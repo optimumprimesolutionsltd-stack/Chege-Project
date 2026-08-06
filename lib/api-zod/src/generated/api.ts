@@ -79,6 +79,37 @@ export const CreateExpenseResponse = zod.object({
 
 
 /**
+ * @summary Update an expense
+ */
+export const UpdateExpenseParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateExpenseBody = zod.object({
+  "amount": zod.number(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "notes": zod.string().optional(),
+  "paidById": zod.string().optional().describe('User ID of who paid — defaults to the current user if omitted'),
+  "isRecurring": zod.boolean().optional(),
+  "date": zod.coerce.date()
+})
+
+export const UpdateExpenseResponse = zod.object({
+  "id": zod.number(),
+  "amount": zod.number().describe('Amount in KES'),
+  "category": zod.string(),
+  "description": zod.string(),
+  "notes": zod.string().nullish().describe('Optional extra notes'),
+  "paidById": zod.string(),
+  "paidByName": zod.string(),
+  "isRecurring": zod.boolean(),
+  "date": zod.coerce.date(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Delete an expense
  */
 export const DeleteExpenseParams = zod.object({

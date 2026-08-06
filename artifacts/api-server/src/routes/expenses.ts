@@ -157,6 +157,30 @@ router.post("/expenses", async (req, res) => {
   res.status(201).json(formatExpense({ ...expense, paidByName: user?.firstName ?? "Unknown" }));
 });
 
+router.patch("/expenses/:id", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const idParsed = DeleteExpenseParams.safeParse(req.params);
+  if (!idParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = ExpenseInput.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
+
+  const { amount, category, description, notes, paidById, isRecurring, date } = parsed.data;
+  const effectivePaidById = paidById ?? req.user!.id;
+
+  const [updated] = await db
+    .update(expensesTable)
+    .set({ amount, category, description, notes: notes ?? null, paidById: effectivePaidById, isRecurring: isRecurring ?? false, date })
+    .where(eq(expensesTable.id, Math.round(idParsed.data.id)))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+
+  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, effectivePaidById) });
+  res.json(formatExpense({ ...updated, paidByName: user?.firstName ?? "Unknown" }));
+});
+
 router.delete("/expenses/:id", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
