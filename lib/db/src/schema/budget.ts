@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, date, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, date, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -21,7 +21,9 @@ export const expensesTable = pgTable("expenses", {
   amount: integer("amount").notNull(), // in KES
   category: text("category").notNull(),
   description: text("description").notNull(),
+  notes: text("notes"),                          // optional extra notes
   paidById: text("paid_by_id").notNull(),
+  isRecurring: boolean("is_recurring").notNull().default(false),
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -44,3 +46,12 @@ export const contributionsTable = pgTable("contributions", {
 export const insertContributionSchema = createInsertSchema(contributionsTable).omit({ id: true, createdAt: true });
 export type InsertContribution = z.infer<typeof insertContributionSchema>;
 export type Contribution = typeof contributionsTable.$inferSelect;
+
+// Members — the two users allowed to access this app
+export const membersTable = pgTable("members", {
+  userId: text("user_id").primaryKey(),
+  addedByUserId: text("added_by_user_id"),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+});
+
+export type Member = typeof membersTable.$inferSelect;

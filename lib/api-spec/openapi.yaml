@@ -20,6 +20,8 @@ tags:
     description: Budget categories
   - name: dashboard
     description: Dashboard summaries and activity
+  - name: members
+    description: App access members
 
 paths:
   /healthz:
@@ -123,6 +125,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /expenses/apply-recurring:
+    post:
+      operationId: applyRecurringExpenses
+      tags: [expenses]
+      summary: Copy recurring expenses from the previous month into the current month
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyRecurringInput"
+      responses:
+        "200":
+          description: Number of expenses copied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplyRecurringResult"
 
   /budget-categories:
     get:
@@ -241,6 +262,89 @@ paths:
                 items:
                   $ref: "#/components/schemas/CategoryBreakdown"
 
+  /dashboard/trends:
+    get:
+      operationId: getDashboardTrends
+      tags: [dashboard]
+      summary: Month-over-month spending totals for the last N months
+      parameters:
+        - name: months
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Monthly trend data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthTrend"
+
+  /members:
+    get:
+      operationId: getMembers
+      tags: [members]
+      summary: List all members with access to this app
+      responses:
+        "200":
+          description: Members list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Member"
+    post:
+      operationId: addMember
+      tags: [members]
+      summary: Add a new member by Replit user ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberInput"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          description: Invalid input or member already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /members/{userId}:
+    delete:
+      operationId: removeMember
+      tags: [members]
+      summary: Remove a member
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -296,10 +400,15 @@ components:
           type: string
         description:
           type: string
+        notes:
+          type: ["string", "null"]
+          description: Optional extra notes
         paidById:
           type: string
         paidByName:
           type: string
+        isRecurring:
+          type: boolean
         date:
           type: string
           format: date
@@ -313,6 +422,7 @@ components:
         - description
         - paidById
         - paidByName
+        - isRecurring
         - date
         - createdAt
 
@@ -325,6 +435,13 @@ components:
           type: string
         description:
           type: string
+        notes:
+          type: string
+        paidById:
+          type: string
+          description: User ID of who paid — defaults to the current user if omitted
+        isRecurring:
+          type: boolean
         date:
           type: string
           format: date
@@ -333,6 +450,28 @@ components:
         - category
         - description
         - date
+
+    ApplyRecurringInput:
+      type: object
+      properties:
+        month:
+          type: number
+          description: Target month (1-12)
+        year:
+          type: number
+          description: Target year
+      required:
+        - month
+        - year
+
+    ApplyRecurringResult:
+      type: object
+      properties:
+        copied:
+          type: number
+          description: Number of expenses copied
+      required:
+        - copied
 
     BudgetCategory:
       type: object
@@ -489,3 +628,46 @@ components:
         - percentUsed
         - priority
         - color
+
+    MonthTrend:
+      type: object
+      properties:
+        month:
+          type: number
+        year:
+          type: number
+        label:
+          type: string
+          description: Human-readable label e.g. "Aug 2026"
+        totalSpent:
+          type: number
+        expenseCount:
+          type: number
+      required:
+        - month
+        - year
+        - label
+        - totalSpent
+        - expenseCount
+
+    Member:
+      type: object
+      properties:
+        userId:
+          type: string
+        userName:
+          type: ["string", "null"]
+        addedAt:
+          type: string
+          format: date-time
+      required:
+        - userId
+        - addedAt
+
+    AddMemberInput:
+      type: object
+      properties:
+        userId:
+          type: string
+      required:
+        - userId

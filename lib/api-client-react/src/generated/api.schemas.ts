@@ -32,8 +32,14 @@ export interface Expense {
   amount: number;
   category: string;
   description: string;
+  /**
+     * Optional extra notes
+     * @nullable
+     */
+  notes?: string | null;
   paidById: string;
   paidByName: string;
+  isRecurring: boolean;
   date: string;
   createdAt: string;
 }
@@ -42,7 +48,23 @@ export interface ExpenseInput {
   amount: number;
   category: string;
   description: string;
+  notes?: string;
+  /** User ID of who paid — defaults to the current user if omitted */
+  paidById?: string;
+  isRecurring?: boolean;
   date: string;
+}
+
+export interface ApplyRecurringInput {
+  /** Target month (1-12) */
+  month: number;
+  /** Target year */
+  year: number;
+}
+
+export interface ApplyRecurringResult {
+  /** Number of expenses copied */
+  copied: number;
 }
 
 export interface BudgetCategory {
@@ -110,6 +132,26 @@ export interface CategoryBreakdown {
   color: string;
 }
 
+export interface MonthTrend {
+  month: number;
+  year: number;
+  /** Human-readable label e.g. "Aug 2026" */
+  label: string;
+  totalSpent: number;
+  expenseCount: number;
+}
+
+export interface Member {
+  userId: string;
+  /** @nullable */
+  userName?: string | null;
+  addedAt: string;
+}
+
+export interface AddMemberInput {
+  userId: string;
+}
+
 export type GetExpensesParams = {
 month?: number;
 year?: number;
@@ -129,5 +171,9 @@ year?: number;
 export type GetDashboardCategoryBreakdownParams = {
 month?: number;
 year?: number;
+};
+
+export type GetDashboardTrendsParams = {
+months?: number;
 };
 

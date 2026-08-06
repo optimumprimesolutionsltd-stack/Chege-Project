@@ -7,6 +7,9 @@
  */
 
 export * from './activityItem';
+export * from './addMemberInput';
+export * from './applyRecurringInput';
+export * from './applyRecurringResult';
 export * from './authUser';
 export * from './budgetCategory';
 export * from './categoryBreakdown';
@@ -19,6 +22,9 @@ export * from './expenseInput';
 export * from './getContributionsParams';
 export * from './getDashboardCategoryBreakdownParams';
 export * from './getDashboardSummaryParams';
+export * from './getDashboardTrendsParams';
 export * from './getExpensesParams';
 export * from './healthStatus';
+export * from './member';
+export * from './monthTrend';
 export * from './successResponse';

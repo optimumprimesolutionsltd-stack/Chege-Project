@@ -12,6 +12,7 @@ import Contributions from '@/pages/contributions';
 import Activity from '@/pages/activity';
 import NotFound from '@/pages/not-found';
 import AuthDone from '@/pages/auth-done';
+import Settings from '@/pages/settings';
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ function AuthenticatedApp() {
         <Route path="/budget" component={Budget} />
         <Route path="/contributions" component={Contributions} />
         <Route path="/activity" component={Activity} />
+        <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

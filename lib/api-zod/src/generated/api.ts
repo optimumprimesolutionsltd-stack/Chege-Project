@@ -41,8 +41,10 @@ export const GetExpensesResponseItem = zod.object({
   "amount": zod.number().describe('Amount in KES'),
   "category": zod.string(),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('Optional extra notes'),
   "paidById": zod.string(),
   "paidByName": zod.string(),
+  "isRecurring": zod.boolean(),
   "date": zod.coerce.date(),
   "createdAt": zod.coerce.date()
 })
@@ -56,6 +58,9 @@ export const CreateExpenseBody = zod.object({
   "amount": zod.number(),
   "category": zod.string(),
   "description": zod.string(),
+  "notes": zod.string().optional(),
+  "paidById": zod.string().optional().describe('User ID of who paid — defaults to the current user if omitted'),
+  "isRecurring": zod.boolean().optional(),
   "date": zod.coerce.date()
 })
 
@@ -64,8 +69,10 @@ export const CreateExpenseResponse = zod.object({
   "amount": zod.number().describe('Amount in KES'),
   "category": zod.string(),
   "description": zod.string(),
+  "notes": zod.string().nullish().describe('Optional extra notes'),
   "paidById": zod.string(),
   "paidByName": zod.string(),
+  "isRecurring": zod.boolean(),
   "date": zod.coerce.date(),
   "createdAt": zod.coerce.date()
 })
@@ -80,6 +87,19 @@ export const DeleteExpenseParams = zod.object({
 
 export const DeleteExpenseResponse = zod.object({
   "success": zod.boolean()
+})
+
+
+/**
+ * @summary Copy recurring expenses from the previous month into the current month
+ */
+export const ApplyRecurringExpensesBody = zod.object({
+  "month": zod.number().describe('Target month (1-12)'),
+  "year": zod.number().describe('Target year')
+})
+
+export const ApplyRecurringExpensesResponse = zod.object({
+  "copied": zod.number().describe('Number of expenses copied')
 })
 
 
@@ -194,5 +214,59 @@ export const GetDashboardCategoryBreakdownResponseItem = zod.object({
   "color": zod.string()
 })
 export const GetDashboardCategoryBreakdownResponse = zod.array(GetDashboardCategoryBreakdownResponseItem)
+
+
+/**
+ * @summary Month-over-month spending totals for the last N months
+ */
+export const GetDashboardTrendsQueryParams = zod.object({
+  "months": zod.coerce.number().optional()
+})
+
+export const GetDashboardTrendsResponseItem = zod.object({
+  "month": zod.number(),
+  "year": zod.number(),
+  "label": zod.string().describe('Human-readable label e.g. \"Aug 2026\"'),
+  "totalSpent": zod.number(),
+  "expenseCount": zod.number()
+})
+export const GetDashboardTrendsResponse = zod.array(GetDashboardTrendsResponseItem)
+
+
+/**
+ * @summary List all members with access to this app
+ */
+export const GetMembersResponseItem = zod.object({
+  "userId": zod.string(),
+  "userName": zod.string().nullish(),
+  "addedAt": zod.coerce.date()
+})
+export const GetMembersResponse = zod.array(GetMembersResponseItem)
+
+
+/**
+ * @summary Add a new member by Replit user ID
+ */
+export const AddMemberBody = zod.object({
+  "userId": zod.string()
+})
+
+export const AddMemberResponse = zod.object({
+  "userId": zod.string(),
+  "userName": zod.string().nullish(),
+  "addedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove a member
+ */
+export const RemoveMemberParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const RemoveMemberResponse = zod.object({
+  "success": zod.boolean()
+})
 
 

@@ -12,8 +12,14 @@ export interface Expense {
   amount: number;
   category: string;
   description: string;
+  /**
+     * Optional extra notes
+     * @nullable
+     */
+  notes?: string | null;
   paidById: string;
   paidByName: string;
+  isRecurring: boolean;
   date: Date;
   createdAt: Date;
 }

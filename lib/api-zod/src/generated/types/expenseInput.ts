@@ -10,5 +10,9 @@ export interface ExpenseInput {
   amount: number;
   category: string;
   description: string;
+  notes?: string;
+  /** User ID of who paid — defaults to the current user if omitted */
+  paidById?: string;
+  isRecurring?: boolean;
   date: Date;
 }
