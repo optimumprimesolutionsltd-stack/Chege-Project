@@ -52,9 +52,9 @@ async function requireMember(req: Request, res: Response, next: NextFunction) {
 
   // Membership is full — return forbidden with their userId so they can ask for access
   res.status(403).json({
-    error: "Access restricted to family members only.",
+    error: "Access restricted to this couple's account.",
     yourUserId: userId,
-    hint: "Share your userId with an existing member to request access.",
+    hint: "Share your userId with your partner to request access.",
   });
 }
 

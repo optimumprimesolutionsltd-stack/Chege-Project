@@ -24,22 +24,22 @@ export default function Settings() {
     if (!newUserId.trim()) return;
     try {
       await addMember.mutateAsync({ data: { userId: newUserId.trim() } });
-      toast({ title: "Member added", description: "They can now sign in to the app." });
+      toast({ title: "Partner added", description: "They can now sign in to the app." });
       setNewUserId("");
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not add member. Check the user ID and try again." });
+      toast({ variant: "destructive", title: "Error", description: "Could not add partner. Check the user ID and try again." });
     }
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm("Remove this member? They will lose access to the app.")) return;
+    if (!confirm("Remove this person? They will lose access to the app.")) return;
     try {
       await removeMember.mutateAsync({ userId });
-      toast({ title: "Member removed" });
+      toast({ title: "Partner removed" });
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not remove member." });
+      toast({ variant: "destructive", title: "Error", description: "Could not remove partner." });
     }
   };
 
@@ -54,7 +54,7 @@ export default function Settings() {
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage app access and your account.</p>
+        <p className="text-muted-foreground mt-1">Manage your couple's access and your account.</p>
       </div>
 
       {/* Your account */}
@@ -64,7 +64,7 @@ export default function Settings() {
             <Shield className="w-5 h-5 text-primary" />
             <CardTitle>Your Account</CardTitle>
           </div>
-          <CardDescription>Share your User ID to be added by another member.</CardDescription>
+          <CardDescription>Share your User ID with your partner so they can add you.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-3">
@@ -86,7 +86,7 @@ export default function Settings() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
-            <CardTitle>Family Members</CardTitle>
+            <CardTitle>Couple Access</CardTitle>
           </div>
           <CardDescription>
             Only these two accounts can access the app. The first two people to sign in are automatically registered.
@@ -122,7 +122,7 @@ export default function Settings() {
                 </div>
               ))}
               {members?.length === 0 && (
-                <p className="text-muted-foreground text-sm text-center py-4">No members yet.</p>
+                <p className="text-muted-foreground text-sm text-center py-4">No one registered yet.</p>
               )}
             </div>
           )}
@@ -130,7 +130,7 @@ export default function Settings() {
           {/* Add member form */}
           {(members?.length ?? 0) < 2 && (
             <form onSubmit={handleAdd} className="space-y-3 pt-2 border-t border-border/50">
-              <p className="text-sm font-medium text-foreground">Add a member by their User ID</p>
+              <p className="text-sm font-medium text-foreground">Add your partner by their User ID</p>
               <div className="flex gap-2">
                 <Input
                   placeholder="Paste Replit user ID..."
@@ -143,7 +143,7 @@ export default function Settings() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Ask the other person to find their User ID on this Settings page, then paste it here.
+                Ask your partner to find their User ID on this Settings page, then paste it here.
               </p>
             </form>
           )}
