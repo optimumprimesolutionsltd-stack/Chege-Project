@@ -1,4 +1,5 @@
 #!/bin/bash
 set -e
 pnpm install --frozen-lockfile
-pnpm --filter db push
+# Push Drizzle schema to the database (creates/alters tables, non-destructive)
+pnpm --filter @workspace/db run push

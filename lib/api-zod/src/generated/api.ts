@@ -265,6 +265,106 @@ export const GetDashboardTrendsResponse = zod.array(GetDashboardTrendsResponseIt
 
 
 /**
+ * @summary List all savings goals
+ */
+export const GetSavingsGoalsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "targetAmount": zod.number().describe('Target amount in KES'),
+  "currentAmount": zod.number().describe('Current saved amount in KES'),
+  "deadline": zod.coerce.date().nullish().describe('Optional deadline date'),
+  "createdByUserId": zod.string(),
+  "isCompleted": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const GetSavingsGoalsResponse = zod.array(GetSavingsGoalsResponseItem)
+
+
+/**
+ * @summary Create a new savings goal
+ */
+export const CreateSavingsGoalBody = zod.object({
+  "name": zod.string(),
+  "targetAmount": zod.number(),
+  "deadline": zod.coerce.date().optional().describe('Optional deadline date')
+})
+
+export const CreateSavingsGoalResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "targetAmount": zod.number().describe('Target amount in KES'),
+  "currentAmount": zod.number().describe('Current saved amount in KES'),
+  "deadline": zod.coerce.date().nullish().describe('Optional deadline date'),
+  "createdByUserId": zod.string(),
+  "isCompleted": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Atomically add an amount to a savings goal's current balance
+ */
+export const ContributeToSavingsGoalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ContributeToSavingsGoalBody = zod.object({
+  "amount": zod.number().describe('Amount to add to the goal (in KES)'),
+  "note": zod.string().optional().describe('Optional note for this contribution')
+})
+
+export const ContributeToSavingsGoalResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "targetAmount": zod.number().describe('Target amount in KES'),
+  "currentAmount": zod.number().describe('Current saved amount in KES'),
+  "deadline": zod.coerce.date().nullish().describe('Optional deadline date'),
+  "createdByUserId": zod.string(),
+  "isCompleted": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a savings goal (name, target, deadline, currentAmount, isCompleted)
+ */
+export const UpdateSavingsGoalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateSavingsGoalBody = zod.object({
+  "name": zod.string().optional(),
+  "targetAmount": zod.number().optional(),
+  "currentAmount": zod.number().optional(),
+  "deadline": zod.coerce.date().nullish(),
+  "isCompleted": zod.boolean().optional()
+})
+
+export const UpdateSavingsGoalResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "targetAmount": zod.number().describe('Target amount in KES'),
+  "currentAmount": zod.number().describe('Current saved amount in KES'),
+  "deadline": zod.coerce.date().nullish().describe('Optional deadline date'),
+  "createdByUserId": zod.string(),
+  "isCompleted": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a savings goal
+ */
+export const DeleteSavingsGoalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteSavingsGoalResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
  * @summary List all members with access to this app
  */
 export const GetMembersResponseItem = zod.object({

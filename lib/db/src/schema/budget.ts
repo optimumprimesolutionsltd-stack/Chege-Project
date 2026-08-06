@@ -72,3 +72,19 @@ export const digestSendsTable = pgTable(
 );
 
 export type DigestSend = typeof digestSendsTable.$inferSelect;
+
+// Savings Goals
+export const savingsGoalsTable = pgTable("savings_goals", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  targetAmount: integer("target_amount").notNull(), // in KES
+  currentAmount: integer("current_amount").notNull().default(0), // in KES
+  deadline: date("deadline"),
+  createdByUserId: text("created_by_user_id").notNull(),
+  isCompleted: boolean("is_completed").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSavingsGoalSchema = createInsertSchema(savingsGoalsTable).omit({ id: true, createdAt: true });
+export type InsertSavingsGoal = z.infer<typeof insertSavingsGoalSchema>;
+export type SavingsGoal = typeof savingsGoalsTable.$inferSelect;

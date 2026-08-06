@@ -10,6 +10,7 @@ import budgetCategoriesRouter from "./budget-categories";
 import dashboardRouter from "./dashboard";
 import membersRouter from "./members";
 import digestRouter from "./digest";
+import savingsGoalsRouter from "./savings-goals";
 
 const MAX_MEMBERS = 2;
 
@@ -74,5 +75,6 @@ router.use(budgetCategoriesRouter);
 router.use(dashboardRouter);
 router.use(membersRouter);
 router.use(digestRouter);
+router.use(savingsGoalsRouter);
 
 export default router;

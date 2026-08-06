@@ -1,8 +1,8 @@
-import { useGetDashboardSummary, useGetDashboardActivity, useGetDashboardCategoryBreakdown, useGetDashboardTrends } from "@workspace/api-client-react";
+import { useGetDashboardSummary, useGetDashboardActivity, useGetDashboardCategoryBreakdown, useGetDashboardTrends, useGetSavingsGoals } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon, Plus, TrendingUp } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon, Plus, TrendingUp, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
@@ -15,6 +15,20 @@ export default function Dashboard() {
   const { data: activity, isLoading: isActivityLoading } = useGetDashboardActivity();
   const { data: breakdown, isLoading: isBreakdownLoading } = useGetDashboardCategoryBreakdown({ month, year });
   const { data: trends, isLoading: isTrendsLoading } = useGetDashboardTrends({ months: 6 });
+  const { data: goals } = useGetSavingsGoals();
+
+  // Find the nearest active goal (closest deadline, or highest % if no deadline)
+  const activeGoals = goals?.filter((g) => !g.isCompleted) ?? [];
+  const nearestGoal = activeGoals.length > 0
+    ? activeGoals.slice().sort((a, b) => {
+        if (a.deadline && b.deadline) return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+        if (a.deadline) return -1;
+        if (b.deadline) return 1;
+        const pctA = a.currentAmount / a.targetAmount;
+        const pctB = b.currentAmount / b.targetAmount;
+        return pctB - pctA;
+      })[0]
+    : null;
 
   if (isSummaryLoading || isActivityLoading || isBreakdownLoading) {
     return (
@@ -187,6 +201,56 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Savings Goals Card */}
+      {(activeGoals.length > 0 || (goals && goals.length > 0)) && nearestGoal && (
+        <Card className="border-none shadow-md overflow-hidden">
+          <CardHeader className="bg-muted/30 border-b border-border/50 pb-4 flex flex-row items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Target className="w-5 h-5 text-secondary" />
+                <CardTitle className="text-xl">Savings Goals</CardTitle>
+              </div>
+              <CardDescription>
+                {activeGoals.length} active goal{activeGoals.length !== 1 ? "s" : ""}
+              </CardDescription>
+            </div>
+            <Link href="/savings-goals" className="text-sm font-medium text-primary hover:underline">
+              View all →
+            </Link>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-semibold text-foreground">{nearestGoal.name}</p>
+                {nearestGoal.deadline && (
+                  <p className="text-xs text-muted-foreground">
+                    by {new Date(nearestGoal.deadline).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="font-bold text-foreground">{formatKes(nearestGoal.currentAmount)}</span>
+                <span className="text-muted-foreground">of {formatKes(nearestGoal.targetAmount)}</span>
+              </div>
+              <div className="h-3 w-full bg-secondary/20 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-700"
+                  style={{ width: `${Math.min((nearestGoal.currentAmount / nearestGoal.targetAmount) * 100, 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-right">
+                {Math.round((nearestGoal.currentAmount / nearestGoal.targetAmount) * 100)}% reached
+              </p>
+            </div>
+            {activeGoals.length > 1 && (
+              <p className="text-xs text-muted-foreground mt-4">
+                +{activeGoals.length - 1} more goal{activeGoals.length - 1 !== 1 ? "s" : ""} in progress
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* 6-Month Spending Trend */}
       <Card className="border-none shadow-md overflow-hidden">

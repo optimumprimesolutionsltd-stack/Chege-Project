@@ -152,6 +152,46 @@ export interface AddMemberInput {
   userId: string;
 }
 
+export interface SavingsGoal {
+  id: number;
+  name: string;
+  /** Target amount in KES */
+  targetAmount: number;
+  /** Current saved amount in KES */
+  currentAmount: number;
+  /**
+     * Optional deadline date
+     * @nullable
+     */
+  deadline?: string | null;
+  createdByUserId: string;
+  isCompleted: boolean;
+  createdAt: string;
+}
+
+export interface SavingsGoalInput {
+  name: string;
+  targetAmount: number;
+  /** Optional deadline date */
+  deadline?: string;
+}
+
+export interface SavingsGoalContributeInput {
+  /** Amount to add to the goal (in KES) */
+  amount: number;
+  /** Optional note for this contribution */
+  note?: string;
+}
+
+export interface SavingsGoalUpdateInput {
+  name?: string;
+  targetAmount?: number;
+  currentAmount?: number;
+  /** @nullable */
+  deadline?: string | null;
+  isCompleted?: boolean;
+}
+
 export type GetExpensesParams = {
 month?: number;
 year?: number;

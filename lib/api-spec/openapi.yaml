@@ -22,6 +22,8 @@ tags:
     description: Dashboard summaries and activity
   - name: members
     description: App access members
+  - name: savings-goals
+    description: Savings goals tracking
 
 paths:
   /healthz:
@@ -310,6 +312,123 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/MonthTrend"
+
+  /savings-goals:
+    get:
+      operationId: getSavingsGoals
+      tags: [savings-goals]
+      summary: List all savings goals
+      responses:
+        "200":
+          description: List of savings goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavingsGoal"
+    post:
+      operationId: createSavingsGoal
+      tags: [savings-goals]
+      summary: Create a new savings goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsGoalInput"
+      responses:
+        "201":
+          description: Created savings goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsGoal"
+
+  /savings-goals/{id}/contribute:
+    post:
+      operationId: contributeToSavingsGoal
+      tags: [savings-goals]
+      summary: Atomically add an amount to a savings goal's current balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsGoalContributeInput"
+      responses:
+        "200":
+          description: Updated savings goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsGoal"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /savings-goals/{id}:
+    patch:
+      operationId: updateSavingsGoal
+      tags: [savings-goals]
+      summary: Update a savings goal (name, target, deadline, currentAmount, isCompleted)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsGoalUpdateInput"
+      responses:
+        "200":
+          description: Updated savings goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsGoal"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteSavingsGoal
+      tags: [savings-goals]
+      summary: Delete a savings goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /members:
     get:
@@ -700,3 +819,78 @@ components:
           type: string
       required:
         - userId
+
+    SavingsGoal:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        targetAmount:
+          type: number
+          description: Target amount in KES
+        currentAmount:
+          type: number
+          description: Current saved amount in KES
+        deadline:
+          type: ["string", "null"]
+          format: date
+          description: Optional deadline date
+        createdByUserId:
+          type: string
+        isCompleted:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - targetAmount
+        - currentAmount
+        - createdByUserId
+        - isCompleted
+        - createdAt
+
+    SavingsGoalInput:
+      type: object
+      properties:
+        name:
+          type: string
+        targetAmount:
+          type: number
+        deadline:
+          type: string
+          format: date
+          description: Optional deadline date
+      required:
+        - name
+        - targetAmount
+
+    SavingsGoalContributeInput:
+      type: object
+      properties:
+        amount:
+          type: number
+          description: Amount to add to the goal (in KES)
+        note:
+          type: string
+          description: Optional note for this contribution
+      required:
+        - amount
+
+    SavingsGoalUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        targetAmount:
+          type: number
+        currentAmount:
+          type: number
+        deadline:
+          type: ["string", "null"]
+          format: date
+        isCompleted:
+          type: boolean
