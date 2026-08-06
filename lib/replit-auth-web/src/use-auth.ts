@@ -47,12 +47,17 @@ export function useAuth(): AuthState {
 
   const login = useCallback(() => {
     const base = getBasePath();
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
+    const url = `/api/login?returnTo=${encodeURIComponent(base)}`;
+    // Navigate the top-level window so OAuth redirects aren't trapped inside
+    // an iframe (e.g. Replit preview pane), which would partition sessionStorage
+    // and cause "missing initial state" errors from the OIDC provider.
+    (window.top ?? window).location.href = url;
   }, []);
 
   const logout = useCallback(() => {
     const base = getBasePath();
-    window.location.href = `/api/logout?returnTo=${encodeURIComponent(base)}`;
+    const url = `/api/logout?returnTo=${encodeURIComponent(base)}`;
+    (window.top ?? window).location.href = url;
   }, []);
 
   return {
