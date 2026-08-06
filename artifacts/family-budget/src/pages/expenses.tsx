@@ -331,6 +331,55 @@ export default function Expenses() {
               ))}
             </div>
 
+            {/* Individual ledgers */}
+            {members && members.length > 0 && expenses && (
+              <div className="space-y-3 pt-1 border-t border-border/40">
+                <span className="text-sm font-semibold text-foreground">Individual Ledgers</span>
+                {[
+                  { name: "Chege", contributed: summary.chegeContributed, target: summary.chegeTarget },
+                  { name: "Lydiah", contributed: summary.lydiahContributed, target: summary.lydiahTarget },
+                ].map(({ name, contributed, target }) => {
+                  const spent = expenses
+                    .filter(e => e.paidByName?.toLowerCase().startsWith(name.toLowerCase()))
+                    .reduce((s, e) => s + e.amount, 0);
+                  const net = contributed - spent;
+                  const overSpent = spent > contributed;
+                  return (
+                    <div key={name} className="rounded-xl border border-border/50 bg-muted/30 p-4 space-y-2">
+                      <p className="text-sm font-semibold text-foreground">{name}</p>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-0.5">Income</p>
+                          <p className={`text-sm font-bold font-mono ${contributed >= target ? "text-green-600" : "text-amber-500"}`}>
+                            {formatKes(contributed)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">of {formatKes(target)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-0.5">Spent</p>
+                          <p className="text-sm font-bold font-mono text-foreground">{formatKes(spent)}</p>
+                          <p className="text-xs text-muted-foreground">{expenses.filter(e => e.paidByName?.toLowerCase().startsWith(name.toLowerCase())).length} items</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-0.5">Net</p>
+                          <p className={`text-sm font-bold font-mono ${overSpent ? "text-destructive" : "text-green-600"}`}>
+                            {overSpent ? "-" : "+"}{formatKes(Math.abs(net))}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{overSpent ? "deficit" : "surplus"}</p>
+                        </div>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${overSpent ? "bg-destructive" : "bg-primary"}`}
+                          style={{ width: `${Math.min(100, contributed > 0 ? (spent / contributed) * 100 : 0)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Selected category hint — shows when form is open and category chosen */}
             {(isAdding || editingId !== null) && addForm.category && breakdown && (() => {
               const cat = breakdown.find(b => b.category === addForm.category);
