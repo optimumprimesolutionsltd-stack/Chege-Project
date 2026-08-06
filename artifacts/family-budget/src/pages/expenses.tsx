@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   useGetExpenses, useGetBudgetCategories, useGetMembers,
   useCreateExpense, useDeleteExpense, useUpdateExpense, useApplyRecurringExpenses,
+  useGetDashboardSummary, useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
   getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
 } from "@workspace/api-client-react";
@@ -10,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, X, Check } from "lucide-react";
+import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -53,6 +54,8 @@ export default function Expenses() {
   const { data: expenses, isLoading } = useGetExpenses({ month, year });
   const { data: categories } = useGetBudgetCategories();
   const { data: members } = useGetMembers();
+  const { data: summary } = useGetDashboardSummary({ month, year });
+  const { data: breakdown } = useGetDashboardCategoryBreakdown({ month, year });
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
@@ -268,6 +271,84 @@ export default function Expenses() {
           </Button>
         </div>
       </div>
+
+      {/* Budget Status */}
+      {summary && (
+        <Card className="border-none shadow-md overflow-hidden">
+          <CardContent className="p-5 space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Budget Status — {formatMonthYear(month, year)}</p>
+
+            {/* Expenses vs Budget */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                  <TrendingDown className="w-4 h-4 text-destructive" /> Expenses
+                </span>
+                <span className="text-sm font-mono">
+                  <span className={summary.totalSpent > summary.totalBudget ? "text-destructive font-bold" : "text-foreground"}>
+                    {formatKes(summary.totalSpent)}
+                  </span>
+                  <span className="text-muted-foreground"> / {formatKes(summary.totalBudget)}</span>
+                </span>
+              </div>
+              <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${summary.totalSpent > summary.totalBudget ? "bg-destructive" : "bg-primary"}`}
+                  style={{ width: `${Math.min(100, (summary.totalSpent / summary.totalBudget) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-right">
+                {summary.totalSpent > summary.totalBudget
+                  ? `Over budget by ${formatKes(summary.totalSpent - summary.totalBudget)}`
+                  : `${formatKes(summary.remaining)} remaining`}
+              </p>
+            </div>
+
+            {/* Income vs Target */}
+            <div className="space-y-2 pt-1 border-t border-border/40">
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                <TrendingUp className="w-4 h-4 text-green-600" /> Income
+              </span>
+              {[
+                { name: "Chege", contributed: summary.chegeContributed, target: summary.chegeTarget },
+                { name: "Lydiah", contributed: summary.lydiahContributed, target: summary.lydiahTarget },
+              ].map(({ name, contributed, target }) => (
+                <div key={name} className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="font-medium text-foreground">{name}</span>
+                    <span className="font-mono">
+                      <span className={contributed >= target ? "text-green-600 font-bold" : "text-foreground"}>{formatKes(contributed)}</span>
+                      <span className="text-muted-foreground"> / {formatKes(target)}</span>
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${contributed >= target ? "bg-green-500" : "bg-amber-400"}`}
+                      style={{ width: `${Math.min(100, target > 0 ? (contributed / target) * 100 : 0)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Selected category hint — shows when form is open and category chosen */}
+            {(isAdding || editingId !== null) && addForm.category && breakdown && (() => {
+              const cat = breakdown.find(b => b.category === addForm.category);
+              if (!cat) return null;
+              const over = cat.remaining < 0;
+              return (
+                <div className={`rounded-xl px-4 py-3 text-sm border ${over ? "bg-destructive/10 border-destructive/20" : "bg-primary/10 border-primary/20"}`}>
+                  <span className="font-semibold">{cat.category}:</span>{" "}
+                  {over
+                    ? <span className="text-destructive">over budget by {formatKes(Math.abs(cat.remaining))}</span>
+                    : <span>{formatKes(cat.remaining)} remaining of {formatKes(cat.budgetAmount)}</span>}
+                  {" "}({cat.percentUsed}% used)
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recurring banner */}
       {showRecurringBanner && (
