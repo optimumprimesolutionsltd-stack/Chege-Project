@@ -11,6 +11,7 @@ import Budget from '@/pages/budget';
 import Contributions from '@/pages/contributions';
 import Activity from '@/pages/activity';
 import NotFound from '@/pages/not-found';
+import AuthDone from '@/pages/auth-done';
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,11 @@ function MainRouter() {
         </div>
       </div>
     );
+  }
+
+  // Auth-done page must be reachable before auth state resolves (popup context).
+  if (window.location.pathname.endsWith('/auth-done')) {
+    return <AuthDone />;
   }
 
   if (!isAuthenticated) {

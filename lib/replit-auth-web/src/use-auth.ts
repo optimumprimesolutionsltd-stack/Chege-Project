@@ -47,11 +47,40 @@ export function useAuth(): AuthState {
 
   const login = useCallback(() => {
     const base = getBasePath();
-    const url = `/api/login?returnTo=${encodeURIComponent(base)}`;
-    // Navigate the top-level window so OAuth redirects aren't trapped inside
-    // an iframe (e.g. Replit preview pane), which would partition sessionStorage
-    // and cause "missing initial state" errors from the OIDC provider.
-    (window.top ?? window).location.href = url;
+    // Use a dedicated close page so the popup auto-closes after auth completes.
+    const returnTo = `${base}auth-done`.replace('//', '/');
+    const url = `/api/login?returnTo=${encodeURIComponent(returnTo)}`;
+
+    // Open login in a popup so the OAuth redirect runs in a real top-level
+    // window. This avoids the "missing initial state" / sessionStorage
+    // partitioning error that occurs when the flow runs inside an iframe.
+    const popup = window.open(url, 'auth-popup', 'width=520,height=640,left=200,top=100');
+    if (!popup) {
+      // Popup blocked — fall back to top-level navigation.
+      (window.top ?? window).location.href = url;
+      return;
+    }
+
+    // Listen for the auth-done page's postMessage.
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin === window.location.origin && e.data?.type === 'auth_complete') {
+        cleanup();
+        window.location.reload();
+      }
+    };
+    // Also poll in case postMessage is blocked (e.g. popup already closed).
+    const interval = setInterval(() => {
+      if (popup.closed) {
+        cleanup();
+        window.location.reload();
+      }
+    }, 500);
+
+    function cleanup() {
+      clearInterval(interval);
+      window.removeEventListener('message', onMessage);
+    }
+    window.addEventListener('message', onMessage);
   }, []);
 
   const logout = useCallback(() => {
