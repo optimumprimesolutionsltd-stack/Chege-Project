@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Family Budget API for Chege & Lydiah
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: expenses
+    description: Expense tracking
+  - name: contributions
+    description: Monthly contributions
+  - name: budget-categories
+    description: Budget categories
+  - name: dashboard
+    description: Dashboard summaries and activity
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,213 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      operationId: getAuthUser
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /expenses:
+    get:
+      operationId: getExpenses
+      tags: [expenses]
+      summary: List expenses
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of expenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Expense"
+    post:
+      operationId: createExpense
+      tags: [expenses]
+      summary: Create a new expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseInput"
+      responses:
+        "201":
+          description: Created expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+
+  /expenses/{id}:
+    delete:
+      operationId: deleteExpense
+      tags: [expenses]
+      summary: Delete an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /budget-categories:
+    get:
+      operationId: getBudgetCategories
+      tags: [budget-categories]
+      summary: List all budget categories with amounts
+      responses:
+        "200":
+          description: Budget categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BudgetCategory"
+
+  /contributions:
+    get:
+      operationId: getContributions
+      tags: [contributions]
+      summary: List contributions
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Contributions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contribution"
+    post:
+      operationId: createContribution
+      tags: [contributions]
+      summary: Record a contribution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContributionInput"
+      responses:
+        "201":
+          description: Created contribution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contribution"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Monthly budget summary — total budget, total spent, remaining, per-category spent
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Recent activity feed — latest expenses and contributions
+      responses:
+        "200":
+          description: Recent activity items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /dashboard/category-breakdown:
+    get:
+      operationId: getDashboardCategoryBreakdown
+      tags: [dashboard]
+      summary: Spending breakdown per category for a given month
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Category breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryBreakdown"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +251,241 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        profileImage:
+          type: ["string", "null"]
+        role:
+          type: string
+          description: "chege or lydiah"
+      required:
+        - id
+        - name
+        - role
+
+    Expense:
+      type: object
+      properties:
+        id:
+          type: number
+        amount:
+          type: number
+          description: Amount in KES
+        category:
+          type: string
+        description:
+          type: string
+        paidById:
+          type: string
+        paidByName:
+          type: string
+        date:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - amount
+        - category
+        - description
+        - paidById
+        - paidByName
+        - date
+        - createdAt
+
+    ExpenseInput:
+      type: object
+      properties:
+        amount:
+          type: number
+        category:
+          type: string
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+      required:
+        - amount
+        - category
+        - description
+        - date
+
+    BudgetCategory:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        budgetAmount:
+          type: number
+          description: Monthly budget in KES
+        priority:
+          type: number
+          description: 1=survival essentials, 2=health/education, 3=household, 4=connectivity, 5=discretionary
+        color:
+          type: string
+      required:
+        - id
+        - name
+        - budgetAmount
+        - priority
+        - color
+
+    Contribution:
+      type: object
+      properties:
+        id:
+          type: number
+        userId:
+          type: string
+        userName:
+          type: string
+        amount:
+          type: number
+          description: Amount in KES
+        month:
+          type: number
+        year:
+          type: number
+        note:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - userName
+        - amount
+        - month
+        - year
+        - createdAt
+
+    ContributionInput:
+      type: object
+      properties:
+        amount:
+          type: number
+        month:
+          type: number
+        year:
+          type: number
+        note:
+          type: string
+      required:
+        - amount
+        - month
+        - year
+
+    DashboardSummary:
+      type: object
+      properties:
+        month:
+          type: number
+        year:
+          type: number
+        totalBudget:
+          type: number
+        totalSpent:
+          type: number
+        remaining:
+          type: number
+        chegeContributed:
+          type: number
+        lydiahContributed:
+          type: number
+        chegeTarget:
+          type: number
+        lydiahTarget:
+          type: number
+        expenseCount:
+          type: number
+      required:
+        - month
+        - year
+        - totalBudget
+        - totalSpent
+        - remaining
+        - chegeContributed
+        - lydiahContributed
+        - chegeTarget
+        - lydiahTarget
+        - expenseCount
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          description: "expense or contribution"
+        amount:
+          type: number
+        description:
+          type: string
+        userName:
+          type: string
+        category:
+          type: ["string", "null"]
+        date:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - amount
+        - description
+        - userName
+        - date
+
+    CategoryBreakdown:
+      type: object
+      properties:
+        category:
+          type: string
+        budgetAmount:
+          type: number
+        spentAmount:
+          type: number
+        remaining:
+          type: number
+        percentUsed:
+          type: number
+        priority:
+          type: number
+        color:
+          type: string
+      required:
+        - category
+        - budgetAmount
+        - spentAmount
+        - remaining
+        - percentUsed
+        - priority
+        - color

@@ -1,0 +1,2 @@
+- [Zod in api-server routes](zod-api-server.md) — use `import { z } from 'zod'` not `zod/v4`; esbuild can't resolve the subpath
+- [OpenAPI integer types](openapi-integer-types.md) — use `type: number` not `type: integer`; Orval generates `zod.int()` for integer which breaks on Zod v3
