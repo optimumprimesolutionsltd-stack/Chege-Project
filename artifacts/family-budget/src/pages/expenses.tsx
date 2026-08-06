@@ -380,7 +380,40 @@ export default function Expenses() {
               </div>
             )}
 
-            {/* Selected category hint — shows when form is open and category chosen */}
+            {/* Category budget vs actual */}
+            {breakdown && breakdown.length > 0 && (
+              <div className="space-y-2 pt-1 border-t border-border/40">
+                <span className="text-sm font-semibold text-foreground">By Category</span>
+                <div className="space-y-2">
+                  {breakdown.map((cat) => {
+                    const over = cat.remaining < 0;
+                    const pct = Math.min(100, cat.percentUsed);
+                    return (
+                      <div key={cat.category} className="space-y-1">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{cat.category}</span>
+                          <span className="font-mono text-muted-foreground">
+                            <span className={over ? "text-destructive font-bold" : "text-foreground"}>{formatKes(cat.spentAmount)}</span>
+                            {" / "}{formatKes(cat.budgetAmount)}
+                            <span className={`ml-1.5 ${over ? "text-destructive" : "text-muted-foreground"}`}>
+                              ({over ? `+${cat.percentUsed - 100}%` : `${cat.percentUsed}%`})
+                            </span>
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${over ? "bg-destructive" : pct >= 80 ? "bg-amber-400" : "bg-primary"}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Category hint when form is open */}
             {(isAdding || editingId !== null) && addForm.category && breakdown && (() => {
               const cat = breakdown.find(b => b.category === addForm.category);
               if (!cat) return null;
