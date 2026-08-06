@@ -34,7 +34,7 @@ export default function LoginPage() {
                 </svg>
               </div>
             </div>
-            <CardTitle className="text-3xl font-bold font-display text-foreground">Family Budget</CardTitle>
+            <CardTitle className="text-3xl font-bold font-display text-foreground">Chege Project</CardTitle>
             <CardDescription className="text-base mt-2 font-medium">
               Manage your family's finances together with clarity and confidence.
             </CardDescription>

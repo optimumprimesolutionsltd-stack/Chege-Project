@@ -29,7 +29,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
               </svg>
           </div>
-          <span className="font-display font-bold text-xl tracking-tight">Family Budget</span>
+          <span className="font-display font-bold text-xl tracking-tight">Chege Project</span>
         </div>
 
         <nav className="flex-1 px-4 space-y-1 mt-4">
@@ -80,7 +80,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
             </svg>
           </div>
-          <span className="font-display font-bold text-lg">Family Budget</span>
+          <span className="font-display font-bold text-lg">Chege Project</span>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-sidebar-foreground">
           <Menu className="w-6 h-6" />
