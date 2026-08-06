@@ -9,6 +9,7 @@ import contributionsRouter from "./contributions";
 import budgetCategoriesRouter from "./budget-categories";
 import dashboardRouter from "./dashboard";
 import membersRouter from "./members";
+import digestRouter from "./digest";
 
 const MAX_MEMBERS = 2;
 
@@ -72,5 +73,6 @@ router.use(contributionsRouter);
 router.use(budgetCategoriesRouter);
 router.use(dashboardRouter);
 router.use(membersRouter);
+router.use(digestRouter);
 
 export default router;

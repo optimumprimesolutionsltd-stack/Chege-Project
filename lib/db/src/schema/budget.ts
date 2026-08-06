@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, boolean, date, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, date, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -55,3 +55,20 @@ export const membersTable = pgTable("members", {
 });
 
 export type Member = typeof membersTable.$inferSelect;
+
+// Digest send log — one row per (month, year) prevents duplicate emails
+// across concurrent or restarted server instances.
+export const digestSendsTable = pgTable(
+  "digest_sends",
+  {
+    id: serial("id").primaryKey(),
+    month: integer("month").notNull(),
+    year: integer("year").notNull(),
+    emailId: text("email_id"),
+    recipients: text("recipients").array(),
+    sentAt: timestamp("sent_at").defaultNow().notNull(),
+  },
+  (t) => [unique("digest_sends_month_year_unique").on(t.month, t.year)],
+);
+
+export type DigestSend = typeof digestSendsTable.$inferSelect;

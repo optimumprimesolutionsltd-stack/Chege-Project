@@ -1,5 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { schedule as cronSchedule } from "node-cron";
+import { sendMonthlyDigest, previousMonth } from "./lib/digest";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +24,14 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+});
+
+// ── Monthly digest cron — runs at 08:00 on the 1st of every month ─────────
+// The job covers the *previous* calendar month so all data is complete.
+cronSchedule("0 8 1 * *", () => {
+  const { month, year } = previousMonth();
+  logger.info({ month, year }, "Running scheduled monthly digest");
+  sendMonthlyDigest(month, year).catch((err) => {
+    logger.error({ err }, "Scheduled digest failed");
+  });
 });
