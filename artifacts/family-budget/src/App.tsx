@@ -14,6 +14,7 @@ import NotFound from '@/pages/not-found';
 import AuthDone from '@/pages/auth-done';
 import Settings from '@/pages/settings';
 import SavingsGoals from '@/pages/savings-goals';
+import Bank from '@/pages/bank';
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ function AuthenticatedApp() {
         <Route path="/contributions" component={Contributions} />
         <Route path="/activity" component={Activity} />
         <Route path="/savings-goals" component={SavingsGoals} />
+        <Route path="/bank" component={Bank} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>

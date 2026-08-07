@@ -169,6 +169,39 @@ export interface SavingsGoal {
   createdAt: string;
 }
 
+export interface JointAccountTransaction {
+  id: number;
+  /** deposit or disbursement */
+  type: string;
+  amount: number;
+  description: string;
+  madeById?: string | null;
+  madeByName?: string | null;
+  date: string;
+  createdAt: string;
+}
+
+export interface JointAccountSummary {
+  balance: number;
+  totalDeposits: number;
+  totalDisbursements: number;
+  transactions: JointAccountTransaction[];
+}
+
+export interface DepositInput {
+  amount: number;
+  description: string;
+  date: string;
+  /** Defaults to the logged-in user */
+  madeById?: string;
+}
+
+export interface DisbursementInput {
+  amount: number;
+  description: string;
+  date: string;
+}
+
 export interface SavingsGoalInput {
   name: string;
   targetAmount: number;

@@ -47,6 +47,21 @@ export const insertContributionSchema = createInsertSchema(contributionsTable).o
 export type InsertContribution = z.infer<typeof insertContributionSchema>;
 export type Contribution = typeof contributionsTable.$inferSelect;
 
+// Joint Account Transactions — deposits and disbursements from the shared pool
+export const jointAccountTxTable = pgTable("joint_account_transactions", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // 'deposit' | 'disbursement'
+  amount: integer("amount").notNull(), // in KES
+  description: text("description").notNull(),
+  madeById: text("made_by_id"), // userId for deposits; null ok for disbursements
+  date: date("date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertJointAccountTxSchema = createInsertSchema(jointAccountTxTable).omit({ id: true, createdAt: true });
+export type InsertJointAccountTx = z.infer<typeof insertJointAccountTxSchema>;
+export type JointAccountTx = typeof jointAccountTxTable.$inferSelect;
+
 // Members — the two users allowed to access this app
 export const membersTable = pgTable("members", {
   userId: text("user_id").primaryKey(),

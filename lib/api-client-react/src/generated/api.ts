@@ -30,6 +30,8 @@ import type {
   Contribution,
   ContributionInput,
   DashboardSummary,
+  DepositInput,
+  DisbursementInput,
   ErrorResponse,
   Expense,
   ExpenseInput,
@@ -39,6 +41,8 @@ import type {
   GetDashboardTrendsParams,
   GetExpensesParams,
   HealthStatus,
+  JointAccountSummary,
+  JointAccountTransaction,
   Member,
   MonthTrend,
   SavingsGoal,
@@ -1305,6 +1309,296 @@ export const useCreateSavingsGoal = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateSavingsGoalMutationOptions(options));
+    }
+
+export const getGetJointAccountUrl = () => {
+
+
+
+
+  return `/api/joint-account`
+}
+
+/**
+ * @summary Get joint account balance and all transactions
+ */
+export const getJointAccount = async ( options?: Parameters<typeof customFetch>[1]): Promise<JointAccountSummary> => {
+
+  return customFetch<JointAccountSummary>(getGetJointAccountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetJointAccountQueryKey = () => {
+    return [
+    `/api/joint-account`
+    ] as const;
+    }
+
+
+export const getGetJointAccountQueryOptions = <TData = Awaited<ReturnType<typeof getJointAccount>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJointAccount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetJointAccountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJointAccount>>> = ({ signal }) => getJointAccount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getJointAccount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetJointAccountQueryResult = NonNullable<Awaited<ReturnType<typeof getJointAccount>>>
+export type GetJointAccountQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get joint account balance and all transactions
+ */
+
+export function useGetJointAccount<TData = Awaited<ReturnType<typeof getJointAccount>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJointAccount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetJointAccountQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateDepositUrl = () => {
+
+
+
+
+  return `/api/joint-account/deposit`
+}
+
+/**
+ * @summary Deposit money into the joint account
+ */
+export const createDeposit = async (depositInput: DepositInput, options?: Parameters<typeof customFetch>[1]): Promise<JointAccountTransaction> => {
+
+  return customFetch<JointAccountTransaction>(getCreateDepositUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(depositInput)
+  }
+);}
+
+
+
+
+
+export const getCreateDepositMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<DepositInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<DepositInput>}, TContext> => {
+
+const mutationKey = ['createDeposit'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDeposit>>, {data: BodyType<DepositInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDeposit(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDepositMutationResult = NonNullable<Awaited<ReturnType<typeof createDeposit>>>
+    export type CreateDepositMutationBody = BodyType<DepositInput>
+    export type CreateDepositMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Deposit money into the joint account
+ */
+export const useCreateDeposit = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDeposit>>, TError,{data: BodyType<DepositInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDeposit>>,
+        TError,
+        {data: BodyType<DepositInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDepositMutationOptions(options));
+    }
+
+export const getCreateDisbursementUrl = () => {
+
+
+
+
+  return `/api/joint-account/disbursement`
+}
+
+/**
+ * @summary Disburse money from the joint account
+ */
+export const createDisbursement = async (disbursementInput: DisbursementInput, options?: Parameters<typeof customFetch>[1]): Promise<JointAccountTransaction> => {
+
+  return customFetch<JointAccountTransaction>(getCreateDisbursementUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(disbursementInput)
+  }
+);}
+
+
+
+
+
+export const getCreateDisbursementMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDisbursement>>, TError,{data: BodyType<DisbursementInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDisbursement>>, TError,{data: BodyType<DisbursementInput>}, TContext> => {
+
+const mutationKey = ['createDisbursement'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDisbursement>>, {data: BodyType<DisbursementInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDisbursement(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDisbursementMutationResult = NonNullable<Awaited<ReturnType<typeof createDisbursement>>>
+    export type CreateDisbursementMutationBody = BodyType<DisbursementInput>
+    export type CreateDisbursementMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Disburse money from the joint account
+ */
+export const useCreateDisbursement = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDisbursement>>, TError,{data: BodyType<DisbursementInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDisbursement>>,
+        TError,
+        {data: BodyType<DisbursementInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDisbursementMutationOptions(options));
+    }
+
+export const getDeleteJointAccountTransactionUrl = (id: number,) => {
+
+
+
+
+  return `/api/joint-account/${id}`
+}
+
+/**
+ * @summary Delete a joint account transaction
+ */
+export const deleteJointAccountTransaction = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteJointAccountTransactionUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteJointAccountTransactionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteJointAccountTransaction>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteJointAccountTransaction>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteJointAccountTransaction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteJointAccountTransaction>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteJointAccountTransaction(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteJointAccountTransactionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteJointAccountTransaction>>>
+
+    export type DeleteJointAccountTransactionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a joint account transaction
+ */
+export const useDeleteJointAccountTransaction = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteJointAccountTransaction>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteJointAccountTransaction>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteJointAccountTransactionMutationOptions(options));
     }
 
 export const getContributeToSavingsGoalUrl = (id: number,) => {

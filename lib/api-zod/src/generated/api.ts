@@ -302,6 +302,81 @@ export const CreateSavingsGoalResponse = zod.object({
 
 
 /**
+ * @summary Get joint account balance and all transactions
+ */
+export const GetJointAccountResponse = zod.object({
+  "balance": zod.number(),
+  "totalDeposits": zod.number(),
+  "totalDisbursements": zod.number(),
+  "transactions": zod.array(zod.object({
+  "id": zod.number(),
+  "type": zod.string().describe('deposit or disbursement'),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "madeById": zod.string().nullish(),
+  "madeByName": zod.string().nullish(),
+  "date": zod.coerce.date(),
+  "createdAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary Deposit money into the joint account
+ */
+export const CreateDepositBody = zod.object({
+  "amount": zod.number(),
+  "description": zod.string(),
+  "date": zod.coerce.date(),
+  "madeById": zod.string().optional().describe('Defaults to the logged-in user')
+})
+
+export const CreateDepositResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.string().describe('deposit or disbursement'),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "madeById": zod.string().nullish(),
+  "madeByName": zod.string().nullish(),
+  "date": zod.coerce.date(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Disburse money from the joint account
+ */
+export const CreateDisbursementBody = zod.object({
+  "amount": zod.number(),
+  "description": zod.string(),
+  "date": zod.coerce.date()
+})
+
+export const CreateDisbursementResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.string().describe('deposit or disbursement'),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "madeById": zod.string().nullish(),
+  "madeByName": zod.string().nullish(),
+  "date": zod.coerce.date(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a joint account transaction
+ */
+export const DeleteJointAccountTransactionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteJointAccountTransactionResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
  * @summary Atomically add an amount to a savings goal's current balance
  */
 export const ContributeToSavingsGoalParams = zod.object({

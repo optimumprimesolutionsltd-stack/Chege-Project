@@ -24,6 +24,8 @@ tags:
     description: App access members
   - name: savings-goals
     description: Savings goals tracking
+  - name: joint-account
+    description: Joint bank account deposits and disbursements
 
 paths:
   /healthz:
@@ -344,6 +346,82 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SavingsGoal"
+
+  /joint-account:
+    get:
+      operationId: getJointAccount
+      tags: [joint-account]
+      summary: Get joint account balance and all transactions
+      responses:
+        "200":
+          description: Account summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountSummary"
+
+  /joint-account/deposit:
+    post:
+      operationId: createDeposit
+      tags: [joint-account]
+      summary: Deposit money into the joint account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepositInput"
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+
+  /joint-account/disbursement:
+    post:
+      operationId: createDisbursement
+      tags: [joint-account]
+      summary: Disburse money from the joint account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisbursementInput"
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+
+  /joint-account/{id}:
+    delete:
+      operationId: deleteJointAccountTransaction
+      tags: [joint-account]
+      summary: Delete a joint account transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /savings-goals/{id}/contribute:
     post:
@@ -852,6 +930,89 @@ components:
         - createdByUserId
         - isCompleted
         - createdAt
+
+    JointAccountTransaction:
+      type: object
+      properties:
+        id:
+          type: number
+        type:
+          type: string
+          description: deposit or disbursement
+        amount:
+          type: number
+        description:
+          type: string
+        madeById:
+          type: string
+          nullable: true
+        madeByName:
+          type: string
+          nullable: true
+        date:
+          type: string
+          format: date
+        createdAt:
+          type: string
+      required:
+        - id
+        - type
+        - amount
+        - description
+        - date
+        - createdAt
+
+    JointAccountSummary:
+      type: object
+      properties:
+        balance:
+          type: number
+        totalDeposits:
+          type: number
+        totalDisbursements:
+          type: number
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/JointAccountTransaction"
+      required:
+        - balance
+        - totalDeposits
+        - totalDisbursements
+        - transactions
+
+    DepositInput:
+      type: object
+      properties:
+        amount:
+          type: number
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+        madeById:
+          type: string
+          description: Defaults to the logged-in user
+      required:
+        - amount
+        - description
+        - date
+
+    DisbursementInput:
+      type: object
+      properties:
+        amount:
+          type: number
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+      required:
+        - amount
+        - description
+        - date
 
     SavingsGoalInput:
       type: object
