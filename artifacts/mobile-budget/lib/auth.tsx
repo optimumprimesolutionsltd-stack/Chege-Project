@@ -3,18 +3,18 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import * as AuthSession from 'expo-auth-session';
 import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import type { AuthUser } from '@workspace/api-client-react';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const AUTH_TOKEN_KEY = 'auth_session_token';
-const ISSUER_URL = process.env.EXPO_PUBLIC_ISSUER_URL ?? 'https://replit.com/oidc';
+export const AUTH_TOKEN_KEY = 'auth_session_token';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -39,26 +39,10 @@ function getApiBaseUrl(): string {
   return '';
 }
 
-function getClientId(): string {
-  return process.env.EXPO_PUBLIC_REPL_ID ?? '';
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
-  const redirectUri = AuthSession.makeRedirectUri();
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: getClientId(),
-      scopes: ['openid', 'email', 'profile', 'offline_access'],
-      redirectUri,
-      prompt: AuthSession.Prompt.Login,
-    },
-    discovery,
-  );
+  const loginResolveRef = useRef<(() => void) | null>(null);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -99,57 +83,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, [fetchUser]);
 
+  // Listen for deep link callbacks: mobile-budget://auth?token=SESSION_TOKEN
   useEffect(() => {
-    if (response?.type !== 'success' || !request?.codeVerifier) return;
-
-    const { code, state } = response.params;
-
-    (async () => {
-      try {
-        const apiBase = getApiBaseUrl();
-        if (!apiBase) {
-          console.error('API base URL not configured');
-          return;
+    const handleUrl = async (event: { url: string }) => {
+      const parsed = Linking.parse(event.url);
+      if (parsed.path === 'auth' && parsed.queryParams?.token) {
+        const token = parsed.queryParams.token as string;
+        await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+        // Dismiss the browser
+        await WebBrowser.dismissBrowserAsync().catch(() => {});
+        // Resolve the pending login promise
+        if (loginResolveRef.current) {
+          loginResolveRef.current();
+          loginResolveRef.current = null;
         }
-
-        const exchangeRes = await fetch(`${apiBase}/api/mobile-auth/token-exchange`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code,
-            code_verifier: request.codeVerifier,
-            redirect_uri: redirectUri,
-            state,
-            nonce: request.nonce,
-          }),
-        });
-
-        if (!exchangeRes.ok) {
-          console.error('Token exchange failed:', exchangeRes.status);
-          setIsLoading(false);
-          return;
-        }
-
-        const data = await exchangeRes.json();
-        if (data.token) {
-          await SecureStore.setItemAsync(AUTH_TOKEN_KEY, data.token);
-          setIsLoading(true);
-          await fetchUser();
-        }
-      } catch (err) {
-        console.error('Token exchange error:', err);
-        setIsLoading(false);
+        setIsLoading(true);
+        await fetchUser();
       }
-    })();
-  }, [response, request, redirectUri, fetchUser]);
+    };
+
+    const subscription = Linking.addEventListener('url', handleUrl);
+
+    // Also check the initial URL in case the app was cold-started from the deep link
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl({ url });
+    });
+
+    return () => subscription.remove();
+  }, [fetchUser]);
 
   const login = useCallback(async () => {
-    try {
-      await promptAsync();
-    } catch (err) {
-      console.error('Login error:', err);
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) {
+      console.error('API base URL not configured');
+      return;
     }
-  }, [promptAsync]);
+
+    await new Promise<void>((resolve) => {
+      loginResolveRef.current = resolve;
+      WebBrowser.openBrowserAsync(`${apiBase}/api/mobile-login`, {
+        showTitle: false,
+        enableDefaultShareMenuItem: false,
+      }).then(() => {
+        // Browser was dismissed (user closed it manually)
+        if (loginResolveRef.current) {
+          loginResolveRef.current();
+          loginResolveRef.current = null;
+        }
+      });
+    });
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -179,5 +162,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth(): AuthContextValue {
   return useContext(AuthContext);
 }
-
-export { AUTH_TOKEN_KEY };

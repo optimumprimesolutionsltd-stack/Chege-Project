@@ -243,6 +243,44 @@ router.get('/callback', async (req: Request, res: Response) => {
   res.redirect(returnTo);
 });
 
+// Mobile login — opens in browser, redirects back to app via deep link after auth
+router.get('/mobile-login', async (req: Request, res: Response) => {
+  const config = await getOidcConfig();
+  const callbackUrl = `${getOrigin(req)}/api/callback`;
+
+  const state = oidc.randomState();
+  const nonce = oidc.randomNonce();
+  const codeVerifier = oidc.randomPKCECodeVerifier();
+  const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
+
+  const redirectTo = oidc.buildAuthorizationUrl(config, {
+    redirect_uri: callbackUrl,
+    scope: 'openid email profile offline_access',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    prompt: 'login consent',
+    state,
+    nonce,
+  });
+
+  setOidcCookie(res, 'code_verifier', codeVerifier);
+  setOidcCookie(res, 'nonce', nonce);
+  setOidcCookie(res, 'state', state);
+  setOidcCookie(res, 'return_to', '/api/mobile-auth/complete');
+
+  res.redirect(redirectTo.href);
+});
+
+// After successful auth, redirect to the app deep link with the session token
+router.get('/mobile-auth/complete', (req: Request, res: Response) => {
+  const sid = req.cookies?.[SESSION_COOKIE];
+  if (!sid) {
+    res.status(401).send('No session found. Please try signing in again.');
+    return;
+  }
+  res.redirect(`mobile-budget://auth?token=${encodeURIComponent(sid)}`);
+});
+
 router.get('/logout', async (req: Request, res: Response) => {
   const config = await getOidcConfig();
   const origin = getOrigin(req);
