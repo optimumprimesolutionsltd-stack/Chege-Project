@@ -7,7 +7,8 @@
       "android": {
         "buildType": "apk",
         "env": {
-          "EXPO_PUBLIC_DOMAIN": "delete-project.replit.app"
+          "EXPO_PUBLIC_DOMAIN": "delete-project.replit.app",
+          "EXPO_PUBLIC_REPL_ID": "fe31a091-a4ed-426d-b193-7f5e5c036bb9"
         }
       }
     },
@@ -15,7 +16,8 @@
       "android": {
         "buildType": "apk",
         "env": {
-          "EXPO_PUBLIC_DOMAIN": "delete-project.replit.app"
+          "EXPO_PUBLIC_DOMAIN": "delete-project.replit.app",
+          "EXPO_PUBLIC_REPL_ID": "fe31a091-a4ed-426d-b193-7f5e5c036bb9"
         }
       }
     }
