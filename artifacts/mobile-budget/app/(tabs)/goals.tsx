@@ -547,6 +547,23 @@ export default function GoalsScreen() {
   // ── Derived data ────────────────────────────────────────────────────────────
   const active = (goals as SavingsGoal[]).filter((g) => !g.isCompleted);
   const done = (goals as SavingsGoal[]).filter((g) => g.isCompleted);
+
+  const filteredContributions = (contributions as SavingsGoalContribution[]).filter((c) => {
+    const date = new Date(c.createdAt);
+    if (filterStart) {
+      const start = new Date(filterStart);
+      start.setHours(0, 0, 0, 0);
+      if (date < start) return false;
+    }
+    if (filterEnd) {
+      const end = new Date(filterEnd);
+      end.setHours(23, 59, 59, 999);
+      if (date > end) return false;
+    }
+    return true;
+  });
+  const filterActive = !!(filterStart || filterEnd);
+  const filterNetTotal = filteredContributions.reduce((sum, c) => sum + c.amount, 0);
   const totalSaved = (goals as SavingsGoal[]).reduce((s, g) => s + (g.currentAmount ?? 0), 0);
   const totalTarget = (goals as SavingsGoal[]).reduce((s, g) => s + (g.targetAmount ?? 0), 0);
 
@@ -932,22 +949,26 @@ export default function GoalsScreen() {
               </View>
             )}
 
+            {/* Filter summary bar */}
+            {filterActive && !historyLoading && (contributions as SavingsGoalContribution[]).length > 0 && (
+              <View style={[styles.filterSummaryBar, { backgroundColor: '#0f2217', borderBottomColor: colors.border }]}>
+                <Feather name="bar-chart-2" size={13} color="#4ade80" style={{ marginRight: 6 }} />
+                <Text style={[styles.filterSummaryText, { color: '#86efac' }]}>
+                  {filteredContributions.length}{' '}
+                  {filteredContributions.length === 1 ? 'contribution' : 'contributions'}
+                  {'  ·  '}
+                  <Text style={{ color: filterNetTotal >= 0 ? '#4ade80' : '#f87171' }}>
+                    {filterNetTotal >= 0
+                      ? `KES ${formatKES(filterNetTotal)}`
+                      : `\u2212 KES ${formatKES(Math.abs(filterNetTotal))}`} total
+                  </Text>
+                </Text>
+              </View>
+            )}
+
             {/* Body */}
             {(() => {
-              const filtered = (contributions as SavingsGoalContribution[]).filter((c) => {
-                const date = new Date(c.createdAt);
-                if (filterStart) {
-                  const start = new Date(filterStart);
-                  start.setHours(0, 0, 0, 0);
-                  if (date < start) return false;
-                }
-                if (filterEnd) {
-                  const end = new Date(filterEnd);
-                  end.setHours(23, 59, 59, 999);
-                  if (date > end) return false;
-                }
-                return true;
-              });
+              const filtered = filteredContributions;
 
               if (historyLoading) {
                 return <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} size="large" />;
@@ -1498,6 +1519,17 @@ const styles = StyleSheet.create({
     padding: 4,
     alignSelf: 'flex-end',
     marginBottom: 4,
+  },
+  filterSummaryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  filterSummaryText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
   },
   historySubtitle: {
     fontSize: 11,
