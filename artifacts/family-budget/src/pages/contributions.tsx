@@ -86,13 +86,32 @@ export default function Contributions() {
           <p className="text-muted-foreground mt-1">Record deposits towards the joint budget.</p>
         </div>
         
-        <div className="flex items-center gap-4 bg-card rounded-xl p-1 border shadow-sm">
+        <div className="flex items-center gap-1 bg-card rounded-xl p-1 border shadow-sm">
           <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg hover:bg-muted">
             <ArrowLeft className="h-5 w-5 text-foreground/70" />
           </Button>
-          <div className="w-36 text-center font-semibold font-display flex items-center justify-center gap-2">
-            <Calendar className="w-4 h-4 text-primary" />
-            {formatMonthYear(month, year)}
+          <div className="flex items-center gap-1.5 px-1">
+            <Calendar className="w-4 h-4 text-primary shrink-0" />
+            <select
+              value={`${year}-${String(month).padStart(2, '0')}`}
+              onChange={e => {
+                const [y, m] = e.target.value.split('-').map(Number);
+                setYear(y);
+                setMonth(m);
+              }}
+              className="font-semibold font-display text-sm text-foreground bg-transparent border-none outline-none cursor-pointer"
+            >
+              {Array.from({ length: 24 }, (_, i) => {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const m = d.getMonth() + 1;
+                const y = d.getFullYear();
+                return (
+                  <option key={`${y}-${m}`} value={`${y}-${String(m).padStart(2, '0')}`}>
+                    {formatMonthYear(m, y)}
+                  </option>
+                );
+              })}
+            </select>
           </div>
           <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg hover:bg-muted" disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
             <ArrowRight className="h-5 w-5 text-foreground/70" />
