@@ -63,10 +63,67 @@ function GoalProgress({ current, target }: { current: number; target: number }) 
   );
 }
 
+type QuickChip = "this-month" | "last-month" | "last-3-months" | "this-year";
+
+function getChipRange(chip: QuickChip): { from: string; to: string } {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = today.getMonth(); // 0-indexed
+
+  if (chip === "this-month") {
+    return { from: fmt(new Date(y, m, 1)), to: fmt(today) };
+  }
+  if (chip === "last-month") {
+    const firstOfLastMonth = new Date(y, m - 1, 1);
+    const lastOfLastMonth = new Date(y, m, 0);
+    return { from: fmt(firstOfLastMonth), to: fmt(lastOfLastMonth) };
+  }
+  if (chip === "last-3-months") {
+    const threeMonthsAgo = new Date(y, m - 3, today.getDate());
+    return { from: fmt(threeMonthsAgo), to: fmt(today) };
+  }
+  // this-year
+  return { from: fmt(new Date(y, 0, 1)), to: fmt(today) };
+}
+
+const QUICK_CHIPS: { id: QuickChip; label: string }[] = [
+  { id: "this-month", label: "This Month" },
+  { id: "last-month", label: "Last Month" },
+  { id: "last-3-months", label: "Last 3 Months" },
+  { id: "this-year", label: "This Year" },
+];
+
 function GoalContributionHistory({ goalId }: { goalId: number }) {
   const { data: contributions, isLoading } = useGetSavingsGoalContributions(goalId);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [activeChip, setActiveChip] = useState<QuickChip | null>(null);
+
+  function applyChip(chip: QuickChip) {
+    if (activeChip === chip) {
+      // toggle off
+      setActiveChip(null);
+      setFromDate("");
+      setToDate("");
+    } else {
+      const range = getChipRange(chip);
+      setActiveChip(chip);
+      setFromDate(range.from);
+      setToDate(range.to);
+    }
+  }
+
+  function handleFromDateChange(value: string) {
+    setFromDate(value);
+    setActiveChip(null);
+  }
+
+  function handleToDateChange(value: string) {
+    setToDate(value);
+    setActiveChip(null);
+  }
 
   if (isLoading) {
     return (
@@ -93,13 +150,30 @@ function GoalContributionHistory({ goalId }: { goalId: number }) {
 
   return (
     <div className="space-y-3">
+      {/* Quick-filter chips */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {QUICK_CHIPS.map((chip) => (
+          <button
+            key={chip.id}
+            onClick={() => applyChip(chip.id)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+              activeChip === chip.id
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-muted/40 text-muted-foreground border-border/50 hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
       {/* Date range filter */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <Input
             type="date"
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
+            onChange={(e) => handleFromDateChange(e.target.value)}
             className="h-7 text-xs bg-muted/40 border-border/50 px-2"
             aria-label="From date"
           />
@@ -107,14 +181,14 @@ function GoalContributionHistory({ goalId }: { goalId: number }) {
           <Input
             type="date"
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
+            onChange={(e) => handleToDateChange(e.target.value)}
             className="h-7 text-xs bg-muted/40 border-border/50 px-2"
             aria-label="To date"
           />
         </div>
         {hasFilter && (
           <button
-            onClick={() => { setFromDate(""); setToDate(""); }}
+            onClick={() => { setFromDate(""); setToDate(""); setActiveChip(null); }}
             className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
           >
             Clear
