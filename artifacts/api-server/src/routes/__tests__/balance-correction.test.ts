@@ -316,6 +316,36 @@ describe("PATCH /savings-goals/:id — balance correction", () => {
     // The goal update and the contribution insert both fired.
     expect(tx.update).toHaveBeenCalledTimes(1);
     expect(tx.insert).toHaveBeenCalledTimes(1);
+
+    // The contribution note must be the caller-supplied reason, not the generic fallback.
+    const insertArg = (tx.insert as ReturnType<typeof vi.fn>).mock.results[0].value;
+    expect(
+      (insertArg.values as ReturnType<typeof vi.fn>).mock.calls[0][0],
+    ).toMatchObject({ note: "Emergency withdrawal approved", amount: -150 });
+  });
+
+  it("falls back to 'Manual adjustment' note when no reason is supplied", async () => {
+    // A normal (small) correction with no reason field — note must be the default fallback.
+    const existing = makeGoal(1, { current: 100, target: 500 });
+    const updated = makeGoal(1, { current: 120, target: 500 }); // delta = +20
+
+    const tx = makePatchTx(existing, updated);
+    mockedDb.transaction = vi
+      .fn()
+      .mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => cb(tx));
+
+    const res = await request(app)
+      .patch("/savings-goals/1")
+      .send({ currentAmount: 120 }); // no reason field
+
+    expect(res.status).toBe(200);
+    expect(tx.insert).toHaveBeenCalledTimes(1);
+
+    // Without a reason, the note must default to "Manual adjustment".
+    const insertArg = (tx.insert as ReturnType<typeof vi.fn>).mock.results[0].value;
+    expect(
+      (insertArg.values as ReturnType<typeof vi.fn>).mock.calls[0][0],
+    ).toMatchObject({ note: "Manual adjustment", amount: 20 });
   });
 
   it("does NOT trigger the large-correction guard when the current balance is 0", async () => {

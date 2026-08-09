@@ -283,7 +283,7 @@ router.patch("/savings-goals/:id", async (req, res) => {
       await tx.insert(savingsGoalContributionsTable).values({
         goalId: id,
         amount: delta,
-        note: "Manual adjustment",
+        note: reason ?? "Manual adjustment",
         createdByUserId: req.user.id,
       });
     }
