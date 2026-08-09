@@ -122,13 +122,23 @@ function GoalContributionHistory({ goalId }: { goalId: number }) {
         )}
       </div>
 
-      {/* Results count when filtered */}
+      {/* Summary bar when filtered */}
       {hasFilter && (
-        <p className="text-xs text-muted-foreground">
-          {filtered.length === 0
-            ? "No contributions in this range."
-            : `${filtered.length} of ${contributions.length} contribution${contributions.length !== 1 ? "s" : ""}`}
-        </p>
+        <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          {filtered.length === 0 ? (
+            "No contributions in this range."
+          ) : (
+            <span>
+              <span className="font-medium text-foreground">{filtered.length}</span>
+              {" "}contribution{filtered.length !== 1 ? "s" : ""}
+              {" · "}
+              <span className="font-medium text-foreground">
+                {formatKes(filtered.reduce((sum: number, c: SavingsGoalContribution) => sum + c.amount, 0))}
+              </span>
+              {" "}total
+            </span>
+          )}
+        </div>
       )}
 
       {filtered.length === 0 && hasFilter ? null : (
