@@ -3,7 +3,6 @@ import React, {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -42,7 +41,6 @@ function getApiBaseUrl(): string {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const loginResolveRef = useRef<(() => void) | null>(null);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -83,33 +81,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, [fetchUser]);
 
-  // Listen for deep link callbacks: mobile-budget://auth?token=SESSION_TOKEN
+  // Handle cold-start deep link (app opened directly from mobile-budget:// URL)
   useEffect(() => {
-    const handleUrl = async (event: { url: string }) => {
-      const parsed = Linking.parse(event.url);
+    const handleUrl = async (url: string) => {
+      const parsed = Linking.parse(url);
       if (parsed.path === 'auth' && parsed.queryParams?.token) {
         const token = parsed.queryParams.token as string;
         await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
-        // Dismiss the browser
-        await WebBrowser.dismissBrowserAsync().catch(() => {});
-        // Resolve the pending login promise
-        if (loginResolveRef.current) {
-          loginResolveRef.current();
-          loginResolveRef.current = null;
-        }
         setIsLoading(true);
         await fetchUser();
       }
     };
 
-    const subscription = Linking.addEventListener('url', handleUrl);
-
-    // Also check the initial URL in case the app was cold-started from the deep link
     Linking.getInitialURL().then((url) => {
-      if (url) handleUrl({ url });
+      if (url) handleUrl(url);
     });
-
-    return () => subscription.remove();
   }, [fetchUser]);
 
   const login = useCallback(async () => {
@@ -119,20 +105,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    await new Promise<void>((resolve) => {
-      loginResolveRef.current = resolve;
-      WebBrowser.openBrowserAsync(`${apiBase}/api/mobile-login`, {
-        showTitle: false,
-        enableDefaultShareMenuItem: false,
-      }).then(() => {
-        // Browser was dismissed (user closed it manually)
-        if (loginResolveRef.current) {
-          loginResolveRef.current();
-          loginResolveRef.current = null;
-        }
-      });
-    });
-  }, []);
+    // openAuthSessionAsync uses Chrome Custom Tabs on Android — it handles the
+    // redirect back to the app internally so no "Open with…" disambiguation
+    // dialog appears. The result URL is returned directly.
+    const result = await WebBrowser.openAuthSessionAsync(
+      `${apiBase}/api/mobile-login`,
+      'mobile-budget://',
+      { showInRecents: false },
+    );
+
+    if (result.type === 'success' && result.url) {
+      const parsed = Linking.parse(result.url);
+      if (parsed.path === 'auth' && parsed.queryParams?.token) {
+        const token = parsed.queryParams.token as string;
+        await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+        setIsLoading(true);
+        await fetchUser();
+      }
+    }
+  }, [fetchUser]);
 
   const logout = useCallback(async () => {
     try {
