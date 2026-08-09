@@ -93,48 +93,53 @@ router.post("/savings-goals/cascade-contribute", async (req, res) => {
       .orderBy(savingsGoalsTable.createdAt);
   }
 
-  let remaining = totalAmount;
-  const allocations: {
-    goalId: number;
-    goalName: string;
-    allocated: number;
-    newTotal: number;
-    completed: boolean;
-  }[] = [];
+  const { allocations, leftover } = await db.transaction(async (tx) => {
+    let remaining = totalAmount;
+    const allocations: {
+      goalId: number;
+      goalName: string;
+      allocated: number;
+      newTotal: number;
+      completed: boolean;
+    }[] = [];
 
-  for (const goal of goals) {
-    if (remaining <= 0) break;
-    const needed = goal.targetAmount - goal.currentAmount;
-    if (needed <= 0) continue; // already full
+    for (const goal of goals) {
+      if (remaining <= 0) break;
+      const needed = goal.targetAmount - goal.currentAmount;
+      if (needed <= 0) continue; // already full
 
-    const allocated = Math.min(needed, remaining);
-    remaining -= allocated;
+      const allocated = Math.min(needed, remaining);
+      remaining -= allocated;
 
-    const [updated] = await db
-      .update(savingsGoalsTable)
-      .set({
-        currentAmount: sql`${savingsGoalsTable.currentAmount} + ${allocated}`,
-        isCompleted: goal.currentAmount + allocated >= goal.targetAmount ? true : goal.isCompleted,
-      })
-      .where(eq(savingsGoalsTable.id, goal.id))
-      .returning();
+      const [updated] = await tx
+        .update(savingsGoalsTable)
+        .set({
+          currentAmount: sql`${savingsGoalsTable.currentAmount} + ${allocated}`,
+          isCompleted: goal.currentAmount + allocated >= goal.targetAmount ? true : goal.isCompleted,
+        })
+        .where(eq(savingsGoalsTable.id, goal.id))
+        .returning();
 
-    await db.insert(savingsGoalContributionsTable).values({
-      goalId: goal.id,
-      amount: allocated,
-      createdByUserId: req.user.id,
-    });
+      // Both writes run in the same transaction — a crash between them rolls back both.
+      await tx.insert(savingsGoalContributionsTable).values({
+        goalId: goal.id,
+        amount: allocated,
+        createdByUserId: req.user.id,
+      });
 
-    allocations.push({
-      goalId: goal.id,
-      goalName: goal.name,
-      allocated,
-      newTotal: updated.currentAmount,
-      completed: updated.isCompleted,
-    });
-  }
+      allocations.push({
+        goalId: goal.id,
+        goalName: goal.name,
+        allocated,
+        newTotal: updated.currentAmount,
+        completed: updated.isCompleted,
+      });
+    }
 
-  res.json({ totalAmount, allocations, leftover: remaining });
+    return { allocations, leftover: remaining };
+  });
+
+  res.json({ totalAmount, allocations, leftover });
 });
 
 // POST /savings-goals/:id/contribute — atomic server-side increment (before /:id PATCH)
