@@ -281,7 +281,9 @@ export default function AddExpenseSheet() {
                         { color: selected ? '#fff' : colors.foreground },
                       ]}
                     >
-                      {m.userName ?? m.userId.slice(0, 8)}
+                      {m.userId === user?.id
+                        ? (m.userName?.split(' ')[0] ?? 'You')
+                        : (m.userName?.split(' ')[0] ?? 'Member')}
                     </Text>
                   </Pressable>
                 );

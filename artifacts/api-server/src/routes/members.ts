@@ -12,7 +12,10 @@ async function getMembersWithNames() {
   const userMap = new Map(users.map((u) => [u.id, u]));
   return members.map((m) => {
     const user = userMap.get(m.userId);
-    const name = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || null;
+    const name =
+      [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+      user?.email?.split("@")[0] ||
+      null;
     return {
       userId: m.userId,
       userName: name,
