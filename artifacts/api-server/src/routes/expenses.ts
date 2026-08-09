@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   CreateExpenseBody,
+  UpdateExpenseBody,
   DeleteExpenseParams,
   GetExpensesQueryParams,
 } from "@workspace/api-zod";
@@ -149,7 +150,7 @@ router.post("/expenses", async (req, res) => {
 
   const [expense] = await db
     .insert(expensesTable)
-    .values({ amount, category, description, notes: notes ?? null, paidById: effectivePaidById, isRecurring: isRecurring ?? false, date })
+    .values({ amount, category, description, notes: notes ?? null, paidById: effectivePaidById, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .returning();
 
   const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, effectivePaidById) });
@@ -163,7 +164,7 @@ router.patch("/expenses/:id", async (req, res) => {
   const idParsed = DeleteExpenseParams.safeParse(req.params);
   if (!idParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const parsed = ExpenseInput.safeParse(req.body);
+  const parsed = UpdateExpenseBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
 
   const { amount, category, description, notes, paidById, isRecurring, date } = parsed.data;
@@ -171,7 +172,7 @@ router.patch("/expenses/:id", async (req, res) => {
 
   const [updated] = await db
     .update(expensesTable)
-    .set({ amount, category, description, notes: notes ?? null, paidById: effectivePaidById, isRecurring: isRecurring ?? false, date })
+    .set({ amount, category, description, notes: notes ?? null, paidById: effectivePaidById, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .where(eq(expensesTable.id, Math.round(idParsed.data.id)))
     .returning();
 
