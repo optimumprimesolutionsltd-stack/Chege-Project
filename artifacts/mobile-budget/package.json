@@ -59,6 +59,6 @@
     "expo-auth-session": "~7.0.11",
     "expo-crypto": "~15.0.9",
     "expo-secure-store": "~15.0.8",
-    "expo-updates": "^57.0.12"
+    "expo-updates": "^29.0.19"
   }
 }
