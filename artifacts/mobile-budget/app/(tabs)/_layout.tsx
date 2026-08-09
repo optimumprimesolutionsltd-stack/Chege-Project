@@ -15,11 +15,23 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'house', selected: 'house.fill' }} />
-        <Label>Dashboard</Label>
+        <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="history">
         <Icon sf={{ default: 'clock', selected: 'clock.fill' }} />
-        <Label>History</Label>
+        <Label>Expenses</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="budget">
+        <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
+        <Label>Budget</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="goals">
+        <Icon sf={{ default: 'target', selected: 'target' }} />
+        <Label>Goals</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="bank">
+        <Icon sf={{ default: 'banknote', selected: 'banknote.fill' }} />
+        <Label>Account</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -39,6 +51,7 @@ function ClassicTabLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.secondary,
         tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarLabelStyle: { fontSize: 10 },
         tabBarStyle: {
           position: 'absolute',
           backgroundColor: isIOS ? 'transparent' : colors.card,
@@ -68,7 +81,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: 'Home',
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="house.fill" tintColor={color} size={24} />
@@ -80,12 +93,48 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: 'History',
+          title: 'Expenses',
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="clock.fill" tintColor={color} size={24} />
             ) : (
               <Feather name="clock" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="budget"
+        options={{
+          title: 'Budget',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="chart.bar.fill" tintColor={color} size={24} />
+            ) : (
+              <Feather name="bar-chart-2" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="goals"
+        options={{
+          title: 'Goals',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="target" tintColor={color} size={24} />
+            ) : (
+              <Feather name="target" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="bank"
+        options={{
+          title: 'Account',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="banknote" tintColor={color} size={24} />
+            ) : (
+              <Feather name="credit-card" size={22} color={color} />
             ),
         }}
       />
