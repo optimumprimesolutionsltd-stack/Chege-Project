@@ -8,28 +8,85 @@ import {
   ActivityIndicator,
   Pressable,
   Platform,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
-import ActivityCard from '@/components/ActivityCard';
-import { useGetExpenses } from '@workspace/api-client-react';
+import { useAuth } from '@/lib/auth';
+import {
+  useGetExpenses,
+  useUpdateExpense,
+  useDeleteExpense,
+  useGetBudgetCategories,
+  useGetMembers,
+  getGetExpensesQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardActivityQueryKey,
+} from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
+const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
+  Food: 'shopping-cart', Transport: 'truck', Health: 'heart', Education: 'book',
+  Utilities: 'zap', Entertainment: 'tv', Clothing: 'tag', Savings: 'archive',
+  Housing: 'home', Communication: 'phone', Other: 'more-horizontal',
+};
+
+function formatKES(n: number) {
+  return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
+}
+
+function formatDate(s: string) {
+  return new Date(s).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+type Expense = {
+  id: number;
+  amount: number;
+  category: string;
+  description: string;
+  notes?: string | null;
+  paidById: string;
+  paidByName: string;
+  isRecurring: boolean;
+  date: string;
+  createdAt: string;
+};
+
+type EditForm = {
+  amount: string;
+  category: string;
+  description: string;
+  notes: string;
+  paidById: string;
+  date: string;
+};
+
 export default function HistoryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
   const { data: expenses = [], isLoading, refetch } = useGetExpenses({ month, year });
+  const { data: categories = [] } = useGetBudgetCategories();
+  const { data: members = [] } = useGetMembers();
+  const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -38,100 +95,128 @@ export default function HistoryScreen() {
     setRefreshing(false);
   }, [refetch]);
 
+  // Edit modal state
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({ amount: '', category: '', description: '', notes: '', paidById: '', date: '' });
+  const [saving, setSaving] = useState(false);
+
+  const openEdit = (exp: Expense) => {
+    setEditForm({
+      amount: String(exp.amount),
+      category: exp.category,
+      description: exp.description,
+      notes: exp.notes ?? '',
+      paidById: exp.paidById ?? '',
+      date: exp.date,
+    });
+    setEditingExpense(exp);
+  };
+
+  const closeEdit = () => { setEditingExpense(null); setSaving(false); };
+
+  const handleSave = async () => {
+    if (!editingExpense) return;
+    const parsed = parseFloat(editForm.amount);
+    if (!parsed || parsed <= 0 || !editForm.category || !editForm.description || !editForm.date) {
+      Alert.alert('Missing fields', 'Please fill in amount, category, description and date.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateExpense.mutateAsync({
+        id: editingExpense.id,
+        data: {
+          amount: parsed,
+          category: editForm.category,
+          description: editForm.description,
+          notes: editForm.notes || undefined,
+          paidById: editForm.paidById || undefined,
+          date: editForm.date,
+          isRecurring: editingExpense.isRecurring,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+      closeEdit();
+    } catch {
+      Alert.alert('Error', 'Could not save changes.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = (exp: Expense) => {
+    Alert.alert('Delete expense', `Delete "${exp.description}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await deleteExpense.mutateAsync({ id: exp.id });
+            queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+          } catch {
+            Alert.alert('Error', 'Could not delete expense.');
+          }
+        },
+      },
+    ]);
+  };
+
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
-
-  // Convert Expense[] to ActivityItem[] shape for ActivityCard
-  const items = expenses.map((e) => ({
-    id: String(e.id),
-    type: 'expense' as const,
-    amount: e.amount,
-    description: e.description,
-    userName: e.paidByName,
-    category: e.category,
-    date: e.createdAt,
-  }));
-
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
-  function prevMonth() {
-    if (month === 1) { setMonth(12); setYear((y) => y - 1); }
-    else setMonth((m) => m - 1);
-  }
-  function nextMonth() {
-    if (month === 12) { setMonth(1); setYear((y) => y + 1); }
-    else setMonth((m) => m + 1);
-  }
+  function prevMonth() { if (month === 1) { setMonth(12); setYear((y) => y - 1); } else setMonth((m) => m - 1); }
+  function nextMonth() { if (month === 12) { setMonth(1); setYear((y) => y + 1); } else setMonth((m) => m + 1); }
+
+  const totalSpent = expenses.reduce((s, e) => s + e.amount, 0);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: topPad + 12,
-            backgroundColor: colors.card,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Expenses</Text>
+      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Expenses</Text>
+          {expenses.length > 0 && (
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
+              {expenses.length} entries · KES {formatKES(totalSpent)}
+            </Text>
+          )}
+        </View>
         <View style={styles.monthNav}>
           <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
             <Feather name="chevron-left" size={20} color={colors.mutedForeground} />
           </Pressable>
-          <Text style={[styles.monthLabel, { color: colors.foreground }]}>
-            {MONTHS_SHORT[month - 1]} {year}
-          </Text>
-          <Pressable
-            onPress={nextMonth}
-            style={styles.navBtn}
-            hitSlop={8}
-            disabled={isCurrentMonth}
-          >
-            <Feather
-              name="chevron-right"
-              size={20}
-              color={isCurrentMonth ? colors.border : colors.mutedForeground}
-            />
+          <Text style={[styles.monthLabel, { color: colors.foreground }]}>{MONTHS_SHORT[month - 1]} {year}</Text>
+          <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
+            <Feather name="chevron-right" size={20} color={isCurrentMonth ? colors.border : colors.mutedForeground} />
           </Pressable>
         </View>
       </View>
 
       {isLoading ? (
-        <ActivityIndicator
-          color={colors.primary}
-          style={{ marginTop: 60 }}
-          size="large"
-        />
+        <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
       ) : (
         <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ActivityCard item={item} colors={colors} />}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
+          data={expenses as Expense[]}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => (
+            <ExpenseRow
+              expense={item}
+              colors={colors}
+              onEdit={() => openEdit(item)}
+              onDelete={() => handleDelete(item)}
             />
-          }
-          contentContainerStyle={[
-            styles.list,
-            {
-              paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100,
-            },
-          ]}
+          )}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+          contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Feather name="inbox" size={36} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                No expenses
-              </Text>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                {MONTHS_SHORT[month - 1]} {year} is empty
-              </Text>
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No expenses</Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{MONTHS_SHORT[month - 1]} {year} is empty</Text>
             </View>
           }
         />
@@ -139,80 +224,213 @@ export default function HistoryScreen() {
 
       {/* FAB */}
       <Pressable
-        style={[
-          styles.fab,
-          {
-            backgroundColor: colors.secondary,
-            bottom: Platform.OS === 'web' ? 100 : insets.bottom + 70,
-          },
-        ]}
+        style={[styles.fab, { backgroundColor: colors.secondary, bottom: Platform.OS === 'web' ? 100 : insets.bottom + 70 }]}
         onPress={() => router.push('/add-expense')}
         hitSlop={8}
       >
         <Feather name="plus" size={28} color="#fff" />
       </Pressable>
+
+      {/* Edit Modal */}
+      <Modal visible={!!editingExpense} animationType="slide" transparent onRequestClose={closeEdit}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalKAV}>
+            <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+              {/* Handle bar */}
+              <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
+
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit Expense</Text>
+                <Pressable onPress={closeEdit} hitSlop={8}>
+                  <Feather name="x" size={22} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalBody}>
+                {/* Amount */}
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount (KES)</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  value={editForm.amount}
+                  onChangeText={v => setEditForm(f => ({ ...f, amount: v }))}
+                  keyboardType="numeric"
+                  placeholder="e.g. 5000"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+
+                {/* Description */}
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Description</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  value={editForm.description}
+                  onChangeText={v => setEditForm(f => ({ ...f, description: v }))}
+                  placeholder="e.g. School fees"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+
+                {/* Category */}
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+                  {categories.map(c => {
+                    const sel = editForm.category === c.name;
+                    return (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => setEditForm(f => ({ ...f, category: c.name }))}
+                        style={[styles.chip, { backgroundColor: sel ? colors.secondary : colors.muted, borderColor: sel ? colors.secondary : colors.border }]}
+                      >
+                        <Feather name={CATEGORY_ICONS[c.name] ?? 'tag'} size={12} color={sel ? '#fff' : colors.mutedForeground} />
+                        <Text style={[styles.chipText, { color: sel ? '#fff' : colors.foreground }]}>{c.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Paid by */}
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Paid by</Text>
+                <View style={styles.memberRow}>
+                  {members.map(m => {
+                    const isMe = m.userId === user?.id;
+                    const sel = editForm.paidById === m.userId || (!editForm.paidById && isMe);
+                    const name = m.userName?.split(' ')[0] ?? (isMe ? 'Me' : 'Member');
+                    return (
+                      <Pressable
+                        key={m.userId}
+                        onPress={() => setEditForm(f => ({ ...f, paidById: m.userId }))}
+                        style={[styles.memberPill, { backgroundColor: sel ? '#4ade80' : colors.muted, borderColor: sel ? '#4ade80' : colors.border }]}
+                      >
+                        <Feather name="user" size={12} color={sel ? '#0a1a10' : colors.mutedForeground} />
+                        <Text style={[styles.memberPillText, { color: sel ? '#0a1a10' : colors.foreground }]}>{name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {/* Notes */}
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Notes <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
+                <TextInput
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  value={editForm.notes}
+                  onChangeText={v => setEditForm(f => ({ ...f, notes: v }))}
+                  placeholder="Any extra details"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+
+                {/* Date */}
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Date</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  value={editForm.date}
+                  onChangeText={v => setEditForm(f => ({ ...f, date: v }))}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+
+                {/* Save */}
+                <Pressable
+                  onPress={handleSave}
+                  disabled={saving}
+                  style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+                >
+                  {saving
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={styles.saveBtnText}>Save Changes</Text>}
+                </Pressable>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function ExpenseRow({
+  expense, colors, onEdit, onDelete,
+}: {
+  expense: Expense;
+  colors: any;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const icon: keyof typeof Feather.glyphMap = CATEGORY_ICONS[expense.category] ?? 'shopping-bag';
+  return (
+    <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.rowIcon, { backgroundColor: colors.accent }]}>
+        <Feather name={icon} size={16} color={colors.accentForeground} />
+      </View>
+      <View style={styles.rowInfo}>
+        <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{expense.description}</Text>
+        <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
+          {expense.paidByName} · {expense.category} · {formatDate(expense.date)}
+        </Text>
+        {expense.notes ? <Text style={[styles.rowNotes, { color: colors.mutedForeground }]}>{expense.notes}</Text> : null}
+      </View>
+      <View style={styles.rowRight}>
+        <Text style={[styles.rowAmount, { color: colors.foreground }]}>
+          −{expense.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
+        </Text>
+        <View style={styles.rowActions}>
+          <Pressable onPress={onEdit} hitSlop={6} style={styles.actionBtn}>
+            <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+          </Pressable>
+          <Pressable onPress={onDelete} hitSlop={6} style={styles.actionBtn}>
+            <Feather name="trash-2" size={14} color="#ef4444" />
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    fontFamily: 'Inter_700Bold',
-  },
-  monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
+  header: { paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerTitle: { fontSize: 22, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  monthNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   navBtn: { padding: 4 },
-  monthLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter_500Medium',
-    minWidth: 64,
-    textAlign: 'center',
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingTop: 80,
-    gap: 10,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    fontFamily: 'Inter_600SemiBold',
-    marginTop: 4,
-  },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 10,
-  },
+  monthLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', minWidth: 56, textAlign: 'center' },
+
+  list: { paddingHorizontal: 14, paddingTop: 14 },
+
+  row: { flexDirection: 'row', alignItems: 'center', padding: 12, borderWidth: 1, borderRadius: 12, marginBottom: 10, gap: 10 },
+  rowIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  rowInfo: { flex: 1 },
+  rowDesc: { fontSize: 14, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+  rowMeta: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  rowNotes: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1, fontStyle: 'italic' },
+  rowRight: { alignItems: 'flex-end', gap: 6 },
+  rowAmount: { fontSize: 14, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  rowActions: { flexDirection: 'row', gap: 8 },
+  actionBtn: { padding: 2 },
+
+  empty: { alignItems: 'center', paddingTop: 80, gap: 10 },
+  emptyTitle: { fontSize: 18, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
+  emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
+
+  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
+
+  // Modal
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalKAV: { justifyContent: 'flex-end' },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
+  handleBar: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  modalTitle: { fontSize: 18, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  modalBody: { paddingHorizontal: 20, paddingBottom: 40 },
+
+  label: { fontSize: 12, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginBottom: 6, marginTop: 14 },
+  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular' },
+
+  chipScroll: { marginBottom: 4 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  chipText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+
+  memberRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
+  memberPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
+  memberPillText: { fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+
+  saveBtn: { marginTop: 24, backgroundColor: '#4ade80', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  saveBtnText: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', color: '#0a1a10' },
 });

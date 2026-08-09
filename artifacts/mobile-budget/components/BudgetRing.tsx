@@ -20,9 +20,10 @@ interface Props {
   spent: number;
   total: number;
   isOver: boolean;
+  hideValues?: boolean;
 }
 
-export default function BudgetRing({ percent, spent, total, isOver }: Props) {
+export default function BudgetRing({ percent, spent, total, isOver, hideValues }: Props) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -72,10 +73,10 @@ export default function BudgetRing({ percent, spent, total, isOver }: Props) {
         <Text style={styles.pct}>{pctDisplay}%</Text>
         <Text style={styles.label}>used</Text>
         <Text style={[styles.spent, { color: ringColor }]}>
-          {spent.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
+          {hideValues ? '••••' : spent.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
         </Text>
         <Text style={styles.ofTotal}>
-          of {total.toLocaleString('en-KE', { maximumFractionDigits: 0 })} KES
+          {hideValues ? '••••' : `of ${total.toLocaleString('en-KE', { maximumFractionDigits: 0 })} KES`}
         </Text>
       </View>
     </View>
