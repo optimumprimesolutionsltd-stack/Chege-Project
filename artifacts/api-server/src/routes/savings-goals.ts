@@ -156,21 +156,26 @@ router.post("/savings-goals/:id/contribute", async (req, res) => {
   const { id } = paramParsed.data;
   const { amount } = bodyParsed.data;
 
-  // Atomic increment — avoids read-modify-write race conditions
-  const [updated] = await db
-    .update(savingsGoalsTable)
-    .set({ currentAmount: sql`${savingsGoalsTable.currentAmount} + ${amount}` })
-    .where(eq(savingsGoalsTable.id, id))
-    .returning();
+  // Both writes run inside a single transaction — a crash between them rolls back both.
+  const updated = await db.transaction(async (tx) => {
+    const [goal] = await tx
+      .update(savingsGoalsTable)
+      .set({ currentAmount: sql`${savingsGoalsTable.currentAmount} + ${amount}` })
+      .where(eq(savingsGoalsTable.id, id))
+      .returning();
+
+    if (!goal) return null;
+
+    await tx.insert(savingsGoalContributionsTable).values({
+      goalId: id,
+      amount,
+      createdByUserId: req.user.id,
+    });
+
+    return goal;
+  });
 
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
-
-  // Record contribution history
-  await db.insert(savingsGoalContributionsTable).values({
-    goalId: id,
-    amount,
-    createdByUserId: req.user.id,
-  });
 
   res.json(formatGoal(updated));
 });
