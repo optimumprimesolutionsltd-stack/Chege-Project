@@ -6,20 +6,25 @@ import { db, membersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 // ── One-time member fix ────────────────────────────────────────────────────
-// An unknown account (63497598) grabbed Lydiah's membership slot before she
-// could sign in. This runs at startup: if the unknown account is a member and
-// Lydiah's real account (63570605) is not, swap them.
+// Ensure the two authorised accounts are Lydiah (lydiah.karimi2015@gmail.com)
+// and Frederick/Chege (mundarafrederick@gmail.com). The business account
+// (optimumprimesolutionsltd@gmail.com / 62278925) must not be a member.
 async function fixMembersIfNeeded() {
-  const UNKNOWN = "63497598";      // mundarafrederick@gmail.com — not Lydiah
-  const LYDIAH  = "63570605";      // lydiah.karimi2015@gmail.com — the real Lydiah
+  const BUSINESS = "62278925";  // optimumprimesolutionsltd@gmail.com — remove
+  const LYDIAH   = "63570605";  // lydiah.karimi2015@gmail.com         — add
+  const CHEGE    = "63497598";  // mundarafrederick@gmail.com           — keep
 
-  const unknown = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, UNKNOWN) });
-  const lydiah  = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, LYDIAH)  });
+  const business = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, BUSINESS) });
+  const lydiah   = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, LYDIAH)   });
+  const chege    = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, CHEGE)    });
 
-  if (unknown && !lydiah) {
-    await db.delete(membersTable).where(eq(membersTable.userId, UNKNOWN));
-    await db.insert(membersTable).values({ userId: LYDIAH, addedByUserId: null }).onConflictDoNothing();
-    logger.info("Members fix applied: replaced unknown account with Lydiah (63570605)");
+  if (business) {
+    await db.delete(membersTable).where(eq(membersTable.userId, BUSINESS));
+    logger.info("Members fix: removed business account (62278925)");
+  }
+  if (!lydiah) {
+    await db.insert(membersTable).values({ userId: LYDIAH, addedByUserId: chege ? CHEGE : null }).onConflictDoNothing();
+    logger.info("Members fix: added Lydiah (63570605)");
   }
 }
 
