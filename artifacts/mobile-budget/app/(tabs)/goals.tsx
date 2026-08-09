@@ -222,6 +222,59 @@ export default function GoalsScreen() {
     ]);
   };
 
+  // ── Rename completed goal ────────────────────────────────────────────────────
+  const [renameVisible, setRenameVisible] = useState(false);
+  const [renamingGoal, setRenamingGoal] = useState<SavingsGoal | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [submittingRename, setSubmittingRename] = useState(false);
+
+  const openRenameGoal = (goal: SavingsGoal) => {
+    setRenamingGoal(goal);
+    setRenameName(goal.name);
+    setRenameVisible(true);
+  };
+
+  const closeRenameGoal = () => {
+    if (submittingRename) return;
+    setRenameVisible(false);
+  };
+
+  const handleRenameGoal = async () => {
+    if (!renamingGoal) return;
+    if (!renameName.trim()) {
+      Alert.alert('Name required', 'Please enter a name for the goal.');
+      return;
+    }
+    setSubmittingRename(true);
+    try {
+      await updateGoal({
+        id: renamingGoal.id,
+        data: {
+          name: renameName.trim(),
+          targetAmount: renamingGoal.targetAmount,
+          deadline: renamingGoal.deadline ?? null,
+        },
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+      setRenameVisible(false);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to rename goal. Please try again.');
+    } finally {
+      setSubmittingRename(false);
+    }
+  };
+
+  const openCompletedGoalActions = (goal: SavingsGoal) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(goal.name, undefined, [
+      { text: 'Rename', onPress: () => openRenameGoal(goal) },
+      { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteGoal(goal) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
   // ── History modal ───────────────────────────────────────────────────────────
   const [historyGoal, setHistoryGoal] = useState<SavingsGoal | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);
@@ -409,7 +462,12 @@ export default function GoalsScreen() {
               <>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 8 }]}>COMPLETED</Text>
                 {done.map((goal) => (
-                  <View key={goal.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: 0.7 }]}>
+                  <Pressable
+                    key={goal.id}
+                    onLongPress={() => openCompletedGoalActions(goal)}
+                    delayLongPress={400}
+                    style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: 0.7 }]}
+                  >
                     <View style={styles.cardTop}>
                       <View style={[styles.iconCircle, { backgroundColor: '#1a2e10' }]}>
                         <Feather name="check-circle" size={18} color="#86efac" />
@@ -418,11 +476,20 @@ export default function GoalsScreen() {
                         <Text style={[styles.cardName, { color: colors.foreground }]}>{goal.name}</Text>
                         <Text style={[styles.cardSub, { color: '#4ade80' }]}>Goal reached!</Text>
                       </View>
-                      <Text style={[styles.cardPct, { color: '#86efac' }]}>
-                        KES {formatKES(goal.currentAmount)}
-                      </Text>
+                      <View style={styles.cardRight}>
+                        <Text style={[styles.cardPct, { color: '#86efac' }]}>
+                          KES {formatKES(goal.currentAmount)}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => openCompletedGoalActions(goal)}
+                          hitSlop={8}
+                          style={styles.kebabBtn}
+                        >
+                          <Feather name="more-vertical" size={18} color={colors.mutedForeground} />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
               </>
             )}
@@ -777,6 +844,68 @@ export default function GoalsScreen() {
                       onSubmitEditing={handleUpdateGoal}
                     />
                   </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ── Rename Completed Goal Modal ────────────────────────────────────── */}
+      <Modal
+        visible={renameVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeRenameGoal}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={styles.modalAvoid}
+            >
+              <TouchableWithoutFeedback>
+                <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingBottom: botPad + 16 }]}>
+                  {/* Handle */}
+                  <View style={[styles.handle, { backgroundColor: colors.border }]} />
+
+                  {/* Header */}
+                  <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={closeRenameGoal} style={styles.modalHeaderBtn}>
+                      <Feather name="x" size={22} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                    <Text style={[styles.modalTitle, { color: colors.foreground }]}>Rename Goal</Text>
+                    <TouchableOpacity
+                      onPress={handleRenameGoal}
+                      disabled={submittingRename}
+                      style={[styles.modalSaveBtn, { backgroundColor: colors.primary, opacity: submittingRename ? 0.7 : 1 }]}
+                    >
+                      {submittingRename ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.modalSaveBtnText}>Save</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.modalBody}>
+                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>GOAL NAME</Text>
+                    <TextInput
+                      style={[styles.textInput, {
+                        backgroundColor: colors.muted,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                        borderRadius: colors.radius,
+                      }]}
+                      placeholder="e.g. Emergency Fund"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={renameName}
+                      onChangeText={setRenameName}
+                      autoFocus
+                      returnKeyType="done"
+                      onSubmitEditing={handleRenameGoal}
+                    />
+                  </View>
                 </View>
               </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
