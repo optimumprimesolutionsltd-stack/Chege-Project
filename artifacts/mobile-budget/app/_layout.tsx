@@ -37,6 +37,14 @@ const queryClient = new QueryClient({
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
 
+  // Re-fetch all data the moment the user signs in so queries that ran
+  // before auth completed (with no token) get a fresh attempt.
+  useEffect(() => {
+    if (isAuthenticated) {
+      queryClient.invalidateQueries();
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
