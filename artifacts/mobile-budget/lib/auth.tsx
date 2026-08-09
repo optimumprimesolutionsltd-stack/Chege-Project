@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleUrl = async (url: string) => {
       const parsed = Linking.parse(url);
-      if (parsed.path === 'auth' && parsed.queryParams?.token) {
+      if (parsed.hostname === 'auth' && parsed.queryParams?.token) {
         const token = parsed.queryParams.token as string;
         await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
         setIsLoading(true);
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (result.type === 'success' && result.url) {
       const parsed = Linking.parse(result.url);
-      if (parsed.path === 'auth' && parsed.queryParams?.token) {
+      if (parsed.hostname === 'auth' && parsed.queryParams?.token) {
         const token = parsed.queryParams.token as string;
         await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
         setIsLoading(true);
