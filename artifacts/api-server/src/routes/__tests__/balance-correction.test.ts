@@ -348,6 +348,51 @@ describe("PATCH /savings-goals/:id — balance correction", () => {
     ).toMatchObject({ note: "Manual adjustment", amount: 20 });
   });
 
+  // -------------------------------------------------------------------------
+  // Boundary tests — exactly 50% and 50% + 0.01
+  // -------------------------------------------------------------------------
+  it("allows a correction of exactly 50% of the balance without a reason", async () => {
+    // balance = 200, new amount = 100 → delta = -100, which is exactly 50% of 200
+    // The guard uses strict > so this must pass without a reason.
+    const existing = makeGoal(1, { current: 200, target: 500 });
+    const updated = makeGoal(1, { current: 100, target: 500 });
+
+    const tx = makePatchTx(existing, updated);
+    mockedDb.transaction = vi
+      .fn()
+      .mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => cb(tx));
+
+    const res = await request(app)
+      .patch("/savings-goals/1")
+      .send({ currentAmount: 100 }); // no reason field — delta is exactly 50%
+
+    expect(res.status).toBe(200);
+    expect(res.body.currentAmount).toBe(100);
+    // The correction must have been applied.
+    expect(tx.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 400 when a correction exceeds 50% of the balance by just 0.01 and no reason is supplied", async () => {
+    // balance = 200, new amount = 99.99 → delta = -100.01, which is 50% + 0.01 of 200
+    // The guard uses strict > so this must be blocked without a reason.
+    const existing = makeGoal(1, { current: 200, target: 500 });
+    const updated = makeGoal(1, { current: 99.99, target: 500 });
+
+    const tx = makePatchTx(existing, updated);
+    mockedDb.transaction = vi
+      .fn()
+      .mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => cb(tx));
+
+    const res = await request(app)
+      .patch("/savings-goals/1")
+      .send({ currentAmount: 99.99 }); // no reason field — delta just exceeds 50%
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/50%/i);
+    // The update must NOT have been applied.
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
   it("does NOT trigger the large-correction guard when the current balance is 0", async () => {
     // previousAmount = 0: the guard must short-circuit on `previousAmount > 0`
     // so a positive correction from zero never requires a reason.
