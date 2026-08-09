@@ -86,6 +86,8 @@ function ClassicTabLayout() {
             ),
         }}
       />
+      {/* history screen kept accessible via router.push but hidden from tab bar */}
+      <Tabs.Screen name="history" options={{ href: null }} />
       <Tabs.Screen
         name="budget"
         options={{
