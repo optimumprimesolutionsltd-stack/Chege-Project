@@ -648,7 +648,9 @@ export default function GoalsScreen() {
   );
   const showContributorFilter = uniqueContributors.length > 1;
 
-  const filteredContributions = (contributions as SavingsGoalContribution[]).filter((c) => {
+  // Date-only filtered (no contributor filter) — used for the per-person summary strip
+  // so that selecting a contributor in the list doesn't zero out everyone else's total.
+  const dateFilteredContributions = (contributions as SavingsGoalContribution[]).filter((c) => {
     const date = new Date(c.createdAt);
     if (filterStart) {
       const start = new Date(filterStart);
@@ -660,6 +662,10 @@ export default function GoalsScreen() {
       end.setHours(23, 59, 59, 999);
       if (date > end) return false;
     }
+    return true;
+  });
+
+  const filteredContributions = dateFilteredContributions.filter((c) => {
     if (filterContributor) {
       // Manual adjustments don't belong to any single contributor — hide them
       // when filtering by person so the count and total are accurate.
@@ -670,6 +676,17 @@ export default function GoalsScreen() {
   });
   const filterActive = !!(filterStart || filterEnd || filterContributor);
   const filterNetTotal = filteredContributions.reduce((sum, c) => sum + c.amount, 0);
+
+  // Per-contributor totals for the summary strip — respects date filter only, independent of
+  // contributor selection so that all totals remain correct when one person is selected.
+  const contributorTotals = showContributorFilter
+    ? uniqueContributors.map((name) => ({
+        name,
+        total: dateFilteredContributions
+          .filter((c) => c.note !== 'Manual adjustment' && (c.contributorName ?? 'Unknown') === name)
+          .reduce((sum, c) => sum + c.amount, 0),
+      }))
+    : [];
   const totalSaved = (goals as SavingsGoal[]).reduce((s, g) => s + (g.currentAmount ?? 0), 0);
   const totalTarget = (goals as SavingsGoal[]).reduce((s, g) => s + (g.targetAmount ?? 0), 0);
 
@@ -1177,6 +1194,47 @@ export default function GoalsScreen() {
                       : `\u2212 KES ${formatKES(Math.abs(filterNetTotal))}`} total
                   </Text>
                 </Text>
+              </View>
+            )}
+
+            {/* Per-contributor summary strip — shown when multiple contributors exist */}
+            {showContributorFilter && !historyLoading && (contributions as SavingsGoalContribution[]).length > 0 && (
+              <View style={[styles.contributorSummaryBar, { borderBottomColor: colors.border }]}>
+                {contributorTotals.map((ct, idx) => {
+                  const isActive = filterContributor === ct.name;
+                  return (
+                    <React.Fragment key={ct.name}>
+                      {idx > 0 && (
+                        <View style={[styles.contributorSummaryDivider, { backgroundColor: colors.border }]} />
+                      )}
+                      <TouchableOpacity
+                        style={styles.contributorSummaryItem}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setFilterContributor(isActive ? null : ct.name);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.contributorSummaryName,
+                            { color: isActive ? '#4ade80' : colors.mutedForeground },
+                          ]}
+                        >
+                          {ct.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.contributorSummaryAmount,
+                            { color: isActive ? '#4ade80' : colors.foreground },
+                          ]}
+                        >
+                          KES {formatKES(ct.total)}
+                        </Text>
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  );
+                })}
               </View>
             )}
 
@@ -1901,5 +1959,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.3,
+  },
+  // Contributor summary strip
+  contributorSummaryBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  contributorSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 12,
+  },
+  contributorSummaryDivider: {
+    width: 1,
+    marginVertical: 4,
+  },
+  contributorSummaryName: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  contributorSummaryAmount: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    fontFamily: 'Inter_700Bold',
   },
 });
