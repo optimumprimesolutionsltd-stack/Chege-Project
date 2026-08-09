@@ -53,6 +53,20 @@ router.get("/dashboard/summary", async (req, res) => {
     .groupBy(expensesTable.paidById);
 
   const users = await db.select().from(usersTable);
+
+  // Identify Chege and Lydiah by name OR email (firstName may be null if they
+  // haven't logged in since the profile-save was added, so email is the reliable fallback)
+  const isChege = (u?: typeof usersTable.$inferSelect | null) => {
+    const n = (u?.firstName ?? "").toLowerCase();
+    const e = (u?.email ?? "").toLowerCase();
+    return n.includes("chege") || n.includes("george") || n.includes("frederick") || e.includes("mundarafrederick");
+  };
+  const isLydiah = (u?: typeof usersTable.$inferSelect | null) => {
+    const n = (u?.firstName ?? "").toLowerCase();
+    const e = (u?.email ?? "").toLowerCase();
+    return n.includes("lydiah") || n.includes("lydia") || e.includes("lydiah");
+  };
+
   let chegeContributed = 0;
   let lydiahContributed = 0;
   let chegeSpent = 0;
@@ -60,18 +74,16 @@ router.get("/dashboard/summary", async (req, res) => {
 
   for (const c of contribs) {
     const user = users.find((u) => u.id === c.userId);
-    const name = (user?.firstName ?? "").toLowerCase();
-    if (name.includes("chege") || name.includes("george")) chegeContributed += Number(c.total);
-    else if (name.includes("lydiah") || name.includes("lydia")) lydiahContributed += Number(c.total);
+    if (isChege(user)) chegeContributed += Number(c.total);
+    else if (isLydiah(user)) lydiahContributed += Number(c.total);
     else if (chegeContributed === 0) chegeContributed += Number(c.total);
     else lydiahContributed += Number(c.total);
   }
 
   for (const e of memberExpenses) {
     const user = users.find((u) => u.id === e.userId);
-    const name = (user?.firstName ?? "").toLowerCase();
-    if (name.includes("chege") || name.includes("george")) chegeSpent += Number(e.total);
-    else if (name.includes("lydiah") || name.includes("lydia")) lydiahSpent += Number(e.total);
+    if (isChege(user)) chegeSpent += Number(e.total);
+    else if (isLydiah(user)) lydiahSpent += Number(e.total);
     else if (chegeSpent === 0) chegeSpent += Number(e.total);
     else lydiahSpent += Number(e.total);
   }

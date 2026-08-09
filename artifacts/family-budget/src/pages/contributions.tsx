@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 import {
   useGetContributions, useCreateContribution, useGetDashboardSummary,
   getGetContributionsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardActivityQueryKey,
@@ -27,7 +27,7 @@ const INCOME_SOURCES: Record<string, { label: string; amount: number; descriptio
 
 export default function Contributions() {
   const now = new Date();
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
   const { user } = useAuth();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
