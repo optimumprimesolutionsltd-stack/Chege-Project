@@ -10,6 +10,16 @@ import {
   useGetSavingsGoalContributions,
 } from "@workspace/api-client-react";
 import type { SavingsGoal, CascadeContributeAllocation } from "@workspace/api-client-react";
+
+interface SavingsGoalContribution {
+  id: number;
+  goalId: number;
+  amount: number;
+  note?: string | null;
+  createdByUserId: string;
+  contributorName: string;
+  createdAt: string;
+}
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +65,8 @@ function GoalProgress({ current, target }: { current: number; target: number }) 
 
 function GoalContributionHistory({ goalId }: { goalId: number }) {
   const { data: contributions, isLoading } = useGetSavingsGoalContributions(goalId);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   if (isLoading) {
     return (
@@ -70,45 +82,96 @@ function GoalContributionHistory({ goalId }: { goalId: number }) {
     );
   }
 
+  const filtered = contributions.filter((c: SavingsGoalContribution) => {
+    const date = new Date(c.createdAt);
+    if (fromDate && date < new Date(`${fromDate}T00:00:00.000`)) return false;
+    if (toDate && date > new Date(`${toDate}T23:59:59.999`)) return false;
+    return true;
+  });
+
+  const hasFilter = fromDate || toDate;
+
   return (
-    <div className="space-y-2">
-      {contributions.map((c) => {
-        const isAdjustment = c.note === "Manual adjustment";
-        const isNegative = c.amount < 0;
-        const formattedAmount = isNegative
-          ? `−${formatKes(Math.abs(c.amount))}`
-          : formatKes(c.amount);
-        return (
-          <div
-            key={c.id}
-            className={`flex items-center gap-3 text-sm py-1.5 border-b border-border/40 last:border-0 ${isAdjustment ? "opacity-75" : ""}`}
+    <div className="space-y-3">
+      {/* Date range filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <Input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="h-7 text-xs bg-muted/40 border-border/50 px-2"
+            aria-label="From date"
+          />
+          <span className="text-xs text-muted-foreground shrink-0">–</span>
+          <Input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="h-7 text-xs bg-muted/40 border-border/50 px-2"
+            aria-label="To date"
+          />
+        </div>
+        {hasFilter && (
+          <button
+            onClick={() => { setFromDate(""); setToDate(""); }}
+            className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
           >
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              {isAdjustment ? (
-                <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              ) : (
-                <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              )}
-              <span className={`font-medium truncate ${isAdjustment ? "text-muted-foreground" : "text-foreground"}`}>
-                {isAdjustment ? "Balance correction" : c.contributorName}
-              </span>
-              {isAdjustment && (
-                <span className="ml-1 text-xs bg-muted text-muted-foreground rounded px-1.5 py-0.5 shrink-0">
-                  Manual
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Results count when filtered */}
+      {hasFilter && (
+        <p className="text-xs text-muted-foreground">
+          {filtered.length === 0
+            ? "No contributions in this range."
+            : `${filtered.length} of ${contributions.length} contribution${contributions.length !== 1 ? "s" : ""}`}
+        </p>
+      )}
+
+      {filtered.length === 0 && hasFilter ? null : (
+        <div className="space-y-2">
+          {filtered.map((c: SavingsGoalContribution) => {
+            const isAdjustment = c.note === "Manual adjustment";
+            const isNegative = c.amount < 0;
+            const formattedAmount = isNegative
+              ? `−${formatKes(Math.abs(c.amount))}`
+              : formatKes(c.amount);
+            return (
+              <div
+                key={c.id}
+                className={`flex items-center gap-3 text-sm py-1.5 border-b border-border/40 last:border-0 ${isAdjustment ? "opacity-75" : ""}`}
+              >
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  {isAdjustment ? (
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  ) : (
+                    <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  )}
+                  <span className={`font-medium truncate ${isAdjustment ? "text-muted-foreground" : "text-foreground"}`}>
+                    {isAdjustment ? "Balance correction" : c.contributorName}
+                  </span>
+                  {isAdjustment && (
+                    <span className="ml-1 text-xs bg-muted text-muted-foreground rounded px-1.5 py-0.5 shrink-0">
+                      Manual
+                    </span>
+                  )}
+                </div>
+                <span
+                  className={`font-semibold shrink-0 ${isAdjustment ? (isNegative ? "text-destructive" : "text-muted-foreground") : "text-primary"}`}
+                >
+                  {formattedAmount}
                 </span>
-              )}
-            </div>
-            <span
-              className={`font-semibold shrink-0 ${isAdjustment ? (isNegative ? "text-destructive" : "text-muted-foreground") : "text-primary"}`}
-            >
-              {formattedAmount}
-            </span>
-            <span className="text-xs text-muted-foreground shrink-0">
-              {new Date(c.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-            </span>
-          </div>
-        );
-      })}
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {new Date(c.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
