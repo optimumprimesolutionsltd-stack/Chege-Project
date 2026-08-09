@@ -115,7 +115,7 @@ function getSafeErrorMetadata(error: unknown) {
   };
 }
 
-async function upsertUser(claims: Record<string, unknown>) {
+export async function upsertUser(claims: Record<string, unknown>) {
   const userData = {
     id: claims.sub as string,
     email: (claims.email as string) || null,
@@ -125,9 +125,8 @@ async function upsertUser(claims: Record<string, unknown>) {
       ((claims.given_name as string) || (claims.first_name as string)) || null,
     lastName:
       ((claims.family_name as string) || (claims.last_name as string)) || null,
-    profileImageUrl: (claims.profile_image_url || claims.picture) as
-      | string
-      | null,
+    profileImageUrl:
+      ((claims.profile_image_url || claims.picture) as string) || null,
   };
 
   const [user] = await db
