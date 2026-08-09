@@ -19,11 +19,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@/lib/auth';
 import {
   useGetJointAccount,
   useCreateDeposit,
   useCreateDisbursement,
   useGetBudgetCategories,
+  useGetMembers,
 } from '@workspace/api-client-react';
 
 function formatKES(n?: number | null): string {
@@ -83,6 +85,9 @@ export default function BankScreen() {
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
   const { data: categories = [] } = useGetBudgetCategories();
+  const { data: members = [] } = useGetMembers();
+  const { user } = useAuth();
+  const [madeById, setMadeById] = useState('');
 
   const openModal = (type: TxType) => {
     setTxType(type);
@@ -90,6 +95,7 @@ export default function BankScreen() {
     setDescription('');
     setExpenseCategory('');
     setShowCategoryPicker(false);
+    setMadeById('');
     setModalVisible(true);
   };
 
@@ -113,7 +119,7 @@ export default function BankScreen() {
     try {
       if (txType === 'deposit') {
         await createDeposit({
-          data: { amount: parsed, description: description.trim(), date: todayIso() },
+          data: { amount: parsed, description: description.trim(), date: todayIso(), madeById: madeById || undefined },
         });
       } else {
         await createDisbursement({
@@ -350,6 +356,36 @@ export default function BankScreen() {
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
             />
+
+            {/* Deposited by (deposits only) */}
+            {isDeposit && members.length > 0 && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Deposited by</Text>
+                <View style={styles.memberRow}>
+                  {members.map((m) => {
+                    const isMe = m.userId === user?.id;
+                    const selected = madeById === m.userId || (!madeById && isMe);
+                    const name = m.userName?.split(' ')[0] ?? (isMe ? 'Me' : 'Member');
+                    return (
+                      <TouchableOpacity
+                        key={m.userId}
+                        style={[
+                          styles.memberPill,
+                          { backgroundColor: selected ? '#4ade80' : colors.muted, borderColor: selected ? '#4ade80' : colors.border },
+                        ]}
+                        onPress={() => setMadeById(m.userId)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="user" size={13} color={selected ? '#0a1a10' : colors.mutedForeground} />
+                        <Text style={[styles.memberPillText, { color: selected ? '#0a1a10' : colors.foreground }]}>
+                          {name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
             {/* Expense category (disbursements only) */}
             {!isDeposit && (
@@ -621,6 +657,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
+  },
+  memberRow: {
+    flexDirection: 'row' as const,
+    gap: 10,
+    marginBottom: 16,
+  },
+  memberPill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  memberPillText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
   },
   categoryDropdown: {
     borderWidth: 1,

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { jointAccountTxTable, usersTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { jointAccountTxTable, usersTable, contributionsTable } from "@workspace/db";
+import { eq, sql, and } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
@@ -60,10 +60,24 @@ router.post("/joint-account/deposit", async (req, res) => {
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
 
   const { amount, description, date, madeById } = parsed.data;
+  const depositorId = madeById ?? req.user!.id;
+
   const [tx] = await db
     .insert(jointAccountTxTable)
-    .values({ type: "deposit", amount, description, date, madeById: madeById ?? req.user!.id })
+    .values({ type: "deposit", amount, description, date, madeById: depositorId })
     .returning();
+
+  // Auto-record this deposit as a contribution for the depositor in the same month/year
+  const depositDate = new Date(date);
+  const month = depositDate.getUTCMonth() + 1;
+  const year = depositDate.getUTCFullYear();
+  await db.insert(contributionsTable).values({
+    userId: depositorId,
+    amount,
+    month,
+    year,
+    note: `Bank deposit: ${description}`,
+  });
 
   res.status(201).json(await enrichTx(tx));
 });
