@@ -225,6 +225,15 @@ export interface SavingsGoalUpdateInput {
   isCompleted?: boolean;
 }
 
+export interface SavingsGoalContribution {
+  id: number;
+  goalId: number;
+  /** Amount contributed in KES */
+  amount: number;
+  createdByUserId: string;
+  createdAt: string;
+}
+
 export type GetExpensesParams = {
 month?: number;
 year?: number;

@@ -103,3 +103,14 @@ export const savingsGoalsTable = pgTable("savings_goals", {
 export const insertSavingsGoalSchema = createInsertSchema(savingsGoalsTable).omit({ id: true, createdAt: true });
 export type InsertSavingsGoal = z.infer<typeof insertSavingsGoalSchema>;
 export type SavingsGoal = typeof savingsGoalsTable.$inferSelect;
+
+// Savings Goal Contributions — one row per individual contribution
+export const savingsGoalContributionsTable = pgTable("savings_goal_contributions", {
+  id: serial("id").primaryKey(),
+  goalId: integer("goal_id").notNull().references(() => savingsGoalsTable.id, { onDelete: "cascade" }),
+  amount: integer("amount").notNull(), // in KES
+  createdByUserId: text("created_by_user_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type SavingsGoalContribution = typeof savingsGoalContributionsTable.$inferSelect;

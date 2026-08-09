@@ -28,7 +28,9 @@ import {
   useUpdateSavingsGoal,
   useDeleteSavingsGoal,
   useContributeToSavingsGoal,
+  useGetSavingsGoalContributions,
   getGetSavingsGoalsQueryKey,
+  type SavingsGoalContribution,
 } from '@workspace/api-client-react';
 
 function formatKES(n?: number | null): string {
@@ -213,11 +215,28 @@ export default function GoalsScreen() {
   const openGoalActions = (goal: SavingsGoal) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(goal.name, undefined, [
+      { text: 'History', onPress: () => openHistory(goal) },
       { text: 'Edit', onPress: () => openEditGoal(goal) },
       { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteGoal(goal) },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
+
+  // ── History modal ───────────────────────────────────────────────────────────
+  const [historyGoal, setHistoryGoal] = useState<SavingsGoal | null>(null);
+  const [historyVisible, setHistoryVisible] = useState(false);
+
+  const { data: contributions = [], isLoading: historyLoading, refetch: refetchHistory } = useGetSavingsGoalContributions(
+    historyGoal?.id ?? 0,
+    { query: { enabled: historyVisible && !!historyGoal } }
+  );
+
+  const openHistory = (goal: SavingsGoal) => {
+    setHistoryGoal(goal);
+    setHistoryVisible(true);
+  };
+
+  const closeHistory = () => setHistoryVisible(false);
 
   // ── Contribute modal ────────────────────────────────────────────────────────
   const [contributeVisible, setContributeVisible] = useState(false);
@@ -588,6 +607,83 @@ export default function GoalsScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
+      {/* ── History Modal ──────────────────────────────────────────────────── */}
+      <Modal
+        visible={historyVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeHistory}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, styles.historySheet, { backgroundColor: colors.background, paddingBottom: botPad + 16 }]}>
+            <View style={[styles.handle, { backgroundColor: colors.border }]} />
+
+            {/* Header */}
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity onPress={closeHistory} style={styles.modalHeaderBtn}>
+                <Feather name="x" size={22} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]} numberOfLines={1}>
+                  {historyGoal?.name}
+                </Text>
+                <Text style={[styles.historySubtitle, { color: colors.mutedForeground }]}>Contribution history</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => refetchHistory()}
+                style={[styles.modalHeaderBtn, { opacity: historyLoading ? 0.4 : 1 }]}
+                disabled={historyLoading}
+              >
+                <Feather name="refresh-cw" size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Body */}
+            {historyLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} size="large" />
+            ) : contributions.length === 0 ? (
+              <View style={styles.historyEmpty}>
+                <Feather name="clock" size={36} color={colors.mutedForeground} />
+                <Text style={[styles.historyEmptyTitle, { color: colors.foreground }]}>No contributions yet</Text>
+                <Text style={[styles.historyEmptyText, { color: colors.mutedForeground }]}>
+                  Tap "Contribute" on the goal card to start saving
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.historyList}
+              >
+                {(contributions as SavingsGoalContribution[]).map((c, idx) => (
+                  <View
+                    key={c.id}
+                    style={[
+                      styles.historyRow,
+                      {
+                        borderBottomColor: colors.border,
+                        borderBottomWidth: idx < contributions.length - 1 ? 1 : 0,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.historyDot, { backgroundColor: '#1a3320' }]}>
+                      <Feather name="arrow-up-circle" size={16} color="#4ade80" />
+                    </View>
+                    <View style={styles.historyRowInfo}>
+                      <Text style={[styles.historyAmount, { color: colors.foreground }]}>
+                        + KES {formatKES(c.amount)}
+                      </Text>
+                      <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
+                        {formatDate(c.createdAt)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Edit Goal Modal ────────────────────────────────────────────────── */}
       <Modal
         visible={editGoalVisible}
@@ -941,5 +1037,63 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     flex: 1,
     letterSpacing: -1,
+  },
+  // History modal
+  historySheet: {
+    maxHeight: '80%',
+  },
+  historySubtitle: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 1,
+  },
+  historyEmpty: {
+    alignItems: 'center',
+    paddingTop: 52,
+    paddingHorizontal: 40,
+    gap: 10,
+  },
+  historyEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+    marginTop: 4,
+  },
+  historyEmptyText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+  },
+  historyList: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 12,
+  },
+  historyDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  historyRowInfo: {
+    flex: 1,
+  },
+  historyAmount: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  historyDate: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
   },
 });

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { savingsGoalsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { savingsGoalsTable, savingsGoalContributionsTable } from "@workspace/db";
+import { eq, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
@@ -89,7 +89,35 @@ router.post("/savings-goals/:id/contribute", async (req, res) => {
 
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
+  // Record contribution history
+  await db.insert(savingsGoalContributionsTable).values({
+    goalId: id,
+    amount,
+    createdByUserId: req.user.id,
+  });
+
   res.json(formatGoal(updated));
+});
+
+// GET /savings-goals/:id/contributions — chronological contribution history
+router.get("/savings-goals/:id/contributions", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const paramParsed = GoalIdParam.safeParse(req.params);
+  if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { id } = paramParsed.data;
+
+  const contributions = await db
+    .select()
+    .from(savingsGoalContributionsTable)
+    .where(eq(savingsGoalContributionsTable.goalId, id))
+    .orderBy(desc(savingsGoalContributionsTable.createdAt));
+
+  res.json(contributions.map((c) => ({
+    ...c,
+    createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
+  })));
 });
 
 router.patch("/savings-goals/:id", async (req, res) => {
