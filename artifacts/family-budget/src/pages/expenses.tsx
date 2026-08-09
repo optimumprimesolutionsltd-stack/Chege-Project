@@ -1,4 +1,34 @@
 import { useState } from "react";
+
+// Expense priority tiers from the budget document
+const EXPENSE_TIERS = [
+  {
+    tier: 1, label: "Survival Essentials",
+    bar: "bg-red-500", badge: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
+    categories: ["Rent", "Food", "School fees", "Nanny salary", "Water & electricity"],
+  },
+  {
+    tier: 2, label: "Health & Education",
+    bar: "bg-orange-400", badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
+    categories: ["Medical outpatient", "Medical insurance", "Uniform replenishment"],
+  },
+  {
+    tier: 3, label: "Daily Household",
+    bar: "bg-yellow-400", badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400",
+    categories: ["Household supplies", "Kids clothes"],
+  },
+  {
+    tier: 4, label: "Connectivity & Care",
+    bar: "bg-blue-400", badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+    categories: ["Wifi/data", "Grooming"],
+  },
+  {
+    tier: 5, label: "Discretionary",
+    bar: "bg-muted-foreground/50", badge: "bg-muted text-muted-foreground",
+    categories: ["Entertainment", "Pocket money"],
+  },
+];
+
 import {
   useGetExpenses, useGetBudgetCategories, useGetMembers,
   useCreateExpense, useDeleteExpense, useUpdateExpense, useApplyRecurringExpenses,
@@ -461,6 +491,51 @@ export default function Expenses() {
             })()}
           </CardContent>
         </Card>
+      )}
+
+      {/* Priority Tier Breakdown */}
+      {breakdown && breakdown.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-lg font-display font-bold text-foreground">Priority Tiers</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">How spending stacks up against priority — essentials first.</p>
+          </div>
+          {EXPENSE_TIERS.map(({ tier, label, bar, badge, categories }) => {
+            const tierCats = breakdown.filter(b => categories.some(c => b.category.toLowerCase() === c.toLowerCase()));
+            const budget = tierCats.reduce((s, c) => s + c.budgetAmount, 0);
+            const spent = tierCats.reduce((s, c) => s + c.spentAmount, 0);
+            const remaining = budget - spent;
+            const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0;
+            const over = remaining < 0;
+            return (
+              <Card key={tier} className="border-none shadow-sm overflow-hidden">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badge}`}>T{tier}</span>
+                      <span className="font-semibold text-foreground text-sm">{label}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className={`text-sm font-mono font-bold ${over ? "text-destructive" : "text-foreground"}`}>
+                        {formatKes(spent)}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono"> / {formatKes(budget)}</span>
+                    </div>
+                  </div>
+                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                    <div className={`h-full ${bar} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{Math.round(pct)}% used · {categories.join(", ")}</span>
+                    <span className={over ? "text-destructive font-semibold" : ""}>
+                      {over ? `Over by ${formatKes(Math.abs(remaining))}` : `${formatKes(remaining)} left`}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       {/* Recurring banner */}
