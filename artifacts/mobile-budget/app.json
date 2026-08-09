@@ -36,14 +36,14 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "url": "https://u.expo.dev/REPLACE_WITH_EAS_PROJECT_ID"
+      "url": "https://u.expo.dev/c57d5c0a-5fb3-451c-8cbf-5e07eb571bf7"
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+        "projectId": "c57d5c0a-5fb3-451c-8cbf-5e07eb571bf7"
       }
     },
     "experiments": {
