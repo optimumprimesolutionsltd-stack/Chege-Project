@@ -183,6 +183,7 @@ router.get("/savings-goals/:id/contributions", async (req, res) => {
       id: savingsGoalContributionsTable.id,
       goalId: savingsGoalContributionsTable.goalId,
       amount: savingsGoalContributionsTable.amount,
+      note: savingsGoalContributionsTable.note,
       createdByUserId: savingsGoalContributionsTable.createdByUserId,
       createdAt: savingsGoalContributionsTable.createdAt,
       contributorName: usersTable.firstName,

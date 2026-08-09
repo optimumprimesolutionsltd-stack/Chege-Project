@@ -1135,6 +1135,10 @@ components:
         amount:
           type: number
           description: Amount contributed in KES
+        note:
+          type: string
+          nullable: true
+          description: Optional note — "Manual adjustment" for balance corrections
         createdByUserId:
           type: string
         contributorName:

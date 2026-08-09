@@ -920,35 +920,79 @@ export default function GoalsScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.historyList}
               >
-                {(contributions as SavingsGoalContribution[]).map((c, idx) => (
-                  <View
-                    key={c.id}
-                    style={[
-                      styles.historyRow,
-                      {
-                        borderBottomColor: colors.border,
-                        borderBottomWidth: idx < contributions.length - 1 ? 1 : 0,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.historyDot, { backgroundColor: '#1a3320' }]}>
-                      <Feather name="arrow-up-circle" size={16} color="#4ade80" />
-                    </View>
-                    <View style={styles.historyRowInfo}>
-                      <View style={styles.historyRowTop}>
-                        <Text style={[styles.historyAmount, { color: colors.foreground }]}>
-                          + KES {formatKES(c.amount)}
-                        </Text>
-                        <Text style={[styles.historyContributor, { color: '#4ade80' }]}>
-                          {c.contributorName}
-                        </Text>
+                {(contributions as SavingsGoalContribution[]).map((c, idx) => {
+                  const isAdjustment = c.note === 'Manual adjustment';
+                  const isNegative = c.amount < 0;
+                  const absAmount = Math.abs(c.amount);
+                  const amountLabel = isNegative
+                    ? `\u2212 KES ${formatKES(absAmount)}`
+                    : `+ KES ${formatKES(absAmount)}`;
+                  return (
+                    <View
+                      key={c.id}
+                      style={[
+                        styles.historyRow,
+                        {
+                          borderBottomColor: colors.border,
+                          borderBottomWidth: idx < contributions.length - 1 ? 1 : 0,
+                          opacity: isAdjustment ? 0.8 : 1,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.historyDot,
+                          {
+                            backgroundColor: isAdjustment ? colors.muted : '#1a3320',
+                          },
+                        ]}
+                      >
+                        <Feather
+                          name={isAdjustment ? 'sliders' : 'arrow-up-circle'}
+                          size={16}
+                          color={isAdjustment ? colors.mutedForeground : '#4ade80'}
+                        />
                       </View>
-                      <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
-                        {formatDate(c.createdAt)}
-                      </Text>
+                      <View style={styles.historyRowInfo}>
+                        <View style={styles.historyRowTop}>
+                          <Text
+                            style={[
+                              styles.historyAmount,
+                              {
+                                color: isAdjustment
+                                  ? isNegative
+                                    ? colors.destructive ?? '#ef4444'
+                                    : colors.mutedForeground
+                                  : colors.foreground,
+                              },
+                            ]}
+                          >
+                            {amountLabel}
+                          </Text>
+                          {isAdjustment ? (
+                            <View style={styles.historyAdjustmentBadge}>
+                              <Text style={[styles.historyAdjustmentBadgeText, { color: colors.mutedForeground }]}>
+                                Manual
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text style={[styles.historyContributor, { color: '#4ade80' }]}>
+                              {c.contributorName}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
+                          {isAdjustment ? 'Balance correction' : formatDate(c.createdAt)}
+                        </Text>
+                        {isAdjustment && (
+                          <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
+                            {formatDate(c.createdAt)}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </ScrollView>
             )}
           </View>
@@ -1428,5 +1472,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     marginTop: 2,
+  },
+  historyAdjustmentBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+  },
+  historyAdjustmentBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.3,
   },
 });

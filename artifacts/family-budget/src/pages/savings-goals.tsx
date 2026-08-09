@@ -29,6 +29,7 @@ import {
   ChevronRight,
   History,
   User,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -71,18 +72,43 @@ function GoalContributionHistory({ goalId }: { goalId: number }) {
 
   return (
     <div className="space-y-2">
-      {contributions.map((c) => (
-        <div key={c.id} className="flex items-center gap-3 text-sm py-1.5 border-b border-border/40 last:border-0">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <span className="font-medium text-foreground truncate">{c.contributorName}</span>
+      {contributions.map((c) => {
+        const isAdjustment = c.note === "Manual adjustment";
+        const isNegative = c.amount < 0;
+        const formattedAmount = isNegative
+          ? `−${formatKes(Math.abs(c.amount))}`
+          : formatKes(c.amount);
+        return (
+          <div
+            key={c.id}
+            className={`flex items-center gap-3 text-sm py-1.5 border-b border-border/40 last:border-0 ${isAdjustment ? "opacity-75" : ""}`}
+          >
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              {isAdjustment ? (
+                <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              ) : (
+                <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              )}
+              <span className={`font-medium truncate ${isAdjustment ? "text-muted-foreground" : "text-foreground"}`}>
+                {isAdjustment ? "Balance correction" : c.contributorName}
+              </span>
+              {isAdjustment && (
+                <span className="ml-1 text-xs bg-muted text-muted-foreground rounded px-1.5 py-0.5 shrink-0">
+                  Manual
+                </span>
+              )}
+            </div>
+            <span
+              className={`font-semibold shrink-0 ${isAdjustment ? (isNegative ? "text-destructive" : "text-muted-foreground") : "text-primary"}`}
+            >
+              {formattedAmount}
+            </span>
+            <span className="text-xs text-muted-foreground shrink-0">
+              {new Date(c.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+            </span>
           </div>
-          <span className="font-semibold text-primary shrink-0">{formatKes(c.amount)}</span>
-          <span className="text-xs text-muted-foreground shrink-0">
-            {new Date(c.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
-          </span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
