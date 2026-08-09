@@ -194,6 +194,12 @@ export default function Contributions() {
         </Button>
       )}
 
+      {!isLoading && contributions && contributions.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {contributions.length} {contributions.length === 1 ? "contribution" : "contributions"} · {formatKes(contributions.reduce((sum, c) => sum + c.amount, 0))} total
+        </p>
+      )}
+
       <Card className="border-none shadow-md overflow-hidden">
         <div className="overflow-x-auto">
           {isLoading ? (
