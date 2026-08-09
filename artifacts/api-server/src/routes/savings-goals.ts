@@ -307,10 +307,23 @@ router.delete("/savings-goals/:id", async (req, res) => {
   const parsed = GoalIdParam.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const [deleted] = await db
-    .delete(savingsGoalsTable)
-    .where(eq(savingsGoalsTable.id, parsed.data.id))
-    .returning();
+  const { id } = parsed.data;
+
+  // Both deletes run inside a single transaction — if either write fails, both
+  // roll back so we never leave orphaned contribution rows behind.
+  const deleted = await db.transaction(async (tx) => {
+    // Remove all contribution history rows first (FK child before parent).
+    await tx
+      .delete(savingsGoalContributionsTable)
+      .where(eq(savingsGoalContributionsTable.goalId, id));
+
+    const [goal] = await tx
+      .delete(savingsGoalsTable)
+      .where(eq(savingsGoalsTable.id, id))
+      .returning();
+
+    return goal ?? null;
+  });
 
   if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
 
