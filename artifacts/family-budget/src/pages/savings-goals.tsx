@@ -605,6 +605,23 @@ export default function SavingsGoals() {
                           {formatKes(goal.currentAmount)} / {formatKes(goal.targetAmount)}
                         </span>
                       </div>
+
+                      {/* Contribution history toggle */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full h-8 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => setExpandedHistoryId(expandedHistoryId === goal.id ? null : goal.id)}
+                      >
+                        <History className="w-3.5 h-3.5 mr-1.5" />
+                        {expandedHistoryId === goal.id ? "Hide history" : "Show history"}
+                      </Button>
+
+                      {expandedHistoryId === goal.id && (
+                        <div className="border-t border-border/40 pt-3">
+                          <GoalContributionHistory goalId={goal.id} />
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
