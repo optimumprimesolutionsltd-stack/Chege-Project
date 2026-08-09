@@ -114,6 +114,7 @@ function GoalContributionHistory({
 }) {
   const { data: contributions, isLoading } = useGetSavingsGoalContributions(goalId);
   const { fromDate, toDate, activeChip } = filter;
+  const [contributorFilter, setContributorFilter] = useState<string | null>(null);
 
   function applyChip(chip: QuickChip) {
     if (activeChip === chip) {
@@ -147,12 +148,28 @@ function GoalContributionHistory({
     );
   }
 
-  const filtered = contributions.filter((c: SavingsGoalContribution) => {
+  const dateFiltered = contributions.filter((c: SavingsGoalContribution) => {
     const date = new Date(c.createdAt);
     if (fromDate && date < new Date(`${fromDate}T00:00:00.000`)) return false;
     if (toDate && date > new Date(`${toDate}T23:59:59.999`)) return false;
     return true;
   });
+
+  // Per-contributor totals (excluding manual adjustments) within the date-filtered window
+  const contributorTotals: { name: string; total: number }[] = [];
+  {
+    const map = new Map<string, number>();
+    for (const c of dateFiltered) {
+      if (c.note === "Manual adjustment") continue;
+      map.set(c.contributorName, (map.get(c.contributorName) ?? 0) + c.amount);
+    }
+    map.forEach((total, name) => contributorTotals.push({ name, total }));
+  }
+  const hasMultipleContributors = contributorTotals.length > 1;
+
+  const filtered = contributorFilter
+    ? dateFiltered.filter((c: SavingsGoalContribution) => c.contributorName === contributorFilter)
+    : dateFiltered;
 
   const hasFilter = fromDate || toDate;
 
@@ -204,6 +221,40 @@ function GoalContributionHistory({
         )}
       </div>
 
+      {/* Per-contributor summary (only when >1 contributor) */}
+      {hasMultipleContributors && (
+        <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 flex flex-wrap gap-2">
+          {contributorTotals.map(({ name, total }) => {
+            const isActive = contributorFilter === name;
+            return (
+              <button
+                key={name}
+                onClick={() => setContributorFilter(isActive ? null : name)}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${
+                  isActive
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-foreground border-border/60 hover:bg-muted hover:border-border"
+                }`}
+              >
+                <User className="w-3 h-3 shrink-0" />
+                <span>{name}</span>
+                <span className={isActive ? "text-primary-foreground/80" : "text-muted-foreground"}>
+                  {formatKes(total)}
+                </span>
+              </button>
+            );
+          })}
+          {contributorFilter && (
+            <button
+              onClick={() => setContributorFilter(null)}
+              className="text-xs text-muted-foreground hover:text-foreground underline self-center"
+            >
+              Show all
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Summary bar when filtered */}
       {hasFilter && (
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
@@ -223,7 +274,7 @@ function GoalContributionHistory({
         </div>
       )}
 
-      {filtered.length === 0 && hasFilter ? null : (
+      {filtered.length === 0 && (hasFilter || contributorFilter) ? null : (
         <div className="space-y-2">
           {filtered.map((c: SavingsGoalContribution) => {
             const isAdjustment = c.note === "Manual adjustment";
