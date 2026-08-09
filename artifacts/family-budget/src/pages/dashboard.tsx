@@ -522,7 +522,7 @@ export default function Dashboard() {
       <Card className="border-none shadow-md overflow-hidden">
         <CardContent className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recent Activity</p>
+            <p className="text-base font-bold text-foreground">Recent Activity</p>
             <Link href="/activity" className="text-xs font-medium text-primary hover:underline">View all</Link>
           </div>
           {activity.length > 0 ? (
