@@ -829,6 +829,14 @@ components:
           type: number
         lydiahContributed:
           type: number
+        chegeSpent:
+          type: number
+        lydiahSpent:
+          type: number
+        chegeNet:
+          type: number
+        lydiahNet:
+          type: number
         chegeTarget:
           type: number
         lydiahTarget:
@@ -843,6 +851,10 @@ components:
         - remaining
         - chegeContributed
         - lydiahContributed
+        - chegeSpent
+        - lydiahSpent
+        - chegeNet
+        - lydiahNet
         - chegeTarget
         - lydiahTarget
         - expenseCount

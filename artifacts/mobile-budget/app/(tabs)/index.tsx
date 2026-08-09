@@ -129,6 +129,8 @@ export default function DashboardScreen() {
   const chegeTarget = summary?.chegeTarget ?? 1;
   const lydiahTotal = summary?.lydiahContributed ?? 0;
   const lydiahTarget = summary?.lydiahTarget ?? 1;
+  const chegeSpent = summary?.chegeSpent ?? 0;
+  const lydiahSpent = summary?.lydiahSpent ?? 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -199,7 +201,8 @@ export default function DashboardScreen() {
             <View style={styles.contribRow}>
               <ContribBar
                 name="Chege"
-                amount={chegeTotal}
+                contributed={chegeTotal}
+                spent={chegeSpent}
                 target={chegeTarget}
                 color="#4ade80"
                 hidden={isPrivate}
@@ -207,7 +210,8 @@ export default function DashboardScreen() {
               <View style={styles.contribDivider} />
               <ContribBar
                 name="Lydiah"
-                amount={lydiahTotal}
+                contributed={lydiahTotal}
+                spent={lydiahSpent}
                 target={lydiahTarget}
                 color="#cf7217"
                 hidden={isPrivate}
@@ -279,16 +283,27 @@ function StatCell({ label, value, valueColor = '#f7faf6' }: { label: string; val
   );
 }
 
-function ContribBar({ name, amount, target, color, hidden }: { name: string; amount: number; target: number; color: string; hidden: boolean }) {
-  const pct = Math.min(amount / Math.max(target, 1), 1);
+function ContribBar({ name, contributed, spent, target, color, hidden }: { name: string; contributed: number; spent: number; target: number; color: string; hidden: boolean }) {
+  const net = contributed - spent;
+  const pctContrib = Math.min(contributed / Math.max(target, 1), 1);
+  const pctSpent = Math.min(spent / Math.max(contributed, 1), 1);
+  const fmt = (n: number) => hidden ? '••••' : n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
   return (
     <View style={styles.contribItem}>
       <View style={styles.contribLabelRow}>
         <Text style={styles.contribName}>{name}</Text>
-        <Text style={[styles.contribAmt, { color }]}>{hidden ? '••••' : `KES ${amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`}</Text>
+        <Text style={[styles.contribAmt, { color: net < 0 ? '#f87171' : color }]}>
+          {hidden ? '••••' : `Net ${net >= 0 ? '+' : ''}${fmt(net)}`}
+        </Text>
       </View>
+      {/* Contribution track */}
       <View style={styles.contribTrack}>
-        <View style={[styles.contribFill, { width: `${pct * 100}%` as any, backgroundColor: color }]} />
+        <View style={[styles.contribFill, { width: `${pctContrib * 100}%` as any, backgroundColor: color, opacity: 0.35 }]} />
+        <View style={[styles.contribFill, StyleSheet.absoluteFillObject, { width: `${pctSpent * pctContrib * 100}%` as any, backgroundColor: '#ef4444', borderRadius: 2 }]} />
+      </View>
+      <View style={styles.contribLabelRow}>
+        <Text style={[styles.contribSubLabel, { color: 'rgba(247,250,246,0.4)' }]}>In: {fmt(contributed)}</Text>
+        <Text style={[styles.contribSubLabel, { color: 'rgba(247,250,246,0.4)' }]}>Out: {fmt(spent)}</Text>
       </View>
     </View>
   );
@@ -322,8 +337,9 @@ const styles = StyleSheet.create({
   contribLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   contribName: { fontSize: 11, color: 'rgba(247,250,246,0.5)', fontFamily: 'Inter_400Regular' },
   contribAmt: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  contribTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' },
+  contribTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', marginBottom: 4 },
   contribFill: { height: '100%', borderRadius: 2 },
+  contribSubLabel: { fontSize: 9, fontFamily: 'Inter_400Regular' },
 
   shortcutRow: { flexDirection: 'row', paddingHorizontal: 12, paddingTop: 16, paddingBottom: 4, gap: 8 },
   shortcutBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 14, gap: 5 },

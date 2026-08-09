@@ -42,9 +42,21 @@ router.get("/dashboard/summary", async (req, res) => {
     .where(sql`${contributionsTable.month} = ${month} AND ${contributionsTable.year} = ${year}`)
     .groupBy(contributionsTable.userId);
 
+  // Per-person spending breakdown
+  const memberExpenses = await db
+    .select({
+      userId: expensesTable.paidById,
+      total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
+    })
+    .from(expensesTable)
+    .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
+    .groupBy(expensesTable.paidById);
+
   const users = await db.select().from(usersTable);
   let chegeContributed = 0;
   let lydiahContributed = 0;
+  let chegeSpent = 0;
+  let lydiahSpent = 0;
 
   for (const c of contribs) {
     const user = users.find((u) => u.id === c.userId);
@@ -55,6 +67,15 @@ router.get("/dashboard/summary", async (req, res) => {
     else lydiahContributed += Number(c.total);
   }
 
+  for (const e of memberExpenses) {
+    const user = users.find((u) => u.id === e.userId);
+    const name = (user?.firstName ?? "").toLowerCase();
+    if (name.includes("chege") || name.includes("george")) chegeSpent += Number(e.total);
+    else if (name.includes("lydiah") || name.includes("lydia")) lydiahSpent += Number(e.total);
+    else if (chegeSpent === 0) chegeSpent += Number(e.total);
+    else lydiahSpent += Number(e.total);
+  }
+
   const totalSpent = Number(spentRow.total);
   res.json({
     month, year,
@@ -63,6 +84,10 @@ router.get("/dashboard/summary", async (req, res) => {
     remaining: TOTAL_BUDGET - totalSpent,
     chegeContributed,
     lydiahContributed,
+    chegeSpent,
+    lydiahSpent,
+    chegeNet: chegeContributed - chegeSpent,
+    lydiahNet: lydiahContributed - lydiahSpent,
     chegeTarget: CHEGE_TARGET,
     lydiahTarget: LYDIAH_TARGET,
     expenseCount: Number(countRow.count),

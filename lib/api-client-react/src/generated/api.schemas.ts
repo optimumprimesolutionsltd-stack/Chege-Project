@@ -108,6 +108,10 @@ export interface DashboardSummary {
   remaining: number;
   chegeContributed: number;
   lydiahContributed: number;
+  chegeSpent: number;
+  lydiahSpent: number;
+  chegeNet: number;
+  lydiahNet: number;
   chegeTarget: number;
   lydiahTarget: number;
   expenseCount: number;

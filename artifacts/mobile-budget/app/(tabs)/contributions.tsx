@@ -48,6 +48,8 @@ function MemberCard({
   name,
   initial,
   contributed,
+  spent,
+  net,
   target,
   accentColor,
   gradientColors,
@@ -55,13 +57,14 @@ function MemberCard({
   name: string;
   initial: string;
   contributed: number;
+  spent: number;
+  net: number;
   target: number;
   accentColor: string;
   gradientColors: [string, string];
 }) {
   const pct = target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
-  const remaining = Math.max(target - contributed, 0);
-  const over = contributed > target;
+  const netPositive = net >= 0;
 
   return (
     <LinearGradient colors={gradientColors} style={styles.memberCard}>
@@ -75,17 +78,33 @@ function MemberCard({
         </View>
       </View>
 
-      <Text style={[styles.memberAmount, { color: accentColor }]}>KES {formatKES(contributed)}</Text>
+      {/* Three-column stats */}
+      <View style={styles.memberStats}>
+        <View style={styles.memberStatCell}>
+          <Text style={styles.memberStatLabel}>Contributed</Text>
+          <Text style={[styles.memberStatValue, { color: accentColor }]}>KES {formatKES(contributed)}</Text>
+        </View>
+        <View style={styles.memberStatDivider} />
+        <View style={styles.memberStatCell}>
+          <Text style={styles.memberStatLabel}>Spent</Text>
+          <Text style={[styles.memberStatValue, { color: '#f87171' }]}>KES {formatKES(spent)}</Text>
+        </View>
+        <View style={styles.memberStatDivider} />
+        <View style={styles.memberStatCell}>
+          <Text style={styles.memberStatLabel}>Net</Text>
+          <Text style={[styles.memberStatValue, { color: netPositive ? '#4ade80' : '#f87171' }]}>
+            {netPositive ? '+' : ''}KES {formatKES(net)}
+          </Text>
+        </View>
+      </View>
 
       <ProgressBar value={contributed} max={target} color={accentColor} />
 
       <View style={styles.memberFooter}>
         <Text style={styles.memberPct}>{Math.round(pct)}% of target</Text>
-        {over ? (
-          <Text style={[styles.memberRemaining, { color: '#ef4444' }]}>Over by KES {formatKES(contributed - target)}</Text>
-        ) : (
-          <Text style={styles.memberRemaining}>KES {formatKES(remaining)} to go</Text>
-        )}
+        <Text style={[styles.memberRemaining, { color: netPositive ? 'rgba(247,250,246,0.55)' : '#f87171' }]}>
+          {netPositive ? `KES ${formatKES(Math.max(target - contributed, 0))} to go` : `Deficit KES ${formatKES(Math.abs(net))}`}
+        </Text>
       </View>
     </LinearGradient>
   );
@@ -112,6 +131,10 @@ export default function ContributionsScreen() {
   }
 
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useGetDashboardSummary({ month, year });
+
+  // Per-person net = contributed - spent
+  const chegeNet = (summary?.chegeContributed ?? 0) - (summary?.chegeSpent ?? 0);
+  const lydiahNet = (summary?.lydiahContributed ?? 0) - (summary?.lydiahSpent ?? 0);
   const { data: contributions, isLoading: contribLoading, refetch: refetchContrib } = useGetContributions({ month, year });
 
   const [refreshing, setRefreshing] = useState(false);
@@ -169,6 +192,8 @@ export default function ContributionsScreen() {
                   name="Chege"
                   initial="C"
                   contributed={summary.chegeContributed ?? 0}
+                  spent={summary.chegeSpent ?? 0}
+                  net={chegeNet}
                   target={summary.chegeTarget ?? 0}
                   accentColor="#4ade80"
                   gradientColors={['#132a1c', '#0f2217']}
@@ -177,6 +202,8 @@ export default function ContributionsScreen() {
                   name="Lydiah"
                   initial="L"
                   contributed={summary.lydiahContributed ?? 0}
+                  spent={summary.lydiahSpent ?? 0}
+                  net={lydiahNet}
                   target={summary.lydiahTarget ?? 0}
                   accentColor="#cf7217"
                   gradientColors={['#2a1c0a', '#1c130a']}
@@ -258,6 +285,11 @@ const styles = StyleSheet.create({
   memberCard: { borderRadius: 18, padding: 20 },
   memberCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   memberAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  memberStats: { flexDirection: 'row' as const, backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 12, paddingVertical: 10, marginBottom: 12 },
+  memberStatCell: { flex: 1, alignItems: 'center' as const },
+  memberStatLabel: { fontSize: 9, color: 'rgba(247,250,246,0.5)', fontFamily: 'Inter_400Regular', marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: 0.4 },
+  memberStatValue: { fontSize: 11, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  memberStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
   memberInitial: { fontSize: 18, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
   memberName: { fontSize: 18, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
   memberTarget: { fontSize: 12, color: 'rgba(247,250,246,0.55)', fontFamily: 'Inter_400Regular', marginTop: 2 },
