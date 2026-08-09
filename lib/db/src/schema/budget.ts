@@ -108,7 +108,8 @@ export type SavingsGoal = typeof savingsGoalsTable.$inferSelect;
 export const savingsGoalContributionsTable = pgTable("savings_goal_contributions", {
   id: serial("id").primaryKey(),
   goalId: integer("goal_id").notNull().references(() => savingsGoalsTable.id, { onDelete: "cascade" }),
-  amount: integer("amount").notNull(), // in KES
+  amount: integer("amount").notNull(), // in KES; negative values indicate manual downward adjustments
+  note: text("note"),                 // null for regular contributions; set for manual adjustments
   createdByUserId: text("created_by_user_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
