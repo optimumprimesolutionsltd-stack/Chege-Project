@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
 import {
   useGetSavingsGoals,
@@ -43,6 +44,215 @@ function formatDate(s?: string | null): string {
   const d = new Date(s);
   return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+function dateToYMD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function ymdToDate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const d = new Date(s + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateObj(d: Date | null): string {
+  if (!d) return '';
+  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// ── DeadlinePicker ────────────────────────────────────────────────────────────
+type DeadlinePickerProps = {
+  value: Date | null;
+  onChange: (date: Date | null) => void;
+  colors: ReturnType<typeof useColors>;
+};
+
+function DeadlinePicker({ value, onChange, colors }: DeadlinePickerProps) {
+  const [showNativePicker, setShowNativePicker] = useState(false);
+  const webInputRef = useRef<HTMLInputElement | null>(null);
+
+  const displayText = value ? formatDateObj(value) : 'No deadline';
+  const hasValue = value !== null;
+
+  const handleNativeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') setShowNativePicker(false);
+    if (selected) onChange(selected);
+  };
+
+  const handleClear = () => {
+    onChange(null);
+    if (Platform.OS === 'android') setShowNativePicker(false);
+  };
+
+  if (Platform.OS === 'web') {
+    // On web: a styled button overlaid with a transparent <input type="date">
+    return (
+      <View
+        style={[
+          deadlineStyles.row,
+          {
+            backgroundColor: colors.muted,
+            borderColor: colors.border,
+            borderRadius: colors.radius,
+          },
+        ]}
+      >
+        <Feather name="calendar" size={16} color={hasValue ? colors.foreground : colors.mutedForeground} style={{ marginRight: 8 }} />
+        <Text style={[deadlineStyles.valueText, { color: hasValue ? colors.foreground : colors.mutedForeground, flex: 1 }]}>
+          {displayText}
+        </Text>
+        {hasValue && (
+          <TouchableOpacity onPress={handleClear} hitSlop={8}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
+        {/* Transparent date input overlaid on top */}
+        {/* @ts-ignore – web-only DOM element */}
+        <input
+          ref={webInputRef}
+          type="date"
+          value={value ? dateToYMD(value) : ''}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+            const v = e.target.value;
+            onChange(v ? ymdToDate(v) : null);
+          }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            opacity: 0,
+            cursor: 'pointer',
+            width: '100%',
+            height: '100%',
+          }}
+        />
+      </View>
+    );
+  }
+
+  // Native (iOS / Android)
+  return (
+    <>
+      <View
+        style={[
+          deadlineStyles.row,
+          {
+            backgroundColor: colors.muted,
+            borderColor: colors.border,
+            borderRadius: colors.radius,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={deadlineStyles.nativeBtn}
+          onPress={() => setShowNativePicker(true)}
+          activeOpacity={0.7}
+        >
+          <Feather name="calendar" size={16} color={hasValue ? colors.foreground : colors.mutedForeground} style={{ marginRight: 8 }} />
+          <Text style={[deadlineStyles.valueText, { color: hasValue ? colors.foreground : colors.mutedForeground, flex: 1 }]}>
+            {displayText}
+          </Text>
+        </TouchableOpacity>
+        {hasValue && (
+          <TouchableOpacity onPress={handleClear} hitSlop={8} style={{ paddingRight: 14 }}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {showNativePicker && (
+        <>
+          {Platform.OS === 'ios' ? (
+            <Modal transparent animationType="slide" visible>
+              <View style={deadlineStyles.iosOverlay}>
+                <View style={[deadlineStyles.iosSheet, { backgroundColor: colors.background }]}>
+                  <View style={[deadlineStyles.iosSheetHeader, { borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={() => { setShowNativePicker(false); onChange(null); }}>
+                      <Text style={[deadlineStyles.iosCancelText, { color: colors.mutedForeground }]}>Clear</Text>
+                    </TouchableOpacity>
+                    <Text style={[deadlineStyles.iosSheetTitle, { color: colors.foreground }]}>Select Deadline</Text>
+                    <TouchableOpacity onPress={() => setShowNativePicker(false)}>
+                      <Text style={[deadlineStyles.iosDoneText, { color: colors.primary as string }]}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={value ?? new Date()}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleNativeChange}
+                    style={{ width: '100%' }}
+                  />
+                </View>
+              </View>
+            </Modal>
+          ) : (
+            <DateTimePicker
+              value={value ?? new Date()}
+              mode="date"
+              display="default"
+              onChange={handleNativeChange}
+            />
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+const deadlineStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    minHeight: 48,
+    overflow: 'hidden',
+  },
+  nativeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  valueText: {
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+  },
+  iosOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  iosSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+  },
+  iosSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  iosSheetTitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  iosCancelText: {
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+  },
+  iosDoneText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+  },
+});
 
 type SavingsGoal = {
   id: number;
@@ -72,7 +282,7 @@ export default function GoalsScreen() {
   const [newGoalVisible, setNewGoalVisible] = useState(false);
   const [goalName, setGoalName] = useState('');
   const [goalTarget, setGoalTarget] = useState('');
-  const [goalDeadline, setGoalDeadline] = useState('');
+  const [goalDeadlineDate, setGoalDeadlineDate] = useState<Date | null>(null);
   const [submittingGoal, setSubmittingGoal] = useState(false);
 
   const { mutateAsync: createGoal } = useCreateSavingsGoal();
@@ -80,7 +290,7 @@ export default function GoalsScreen() {
   const openNewGoal = () => {
     setGoalName('');
     setGoalTarget('');
-    setGoalDeadline('');
+    setGoalDeadlineDate(null);
     setNewGoalVisible(true);
   };
 
@@ -99,12 +309,7 @@ export default function GoalsScreen() {
       Alert.alert('Target required', 'Please enter a valid target amount.');
       return;
     }
-    // Basic date validation (YYYY-MM-DD)
-    const deadlineValue = goalDeadline.trim() || undefined;
-    if (deadlineValue && !/^\d{4}-\d{2}-\d{2}$/.test(deadlineValue)) {
-      Alert.alert('Invalid date', 'Enter the deadline as YYYY-MM-DD, or leave it blank.');
-      return;
-    }
+    const deadlineValue = goalDeadlineDate ? dateToYMD(goalDeadlineDate) : undefined;
 
     setSubmittingGoal(true);
     try {
@@ -131,7 +336,7 @@ export default function GoalsScreen() {
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [editName, setEditName] = useState('');
   const [editTarget, setEditTarget] = useState('');
-  const [editDeadline, setEditDeadline] = useState('');
+  const [editDeadlineDate, setEditDeadlineDate] = useState<Date | null>(null);
   const [submittingEdit, setSubmittingEdit] = useState(false);
 
   const { mutateAsync: updateGoal } = useUpdateSavingsGoal();
@@ -141,7 +346,7 @@ export default function GoalsScreen() {
     setEditingGoal(goal);
     setEditName(goal.name);
     setEditTarget(String(goal.targetAmount));
-    setEditDeadline(goal.deadline ?? '');
+    setEditDeadlineDate(ymdToDate(goal.deadline));
     setEditGoalVisible(true);
   };
 
@@ -161,11 +366,7 @@ export default function GoalsScreen() {
       Alert.alert('Target required', 'Please enter a valid target amount.');
       return;
     }
-    const deadlineValue = editDeadline.trim() || undefined;
-    if (deadlineValue && !/^\d{4}-\d{2}-\d{2}$/.test(deadlineValue)) {
-      Alert.alert('Invalid date', 'Enter the deadline as YYYY-MM-DD, or leave it blank.');
-      return;
-    }
+    const deadlineValue = editDeadlineDate ? dateToYMD(editDeadlineDate) : null;
 
     setSubmittingEdit(true);
     try {
@@ -174,7 +375,7 @@ export default function GoalsScreen() {
         data: {
           name: editName.trim(),
           targetAmount: target,
-          deadline: deadlineValue ?? null,
+          deadline: deadlineValue,
         },
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -574,20 +775,11 @@ export default function GoalsScreen() {
                     />
 
                     {/* Deadline */}
-                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>DEADLINE (optional, YYYY-MM-DD)</Text>
-                    <TextInput
-                      style={[styles.textInput, {
-                        backgroundColor: colors.muted,
-                        borderColor: colors.border,
-                        color: colors.foreground,
-                        borderRadius: colors.radius,
-                      }]}
-                      placeholder="e.g. 2026-12-31"
-                      placeholderTextColor={colors.mutedForeground}
-                      value={goalDeadline}
-                      onChangeText={setGoalDeadline}
-                      returnKeyType="done"
-                      onSubmitEditing={handleCreateGoal}
+                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>DEADLINE (optional)</Text>
+                    <DeadlinePicker
+                      value={goalDeadlineDate}
+                      onChange={setGoalDeadlineDate}
+                      colors={colors}
                     />
                   </ScrollView>
                 </View>
@@ -828,20 +1020,11 @@ export default function GoalsScreen() {
                     />
 
                     {/* Deadline */}
-                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>DEADLINE (optional, YYYY-MM-DD)</Text>
-                    <TextInput
-                      style={[styles.textInput, {
-                        backgroundColor: colors.muted,
-                        borderColor: colors.border,
-                        color: colors.foreground,
-                        borderRadius: colors.radius,
-                      }]}
-                      placeholder="e.g. 2026-12-31"
-                      placeholderTextColor={colors.mutedForeground}
-                      value={editDeadline}
-                      onChangeText={setEditDeadline}
-                      returnKeyType="done"
-                      onSubmitEditing={handleUpdateGoal}
+                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>DEADLINE (optional)</Text>
+                    <DeadlinePicker
+                      value={editDeadlineDate}
+                      onChange={setEditDeadlineDate}
+                      colors={colors}
                     />
                   </ScrollView>
                 </View>
