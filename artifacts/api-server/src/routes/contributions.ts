@@ -9,6 +9,17 @@ import {
 
 const router = Router();
 
+/** Returns a human-readable name from a user record, using email as fallback when firstName is null */
+function displayName(u: { firstName?: string | null; email?: string | null } | null | undefined): string {
+  if (u?.firstName) return u.firstName;
+  const email = (u?.email ?? "").toLowerCase();
+  if (email.includes("mundarafrederick") || email.includes("chege")) return "Chege";
+  if (email.includes("lydiah")) return "Lydiah";
+  // Generic fallback: use the part before @ capitalised
+  const prefix = u?.email?.split("@")[0] ?? "";
+  return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : "Unknown";
+}
+
 router.get("/contributions", async (req, res) => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Unauthorized" });
@@ -26,7 +37,8 @@ router.get("/contributions", async (req, res) => {
     .select({
       id: contributionsTable.id,
       userId: contributionsTable.userId,
-      userName: usersTable.firstName,
+      userFirstName: usersTable.firstName,
+      userEmail: usersTable.email,
       amount: contributionsTable.amount,
       month: contributionsTable.month,
       year: contributionsTable.year,
@@ -40,8 +52,13 @@ router.get("/contributions", async (req, res) => {
 
   res.json(
     contributions.map((c) => ({
-      ...c,
-      userName: c.userName ?? "Unknown",
+      id: c.id,
+      userId: c.userId,
+      userName: displayName({ firstName: c.userFirstName, email: c.userEmail }),
+      amount: c.amount,
+      month: c.month,
+      year: c.year,
+      note: c.note,
       createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
     })),
   );
@@ -77,7 +94,7 @@ router.post("/contributions", async (req, res) => {
 
   res.status(201).json({
     ...contribution,
-    userName: user?.firstName ?? "Unknown",
+    userName: displayName(user),
     createdAt: contribution.createdAt instanceof Date ? contribution.createdAt.toISOString() : contribution.createdAt,
   });
 });
