@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -507,9 +508,11 @@ export default function GoalsScreen() {
   const [activeChip, setActiveChip] = useState<string | null>(null);
   const [filterContributor, setFilterContributor] = useState<string | null>(null);
 
-  // Persist per-goal filter state within a session
+  // Persist per-goal filter state within a session and across restarts
   type GoalFilterState = { filterStart: Date | null; filterEnd: Date | null; activeChip: string | null; filterContributor: string | null };
+  type StoredGoalFilter = { filterStart: string | null; filterEnd: string | null; activeChip: string | null; filterContributor: string | null };
   const goalFilterCache = useRef<Record<number, GoalFilterState>>({});
+  const goalFilterStorageKey = (id: number) => `goal_filter_${id}`;
 
   const { data: contributions = [], isLoading: historyLoading, refetch: refetchHistory } = useGetSavingsGoalContributions(
     historyGoal?.id ?? 0,
@@ -569,26 +572,53 @@ export default function GoalsScreen() {
     }
   };
 
-  const openHistory = (goal: SavingsGoal) => {
+  const openHistory = async (goal: SavingsGoal) => {
     setHistoryGoal(goal);
-    // Restore the last-used filter for this goal (null defaults for first open)
-    const saved = goalFilterCache.current[goal.id] ?? null;
-    setFilterStart(saved?.filterStart ?? null);
-    setFilterEnd(saved?.filterEnd ?? null);
-    setActiveChip(saved?.activeChip ?? null);
-    setFilterContributor(saved?.filterContributor ?? null);
+    // Restore from in-memory cache first (same session), then fall back to AsyncStorage
+    const cached = goalFilterCache.current[goal.id] ?? null;
+    if (cached) {
+      setFilterStart(cached.filterStart);
+      setFilterEnd(cached.filterEnd);
+      setActiveChip(cached.activeChip);
+      setFilterContributor(cached.filterContributor);
+    } else {
+      try {
+        const raw = await AsyncStorage.getItem(goalFilterStorageKey(goal.id));
+        if (raw) {
+          const stored: StoredGoalFilter = JSON.parse(raw);
+          setFilterStart(stored.filterStart ? new Date(stored.filterStart) : null);
+          setFilterEnd(stored.filterEnd ? new Date(stored.filterEnd) : null);
+          setActiveChip(stored.activeChip ?? null);
+          setFilterContributor(stored.filterContributor ?? null);
+        } else {
+          setFilterStart(null);
+          setFilterEnd(null);
+          setActiveChip(null);
+          setFilterContributor(null);
+        }
+      } catch {
+        setFilterStart(null);
+        setFilterEnd(null);
+        setActiveChip(null);
+        setFilterContributor(null);
+      }
+    }
     setHistoryVisible(true);
   };
 
   const closeHistory = () => {
     // Persist the current filter state for this goal before closing
     if (historyGoal) {
-      goalFilterCache.current[historyGoal.id] = {
-        filterStart,
-        filterEnd,
+      const state: GoalFilterState = { filterStart, filterEnd, activeChip, filterContributor };
+      goalFilterCache.current[historyGoal.id] = state;
+      // Write to AsyncStorage so it survives app restarts
+      const stored: StoredGoalFilter = {
+        filterStart: filterStart ? filterStart.toISOString() : null,
+        filterEnd: filterEnd ? filterEnd.toISOString() : null,
         activeChip,
         filterContributor,
       };
+      AsyncStorage.setItem(goalFilterStorageKey(historyGoal.id), JSON.stringify(stored)).catch(() => {});
     }
     setHistoryVisible(false);
   };
