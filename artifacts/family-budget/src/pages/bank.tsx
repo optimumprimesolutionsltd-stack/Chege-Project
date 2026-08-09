@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useDeleteJointAccountTransaction,
-  useGetMembers, getGetJointAccountQueryKey,
+  useGetMembers, useGetBudgetCategories, getGetJointAccountQueryKey,
 } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,6 +16,7 @@ export default function Bank() {
   const { user } = useAuth();
   const { data: account, isLoading } = useGetJointAccount();
   const { data: members } = useGetMembers();
+  const { data: categories } = useGetBudgetCategories();
   const createDeposit = useCreateDeposit();
   const createDisbursement = useCreateDisbursement();
   const deleteTx = useDeleteJointAccountTransaction();
@@ -27,12 +28,13 @@ export default function Bank() {
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [madeById, setMadeById] = useState("");
+  const [expenseCategory, setExpenseCategory] = useState("");
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
 
   const resetForm = () => {
     setAmount(""); setDescription(""); setDate(new Date().toISOString().split("T")[0]);
-    setMadeById(""); setMode(null);
+    setMadeById(""); setExpenseCategory(""); setMode(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,7 +48,7 @@ export default function Bank() {
         toast({ title: "Deposit recorded" });
       } else {
         await createDisbursement.mutateAsync({
-          data: { amount: Number(amount), description, date },
+          data: { amount: Number(amount), description, date, expenseCategory: expenseCategory || undefined },
         });
         toast({ title: "Disbursement recorded" });
       }
@@ -73,8 +75,8 @@ export default function Bank() {
   return (
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
-        <h1 className="text-3xl font-display font-bold text-foreground">Joint Account</h1>
-        <p className="text-muted-foreground mt-1">Track deposits and disbursements from the shared pool.</p>
+        <h1 className="text-3xl font-display font-bold text-foreground">Bank Account</h1>
+        <p className="text-muted-foreground mt-1">Track deposits and disbursements from the shared bank account.</p>
       </div>
 
       {/* Balance card */}
@@ -122,8 +124,8 @@ export default function Bank() {
             </CardTitle>
             <CardDescription>
               {mode === "deposit"
-                ? "Money going into the joint account."
-                : "Money going out of the joint account."}
+                ? "Money going into the bank account."
+                : "Money going out of the bank account."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -153,6 +155,17 @@ export default function Bank() {
                       {members?.filter(m => m.userId !== user?.id).map(m => (
                         <option key={m.userId} value={m.userId}>{m.userName ?? m.userId}</option>
                       ))}
+                    </select>
+                  </div>
+                )}
+                {mode === "disbursement" && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-sm font-semibold text-foreground">Expense category <span className="font-normal text-muted-foreground">(optional)</span></label>
+                    <select
+                      className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={expenseCategory} onChange={e => setExpenseCategory(e.target.value)}>
+                      <option value="">Not linked to an expense category</option>
+                      {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
                 )}
@@ -194,7 +207,7 @@ export default function Bank() {
                     <div className="min-w-0">
                       <p className="font-semibold text-foreground truncate">{tx.description}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {isDeposit ? `Deposited by ${tx.madeByName ?? "Unknown"}` : "Disbursement"}
+                        {isDeposit ? `Deposited by ${tx.madeByName ?? "Unknown"}` : (tx.expenseCategory ? `→ ${tx.expenseCategory}` : "Disbursement")}
                         {" · "}{formatDate(tx.date)}
                       </p>
                     </div>

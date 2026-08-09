@@ -54,6 +54,7 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   amount: integer("amount").notNull(), // in KES
   description: text("description").notNull(),
   madeById: text("made_by_id"), // userId for deposits; null ok for disbursements
+  expenseCategory: text("expense_category"), // optional: which expense category this disbursement covers
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

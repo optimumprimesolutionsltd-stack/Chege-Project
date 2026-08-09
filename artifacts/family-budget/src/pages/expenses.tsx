@@ -197,6 +197,18 @@ export default function Expenses() {
             <option value="" disabled>Select category...</option>
             {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
           </select>
+          {form.category && (() => {
+            const cat = breakdown?.find(b => b.category === form.category);
+            return cat ? (
+              <p className="text-xs text-muted-foreground pt-1">
+                Spent this month: <span className="font-semibold text-foreground">{formatKes(cat.spentAmount)}</span>
+                <span className="mx-1">·</span>
+                <span className={cat.spentAmount >= cat.budgetAmount ? "text-destructive font-semibold" : ""}>
+                  {formatKes(Math.max(0, cat.budgetAmount - cat.spentAmount))} remaining of {formatKes(cat.budgetAmount)}
+                </span>
+              </p>
+            ) : null;
+          })()}
         </div>
 
         <div className="space-y-2 md:col-span-2">

@@ -17,6 +17,7 @@ const DisbursementInput = z.object({
   amount: z.number().positive(),
   description: z.string().min(1),
   date: z.string().min(1),
+  expenseCategory: z.string().optional(),
 });
 
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
@@ -28,6 +29,7 @@ async function enrichTx(tx: typeof jointAccountTxTable.$inferSelect) {
   return {
     ...tx,
     madeByName: user?.firstName ?? null,
+    expenseCategory: tx.expenseCategory ?? null,
     createdAt: tx.createdAt instanceof Date ? tx.createdAt.toISOString() : tx.createdAt,
   };
 }
@@ -73,10 +75,10 @@ router.post("/joint-account/disbursement", async (req, res) => {
   const parsed = DisbursementInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
 
-  const { amount, description, date } = parsed.data;
+  const { amount, description, date, expenseCategory } = parsed.data;
   const [tx] = await db
     .insert(jointAccountTxTable)
-    .values({ type: "disbursement", amount, description, date, madeById: req.user!.id })
+    .values({ type: "disbursement", amount, description, date, madeById: req.user!.id, expenseCategory: expenseCategory ?? null })
     .returning();
 
   res.status(201).json(await enrichTx(tx));

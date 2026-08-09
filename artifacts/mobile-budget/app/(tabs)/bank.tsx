@@ -23,6 +23,7 @@ import {
   useGetJointAccount,
   useCreateDeposit,
   useCreateDisbursement,
+  useGetBudgetCategories,
 } from '@workspace/api-client-react';
 
 function formatKES(n?: number | null): string {
@@ -46,6 +47,7 @@ type Tx = {
   amount: number;
   description: string;
   madeByName?: string | null;
+  expenseCategory?: string | null;
   createdAt?: string | null;
 };
 
@@ -74,15 +76,20 @@ export default function BankScreen() {
   const [txType, setTxType] = useState<TxType>('deposit');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('');
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
+  const { data: categories = [] } = useGetBudgetCategories();
 
   const openModal = (type: TxType) => {
     setTxType(type);
     setAmount('');
     setDescription('');
+    setExpenseCategory('');
+    setShowCategoryPicker(false);
     setModalVisible(true);
   };
 
@@ -110,7 +117,7 @@ export default function BankScreen() {
         });
       } else {
         await createDisbursement({
-          data: { amount: parsed, description: description.trim(), date: todayIso() },
+          data: { amount: parsed, description: description.trim(), date: todayIso(), expenseCategory: expenseCategory || undefined },
         });
       }
       setModalVisible(false);
@@ -135,7 +142,7 @@ export default function BankScreen() {
         colors={['#0a1a10', '#0f2217', '#132a1c']}
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
-        <Text style={styles.headerTitle}>Joint Account</Text>
+        <Text style={styles.headerTitle}>Bank Account</Text>
         {isLoading ? (
           <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
         ) : (
@@ -230,7 +237,11 @@ export default function BankScreen() {
                   {item.description}
                 </Text>
                 <Text style={[styles.txMeta, { color: colors.mutedForeground }]}>
-                  {item.madeByName ? `${item.madeByName} · ` : ''}
+                  {dep
+                    ? (item.madeByName ? `${item.madeByName} · ` : '')
+                    : ((item as Tx & { expenseCategory?: string | null }).expenseCategory
+                        ? `→ ${(item as Tx & { expenseCategory?: string | null }).expenseCategory} · `
+                        : '')}
                   {formatDateTime(item.createdAt)}
                 </Text>
               </View>
@@ -339,6 +350,35 @@ export default function BankScreen() {
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
             />
+
+            {/* Expense category (disbursements only) */}
+            {!isDeposit && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Expense Category <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
+                <TouchableOpacity
+                  style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                  onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: expenseCategory ? colors.foreground : colors.mutedForeground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                    {expenseCategory || 'Not linked to a category'}
+                  </Text>
+                  <Feather name={showCategoryPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                </TouchableOpacity>
+                {showCategoryPicker && (
+                  <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    <TouchableOpacity style={styles.categoryOption} onPress={() => { setExpenseCategory(''); setShowCategoryPicker(false); }}>
+                      <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>Not linked to a category</Text>
+                    </TouchableOpacity>
+                    {categories.map(c => (
+                      <TouchableOpacity key={c.id} style={styles.categoryOption} onPress={() => { setExpenseCategory(c.name); setShowCategoryPicker(false); }}>
+                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>{c.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
 
             {/* Submit */}
             <TouchableOpacity
@@ -576,5 +616,22 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     fontFamily: 'Inter_700Bold',
     color: '#0a1a10',
+  },
+  pickerButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  categoryDropdown: {
+    borderWidth: 1,
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden' as const,
+  },
+  categoryOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
 });

@@ -10,4 +10,6 @@ export interface DisbursementInput {
   amount: number;
   description: string;
   date: Date;
+  /** Optional expense category this disbursement is paying for */
+  expenseCategory?: string;
 }

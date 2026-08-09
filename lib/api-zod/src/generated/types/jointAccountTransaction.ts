@@ -14,6 +14,8 @@ export interface JointAccountTransaction {
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
+  /** Expense category this disbursement covers (optional) */
+  expenseCategory?: string | null;
   date: Date;
   createdAt: string;
 }

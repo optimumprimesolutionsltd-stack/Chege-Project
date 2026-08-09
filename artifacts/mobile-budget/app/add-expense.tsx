@@ -22,6 +22,7 @@ import {
   useCreateExpense,
   useGetBudgetCategories,
   useGetMembers,
+  useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey,
   getGetDashboardActivityQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -65,6 +66,8 @@ export default function AddExpenseSheet() {
 
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
+  const now = new Date();
+  const { data: breakdown } = useGetDashboardCategoryBreakdown({ month: now.getMonth() + 1, year: now.getFullYear() });
 
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
@@ -208,6 +211,22 @@ export default function AddExpenseSheet() {
             );
           })}
         </ScrollView>
+
+        {/* Running balance for selected category */}
+        {category ? (() => {
+          const cat = breakdown?.find(b => b.category === category);
+          if (!cat) return null;
+          const over = cat.spentAmount >= cat.budgetAmount;
+          return (
+            <View style={[styles.balancePill, { backgroundColor: over ? 'rgba(239,68,68,0.1)' : 'rgba(74,222,128,0.1)', borderColor: over ? 'rgba(239,68,68,0.3)' : 'rgba(74,222,128,0.3)' }]}>
+              <Feather name="bar-chart-2" size={12} color={over ? '#ef4444' : '#4ade80'} />
+              <Text style={[styles.balancePillText, { color: over ? '#ef4444' : '#4ade80' }]}>
+                Spent this month: KES {cat.spentAmount.toLocaleString()} / {cat.budgetAmount.toLocaleString()}
+                {over ? '  ·  Over budget!' : `  ·  KES ${(cat.budgetAmount - cat.spentAmount).toLocaleString()} left`}
+              </Text>
+            </View>
+          );
+        })() : null}
 
         {/* Description */}
         <Text style={[styles.label, { color: colors.mutedForeground }]}>DESCRIPTION</Text>
@@ -493,5 +512,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     marginTop: 2,
+  },
+  balancePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  balancePillText: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    flex: 1,
   },
 });

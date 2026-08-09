@@ -17,7 +17,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/contributions', label: 'Contributions', icon: PiggyBank },
     { href: '/activity', label: 'Activity', icon: Activity },
     { href: '/savings-goals', label: 'Savings Goals', icon: Target },
-    { href: '/bank', label: 'Joint Account', icon: Landmark },
+    { href: '/bank', label: 'Bank Account', icon: Landmark },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 

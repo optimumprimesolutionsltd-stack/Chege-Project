@@ -316,6 +316,7 @@ export const GetJointAccountResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 }))
@@ -339,6 +340,7 @@ export const CreateDepositResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -350,7 +352,8 @@ export const CreateDepositResponse = zod.object({
 export const CreateDisbursementBody = zod.object({
   "amount": zod.number(),
   "description": zod.string(),
-  "date": zod.coerce.date()
+  "date": zod.coerce.date(),
+  "expenseCategory": zod.string().optional().describe('Optional expense category this disbursement is paying for')
 })
 
 export const CreateDisbursementResponse = zod.object({
@@ -360,6 +363,7 @@ export const CreateDisbursementResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })

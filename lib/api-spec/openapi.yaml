@@ -994,6 +994,10 @@ components:
         madeByName:
           type: string
           nullable: true
+        expenseCategory:
+          type: string
+          nullable: true
+          description: Expense category this disbursement covers (optional)
         date:
           type: string
           format: date
@@ -1054,6 +1058,9 @@ components:
         date:
           type: string
           format: date
+        expenseCategory:
+          type: string
+          description: Optional expense category this disbursement is paying for
       required:
         - amount
         - description

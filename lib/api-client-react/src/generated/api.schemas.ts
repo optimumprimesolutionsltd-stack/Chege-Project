@@ -180,6 +180,8 @@ export interface JointAccountTransaction {
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
+  /** Expense category this disbursement covers (optional) */
+  expenseCategory?: string | null;
   date: string;
   createdAt: string;
 }
@@ -203,6 +205,8 @@ export interface DisbursementInput {
   amount: number;
   description: string;
   date: string;
+  /** Optional expense category this disbursement is paying for */
+  expenseCategory?: string;
 }
 
 export interface SavingsGoalInput {
