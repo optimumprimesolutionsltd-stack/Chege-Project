@@ -194,11 +194,28 @@ export default function Contributions() {
         </Button>
       )}
 
-      {!isLoading && contributions && contributions.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          {contributions.length} {contributions.length === 1 ? "contribution" : "contributions"} · {formatKes(contributions.reduce((sum, c) => sum + c.amount, 0))} total
-        </p>
-      )}
+      {!isLoading && contributions && contributions.length > 0 && (() => {
+        const total = contributions.reduce((sum, c) => sum + c.amount, 0);
+        const byPerson: Record<string, { name: string; amount: number }> = {};
+        contributions.forEach(c => {
+          if (byPerson[c.userId]) {
+            byPerson[c.userId].amount += c.amount;
+          } else {
+            byPerson[c.userId] = { name: c.userName, amount: c.amount };
+          }
+        });
+        const personBreakdown = Object.values(byPerson)
+          .map(({ name, amount }) => `${name} ${formatKes(amount)}`)
+          .join(" · ");
+        return (
+          <p className="text-sm text-muted-foreground">
+            {contributions.length} {contributions.length === 1 ? "contribution" : "contributions"} · {formatKes(total)} total
+            {personBreakdown && (
+              <span className="text-muted-foreground/70"> ({personBreakdown})</span>
+            )}
+          </p>
+        );
+      })()}
 
       <Card className="border-none shadow-md overflow-hidden">
         <div className="overflow-x-auto">
