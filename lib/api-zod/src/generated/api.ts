@@ -453,7 +453,8 @@ export const UpdateSavingsGoalBody = zod.object({
   "targetAmount": zod.number().optional(),
   "currentAmount": zod.number().optional(),
   "deadline": zod.coerce.date().nullish(),
-  "isCompleted": zod.boolean().optional()
+  "isCompleted": zod.boolean().optional(),
+  "reason": zod.string().optional().describe('Required when currentAmount correction reduces the balance by more than 50%')
 })
 
 export const UpdateSavingsGoalResponse = zod.object({

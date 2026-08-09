@@ -195,6 +195,8 @@ export default function SavingsGoals() {
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [currentAmount, setCurrentAmount] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
   const [contributeId, setContributeId] = useState<number | null>(null);
   const [contributeAmount, setContributeAmount] = useState("");
 
@@ -267,6 +269,8 @@ export default function SavingsGoals() {
     setName("");
     setTargetAmount("");
     setDeadline("");
+    setCurrentAmount("");
+    setCorrectionReason("");
     setMode("none");
   };
 
@@ -274,6 +278,8 @@ export default function SavingsGoals() {
     setName("");
     setTargetAmount("");
     setDeadline("");
+    setCurrentAmount("");
+    setCorrectionReason("");
     setMode("create");
   };
 
@@ -281,8 +287,21 @@ export default function SavingsGoals() {
     setName(goal.name);
     setTargetAmount(String(goal.targetAmount));
     setDeadline(goal.deadline ?? "");
+    setCurrentAmount(String(goal.currentAmount));
+    setCorrectionReason("");
     setMode({ type: "edit", goal });
   };
+
+  // Derived: big-drop warning (only in edit mode when currentAmount changed)
+  const editingGoal = typeof mode === "object" && mode.type === "edit" ? mode.goal : null;
+  const parsedCurrentAmount = currentAmount !== "" ? Number(currentAmount) : NaN;
+  const isBigDrop =
+    editingGoal !== null &&
+    !isNaN(parsedCurrentAmount) &&
+    editingGoal.currentAmount > 0 &&
+    parsedCurrentAmount < editingGoal.currentAmount &&
+    editingGoal.currentAmount - parsedCurrentAmount > editingGoal.currentAmount * 0.5;
+  const dropAmount = editingGoal ? editingGoal.currentAmount - parsedCurrentAmount : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,13 +311,24 @@ export default function SavingsGoals() {
         await createGoal.mutateAsync({ data: { name, targetAmount: Number(targetAmount), deadline: deadline || undefined } });
         toast({ title: "Goal created", description: `"${name}" has been added.` });
       } else if (typeof mode === "object" && mode.type === "edit") {
-        await updateGoal.mutateAsync({ id: mode.goal.id, data: { name, targetAmount: Number(targetAmount), deadline: deadline || null } });
+        const amountChanged = parsedCurrentAmount !== mode.goal.currentAmount && !isNaN(parsedCurrentAmount);
+        await updateGoal.mutateAsync({
+          id: mode.goal.id,
+          data: {
+            name,
+            targetAmount: Number(targetAmount),
+            deadline: deadline || null,
+            ...(amountChanged ? { currentAmount: parsedCurrentAmount } : {}),
+            ...(amountChanged && correctionReason.trim() ? { reason: correctionReason.trim() } : {}),
+          },
+        });
         toast({ title: "Goal updated" });
       }
       invalidate();
       resetForm();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Something went wrong." });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : undefined;
+      toast({ variant: "destructive", title: "Error", description: msg ?? "Something went wrong." });
     }
   };
 
@@ -517,8 +547,56 @@ export default function SavingsGoals() {
                   />
                 </div>
               </div>
+
+              {/* Current balance correction — edit mode only */}
+              {mode !== "create" && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">
+                      Current Balance (KES){" "}
+                      <span className="font-normal text-muted-foreground">(optional correction)</span>
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={currentAmount}
+                      onChange={(e) => { setCurrentAmount(e.target.value); setCorrectionReason(""); }}
+                      className="h-12 bg-card text-lg"
+                    />
+                  </div>
+
+                  {isBigDrop && (
+                    <div className="rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 p-4 space-y-3">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                        ⚠ This will remove {formatKes(dropAmount)} from this goal
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        That's more than 50% of the current balance. Please explain why so this correction is easy to trace later.
+                      </p>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                          Reason <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          placeholder="e.g. Withdrew funds to cover medical bill"
+                          value={correctionReason}
+                          onChange={(e) => setCorrectionReason(e.target.value)}
+                          className="h-10 bg-card text-sm"
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="pt-2 flex justify-end">
-                <Button type="submit" size="lg" className="rounded-xl h-12 px-8" disabled={isPending}>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="rounded-xl h-12 px-8"
+                  disabled={isPending || (isBigDrop && !correctionReason.trim())}
+                >
                   {isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Plus className="w-5 h-5 mr-2" />}
                   {mode === "create" ? "Create Goal" : "Save Changes"}
                 </Button>

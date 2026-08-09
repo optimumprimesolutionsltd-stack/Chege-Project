@@ -337,6 +337,8 @@ export default function GoalsScreen() {
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [editName, setEditName] = useState('');
   const [editTarget, setEditTarget] = useState('');
+  const [editCurrentAmount, setEditCurrentAmount] = useState('');
+  const [editCorrectionReason, setEditCorrectionReason] = useState('');
   const [editDeadlineDate, setEditDeadlineDate] = useState<Date | null>(null);
   const [submittingEdit, setSubmittingEdit] = useState(false);
 
@@ -347,6 +349,8 @@ export default function GoalsScreen() {
     setEditingGoal(goal);
     setEditName(goal.name);
     setEditTarget(String(goal.targetAmount));
+    setEditCurrentAmount(String(goal.currentAmount));
+    setEditCorrectionReason('');
     setEditDeadlineDate(ymdToDate(goal.deadline));
     setEditGoalVisible(true);
   };
@@ -355,6 +359,16 @@ export default function GoalsScreen() {
     if (submittingEdit) return;
     setEditGoalVisible(false);
   };
+
+  // Derived: big-drop warning
+  const editParsedCurrent = editCurrentAmount !== '' ? parseFloat(editCurrentAmount.replace(/,/g, '')) : NaN;
+  const editIsBigDrop =
+    editingGoal !== null &&
+    !isNaN(editParsedCurrent) &&
+    editingGoal.currentAmount > 0 &&
+    editParsedCurrent < editingGoal.currentAmount &&
+    editingGoal.currentAmount - editParsedCurrent > editingGoal.currentAmount * 0.5;
+  const editDropAmount = editingGoal ? editingGoal.currentAmount - editParsedCurrent : 0;
 
   const handleUpdateGoal = async () => {
     if (!editingGoal) return;
@@ -367,7 +381,12 @@ export default function GoalsScreen() {
       Alert.alert('Target required', 'Please enter a valid target amount.');
       return;
     }
+    if (editIsBigDrop && !editCorrectionReason.trim()) {
+      Alert.alert('Reason required', 'Please explain why the balance is being reduced by more than 50%.');
+      return;
+    }
     const deadlineValue = editDeadlineDate ? dateToYMD(editDeadlineDate) : null;
+    const currentAmountChanged = !isNaN(editParsedCurrent) && editParsedCurrent !== editingGoal.currentAmount;
 
     setSubmittingEdit(true);
     try {
@@ -377,6 +396,8 @@ export default function GoalsScreen() {
           name: editName.trim(),
           targetAmount: target,
           deadline: deadlineValue,
+          ...(currentAmountChanged ? { currentAmount: editParsedCurrent } : {}),
+          ...(currentAmountChanged && editCorrectionReason.trim() ? { reason: editCorrectionReason.trim() } : {}),
         },
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1106,8 +1127,8 @@ export default function GoalsScreen() {
                     <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit Goal</Text>
                     <TouchableOpacity
                       onPress={handleUpdateGoal}
-                      disabled={submittingEdit}
-                      style={[styles.modalSaveBtn, { backgroundColor: colors.primary, opacity: submittingEdit ? 0.7 : 1 }]}
+                      disabled={submittingEdit || (editIsBigDrop && !editCorrectionReason.trim())}
+                      style={[styles.modalSaveBtn, { backgroundColor: colors.primary, opacity: (submittingEdit || (editIsBigDrop && !editCorrectionReason.trim())) ? 0.4 : 1 }]}
                     >
                       {submittingEdit ? (
                         <ActivityIndicator size="small" color="#fff" />
@@ -1155,6 +1176,59 @@ export default function GoalsScreen() {
                       onChangeText={setEditTarget}
                       returnKeyType="next"
                     />
+
+                    {/* Current balance correction */}
+                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>CURRENT BALANCE (KES)</Text>
+                    <TextInput
+                      style={[styles.textInput, {
+                        backgroundColor: colors.muted,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                        borderRadius: colors.radius,
+                      }]}
+                      placeholder="Leave unchanged or enter correction"
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType="numeric"
+                      value={editCurrentAmount}
+                      onChangeText={(v) => { setEditCurrentAmount(v); setEditCorrectionReason(''); }}
+                      returnKeyType="next"
+                    />
+
+                    {/* Big-drop warning + required reason */}
+                    {editIsBigDrop && (
+                      <View style={{
+                        backgroundColor: '#fef3c7',
+                        borderColor: '#d97706',
+                        borderWidth: 1,
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 8,
+                        gap: 8,
+                      }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#92400e' }}>
+                          ⚠ This will remove KES {editDropAmount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from this goal
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#b45309' }}>
+                          That's more than 50% of the current balance. Please explain why so this correction can be traced.
+                        </Text>
+                        <Text style={[styles.fieldLabel, { color: '#92400e', marginTop: 4 }]}>REASON (required)</Text>
+                        <TextInput
+                          style={[styles.textInput, {
+                            backgroundColor: '#fffbeb',
+                            borderColor: '#d97706',
+                            color: '#1c1917',
+                            borderRadius: 8,
+                            marginBottom: 0,
+                          }]}
+                          placeholder="e.g. Withdrew funds to cover medical bill"
+                          placeholderTextColor="#a16207"
+                          value={editCorrectionReason}
+                          onChangeText={setEditCorrectionReason}
+                          returnKeyType="done"
+                          multiline
+                        />
+                      </View>
+                    )}
 
                     {/* Deadline */}
                     <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>DEADLINE (optional)</Text>

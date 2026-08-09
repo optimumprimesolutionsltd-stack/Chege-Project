@@ -1179,3 +1179,6 @@ components:
           format: date
         isCompleted:
           type: boolean
+        reason:
+          type: string
+          description: Required when currentAmount correction reduces the balance by more than 50%

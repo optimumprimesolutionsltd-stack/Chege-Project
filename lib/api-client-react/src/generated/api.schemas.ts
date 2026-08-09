@@ -260,6 +260,8 @@ export interface SavingsGoalUpdateInput {
   /** @nullable */
   deadline?: string | null;
   isCompleted?: boolean;
+  /** Required when currentAmount correction reduces the balance by more than 50% */
+  reason?: string;
 }
 
 export type GetExpensesParams = {
