@@ -1,31 +1,28 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import {
-  useGetContributions, useCreateContribution, useGetDashboardSummary, useGetMembers,
+  useGetContributions, useCreateContribution, useGetDashboardSummary,
   getGetContributionsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardActivityQueryKey,
 } from "@workspace/api-client-react";
-import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { Plus, Loader2, ArrowLeft, ArrowRight, PiggyBank, Calendar, Landmark, ChevronRight, Zap } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, PiggyBank, Calendar, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
-// Known member IDs
 const CHEGE_ID = "63497598";
 const LYDIAH_ID = "63570605";
 
-// Income sources per person
-const INCOME_SOURCES: Record<string, { label: string; amount: number; description: string }[]> = {
+const INCOME_SOURCES: Record<string, { label: string; amount: number }[]> = {
   [CHEGE_ID]: [
-    { label: "Ujenzi Salary", amount: 76140, description: "Monthly salary from Ujenzi family business" },
-    { label: "Rental Income", amount: 150000, description: "Ujenzi premises rental income" },
-    { label: "Optimum", amount: 40954, description: "Optimum personal business income" },
+    { label: "Ujenzi Salary", amount: 76140 },
+    { label: "Rental Income", amount: 150000 },
+    { label: "Optimum", amount: 40954 },
   ],
   [LYDIAH_ID]: [
-    { label: "EISH", amount: 50000, description: "EISH personal business income" },
+    { label: "EISH", amount: 50000 },
   ],
 };
 
@@ -37,19 +34,18 @@ const MEMBER_NAMES: Record<string, string> = {
 export default function Contributions() {
   const now = new Date();
   const [, navigate] = useLocation();
-  const { user } = useAuth();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
-  const [showCustom, setShowCustom] = useState(false);
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [customForUserId, setCustomForUserId] = useState("");
-  const [recordingSource, setRecordingSource] = useState<string | null>(null);
+  // Deposit form state
+  const [showForm, setShowForm] = useState(false);
+  const [forUserId, setForUserId] = useState(CHEGE_ID);
+  const [selectedSource, setSelectedSource] = useState("");
+  const [customAmount, setCustomAmount] = useState("");
+  const [customNote, setCustomNote] = useState("");
 
   const { data: contributions, isLoading } = useGetContributions({ month, year });
   const { data: summary } = useGetDashboardSummary({ month, year });
-  const { data: members } = useGetMembers();
   const createContribution = useCreateContribution();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -67,48 +63,49 @@ export default function Contributions() {
     if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1);
   };
 
-  const quickRecord = async (forUserId: string, sourceLabel: string, sourceAmount: number) => {
-    setRecordingSource(`${forUserId}::${sourceLabel}`);
-    try {
-      await createContribution.mutateAsync({
-        data: { amount: sourceAmount, month, year, note: sourceLabel, forUserId },
-      });
-      const who = MEMBER_NAMES[forUserId] ?? "Member";
-      toast({ title: "Recorded", description: `${who} · ${sourceLabel} — ${formatKes(sourceAmount)}` });
-      invalidate();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Failed to record contribution." });
-    } finally {
-      setRecordingSource(null);
-    }
+  const sources = INCOME_SOURCES[forUserId] ?? [];
+  const isOther = selectedSource === "other";
+  const selectedSourceObj = sources.find(s => s.label === selectedSource);
+  const finalAmount = isOther ? Number(customAmount) : (selectedSourceObj?.amount ?? 0);
+
+  const resetForm = () => {
+    setShowForm(false);
+    setSelectedSource("");
+    setCustomAmount("");
+    setCustomNote("");
   };
 
-  const handleCustomCreate = async (e: React.FormEvent) => {
+  const handlePersonChange = (id: string) => {
+    setForUserId(id);
+    setSelectedSource(""); // reset source when person changes
+    setCustomAmount("");
+    setCustomNote("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount) return;
+    if (!selectedSource || finalAmount <= 0) return;
     try {
       await createContribution.mutateAsync({
         data: {
-          amount: Number(amount),
+          amount: finalAmount,
           month,
           year,
-          note: note || undefined,
-          forUserId: customForUserId || undefined,
+          note: isOther ? (customNote || "Other") : selectedSource,
+          forUserId,
         },
       });
-      toast({ title: "Contribution recorded" });
-      setAmount(""); setNote(""); setCustomForUserId(""); setShowCustom(false);
+      const who = MEMBER_NAMES[forUserId] ?? "Member";
+      toast({ title: "Deposit recorded", description: `${who} · ${formatKes(finalAmount)}` });
+      resetForm();
       invalidate();
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "Failed to record contribution." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to record deposit." });
     }
   };
 
-  // All members including known ones even if members API hasn't loaded
-  const allMemberIds = members?.map(m => m.userId) ?? [CHEGE_ID, LYDIAH_ID];
-
   return (
-    <div className="space-y-6 pb-16 px-1">
+    <div className="space-y-6 pb-16 w-full">
       {/* Header */}
       <div className="flex flex-col gap-3">
         <div>
@@ -118,7 +115,7 @@ export default function Contributions() {
         {/* Month picker */}
         <div className="flex items-center gap-1 bg-card rounded-xl p-1 border shadow-sm self-start">
           <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg hover:bg-muted">
-            <ArrowLeft className="h-5 w-5 text-foreground/70" />
+            <ArrowLeft className="h-4 w-4 text-foreground/70" />
           </Button>
           <div className="flex items-center gap-1.5 px-1">
             <Calendar className="w-4 h-4 text-primary shrink-0" />
@@ -128,7 +125,7 @@ export default function Contributions() {
                 const [y, m] = e.target.value.split("-").map(Number);
                 setYear(y); setMonth(m);
               }}
-              className="font-semibold font-display text-sm text-foreground bg-transparent border-none outline-none cursor-pointer"
+              className="font-semibold text-sm text-foreground bg-transparent border-none outline-none cursor-pointer"
             >
               {Array.from({ length: 24 }, (_, i) => {
                 const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -143,7 +140,7 @@ export default function Contributions() {
           </div>
           <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg hover:bg-muted"
             disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
-            <ArrowRight className="h-5 w-5 text-foreground/70" />
+            <ArrowRight className="h-4 w-4 text-foreground/70" />
           </Button>
         </div>
       </div>
@@ -159,18 +156,18 @@ export default function Contributions() {
             const netPos = net >= 0;
             return (
               <Card key={name} className="border-none shadow-md overflow-hidden">
-                <CardContent className={`p-5 space-y-4 bg-gradient-to-br ${bgClass} to-transparent`}>
+                <CardContent className={`p-5 space-y-3 bg-gradient-to-br ${bgClass} to-transparent`}>
                   <div className="flex justify-between items-center">
                     <h3 className="font-display font-bold text-xl text-foreground">{name}</h3>
                     <p className="text-sm text-muted-foreground">Target: {formatKes(target)}</p>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center bg-background/50 rounded-xl p-3">
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Contributed</p>
+                      <p className="text-xs text-muted-foreground mb-1">In</p>
                       <p className={`text-base font-bold font-mono ${colorClass}`}>{formatKes(contributed)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Spent</p>
+                      <p className="text-xs text-muted-foreground mb-1">Out</p>
                       <p className="text-base font-bold font-mono text-destructive">{formatKes(spent)}</p>
                     </div>
                     <div>
@@ -184,7 +181,7 @@ export default function Contributions() {
                     <div className="h-2 w-full bg-muted/40 rounded-full overflow-hidden">
                       <div className={`h-full ${barClass} rounded-full transition-all`} style={{ width: `${pct}%` }} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1.5 text-right">
+                    <p className="text-xs text-muted-foreground mt-1 text-right">
                       {Math.round(pct)}% · {formatKes(Math.max(target - contributed, 0))} to go
                     </p>
                   </div>
@@ -195,158 +192,108 @@ export default function Contributions() {
         </div>
       )}
 
-      {/* Make a Bank Deposit section */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-display font-bold text-foreground">Make a Bank Deposit</h2>
-        <p className="text-base text-muted-foreground -mt-1">
-          Tap a source to record the full amount instantly. Each entry is attributed to that person's total.
-        </p>
+      {/* Make a Deposit */}
+      {showForm ? (
+        <Card className="border-none shadow-md">
+          <CardContent className="p-5">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="flex items-center justify-between border-b border-border/50 pb-3">
+                <h3 className="text-lg font-bold font-display text-foreground">Make a Bank Deposit</h3>
+                <Button type="button" variant="ghost" size="sm" onClick={resetForm}>Cancel</Button>
+              </div>
 
-        {/* Deposit to Bank shortcut */}
-        <button
-          onClick={() => navigate("/bank")}
-          className="w-full flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/40 transition-colors text-left group"
-        >
-          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center shrink-0">
-            <Landmark className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-base text-foreground">Deposit to Bank Account</p>
-            <p className="text-sm text-muted-foreground">Record a deposit into the joint bank account</p>
-          </div>
-          <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0 group-hover:translate-x-0.5 transition-transform" />
-        </button>
-
-        {/* Income source presets — both members */}
-        {allMemberIds.map(memberId => {
-          const sources = INCOME_SOURCES[memberId];
-          if (!sources) return null;
-          const memberName = MEMBER_NAMES[memberId] ?? memberId;
-          return (
-            <div key={memberId} className="space-y-2">
-              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-1">{memberName}'s Sources</p>
-              {sources.map((source) => {
-                const key = `${memberId}::${source.label}`;
-                const isRecording = recordingSource === key;
-                const alreadyRecorded = contributions?.some(c =>
-                  c.note === source.label &&
-                  (c.userId === memberId || (c.userId === user?.id && !members?.find(m => m.userId === memberId)))
-                ) ?? false;
-                return (
-                  <div
-                    key={source.label}
-                    className={`flex items-center gap-3 p-4 rounded-xl border bg-card transition-colors ${alreadyRecorded ? "border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/20" : "border-border"}`}
-                  >
-                    <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
-                      <Zap className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-base text-foreground">{source.label}</p>
-                        {alreadyRecorded && (
-                          <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">
-                            Recorded
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {formatKes(source.amount)}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={alreadyRecorded ? "outline" : "default"}
-                      onClick={() => quickRecord(memberId, source.label, source.amount)}
-                      disabled={isRecording}
-                      className="shrink-0 h-10 px-4 text-sm"
+              {/* Who */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[{ id: CHEGE_ID, name: "Chege" }, { id: LYDIAH_ID, name: "Lydiah" }].map(({ id, name }) => (
+                    <button
+                      key={id} type="button" onClick={() => handlePersonChange(id)}
+                      className={`py-3 rounded-xl border text-base font-semibold transition-colors ${forUserId === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}
                     >
-                      {isRecording ? <Loader2 className="w-4 h-4 animate-spin" /> : alreadyRecorded ? "Again" : "Record"}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-
-        {/* Other / custom */}
-        {showCustom ? (
-          <Card className="border-none shadow-md">
-            <CardContent className="p-5">
-              <form onSubmit={handleCustomCreate} className="space-y-4">
-                <div className="flex items-center justify-between border-b border-border/50 pb-3">
-                  <h3 className="text-lg font-bold font-display text-foreground">Other / Custom</h3>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowCustom(false)}>Cancel</Button>
+                      {name}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                {/* Person picker */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Who is contributing?</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { id: CHEGE_ID, name: "Chege" },
-                      { id: LYDIAH_ID, name: "Lydiah" },
-                    ].map(({ id, name }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setCustomForUserId(id)}
-                        className={`py-3 rounded-xl border text-sm font-semibold transition-colors ${customForUserId === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}
-                      >
-                        {name}
-                      </button>
+              {/* Source dropdown */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-foreground">Where is the money from?</label>
+                <div className="relative">
+                  <select
+                    value={selectedSource}
+                    onChange={e => {
+                      setSelectedSource(e.target.value);
+                      setCustomAmount("");
+                    }}
+                    required
+                    className="w-full h-12 rounded-xl border border-input bg-card px-4 pr-10 text-base text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="" disabled>Select source…</option>
+                    {sources.map(s => (
+                      <option key={s.label} value={s.label}>
+                        {s.label} — {formatKes(s.amount)}
+                      </option>
                     ))}
-                  </div>
+                    <option value="other">Other / Custom amount</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 </div>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
+              {/* Amount — auto-filled for known sources, editable for Other */}
+              {selectedSource && (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
+                  {isOther ? (
                     <Input
-                      type="number" placeholder="e.g. 20000" value={amount}
-                      onChange={e => setAmount(e.target.value)} required min="1"
+                      type="number" placeholder="e.g. 20000" value={customAmount}
+                      onChange={e => setCustomAmount(e.target.value)} required min="1"
                       className="h-12 text-lg bg-background"
+                      autoFocus
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-foreground">Source / Note</label>
-                    <Input
-                      type="text" placeholder="e.g. Bonus, side hustle…" value={note}
-                      onChange={e => setNote(e.target.value)} className="h-12 bg-background"
-                    />
-                  </div>
+                  ) : (
+                    <div className="h-12 rounded-xl border border-input bg-muted/30 px-4 flex items-center">
+                      <span className="text-lg font-bold text-primary">{formatKes(selectedSourceObj?.amount ?? 0)}</span>
+                      <span className="text-sm text-muted-foreground ml-2">(full target amount)</span>
+                    </div>
+                  )}
                 </div>
-                <Button type="submit" disabled={createContribution.isPending} className="h-12 w-full text-base">
-                  {createContribution.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-                  Save Contribution
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        ) : (
-          <button
-            onClick={() => setShowCustom(true)}
-            className="w-full flex items-center gap-4 p-4 rounded-xl border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors text-left"
-          >
-            <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
-              <Plus className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="font-semibold text-base text-primary">Other / Custom Amount</p>
-              <p className="text-sm text-muted-foreground">Record income from a different source</p>
-            </div>
-          </button>
-        )}
-      </div>
+              )}
 
-      {/* History */}
-      {!isLoading && contributions && contributions.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          {contributions.length} {contributions.length === 1 ? "entry" : "entries"} ·{" "}
-          {formatKes(contributions.reduce((s, c) => s + c.amount, 0))} total
-        </p>
+              {/* Note — only for Other */}
+              {isOther && (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">Note <span className="font-normal text-muted-foreground">(optional)</span></label>
+                  <Input
+                    type="text" placeholder="e.g. Bonus, side hustle…" value={customNote}
+                    onChange={e => setCustomNote(e.target.value)} className="h-12 bg-background"
+                  />
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={!selectedSource || finalAmount <= 0 || createContribution.isPending}
+                className="w-full h-12 text-base"
+              >
+                {createContribution.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Record Deposit
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <button
+          onClick={() => setShowForm(true)}
+          className="w-full flex items-center justify-center gap-3 p-4 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-semibold text-base shadow-md"
+        >
+          + Make a Bank Deposit
+        </button>
       )}
 
+      {/* History */}
       <Card className="border-none shadow-md overflow-hidden">
         {isLoading ? (
           <div className="p-12 flex justify-center">
@@ -357,27 +304,29 @@ export default function Contributions() {
             <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
               <PiggyBank className="w-7 h-7 text-muted-foreground/50" />
             </div>
-            <p className="text-base font-medium text-foreground">No contributions this month yet</p>
-            <p className="text-sm mt-1">Use the sources above to record a deposit.</p>
+            <p className="text-base font-medium text-foreground">No deposits this month yet</p>
+            <p className="text-sm mt-1">Tap "Make a Bank Deposit" to add one.</p>
           </div>
         ) : (
-          <div className="divide-y divide-border/30">
-            {contributions.map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold text-base text-foreground">{item.userName}</p>
-                  <p className="text-sm text-muted-foreground">{item.note || "—"} · {formatDate(item.createdAt)}</p>
+          <>
+            <div className="divide-y divide-border/30">
+              {contributions.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-base text-foreground">{item.userName}</p>
+                    <p className="text-sm text-muted-foreground">{item.note || "—"} · {formatDate(item.createdAt)}</p>
+                  </div>
+                  <p className="font-display font-bold text-primary whitespace-nowrap text-base shrink-0">
+                    +{formatKes(item.amount)}
+                  </p>
                 </div>
-                <p className="font-display font-bold text-primary whitespace-nowrap text-base shrink-0">
-                  +{formatKes(item.amount)}
-                </p>
-              </div>
-            ))}
-            <div className="px-4 py-3 bg-muted/30 flex justify-between items-center">
+              ))}
+            </div>
+            <div className="px-4 py-3 bg-muted/30 flex justify-between items-center border-t border-border/30">
               <span className="text-sm text-muted-foreground">{contributions.length} {contributions.length === 1 ? "entry" : "entries"}</span>
               <span className="font-bold text-primary">{formatKes(contributions.reduce((s, c) => s + c.amount, 0))}</span>
             </div>
-          </div>
+          </>
         )}
       </Card>
     </div>

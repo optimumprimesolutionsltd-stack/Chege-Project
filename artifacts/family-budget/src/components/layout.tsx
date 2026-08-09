@@ -22,7 +22,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground selection:bg-primary/20">
+    <div className="flex min-h-screen bg-background text-foreground selection:bg-primary/20 overflow-x-hidden">
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
         <div className="p-6 flex items-center gap-3">
