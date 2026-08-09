@@ -95,34 +95,42 @@ const QUICK_CHIPS: { id: QuickChip; label: string }[] = [
   { id: "this-year", label: "This Year" },
 ];
 
-function GoalContributionHistory({ goalId }: { goalId: number }) {
+interface GoalFilterState {
+  fromDate: string;
+  toDate: string;
+  activeChip: QuickChip | null;
+}
+
+const DEFAULT_FILTER: GoalFilterState = { fromDate: "", toDate: "", activeChip: null };
+
+function GoalContributionHistory({
+  goalId,
+  filter,
+  onFilterChange,
+}: {
+  goalId: number;
+  filter: GoalFilterState;
+  onFilterChange: (f: GoalFilterState) => void;
+}) {
   const { data: contributions, isLoading } = useGetSavingsGoalContributions(goalId);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [activeChip, setActiveChip] = useState<QuickChip | null>(null);
+  const { fromDate, toDate, activeChip } = filter;
 
   function applyChip(chip: QuickChip) {
     if (activeChip === chip) {
       // toggle off
-      setActiveChip(null);
-      setFromDate("");
-      setToDate("");
+      onFilterChange({ fromDate: "", toDate: "", activeChip: null });
     } else {
       const range = getChipRange(chip);
-      setActiveChip(chip);
-      setFromDate(range.from);
-      setToDate(range.to);
+      onFilterChange({ fromDate: range.from, toDate: range.to, activeChip: chip });
     }
   }
 
   function handleFromDateChange(value: string) {
-    setFromDate(value);
-    setActiveChip(null);
+    onFilterChange({ ...filter, fromDate: value, activeChip: null });
   }
 
   function handleToDateChange(value: string) {
-    setToDate(value);
-    setActiveChip(null);
+    onFilterChange({ ...filter, toDate: value, activeChip: null });
   }
 
   if (isLoading) {
@@ -188,7 +196,7 @@ function GoalContributionHistory({ goalId }: { goalId: number }) {
         </div>
         {hasFilter && (
           <button
-            onClick={() => { setFromDate(""); setToDate(""); setActiveChip(null); }}
+            onClick={() => onFilterChange(DEFAULT_FILTER)}
             className="text-xs text-muted-foreground hover:text-foreground underline shrink-0"
           >
             Clear
@@ -274,6 +282,15 @@ export default function SavingsGoals() {
 
   const [mode, setMode] = useState<GoalFormMode>("none");
   const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(null);
+  const [goalFilters, setGoalFilters] = useState<Record<number, GoalFilterState>>({});
+
+  function getGoalFilter(goalId: number): GoalFilterState {
+    return goalFilters[goalId] ?? DEFAULT_FILTER;
+  }
+
+  function setGoalFilter(goalId: number, f: GoalFilterState) {
+    setGoalFilters((prev) => ({ ...prev, [goalId]: f }));
+  }
 
   // Form state
   const [name, setName] = useState("");
@@ -791,7 +808,11 @@ export default function SavingsGoals() {
 
                     {expandedHistoryId === goal.id && (
                       <div className="border-t border-border/40 pt-3">
-                        <GoalContributionHistory goalId={goal.id} />
+                        <GoalContributionHistory
+                          goalId={goal.id}
+                          filter={getGoalFilter(goal.id)}
+                          onFilterChange={(f) => setGoalFilter(goal.id, f)}
+                        />
                       </div>
                     )}
                   </CardContent>
@@ -844,7 +865,11 @@ export default function SavingsGoals() {
 
                       {expandedHistoryId === goal.id && (
                         <div className="border-t border-border/40 pt-3">
-                          <GoalContributionHistory goalId={goal.id} />
+                          <GoalContributionHistory
+                            goalId={goal.id}
+                            filter={getGoalFilter(goal.id)}
+                            onFilterChange={(f) => setGoalFilter(goal.id, f)}
+                          />
                         </div>
                       )}
                     </CardContent>
