@@ -229,29 +229,39 @@ router.patch("/savings-goals/:id", async (req, res) => {
   }
 
   const result = await db.transaction(async (tx) => {
-    // If currentAmount is being set directly, fetch the current value so we can
-    // record the delta as a manual adjustment entry in the contribution history.
-    let previousAmount: number | undefined;
+    // If currentAmount is being set directly, fetch the current value with a
+    // row-level lock so concurrent PATCH requests serialize instead of racing.
+    let delta: number | undefined;
     if (updates.currentAmount !== undefined) {
       const [existing] = await tx
         .select({ currentAmount: savingsGoalsTable.currentAmount })
         .from(savingsGoalsTable)
-        .where(eq(savingsGoalsTable.id, id));
+        .where(eq(savingsGoalsTable.id, id))
+        .for("update"); // prevents concurrent reads from seeing the same snapshot
       if (!existing) return null;
-      previousAmount = existing.currentAmount;
+      const previousAmount = existing.currentAmount;
 
       // Guard against accidental large negative corrections.
       // If the new amount would wipe more than 50% of the current balance,
       // require an explicit reason so the intent is clear.
-      const delta = updates.currentAmount - previousAmount;
+      delta = updates.currentAmount - previousAmount;
       if (delta < 0 && previousAmount > 0 && Math.abs(delta) > previousAmount * 0.5 && !reason) {
         return { validationError: `A correction of ${Math.abs(delta).toFixed(2)} would reduce the balance by more than 50%. Provide a 'reason' field to confirm this is intentional.` };
       }
     }
 
+    // Apply currentAmount as an atomic delta (currentAmount + delta) rather than
+    // writing the raw caller-supplied value. This ensures two concurrent edits
+    // both take effect rather than the second silently overwriting the first.
+    const { currentAmount: _ignored, ...otherUpdates } = updates;
+    const setClause: Record<string, unknown> = { ...otherUpdates };
+    if (delta !== undefined) {
+      setClause.currentAmount = sql`${savingsGoalsTable.currentAmount} + ${delta}`;
+    }
+
     const [updated] = await tx
       .update(savingsGoalsTable)
-      .set(updates)
+      .set(setClause)
       .where(eq(savingsGoalsTable.id, id))
       .returning();
 
@@ -259,16 +269,13 @@ router.patch("/savings-goals/:id", async (req, res) => {
 
     // Record a manual adjustment contribution so history totals stay consistent.
     // Both writes succeed or both roll back — no partial state possible.
-    if (updates.currentAmount !== undefined && previousAmount !== undefined) {
-      const delta = updates.currentAmount - previousAmount;
-      if (delta !== 0) {
-        await tx.insert(savingsGoalContributionsTable).values({
-          goalId: id,
-          amount: delta,
-          note: "Manual adjustment",
-          createdByUserId: req.user.id,
-        });
-      }
+    if (delta !== undefined && delta !== 0) {
+      await tx.insert(savingsGoalContributionsTable).values({
+        goalId: id,
+        amount: delta,
+        note: "Manual adjustment",
+        createdByUserId: req.user.id,
+      });
     }
 
     return updated;
