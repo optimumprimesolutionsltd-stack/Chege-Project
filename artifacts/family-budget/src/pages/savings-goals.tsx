@@ -5,9 +5,10 @@ import {
   useUpdateSavingsGoal,
   useDeleteSavingsGoal,
   useContributeToSavingsGoal,
+  useCascadeContribute,
   getGetSavingsGoalsQueryKey,
 } from "@workspace/api-client-react";
-import type { SavingsGoal } from "@workspace/api-client-react";
+import type { SavingsGoal, CascadeContributeAllocation } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,10 @@ import {
   Trash2,
   Calendar,
   Trophy,
+  ArrowUp,
+  ArrowDown,
+  Sparkles,
+  ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -51,6 +56,7 @@ export default function SavingsGoals() {
   const createGoal = useCreateSavingsGoal();
   const updateGoal = useUpdateSavingsGoal();
   const contributeToGoal = useContributeToSavingsGoal();
+  const cascadeContribute = useCascadeContribute();
   const deleteGoal = useDeleteSavingsGoal();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -64,8 +70,70 @@ export default function SavingsGoals() {
   const [contributeId, setContributeId] = useState<number | null>(null);
   const [contributeAmount, setContributeAmount] = useState("");
 
+  // Cascade payment state
+  const [showCascade, setShowCascade] = useState(false);
+  const [cascadeAmount, setCascadeAmount] = useState("");
+  const [cascadeOrder, setCascadeOrder] = useState<number[]>([]);
+  const [cascadeResult, setCascadeResult] = useState<CascadeContributeAllocation[] | null>(null);
+
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+
+  const activeGoals = goals?.filter((g) => !g.isCompleted) ?? [];
+  const completedGoals = goals?.filter((g) => g.isCompleted) ?? [];
+  const isPending = createGoal.isPending || updateGoal.isPending;
+
+  // Ordered active goals for cascade UI
+  const orderedGoals =
+    cascadeOrder.length > 0
+      ? cascadeOrder
+          .map((id) => activeGoals.find((g) => g.id === id))
+          .filter(Boolean) as SavingsGoal[]
+      : activeGoals;
+
+  const openCascade = () => {
+    setCascadeOrder(activeGoals.map((g) => g.id));
+    setCascadeAmount("");
+    setCascadeResult(null);
+    setShowCascade(true);
+  };
+
+  const moveGoal = (index: number, direction: -1 | 1) => {
+    const order = [...(cascadeOrder.length > 0 ? cascadeOrder : activeGoals.map((g) => g.id))];
+    const target = index + direction;
+    if (target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target], order[index]];
+    setCascadeOrder(order);
+  };
+
+  const handleCascade = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(cascadeAmount);
+    if (!amount || amount <= 0) return;
+
+    try {
+      const result = await cascadeContribute.mutateAsync({
+        data: {
+          amount,
+          goalIds: cascadeOrder.length > 0 ? cascadeOrder : undefined,
+        },
+      });
+      setCascadeResult(result.allocations);
+      invalidate();
+
+      const distributed = result.allocations.reduce((s, a) => s + a.allocated, 0);
+      const completed = result.allocations.filter((a) => a.completed).length;
+      toast({
+        title: `${formatKes(distributed)} distributed`,
+        description:
+          completed > 0
+            ? `${completed} goal${completed > 1 ? "s" : ""} completed! 🎉`
+            : `Spread across ${result.allocations.length} goal${result.allocations.length !== 1 ? "s" : ""}.`,
+      });
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Failed to distribute payment." });
+    }
+  };
 
   const resetForm = () => {
     setName("");
@@ -91,26 +159,12 @@ export default function SavingsGoals() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !targetAmount) return;
-
     try {
       if (mode === "create") {
-        await createGoal.mutateAsync({
-          data: {
-            name,
-            targetAmount: Number(targetAmount),
-            deadline: deadline || undefined,
-          },
-        });
+        await createGoal.mutateAsync({ data: { name, targetAmount: Number(targetAmount), deadline: deadline || undefined } });
         toast({ title: "Goal created", description: `"${name}" has been added.` });
       } else if (typeof mode === "object" && mode.type === "edit") {
-        await updateGoal.mutateAsync({
-          id: mode.goal.id,
-          data: {
-            name,
-            targetAmount: Number(targetAmount),
-            deadline: deadline || null,
-          },
-        });
+        await updateGoal.mutateAsync({ id: mode.goal.id, data: { name, targetAmount: Number(targetAmount), deadline: deadline || null } });
         toast({ title: "Goal updated" });
       }
       invalidate();
@@ -124,12 +178,8 @@ export default function SavingsGoals() {
     e.preventDefault();
     const amount = Number(contributeAmount);
     if (!amount || amount <= 0) return;
-
     try {
-      await contributeToGoal.mutateAsync({
-        id: goal.id,
-        data: { amount },
-      });
+      await contributeToGoal.mutateAsync({ id: goal.id, data: { amount } });
       toast({ title: "Contribution added", description: `${formatKes(amount)} added to "${goal.name}".` });
       invalidate();
       setContributeId(null);
@@ -141,10 +191,7 @@ export default function SavingsGoals() {
 
   const handleMarkComplete = async (goal: SavingsGoal) => {
     try {
-      await updateGoal.mutateAsync({
-        id: goal.id,
-        data: { isCompleted: !goal.isCompleted },
-      });
+      await updateGoal.mutateAsync({ id: goal.id, data: { isCompleted: !goal.isCompleted } });
       toast({ title: goal.isCompleted ? "Goal reopened" : "Goal completed! 🎉" });
       invalidate();
     } catch {
@@ -163,10 +210,6 @@ export default function SavingsGoals() {
     }
   };
 
-  const activeGoals = goals?.filter((g) => !g.isCompleted) ?? [];
-  const completedGoals = goals?.filter((g) => g.isCompleted) ?? [];
-  const isPending = createGoal.isPending || updateGoal.isPending;
-
   return (
     <div className="space-y-8 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -177,15 +220,128 @@ export default function SavingsGoals() {
           </p>
         </div>
         {mode === "none" && (
-          <Button
-            onClick={openCreate}
-            className="rounded-xl h-12 px-6 shadow-md hover:-translate-y-0.5 transition-transform"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            New Goal
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            {activeGoals.length > 1 && !showCascade && (
+              <Button
+                variant="outline"
+                onClick={openCascade}
+                className="rounded-xl h-12 px-6 border-primary/30 text-primary hover:bg-primary/5"
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Distribute Payment
+              </Button>
+            )}
+            <Button
+              onClick={openCreate}
+              className="rounded-xl h-12 px-6 shadow-md hover:-translate-y-0.5 transition-transform"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              New Goal
+            </Button>
+          </div>
         )}
       </div>
+
+      {/* Cascade Payment Panel */}
+      {showCascade && activeGoals.length > 0 && (
+        <Card className="border-primary/20 shadow-md bg-primary/5">
+          <CardContent className="p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold font-display text-foreground flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  Distribute Payment
+                </h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Enter the total amount — it fills goals in order, top to bottom.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => { setShowCascade(false); setCascadeResult(null); }}>
+                Cancel
+              </Button>
+            </div>
+
+            {/* Goal order */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Priority order — drag or use arrows
+              </p>
+              {orderedGoals.map((goal, i) => {
+                const remaining = goal.targetAmount - goal.currentAmount;
+                return (
+                  <div
+                    key={goal.id}
+                    className="flex items-center gap-3 bg-card rounded-xl px-4 py-3 border border-border/50"
+                  >
+                    <span className="text-sm font-bold text-muted-foreground w-5 text-center">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground truncate">{goal.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatKes(remaining)} still needed
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => moveGoal(i, -1)}
+                        disabled={i === 0}
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => moveGoal(i, 1)}
+                        disabled={i === orderedGoals.length - 1}
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Amount + submit */}
+            <form onSubmit={handleCascade} className="flex gap-3 items-center">
+              <Input
+                type="number"
+                placeholder="Total payment amount (KES)"
+                value={cascadeAmount}
+                onChange={(e) => { setCascadeAmount(e.target.value); setCascadeResult(null); }}
+                min="1"
+                required
+                className="h-12 bg-card text-lg flex-1"
+              />
+              <Button type="submit" size="lg" className="h-12 px-6 rounded-xl shrink-0" disabled={cascadeContribute.isPending}>
+                {cascadeContribute.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Distribute"}
+              </Button>
+            </form>
+
+            {/* Result breakdown */}
+            {cascadeResult && cascadeResult.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">How it was split</p>
+                {cascadeResult.map((a) => (
+                  <div key={a.goalId} className="flex items-center gap-3 text-sm">
+                    <ChevronRight className="w-4 h-4 text-primary shrink-0" />
+                    <span className="flex-1 text-foreground font-medium truncate">{a.goalName}</span>
+                    <span className="font-bold text-primary">{formatKes(a.allocated)}</span>
+                    {a.completed && (
+                      <span className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded-full font-semibold">
+                        Complete!
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Create / Edit Form */}
       {mode !== "none" && (
@@ -196,9 +352,7 @@ export default function SavingsGoals() {
                 <h3 className="text-xl font-bold font-display text-foreground">
                   {mode === "create" ? "New Savings Goal" : "Edit Goal"}
                 </h3>
-                <Button type="button" variant="ghost" onClick={resetForm}>
-                  Cancel
-                </Button>
+                <Button type="button" variant="ghost" onClick={resetForm}>Cancel</Button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2 md:col-span-1">
@@ -225,8 +379,7 @@ export default function SavingsGoals() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-foreground">
-                    Deadline{" "}
-                    <span className="font-normal text-muted-foreground">(optional)</span>
+                    Deadline <span className="font-normal text-muted-foreground">(optional)</span>
                   </label>
                   <Input
                     type="date"
@@ -237,17 +390,8 @@ export default function SavingsGoals() {
                 </div>
               </div>
               <div className="pt-2 flex justify-end">
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="rounded-xl h-12 px-8"
-                  disabled={isPending}
-                >
-                  {isPending ? (
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="w-5 h-5 mr-2" />
-                  )}
+                <Button type="submit" size="lg" className="rounded-xl h-12 px-8" disabled={isPending}>
+                  {isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Plus className="w-5 h-5 mr-2" />}
                   {mode === "create" ? "Create Goal" : "Save Changes"}
                 </Button>
               </div>
@@ -264,7 +408,6 @@ export default function SavingsGoals() {
         </div>
       ) : (
         <>
-          {/* Active Goals */}
           {activeGoals.length === 0 && mode === "none" && (
             <Card className="border-none shadow-md">
               <CardContent className="p-12 text-center text-muted-foreground">
@@ -291,31 +434,13 @@ export default function SavingsGoals() {
                         <CardTitle className="text-lg leading-tight">{goal.name}</CardTitle>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          onClick={() => openEdit(goal)}
-                          title="Edit goal"
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEdit(goal)} title="Edit goal">
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-emerald-600"
-                          onClick={() => handleMarkComplete(goal)}
-                          title="Mark complete"
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-emerald-600" onClick={() => handleMarkComplete(goal)} title="Mark complete">
                           <CheckCircle2 className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDelete(goal)}
-                          title="Delete goal"
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(goal)} title="Delete goal">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -325,11 +450,7 @@ export default function SavingsGoals() {
                         <Calendar className="w-3.5 h-3.5" />
                         <span>
                           Target by{" "}
-                          {new Date(goal.deadline).toLocaleDateString("en-KE", {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                          })}
+                          {new Date(goal.deadline).toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}
                         </span>
                       </div>
                     )}
@@ -337,12 +458,8 @@ export default function SavingsGoals() {
                   <CardContent className="p-6 space-y-5">
                     <GoalProgress current={goal.currentAmount} target={goal.targetAmount} />
 
-                    {/* Contribute inline */}
                     {contributeId === goal.id ? (
-                      <form
-                        onSubmit={(e) => handleContribute(e, goal)}
-                        className="flex gap-3 items-center"
-                      >
+                      <form onSubmit={(e) => handleContribute(e, goal)} className="flex gap-3 items-center">
                         <Input
                           type="number"
                           placeholder="Amount to add (KES)"
@@ -353,28 +470,10 @@ export default function SavingsGoals() {
                           className="h-10 bg-muted/40"
                           autoFocus
                         />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          className="h-10 rounded-lg shrink-0"
-                          disabled={contributeToGoal.isPending}
-                        >
-                          {contributeToGoal.isPending ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            "Add"
-                          )}
+                        <Button type="submit" size="sm" className="h-10 rounded-lg shrink-0" disabled={contributeToGoal.isPending}>
+                          {contributeToGoal.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
                         </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-10 rounded-lg"
-                          onClick={() => {
-                            setContributeId(null);
-                            setContributeAmount("");
-                          }}
-                        >
+                        <Button type="button" variant="ghost" size="sm" className="h-10 rounded-lg" onClick={() => { setContributeId(null); setContributeAmount(""); }}>
                           Cancel
                         </Button>
                       </form>
@@ -382,10 +481,7 @@ export default function SavingsGoals() {
                       <Button
                         variant="outline"
                         className="w-full h-10 rounded-xl font-semibold border-primary/20 text-primary hover:bg-primary/5"
-                        onClick={() => {
-                          setContributeId(goal.id);
-                          setContributeAmount("");
-                        }}
+                        onClick={() => { setContributeId(goal.id); setContributeAmount(""); }}
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         Add Contribution
@@ -397,7 +493,6 @@ export default function SavingsGoals() {
             </div>
           )}
 
-          {/* Completed Goals */}
           {completedGoals.length > 0 && (
             <div className="space-y-4">
               <h2 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
@@ -406,10 +501,7 @@ export default function SavingsGoals() {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {completedGoals.map((goal) => (
-                  <Card
-                    key={goal.id}
-                    className="border-none shadow-sm opacity-70 bg-muted/30"
-                  >
+                  <Card key={goal.id} className="border-none shadow-sm opacity-70 bg-muted/30">
                     <CardContent className="p-5 space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -417,22 +509,10 @@ export default function SavingsGoals() {
                           <p className="font-semibold text-foreground">{goal.name}</p>
                         </div>
                         <div className="flex gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => handleMarkComplete(goal)}
-                            title="Reopen goal"
-                          >
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleMarkComplete(goal)} title="Reopen goal">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleDelete(goal)}
-                            title="Delete goal"
-                          >
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(goal)} title="Delete goal">
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>

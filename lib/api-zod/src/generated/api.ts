@@ -377,6 +377,27 @@ export const DeleteJointAccountTransactionResponse = zod.object({
 
 
 /**
+ * @summary Distribute a payment waterfall-style across multiple savings goals
+ */
+export const CascadeContributeBody = zod.object({
+  "amount": zod.number().describe('Total payment amount to distribute (in KES)'),
+  "goalIds": zod.array(zod.number()).optional().describe('Optional ordered list of goal IDs; defaults to all active goals by creation date')
+})
+
+export const CascadeContributeResponse = zod.object({
+  "totalAmount": zod.number(),
+  "allocations": zod.array(zod.object({
+  "goalId": zod.number(),
+  "goalName": zod.string(),
+  "allocated": zod.number(),
+  "newTotal": zod.number(),
+  "completed": zod.boolean()
+})),
+  "leftover": zod.number()
+})
+
+
+/**
  * @summary Atomically add an amount to a savings goal's current balance
  */
 export const ContributeToSavingsGoalParams = zod.object({

@@ -26,6 +26,8 @@ import type {
   ApplyRecurringResult,
   AuthUser,
   BudgetCategory,
+  CascadeContributeInput,
+  CascadeContributeResult,
   CategoryBreakdown,
   Contribution,
   ContributionInput,
@@ -47,7 +49,6 @@ import type {
   MonthTrend,
   SavingsGoal,
   SavingsGoalContributeInput,
-  SavingsGoalContribution,
   SavingsGoalInput,
   SavingsGoalUpdateInput,
   SuccessResponse
@@ -1602,46 +1603,76 @@ export const useDeleteJointAccountTransaction = <TError = ErrorType<ErrorRespons
       return useMutation(getDeleteJointAccountTransactionMutationOptions(options));
     }
 
-export const getGetSavingsGoalContributionsUrl = (id: number) => {
-  return `/api/savings-goals/${id}/contributions`
+export const getCascadeContributeUrl = () => {
+
+
+
+
+  return `/api/savings-goals/cascade-contribute`
 }
 
 /**
- * @summary Get contribution history for a savings goal
+ * @summary Distribute a payment waterfall-style across multiple savings goals
  */
-export const getSavingsGoalContributions = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<SavingsGoalContribution[]> => {
-  return customFetch<SavingsGoalContribution[]>(getGetSavingsGoalContributionsUrl(id), {
+export const cascadeContribute = async (cascadeContributeInput: CascadeContributeInput, options?: Parameters<typeof customFetch>[1]): Promise<CascadeContributeResult> => {
+
+  return customFetch<CascadeContributeResult>(getCascadeContributeUrl(),
+  {
     ...options,
-    method: 'GET',
-  });
-}
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cascadeContributeInput)
+  }
+);}
 
-export const getGetSavingsGoalContributionsQueryKey = (id: number) => {
-  return [`/api/savings-goals/${id}/contributions`] as const;
-}
 
-export const getGetSavingsGoalContributionsQueryOptions = <TData = Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError = ErrorType<unknown>>(id: number, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError, TData>, 'queryKey'>, request?: SecondParameter<typeof customFetch>}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = getGetSavingsGoalContributionsQueryKey(id);
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSavingsGoalContributions>>> = ({ signal }) =>
-    getSavingsGoalContributions(id, { signal, ...requestOptions });
-  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError, TData> & { queryKey: QueryKey };
-}
 
-export type GetSavingsGoalContributionsQueryResult = NonNullable<Awaited<ReturnType<typeof getSavingsGoalContributions>>>
-export type GetSavingsGoalContributionsQueryError = ErrorType<unknown>
 
-/**
- * @summary Get contribution history for a savings goal
+
+export const getCascadeContributeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cascadeContribute>>, TError,{data: BodyType<CascadeContributeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cascadeContribute>>, TError,{data: BodyType<CascadeContributeInput>}, TContext> => {
+
+const mutationKey = ['cascadeContribute'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cascadeContribute>>, {data: BodyType<CascadeContributeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  cascadeContribute(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CascadeContributeMutationResult = NonNullable<Awaited<ReturnType<typeof cascadeContribute>>>
+    export type CascadeContributeMutationBody = BodyType<CascadeContributeInput>
+    export type CascadeContributeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Distribute a payment waterfall-style across multiple savings goals
  */
-export function useGetSavingsGoalContributions<TData = Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError = ErrorType<unknown>>(
-  id: number,
-  options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError, TData>, 'queryKey'>, request?: SecondParameter<typeof customFetch> }
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetSavingsGoalContributionsQueryOptions(id, options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return withQueryKey(query, queryOptions.queryKey);
-}
+export const useCascadeContribute = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cascadeContribute>>, TError,{data: BodyType<CascadeContributeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cascadeContribute>>,
+        TError,
+        {data: BodyType<CascadeContributeInput>},
+        TContext
+      > => {
+      return useMutation(getCascadeContributeMutationOptions(options));
+    }
 
 export const getContributeToSavingsGoalUrl = (id: number,) => {
 

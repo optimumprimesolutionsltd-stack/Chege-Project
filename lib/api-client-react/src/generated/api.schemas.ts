@@ -209,6 +209,27 @@ export interface SavingsGoalInput {
   deadline?: string;
 }
 
+export interface CascadeContributeInput {
+  /** Total payment amount to distribute (in KES) */
+  amount: number;
+  /** Optional ordered list of goal IDs; defaults to all active goals by creation date */
+  goalIds?: number[];
+}
+
+export interface CascadeContributeAllocation {
+  goalId: number;
+  goalName: string;
+  allocated: number;
+  newTotal: number;
+  completed: boolean;
+}
+
+export interface CascadeContributeResult {
+  totalAmount: number;
+  allocations: CascadeContributeAllocation[];
+  leftover: number;
+}
+
 export interface SavingsGoalContributeInput {
   /** Amount to add to the goal (in KES) */
   amount: number;
@@ -223,15 +244,6 @@ export interface SavingsGoalUpdateInput {
   /** @nullable */
   deadline?: string | null;
   isCompleted?: boolean;
-}
-
-export interface SavingsGoalContribution {
-  id: number;
-  goalId: number;
-  /** Amount contributed in KES */
-  amount: number;
-  createdByUserId: string;
-  createdAt: string;
 }
 
 export type GetExpensesParams = {

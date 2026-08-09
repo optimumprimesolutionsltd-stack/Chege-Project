@@ -423,6 +423,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /savings-goals/cascade-contribute:
+    post:
+      operationId: cascadeContribute
+      tags: [savings-goals]
+      summary: Distribute a payment waterfall-style across multiple savings goals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CascadeContributeInput"
+      responses:
+        "200":
+          description: Allocation breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CascadeContributeResult"
+
   /savings-goals/{id}/contribute:
     post:
       operationId: contributeToSavingsGoal
@@ -1028,6 +1047,56 @@ components:
       required:
         - name
         - targetAmount
+
+    CascadeContributeInput:
+      type: object
+      properties:
+        amount:
+          type: number
+          description: Total payment amount to distribute (in KES)
+        goalIds:
+          type: array
+          items:
+            type: number
+          description: Optional ordered list of goal IDs; defaults to all active goals by creation date
+      required:
+        - amount
+
+    CascadeContributeAllocation:
+      type: object
+      properties:
+        goalId:
+          type: number
+        goalName:
+          type: string
+        allocated:
+          type: number
+        newTotal:
+          type: number
+        completed:
+          type: boolean
+      required:
+        - goalId
+        - goalName
+        - allocated
+        - newTotal
+        - completed
+
+    CascadeContributeResult:
+      type: object
+      properties:
+        totalAmount:
+          type: number
+        allocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/CascadeContributeAllocation"
+        leftover:
+          type: number
+      required:
+        - totalAmount
+        - allocations
+        - leftover
 
     SavingsGoalContributeInput:
       type: object

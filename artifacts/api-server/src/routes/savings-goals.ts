@@ -66,6 +66,76 @@ router.post("/savings-goals", async (req, res) => {
   res.status(201).json(formatGoal(goal));
 });
 
+// POST /savings-goals/cascade-contribute — distribute a payment waterfall-style across goals
+router.post("/savings-goals/cascade-contribute", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const bodySchema = z.object({
+    amount: z.number().positive(),
+    goalIds: z.array(z.number().int().positive()).optional(),
+  });
+  const parsed = bodySchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
+
+  const { amount: totalAmount, goalIds } = parsed.data;
+
+  // Fetch goals in requested order or all active goals by creation date
+  let goals: (typeof savingsGoalsTable.$inferSelect)[];
+  if (goalIds && goalIds.length > 0) {
+    const all = await db.select().from(savingsGoalsTable)
+      .where(eq(savingsGoalsTable.isCompleted, false));
+    const byId = Object.fromEntries(all.map((g) => [g.id, g]));
+    goals = goalIds.map((id) => byId[id]).filter(Boolean);
+  } else {
+    goals = await db.select().from(savingsGoalsTable)
+      .where(eq(savingsGoalsTable.isCompleted, false))
+      .orderBy(savingsGoalsTable.createdAt);
+  }
+
+  let remaining = totalAmount;
+  const allocations: {
+    goalId: number;
+    goalName: string;
+    allocated: number;
+    newTotal: number;
+    completed: boolean;
+  }[] = [];
+
+  for (const goal of goals) {
+    if (remaining <= 0) break;
+    const needed = goal.targetAmount - goal.currentAmount;
+    if (needed <= 0) continue; // already full
+
+    const allocated = Math.min(needed, remaining);
+    remaining -= allocated;
+
+    const [updated] = await db
+      .update(savingsGoalsTable)
+      .set({
+        currentAmount: sql`${savingsGoalsTable.currentAmount} + ${allocated}`,
+        isCompleted: goal.currentAmount + allocated >= goal.targetAmount ? true : goal.isCompleted,
+      })
+      .where(eq(savingsGoalsTable.id, goal.id))
+      .returning();
+
+    await db.insert(savingsGoalContributionsTable).values({
+      goalId: goal.id,
+      amount: allocated,
+      createdByUserId: req.user.id,
+    });
+
+    allocations.push({
+      goalId: goal.id,
+      goalName: goal.name,
+      allocated,
+      newTotal: updated.currentAmount,
+      completed: updated.isCompleted,
+    });
+  }
+
+  res.json({ totalAmount, allocations, leftover: remaining });
+});
+
 // POST /savings-goals/:id/contribute — atomic server-side increment (before /:id PATCH)
 router.post("/savings-goals/:id/contribute", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
