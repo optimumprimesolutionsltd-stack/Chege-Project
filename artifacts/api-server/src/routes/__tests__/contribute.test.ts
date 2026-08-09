@@ -1,7 +1,7 @@
 /**
  * Unit tests for POST /savings-goals/:id/contribute
  *
- * Two core guarantees are tested:
+ * Three core guarantees are tested:
  *
  * 1. ATOMIC INCREMENT under concurrent requests
  *    The handler must use sql`currentAmount + ${amount}` — a server-side
@@ -25,6 +25,11 @@
  *    "committed" row is updated only when the callback returns without
  *    throwing.  When insert throws, the callback re-throws, and the
  *    committed row remains unchanged — exactly what Postgres ROLLBACK does.
+ *
+ * 3. CAPPING & COMPLETION
+ *    When a contribution would push the balance past the target, the handler
+ *    must cap the applied amount at (targetAmount − currentAmount) and set
+ *    isCompleted = true in the same UPDATE.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -143,18 +148,29 @@ type GoalRow = {
 
 function makeRow(
   id: number,
-  opts: { current?: number; target?: number } = {},
+  opts: { current?: number; target?: number; completed?: boolean } = {},
 ): GoalRow {
   return {
     id,
     name: `Goal ${id}`,
     currentAmount: opts.current ?? 0,
     targetAmount: opts.target ?? 500,
-    isCompleted: false,
+    isCompleted: opts.completed ?? false,
     deadline: null,
     createdByUserId: 1,
     createdAt: new Date("2024-01-01"),
   };
+}
+
+/** Build a tx.select() chain that resolves to the given rows. */
+function makeSelectMock(rows: GoalRow[]) {
+  return vi.fn().mockReturnValue({
+    from: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        for: vi.fn().mockResolvedValue(rows),
+      }),
+    }),
+  });
 }
 
 /** Narrow view of db that lets tests re-assign transaction per test. */
@@ -184,7 +200,7 @@ describe("POST /savings-goals/:id/contribute", () => {
   describe("atomic SQL increment (single request)", () => {
     it("applies the contribution amount as an increment, not an overwrite", async () => {
       // Committed row starts at 100; we expect it to reach 150 after +50.
-      const committed = makeRow(1, { current: 100 });
+      const committed = makeRow(1, { current: 100, target: 500 });
 
       mockedDb.transaction = vi
         .fn()
@@ -192,14 +208,19 @@ describe("POST /savings-goals/:id/contribute", () => {
           async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
             // Transaction-local snapshot — only copied to `committed` on success.
             let txAmount = committed.currentAmount;
+            let txCompleted = committed.isCompleted;
 
             const tx: Record<string, unknown> = {
+              select: makeSelectMock([{ ...committed }]),
               update: vi.fn().mockImplementation(() => ({
                 set: vi.fn().mockImplementation((setClause: Record<string, unknown>) => ({
                   where: vi.fn().mockReturnValue({
                     returning: vi.fn().mockImplementation(async () => {
                       txAmount = evaluateSetClause(txAmount, setClause);
-                      return [{ ...committed, currentAmount: txAmount }];
+                      txCompleted = typeof setClause.isCompleted === "boolean"
+                        ? setClause.isCompleted
+                        : txCompleted;
+                      return [{ ...committed, currentAmount: txAmount, isCompleted: txCompleted }];
                     }),
                   }),
                 })),
@@ -212,6 +233,7 @@ describe("POST /savings-goals/:id/contribute", () => {
             const result = await cb(tx);
             // Commit only on success.
             committed.currentAmount = txAmount;
+            committed.isCompleted = txCompleted;
             return result;
           },
         );
@@ -235,7 +257,7 @@ describe("POST /savings-goals/:id/contribute", () => {
       // both transactions independently add 200, giving 400.
       // A regression to sql`${amount}` (overwrite) would end up at 200,
       // and the assertion below would catch it.
-      const committed = makeRow(7, { current: 0 });
+      const committed = makeRow(7, { current: 0, target: 1000 });
 
       mockedDb.transaction = vi
         .fn()
@@ -244,14 +266,19 @@ describe("POST /savings-goals/:id/contribute", () => {
             // Each transaction gets its own local snapshot, initialised from
             // the current committed value at the moment it starts.
             let txAmount = committed.currentAmount;
+            let txCompleted = committed.isCompleted;
 
             const tx: Record<string, unknown> = {
+              select: makeSelectMock([{ ...committed }]),
               update: vi.fn().mockImplementation(() => ({
                 set: vi.fn().mockImplementation((setClause: Record<string, unknown>) => ({
                   where: vi.fn().mockReturnValue({
                     returning: vi.fn().mockImplementation(async () => {
                       txAmount = evaluateSetClause(txAmount, setClause);
-                      return [{ ...committed, currentAmount: txAmount }];
+                      txCompleted = typeof setClause.isCompleted === "boolean"
+                        ? setClause.isCompleted
+                        : txCompleted;
+                      return [{ ...committed, currentAmount: txAmount, isCompleted: txCompleted }];
                     }),
                   }),
                 })),
@@ -264,6 +291,7 @@ describe("POST /savings-goals/:id/contribute", () => {
             const result = await cb(tx);
             // Commit local state to shared row on success.
             committed.currentAmount += txAmount - committed.currentAmount;
+            committed.isCompleted = txCompleted;
             return result;
           },
         );
@@ -284,7 +312,7 @@ describe("POST /savings-goals/:id/contribute", () => {
     });
 
     it("records one contribution insert per successful concurrent transaction — inserts always match increments", async () => {
-      const committed = makeRow(3, { current: 0 });
+      const committed = makeRow(3, { current: 0, target: 1000 });
       let insertCount = 0;
 
       mockedDb.transaction = vi
@@ -292,14 +320,19 @@ describe("POST /savings-goals/:id/contribute", () => {
         .mockImplementation(
           async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
             let txAmount = committed.currentAmount;
+            let txCompleted = committed.isCompleted;
 
             const tx: Record<string, unknown> = {
+              select: makeSelectMock([{ ...committed }]),
               update: vi.fn().mockImplementation(() => ({
                 set: vi.fn().mockImplementation((setClause: Record<string, unknown>) => ({
                   where: vi.fn().mockReturnValue({
                     returning: vi.fn().mockImplementation(async () => {
                       txAmount = evaluateSetClause(txAmount, setClause);
-                      return [{ ...committed, currentAmount: txAmount }];
+                      txCompleted = typeof setClause.isCompleted === "boolean"
+                        ? setClause.isCompleted
+                        : txCompleted;
+                      return [{ ...committed, currentAmount: txAmount, isCompleted: txCompleted }];
                     }),
                   }),
                 })),
@@ -313,6 +346,7 @@ describe("POST /savings-goals/:id/contribute", () => {
 
             const result = await cb(tx);
             committed.currentAmount += txAmount - committed.currentAmount;
+            committed.isCompleted = txCompleted;
             return result;
           },
         );
@@ -339,7 +373,7 @@ describe("POST /savings-goals/:id/contribute", () => {
   describe("rollback when history insert fails", () => {
     it("leaves the committed balance unchanged when the contribution insert throws a constraint error", async () => {
       // committed.currentAmount starts at 50 and must remain 50 after rollback.
-      const committed = makeRow(2, { current: 50 });
+      const committed = makeRow(2, { current: 50, target: 500 });
       const originalBalance = committed.currentAmount;
 
       mockedDb.transaction = vi
@@ -348,15 +382,20 @@ describe("POST /savings-goals/:id/contribute", () => {
           async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
             // Transaction-local state — never copied to committed if cb throws.
             let txAmount = committed.currentAmount;
+            let txCompleted = committed.isCompleted;
 
             const tx: Record<string, unknown> = {
+              select: makeSelectMock([{ ...committed }]),
               update: vi.fn().mockImplementation(() => ({
                 set: vi.fn().mockImplementation((setClause: Record<string, unknown>) => ({
                   where: vi.fn().mockReturnValue({
                     returning: vi.fn().mockImplementation(async () => {
                       // Apply delta locally — does NOT touch committed yet.
                       txAmount = evaluateSetClause(txAmount, setClause);
-                      return [{ ...committed, currentAmount: txAmount }];
+                      txCompleted = typeof setClause.isCompleted === "boolean"
+                        ? setClause.isCompleted
+                        : txCompleted;
+                      return [{ ...committed, currentAmount: txAmount, isCompleted: txCompleted }];
                     }),
                   }),
                 })),
@@ -373,6 +412,7 @@ describe("POST /savings-goals/:id/contribute", () => {
             // cb() throws because insert throws; committed is never updated.
             const result = await cb(tx);
             committed.currentAmount = txAmount; // only reached on success
+            committed.isCompleted = txCompleted;
             return result;
           },
         );
@@ -396,7 +436,7 @@ describe("POST /savings-goals/:id/contribute", () => {
     });
 
     it("leaves the committed balance unchanged when the insert fails due to a unique-constraint violation", async () => {
-      const committed = makeRow(5, { current: 30 });
+      const committed = makeRow(5, { current: 30, target: 500 });
       const originalBalance = committed.currentAmount;
 
       mockedDb.transaction = vi
@@ -404,14 +444,19 @@ describe("POST /savings-goals/:id/contribute", () => {
         .mockImplementation(
           async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
             let txAmount = committed.currentAmount;
+            let txCompleted = committed.isCompleted;
 
             const tx: Record<string, unknown> = {
+              select: makeSelectMock([{ ...committed }]),
               update: vi.fn().mockImplementation(() => ({
                 set: vi.fn().mockImplementation((setClause: Record<string, unknown>) => ({
                   where: vi.fn().mockReturnValue({
                     returning: vi.fn().mockImplementation(async () => {
                       txAmount = evaluateSetClause(txAmount, setClause);
-                      return [{ ...committed, currentAmount: txAmount }];
+                      txCompleted = typeof setClause.isCompleted === "boolean"
+                        ? setClause.isCompleted
+                        : txCompleted;
+                      return [{ ...committed, currentAmount: txAmount, isCompleted: txCompleted }];
                     }),
                   }),
                 })),
@@ -427,6 +472,7 @@ describe("POST /savings-goals/:id/contribute", () => {
 
             const result = await cb(tx);
             committed.currentAmount = txAmount;
+            committed.isCompleted = txCompleted;
             return result;
           },
         );
@@ -450,22 +496,22 @@ describe("POST /savings-goals/:id/contribute", () => {
   // 4. Goal not found
   // -------------------------------------------------------------------------
   describe("goal not found", () => {
-    it("returns 404 and never calls insert when the goal does not exist", async () => {
-      const tx: Record<string, unknown> = {
-        update: vi.fn().mockImplementation(() => ({
-          set: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              returning: vi.fn().mockResolvedValue([]), // empty — no matching row
-            }),
-          }),
-        })),
-        insert: vi.fn(),
-      };
+    it("returns 404 and never calls update or insert when the goal does not exist", async () => {
+      const txUpdate = vi.fn();
+      const txInsert = vi.fn();
 
       mockedDb.transaction = vi
         .fn()
         .mockImplementation(
-          async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => cb(tx),
+          async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
+            const tx: Record<string, unknown> = {
+              // select returns empty — goal not found
+              select: makeSelectMock([]),
+              update: txUpdate,
+              insert: txInsert,
+            };
+            return cb(tx);
+          },
         );
 
       const res = await request(app)
@@ -474,7 +520,8 @@ describe("POST /savings-goals/:id/contribute", () => {
 
       expect(res.status).toBe(404);
       expect(res.body).toMatchObject({ error: "Not found" });
-      expect(tx.insert).not.toHaveBeenCalled();
+      expect(txUpdate).not.toHaveBeenCalled();
+      expect(txInsert).not.toHaveBeenCalled();
     });
   });
 
@@ -508,6 +555,107 @@ describe("POST /savings-goals/:id/contribute", () => {
         .post("/savings-goals/abc/contribute")
         .send({ amount: 50 });
       expect(res.status).toBe(400);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. Cap and completion
+  // -------------------------------------------------------------------------
+  describe("cap and completion", () => {
+    /** Build a standard transaction mock around a committed row. */
+    function makeCapMock(
+      committed: GoalRow,
+      captureInsertValues?: (v: unknown) => void,
+    ) {
+      return vi
+        .fn()
+        .mockImplementation(
+          async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
+            let txAmount = committed.currentAmount;
+            let txCompleted = committed.isCompleted;
+
+            const tx: Record<string, unknown> = {
+              select: makeSelectMock([{ ...committed }]),
+              update: vi.fn().mockImplementation(() => ({
+                set: vi.fn().mockImplementation((setClause: Record<string, unknown>) => ({
+                  where: vi.fn().mockReturnValue({
+                    returning: vi.fn().mockImplementation(async () => {
+                      txAmount = evaluateSetClause(txAmount, setClause);
+                      txCompleted = typeof setClause.isCompleted === "boolean"
+                        ? setClause.isCompleted
+                        : txCompleted;
+                      return [{ ...committed, currentAmount: txAmount, isCompleted: txCompleted }];
+                    }),
+                  }),
+                })),
+              })),
+              insert: vi.fn().mockImplementation(() => ({
+                values: vi.fn().mockImplementation(async (vals: unknown) => {
+                  captureInsertValues?.(vals);
+                }),
+              })),
+            };
+
+            const result = await cb(tx);
+            committed.currentAmount = txAmount;
+            committed.isCompleted = txCompleted;
+            return result;
+          },
+        );
+    }
+
+    it("sets isCompleted=true and records the exact needed amount when the contribution exactly fills the goal", async () => {
+      // current=400, target=500 → need exactly 100 more.
+      const committed = makeRow(10, { current: 400, target: 500 });
+      let insertedValues: unknown;
+      mockedDb.transaction = makeCapMock(committed, (v) => { insertedValues = v; });
+
+      const res = await request(app)
+        .post("/savings-goals/10/contribute")
+        .send({ amount: 100 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.currentAmount).toBe(500);
+      expect(res.body.isCompleted).toBe(true);
+      expect(committed.currentAmount).toBe(500);
+      expect(committed.isCompleted).toBe(true);
+      // The contribution row records exactly 100, not more.
+      expect((insertedValues as { amount: number }).amount).toBe(100);
+    });
+
+    it("caps the applied amount and sets isCompleted=true when the contribution exceeds the target", async () => {
+      // current=400, target=500 → only 100 needed; request sends 300.
+      const committed = makeRow(11, { current: 400, target: 500 });
+      let insertedValues: unknown;
+      mockedDb.transaction = makeCapMock(committed, (v) => { insertedValues = v; });
+
+      const res = await request(app)
+        .post("/savings-goals/11/contribute")
+        .send({ amount: 300 });
+
+      expect(res.status).toBe(200);
+      // Balance must be exactly the target — not 700.
+      expect(res.body.currentAmount).toBe(500);
+      expect(res.body.isCompleted).toBe(true);
+      expect(committed.currentAmount).toBe(500);
+      expect(committed.isCompleted).toBe(true);
+      // The insert records the capped amount (100), not the requested amount (300).
+      expect((insertedValues as { amount: number }).amount).toBe(100);
+    });
+
+    it("does not set isCompleted when the goal is only partially filled", async () => {
+      // current=100, target=500 → 50 leaves 350 remaining.
+      const committed = makeRow(12, { current: 100, target: 500 });
+      mockedDb.transaction = makeCapMock(committed);
+
+      const res = await request(app)
+        .post("/savings-goals/12/contribute")
+        .send({ amount: 50 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.currentAmount).toBe(150);
+      expect(res.body.isCompleted).toBe(false);
+      expect(committed.isCompleted).toBe(false);
     });
   });
 });

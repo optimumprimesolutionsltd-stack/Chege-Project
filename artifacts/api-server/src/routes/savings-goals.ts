@@ -166,23 +166,41 @@ router.post("/savings-goals/:id/contribute", async (req, res) => {
   const { id } = paramParsed.data;
   const { amount } = bodyParsed.data;
 
-  // Both writes run inside a single transaction — a crash between them rolls back both.
+  // All reads and writes run inside a single transaction — a crash between them
+  // rolls back everything.
   const updated = await db.transaction(async (tx) => {
+    // Lock the row so concurrent contributions serialize at the DB level.
     const [goal] = await tx
-      .update(savingsGoalsTable)
-      .set({ currentAmount: sql`${savingsGoalsTable.currentAmount} + ${amount}` })
+      .select()
+      .from(savingsGoalsTable)
       .where(eq(savingsGoalsTable.id, id))
-      .returning();
+      .for("update");
 
     if (!goal) return null;
 
+    // Cap the applied amount so the balance never exceeds the target.
+    const needed = goal.targetAmount - goal.currentAmount;
+    const actualAmount = Math.min(amount, needed);
+    const willComplete = goal.currentAmount + actualAmount >= goal.targetAmount;
+
+    const [updated] = await tx
+      .update(savingsGoalsTable)
+      .set({
+        currentAmount: sql`${savingsGoalsTable.currentAmount} + ${actualAmount}`,
+        isCompleted: willComplete ? true : goal.isCompleted,
+      })
+      .where(eq(savingsGoalsTable.id, id))
+      .returning();
+
+    if (!updated) return null;
+
     await tx.insert(savingsGoalContributionsTable).values({
       goalId: id,
-      amount,
+      amount: actualAmount,
       createdByUserId: req.user.id,
     });
 
-    return goal;
+    return updated;
   });
 
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
