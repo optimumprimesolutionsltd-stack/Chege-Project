@@ -273,4 +273,67 @@ describe("PATCH /savings-goals/:id — balance correction", () => {
       .send({ targetAmount: -50 });
     expect(res.status).toBe(400);
   });
+
+  // -------------------------------------------------------------------------
+  // Large-correction safety guard
+  // -------------------------------------------------------------------------
+  it("returns 400 with a descriptive message when a correction wipes more than 50% of the balance and no reason is supplied", async () => {
+    // balance = 200, new amount = 50 → delta = -150, which is 75% of 200
+    const existing = makeGoal(1, { current: 200, target: 500 });
+    const updated = makeGoal(1, { current: 50, target: 500 });
+
+    const tx = makePatchTx(existing, updated);
+    mockedDb.transaction = vi
+      .fn()
+      .mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => cb(tx));
+
+    const res = await request(app)
+      .patch("/savings-goals/1")
+      .send({ currentAmount: 50 }); // no reason field
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/50%/i);
+    // The update must NOT have been applied.
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("succeeds when the same large correction includes a reason field", async () => {
+    // balance = 200, new amount = 50 → delta = -150 (>50%), but reason is provided
+    const existing = makeGoal(1, { current: 200, target: 500 });
+    const updated = makeGoal(1, { current: 50, target: 500 });
+
+    const tx = makePatchTx(existing, updated);
+    mockedDb.transaction = vi
+      .fn()
+      .mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => cb(tx));
+
+    const res = await request(app)
+      .patch("/savings-goals/1")
+      .send({ currentAmount: 50, reason: "Emergency withdrawal approved" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.currentAmount).toBe(50);
+    // The goal update and the contribution insert both fired.
+    expect(tx.update).toHaveBeenCalledTimes(1);
+    expect(tx.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT trigger the large-correction guard when the current balance is 0", async () => {
+    // previousAmount = 0: the guard must short-circuit on `previousAmount > 0`
+    // so a positive correction from zero never requires a reason.
+    const existing = makeGoal(1, { current: 0, target: 500 });
+    const updated = makeGoal(1, { current: 100, target: 500 });
+
+    const tx = makePatchTx(existing, updated);
+    mockedDb.transaction = vi
+      .fn()
+      .mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => cb(tx));
+
+    const res = await request(app)
+      .patch("/savings-goals/1")
+      .send({ currentAmount: 100 }); // no reason, delta is positive but guard irrelevant
+
+    expect(res.status).toBe(200);
+    expect(res.body.currentAmount).toBe(100);
+  });
 });
