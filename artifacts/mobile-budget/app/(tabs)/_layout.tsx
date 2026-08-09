@@ -25,6 +25,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'target', selected: 'target' }} />
         <Label>Goals</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="contributions">
+        <Icon sf={{ default: 'person.2', selected: 'person.2.fill' }} />
+        <Label>Contributions</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="bank">
         <Icon sf={{ default: 'banknote', selected: 'banknote.fill' }} />
         <Label>Account</Label>
@@ -109,6 +113,18 @@ function ClassicTabLayout() {
               <SymbolView name="target" tintColor={color} size={24} />
             ) : (
               <Feather name="target" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="contributions"
+        options={{
+          title: 'Contributions',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="person.2.fill" tintColor={color} size={24} />
+            ) : (
+              <Feather name="users" size={22} color={color} />
             ),
         }}
       />

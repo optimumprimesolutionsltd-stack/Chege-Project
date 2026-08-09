@@ -1,0 +1,288 @@
+import React, { useCallback, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  Platform,
+  Pressable,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useColors } from '@/hooks/useColors';
+import {
+  useGetContributions,
+  useGetDashboardSummary,
+} from '@workspace/api-client-react';
+
+const MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+function formatKES(n?: number | null): string {
+  if (n === undefined || n === null) return '—';
+  return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
+}
+
+function formatDate(s?: string | null): string {
+  if (!s) return '';
+  const d = new Date(s);
+  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.min(value / max, 1) : 0;
+  const over = value > max;
+  return (
+    <View style={styles.progressTrack}>
+      <View style={[styles.progressFill, { width: `${pct * 100}%` as any, backgroundColor: over ? '#ef4444' : color }]} />
+    </View>
+  );
+}
+
+function MemberCard({
+  name,
+  initial,
+  contributed,
+  target,
+  accentColor,
+  gradientColors,
+}: {
+  name: string;
+  initial: string;
+  contributed: number;
+  target: number;
+  accentColor: string;
+  gradientColors: [string, string];
+}) {
+  const pct = target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
+  const remaining = Math.max(target - contributed, 0);
+  const over = contributed > target;
+
+  return (
+    <LinearGradient colors={gradientColors} style={styles.memberCard}>
+      <View style={styles.memberCardTop}>
+        <View>
+          <Text style={styles.memberName}>{name}</Text>
+          <Text style={styles.memberTarget}>Target: KES {formatKES(target)}</Text>
+        </View>
+        <View style={[styles.memberAvatar, { backgroundColor: accentColor + '33' }]}>
+          <Text style={[styles.memberInitial, { color: accentColor }]}>{initial}</Text>
+        </View>
+      </View>
+
+      <Text style={[styles.memberAmount, { color: accentColor }]}>KES {formatKES(contributed)}</Text>
+
+      <ProgressBar value={contributed} max={target} color={accentColor} />
+
+      <View style={styles.memberFooter}>
+        <Text style={styles.memberPct}>{Math.round(pct)}% of target</Text>
+        {over ? (
+          <Text style={[styles.memberRemaining, { color: '#ef4444' }]}>Over by KES {formatKES(contributed - target)}</Text>
+        ) : (
+          <Text style={styles.memberRemaining}>KES {formatKES(remaining)} to go</Text>
+        )}
+      </View>
+    </LinearGradient>
+  );
+}
+
+export default function ContributionsScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const topPad = Platform.OS === 'web' ? 67 : insets.top;
+
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+
+  const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+
+  function prevMonth() {
+    if (month === 1) { setMonth(12); setYear(y => y - 1); }
+    else setMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (month === 12) { setMonth(1); setYear(y => y + 1); }
+    else setMonth(m => m + 1);
+  }
+
+  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useGetDashboardSummary({ month, year });
+  const { data: contributions, isLoading: contribLoading, refetch: refetchContrib } = useGetContributions({ month, year });
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refetchSummary(), refetchContrib()]);
+    setRefreshing(false);
+  }, [refetchSummary, refetchContrib]);
+
+  const isLoading = summaryLoading || contribLoading;
+  const total = contributions?.reduce((s, c) => s + c.amount, 0) ?? 0;
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <LinearGradient
+        colors={['#0a1a10', '#0f2217', '#132a1c']}
+        style={[styles.header, { paddingTop: topPad + 16 }]}
+      >
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Contributions</Text>
+          <View style={styles.monthNav}>
+            <Pressable onPress={prevMonth} hitSlop={10} style={styles.navBtn}>
+              <Feather name="chevron-left" size={20} color="rgba(247,250,246,0.7)" />
+            </Pressable>
+            <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
+            <Pressable onPress={nextMonth} hitSlop={10} style={styles.navBtn} disabled={isCurrentMonth}>
+              <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Combined total */}
+        {!isLoading && summary && (
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total contributed</Text>
+            <Text style={styles.totalAmount}>KES {formatKES((summary.chegeContributed ?? 0) + (summary.lydiahContributed ?? 0))}</Text>
+          </View>
+        )}
+      </LinearGradient>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4ade80" />}
+        contentContainerStyle={[styles.scroll, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }]}
+      >
+        {isLoading ? (
+          <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
+        ) : (
+          <>
+            {/* Member cards */}
+            {summary && (
+              <View style={styles.cards}>
+                <MemberCard
+                  name="Chege"
+                  initial="C"
+                  contributed={summary.chegeContributed ?? 0}
+                  target={summary.chegeTarget ?? 0}
+                  accentColor="#4ade80"
+                  gradientColors={['#132a1c', '#0f2217']}
+                />
+                <MemberCard
+                  name="Lydiah"
+                  initial="L"
+                  contributed={summary.lydiahContributed ?? 0}
+                  target={summary.lydiahTarget ?? 0}
+                  accentColor="#cf7217"
+                  gradientColors={['#2a1c0a', '#1c130a']}
+                />
+              </View>
+            )}
+
+            {/* History list */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                  {contributions?.length ?? 0} {(contributions?.length ?? 0) === 1 ? 'entry' : 'entries'}
+                </Text>
+                {total > 0 && (
+                  <Text style={[styles.sectionTotal, { color: colors.mutedForeground }]}>
+                    KES {formatKES(total)} total
+                  </Text>
+                )}
+              </View>
+
+              {!contributions || contributions.length === 0 ? (
+                <View style={styles.empty}>
+                  <Feather name="inbox" size={36} color={colors.mutedForeground} />
+                  <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No contributions yet</Text>
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                    Record a deposit in the Bank Account tab to log a contribution.
+                  </Text>
+                </View>
+              ) : (
+                <View style={[styles.list, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                  {contributions.map((c, i) => (
+                    <View
+                      key={c.id}
+                      style={[
+                        styles.row,
+                        { borderBottomColor: colors.border },
+                        i === contributions.length - 1 && { borderBottomWidth: 0 },
+                      ]}
+                    >
+                      <View style={[styles.rowIcon, { backgroundColor: c.userName?.toLowerCase().startsWith('c') ? '#1a3320' : '#2a1c0a' }]}>
+                        <Text style={[styles.rowInitial, { color: c.userName?.toLowerCase().startsWith('c') ? '#4ade80' : '#cf7217' }]}>
+                          {(c.userName ?? '?').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.rowInfo}>
+                        <Text style={[styles.rowName, { color: colors.foreground }]}>{c.userName}</Text>
+                        <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
+                          {c.note ? c.note : 'Contribution'} · {formatDate(c.createdAt)}
+                        </Text>
+                      </View>
+                      <Text style={styles.rowAmount}>+KES {formatKES(c.amount)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { paddingHorizontal: 24, paddingBottom: 24 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  headerTitle: { fontSize: 22, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+  monthNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  navBtn: { padding: 6 },
+  monthLabel: { fontSize: 14, fontWeight: '600' as const, color: '#f7faf6', fontFamily: 'Inter_600SemiBold', minWidth: 64, textAlign: 'center' },
+  totalRow: { alignItems: 'center' },
+  totalLabel: { fontSize: 11, color: '#7aaa8a', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 2 },
+  totalAmount: { fontSize: 28, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+
+  scroll: { paddingHorizontal: 16, paddingTop: 20, gap: 20 },
+
+  cards: { gap: 12 },
+  memberCard: { borderRadius: 18, padding: 20 },
+  memberCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  memberAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  memberInitial: { fontSize: 18, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  memberName: { fontSize: 18, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+  memberTarget: { fontSize: 12, color: 'rgba(247,250,246,0.55)', fontFamily: 'Inter_400Regular', marginTop: 2 },
+  memberAmount: { fontSize: 28, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', marginBottom: 12 },
+  progressTrack: { height: 6, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 },
+  progressFill: { height: '100%', borderRadius: 3 },
+  memberFooter: { flexDirection: 'row', justifyContent: 'space-between' },
+  memberPct: { fontSize: 12, color: 'rgba(247,250,246,0.55)', fontFamily: 'Inter_400Regular' },
+  memberRemaining: { fontSize: 12, color: 'rgba(247,250,246,0.55)', fontFamily: 'Inter_400Regular' },
+
+  section: { gap: 10 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionTitle: { fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+  sectionTotal: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+
+  list: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
+  rowIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  rowInitial: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  rowInfo: { flex: 1 },
+  rowName: { fontSize: 15, fontWeight: '500' as const, fontFamily: 'Inter_500Medium' },
+  rowMeta: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  rowAmount: { fontSize: 15, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', color: '#4ade80' },
+
+  empty: { alignItems: 'center', paddingVertical: 40, gap: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
+  emptyText: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingHorizontal: 30 },
+});
