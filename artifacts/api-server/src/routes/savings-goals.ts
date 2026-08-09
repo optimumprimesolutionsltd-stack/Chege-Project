@@ -80,20 +80,30 @@ router.post("/savings-goals/cascade-contribute", async (req, res) => {
 
   const { amount: totalAmount, goalIds } = parsed.data;
 
-  // Fetch goals in requested order or all active goals by creation date
-  let goals: (typeof savingsGoalsTable.$inferSelect)[];
-  if (goalIds && goalIds.length > 0) {
-    const all = await db.select().from(savingsGoalsTable)
-      .where(eq(savingsGoalsTable.isCompleted, false));
-    const byId = Object.fromEntries(all.map((g) => [g.id, g]));
-    goals = goalIds.map((id) => byId[id]).filter(Boolean);
-  } else {
-    goals = await db.select().from(savingsGoalsTable)
-      .where(eq(savingsGoalsTable.isCompleted, false))
-      .orderBy(savingsGoalsTable.createdAt);
-  }
-
   const { allocations, leftover } = await db.transaction(async (tx) => {
+    // Fetch and lock goals inside the transaction so two concurrent cascades
+    // cannot both read the same stale balances and doubly-fund the same goals.
+    // The FOR UPDATE lock serialises concurrent transactions at the DB level:
+    // the second request blocks on the lock until the first commits, then reads
+    // the freshly-committed balances before allocating.
+    let goals: (typeof savingsGoalsTable.$inferSelect)[];
+    if (goalIds && goalIds.length > 0) {
+      const all = await tx
+        .select()
+        .from(savingsGoalsTable)
+        .where(eq(savingsGoalsTable.isCompleted, false))
+        .for("update");
+      const byId = Object.fromEntries(all.map((g) => [g.id, g]));
+      goals = goalIds.map((id) => byId[id]).filter(Boolean);
+    } else {
+      goals = await tx
+        .select()
+        .from(savingsGoalsTable)
+        .where(eq(savingsGoalsTable.isCompleted, false))
+        .orderBy(savingsGoalsTable.createdAt)
+        .for("update");
+    }
+
     let remaining = totalAmount;
     const allocations: {
       goalId: number;
