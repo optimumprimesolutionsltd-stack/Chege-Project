@@ -35,6 +35,14 @@ function formatKES(n?: number | null): string {
   return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
 }
 
+function shortKES(n?: number | null): string {
+  if (n === undefined || n === null) return '—';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(Math.round(n));
+}
+
 type Shortcut = {
   icon: keyof typeof Feather.glyphMap;
   label: string;
@@ -189,11 +197,11 @@ export default function DashboardScreen() {
 
           {/* Stats strip */}
           <View style={styles.statsStrip}>
-            <StatCell label="Budget" value={fmt(summary?.totalBudget)} />
+            <StatCell label="Budget" value={isPrivate ? '••••' : shortKES(summary?.totalBudget)} />
             <View style={styles.stripDivider} />
-            <StatCell label="Spent" value={fmt(summary?.totalSpent)} valueColor={isOver ? '#f87171' : '#f7faf6'} />
+            <StatCell label="Spent" value={isPrivate ? '••••' : shortKES(summary?.totalSpent)} valueColor={isOver ? '#f87171' : '#f7faf6'} />
             <View style={styles.stripDivider} />
-            <StatCell label="Left" value={fmt(summary?.remaining)} valueColor={isOver ? '#f87171' : '#4ade80'} />
+            <StatCell label="Left" value={isPrivate ? '••••' : shortKES(summary?.remaining)} valueColor={isOver ? '#f87171' : '#4ade80'} />
           </View>
 
           {/* Contribution mini-bars */}
@@ -328,7 +336,7 @@ const styles = StyleSheet.create({
   statsStrip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, paddingVertical: 12, marginBottom: 14 },
   statCell: { flex: 1, alignItems: 'center' },
   statLabel: { fontSize: 10, color: '#7aaa8a', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 3 },
-  statValue: { fontSize: 13, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  statValue: { fontSize: 11, fontWeight: '500' as const, fontFamily: 'Inter_500Medium', opacity: 0.75 },
   stripDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
 
   contribRow: { flexDirection: 'row', gap: 12 },
