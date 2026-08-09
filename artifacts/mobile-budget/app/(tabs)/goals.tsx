@@ -504,6 +504,7 @@ export default function GoalsScreen() {
   const [historyVisible, setHistoryVisible] = useState(false);
   const [filterStart, setFilterStart] = useState<Date | null>(null);
   const [filterEnd, setFilterEnd] = useState<Date | null>(null);
+  const [activeChip, setActiveChip] = useState<string | null>(null);
 
   const { data: contributions = [], isLoading: historyLoading, refetch: refetchHistory } = useGetSavingsGoalContributions(
     historyGoal?.id ?? 0,
@@ -515,10 +516,59 @@ export default function GoalsScreen() {
     }
   );
 
+  const QUICK_CHIPS: { key: string; label: string }[] = [
+    { key: 'this_month', label: 'This Month' },
+    { key: 'last_month', label: 'Last Month' },
+    { key: 'last_3_months', label: 'Last 3 Months' },
+    { key: 'this_year', label: 'This Year' },
+  ];
+
+  const getChipRange = (key: string): { start: Date; end: Date } => {
+    const now = new Date();
+    if (key === 'this_month') {
+      return {
+        start: new Date(now.getFullYear(), now.getMonth(), 1),
+        end: new Date(now.getFullYear(), now.getMonth() + 1, 0),
+      };
+    }
+    if (key === 'last_month') {
+      return {
+        start: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+        end: new Date(now.getFullYear(), now.getMonth(), 0),
+      };
+    }
+    if (key === 'last_3_months') {
+      return {
+        start: new Date(now.getFullYear(), now.getMonth() - 2, 1),
+        end: new Date(now.getFullYear(), now.getMonth() + 1, 0),
+      };
+    }
+    // this_year
+    return {
+      start: new Date(now.getFullYear(), 0, 1),
+      end: new Date(now.getFullYear(), 11, 31),
+    };
+  };
+
+  const handleChipPress = (key: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (activeChip === key) {
+      setActiveChip(null);
+      setFilterStart(null);
+      setFilterEnd(null);
+    } else {
+      const range = getChipRange(key);
+      setActiveChip(key);
+      setFilterStart(range.start);
+      setFilterEnd(range.end);
+    }
+  };
+
   const openHistory = (goal: SavingsGoal) => {
     setHistoryGoal(goal);
     setFilterStart(null);
     setFilterEnd(null);
+    setActiveChip(null);
     setHistoryVisible(true);
   };
 
@@ -949,24 +999,69 @@ export default function GoalsScreen() {
             {/* Date range filter bar */}
             {!historyLoading && (contributions as SavingsGoalContribution[]).length > 0 && (
               <View style={[styles.filterBar, { borderBottomColor: colors.border }]}>
-                <View style={styles.filterField}>
-                  <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>FROM</Text>
-                  <DeadlinePicker value={filterStart} onChange={setFilterStart} colors={colors} />
+                {/* Quick-filter chips */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipsRow}
+                  style={styles.chipsScroll}
+                >
+                  {QUICK_CHIPS.map((chip) => {
+                    const isActive = activeChip === chip.key;
+                    return (
+                      <Pressable
+                        key={chip.key}
+                        onPress={() => handleChipPress(chip.key)}
+                        style={[
+                          styles.chip,
+                          {
+                            backgroundColor: isActive ? colors.primary as string : colors.muted,
+                            borderColor: isActive ? colors.primary as string : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            { color: isActive ? '#fff' : colors.mutedForeground },
+                          ]}
+                        >
+                          {chip.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* FROM / TO pickers */}
+                <View style={styles.filterPickers}>
+                  <View style={styles.filterField}>
+                    <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>FROM</Text>
+                    <DeadlinePicker
+                      value={filterStart}
+                      onChange={(d) => { setFilterStart(d); setActiveChip(null); }}
+                      colors={colors}
+                    />
+                  </View>
+                  <View style={styles.filterDivider} />
+                  <View style={styles.filterField}>
+                    <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>TO</Text>
+                    <DeadlinePicker
+                      value={filterEnd}
+                      onChange={(d) => { setFilterEnd(d); setActiveChip(null); }}
+                      colors={colors}
+                    />
+                  </View>
+                  {(filterStart || filterEnd) && (
+                    <TouchableOpacity
+                      onPress={() => { setFilterStart(null); setFilterEnd(null); setActiveChip(null); }}
+                      style={styles.filterClearBtn}
+                      hitSlop={8}
+                    >
+                      <Feather name="x-circle" size={16} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <View style={styles.filterDivider} />
-                <View style={styles.filterField}>
-                  <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>TO</Text>
-                  <DeadlinePicker value={filterEnd} onChange={setFilterEnd} colors={colors} />
-                </View>
-                {(filterStart || filterEnd) && (
-                  <TouchableOpacity
-                    onPress={() => { setFilterStart(null); setFilterEnd(null); }}
-                    style={styles.filterClearBtn}
-                    hitSlop={8}
-                  >
-                    <Feather name="x-circle" size={16} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                )}
               </View>
             )}
 
@@ -1566,11 +1661,34 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
   },
   filterBar: {
+    flexDirection: 'column',
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  chipsScroll: {
+    flexShrink: 0,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  chipText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  filterPickers: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
     gap: 8,
   },
   filterField: {
