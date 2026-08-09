@@ -217,40 +217,47 @@ router.patch("/savings-goals/:id", async (req, res) => {
     return;
   }
 
-  // If currentAmount is being set directly, fetch the current value so we can
-  // record the delta as a manual adjustment entry in the contribution history.
-  let previousAmount: number | undefined;
-  if (updates.currentAmount !== undefined) {
-    const [existing] = await db
-      .select({ currentAmount: savingsGoalsTable.currentAmount })
-      .from(savingsGoalsTable)
-      .where(eq(savingsGoalsTable.id, id));
-    if (!existing) { res.status(404).json({ error: "Not found" }); return; }
-    previousAmount = existing.currentAmount;
-  }
-
-  const [updated] = await db
-    .update(savingsGoalsTable)
-    .set(updates)
-    .where(eq(savingsGoalsTable.id, id))
-    .returning();
-
-  if (!updated) { res.status(404).json({ error: "Not found" }); return; }
-
-  // Record a manual adjustment contribution so history totals stay consistent.
-  if (updates.currentAmount !== undefined && previousAmount !== undefined) {
-    const delta = updates.currentAmount - previousAmount;
-    if (delta !== 0) {
-      await db.insert(savingsGoalContributionsTable).values({
-        goalId: id,
-        amount: delta,
-        note: "Manual adjustment",
-        createdByUserId: req.user.id,
-      });
+  const result = await db.transaction(async (tx) => {
+    // If currentAmount is being set directly, fetch the current value so we can
+    // record the delta as a manual adjustment entry in the contribution history.
+    let previousAmount: number | undefined;
+    if (updates.currentAmount !== undefined) {
+      const [existing] = await tx
+        .select({ currentAmount: savingsGoalsTable.currentAmount })
+        .from(savingsGoalsTable)
+        .where(eq(savingsGoalsTable.id, id));
+      if (!existing) return null;
+      previousAmount = existing.currentAmount;
     }
-  }
 
-  res.json(formatGoal(updated));
+    const [updated] = await tx
+      .update(savingsGoalsTable)
+      .set(updates)
+      .where(eq(savingsGoalsTable.id, id))
+      .returning();
+
+    if (!updated) return null;
+
+    // Record a manual adjustment contribution so history totals stay consistent.
+    // Both writes succeed or both roll back — no partial state possible.
+    if (updates.currentAmount !== undefined && previousAmount !== undefined) {
+      const delta = updates.currentAmount - previousAmount;
+      if (delta !== 0) {
+        await tx.insert(savingsGoalContributionsTable).values({
+          goalId: id,
+          amount: delta,
+          note: "Manual adjustment",
+          createdByUserId: req.user.id,
+        });
+      }
+    }
+
+    return updated;
+  });
+
+  if (!result) { res.status(404).json({ error: "Not found" }); return; }
+
+  res.json(formatGoal(result));
 });
 
 router.delete("/savings-goals/:id", async (req, res) => {
