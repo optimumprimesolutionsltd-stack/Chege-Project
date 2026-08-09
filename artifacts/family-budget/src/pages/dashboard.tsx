@@ -370,15 +370,15 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-4 relative z-10">
             <div className="space-y-2">
               <p className="text-primary-foreground/80 font-medium">Total Budget</p>
-              <p className="text-4xl font-display font-bold">{formatKes(summary.totalBudget)}</p>
+              <p className="text-lg font-medium text-primary-foreground/70 tracking-wide">{formatKes(summary.totalBudget)}</p>
             </div>
             <div className="space-y-2">
               <p className="text-primary-foreground/80 font-medium">Total Spent</p>
-              <p className="text-4xl font-display font-bold">{formatKes(summary.totalSpent)}</p>
+              <p className="text-lg font-medium text-primary-foreground/70 tracking-wide">{formatKes(summary.totalSpent)}</p>
             </div>
             <div className="space-y-2 md:text-right">
               <p className="text-primary-foreground/80 font-medium">Remaining</p>
-              <p className={`text-4xl font-display font-bold ${isOverBudget ? "text-destructive-foreground bg-destructive inline-block px-3 rounded-lg" : ""}`}>
+              <p className={`text-lg font-medium tracking-wide ${isOverBudget ? "text-destructive-foreground bg-destructive inline-block px-3 rounded-lg" : "text-primary-foreground/70"}`}>
                 {formatKes(summary.remaining)}
               </p>
             </div>
