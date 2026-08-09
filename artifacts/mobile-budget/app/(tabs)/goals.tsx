@@ -471,6 +471,7 @@ export default function GoalsScreen() {
   const openCompletedGoalActions = (goal: SavingsGoal) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(goal.name, undefined, [
+      { text: 'History', onPress: () => openHistory(goal) },
       { text: 'Rename', onPress: () => openRenameGoal(goal) },
       { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteGoal(goal) },
       { text: 'Cancel', style: 'cancel' },
