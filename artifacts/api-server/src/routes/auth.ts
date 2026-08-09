@@ -119,8 +119,12 @@ async function upsertUser(claims: Record<string, unknown>) {
   const userData = {
     id: claims.sub as string,
     email: (claims.email as string) || null,
-    firstName: (claims.first_name as string) || null,
-    lastName: (claims.last_name as string) || null,
+    // Google OIDC uses given_name / family_name; fall back to first_name /
+    // last_name in case a different provider uses those keys.
+    firstName:
+      ((claims.given_name as string) || (claims.first_name as string)) || null,
+    lastName:
+      ((claims.family_name as string) || (claims.last_name as string)) || null,
     profileImageUrl: (claims.profile_image_url || claims.picture) as
       | string
       | null,
