@@ -398,6 +398,24 @@ export const CascadeContributeResponse = zod.object({
 
 
 /**
+ * @summary List contribution history for a savings goal
+ */
+export const GetSavingsGoalContributionsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetSavingsGoalContributionsResponseItem = zod.object({
+  "id": zod.number(),
+  "goalId": zod.number(),
+  "amount": zod.number().describe('Amount contributed in KES'),
+  "createdByUserId": zod.string(),
+  "contributorName": zod.string().describe('Display name of the user who made the contribution'),
+  "createdAt": zod.string()
+})
+export const GetSavingsGoalContributionsResponse = zod.array(GetSavingsGoalContributionsResponseItem)
+
+
+/**
  * @summary Atomically add an amount to a savings goal's current balance
  */
 export const ContributeToSavingsGoalParams = zod.object({

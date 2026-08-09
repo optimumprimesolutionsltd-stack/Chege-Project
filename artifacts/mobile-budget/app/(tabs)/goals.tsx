@@ -30,6 +30,7 @@ import {
   useDeleteSavingsGoal,
   useContributeToSavingsGoal,
   useGetSavingsGoalContributions,
+  getGetSavingsGoalContributionsQueryKey,
   getGetSavingsGoalsQueryKey,
   type SavingsGoalContribution,
 } from '@workspace/api-client-react';
@@ -482,7 +483,12 @@ export default function GoalsScreen() {
 
   const { data: contributions = [], isLoading: historyLoading, refetch: refetchHistory } = useGetSavingsGoalContributions(
     historyGoal?.id ?? 0,
-    { query: { enabled: historyVisible && !!historyGoal } }
+    {
+      query: {
+        queryKey: getGetSavingsGoalContributionsQueryKey(historyGoal?.id ?? 0),
+        enabled: historyVisible && !!historyGoal,
+      },
+    }
   );
 
   const openHistory = (goal: SavingsGoal) => {
@@ -928,9 +934,14 @@ export default function GoalsScreen() {
                       <Feather name="arrow-up-circle" size={16} color="#4ade80" />
                     </View>
                     <View style={styles.historyRowInfo}>
-                      <Text style={[styles.historyAmount, { color: colors.foreground }]}>
-                        + KES {formatKES(c.amount)}
-                      </Text>
+                      <View style={styles.historyRowTop}>
+                        <Text style={[styles.historyAmount, { color: colors.foreground }]}>
+                          + KES {formatKES(c.amount)}
+                        </Text>
+                        <Text style={[styles.historyContributor, { color: '#4ade80' }]}>
+                          {c.contributorName}
+                        </Text>
+                      </View>
                       <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
                         {formatDate(c.createdAt)}
                       </Text>
@@ -1398,9 +1409,18 @@ const styles = StyleSheet.create({
   historyRowInfo: {
     flex: 1,
   },
+  historyRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   historyAmount: {
     fontSize: 15,
     fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  historyContributor: {
+    fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
   },
   historyDate: {

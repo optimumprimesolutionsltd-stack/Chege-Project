@@ -49,6 +49,7 @@ import type {
   MonthTrend,
   SavingsGoal,
   SavingsGoalContributeInput,
+  SavingsGoalContribution,
   SavingsGoalInput,
   SavingsGoalUpdateInput,
   SuccessResponse
@@ -1673,6 +1674,83 @@ export const useCascadeContribute = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCascadeContributeMutationOptions(options));
     }
+
+export const getGetSavingsGoalContributionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/savings-goals/${id}/contributions`
+}
+
+/**
+ * @summary List contribution history for a savings goal
+ */
+export const getSavingsGoalContributions = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<SavingsGoalContribution[]> => {
+
+  return customFetch<SavingsGoalContribution[]>(getGetSavingsGoalContributionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSavingsGoalContributionsQueryKey = (id: number,) => {
+    return [
+    `/api/savings-goals/${id}/contributions`
+    ] as const;
+    }
+
+
+export const getGetSavingsGoalContributionsQueryOptions = <TData = Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError = ErrorType<ErrorResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSavingsGoalContributionsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSavingsGoalContributions>>> = ({ signal }) => getSavingsGoalContributions(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSavingsGoalContributionsQueryResult = NonNullable<Awaited<ReturnType<typeof getSavingsGoalContributions>>>
+export type GetSavingsGoalContributionsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List contribution history for a savings goal
+ */
+
+export function useGetSavingsGoalContributions<TData = Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError = ErrorType<ErrorResponse>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSavingsGoalContributions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSavingsGoalContributionsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getContributeToSavingsGoalUrl = (id: number,) => {
 

@@ -442,6 +442,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/CascadeContributeResult"
 
+  /savings-goals/{id}/contributions:
+    get:
+      operationId: getSavingsGoalContributions
+      tags: [savings-goals]
+      summary: List contribution history for a savings goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: List of contributions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavingsGoalContribution"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /savings-goals/{id}/contribute:
     post:
       operationId: contributeToSavingsGoal
@@ -1097,6 +1124,31 @@ components:
         - totalAmount
         - allocations
         - leftover
+
+    SavingsGoalContribution:
+      type: object
+      properties:
+        id:
+          type: number
+        goalId:
+          type: number
+        amount:
+          type: number
+          description: Amount contributed in KES
+        createdByUserId:
+          type: string
+        contributorName:
+          type: string
+          description: Display name of the user who made the contribution
+        createdAt:
+          type: string
+      required:
+        - id
+        - goalId
+        - amount
+        - createdByUserId
+        - contributorName
+        - createdAt
 
     SavingsGoalContributeInput:
       type: object

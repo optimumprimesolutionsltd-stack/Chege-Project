@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { savingsGoalsTable, savingsGoalContributionsTable } from "@workspace/db";
+import { savingsGoalsTable, savingsGoalContributionsTable, usersTable } from "@workspace/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 
@@ -178,14 +178,23 @@ router.get("/savings-goals/:id/contributions", async (req, res) => {
 
   const { id } = paramParsed.data;
 
-  const contributions = await db
-    .select()
+  const rows = await db
+    .select({
+      id: savingsGoalContributionsTable.id,
+      goalId: savingsGoalContributionsTable.goalId,
+      amount: savingsGoalContributionsTable.amount,
+      createdByUserId: savingsGoalContributionsTable.createdByUserId,
+      createdAt: savingsGoalContributionsTable.createdAt,
+      contributorName: usersTable.firstName,
+    })
     .from(savingsGoalContributionsTable)
+    .leftJoin(usersTable, eq(savingsGoalContributionsTable.createdByUserId, usersTable.id))
     .where(eq(savingsGoalContributionsTable.goalId, id))
     .orderBy(desc(savingsGoalContributionsTable.createdAt));
 
-  res.json(contributions.map((c) => ({
+  res.json(rows.map((c) => ({
     ...c,
+    contributorName: c.contributorName ?? "Unknown",
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
   })));
 });

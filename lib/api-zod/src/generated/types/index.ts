@@ -36,6 +36,7 @@ export * from './member';
 export * from './monthTrend';
 export * from './savingsGoal';
 export * from './savingsGoalContributeInput';
+export * from './savingsGoalContribution';
 export * from './savingsGoalInput';
 export * from './savingsGoalUpdateInput';
 export * from './successResponse';
