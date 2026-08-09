@@ -25,6 +25,8 @@ import { useColors } from '@/hooks/useColors';
 import {
   useGetSavingsGoals,
   useCreateSavingsGoal,
+  useUpdateSavingsGoal,
+  useDeleteSavingsGoal,
   useContributeToSavingsGoal,
   getGetSavingsGoalsQueryKey,
 } from '@workspace/api-client-react';
@@ -120,6 +122,101 @@ export default function GoalsScreen() {
     } finally {
       setSubmittingGoal(false);
     }
+  };
+
+  // ── Edit Goal modal ─────────────────────────────────────────────────────────
+  const [editGoalVisible, setEditGoalVisible] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editTarget, setEditTarget] = useState('');
+  const [editDeadline, setEditDeadline] = useState('');
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+
+  const { mutateAsync: updateGoal } = useUpdateSavingsGoal();
+  const { mutateAsync: deleteGoal } = useDeleteSavingsGoal();
+
+  const openEditGoal = (goal: SavingsGoal) => {
+    setEditingGoal(goal);
+    setEditName(goal.name);
+    setEditTarget(String(goal.targetAmount));
+    setEditDeadline(goal.deadline ?? '');
+    setEditGoalVisible(true);
+  };
+
+  const closeEditGoal = () => {
+    if (submittingEdit) return;
+    setEditGoalVisible(false);
+  };
+
+  const handleUpdateGoal = async () => {
+    if (!editingGoal) return;
+    const target = parseFloat(editTarget.replace(/,/g, ''));
+    if (!editName.trim()) {
+      Alert.alert('Name required', 'Please enter a name for the goal.');
+      return;
+    }
+    if (!target || target <= 0) {
+      Alert.alert('Target required', 'Please enter a valid target amount.');
+      return;
+    }
+    const deadlineValue = editDeadline.trim() || undefined;
+    if (deadlineValue && !/^\d{4}-\d{2}-\d{2}$/.test(deadlineValue)) {
+      Alert.alert('Invalid date', 'Enter the deadline as YYYY-MM-DD, or leave it blank.');
+      return;
+    }
+
+    setSubmittingEdit(true);
+    try {
+      await updateGoal({
+        id: editingGoal.id,
+        data: {
+          name: editName.trim(),
+          targetAmount: target,
+          deadline: deadlineValue ?? null,
+        },
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+      setEditGoalVisible(false);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to update goal. Please try again.');
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
+
+  const confirmDeleteGoal = (goal: SavingsGoal) => {
+    Alert.alert(
+      'Delete Goal',
+      `Are you sure you want to delete "${goal.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteGoal({ id: goal.id });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+            } catch {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('Error', 'Failed to delete goal. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const openGoalActions = (goal: SavingsGoal) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(goal.name, undefined, [
+      { text: 'Edit', onPress: () => openEditGoal(goal) },
+      { text: 'Delete', style: 'destructive', onPress: () => confirmDeleteGoal(goal) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   // ── Contribute modal ────────────────────────────────────────────────────────
@@ -228,7 +325,12 @@ export default function GoalsScreen() {
                 {active.map((goal) => {
                   const pct = goal.targetAmount > 0 ? Math.min(goal.currentAmount / goal.targetAmount, 1) : 0;
                   return (
-                    <View key={goal.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Pressable
+                      key={goal.id}
+                      onLongPress={() => openGoalActions(goal)}
+                      delayLongPress={400}
+                      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    >
                       <View style={styles.cardTop}>
                         <View style={[styles.iconCircle, { backgroundColor: '#1a3320' }]}>
                           <Feather name="target" size={18} color="#4ade80" />
@@ -243,6 +345,13 @@ export default function GoalsScreen() {
                         </View>
                         <View style={styles.cardRight}>
                           <Text style={[styles.cardPct, { color: '#4ade80' }]}>{Math.round(pct * 100)}%</Text>
+                          <TouchableOpacity
+                            onPress={() => openGoalActions(goal)}
+                            hitSlop={8}
+                            style={styles.kebabBtn}
+                          >
+                            <Feather name="more-vertical" size={18} color={colors.mutedForeground} />
+                          </TouchableOpacity>
                         </View>
                       </View>
 
@@ -271,7 +380,7 @@ export default function GoalsScreen() {
                           <Text style={styles.contributeBtnText}>Contribute</Text>
                         </Pressable>
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </>
@@ -478,6 +587,106 @@ export default function GoalsScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* ── Edit Goal Modal ────────────────────────────────────────────────── */}
+      <Modal
+        visible={editGoalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeEditGoal}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={styles.modalAvoid}
+            >
+              <TouchableWithoutFeedback>
+                <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingBottom: botPad + 16 }]}>
+                  {/* Handle */}
+                  <View style={[styles.handle, { backgroundColor: colors.border }]} />
+
+                  {/* Header */}
+                  <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={closeEditGoal} style={styles.modalHeaderBtn}>
+                      <Feather name="x" size={22} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                    <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit Goal</Text>
+                    <TouchableOpacity
+                      onPress={handleUpdateGoal}
+                      disabled={submittingEdit}
+                      style={[styles.modalSaveBtn, { backgroundColor: colors.primary, opacity: submittingEdit ? 0.7 : 1 }]}
+                    >
+                      {submittingEdit ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.modalSaveBtnText}>Save</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={styles.modalBody}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {/* Goal name */}
+                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>GOAL NAME</Text>
+                    <TextInput
+                      style={[styles.textInput, {
+                        backgroundColor: colors.muted,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                        borderRadius: colors.radius,
+                      }]}
+                      placeholder="e.g. Emergency Fund"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={editName}
+                      onChangeText={setEditName}
+                      autoFocus
+                      returnKeyType="next"
+                    />
+
+                    {/* Target amount */}
+                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>TARGET AMOUNT (KES)</Text>
+                    <TextInput
+                      style={[styles.textInput, {
+                        backgroundColor: colors.muted,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                        borderRadius: colors.radius,
+                      }]}
+                      placeholder="e.g. 50000"
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType="numeric"
+                      value={editTarget}
+                      onChangeText={setEditTarget}
+                      returnKeyType="next"
+                    />
+
+                    {/* Deadline */}
+                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>DEADLINE (optional, YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={[styles.textInput, {
+                        backgroundColor: colors.muted,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                        borderRadius: colors.radius,
+                      }]}
+                      placeholder="e.g. 2026-12-31"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={editDeadline}
+                      onChangeText={setEditDeadline}
+                      returnKeyType="done"
+                      onSubmitEditing={handleUpdateGoal}
+                    />
+                  </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -570,7 +779,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     marginTop: 2,
   },
-  cardRight: { alignItems: 'flex-end' },
+  cardRight: { alignItems: 'flex-end', justifyContent: 'space-between', gap: 4 },
+  kebabBtn: { padding: 4 },
   cardPct: {
     fontSize: 18,
     fontWeight: '700' as const,
