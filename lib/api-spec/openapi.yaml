@@ -807,6 +807,9 @@ components:
           type: number
         note:
           type: string
+        forUserId:
+          type: string
+          description: Record this contribution on behalf of another household member (their ID)
       required:
         - amount
         - month

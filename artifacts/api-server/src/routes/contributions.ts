@@ -76,11 +76,25 @@ router.post("/contributions", async (req, res) => {
     return;
   }
 
-  const { amount, month, year, note } = parsed.data;
+  const { amount, month, year, note, forUserId } = parsed.data;
+
+  // If forUserId is provided, verify that user is a household member
+  let targetUserId = req.user.id;
+  if (forUserId && forUserId !== req.user.id) {
+    const targetUser = await db.query.usersTable.findFirst({
+      where: eq(usersTable.id, forUserId),
+    });
+    if (!targetUser) {
+      res.status(400).json({ error: "User not found" });
+      return;
+    }
+    targetUserId = forUserId;
+  }
+
   const [contribution] = await db
     .insert(contributionsTable)
     .values({
-      userId: req.user.id,
+      userId: targetUserId,
       amount,
       month: Math.round(month),
       year: Math.round(year),
@@ -89,7 +103,7 @@ router.post("/contributions", async (req, res) => {
     .returning();
 
   const user = await db.query.usersTable.findFirst({
-    where: eq(usersTable.id, req.user.id),
+    where: eq(usersTable.id, targetUserId),
   });
 
   res.status(201).json({

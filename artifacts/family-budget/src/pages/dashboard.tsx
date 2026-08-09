@@ -33,10 +33,14 @@ import { useToast } from "@/hooks/use-toast";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
-// ── Quick Action: Record Income ──────────────────────────────────────────────
+const CHEGE_ID = "63497598";
+const LYDIAH_ID = "63570605";
+
+// ── Quick Action: Make a Bank Deposit ────────────────────────────────────────
 function IncomeForm({ onDone }: { onDone: () => void }) {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [forUserId, setForUserId] = useState<string>(CHEGE_ID);
   const createContribution = useCreateContribution();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -48,36 +52,49 @@ function IncomeForm({ onDone }: { onDone: () => void }) {
     if (!amt || amt <= 0) return;
     try {
       await createContribution.mutateAsync({
-        data: { amount: amt, month: now.getMonth() + 1, year: now.getFullYear(), note: note || undefined },
+        data: { amount: amt, month: now.getMonth() + 1, year: now.getFullYear(), note: note || undefined, forUserId },
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
       qc.invalidateQueries({ queryKey: getGetContributionsQueryKey() });
-      toast({ title: "Income recorded", description: `${formatKes(amt)} added to this month.` });
+      const who = forUserId === CHEGE_ID ? "Chege" : "Lydiah";
+      toast({ title: "Deposit recorded", description: `${who} · ${formatKes(amt)} added to this month.` });
       onDone();
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not record income." });
+      toast({ variant: "destructive", title: "Error", description: "Could not record deposit." });
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Person picker */}
+      <div className="space-y-1.5">
+        <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
+        <div className="grid grid-cols-2 gap-2">
+          {[{ id: CHEGE_ID, name: "Chege" }, { id: LYDIAH_ID, name: "Lydiah" }].map(({ id, name }) => (
+            <button key={id} type="button" onClick={() => setForUserId(id)}
+              className={`py-3 rounded-xl border text-sm font-semibold transition-colors ${forUserId === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}>
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
-          <Input type="number" placeholder="e.g. 50000" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-11 bg-card text-base" autoFocus />
+          <Input type="number" placeholder="e.g. 50000" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-12 bg-card text-base" autoFocus />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Note <span className="text-muted-foreground font-normal">(optional)</span></label>
-          <Input placeholder="e.g. Salary, freelance…" value={note} onChange={e => setNote(e.target.value)} className="h-11 bg-card" />
+          <Input placeholder="e.g. Salary, rental…" value={note} onChange={e => setNote(e.target.value)} className="h-12 bg-card" />
         </div>
       </div>
       <div className="flex gap-3">
-        <Button type="submit" className="h-11 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white" disabled={createContribution.isPending}>
+        <Button type="submit" className="h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex-1 text-base" disabled={createContribution.isPending}>
           {createContribution.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-          Record Income
+          Make Deposit
         </Button>
-        <Button type="button" variant="ghost" className="h-11" onClick={onDone}>Cancel</Button>
+        <Button type="button" variant="ghost" className="h-12" onClick={onDone}>Cancel</Button>
       </div>
     </form>
   );
@@ -321,7 +338,7 @@ export default function Dashboard() {
           {/* Action buttons row */}
           <div className="grid grid-cols-3 divide-x divide-border/50">
             {[
-              { key: "income" as const, label: "Record Income", icon: "💰", active: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-400" },
+              { key: "income" as const, label: "Bank Deposit", icon: "💰", active: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-400" },
               { key: "expense" as const, label: "Log Expense",   icon: "📋", active: "bg-amber-50 dark:bg-amber-950/40",   text: "text-amber-700 dark:text-amber-400" },
               { key: "goal" as const,   label: "Save to Goal",  icon: "🎯", active: "bg-blue-50 dark:bg-blue-950/40",     text: "text-blue-700 dark:text-blue-400" },
             ].map(({ key, label, icon, active, text }) => (
