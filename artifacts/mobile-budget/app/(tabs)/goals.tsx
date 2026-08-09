@@ -24,6 +24,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
+import { deriveContributorTotals, applyDateFilter, MANUAL_ADJUSTMENT_NOTE } from '@/utils/contributorTotals';
 import {
   useGetSavingsGoals,
   useCreateSavingsGoal,
@@ -672,7 +673,7 @@ export default function GoalsScreen() {
   const uniqueContributors = Array.from(
     new Set(
       (contributions as SavingsGoalContribution[])
-        .filter((c) => c.note !== 'Manual adjustment')
+        .filter((c) => c.note !== MANUAL_ADJUSTMENT_NOTE)
         .map((c) => c.contributorName ?? 'Unknown')
     )
   );
@@ -680,26 +681,17 @@ export default function GoalsScreen() {
 
   // Date-only filtered (no contributor filter) — used for the per-person summary strip
   // so that selecting a contributor in the list doesn't zero out everyone else's total.
-  const dateFilteredContributions = (contributions as SavingsGoalContribution[]).filter((c) => {
-    const date = new Date(c.createdAt);
-    if (filterStart) {
-      const start = new Date(filterStart);
-      start.setHours(0, 0, 0, 0);
-      if (date < start) return false;
-    }
-    if (filterEnd) {
-      const end = new Date(filterEnd);
-      end.setHours(23, 59, 59, 999);
-      if (date > end) return false;
-    }
-    return true;
-  });
+  const dateFilteredContributions = applyDateFilter(
+    contributions as SavingsGoalContribution[],
+    filterStart,
+    filterEnd,
+  );
 
   const filteredContributions = dateFilteredContributions.filter((c) => {
     if (filterContributor) {
       // Manual adjustments don't belong to any single contributor — hide them
       // when filtering by person so the count and total are accurate.
-      if (c.note === 'Manual adjustment') return false;
+      if (c.note === MANUAL_ADJUSTMENT_NOTE) return false;
       if ((c.contributorName ?? 'Unknown') !== filterContributor) return false;
     }
     return true;
@@ -709,14 +701,11 @@ export default function GoalsScreen() {
 
   // Per-contributor totals for the summary strip — respects date filter only, independent of
   // contributor selection so that all totals remain correct when one person is selected.
-  const contributorTotals = showContributorFilter
-    ? uniqueContributors.map((name) => ({
-        name,
-        total: dateFilteredContributions
-          .filter((c) => c.note !== 'Manual adjustment' && (c.contributorName ?? 'Unknown') === name)
-          .reduce((sum, c) => sum + c.amount, 0),
-      }))
-    : [];
+  const contributorTotals = deriveContributorTotals(
+    contributions as SavingsGoalContribution[],
+    filterStart,
+    filterEnd,
+  );
   const totalSaved = (goals as SavingsGoal[]).reduce((s, g) => s + (g.currentAmount ?? 0), 0);
   const totalTarget = (goals as SavingsGoal[]).reduce((s, g) => s + (g.targetAmount ?? 0), 0);
 
