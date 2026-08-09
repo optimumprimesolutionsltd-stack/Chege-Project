@@ -7,6 +7,7 @@ import {
   useContributeToSavingsGoal,
   useCascadeContribute,
   getGetSavingsGoalsQueryKey,
+  useGetSavingsGoalContributions,
 } from "@workspace/api-client-react";
 import type { SavingsGoal, CascadeContributeAllocation } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,8 @@ import {
   ArrowDown,
   Sparkles,
   ChevronRight,
+  History,
+  User,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -49,6 +52,41 @@ function GoalProgress({ current, target }: { current: number; target: number }) 
   );
 }
 
+function GoalContributionHistory({ goalId }: { goalId: number }) {
+  const { data: contributions, isLoading } = useGetSavingsGoalContributions(goalId);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-4">
+        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!contributions || contributions.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-3">No contributions yet.</p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {contributions.map((c) => (
+        <div key={c.id} className="flex items-center gap-3 text-sm py-1.5 border-b border-border/40 last:border-0">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <span className="font-medium text-foreground truncate">{c.contributorName}</span>
+          </div>
+          <span className="font-semibold text-primary shrink-0">{formatKes(c.amount)}</span>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {new Date(c.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 type GoalFormMode = "none" | "create" | { type: "edit"; goal: SavingsGoal };
 
 export default function SavingsGoals() {
@@ -62,6 +100,7 @@ export default function SavingsGoals() {
   const queryClient = useQueryClient();
 
   const [mode, setMode] = useState<GoalFormMode>("none");
+  const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(null);
 
   // Form state
   const [name, setName] = useState("");
@@ -486,6 +525,23 @@ export default function SavingsGoals() {
                         <Plus className="w-4 h-4 mr-2" />
                         Add Contribution
                       </Button>
+                    )}
+
+                    {/* Contribution history toggle */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full h-8 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setExpandedHistoryId(expandedHistoryId === goal.id ? null : goal.id)}
+                    >
+                      <History className="w-3.5 h-3.5 mr-1.5" />
+                      {expandedHistoryId === goal.id ? "Hide history" : "Show history"}
+                    </Button>
+
+                    {expandedHistoryId === goal.id && (
+                      <div className="border-t border-border/40 pt-3">
+                        <GoalContributionHistory goalId={goal.id} />
+                      </div>
                     )}
                   </CardContent>
                 </Card>
