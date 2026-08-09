@@ -260,13 +260,16 @@ export default function Expenses() {
 
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">Paid by</label>
-          <select className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            value={form.paidById} onChange={e => form.setPaidById(e.target.value)}>
-            <option value="">Me ({user?.firstName ?? "You"})</option>
-            {members?.filter(m => m.userId !== user?.id).map(m => (
-              <option key={m.userId} value={m.userId}>{m.userName ?? m.userId}</option>
+          <div className="grid grid-cols-2 gap-2">
+            {[{ id: "63497598", name: "Chege" }, { id: "63570605", name: "Lydiah" }].map(({ id, name }) => (
+              <button
+                key={id} type="button" onClick={() => form.setPaidById(id)}
+                className={`h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidById === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
+              >
+                {name}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
         <div className="md:col-span-2 flex items-center gap-3 bg-card rounded-xl p-4 border border-border/50">

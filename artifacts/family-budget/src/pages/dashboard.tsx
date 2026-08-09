@@ -149,11 +149,15 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
           </select>
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Paid by <span className="text-muted-foreground font-normal">(optional)</span></label>
-          <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-            <option value="">Either</option>
-            {members.map(m => <option key={m.userId} value={m.userId}>{m.userName ?? m.userId}</option>)}
-          </select>
+          <label className="text-sm font-semibold text-foreground">Paid by</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[{ id: CHEGE_ID, name: "Chege" }, { id: LYDIAH_ID, name: "Lydiah" }].map(({ id, name }) => (
+              <button key={id} type="button" onClick={() => setPaidBy(id)}
+                className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
+                {name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="flex gap-3">
