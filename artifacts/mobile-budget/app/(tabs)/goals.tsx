@@ -507,6 +507,10 @@ export default function GoalsScreen() {
   const [activeChip, setActiveChip] = useState<string | null>(null);
   const [filterContributor, setFilterContributor] = useState<string | null>(null);
 
+  // Persist per-goal filter state within a session
+  type GoalFilterState = { filterStart: Date | null; filterEnd: Date | null; activeChip: string | null; filterContributor: string | null };
+  const goalFilterCache = useRef<Record<number, GoalFilterState>>({});
+
   const { data: contributions = [], isLoading: historyLoading, refetch: refetchHistory } = useGetSavingsGoalContributions(
     historyGoal?.id ?? 0,
     {
@@ -567,14 +571,27 @@ export default function GoalsScreen() {
 
   const openHistory = (goal: SavingsGoal) => {
     setHistoryGoal(goal);
-    setFilterStart(null);
-    setFilterEnd(null);
-    setActiveChip(null);
-    setFilterContributor(null);
+    // Restore the last-used filter for this goal (null defaults for first open)
+    const saved = goalFilterCache.current[goal.id] ?? null;
+    setFilterStart(saved?.filterStart ?? null);
+    setFilterEnd(saved?.filterEnd ?? null);
+    setActiveChip(saved?.activeChip ?? null);
+    setFilterContributor(saved?.filterContributor ?? null);
     setHistoryVisible(true);
   };
 
-  const closeHistory = () => setHistoryVisible(false);
+  const closeHistory = () => {
+    // Persist the current filter state for this goal before closing
+    if (historyGoal) {
+      goalFilterCache.current[historyGoal.id] = {
+        filterStart,
+        filterEnd,
+        activeChip,
+        filterContributor,
+      };
+    }
+    setHistoryVisible(false);
+  };
 
   // ── Contribute modal ────────────────────────────────────────────────────────
   const [contributeVisible, setContributeVisible] = useState(false);
