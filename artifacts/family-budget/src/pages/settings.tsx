@@ -76,7 +76,7 @@ export default function Settings() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Signed in as <strong>{user?.name}</strong>
+            Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email}</strong>
           </p>
         </CardContent>
       </Card>

@@ -56,15 +56,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-4 border-t border-sidebar-border mt-auto">
           <div className="flex items-center gap-3 mb-4 px-2">
             <div className="w-10 h-10 rounded-full bg-sidebar-accent border border-sidebar-border flex items-center justify-center overflow-hidden flex-shrink-0">
-              {user?.profileImage ? (
-                <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" />
+              {user?.profileImageUrl ? (
+                <img src={user.profileImageUrl} alt={user.firstName ?? 'User'} className="w-full h-full object-cover" />
               ) : (
-                <span className="font-bold text-sidebar-primary">{user?.name?.charAt(0) || 'U'}</span>
+                <span className="font-bold text-sidebar-primary">{user?.firstName?.charAt(0) || 'U'}</span>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">{user?.name || 'User'}</p>
-              <p className="text-xs text-sidebar-foreground/60 capitalize truncate">{user?.role || 'Member'}</p>
+              <p className="text-sm font-semibold truncate">{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User'}</p>
+              <p className="text-xs text-sidebar-foreground/60 capitalize truncate">Member</p>
             </div>
           </div>
           <Button variant="ghost" className="w-full justify-start text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent" onClick={logout}>

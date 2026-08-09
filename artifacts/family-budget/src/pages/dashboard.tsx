@@ -16,6 +16,7 @@ import {
   getGetSavingsGoalsQueryKey,
   getGetContributionsQueryKey,
   getGetExpensesQueryKey,
+  type SavingsGoal,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatKes, formatDate } from "@/lib/utils";
@@ -100,7 +101,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
     if (!amt || !description) return;
     try {
       await createExpense.mutateAsync({
-        data: { amount: amt, description, category: category || undefined, paidByUserId: paidBy || undefined },
+        data: { amount: amt, description, category: category, paidById: paidBy || undefined, date: new Date().toISOString().split('T')[0] },
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
@@ -134,7 +135,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
           <label className="text-sm font-semibold text-foreground">Paid by <span className="text-muted-foreground font-normal">(optional)</span></label>
           <select value={paidBy} onChange={e => setPaidBy(e.target.value)} className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
             <option value="">Either</option>
-            {members.map(m => <option key={m.userId} value={m.userId}>{m.name ?? m.userId}</option>)}
+            {members.map(m => <option key={m.userId} value={m.userId}>{m.userName ?? m.userId}</option>)}
           </select>
         </div>
       </div>
@@ -150,7 +151,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
 }
 
 // ── Quick Action: Save to Goal ───────────────────────────────────────────────
-function GoalForm({ goals, onDone }: { goals: ReturnType<typeof useGetSavingsGoals>["data"]; onDone: () => void }) {
+function GoalForm({ goals, onDone }: { goals: SavingsGoal[] | undefined; onDone: () => void }) {
   const activeGoals = goals?.filter(g => !g.isCompleted) ?? [];
   const [amount, setAmount] = useState("");
   const [selectedGoalId, setSelectedGoalId] = useState<"cascade" | number>(

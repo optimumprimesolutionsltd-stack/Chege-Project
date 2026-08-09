@@ -52,7 +52,7 @@ function formatDate(dateStr: string): string {
 export default function ActivityCard({ item, colors }: Props) {
   const isExpense = item.type === 'expense';
   const iconName: keyof typeof Feather.glyphMap =
-    (item.category && CATEGORY_ICONS[item.category]) ??
+    (item.category ? CATEGORY_ICONS[item.category] : undefined) ??
     (isExpense ? 'shopping-bag' : 'arrow-down-circle');
 
   return (

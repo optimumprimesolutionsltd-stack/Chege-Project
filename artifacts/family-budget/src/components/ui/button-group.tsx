@@ -43,7 +43,7 @@ function ButtonGroupText({
 }: React.ComponentProps<'div'> & {
   asChild?: boolean;
 }) {
-  const Comp = asChild ? Slot : 'div';
+  const Comp = (asChild ? Slot : 'div') as React.ElementType;
 
   return (
     <Comp

@@ -149,7 +149,7 @@ export default function Bank() {
                     <select
                       className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       value={madeById} onChange={e => setMadeById(e.target.value)}>
-                      <option value="">Me ({user?.name ?? "You"})</option>
+                      <option value="">Me ({user?.firstName ?? "You"})</option>
                       {members?.filter(m => m.userId !== user?.id).map(m => (
                         <option key={m.userId} value={m.userId}>{m.userName ?? m.userId}</option>
                       ))}

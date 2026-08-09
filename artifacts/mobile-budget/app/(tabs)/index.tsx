@@ -80,7 +80,7 @@ export default function DashboardScreen() {
     return 'Good evening';
   }, []);
 
-  const firstName = user?.name?.split(' ')[0] ?? '';
+  const firstName = user?.firstName ?? '';
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
