@@ -481,6 +481,8 @@ export default function GoalsScreen() {
   // ── History modal ───────────────────────────────────────────────────────────
   const [historyGoal, setHistoryGoal] = useState<SavingsGoal | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [filterStart, setFilterStart] = useState<Date | null>(null);
+  const [filterEnd, setFilterEnd] = useState<Date | null>(null);
 
   const { data: contributions = [], isLoading: historyLoading, refetch: refetchHistory } = useGetSavingsGoalContributions(
     historyGoal?.id ?? 0,
@@ -494,6 +496,8 @@ export default function GoalsScreen() {
 
   const openHistory = (goal: SavingsGoal) => {
     setHistoryGoal(goal);
+    setFilterStart(null);
+    setFilterEnd(null);
     setHistoryVisible(true);
   };
 
@@ -904,97 +908,153 @@ export default function GoalsScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Body */}
-            {historyLoading ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} size="large" />
-            ) : contributions.length === 0 ? (
-              <View style={styles.historyEmpty}>
-                <Feather name="clock" size={36} color={colors.mutedForeground} />
-                <Text style={[styles.historyEmptyTitle, { color: colors.foreground }]}>No contributions yet</Text>
-                <Text style={[styles.historyEmptyText, { color: colors.mutedForeground }]}>
-                  Tap "Contribute" on the goal card to start saving
-                </Text>
+            {/* Date range filter bar */}
+            {!historyLoading && (contributions as SavingsGoalContribution[]).length > 0 && (
+              <View style={[styles.filterBar, { borderBottomColor: colors.border }]}>
+                <View style={styles.filterField}>
+                  <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>FROM</Text>
+                  <DeadlinePicker value={filterStart} onChange={setFilterStart} colors={colors} />
+                </View>
+                <View style={styles.filterDivider} />
+                <View style={styles.filterField}>
+                  <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>TO</Text>
+                  <DeadlinePicker value={filterEnd} onChange={setFilterEnd} colors={colors} />
+                </View>
+                {(filterStart || filterEnd) && (
+                  <TouchableOpacity
+                    onPress={() => { setFilterStart(null); setFilterEnd(null); }}
+                    style={styles.filterClearBtn}
+                    hitSlop={8}
+                  >
+                    <Feather name="x-circle" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
               </View>
-            ) : (
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.historyList}
-              >
-                {(contributions as SavingsGoalContribution[]).map((c, idx) => {
-                  const isAdjustment = c.note === 'Manual adjustment';
-                  const isNegative = c.amount < 0;
-                  const absAmount = Math.abs(c.amount);
-                  const amountLabel = isNegative
-                    ? `\u2212 KES ${formatKES(absAmount)}`
-                    : `+ KES ${formatKES(absAmount)}`;
-                  return (
-                    <View
-                      key={c.id}
-                      style={[
-                        styles.historyRow,
-                        {
-                          borderBottomColor: colors.border,
-                          borderBottomWidth: idx < contributions.length - 1 ? 1 : 0,
-                          opacity: isAdjustment ? 0.8 : 1,
-                        },
-                      ]}
-                    >
+            )}
+
+            {/* Body */}
+            {(() => {
+              const filtered = (contributions as SavingsGoalContribution[]).filter((c) => {
+                const date = new Date(c.createdAt);
+                if (filterStart) {
+                  const start = new Date(filterStart);
+                  start.setHours(0, 0, 0, 0);
+                  if (date < start) return false;
+                }
+                if (filterEnd) {
+                  const end = new Date(filterEnd);
+                  end.setHours(23, 59, 59, 999);
+                  if (date > end) return false;
+                }
+                return true;
+              });
+
+              if (historyLoading) {
+                return <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} size="large" />;
+              }
+              if ((contributions as SavingsGoalContribution[]).length === 0) {
+                return (
+                  <View style={styles.historyEmpty}>
+                    <Feather name="clock" size={36} color={colors.mutedForeground} />
+                    <Text style={[styles.historyEmptyTitle, { color: colors.foreground }]}>No contributions yet</Text>
+                    <Text style={[styles.historyEmptyText, { color: colors.mutedForeground }]}>
+                      Tap "Contribute" on the goal card to start saving
+                    </Text>
+                  </View>
+                );
+              }
+              if (filtered.length === 0) {
+                return (
+                  <View style={styles.historyEmpty}>
+                    <Feather name="filter" size={36} color={colors.mutedForeground} />
+                    <Text style={[styles.historyEmptyTitle, { color: colors.foreground }]}>No contributions found</Text>
+                    <Text style={[styles.historyEmptyText, { color: colors.mutedForeground }]}>
+                      No contributions fall in the selected date range
+                    </Text>
+                  </View>
+                );
+              }
+              return (
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.historyList}
+                >
+                  {filtered.map((c, idx) => {
+                    const isAdjustment = c.note === 'Manual adjustment';
+                    const isNegative = c.amount < 0;
+                    const absAmount = Math.abs(c.amount);
+                    const amountLabel = isNegative
+                      ? `\u2212 KES ${formatKES(absAmount)}`
+                      : `+ KES ${formatKES(absAmount)}`;
+                    return (
                       <View
+                        key={c.id}
                         style={[
-                          styles.historyDot,
+                          styles.historyRow,
                           {
-                            backgroundColor: isAdjustment ? colors.muted : '#1a3320',
+                            borderBottomColor: colors.border,
+                            borderBottomWidth: idx < filtered.length - 1 ? 1 : 0,
+                            opacity: isAdjustment ? 0.8 : 1,
                           },
                         ]}
                       >
-                        <Feather
-                          name={isAdjustment ? 'sliders' : 'arrow-up-circle'}
-                          size={16}
-                          color={isAdjustment ? colors.mutedForeground : '#4ade80'}
-                        />
-                      </View>
-                      <View style={styles.historyRowInfo}>
-                        <View style={styles.historyRowTop}>
-                          <Text
-                            style={[
-                              styles.historyAmount,
-                              {
-                                color: isAdjustment
-                                  ? isNegative
-                                    ? colors.destructive ?? '#ef4444'
-                                    : colors.mutedForeground
-                                  : colors.foreground,
-                              },
-                            ]}
-                          >
-                            {amountLabel}
-                          </Text>
-                          {isAdjustment ? (
-                            <View style={styles.historyAdjustmentBadge}>
-                              <Text style={[styles.historyAdjustmentBadgeText, { color: colors.mutedForeground }]}>
-                                Manual
+                        <View
+                          style={[
+                            styles.historyDot,
+                            {
+                              backgroundColor: isAdjustment ? colors.muted : '#1a3320',
+                            },
+                          ]}
+                        >
+                          <Feather
+                            name={isAdjustment ? 'sliders' : 'arrow-up-circle'}
+                            size={16}
+                            color={isAdjustment ? colors.mutedForeground : '#4ade80'}
+                          />
+                        </View>
+                        <View style={styles.historyRowInfo}>
+                          <View style={styles.historyRowTop}>
+                            <Text
+                              style={[
+                                styles.historyAmount,
+                                {
+                                  color: isAdjustment
+                                    ? isNegative
+                                      ? colors.destructive ?? '#ef4444'
+                                      : colors.mutedForeground
+                                    : colors.foreground,
+                                },
+                              ]}
+                            >
+                              {amountLabel}
+                            </Text>
+                            {isAdjustment ? (
+                              <View style={styles.historyAdjustmentBadge}>
+                                <Text style={[styles.historyAdjustmentBadgeText, { color: colors.mutedForeground }]}>
+                                  Manual
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={[styles.historyContributor, { color: '#4ade80' }]}>
+                                {c.contributorName}
                               </Text>
-                            </View>
-                          ) : (
-                            <Text style={[styles.historyContributor, { color: '#4ade80' }]}>
-                              {c.contributorName}
+                            )}
+                          </View>
+                          <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
+                            {isAdjustment ? 'Balance correction' : formatDate(c.createdAt)}
+                          </Text>
+                          {isAdjustment && (
+                            <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
+                              {formatDate(c.createdAt)}
                             </Text>
                           )}
                         </View>
-                        <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
-                          {isAdjustment ? 'Balance correction' : formatDate(c.createdAt)}
-                        </Text>
-                        {isAdjustment && (
-                          <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
-                            {formatDate(c.createdAt)}
-                          </Text>
-                        )}
                       </View>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            )}
+                    );
+                  })}
+                </ScrollView>
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -1408,7 +1468,36 @@ const styles = StyleSheet.create({
   },
   // History modal
   historySheet: {
-    maxHeight: '80%',
+    maxHeight: '85%',
+  },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  filterField: {
+    flex: 1,
+    gap: 4,
+  },
+  filterLabel: {
+    fontSize: 9,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 1,
+    marginLeft: 2,
+  },
+  filterDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'transparent',
+  },
+  filterClearBtn: {
+    padding: 4,
+    alignSelf: 'flex-end',
+    marginBottom: 4,
   },
   historySubtitle: {
     fontSize: 11,
