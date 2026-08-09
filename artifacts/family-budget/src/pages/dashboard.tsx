@@ -503,40 +503,30 @@ export default function Dashboard() {
 
       {/* Recent Activity */}
       <Card className="border-none shadow-md overflow-hidden">
-        <CardHeader className="bg-muted/30 border-b border-border/50 pb-4 flex flex-row items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2"><ActivityIcon className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">Recent Activity</CardTitle></div>
-            <CardDescription>Latest expenses and deposits</CardDescription>
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Recent Activity</p>
+            <Link href="/activity" className="text-xs font-medium text-primary hover:underline">View all</Link>
           </div>
-          <Link href="/activity" className="text-sm font-medium text-primary hover:underline hidden sm:block">View all</Link>
-        </CardHeader>
-        <CardContent className="p-0">
           {activity.length > 0 ? (
-            <div className="divide-y divide-border/50">
-              {activity.slice(0, 5).map((item) => (
-                <div key={item.id} className="p-4 sm:p-6 flex items-center justify-between hover:bg-muted/20 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.type === "expense" ? "bg-accent text-accent-foreground" : "bg-primary/10 text-primary"}`}>
-                      {item.type === "expense" ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground line-clamp-1">{item.description}</p>
-                      <p className="text-sm text-muted-foreground flex items-center gap-2">
-                        <span>{item.userName}</span>
-                        <span className="w-1 h-1 rounded-full bg-border" />
-                        <span>{formatDate(item.date)}</span>
-                        {item.category && <><span className="w-1 h-1 rounded-full bg-border hidden sm:block" /><span className="hidden sm:block px-2 py-0.5 bg-muted rounded text-xs">{item.category}</span></>}
-                      </p>
+            <div className="space-y-1">
+              {activity.slice(0, 6).map((item) => (
+                <div key={item.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.type === "expense" ? "bg-muted-foreground/40" : "bg-primary"}`} />
+                    <div className="min-w-0">
+                      <p className="text-sm text-foreground truncate">{item.description}</p>
+                      <p className="text-xs text-muted-foreground">{item.userName} · {formatDate(item.date)}</p>
                     </div>
                   </div>
-                  <div className={`font-display font-bold text-lg whitespace-nowrap ${item.type === "expense" ? "text-foreground" : "text-primary"}`}>
+                  <p className={`text-sm font-medium whitespace-nowrap ml-3 ${item.type === "expense" ? "text-foreground/70" : "text-primary"}`}>
                     {item.type === "expense" ? "-" : "+"}{formatKes(item.amount)}
-                  </div>
+                  </p>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="p-8 text-center text-muted-foreground"><p>No recent activity found.</p></div>
+            <p className="text-sm text-muted-foreground text-center py-4">No recent activity.</p>
           )}
         </CardContent>
       </Card>
