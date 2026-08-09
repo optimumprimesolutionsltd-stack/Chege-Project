@@ -21,9 +21,10 @@ export const HealthCheckResponse = zod.object({
  */
 export const GetAuthUserResponse = zod.object({
   "id": zod.string(),
-  "name": zod.string(),
-  "profileImage": zod.string().nullish(),
-  "role": zod.string().describe('chege or lydiah')
+  "email": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "profileImageUrl": zod.string().nullish()
 })
 
 
@@ -408,6 +409,7 @@ export const GetSavingsGoalContributionsResponseItem = zod.object({
   "id": zod.number(),
   "goalId": zod.number(),
   "amount": zod.number().describe('Amount contributed in KES'),
+  "note": zod.string().nullish().describe('Optional note — \"Manual adjustment\" for balance corrections'),
   "createdByUserId": zod.string(),
   "contributorName": zod.string().describe('Display name of the user who made the contribution'),
   "createdAt": zod.string()

@@ -648,17 +648,16 @@ components:
       properties:
         id:
           type: string
-        name:
-          type: string
-        profileImage:
+        email:
           type: ["string", "null"]
-        role:
-          type: string
-          description: "chege or lydiah"
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
       required:
         - id
-        - name
-        - role
 
     Expense:
       type: object

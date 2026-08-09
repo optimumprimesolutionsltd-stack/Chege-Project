@@ -7,13 +7,13 @@ import {
   getSession,
   getSessionId,
   updateSession,
+  type AuthUser,
   type SessionData,
-  type SessionUser,
 } from '../lib/auth';
 
 declare global {
   namespace Express {
-    interface User extends SessionUser {}
+    interface User extends AuthUser {}
 
     interface Request {
       isAuthenticated(): this is AuthedRequest;

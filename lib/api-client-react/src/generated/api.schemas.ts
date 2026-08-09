@@ -19,11 +19,14 @@ export interface SuccessResponse {
 
 export interface AuthUser {
   id: string;
-  name: string;
   /** @nullable */
-  profileImage?: string | null;
-  /** chege or lydiah */
-  role: string;
+  email?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  profileImageUrl?: string | null;
 }
 
 export interface Expense {
@@ -235,10 +238,7 @@ export interface SavingsGoalContribution {
   goalId: number;
   /** Amount contributed in KES */
   amount: number;
-  /**
-   * Optional note — "Manual adjustment" for balance corrections
-   * @nullable
-   */
+  /** Optional note — "Manual adjustment" for balance corrections */
   note?: string | null;
   createdByUserId: string;
   /** Display name of the user who made the contribution */

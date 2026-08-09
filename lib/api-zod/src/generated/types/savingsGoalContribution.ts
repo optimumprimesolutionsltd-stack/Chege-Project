@@ -11,6 +11,8 @@ export interface SavingsGoalContribution {
   goalId: number;
   /** Amount contributed in KES */
   amount: number;
+  /** Optional note — "Manual adjustment" for balance corrections */
+  note?: string | null;
   createdByUserId: string;
   /** Display name of the user who made the contribution */
   contributorName: string;
