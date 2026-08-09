@@ -505,6 +505,7 @@ export default function GoalsScreen() {
   const [filterStart, setFilterStart] = useState<Date | null>(null);
   const [filterEnd, setFilterEnd] = useState<Date | null>(null);
   const [activeChip, setActiveChip] = useState<string | null>(null);
+  const [filterContributor, setFilterContributor] = useState<string | null>(null);
 
   const { data: contributions = [], isLoading: historyLoading, refetch: refetchHistory } = useGetSavingsGoalContributions(
     historyGoal?.id ?? 0,
@@ -569,6 +570,7 @@ export default function GoalsScreen() {
     setFilterStart(null);
     setFilterEnd(null);
     setActiveChip(null);
+    setFilterContributor(null);
     setHistoryVisible(true);
   };
 
@@ -619,6 +621,16 @@ export default function GoalsScreen() {
   const active = (goals as SavingsGoal[]).filter((g) => !g.isCompleted);
   const done = (goals as SavingsGoal[]).filter((g) => g.isCompleted);
 
+  // Unique contributors derived from loaded data (excluding manual adjustments)
+  const uniqueContributors = Array.from(
+    new Set(
+      (contributions as SavingsGoalContribution[])
+        .filter((c) => c.note !== 'Manual adjustment')
+        .map((c) => c.contributorName ?? 'Unknown')
+    )
+  );
+  const showContributorFilter = uniqueContributors.length > 1;
+
   const filteredContributions = (contributions as SavingsGoalContribution[]).filter((c) => {
     const date = new Date(c.createdAt);
     if (filterStart) {
@@ -631,9 +643,15 @@ export default function GoalsScreen() {
       end.setHours(23, 59, 59, 999);
       if (date > end) return false;
     }
+    if (filterContributor) {
+      // Manual adjustments don't belong to any single contributor — hide them
+      // when filtering by person so the count and total are accurate.
+      if (c.note === 'Manual adjustment') return false;
+      if ((c.contributorName ?? 'Unknown') !== filterContributor) return false;
+    }
     return true;
   });
-  const filterActive = !!(filterStart || filterEnd);
+  const filterActive = !!(filterStart || filterEnd || filterContributor);
   const filterNetTotal = filteredContributions.reduce((sum, c) => sum + c.amount, 0);
   const totalSaved = (goals as SavingsGoal[]).reduce((s, g) => s + (g.currentAmount ?? 0), 0);
   const totalTarget = (goals as SavingsGoal[]).reduce((s, g) => s + (g.targetAmount ?? 0), 0);
@@ -1062,6 +1080,68 @@ export default function GoalsScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
+
+                {/* Contributor chips — only when multiple contributors exist */}
+                {showContributorFilter && (
+                  <View style={styles.contributorRow}>
+                    <Text style={[styles.filterLabel, { color: colors.mutedForeground, marginBottom: 6 }]}>
+                      CONTRIBUTOR
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.chipsRow}
+                    >
+                      {uniqueContributors.map((name) => {
+                        const isActive = filterContributor === name;
+                        return (
+                          <Pressable
+                            key={name}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              setFilterContributor(isActive ? null : name);
+                            }}
+                            style={[
+                              styles.chip,
+                              {
+                                backgroundColor: isActive ? '#1a3320' : colors.muted,
+                                borderColor: isActive ? '#4ade80' : colors.border,
+                              },
+                            ]}
+                          >
+                            <Feather
+                              name="user"
+                              size={12}
+                              color={isActive ? '#4ade80' : colors.mutedForeground}
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text
+                              style={[
+                                styles.chipText,
+                                { color: isActive ? '#4ade80' : colors.mutedForeground },
+                              ]}
+                            >
+                              {name}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                      {filterContributor && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setFilterContributor(null);
+                          }}
+                          style={[styles.chip, { backgroundColor: colors.muted, borderColor: colors.border }]}
+                          hitSlop={4}
+                        >
+                          <Feather name="x" size={12} color={colors.mutedForeground} style={{ marginRight: 4 }} />
+                          <Text style={[styles.chipText, { color: colors.mutedForeground }]}>Clear</Text>
+                        </TouchableOpacity>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
             )}
 
@@ -1072,6 +1152,7 @@ export default function GoalsScreen() {
                 <Text style={[styles.filterSummaryText, { color: '#86efac' }]}>
                   {filteredContributions.length}{' '}
                   {filteredContributions.length === 1 ? 'contribution' : 'contributions'}
+                  {filterContributor ? ` by ${filterContributor}` : ''}
                   {'  ·  '}
                   <Text style={{ color: filterNetTotal >= 0 ? '#4ade80' : '#f87171' }}>
                     {filterNetTotal >= 0
@@ -1106,7 +1187,9 @@ export default function GoalsScreen() {
                     <Feather name="filter" size={36} color={colors.mutedForeground} />
                     <Text style={[styles.historyEmptyTitle, { color: colors.foreground }]}>No contributions found</Text>
                     <Text style={[styles.historyEmptyText, { color: colors.mutedForeground }]}>
-                      No contributions fall in the selected date range
+                      {filterContributor
+                        ? `No contributions from ${filterContributor} in this range`
+                        : 'No contributions fall in the selected date range'}
                     </Text>
                   </View>
                 );
@@ -1711,6 +1794,11 @@ const styles = StyleSheet.create({
     padding: 4,
     alignSelf: 'flex-end',
     marginBottom: 4,
+  },
+  contributorRow: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   filterSummaryBar: {
     flexDirection: 'row',
