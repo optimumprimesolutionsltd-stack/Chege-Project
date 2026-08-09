@@ -18,6 +18,7 @@ const UpdateGoalBody = z.object({
   currentAmount: z.number().min(0).optional(),
   deadline: z.string().nullable().optional(),
   isCompleted: z.boolean().optional(),
+  reason: z.string().trim().min(1).optional(),
 });
 
 const GoalIdParam = z.object({
@@ -210,7 +211,7 @@ router.patch("/savings-goals/:id", async (req, res) => {
   if (!bodyParsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { id } = paramParsed.data;
-  const updates = bodyParsed.data;
+  const { reason, ...updates } = bodyParsed.data;
 
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: "No updates provided" });
@@ -228,6 +229,14 @@ router.patch("/savings-goals/:id", async (req, res) => {
         .where(eq(savingsGoalsTable.id, id));
       if (!existing) return null;
       previousAmount = existing.currentAmount;
+
+      // Guard against accidental large negative corrections.
+      // If the new amount would wipe more than 50% of the current balance,
+      // require an explicit reason so the intent is clear.
+      const delta = updates.currentAmount - previousAmount;
+      if (delta < 0 && previousAmount > 0 && Math.abs(delta) > previousAmount * 0.5 && !reason) {
+        return { validationError: `A correction of ${Math.abs(delta).toFixed(2)} would reduce the balance by more than 50%. Provide a 'reason' field to confirm this is intentional.` };
+      }
     }
 
     const [updated] = await tx
@@ -256,6 +265,11 @@ router.patch("/savings-goals/:id", async (req, res) => {
   });
 
   if (!result) { res.status(404).json({ error: "Not found" }); return; }
+
+  if ("validationError" in result) {
+    res.status(400).json({ error: result.validationError });
+    return;
+  }
 
   res.json(formatGoal(result));
 });
