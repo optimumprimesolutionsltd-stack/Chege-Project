@@ -48,7 +48,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle } from "lucide-react";
 
 function GoalProgress({ current, target }: { current: number; target: number }) {
   const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
@@ -321,6 +322,14 @@ function GoalContributionHistory({
 
 type GoalFormMode = "none" | "create" | { type: "edit"; goal: SavingsGoal };
 
+interface InconsistentGoal {
+  id: number;
+  name: string;
+  currentAmount: number;
+  contributionTotal: number;
+  discrepancy: number;
+}
+
 export default function SavingsGoals() {
   const { data: goals, isLoading } = useGetSavingsGoals();
   const createGoal = useCreateSavingsGoal();
@@ -330,6 +339,14 @@ export default function SavingsGoals() {
   const deleteGoal = useDeleteSavingsGoal();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { data: consistencyData } = useQuery<{ ok: boolean; inconsistentGoals: InconsistentGoal[] }>({
+    queryKey: ["savings-goals-consistency"],
+    queryFn: () => fetch("/api/savings-goals/consistency-check").then((r) => r.json()),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const inconsistentGoals = consistencyData?.inconsistentGoals ?? [];
 
   const [mode, setMode] = useState<GoalFormMode>("none");
   const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(() => {
@@ -802,6 +819,23 @@ export default function SavingsGoals() {
                 </Button>
               </CardContent>
             </Card>
+          )}
+
+          {inconsistentGoals.length > 0 && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 space-y-1.5">
+              <div className="flex items-center gap-2 text-amber-600 font-semibold text-sm">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                Balance mismatch detected on {inconsistentGoals.length} goal{inconsistentGoals.length !== 1 ? "s" : ""}
+              </div>
+              {inconsistentGoals.map((g) => (
+                <div key={g.id} className="text-xs text-amber-700/80 pl-6">
+                  <span className="font-medium">{g.name}</span>
+                  {" — "}recorded {formatKes(g.currentAmount)}, contributions sum to {formatKes(g.contributionTotal)}
+                  {" (off by "}{formatKes(Math.abs(g.discrepancy))}{")"}
+                </div>
+              ))}
+              <p className="text-xs text-amber-600/70 pl-6 pt-0.5">Use the balance-correction form on each goal to reconcile.</p>
+            </div>
           )}
 
           {activeGoals.length > 0 && (
