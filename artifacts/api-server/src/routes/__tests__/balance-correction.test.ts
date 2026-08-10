@@ -411,4 +411,37 @@ describe("PATCH /savings-goals/:id — balance correction", () => {
     expect(res.status).toBe(200);
     expect(res.body.currentAmount).toBe(100);
   });
+
+  // -------------------------------------------------------------------------
+  // Negative-balance guard
+  // -------------------------------------------------------------------------
+  it("returns 400 with a clear message when currentAmount is set to a negative value", async () => {
+    // A negative balance is nonsensical — the schema must reject it before the
+    // transaction even starts, and the error message must be descriptive.
+    const res = await request(app)
+      .patch("/savings-goals/1")
+      .send({ currentAmount: -1 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/cannot be negative/i);
+  });
+
+  it("allows setting currentAmount to exactly 0", async () => {
+    // Zero is a valid balance (goal was emptied) — the guard must not block it.
+    const existing = makeGoal(1, { current: 100, target: 500 });
+    const updated = makeGoal(1, { current: 0, target: 500 }); // delta = -100 (100% wipe, needs reason)
+
+    const tx = makePatchTx(existing, updated);
+    mockedDb.transaction = vi
+      .fn()
+      .mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => cb(tx));
+
+    const res = await request(app)
+      .patch("/savings-goals/1")
+      .send({ currentAmount: 0, reason: "Goal reset to zero" }); // reason supplied for >50% wipe
+
+    expect(res.status).toBe(200);
+    expect(res.body.currentAmount).toBe(0);
+    expect(tx.update).toHaveBeenCalledTimes(1);
+  });
 });

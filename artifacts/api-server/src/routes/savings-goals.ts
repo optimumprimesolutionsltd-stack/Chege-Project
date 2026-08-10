@@ -15,7 +15,7 @@ const CreateGoalBody = z.object({
 const UpdateGoalBody = z.object({
   name: z.string().min(1).optional(),
   targetAmount: z.number().positive().optional(),
-  currentAmount: z.number().min(0).optional(),
+  currentAmount: z.number().min(0, "currentAmount cannot be negative").optional(),
   deadline: z.string().nullable().optional(),
   isCompleted: z.boolean().optional(),
   reason: z.string().trim().min(1).optional(),
@@ -246,7 +246,12 @@ router.patch("/savings-goals/:id", async (req, res) => {
   if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const bodyParsed = UpdateGoalBody.safeParse(req.body);
-  if (!bodyParsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
+  if (!bodyParsed.success) {
+    const firstIssue = bodyParsed.error.issues[0];
+    const message = firstIssue?.message ?? "Invalid request body";
+    res.status(400).json({ error: message });
+    return;
+  }
 
   const { id } = paramParsed.data;
   const { reason, ...updates } = bodyParsed.data;
