@@ -15,6 +15,7 @@ import AuthDone from '@/pages/auth-done';
 import Settings from '@/pages/settings';
 import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
+import Parity from '@/pages/parity';
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ function AuthenticatedApp() {
         <Route path="/savings-goals" component={SavingsGoals} />
         <Route path="/bank" component={Bank} />
         <Route path="/settings" component={Settings} />
+        <Route path="/parity" component={Parity} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Trash2, UserPlus, Shield, Copy, Check } from "lucide-react";
+import { Trash2, UserPlus, Shield, Copy, Check, GitCompare } from "lucide-react";
+import { Link } from "wouter";
 
 export default function Settings() {
   const { user } = useAuth();
@@ -56,6 +57,26 @@ export default function Settings() {
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-1">Manage your couple's access and your account.</p>
       </div>
+
+      {/* Platform Parity */}
+      <Link href="/parity">
+        <Card className="border-none shadow-md cursor-pointer hover:shadow-lg transition-shadow group">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <GitCompare className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">Platform Parity</p>
+                  <p className="text-sm text-muted-foreground">See which features exist on web vs mobile</p>
+                </div>
+              </div>
+              <span className="text-muted-foreground group-hover:text-foreground transition-colors text-lg">→</span>
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* Your account */}
       <Card className="border-none shadow-md">
