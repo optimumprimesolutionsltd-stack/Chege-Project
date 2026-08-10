@@ -269,7 +269,9 @@ function GoalContributionHistory({
       {filtered.length === 0 && (hasFilter || contributorFilter) ? null : (
         <div className="space-y-2">
           {filtered.map((c: SavingsGoalContribution) => {
-            const isAdjustment = c.note === "Manual adjustment";
+            const isAdjustment = c.note != null;
+            const isManualSentinel = c.note === "Manual adjustment";
+            const customReason = isAdjustment && !isManualSentinel ? c.note : null;
             const isNegative = c.amount < 0;
             const formattedAmount = isNegative
               ? `−${formatKes(Math.abs(c.amount))}`
@@ -289,8 +291,8 @@ function GoalContributionHistory({
                     {isAdjustment ? "Balance correction" : c.contributorName}
                   </span>
                   {isAdjustment && (
-                    <span className="ml-1 text-xs bg-muted text-muted-foreground rounded px-1.5 py-0.5 shrink-0">
-                      Manual
+                    <span className="ml-1 text-xs bg-muted text-muted-foreground rounded px-1.5 py-0.5 shrink-0 max-w-[160px] truncate" title={customReason ?? "Manual adjustment"}>
+                      {customReason ?? "Manual"}
                     </span>
                   )}
                 </div>
@@ -818,7 +820,14 @@ export default function SavingsGoals() {
                   <CardContent className="p-6 space-y-5">
                     <GoalProgress current={goal.currentAmount} target={goal.targetAmount} />
 
-                    {contributeId === goal.id ? (
+                    {goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount && (
+                      <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span className="text-sm font-medium text-emerald-600">Goal reached! Mark it complete when ready.</span>
+                      </div>
+                    )}
+
+                    {goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount ? null : contributeId === goal.id ? (
                       <form onSubmit={(e) => handleContribute(e, goal)} className="flex gap-3 items-center">
                         <Input
                           type="number"

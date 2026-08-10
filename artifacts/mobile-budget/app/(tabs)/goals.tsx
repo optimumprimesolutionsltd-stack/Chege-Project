@@ -767,12 +767,13 @@ export default function GoalsScreen() {
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ACTIVE</Text>
                 {active.map((goal) => {
                   const pct = goal.targetAmount > 0 ? Math.min(goal.currentAmount / goal.targetAmount, 1) : 0;
+                  const isFunded = goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount;
                   return (
                     <Pressable
                       key={goal.id}
                       onLongPress={() => openGoalActions(goal)}
                       delayLongPress={400}
-                      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+                      style={[styles.card, { backgroundColor: colors.card, borderColor: isFunded ? '#4ade80' : colors.border }]}
                     >
                       <View style={styles.cardTop}>
                         <View style={[styles.iconCircle, { backgroundColor: '#1a3320' }]}>
@@ -803,6 +804,12 @@ export default function GoalsScreen() {
                         <View style={[styles.barFill, { width: `${pct * 100}%`, backgroundColor: '#4ade80' }]} />
                       </View>
 
+                      {isFunded && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1a3320', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 4 }}>
+                          <Feather name="check-circle" size={14} color="#4ade80" />
+                          <Text style={{ color: '#4ade80', fontSize: 13, fontWeight: '600' }}>Goal reached! Mark it complete.</Text>
+                        </View>
+                      )}
                       <View style={styles.cardBottom}>
                         <View style={styles.cardAmounts}>
                           <Text style={[styles.cardAmountSaved, { color: colors.foreground }]}>
@@ -812,16 +819,18 @@ export default function GoalsScreen() {
                             of KES {formatKES(goal.targetAmount)}
                           </Text>
                         </View>
-                        <Pressable
-                          onPress={() => openContribute(goal)}
-                          style={({ pressed }) => [
-                            styles.contributeBtn,
-                            { backgroundColor: '#1a3320', opacity: pressed ? 0.7 : 1 },
-                          ]}
-                        >
-                          <Feather name="plus-circle" size={13} color="#4ade80" />
-                          <Text style={styles.contributeBtnText}>Contribute</Text>
-                        </Pressable>
+                        {!isFunded && (
+                          <Pressable
+                            onPress={() => openContribute(goal)}
+                            style={({ pressed }) => [
+                              styles.contributeBtn,
+                              { backgroundColor: '#1a3320', opacity: pressed ? 0.7 : 1 },
+                            ]}
+                          >
+                            <Feather name="plus-circle" size={13} color="#4ade80" />
+                            <Text style={styles.contributeBtnText}>Contribute</Text>
+                          </Pressable>
+                        )}
                       </View>
                     </Pressable>
                   );
