@@ -252,17 +252,23 @@ function GoalContributionHistory({
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           {filtered.length === 0 ? (
             "No contributions in this range."
-          ) : (
-            <span>
-              <span className="font-medium text-foreground">{filtered.length}</span>
-              {" "}contribution{filtered.length !== 1 ? "s" : ""}
-              {" · "}
-              <span className="font-medium text-foreground">
-                {formatKes(filtered.reduce((sum: number, c: SavingsGoalContribution) => sum + c.amount, 0))}
+          ) : (() => {
+            const realContribs = filtered.filter((c: SavingsGoalContribution) => c.note == null);
+            const total = realContribs.reduce((sum: number, c: SavingsGoalContribution) => sum + c.amount, 0);
+            const corrections = filtered.length - realContribs.length;
+            return (
+              <span>
+                <span className="font-medium text-foreground">{realContribs.length}</span>
+                {" "}contribution{realContribs.length !== 1 ? "s" : ""}
+                {corrections > 0 && (
+                  <span className="text-muted-foreground/60"> +{corrections} correction{corrections !== 1 ? "s" : ""}</span>
+                )}
+                {" · "}
+                <span className="font-medium text-foreground">{formatKes(total)}</span>
+                {" "}total
               </span>
-              {" "}total
-            </span>
-          )}
+            );
+          })()}
         </div>
       )}
 

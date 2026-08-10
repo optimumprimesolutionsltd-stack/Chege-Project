@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,6 +77,7 @@ export default function AddExpenseSheet() {
   const [paidById, setPaidById] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [date, setDate] = useState(todayIso());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const { mutate: createExpense, isPending } = useCreateExpense({
     mutation: {
@@ -322,30 +324,36 @@ export default function AddExpenseSheet() {
 
         {/* Date */}
         <Text style={[styles.label, { color: colors.mutedForeground }]}>DATE</Text>
-        <View
+        <Pressable
+          onPress={() => setShowDatePicker(true)}
           style={[
             styles.dateRow,
             { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: colors.radius },
           ]}
         >
-          <Pressable onPress={() => setDate(shiftDate(date, -1))} style={styles.dateArrow}>
-            <Feather name="chevron-left" size={20} color={colors.mutedForeground} />
-          </Pressable>
-          <Text style={[styles.dateText, { color: colors.foreground }]}>
+          <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+          <Text style={[styles.dateText, { color: colors.foreground, flex: 1 }]}>
             {formatDateDisplay(date)}
           </Text>
-          <Pressable
-            onPress={() => setDate(shiftDate(date, 1))}
-            style={styles.dateArrow}
-            disabled={date >= todayIso()}
-          >
-            <Feather
-              name="chevron-right"
-              size={20}
-              color={date >= todayIso() ? colors.border : colors.mutedForeground}
-            />
-          </Pressable>
-        </View>
+          <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+        </Pressable>
+        {showDatePicker && (
+          <DateTimePicker
+            value={new Date(date + 'T00:00:00')}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+            maximumDate={new Date()}
+            onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+              setShowDatePicker(Platform.OS === 'ios');
+              if (selected) {
+                const y = selected.getFullYear();
+                const m = String(selected.getMonth() + 1).padStart(2, '0');
+                const d = String(selected.getDate()).padStart(2, '0');
+                setDate(`${y}-${m}-${d}`);
+              }
+            }}
+          />
+        )}
 
         {/* Recurring toggle */}
         <View

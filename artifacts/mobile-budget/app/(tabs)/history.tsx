@@ -24,11 +24,13 @@ import {
   useGetExpenses,
   useUpdateExpense,
   useDeleteExpense,
+  useApplyRecurringExpenses,
   useGetBudgetCategories,
   useGetMembers,
   getGetExpensesQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
+  getGetDashboardCategoryBreakdownQueryKey,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -106,10 +108,33 @@ export default function HistoryScreen() {
   }
 
   const { data: expenses = [], isLoading, refetch } = useGetExpenses({ month, year });
+  const prevMonthNum = month === 1 ? 12 : month - 1;
+  const prevYearNum = month === 1 ? year - 1 : year;
+  const { data: prevExpenses = [] } = useGetExpenses({ month: prevMonthNum, year: prevYearNum });
+  const recurringFromPrev = prevExpenses.filter((e: Expense) => e.isRecurring);
+  const alreadyApplied = expenses.some((e: Expense) => e.isRecurring);
+  const showRecurringBanner = recurringFromPrev.length > 0 && !alreadyApplied;
+  const applyRecurring = useApplyRecurringExpenses();
+  const [applyingRecurring, setApplyingRecurring] = useState(false);
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
+
+  const handleApplyRecurring = async () => {
+    setApplyingRecurring(true);
+    try {
+      await applyRecurring.mutateAsync({ data: { month, year } });
+      queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+    } catch {
+      Alert.alert('Error', 'Could not apply recurring expenses.');
+    } finally {
+      setApplyingRecurring(false);
+    }
+  };
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -258,6 +283,22 @@ export default function HistoryScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {showRecurringBanner && (
+        <Pressable
+          onPress={handleApplyRecurring}
+          disabled={applyingRecurring}
+          style={[styles.recurringBanner, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <Feather name="refresh-cw" size={15} color={colors.primary} />
+          <Text style={[styles.recurringBannerText, { color: colors.foreground }]}>
+            {recurringFromPrev.length} recurring expense{recurringFromPrev.length !== 1 ? 's' : ''} from last month
+          </Text>
+          <Text style={[styles.recurringBannerAction, { color: colors.primary }]}>
+            {applyingRecurring ? 'Applying…' : 'Apply'}
+          </Text>
+        </Pressable>
+      )}
 
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
@@ -470,6 +511,10 @@ const styles = StyleSheet.create({
   pickerList: { flexGrow: 0 },
   pickerItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, marginHorizontal: 12, marginVertical: 1 },
   pickerItemText: { fontSize: 16, fontFamily: 'Inter_500Medium' },
+
+  recurringBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 14, marginTop: 10, padding: 12, borderRadius: 10, borderWidth: 1 },
+  recurringBannerText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
+  recurringBannerAction: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 
   list: { paddingHorizontal: 14, paddingTop: 14 },
 

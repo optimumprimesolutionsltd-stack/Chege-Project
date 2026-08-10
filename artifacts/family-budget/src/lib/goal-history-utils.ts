@@ -63,14 +63,16 @@ export function filterByDateRange(
 }
 
 /**
- * Compute per-contributor totals, excluding entries whose note is "Manual adjustment".
+ * Compute per-contributor totals, excluding all balance-correction entries
+ * (any entry whose note is non-null, including the "Manual adjustment" sentinel
+ * and custom-reason corrections).
  */
 export function computeContributorTotals(
   contributions: GoalContribution[],
 ): { name: string; total: number }[] {
   const map = new Map<string, number>();
   for (const c of contributions) {
-    if (c.note === "Manual adjustment") continue;
+    if (c.note != null) continue; // skip all corrections
     map.set(c.contributorName, (map.get(c.contributorName) ?? 0) + c.amount);
   }
   const result: { name: string; total: number }[] = [];
