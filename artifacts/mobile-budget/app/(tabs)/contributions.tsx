@@ -10,20 +10,48 @@ import {
   Pressable,
   Modal,
   FlatList,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import {
   useGetContributions,
   useGetDashboardSummary,
+  useCreateContribution,
+  getGetContributionsQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardActivityQueryKey,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
+
+const CHEGE_ID = '63497598';
+const LYDIAH_ID = '63570605';
+
+const INCOME_SOURCES: Record<string, { label: string; amount: number }[]> = {
+  [CHEGE_ID]: [
+    { label: 'Ujenzi Salary', amount: 76140 },
+    { label: 'Rental Income', amount: 150000 },
+    { label: 'Optimum', amount: 40954 },
+  ],
+  [LYDIAH_ID]: [
+    { label: 'EISH', amount: 50000 },
+  ],
+};
+
+const MEMBER_NAMES: Record<string, string> = {
+  [CHEGE_ID]: 'Chege',
+  [LYDIAH_ID]: 'Lydiah',
+};
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -112,6 +140,238 @@ function MemberCard({
   );
 }
 
+// ── Record-deposit bottom sheet ──────────────────────────────────────────────
+
+function RecordDepositModal({
+  visible,
+  onClose,
+  month,
+  year,
+  onSuccess,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  month: number;
+  year: number;
+  onSuccess: () => void;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+
+  const [forUserId, setForUserId] = useState(CHEGE_ID);
+  const [selectedSource, setSelectedSource] = useState('');
+  const [customAmount, setCustomAmount] = useState('');
+  const [customNote, setCustomNote] = useState('');
+
+  const { mutate: createContribution, isPending } = useCreateContribution({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: getGetContributionsQueryKey({ month, year }) });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+        onSuccess();
+        handleReset();
+      },
+      onError: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Error', 'Failed to record deposit. Please try again.');
+      },
+    },
+  });
+
+  const sources = INCOME_SOURCES[forUserId] ?? [];
+  const isOther = selectedSource === 'other';
+  const selectedSourceObj = sources.find(s => s.label === selectedSource);
+  const finalAmount = isOther ? Number(customAmount.replace(/,/g, '')) : (selectedSourceObj?.amount ?? 0);
+
+  function handleReset() {
+    setSelectedSource('');
+    setCustomAmount('');
+    setCustomNote('');
+  }
+
+  function handlePersonChange(id: string) {
+    setForUserId(id);
+    handleReset();
+  }
+
+  function handleSubmit() {
+    if (!selectedSource) {
+      Alert.alert('Select a source', 'Please pick an income source or choose Custom.');
+      return;
+    }
+    if (finalAmount <= 0) {
+      Alert.alert('Amount required', 'Please enter a valid amount.');
+      return;
+    }
+    createContribution({
+      data: {
+        amount: finalAmount,
+        month,
+        year,
+        note: isOther ? (customNote.trim() || 'Other') : selectedSource,
+        forUserId,
+      },
+    });
+  }
+
+  function handleClose() {
+    handleReset();
+    onClose();
+  }
+
+  const accentChege = '#4ade80';
+  const accentLydiah = '#cf7217';
+  const accent = forUserId === CHEGE_ID ? accentChege : accentLydiah;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+      <Pressable style={styles.modalOverlay} onPress={handleClose}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ width: '100%' }}
+        >
+          <Pressable
+            style={[styles.modalSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 24 }]}
+            onPress={() => {}}
+          >
+            {/* Handle */}
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Record Deposit</Text>
+
+            {/* Person toggle */}
+            <Text style={[styles.sheetLabel, { color: colors.mutedForeground }]}>FOR</Text>
+            <View style={styles.personToggle}>
+              {([CHEGE_ID, LYDIAH_ID] as const).map((id) => {
+                const name = MEMBER_NAMES[id];
+                const isSelected = forUserId === id;
+                const btnAccent = id === CHEGE_ID ? accentChege : accentLydiah;
+                return (
+                  <Pressable
+                    key={id}
+                    onPress={() => handlePersonChange(id)}
+                    style={[
+                      styles.personBtn,
+                      isSelected
+                        ? { backgroundColor: btnAccent + '22', borderColor: btnAccent }
+                        : { backgroundColor: colors.muted, borderColor: colors.border },
+                    ]}
+                  >
+                    <View style={[styles.personDot, { backgroundColor: isSelected ? btnAccent : colors.mutedForeground }]} />
+                    <Text style={[styles.personBtnText, { color: isSelected ? btnAccent : colors.foreground }]}>
+                      {name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Income source presets */}
+            <Text style={[styles.sheetLabel, { color: colors.mutedForeground }]}>SOURCE</Text>
+            <View style={styles.sourceGrid}>
+              {sources.map((src) => {
+                const selected = selectedSource === src.label;
+                return (
+                  <Pressable
+                    key={src.label}
+                    onPress={() => setSelectedSource(src.label)}
+                    style={[
+                      styles.sourceChip,
+                      selected
+                        ? { backgroundColor: accent + '22', borderColor: accent }
+                        : { backgroundColor: colors.muted, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={[styles.sourceChipLabel, { color: selected ? accent : colors.foreground }]}>
+                      {src.label}
+                    </Text>
+                    <Text style={[styles.sourceChipAmount, { color: selected ? accent : colors.mutedForeground }]}>
+                      KES {formatKES(src.amount)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              {/* Custom option */}
+              <Pressable
+                onPress={() => setSelectedSource('other')}
+                style={[
+                  styles.sourceChip,
+                  isOther
+                    ? { backgroundColor: accent + '22', borderColor: accent }
+                    : { backgroundColor: colors.muted, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.sourceChipLabel, { color: isOther ? accent : colors.foreground }]}>Custom</Text>
+                <Feather name="edit-2" size={12} color={isOther ? accent : colors.mutedForeground} style={{ marginTop: 2 }} />
+              </Pressable>
+            </View>
+
+            {/* Custom amount + note */}
+            {isOther && (
+              <View style={styles.customFields}>
+                <View style={[styles.customInput, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                  <Text style={[styles.customCurrency, { color: colors.mutedForeground }]}>KES</Text>
+                  <TextInput
+                    style={[styles.customAmountText, { color: colors.foreground }]}
+                    placeholder="0"
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="numeric"
+                    value={customAmount}
+                    onChangeText={setCustomAmount}
+                    autoFocus
+                  />
+                </View>
+                <TextInput
+                  style={[styles.customNoteInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground }]}
+                  placeholder="Note (optional)"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={customNote}
+                  onChangeText={setCustomNote}
+                  returnKeyType="done"
+                />
+              </View>
+            )}
+
+            {/* Preview amount */}
+            {selectedSource && finalAmount > 0 && (
+              <View style={[styles.amountPreview, { backgroundColor: accent + '11', borderColor: accent + '44' }]}>
+                <Feather name="check-circle" size={14} color={accent} />
+                <Text style={[styles.amountPreviewText, { color: accent }]}>
+                  Recording KES {formatKES(finalAmount)} for {MEMBER_NAMES[forUserId]}
+                </Text>
+              </View>
+            )}
+
+            {/* Submit */}
+            <Pressable
+              onPress={handleSubmit}
+              disabled={isPending || !selectedSource || finalAmount <= 0}
+              style={[
+                styles.submitBtn,
+                {
+                  backgroundColor: accent,
+                  opacity: isPending || !selectedSource || finalAmount <= 0 ? 0.5 : 1,
+                },
+              ]}
+            >
+              {isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.submitBtnText}>Record Deposit</Text>
+              )}
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ── Main screen ──────────────────────────────────────────────────────────────
+
 export default function ContributionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -121,6 +381,7 @@ export default function ContributionsScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [depositModalVisible, setDepositModalVisible] = useState(false);
 
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
@@ -180,16 +441,26 @@ export default function ContributionsScreen() {
       >
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>Contributions</Text>
-          <View style={styles.monthNav}>
-            <Pressable onPress={prevMonth} hitSlop={10} style={styles.navBtn}>
-              <Feather name="chevron-left" size={20} color="rgba(247,250,246,0.7)" />
-            </Pressable>
-            <Pressable onPress={() => setPickerVisible(true)} hitSlop={6} style={styles.monthLabelBtn}>
-              <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
-              <Feather name="chevron-down" size={12} color="rgba(247,250,246,0.5)" style={{ marginLeft: 3 }} />
-            </Pressable>
-            <Pressable onPress={nextMonth} hitSlop={10} style={styles.navBtn} disabled={isCurrentMonth}>
-              <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
+          <View style={styles.headerActions}>
+            <View style={styles.monthNav}>
+              <Pressable onPress={prevMonth} hitSlop={10} style={styles.navBtn}>
+                <Feather name="chevron-left" size={20} color="rgba(247,250,246,0.7)" />
+              </Pressable>
+              <Pressable onPress={() => setPickerVisible(true)} hitSlop={6} style={styles.monthLabelBtn}>
+                <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
+                <Feather name="chevron-down" size={12} color="rgba(247,250,246,0.5)" style={{ marginLeft: 3 }} />
+              </Pressable>
+              <Pressable onPress={nextMonth} hitSlop={10} style={styles.navBtn} disabled={isCurrentMonth}>
+                <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
+              </Pressable>
+            </View>
+            <Pressable
+              onPress={() => setDepositModalVisible(true)}
+              style={styles.recordBtn}
+              hitSlop={8}
+            >
+              <Feather name="plus" size={16} color="#0a1a10" />
+              <Text style={styles.recordBtnText}>Record</Text>
             </Pressable>
           </View>
         </View>
@@ -232,6 +503,15 @@ export default function ContributionsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Record Deposit Modal */}
+      <RecordDepositModal
+        visible={depositModalVisible}
+        onClose={() => setDepositModalVisible(false)}
+        month={month}
+        year={year}
+        onSuccess={() => setDepositModalVisible(false)}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -286,8 +566,15 @@ export default function ContributionsScreen() {
                   <Feather name="inbox" size={36} color={colors.mutedForeground} />
                   <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No contributions yet</Text>
                   <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                    Record a deposit in the Bank Account tab to log a contribution.
+                    Tap Record above to log a deposit for Chege or Lydiah.
                   </Text>
+                  <Pressable
+                    onPress={() => setDepositModalVisible(true)}
+                    style={[styles.emptyBtn, { borderColor: '#4ade80' }]}
+                  >
+                    <Feather name="plus" size={14} color="#4ade80" />
+                    <Text style={[styles.emptyBtnText, { color: '#4ade80' }]}>Record first deposit</Text>
+                  </Pressable>
                 </View>
               ) : (
                 <View style={[styles.list, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -329,10 +616,21 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingBottom: 24 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   headerTitle: { fontSize: 22, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   navBtn: { padding: 6 },
   monthLabelBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 },
   monthLabel: { fontSize: 14, fontWeight: '600' as const, color: '#f7faf6', fontFamily: 'Inter_600SemiBold', minWidth: 64, textAlign: 'center' },
+  recordBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#4ade80',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  recordBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#0a1a10', fontFamily: 'Inter_700Bold' },
 
   pickerOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   pickerSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: '60%' },
@@ -383,4 +681,75 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 40, gap: 8 },
   emptyTitle: { fontSize: 17, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   emptyText: { fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingHorizontal: 30 },
+  emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginTop: 8 },
+  emptyBtnText: { fontSize: 14, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+
+  // Deposit modal
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' },
+  modalSheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12 },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
+  sheetTitle: { fontSize: 18, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', textAlign: 'center', marginBottom: 20 },
+  sheetLabel: { fontSize: 10, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginBottom: 8 },
+  personToggle: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  personBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  personDot: { width: 8, height: 8, borderRadius: 4 },
+  personBtnText: { fontSize: 15, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+  sourceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  sourceChip: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: '45%',
+    flex: 1,
+  },
+  sourceChipLabel: { fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
+  sourceChipAmount: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  customFields: { gap: 10, marginBottom: 16 },
+  customInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  customCurrency: { fontSize: 16, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+  customAmountText: { fontSize: 22, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', flex: 1 },
+  customNoteInput: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+  },
+  amountPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  amountPreviewText: { fontSize: 13, fontFamily: 'Inter_500Medium', flex: 1 },
+  submitBtn: {
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  submitBtnText: { fontSize: 16, fontWeight: '700' as const, color: '#fff', fontFamily: 'Inter_700Bold' },
 });

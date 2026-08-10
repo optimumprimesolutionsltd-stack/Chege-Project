@@ -98,6 +98,7 @@ export interface ContributionInput {
   month: number;
   year: number;
   note?: string;
+  forUserId?: string;
 }
 
 export interface DashboardSummary {
