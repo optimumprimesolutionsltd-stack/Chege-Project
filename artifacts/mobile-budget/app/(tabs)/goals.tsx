@@ -509,6 +509,29 @@ export default function GoalsScreen() {
   const [filterEnd, setFilterEnd] = useState<Date | null>(null);
   const [activeChip, setActiveChip] = useState<string | null>(null);
   const [filterContributor, setFilterContributor] = useState<string | null>(null);
+  const [historyMonthPickerVisible, setHistoryMonthPickerVisible] = useState(false);
+
+  // Last 24 months for the month-jump picker
+  const historyMonthOptions = useMemo(() => {
+    const MONTHS_HIST = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const result: { month: number; year: number; label: string }[] = [];
+    const d = new Date();
+    d.setDate(1);
+    for (let i = 0; i < 24; i++) {
+      result.push({ month: d.getMonth() + 1, year: d.getFullYear(), label: `${MONTHS_HIST[d.getMonth()]} ${d.getFullYear()}` });
+      d.setMonth(d.getMonth() - 1);
+    }
+    return result;
+  }, []);
+
+  function jumpHistoryToMonth(m: number, y: number) {
+    const start = new Date(y, m - 1, 1);
+    const end = new Date(y, m, 0, 23, 59, 59);
+    setFilterStart(start);
+    setFilterEnd(end);
+    setActiveChip(null);
+    setHistoryMonthPickerVisible(false);
+  }
 
   // Persist per-goal filter state within a session and across restarts
   type GoalFilterState = { filterStart: Date | null; filterEnd: Date | null; activeChip: string | null; filterContributor: string | null };
@@ -1338,6 +1361,18 @@ export default function GoalsScreen() {
                       </Pressable>
                     );
                   })}
+
+                  {/* Month picker chip */}
+                  <Pressable
+                    onPress={() => setHistoryMonthPickerVisible(true)}
+                    style={[
+                      styles.chip,
+                      { backgroundColor: colors.muted, borderColor: colors.border, flexDirection: 'row', gap: 4 },
+                    ]}
+                  >
+                    <Feather name="calendar" size={12} color={colors.mutedForeground} />
+                    <Text style={[styles.chipText, { color: colors.mutedForeground }]}>Month…</Text>
+                  </Pressable>
                 </ScrollView>
 
                 {/* FROM / TO pickers */}
@@ -1607,6 +1642,49 @@ export default function GoalsScreen() {
             })()}
           </View>
         </View>
+      </Modal>
+
+      {/* ── History Month-Jump Picker ──────────────────────────────────────── */}
+      <Modal
+        visible={historyMonthPickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setHistoryMonthPickerVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setHistoryMonthPickerVisible(false)}>
+          <View style={styles.pickerOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={[styles.pickerSheet, { backgroundColor: colors.card }]}>
+                <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
+                <Text style={[styles.pickerTitle, { color: colors.foreground }]}>Jump to month</Text>
+                <FlatList
+                  data={historyMonthOptions}
+                  keyExtractor={(item) => `${item.year}-${item.month}`}
+                  showsVerticalScrollIndicator={false}
+                  style={styles.pickerList}
+                  renderItem={({ item }) => {
+                    const isActive =
+                      filterStart &&
+                      filterStart.getMonth() + 1 === item.month &&
+                      filterStart.getFullYear() === item.year &&
+                      !activeChip;
+                    return (
+                      <Pressable
+                        onPress={() => jumpHistoryToMonth(item.month, item.year)}
+                        style={[styles.pickerItem, isActive && { backgroundColor: colors.accent }]}
+                      >
+                        <Text style={[styles.pickerItemText, { color: isActive ? colors.accentForeground : colors.foreground }, isActive && { fontFamily: 'Inter_700Bold' }]}>
+                          {item.label}
+                        </Text>
+                        {isActive && <Feather name="check" size={16} color={colors.accentForeground} />}
+                      </Pressable>
+                    );
+                  }}
+                />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* ── Edit Goal Modal ────────────────────────────────────────────────── */}
@@ -2096,6 +2174,13 @@ const styles = StyleSheet.create({
   historySheet: {
     maxHeight: '85%',
   },
+  pickerOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: '60%' },
+  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  pickerTitle: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', textAlign: 'center', paddingVertical: 12 },
+  pickerList: { flexGrow: 0 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, marginHorizontal: 12, marginVertical: 1 },
+  pickerItemText: { fontSize: 16, fontFamily: 'Inter_500Medium' },
   filterBar: {
     flexDirection: 'column',
     paddingTop: 10,
