@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "preinstall": "node -e \"['package-lock.json','yarn.lock'].forEach(f=>{try{require('fs').unlinkSync(f)}catch(_){}});const ua=process.env.npm_config_user_agent||'';if(ua&&!ua.startsWith('pnpm')){process.stderr.write('Use pnpm instead\\n');process.exit(1)}\"",
+    "preinstall": "node -e \"['package-lock.json','yarn.lock'].forEach(f=>{try{require('fs').unlinkSync(f)}catch(_){}});const ua=process.env.npm_config_user_agent||'';if(ua&&!ua.startsWith('pnpm')&&!process.env.EAS_BUILD&&!process.env.CI){process.stderr.write('Use pnpm instead\\n');process.exit(1)}\"",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
