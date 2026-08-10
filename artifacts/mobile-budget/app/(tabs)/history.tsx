@@ -113,7 +113,8 @@ export default function HistoryScreen() {
   const { data: prevExpenses = [] } = useGetExpenses({ month: prevMonthNum, year: prevYearNum });
   const recurringFromPrev = prevExpenses.filter((e: Expense) => e.isRecurring);
   const alreadyApplied = expenses.some((e: Expense) => e.isRecurring);
-  const showRecurringBanner = recurringFromPrev.length > 0 && !alreadyApplied;
+  const showRecurringBanner = recurringFromPrev.length > 0 && !alreadyApplied &&
+    month === now.getMonth() + 1 && year === now.getFullYear();
   const applyRecurring = useApplyRecurringExpenses();
   const [applyingRecurring, setApplyingRecurring] = useState(false);
   const { data: categories = [] } = useGetBudgetCategories();
