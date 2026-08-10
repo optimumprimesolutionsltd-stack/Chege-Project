@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { expensesTable, usersTable } from "@workspace/db";
+import { expensesTable, usersTable, membersTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -145,15 +145,24 @@ router.post("/expenses", async (req, res) => {
 
   const { amount, category, description, notes, paidById, isRecurring, date } = parsed.data;
 
-  // Allow overriding who paid (e.g. Chege logging Lydiah's expense)
-  const effectivePaidById = paidById ?? req.user.id;
+  if (!paidById) {
+    res.status(400).json({ error: "paidById is required — choose who paid." });
+    return;
+  }
+
+  // Validate paidById is a known household member
+  const member = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, paidById) });
+  if (!member) {
+    res.status(400).json({ error: "paidById must be a recognised household member." });
+    return;
+  }
 
   const [expense] = await db
     .insert(expensesTable)
-    .values({ amount, category, description, notes: notes ?? null, paidById: effectivePaidById, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
+    .values({ amount, category, description, notes: notes ?? null, paidById, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .returning();
 
-  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, effectivePaidById) });
+  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
 
   res.status(201).json(formatExpense({ ...expense, paidByName: user?.firstName ?? "Unknown" }));
 });
@@ -168,17 +177,28 @@ router.patch("/expenses/:id", async (req, res) => {
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
 
   const { amount, category, description, notes, paidById, isRecurring, date } = parsed.data;
-  const effectivePaidById = paidById ?? req.user!.id;
+
+  if (!paidById) {
+    res.status(400).json({ error: "paidById is required — choose who paid." });
+    return;
+  }
+
+  // Validate paidById is a known household member
+  const member = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, paidById) });
+  if (!member) {
+    res.status(400).json({ error: "paidById must be a recognised household member." });
+    return;
+  }
 
   const [updated] = await db
     .update(expensesTable)
-    .set({ amount, category, description, notes: notes ?? null, paidById: effectivePaidById, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
+    .set({ amount, category, description, notes: notes ?? null, paidById, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .where(eq(expensesTable.id, Math.round(idParsed.data.id)))
     .returning();
 
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
-  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, effectivePaidById) });
+  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
   res.json(formatExpense({ ...updated, paidByName: user?.firstName ?? "Unknown" }));
 });
 

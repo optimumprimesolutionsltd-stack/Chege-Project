@@ -118,7 +118,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
     if (!amt || !description || !paidBy) return;
     try {
       await createExpense.mutateAsync({
-        data: { amount: amt, description, category: category, paidById: paidBy || undefined, date: new Date().toISOString().split('T')[0] },
+        data: { amount: amt, description, category: category, paidById: paidBy, date: new Date().toISOString().split('T')[0] },
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
@@ -149,15 +149,21 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
           </select>
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Paid by</label>
+          <label className="text-sm font-semibold text-foreground">
+            Paid by <span className="text-destructive">*</span>
+          </label>
           <div className="grid grid-cols-2 gap-2">
-            {[{ id: CHEGE_ID, name: "Chege" }, { id: LYDIAH_ID, name: "Lydiah" }].map(({ id, name }) => (
-              <button key={id} type="button" onClick={() => setPaidBy(id)}
-                className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
-                {name}
-              </button>
-            ))}
+            {members.map((m) => {
+              const name = m.userName?.split(" ")[0] ?? "Member";
+              return (
+                <button key={m.userId} type="button" onClick={() => setPaidBy(m.userId)}
+                  className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
+                  {name}
+                </button>
+              );
+            })}
           </div>
+          {!paidBy && <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>}
         </div>
       </div>
       <div className="flex gap-3">
