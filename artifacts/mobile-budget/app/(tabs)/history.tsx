@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -22,6 +23,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import {
   useGetExpenses,
+  useGetDashboardActivity,
   useUpdateExpense,
   useDeleteExpense,
   useApplyRecurringExpenses,
@@ -33,6 +35,9 @@ import {
   getGetDashboardCategoryBreakdownQueryKey,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
+import ActivityCard from '@/components/ActivityCard';
+
+const MONTH_PREF_KEY = 'expenses_month_pref';
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -75,6 +80,8 @@ type EditForm = {
   date: string;
 };
 
+type FeedTab = 'expenses' | 'activity';
+
 export default function HistoryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -85,6 +92,26 @@ export default function HistoryScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<FeedTab>('expenses');
+
+  // Restore last-viewed month from AsyncStorage
+  useEffect(() => {
+    AsyncStorage.getItem(MONTH_PREF_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const { m, y } = JSON.parse(raw);
+        if (typeof m === 'number' && typeof y === 'number') {
+          setMonth(m);
+          setYear(y);
+        }
+      } catch {}
+    });
+  }, []);
+
+  // Persist selected month whenever it changes
+  useEffect(() => {
+    AsyncStorage.setItem(MONTH_PREF_KEY, JSON.stringify({ m: month, y: year })).catch(() => {});
+  }, [month, year]);
 
   // Build list of last 24 months (most-recent first)
   const monthOptions = useMemo(() => {
@@ -137,12 +164,19 @@ export default function HistoryScreen() {
     }
   };
 
+  // Activity feed (for the "Activity" tab)
+  const { data: activityFeed = [], isLoading: activityLoading, refetch: refetchActivity } = useGetDashboardActivity();
+
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    if (activeTab === 'activity') {
+      await refetchActivity();
+    } else {
+      await refetch();
+    }
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, refetchActivity, activeTab]);
 
   // Edit modal state
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -229,25 +263,58 @@ export default function HistoryScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Expenses</Text>
-          {expenses.length > 0 && (
+        {/* Title row */}
+        <View style={styles.headerTitleRow}>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+            {activeTab === 'expenses' ? 'Expenses' : 'Activity'}
+          </Text>
+          {activeTab === 'expenses' && expenses.length > 0 && (
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
               {expenses.length} entries · KES {formatKES(totalSpent)}
             </Text>
           )}
+          {activeTab === 'activity' && activityFeed.length > 0 && (
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
+              Recent {activityFeed.length} items
+            </Text>
+          )}
         </View>
-        <View style={styles.monthNav}>
-          <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
-            <Feather name="chevron-left" size={20} color={colors.mutedForeground} />
-          </Pressable>
-          <Pressable onPress={() => setPickerVisible(true)} hitSlop={6} style={styles.monthLabelBtn}>
-            <Text style={[styles.monthLabel, { color: colors.foreground }]}>{MONTHS_SHORT[month - 1]} {year}</Text>
-            <Feather name="chevron-down" size={12} color={colors.mutedForeground} style={{ marginLeft: 3 }} />
-          </Pressable>
-          <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
-            <Feather name="chevron-right" size={20} color={isCurrentMonth ? colors.border : colors.mutedForeground} />
-          </Pressable>
+
+        {/* Segment switcher + month nav */}
+        <View style={styles.headerControls}>
+          {/* Tab toggle */}
+          <View style={[styles.segmentBar, { backgroundColor: colors.muted }]}>
+            <Pressable
+              onPress={() => setActiveTab('expenses')}
+              style={[styles.segmentBtn, activeTab === 'expenses' && { backgroundColor: colors.card, borderRadius: 8 }]}
+            >
+              <Feather name="list" size={13} color={activeTab === 'expenses' ? colors.foreground : colors.mutedForeground} />
+              <Text style={[styles.segmentText, { color: activeTab === 'expenses' ? colors.foreground : colors.mutedForeground }]}>Expenses</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setActiveTab('activity')}
+              style={[styles.segmentBtn, activeTab === 'activity' && { backgroundColor: colors.card, borderRadius: 8 }]}
+            >
+              <Feather name="activity" size={13} color={activeTab === 'activity' ? colors.foreground : colors.mutedForeground} />
+              <Text style={[styles.segmentText, { color: activeTab === 'activity' ? colors.foreground : colors.mutedForeground }]}>Activity</Text>
+            </Pressable>
+          </View>
+
+          {/* Month nav — only in expenses tab */}
+          {activeTab === 'expenses' && (
+            <View style={styles.monthNav}>
+              <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
+                <Feather name="chevron-left" size={20} color={colors.mutedForeground} />
+              </Pressable>
+              <Pressable onPress={() => setPickerVisible(true)} hitSlop={6} style={styles.monthLabelBtn}>
+                <Text style={[styles.monthLabel, { color: colors.foreground }]}>{MONTHS_SHORT[month - 1]} {year}</Text>
+                <Feather name="chevron-down" size={12} color={colors.mutedForeground} style={{ marginLeft: 3 }} />
+              </Pressable>
+              <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
+                <Feather name="chevron-right" size={20} color={isCurrentMonth ? colors.border : colors.mutedForeground} />
+              </Pressable>
+            </View>
+          )}
         </View>
       </View>
 
@@ -285,7 +352,8 @@ export default function HistoryScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {showRecurringBanner && (
+      {/* Recurring banner — expenses tab only */}
+      {activeTab === 'expenses' && showRecurringBanner && (
         <Pressable
           onPress={handleApplyRecurring}
           disabled={applyingRecurring}
@@ -301,31 +369,55 @@ export default function HistoryScreen() {
         </Pressable>
       )}
 
-      {isLoading ? (
-        <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
+      {activeTab === 'expenses' ? (
+        isLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
+        ) : (
+          <FlatList
+            data={expenses as Expense[]}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={({ item }) => (
+              <ExpenseRow
+                expense={item}
+                colors={colors}
+                onEdit={() => openEdit(item)}
+                onDelete={() => handleDelete(item)}
+              />
+            )}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+            contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Feather name="inbox" size={36} color={colors.mutedForeground} />
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No expenses</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{MONTHS_SHORT[month - 1]} {year} is empty</Text>
+              </View>
+            }
+          />
+        )
       ) : (
-        <FlatList
-          data={expenses as Expense[]}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => (
-            <ExpenseRow
-              expense={item}
-              colors={colors}
-              onEdit={() => openEdit(item)}
-              onDelete={() => handleDelete(item)}
-            />
-          )}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-          contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Feather name="inbox" size={36} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No expenses</Text>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{MONTHS_SHORT[month - 1]} {year} is empty</Text>
-            </View>
-          }
-        />
+        activityLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
+        ) : (
+          <FlatList
+            data={activityFeed as Array<{ id: string; type: string; amount: number; description: string; userName: string; category: string | null; date: string }>}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <ActivityCard item={item} colors={colors} />
+            )}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+            contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Feather name="activity" size={36} color={colors.mutedForeground} />
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No activity yet</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Expenses and contributions will appear here</Text>
+              </View>
+            }
+          />
+        )
       )}
 
       {/* FAB */}
@@ -497,9 +589,14 @@ function ExpenseRow({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 10 },
   headerTitle: { fontSize: 22, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
-  headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  headerControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  segmentBar: { flexDirection: 'row', borderRadius: 10, padding: 3, gap: 2 },
+  segmentBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7 },
+  segmentText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   navBtn: { padding: 4 },
   monthLabelBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, paddingVertical: 4 },
