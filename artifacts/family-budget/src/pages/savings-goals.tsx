@@ -103,6 +103,26 @@ interface GoalFilterState {
 
 const DEFAULT_FILTER: GoalFilterState = { fromDate: "", toDate: "", activeChip: null };
 
+const FILTERS_STORAGE_KEY = "goal-history-filters";
+
+function loadFiltersFromStorage(): Record<number, GoalFilterState> {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<number, GoalFilterState>;
+  } catch {
+    return {};
+  }
+}
+
+function saveFiltersToStorage(filters: Record<number, GoalFilterState>) {
+  try {
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  } catch {
+    // localStorage unavailable — silently skip
+  }
+}
+
 function GoalContributionHistory({
   goalId,
   filter,
@@ -333,14 +353,24 @@ export default function SavingsGoals() {
 
   const [mode, setMode] = useState<GoalFormMode>("none");
   const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(null);
-  const [goalFilters, setGoalFilters] = useState<Record<number, GoalFilterState>>({});
+  const [goalFilters, setGoalFilters] = useState<Record<number, GoalFilterState>>(loadFiltersFromStorage);
 
   function getGoalFilter(goalId: number): GoalFilterState {
     return goalFilters[goalId] ?? DEFAULT_FILTER;
   }
 
   function setGoalFilter(goalId: number, f: GoalFilterState) {
-    setGoalFilters((prev) => ({ ...prev, [goalId]: f }));
+    setGoalFilters((prev) => {
+      const next = { ...prev, [goalId]: f };
+      // Clear the entry when the filter is reset to defaults so storage stays tidy
+      if (!f.fromDate && !f.toDate && !f.activeChip) {
+        const { [goalId]: _removed, ...rest } = next;
+        saveFiltersToStorage(rest);
+        return rest;
+      }
+      saveFiltersToStorage(next);
+      return next;
+    });
   }
 
   // Form state
