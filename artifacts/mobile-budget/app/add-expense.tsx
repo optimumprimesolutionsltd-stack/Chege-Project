@@ -73,7 +73,7 @@ export default function AddExpenseSheet() {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
-  const [paidById, setPaidById] = useState(user?.id ?? '');
+  const [paidById, setPaidById] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [date, setDate] = useState(todayIso());
 
@@ -108,6 +108,10 @@ export default function AddExpenseSheet() {
     }
     if (!description.trim()) {
       Alert.alert('Description required', 'Please add a description.');
+      return;
+    }
+    if (!paidById) {
+      Alert.alert('Paid by required', 'Please choose who paid for this expense.');
       return;
     }
     createExpense({
@@ -272,10 +276,12 @@ export default function AddExpenseSheet() {
         {/* Who paid */}
         {members.length > 0 && (
           <>
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>PAID BY</Text>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>
+              PAID BY <Text style={{ color: '#ef4444' }}>*</Text>
+            </Text>
             <View style={styles.paidByRow}>
               {members.map((m) => {
-                const selected = paidById === m.userId || (!paidById && m.userId === user?.id);
+                const selected = paidById === m.userId;
                 return (
                   <Pressable
                     key={m.userId}
@@ -300,14 +306,17 @@ export default function AddExpenseSheet() {
                         { color: selected ? '#fff' : colors.foreground },
                       ]}
                     >
-                      {m.userId === user?.id
-                        ? (m.userName?.split(' ')[0] ?? 'You')
-                        : (m.userName?.split(' ')[0] ?? 'Member')}
+                      {m.userName?.split(' ')[0] ?? 'Member'}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
+            {!paidById && (
+              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                Tap to choose who paid
+              </Text>
+            )}
           </>
         )}
 
@@ -527,5 +536,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     flex: 1,
+  },
+  hintText: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 6,
   },
 });

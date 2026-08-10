@@ -133,7 +133,7 @@ export default function Expenses() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addForm.amount || !addForm.category || !addForm.description || !addForm.date) return;
+    if (!addForm.amount || !addForm.category || !addForm.description || !addForm.date || !addForm.paidById) return;
     try {
       await createExpense.mutateAsync({
         data: {
@@ -156,7 +156,7 @@ export default function Expenses() {
 
   const handleUpdate = async (e: React.FormEvent, id: number) => {
     e.preventDefault();
-    if (!editForm.amount || !editForm.category || !editForm.description || !editForm.date) return;
+    if (!editForm.amount || !editForm.category || !editForm.description || !editForm.date || !editForm.paidById) return;
     try {
       await updateExpense.mutateAsync({
         id,
@@ -259,7 +259,9 @@ export default function Expenses() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Paid by</label>
+          <label className="text-sm font-semibold text-foreground">
+            Paid by <span className="text-destructive">*</span>
+          </label>
           <div className="grid grid-cols-2 gap-2">
             {[{ id: "63497598", name: "Chege" }, { id: "63570605", name: "Lydiah" }].map(({ id, name }) => (
               <button
@@ -270,6 +272,9 @@ export default function Expenses() {
               </button>
             ))}
           </div>
+          {!form.paidById && (
+            <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>
+          )}
         </div>
 
         <div className="md:col-span-2 flex items-center gap-3 bg-card rounded-xl p-4 border border-border/50">
@@ -403,9 +408,8 @@ export default function Expenses() {
                   { name: "Chege", contributed: summary.chegeContributed, target: summary.chegeTarget },
                   { name: "Lydiah", contributed: summary.lydiahContributed, target: summary.lydiahTarget },
                 ].map(({ name, contributed, target }) => {
-                  const spent = expenses
-                    .filter(e => e.paidByName?.toLowerCase().startsWith(name.toLowerCase()))
-                    .reduce((s, e) => s + e.amount, 0);
+                  const myExpenses = expenses.filter(e => e.paidByName?.toLowerCase().startsWith(name.toLowerCase()));
+                  const spent = myExpenses.reduce((s, e) => s + e.amount, 0);
                   const net = contributed - spent;
                   const overSpent = spent > contributed;
                   return (
@@ -422,7 +426,7 @@ export default function Expenses() {
                         <div>
                           <p className="text-xs text-muted-foreground mb-0.5">Spent</p>
                           <p className="text-sm font-bold font-mono text-foreground">{formatKes(spent)}</p>
-                          <p className="text-xs text-muted-foreground">{expenses.filter(e => e.paidByName?.toLowerCase().startsWith(name.toLowerCase())).length} items</p>
+                          <p className="text-xs text-muted-foreground">{myExpenses.length} items</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-0.5">Net</p>
@@ -441,6 +445,24 @@ export default function Expenses() {
                     </div>
                   );
                 })}
+                {/* Joint / unattributed expenses */}
+                {(() => {
+                  const jointExpenses = expenses.filter(e =>
+                    !e.paidByName ||
+                    (!e.paidByName.toLowerCase().startsWith("chege") && !e.paidByName.toLowerCase().startsWith("lydiah"))
+                  );
+                  if (jointExpenses.length === 0) return null;
+                  const jointTotal = jointExpenses.reduce((s, e) => s + e.amount, 0);
+                  return (
+                    <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-foreground">Joint / Unattributed</p>
+                        <p className="text-sm font-bold font-mono text-foreground">{formatKes(jointTotal)}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{jointExpenses.length} item{jointExpenses.length !== 1 ? "s" : ""} recorded without a payer</p>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

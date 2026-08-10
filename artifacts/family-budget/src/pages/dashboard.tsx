@@ -115,7 +115,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
-    if (!amt || !description) return;
+    if (!amt || !description || !paidBy) return;
     try {
       await createExpense.mutateAsync({
         data: { amount: amt, description, category: category, paidById: paidBy || undefined, date: new Date().toISOString().split('T')[0] },
