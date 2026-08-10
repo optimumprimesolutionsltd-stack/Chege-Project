@@ -6,12 +6,16 @@
  * goals.tsx so that any regression in the real implementation is caught here.
  *
  * Core invariants verified:
- *   1. Manual-adjustment rows (note === MANUAL_ADJUSTMENT_NOTE) are excluded
- *      from every contributor's total, no matter who triggered the correction.
- *   2. A contributor whose only rows are manual adjustments does not appear in
- *      the summary strip at all.
+ *   1. Balance-correction rows (ANY row with a non-null note) are excluded from
+ *      every contributor's total, no matter who triggered the correction.
+ *      This covers both the default "Manual adjustment" sentinel AND any
+ *      caller-supplied custom-reason string — the PATCH handler writes
+ *      `note: reason ?? "Manual adjustment"`, so custom-reason rows are still
+ *      corrections, not real contributions.
+ *   2. A contributor whose only rows are corrections does not appear in the
+ *      summary strip at all.
  *   3. Date-range narrowing (filterStart / filterEnd) still gives the correct
- *      per-person total while continuing to exclude adjustment rows.
+ *      per-person total while continuing to exclude correction rows.
  *   4. The strip is omitted (empty array) when fewer than 2 real contributors
  *      exist.
  */
@@ -20,6 +24,7 @@ import { describe, it, expect } from "vitest";
 import {
   deriveContributorTotals,
   applyDateFilter,
+  isCorrectionRow,
   MANUAL_ADJUSTMENT_NOTE,
 } from "../contributorTotals.js";
 import type { ContributionRow } from "../contributorTotals.js";
@@ -118,7 +123,126 @@ describe("deriveContributorTotals — manual adjustment exclusion", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Date-filter narrowing combined with manual-adjustment exclusion
+// 1b. Custom-reason correction exclusion
+//
+// DECISION: Custom-reason corrections are ALSO excluded from contributor totals.
+//
+// Rationale: when the PATCH /savings-goals/:id handler is called with a
+// `reason` field, it writes `note: reason` instead of the default sentinel
+// "Manual adjustment".  The note string is still a correction marker — it is
+// the *explanation* for a balance adjustment, not evidence of a genuine
+// contribution.  Regular contributions always have `note: null`.
+//
+// Therefore the filter is `note == null` (null means real contribution), not
+// `note !== MANUAL_ADJUSTMENT_NOTE` (which would let custom-reason rows through).
+//
+// If this test ever fails it means the filter was narrowed back to an exact
+// sentinel check, which would cause custom-reason corrections to inflate
+// contributor totals — an intentional regression, not an accident.
+// ---------------------------------------------------------------------------
+describe("deriveContributorTotals — custom-reason correction exclusion", () => {
+  it("does not count a custom-reason correction toward the contributor's total", () => {
+    // Decision documented: custom-reason corrections are corrections, not
+    // contributions.  Their `note` is non-null (the caller's reason string),
+    // so `isCorrectionRow` returns true and they are filtered out.
+    const contributions: ContributionRow[] = [
+      row({ amount: 2000, contributorName: "Alice", createdAt: "2024-06-01T10:00:00Z" }),
+      row({ amount: 1000, contributorName: "Bob", createdAt: "2024-06-02T10:00:00Z" }),
+      // Alice triggers a large correction with a custom reason — must NOT inflate her total.
+      { amount: -800, note: "Emergency withdrawal approved", contributorName: "Alice", createdAt: "2024-06-03T10:00:00Z" },
+    ];
+
+    const totals = deriveContributorTotals(contributions);
+
+    const alice = totals.find((t) => t.name === "Alice");
+    const bob = totals.find((t) => t.name === "Bob");
+
+    // Alice: 2000 only — the custom-reason -800 correction is excluded.
+    expect(alice?.total).toBe(2000);
+    expect(bob?.total).toBe(1000);
+  });
+
+  it("does not count a positive custom-reason correction toward any total", () => {
+    // A positive custom-reason correction (e.g. an admin credit) must also be
+    // excluded — it adjusts the balance but is not a real contribution.
+    const contributions: ContributionRow[] = [
+      row({ amount: 500, contributorName: "Carol", createdAt: "2024-06-01T10:00:00Z" }),
+      row({ amount: 700, contributorName: "Dave", createdAt: "2024-06-02T10:00:00Z" }),
+      { amount: 5000, note: "Admin credit — bank error refund", contributorName: "Carol", createdAt: "2024-06-03T10:00:00Z" },
+    ];
+
+    const totals = deriveContributorTotals(contributions);
+    const grandTotal = totals.reduce((s, t) => s + t.total, 0);
+
+    // 500 + 700 = 1200; the 5000 admin credit must be excluded.
+    expect(grandTotal).toBe(1200);
+  });
+
+  it("excludes a contributor whose only rows are custom-reason corrections", () => {
+    // A person (or system account) that has only custom-reason correction rows
+    // must not appear in the summary strip at all.
+    const contributions: ContributionRow[] = [
+      row({ amount: 1000, contributorName: "Eve", createdAt: "2024-06-01T10:00:00Z" }),
+      row({ amount: 600, contributorName: "Frank", createdAt: "2024-06-02T10:00:00Z" }),
+      { amount: -400, note: "Admin override — duplicate entry removed", contributorName: "Admin", createdAt: "2024-06-03T10:00:00Z" },
+    ];
+
+    const totals = deriveContributorTotals(contributions);
+    const names = totals.map((t) => t.name);
+
+    expect(names).not.toContain("Admin");
+    expect(names).toContain("Eve");
+    expect(names).toContain("Frank");
+  });
+
+  it("excludes a mix of sentinel and custom-reason corrections together", () => {
+    // Both the sentinel "Manual adjustment" and a custom reason string must be
+    // excluded by the same `note != null` rule.
+    const contributions: ContributionRow[] = [
+      row({ amount: 3000, contributorName: "Grace", createdAt: "2024-07-01T10:00:00Z" }),
+      row({ amount: 2000, contributorName: "Hank", createdAt: "2024-07-02T10:00:00Z" }),
+      adjustment({ amount: -500, contributorName: "Grace", createdAt: "2024-07-03T10:00:00Z" }),          // sentinel
+      { amount: -300, note: "Partial refund to external account", contributorName: "Hank", createdAt: "2024-07-04T10:00:00Z" },  // custom reason
+    ];
+
+    const totals = deriveContributorTotals(contributions);
+
+    const grace = totals.find((t) => t.name === "Grace");
+    const hank = totals.find((t) => t.name === "Hank");
+
+    // Grace: 3000 only; Hank: 2000 only — both corrections excluded.
+    expect(grace?.total).toBe(3000);
+    expect(hank?.total).toBe(2000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1c. isCorrectionRow — unit tests for the detection predicate
+// ---------------------------------------------------------------------------
+describe("isCorrectionRow", () => {
+  it("returns false for a real contribution (note: null)", () => {
+    expect(isCorrectionRow({ note: null })).toBe(false);
+  });
+
+  it("returns false for a real contribution (note: undefined)", () => {
+    expect(isCorrectionRow({ note: undefined })).toBe(false);
+  });
+
+  it("returns true for the default sentinel note", () => {
+    expect(isCorrectionRow({ note: MANUAL_ADJUSTMENT_NOTE })).toBe(true);
+  });
+
+  it("returns true for a custom-reason note string", () => {
+    expect(isCorrectionRow({ note: "Emergency withdrawal approved" })).toBe(true);
+  });
+
+  it("returns true for any non-empty string note", () => {
+    expect(isCorrectionRow({ note: "Any correction reason" })).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2. Date-filter narrowing combined with correction exclusion
 // ---------------------------------------------------------------------------
 describe("deriveContributorTotals — date-filter narrowing", () => {
   /**

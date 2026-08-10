@@ -3,14 +3,35 @@
  * history.  Extracted from goals.tsx so it can be unit-tested in isolation and
  * reused across screens.
  *
- * Manual-adjustment rows (note === MANUAL_ADJUSTMENT_NOTE) are intentionally
- * excluded from every contributor's total — balance corrections should not
- * inflate the person who triggered them, and should not surface as a phantom
- * "System" contributor in the summary strip.
+ * Balance-correction rows are intentionally excluded from every contributor's
+ * total — corrections should not inflate the person who triggered them, and
+ * should not surface as a phantom "System" contributor in the summary strip.
+ *
+ * Detection rule: ALL rows with a non-null `note` are corrections.
+ *   - The PATCH handler writes note = "Manual adjustment" (the sentinel) when
+ *     no explicit reason is supplied.
+ *   - When the caller supplies a `reason` field the handler writes that custom
+ *     string instead — it is still a balance correction, not a real contribution.
+ *   - Regular contributions always have note = null.
+ *
+ * Therefore the filter is `c.note == null` (excludes both the sentinel and any
+ * custom-reason string), rather than checking for the exact sentinel value.
  */
 
 /** Sentinel note written by the PATCH /savings-goals/:id balance-correction handler. */
 export const MANUAL_ADJUSTMENT_NOTE = 'Manual adjustment';
+
+/**
+ * Returns true when a contribution row is a balance correction (manual
+ * adjustment with or without a custom reason) that should be excluded from
+ * contributor totals.
+ *
+ * Any row with a non-null note is a correction — regular contributions always
+ * have note === null.
+ */
+export function isCorrectionRow(row: { note?: string | null }): boolean {
+  return row.note != null;
+}
 
 /** Minimal fields the helpers need — the generics preserve the full input type. */
 export interface ContributionRow {
@@ -68,13 +89,15 @@ export function applyDateFilter<T extends ContributionRow>(
  * Derive per-contributor totals from a goal's contribution history.
  *
  * Rules:
- *   1. Rows with note === MANUAL_ADJUSTMENT_NOTE are excluded everywhere:
- *      they do not contribute to any person's total and do not create a
- *      contributor entry in the summary strip.
+ *   1. Balance-correction rows (any row with a non-null note) are excluded
+ *      everywhere — they do not contribute to any person's total and do not
+ *      create a contributor entry in the summary strip.  This covers both the
+ *      default "Manual adjustment" sentinel and any caller-supplied custom
+ *      reason string; see `isCorrectionRow` for details.
  *   2. Date filtering (filterStart / filterEnd) is applied before summing
- *      but after the manual-adjustment exclusion pass that builds the unique
- *      name set.  This means a person who has only manual-adjustment rows in
- *      the chosen date range still does not appear in the strip.
+ *      but after the correction-exclusion pass that builds the unique name set.
+ *      This means a person who has only correction rows in the chosen date
+ *      range still does not appear in the strip.
  *   3. The summary strip is only shown when there are ≥ 2 distinct real
  *      contributors (showContributorFilter).  When fewer are present the
  *      function returns an empty array.
@@ -96,7 +119,7 @@ export function deriveContributorTotals<T extends ContributionRow>(
   const uniqueContributors = Array.from(
     new Set(
       contributions
-        .filter((c) => c.note !== MANUAL_ADJUSTMENT_NOTE)
+        .filter((c) => !isCorrectionRow(c))
         .map((c) => c.contributorName ?? 'Unknown'),
     ),
   );
@@ -104,7 +127,7 @@ export function deriveContributorTotals<T extends ContributionRow>(
   // Strip is only meaningful when more than one real contributor exists.
   if (uniqueContributors.length < 2) return [];
 
-  // Step 2: apply date filter — manual adjustments may fall inside the window
+  // Step 2: apply date filter — correction rows may fall inside the window
   // but are excluded in step 3.
   const dateFiltered = applyDateFilter(contributions, filterStart, filterEnd);
 
@@ -114,7 +137,7 @@ export function deriveContributorTotals<T extends ContributionRow>(
     total: dateFiltered
       .filter(
         (c) =>
-          c.note !== MANUAL_ADJUSTMENT_NOTE &&
+          !isCorrectionRow(c) &&
           (c.contributorName ?? 'Unknown') === name,
       )
       .reduce((sum, c) => sum + c.amount, 0),
