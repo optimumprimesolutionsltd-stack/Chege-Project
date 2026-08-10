@@ -25,6 +25,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKes } from "@/lib/utils";
 import {
+  getChipRange,
+  filterByDateRange,
+  computeContributorTotals,
+} from "@/lib/goal-history-utils";
+import type { QuickChip as GoalQuickChip } from "@/lib/goal-history-utils";
+import {
   Plus,
   Loader2,
   Target,
@@ -63,30 +69,7 @@ function GoalProgress({ current, target }: { current: number; target: number }) 
   );
 }
 
-type QuickChip = "this-month" | "last-month" | "last-3-months" | "this-year";
-
-function getChipRange(chip: QuickChip): { from: string; to: string } {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = today.getMonth(); // 0-indexed
-
-  if (chip === "this-month") {
-    return { from: fmt(new Date(y, m, 1)), to: fmt(today) };
-  }
-  if (chip === "last-month") {
-    const firstOfLastMonth = new Date(y, m - 1, 1);
-    const lastOfLastMonth = new Date(y, m, 0);
-    return { from: fmt(firstOfLastMonth), to: fmt(lastOfLastMonth) };
-  }
-  if (chip === "last-3-months") {
-    const threeMonthsAgo = new Date(y, m - 3, today.getDate());
-    return { from: fmt(threeMonthsAgo), to: fmt(today) };
-  }
-  // this-year
-  return { from: fmt(new Date(y, 0, 1)), to: fmt(today) };
-}
+type QuickChip = GoalQuickChip;
 
 const QUICK_CHIPS: { id: QuickChip; label: string }[] = [
   { id: "this-month", label: "This Month" },
@@ -168,23 +151,10 @@ function GoalContributionHistory({
     );
   }
 
-  const dateFiltered = contributions.filter((c: SavingsGoalContribution) => {
-    const date = new Date(c.createdAt);
-    if (fromDate && date < new Date(`${fromDate}T00:00:00.000`)) return false;
-    if (toDate && date > new Date(`${toDate}T23:59:59.999`)) return false;
-    return true;
-  });
+  const dateFiltered = filterByDateRange(contributions as SavingsGoalContribution[], fromDate, toDate);
 
   // Per-contributor totals (excluding manual adjustments) within the date-filtered window
-  const contributorTotals: { name: string; total: number }[] = [];
-  {
-    const map = new Map<string, number>();
-    for (const c of dateFiltered) {
-      if (c.note === "Manual adjustment") continue;
-      map.set(c.contributorName, (map.get(c.contributorName) ?? 0) + c.amount);
-    }
-    map.forEach((total, name) => contributorTotals.push({ name, total }));
-  }
+  const contributorTotals = computeContributorTotals(dateFiltered as SavingsGoalContribution[]);
   const hasMultipleContributors = contributorTotals.length > 1;
 
   const filtered = contributorFilter
