@@ -253,6 +253,8 @@ function GoalContributionHistory({
                 className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${
                   isActive
                     ? "bg-primary text-primary-foreground border-primary"
+                    : contributorFilter
+                    ? "bg-muted/30 text-muted-foreground border-border/40 hover:bg-muted hover:text-foreground hover:border-border"
                     : "bg-background text-foreground border-border/60 hover:bg-muted hover:border-border"
                 }`}
               >
