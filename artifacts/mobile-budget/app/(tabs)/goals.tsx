@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
   StyleSheet,
+  FlatList,
   ScrollView,
   RefreshControl,
   ActivityIndicator,
@@ -1659,10 +1660,10 @@ export default function GoalsScreen() {
                 <Text style={[styles.pickerTitle, { color: colors.foreground }]}>Jump to month</Text>
                 <FlatList
                   data={historyMonthOptions}
-                  keyExtractor={(item) => `${item.year}-${item.month}`}
+                  keyExtractor={(item: { month: number; year: number; label: string }) => `${item.year}-${item.month}`}
                   showsVerticalScrollIndicator={false}
                   style={styles.pickerList}
-                  renderItem={({ item }) => {
+                  renderItem={({ item }: { item: { month: number; year: number; label: string } }) => {
                     const isActive =
                       filterStart &&
                       filterStart.getMonth() + 1 === item.month &&
