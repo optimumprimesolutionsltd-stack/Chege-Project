@@ -11,6 +11,7 @@ import {
   useCreateContribution,
   useContributeToSavingsGoal,
   useCascadeContribute,
+  useGetJointAccount,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
   getGetSavingsGoalsQueryKey,
@@ -23,7 +24,7 @@ import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
-  Plus, TrendingUp, Target, Loader2, X, ChevronRight,
+  Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -291,6 +292,21 @@ export default function Dashboard() {
   const { data: breakdown, isLoading: isBreakdownLoading } = useGetDashboardCategoryBreakdown({ month, year });
   const { data: trends, isLoading: isTrendsLoading } = useGetDashboardTrends({ months: 6 });
   const { data: goals } = useGetSavingsGoals();
+  const { data: bankAccount } = useGetJointAccount();
+
+  // Compute this-month totals from the transactions array
+  const monthlyDeposited = bankAccount?.transactions
+    .filter(t => {
+      const d = new Date(t.date);
+      return t.type === "deposit" && d.getFullYear() === year && d.getMonth() + 1 === month;
+    })
+    .reduce((s, t) => s + t.amount, 0) ?? 0;
+  const monthlyDisbursed = bankAccount?.transactions
+    .filter(t => {
+      const d = new Date(t.date);
+      return t.type === "disbursement" && d.getFullYear() === year && d.getMonth() + 1 === month;
+    })
+    .reduce((s, t) => s + t.amount, 0) ?? 0;
 
   const activeGoals = goals?.filter((g) => !g.isCompleted) ?? [];
   const nearestGoal = activeGoals.length > 0
@@ -421,6 +437,48 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Bank Account Balance Card */}
+      <Link href="/bank">
+        <Card className="border-none shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">Bank Account</p>
+                  <p className="text-xs text-muted-foreground">Shared joint account</p>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Balance</p>
+                <p className="text-2xl font-display font-bold text-sky-600 dark:text-sky-400">
+                  {bankAccount ? formatKes(bankAccount.balance) : "—"}
+                </p>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Deposited</p>
+                <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                  +{formatKes(monthlyDeposited)}
+                </p>
+                <p className="text-xs text-muted-foreground">this month</p>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Disbursed</p>
+                <p className="text-lg font-semibold text-rose-600 dark:text-rose-400">
+                  -{formatKes(monthlyDisbursed)}
+                </p>
+                <p className="text-xs text-muted-foreground">this month</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Contributions */}

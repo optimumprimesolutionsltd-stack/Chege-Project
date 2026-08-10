@@ -21,6 +21,7 @@ import ActivityCard from '@/components/ActivityCard';
 import {
   useGetDashboardSummary,
   useGetDashboardActivity,
+  useGetJointAccount,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
@@ -98,12 +99,36 @@ export default function DashboardScreen() {
     refetch: refetchActivity,
   } = useGetDashboardActivity();
 
+  const {
+    data: bankAccount,
+    refetch: refetchBank,
+  } = useGetJointAccount();
+
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchSummary(), refetchActivity()]);
+    await Promise.all([refetchSummary(), refetchActivity(), refetchBank()]);
     setRefreshing(false);
-  }, [refetchSummary, refetchActivity]);
+  }, [refetchSummary, refetchActivity, refetchBank]);
+
+  // Compute this-month bank totals from transactions
+  const monthlyDeposited = useMemo(() => {
+    return (bankAccount?.transactions ?? [])
+      .filter(t => {
+        const d = new Date(t.date);
+        return t.type === 'deposit' && d.getFullYear() === year && d.getMonth() + 1 === month;
+      })
+      .reduce((s, t) => s + t.amount, 0);
+  }, [bankAccount, month, year]);
+
+  const monthlyDisbursed = useMemo(() => {
+    return (bankAccount?.transactions ?? [])
+      .filter(t => {
+        const d = new Date(t.date);
+        return t.type === 'disbursement' && d.getFullYear() === year && d.getMonth() + 1 === month;
+      })
+      .reduce((s, t) => s + t.amount, 0);
+  }, [bankAccount, month, year]);
 
   const spentPercent = summary
     ? summary.totalBudget > 0 ? summary.totalSpent / summary.totalBudget : 0
@@ -243,6 +268,45 @@ export default function DashboardScreen() {
           ))}
         </View>
 
+        {/* Bank Account Balance Card */}
+        <Pressable
+          style={[styles.bankCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => router.push('/(tabs)/bank')}
+        >
+          <View style={styles.bankCardHeader}>
+            <View style={styles.bankIconWrap}>
+              <Feather name="credit-card" size={18} color="#38bdf8" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.bankCardTitle, { color: colors.foreground }]}>Bank Account</Text>
+              <Text style={[styles.bankCardSub, { color: colors.mutedForeground }]}>Shared joint account</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </View>
+          <View style={styles.bankStatsRow}>
+            <View style={styles.bankStat}>
+              <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>BALANCE</Text>
+              <Text style={[styles.bankBalance, { color: '#38bdf8' }]}>
+                {bankAccount ? (isPrivate ? '••••' : `KES ${shortKES(bankAccount.balance)}`) : '—'}
+              </Text>
+            </View>
+            <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.bankStat}>
+              <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>IN THIS MONTH</Text>
+              <Text style={[styles.bankStatValue, { color: '#4ade80' }]}>
+                {isPrivate ? '••••' : `+KES ${shortKES(monthlyDeposited)}`}
+              </Text>
+            </View>
+            <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.bankStat}>
+              <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>OUT THIS MONTH</Text>
+              <Text style={[styles.bankStatValue, { color: '#f87171' }]}>
+                {isPrivate ? '••••' : `-KES ${shortKES(monthlyDisbursed)}`}
+              </Text>
+            </View>
+          </View>
+        </Pressable>
+
         {/* Recent Activity */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -364,4 +428,16 @@ const styles = StyleSheet.create({
   emptyBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
+
+  bankCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
+  bankCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  bankIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(56,189,248,0.15)', alignItems: 'center', justifyContent: 'center' },
+  bankCardTitle: { fontSize: 14, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+  bankCardSub: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  bankStatsRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
+  bankStat: { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4 },
+  bankStatLabel: { fontSize: 9, fontFamily: 'Inter_400Regular', letterSpacing: 0.4, marginBottom: 3 },
+  bankBalance: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  bankStatValue: { fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+  bankStatDivider: { width: 1, marginVertical: 10 },
 });
