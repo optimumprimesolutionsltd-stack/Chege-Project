@@ -31,6 +31,7 @@ import {
   useUpdateSavingsGoal,
   useDeleteSavingsGoal,
   useContributeToSavingsGoal,
+  useCascadeContribute,
   useGetSavingsGoalContributions,
   getGetSavingsGoalContributionsQueryKey,
   getGetSavingsGoalsQueryKey,
@@ -632,6 +633,57 @@ export default function GoalsScreen() {
 
   const { mutateAsync: contribute } = useContributeToSavingsGoal();
 
+  // ── Cascade (distribute) modal ───────────────────────────────────────────────
+  const [cascadeVisible, setCascadeVisible] = useState(false);
+  const [cascadeAmount, setCascadeAmount] = useState('');
+  const [cascadeOrder, setCascadeOrder] = useState<number[]>([]);
+  const [cascadeResult, setCascadeResult] = useState<Array<{ goalId: number; allocated: number; completed: boolean }> | null>(null);
+  const [submittingCascade, setSubmittingCascade] = useState(false);
+
+  const { mutateAsync: cascadeContribute } = useCascadeContribute();
+
+  const openCascade = () => {
+    setCascadeOrder(active.map((g) => g.id));
+    setCascadeAmount('');
+    setCascadeResult(null);
+    setCascadeVisible(true);
+  };
+
+  const closeCascade = () => {
+    if (submittingCascade) return;
+    setCascadeVisible(false);
+  };
+
+  const moveCascadeGoal = (index: number, dir: 'up' | 'down') => {
+    setCascadeOrder((prev) => {
+      const next = [...prev];
+      const swap = dir === 'up' ? index - 1 : index + 1;
+      if (swap < 0 || swap >= next.length) return prev;
+      [next[index], next[swap]] = [next[swap], next[index]];
+      return next;
+    });
+  };
+
+  const handleCascade = async () => {
+    const amount = parseFloat(cascadeAmount.replace(/,/g, ''));
+    if (!amount || amount <= 0) {
+      Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
+      return;
+    }
+    setSubmittingCascade(true);
+    try {
+      const result = await cascadeContribute({ data: { amount, goalIds: cascadeOrder } });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+      setCascadeResult(result.allocations ?? []);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to distribute payment. Please try again.');
+    } finally {
+      setSubmittingCascade(false);
+    }
+  };
+
   const openContribute = (goal: SavingsGoal) => {
     setSelectedGoal(goal);
     setContributeAmount('');
@@ -764,7 +816,27 @@ export default function GoalsScreen() {
           <View style={styles.list}>
             {active.length > 0 && (
               <>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ACTIVE</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginBottom: 0 }]}>ACTIVE</Text>
+                  {active.length > 1 && (
+                    <Pressable
+                      onPress={openCascade}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: '#1a3320',
+                        borderRadius: 20,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                    >
+                      <Feather name="share-2" size={13} color="#4ade80" />
+                      <Text style={{ color: '#4ade80', fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>Distribute</Text>
+                    </Pressable>
+                  )}
+                </View>
                 {active.map((goal) => {
                   const pct = goal.targetAmount > 0 ? Math.min(goal.currentAmount / goal.targetAmount, 1) : 0;
                   const isFunded = goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount;
@@ -1038,6 +1110,161 @@ export default function GoalsScreen() {
                       />
                     </View>
                   </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ── Cascade / Distribute Modal ─────────────────────────────────────── */}
+      <Modal
+        visible={cascadeVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeCascade}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={styles.modalAvoid}
+            >
+              <TouchableWithoutFeedback>
+                <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingBottom: botPad + 16 }]}>
+                  <View style={[styles.handle, { backgroundColor: colors.border }]} />
+
+                  {/* Header */}
+                  <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                    <TouchableOpacity onPress={closeCascade} style={styles.modalHeaderBtn}>
+                      <Feather name="x" size={22} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                    <Text style={[styles.modalTitle, { color: colors.foreground }]}>Distribute Payment</Text>
+                    {!cascadeResult ? (
+                      <TouchableOpacity
+                        onPress={handleCascade}
+                        disabled={submittingCascade}
+                        style={[styles.modalSaveBtn, { backgroundColor: colors.primary, opacity: submittingCascade ? 0.7 : 1 }]}
+                      >
+                        {submittingCascade ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.modalSaveBtnText}>Distribute</Text>
+                        )}
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={closeCascade}
+                        style={[styles.modalSaveBtn, { backgroundColor: '#1a3320' }]}
+                      >
+                        <Text style={[styles.modalSaveBtnText, { color: '#4ade80' }]}>Done</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={styles.modalBody}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {cascadeResult ? (
+                      /* Results view */
+                      <>
+                        <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginBottom: 12 }]}>DISTRIBUTION RESULT</Text>
+                        {cascadeResult.map((alloc) => {
+                          const goal = active.find((g) => g.id === alloc.goalId);
+                          if (!alloc.allocated) return null;
+                          return (
+                            <View
+                              key={alloc.goalId}
+                              style={[styles.cascadeResultRow, { backgroundColor: alloc.completed ? '#1a3320' : colors.card, borderColor: alloc.completed ? '#4ade80' : colors.border }]}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.cascadeGoalName, { color: colors.foreground }]} numberOfLines={1}>
+                                  {goal?.name ?? `Goal ${alloc.goalId}`}
+                                </Text>
+                                {alloc.completed && (
+                                  <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 }}>
+                                    ✓ Completed!
+                                  </Text>
+                                )}
+                              </View>
+                              <Text style={{ color: alloc.completed ? '#4ade80' : colors.primary, fontFamily: 'Inter_700Bold', fontSize: 15 }}>
+                                +KES {formatKES(alloc.allocated)}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      /* Input view */
+                      <>
+                        <Text style={[{ color: colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_400Regular', marginBottom: 16, lineHeight: 18 }]}>
+                          Enter a total amount and drag goals into priority order. Funds fill the top goal first, then overflow to the next.
+                        </Text>
+
+                        {/* Amount */}
+                        <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>TOTAL AMOUNT (KES)</Text>
+                        <View style={[styles.amountRow, { marginBottom: 20 }]}>
+                          <Text style={[styles.currencyLabel, { color: colors.mutedForeground }]}>KES</Text>
+                          <TextInput
+                            style={[styles.amountInput, { color: colors.foreground }]}
+                            placeholder="0"
+                            placeholderTextColor={colors.mutedForeground}
+                            keyboardType="numeric"
+                            value={cascadeAmount}
+                            onChangeText={setCascadeAmount}
+                            autoFocus
+                            returnKeyType="done"
+                            onSubmitEditing={Keyboard.dismiss}
+                          />
+                        </View>
+
+                        {/* Goal priority order */}
+                        <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginBottom: 8 }]}>GOAL PRIORITY ORDER</Text>
+                        {cascadeOrder.map((id, idx) => {
+                          const goal = active.find((g) => g.id === id);
+                          if (!goal) return null;
+                          const remaining = goal.targetAmount - goal.currentAmount;
+                          return (
+                            <View
+                              key={id}
+                              style={[styles.cascadeGoalRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+                            >
+                              <View style={{ width: 24, alignItems: 'center' }}>
+                                <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_700Bold' }}>{idx + 1}</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.cascadeGoalName, { color: colors.foreground }]} numberOfLines={1}>{goal.name}</Text>
+                                <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                                  Needs KES {formatKES(remaining > 0 ? remaining : 0)} more
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: 'column', gap: 4 }}>
+                                <TouchableOpacity
+                                  onPress={() => moveCascadeGoal(idx, 'up')}
+                                  disabled={idx === 0}
+                                  style={{ opacity: idx === 0 ? 0.2 : 1 }}
+                                  hitSlop={8}
+                                >
+                                  <Feather name="chevron-up" size={18} color={colors.mutedForeground} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => moveCascadeGoal(idx, 'down')}
+                                  disabled={idx === cascadeOrder.length - 1}
+                                  style={{ opacity: idx === cascadeOrder.length - 1 ? 0.2 : 1 }}
+                                  hitSlop={8}
+                                >
+                                  <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </>
+                    )}
+                  </ScrollView>
                 </View>
               </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
@@ -1721,6 +1948,29 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     fontFamily: 'Inter_600SemiBold',
     color: '#4ade80',
+  },
+  cascadeGoalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  cascadeGoalName: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600' as const,
+  },
+  cascadeResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
   },
   empty: { alignItems: 'center', paddingTop: 80, gap: 10 },
   emptyTitle: {
