@@ -220,6 +220,111 @@ describe('upsertUser — OIDC claim mapping', () => {
   });
 
   // -------------------------------------------------------------------------
+  // picture vs profile_image_url precedence
+  // -------------------------------------------------------------------------
+  describe('picture claim takes precedence over profile_image_url', () => {
+    it('uses picture when both picture and profile_image_url are present', async () => {
+      const returnedUser = {
+        id: 'google-uid-5',
+        email: 'grace@example.com',
+        firstName: 'Grace',
+        lastName: 'Lee',
+        profileImageUrl: 'https://lh3.googleusercontent.com/picture.jpg',
+      };
+      const { values } = setupDbReturns(returnedUser);
+
+      const claims = {
+        sub: 'google-uid-5',
+        email: 'grace@example.com',
+        given_name: 'Grace',
+        family_name: 'Lee',
+        // Both present — picture should win
+        picture: 'https://lh3.googleusercontent.com/picture.jpg',
+        profile_image_url: 'https://cdn.example.com/wrong.png',
+      };
+
+      await upsertUser(claims);
+
+      const inserted = (values as AnyMock).mock.calls[0][0] as Record<string, unknown>;
+      expect(inserted.profileImageUrl).toBe('https://lh3.googleusercontent.com/picture.jpg');
+    });
+
+    it('falls back to profile_image_url only when picture is absent', async () => {
+      const returnedUser = {
+        id: 'other-uid-3',
+        email: 'henry@example.com',
+        firstName: 'Henry',
+        lastName: 'Park',
+        profileImageUrl: 'https://cdn.example.com/henry.png',
+      };
+      const { values } = setupDbReturns(returnedUser);
+
+      const claims = {
+        sub: 'other-uid-3',
+        email: 'henry@example.com',
+        first_name: 'Henry',
+        last_name: 'Park',
+        // No picture claim; profile_image_url should be used
+        profile_image_url: 'https://cdn.example.com/henry.png',
+      };
+
+      await upsertUser(claims);
+
+      const inserted = (values as AnyMock).mock.calls[0][0] as Record<string, unknown>;
+      expect(inserted.profileImageUrl).toBe('https://cdn.example.com/henry.png');
+    });
+
+    it('sets profileImageUrl to null when neither picture nor profile_image_url is present', async () => {
+      const returnedUser = {
+        id: 'no-image-uid-1',
+        email: 'iris@example.com',
+        firstName: 'Iris',
+        lastName: 'Ng',
+        profileImageUrl: null,
+      };
+      const { values } = setupDbReturns(returnedUser);
+
+      const claims = {
+        sub: 'no-image-uid-1',
+        email: 'iris@example.com',
+        given_name: 'Iris',
+        family_name: 'Ng',
+        // Neither picture nor profile_image_url
+      };
+
+      await upsertUser(claims);
+
+      const inserted = (values as AnyMock).mock.calls[0][0] as Record<string, unknown>;
+      expect(inserted.profileImageUrl).toBeNull();
+    });
+
+    it('sets profileImageUrl to null when picture is an empty string', async () => {
+      const returnedUser = {
+        id: 'no-image-uid-2',
+        email: 'jack@example.com',
+        firstName: 'Jack',
+        lastName: 'Ma',
+        profileImageUrl: null,
+      };
+      const { values } = setupDbReturns(returnedUser);
+
+      const claims = {
+        sub: 'no-image-uid-2',
+        email: 'jack@example.com',
+        given_name: 'Jack',
+        family_name: 'Ma',
+        picture: '',
+        profile_image_url: '',
+      };
+
+      await upsertUser(claims);
+
+      const inserted = (values as AnyMock).mock.calls[0][0] as Record<string, unknown>;
+      expect(inserted.profileImageUrl).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Null/missing claims — safe defaults
   // -------------------------------------------------------------------------
   describe('Missing optional claims default to null', () => {
