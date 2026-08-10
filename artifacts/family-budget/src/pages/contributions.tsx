@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   useGetContributions, useCreateContribution, useGetDashboardSummary,
@@ -31,11 +31,29 @@ const MEMBER_NAMES: Record<string, string> = {
   [LYDIAH_ID]: "Lydiah",
 };
 
+const CONTRIBUTIONS_MONTH_KEY = "contributions-month-pref";
+
 export default function Contributions() {
   const now = new Date();
   const [, navigate] = useLocation();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CONTRIBUTIONS_MONTH_KEY);
+      if (raw) { const p = JSON.parse(raw); if (typeof p?.month === "number") return p.month; }
+    } catch {}
+    return now.getMonth() + 1;
+  });
+  const [year, setYear] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CONTRIBUTIONS_MONTH_KEY);
+      if (raw) { const p = JSON.parse(raw); if (typeof p?.year === "number") return p.year; }
+    } catch {}
+    return now.getFullYear();
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(CONTRIBUTIONS_MONTH_KEY, JSON.stringify({ month, year })); } catch {}
+  }, [month, year]);
 
   // Deposit form state
   const [showForm, setShowForm] = useState(false);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // Expense priority tiers from the budget document
 const EXPENSE_TIERS = [
@@ -69,11 +69,29 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes, paidById, setPaidById, isRecurring, setIsRecurring, date, setDate };
 }
 
+const EXPENSES_MONTH_KEY = "expenses-month-pref";
+
 export default function Expenses() {
   const now = new Date();
   const { user } = useAuth();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(() => {
+    try {
+      const raw = localStorage.getItem(EXPENSES_MONTH_KEY);
+      if (raw) { const p = JSON.parse(raw); if (typeof p?.month === "number") return p.month; }
+    } catch {}
+    return now.getMonth() + 1;
+  });
+  const [year, setYear] = useState(() => {
+    try {
+      const raw = localStorage.getItem(EXPENSES_MONTH_KEY);
+      if (raw) { const p = JSON.parse(raw); if (typeof p?.year === "number") return p.year; }
+    } catch {}
+    return now.getFullYear();
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(EXPENSES_MONTH_KEY, JSON.stringify({ month, year })); } catch {}
+  }, [month, year]);
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);

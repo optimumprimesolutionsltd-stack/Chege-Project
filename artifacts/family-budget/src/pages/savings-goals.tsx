@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useGetSavingsGoals,
   useCreateSavingsGoal,
@@ -326,8 +326,21 @@ export default function SavingsGoals() {
   const queryClient = useQueryClient();
 
   const [mode, setMode] = useState<GoalFormMode>("none");
-  const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(null);
+  const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(() => {
+    try {
+      const raw = localStorage.getItem("goal-history-expanded");
+      if (raw !== null) return Number(raw);
+    } catch {}
+    return null;
+  });
   const [goalFilters, setGoalFilters] = useState<Record<number, GoalFilterState>>(loadFiltersFromStorage);
+
+  useEffect(() => {
+    try {
+      if (expandedHistoryId === null) localStorage.removeItem("goal-history-expanded");
+      else localStorage.setItem("goal-history-expanded", String(expandedHistoryId));
+    } catch {}
+  }, [expandedHistoryId]);
 
   function getGoalFilter(goalId: number): GoalFilterState {
     return goalFilters[goalId] ?? DEFAULT_FILTER;
