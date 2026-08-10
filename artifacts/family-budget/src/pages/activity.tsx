@@ -2,6 +2,7 @@ import { useGetDashboardActivity } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKes, formatDate } from "@/lib/utils";
 import { ArrowUpRight, ArrowDownRight, Loader2, Activity as ActivityIcon } from "lucide-react";
+import { ACTIVITY_TYPE } from "@/lib/activityTypes";
 
 export default function Activity() {
   const { data: activity, isLoading } = useGetDashboardActivity();
@@ -32,9 +33,9 @@ export default function Activity() {
                 <div key={item.id} className="p-5 sm:p-6 flex items-center justify-between hover:bg-muted/10 transition-colors">
                   <div className="flex items-center gap-5">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
-                      item.type === 'expense' ? 'bg-accent/50 text-accent-foreground border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
+                      item.type === ACTIVITY_TYPE.EXPENSE ? 'bg-accent/50 text-accent-foreground border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
                     }`}>
-                      {item.type === 'expense' ? <ArrowDownRight className="w-6 h-6" /> : <ArrowUpRight className="w-6 h-6" />}
+                      {item.type === ACTIVITY_TYPE.EXPENSE ? <ArrowDownRight className="w-6 h-6" /> : <ArrowUpRight className="w-6 h-6" />}
                     </div>
                     <div>
                       <p className="font-semibold text-foreground text-lg">{item.description}</p>
@@ -54,9 +55,9 @@ export default function Activity() {
                     </div>
                   </div>
                   <div className={`font-display font-bold text-xl whitespace-nowrap ${
-                    item.type === 'expense' ? 'text-foreground' : 'text-primary'
+                    item.type === ACTIVITY_TYPE.EXPENSE ? 'text-foreground' : 'text-primary'
                   }`}>
-                    {item.type === 'expense' ? '-' : '+'}{formatKes(item.amount)}
+                    {item.type === ACTIVITY_TYPE.EXPENSE ? '-' : '+'}{formatKes(item.amount)}
                   </div>
                 </div>
               ))}

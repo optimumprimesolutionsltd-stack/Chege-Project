@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 
 export interface ActivityItem {
   id: string;
@@ -50,7 +51,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function ActivityCard({ item, colors }: Props) {
-  const isExpense = item.type === 'expense';
+  const isExpense = item.type === ACTIVITY_TYPE.EXPENSE;
   const iconName: keyof typeof Feather.glyphMap =
     (item.category ? CATEGORY_ICONS[item.category] : undefined) ??
     (isExpense ? 'shopping-bag' : 'arrow-down-circle');

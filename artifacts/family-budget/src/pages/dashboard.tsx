@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ACTIVITY_TYPE } from "@/lib/activityTypes";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -598,14 +599,14 @@ export default function Dashboard() {
               {activity.slice(0, 6).map((item) => (
                 <div key={item.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.type === "expense" ? "bg-muted-foreground/40" : "bg-primary"}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/40" : "bg-primary"}`} />
                     <div className="min-w-0">
                       <p className="text-sm text-foreground truncate">{item.description}</p>
                       <p className="text-xs text-muted-foreground">{item.userName} · {formatDate(item.date)}</p>
                     </div>
                   </div>
-                  <p className={`text-sm font-medium whitespace-nowrap ml-3 ${item.type === "expense" ? "text-foreground/70" : "text-primary"}`}>
-                    {item.type === "expense" ? "-" : "+"}{formatKes(item.amount)}
+                  <p className={`text-sm font-medium whitespace-nowrap ml-3 ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
+                    {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
                   </p>
                 </div>
               ))}

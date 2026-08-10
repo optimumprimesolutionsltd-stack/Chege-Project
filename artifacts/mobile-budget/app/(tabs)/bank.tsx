@@ -29,7 +29,9 @@ import {
   useDeleteJointAccountTransaction,
   useGetBudgetCategories,
   useGetMembers,
+  getGetJointAccountQueryKey,
 } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -66,6 +68,7 @@ export default function BankScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
+  const queryClient = useQueryClient();
 
   const { data, isLoading, refetch } = useGetJointAccount();
 
@@ -112,6 +115,11 @@ export default function BankScreen() {
     setModalVisible(false);
   };
 
+  // Invalidate everywhere that displays the joint-account balance so all
+  // screens (home card + bank tab) update immediately after any mutation.
+  const invalidateBalance = () =>
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+
   const handleDelete = (tx: Tx) => {
     Alert.alert(
       'Delete transaction',
@@ -122,7 +130,7 @@ export default function BankScreen() {
           text: 'Delete', style: 'destructive', onPress: async () => {
             try {
               await deleteTransaction({ id: tx.id });
-              await refetch();
+              await invalidateBalance();
             } catch {
               Alert.alert('Error', 'Could not delete transaction.');
             }
@@ -155,7 +163,7 @@ export default function BankScreen() {
         });
       }
       setModalVisible(false);
-      await refetch();
+      await invalidateBalance();
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Something went wrong. Please try again.';
