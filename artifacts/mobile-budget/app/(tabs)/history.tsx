@@ -121,6 +121,10 @@ export default function HistoryScreen() {
       Alert.alert('Missing fields', 'Please fill in amount, category, description and date.');
       return;
     }
+    if (!editForm.paidById) {
+      Alert.alert('Paid by required', 'Please choose who paid for this expense.');
+      return;
+    }
     setSaving(true);
     try {
       await updateExpense.mutateAsync({
@@ -130,7 +134,7 @@ export default function HistoryScreen() {
           category: editForm.category,
           description: editForm.description,
           notes: editForm.notes || undefined,
-          paidById: editForm.paidById || undefined,
+          paidById: editForm.paidById,
           date: editForm.date,
           isRecurring: editingExpense.isRecurring,
         },
@@ -287,12 +291,13 @@ export default function HistoryScreen() {
                 </ScrollView>
 
                 {/* Paid by */}
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Paid by</Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  Paid by <Text style={{ color: '#ef4444' }}>*</Text>
+                </Text>
                 <View style={styles.memberRow}>
                   {members.map(m => {
-                    const isMe = m.userId === user?.id;
-                    const sel = editForm.paidById === m.userId || (!editForm.paidById && isMe);
-                    const name = m.userName?.split(' ')[0] ?? (isMe ? 'Me' : 'Member');
+                    const sel = editForm.paidById === m.userId;
+                    const name = m.userName?.split(' ')[0] ?? 'Member';
                     return (
                       <Pressable
                         key={m.userId}
@@ -305,6 +310,11 @@ export default function HistoryScreen() {
                     );
                   })}
                 </View>
+                {!editForm.paidById && (
+                  <Text style={[styles.memberPillText, { color: colors.mutedForeground, marginTop: 4 }]}>
+                    Tap to choose who paid
+                  </Text>
+                )}
 
                 {/* Notes */}
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Notes <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
