@@ -120,7 +120,7 @@ export default function AddExpenseSheet() {
         category,
         description: description.trim(),
         notes: notes.trim() || undefined,
-        paidById: paidById || undefined,
+        paidById,
         isRecurring,
         date,
       },

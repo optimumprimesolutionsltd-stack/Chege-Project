@@ -176,7 +176,8 @@ export const CreateContributionBody = zod.object({
   "amount": zod.number(),
   "month": zod.number(),
   "year": zod.number(),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "forUserId": zod.string().optional()
 })
 
 export const CreateContributionResponse = zod.object({

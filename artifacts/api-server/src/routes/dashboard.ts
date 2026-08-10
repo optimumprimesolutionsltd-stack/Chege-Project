@@ -5,6 +5,7 @@ import {
   contributionsTable,
   budgetCategoriesTable,
   usersTable,
+  jointAccountTxTable,
 } from "@workspace/db";
 import { sql, eq } from "drizzle-orm";
 import { GetDashboardSummaryQueryParams, GetDashboardCategoryBreakdownQueryParams } from "@workspace/api-zod";
@@ -32,6 +33,12 @@ router.get("/dashboard/summary", async (req, res) => {
     .select({ count: sql<number>`COUNT(*)` })
     .from(expensesTable)
     .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`);
+
+  // Disbursements tagged to an expense category also count as spending
+  const [categorisedDisbursementsRow] = await db
+    .select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
 
   const contribs = await db
     .select({
@@ -88,7 +95,7 @@ router.get("/dashboard/summary", async (req, res) => {
     else lydiahSpent += Number(e.total);
   }
 
-  const totalSpent = Number(spentRow.total);
+  const totalSpent = Number(spentRow.total) + Number(categorisedDisbursementsRow.total);
   res.json({
     month, year,
     totalBudget: TOTAL_BUDGET,
@@ -181,10 +188,21 @@ router.get("/dashboard/category-breakdown", async (req, res) => {
     .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
     .groupBy(expensesTable.category);
 
+  // Also count disbursements that are tagged to an expense category
+  const disbursementsByCategory = await db
+    .select({
+      category: jointAccountTxTable.expenseCategory,
+      total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`,
+    })
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
+    .groupBy(jointAccountTxTable.expenseCategory);
+
   const spentMap = new Map(spentByCategory.map((s) => [s.category, Number(s.total)]));
+  const disbursementMap = new Map(disbursementsByCategory.map((d) => [d.category, Number(d.total)]));
 
   res.json(categories.map((cat) => {
-    const spentAmount = spentMap.get(cat.name) ?? 0;
+    const spentAmount = (spentMap.get(cat.name) ?? 0) + (disbursementMap.get(cat.name) ?? 0);
     return {
       category: cat.name,
       budgetAmount: cat.budgetAmount,
