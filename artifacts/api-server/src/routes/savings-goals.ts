@@ -239,6 +239,51 @@ router.get("/savings-goals/:id/contributions", async (req, res) => {
   })));
 });
 
+// GET /savings-goals/consistency-check — surface goals with balance/history mismatches.
+//
+// A Postgres transaction guarantees that the goal UPDATE and the contribution
+// INSERT both commit or both roll back. If a connection ever drops between those
+// two writes, the DB will roll back the entire transaction and neither change
+// will persist. This endpoint provides a secondary safety net: it queries the DB
+// directly and returns any goals where currentAmount ≠ SUM(contributions), which
+// would indicate a partial write that somehow survived (e.g. a logic bug, a
+// manual DB edit, or a future refactor that breaks transactionality).
+//
+// Returns: { ok: true, inconsistentGoals: [...] }
+//   inconsistentGoals is empty when everything is consistent.
+//   Each entry has: id, name, currentAmount, contributionTotal, discrepancy
+router.get("/savings-goals/consistency-check", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  // Aggregate contribution totals per goal with a LEFT JOIN so goals that have
+  // no contributions at all still appear (their contributionTotal will be 0).
+  const rows = await db
+    .select({
+      id: savingsGoalsTable.id,
+      name: savingsGoalsTable.name,
+      currentAmount: savingsGoalsTable.currentAmount,
+      contributionTotal: sql<number>`COALESCE(SUM(${savingsGoalContributionsTable.amount}), 0)`,
+    })
+    .from(savingsGoalsTable)
+    .leftJoin(
+      savingsGoalContributionsTable,
+      eq(savingsGoalContributionsTable.goalId, savingsGoalsTable.id),
+    )
+    .groupBy(savingsGoalsTable.id);
+
+  const inconsistentGoals = rows
+    .filter((r) => r.currentAmount !== Number(r.contributionTotal))
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      currentAmount: r.currentAmount,
+      contributionTotal: Number(r.contributionTotal),
+      discrepancy: r.currentAmount - Number(r.contributionTotal),
+    }));
+
+  res.json({ ok: inconsistentGoals.length === 0, inconsistentGoals });
+});
+
 router.patch("/savings-goals/:id", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
