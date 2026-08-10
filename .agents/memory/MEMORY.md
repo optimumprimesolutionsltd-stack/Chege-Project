@@ -7,3 +7,6 @@
 - [Consistency check endpoint](consistency-check.md) — GET /api/savings-goals/consistency-check returns { ok, inconsistentGoals: [{id, name, currentAmount, contributionTotal, discrepancy}] }; no generated React hook exists — use useQuery with direct fetch.
 - [Cascade contribute server](cascade-contribute-server.md) — POST /savings-goals/cascade-contribute uses db.transaction() with for("update") row locks; deadlock-safe and crash-safe by design.
 - [Settings screen added](settings-screen.md) — artifacts/mobile-budget/app/(tabs)/settings.tsx exists; wired into both NativeTabLayout and ClassicTabLayout in _layout.tsx.
+- [OTA export for pnpm workspace](ota-export.md) — expo export and eas update need special setup; see topic file for the full recipe.
+- [Activity type constants](activity-types.md) — ACTIVITY_TYPE = { EXPENSE, CONTRIBUTION } in lib/activityTypes.ts (mobile) and src/lib/activityTypes.ts (web); use instead of inline strings.
+- [Bank balance invalidation](bank-balance-invalidation.md) — after deposit/disbursement/delete on bank.tsx, call invalidateQueries({ queryKey: getGetJointAccountQueryKey() }) so home-screen card updates immediately.
