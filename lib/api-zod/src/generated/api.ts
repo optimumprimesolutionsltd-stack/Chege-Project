@@ -60,7 +60,7 @@ export const CreateExpenseBody = zod.object({
   "category": zod.string(),
   "description": zod.string(),
   "notes": zod.string().optional(),
-  "paidById": zod.string().optional().describe('User ID of who paid — defaults to the current user if omitted'),
+  "paidById": zod.string().describe('User ID of who paid — must be a recognised household member'),
   "isRecurring": zod.boolean().optional(),
   "date": zod.coerce.date()
 })
@@ -91,7 +91,7 @@ export const UpdateExpenseBody = zod.object({
   "category": zod.string(),
   "description": zod.string(),
   "notes": zod.string().optional(),
-  "paidById": zod.string().optional().describe('User ID of who paid — defaults to the current user if omitted'),
+  "paidById": zod.string().describe('User ID of who paid — must be a recognised household member'),
   "isRecurring": zod.boolean().optional(),
   "date": zod.coerce.date()
 })

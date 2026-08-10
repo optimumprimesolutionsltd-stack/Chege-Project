@@ -263,14 +263,17 @@ export default function Expenses() {
             Paid by <span className="text-destructive">*</span>
           </label>
           <div className="grid grid-cols-2 gap-2">
-            {[{ id: "63497598", name: "Chege" }, { id: "63570605", name: "Lydiah" }].map(({ id, name }) => (
-              <button
-                key={id} type="button" onClick={() => form.setPaidById(id)}
-                className={`h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidById === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
-              >
-                {name}
-              </button>
-            ))}
+            {(members ?? []).map((m) => {
+              const name = m.userName?.split(" ")[0] ?? "Member";
+              return (
+                <button
+                  key={m.userId} type="button" onClick={() => form.setPaidById(m.userId)}
+                  className={`h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidById === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
+                >
+                  {name}
+                </button>
+              );
+            })}
           </div>
           {!form.paidById && (
             <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>

@@ -710,7 +710,7 @@ components:
           type: string
         paidById:
           type: string
-          description: User ID of who paid — defaults to the current user if omitted
+          description: User ID of who paid — must be a recognised household member
         isRecurring:
           type: boolean
         date:
@@ -720,6 +720,7 @@ components:
         - amount
         - category
         - description
+        - paidById
         - date
 
     ApplyRecurringInput:

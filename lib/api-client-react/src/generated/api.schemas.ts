@@ -52,8 +52,8 @@ export interface ExpenseInput {
   category: string;
   description: string;
   notes?: string;
-  /** User ID of who paid — defaults to the current user if omitted */
-  paidById?: string;
+  /** User ID of who paid — must be a recognised household member */
+  paidById: string;
   isRecurring?: boolean;
   date: string;
 }
