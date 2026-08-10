@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   Modal,
+  Pressable,
   TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
@@ -18,12 +19,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import {
   useGetJointAccount,
   useCreateDeposit,
   useCreateDisbursement,
+  useDeleteJointAccountTransaction,
   useGetBudgetCategories,
   useGetMembers,
 } from '@workspace/api-client-react';
@@ -80,10 +83,13 @@ export default function BankScreen() {
   const [description, setDescription] = useState('');
   const [expenseCategory, setExpenseCategory] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [date, setDate] = useState(todayIso());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
+  const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const { user } = useAuth();
@@ -95,6 +101,8 @@ export default function BankScreen() {
     setDescription('');
     setExpenseCategory('');
     setShowCategoryPicker(false);
+    setDate(todayIso());
+    setShowDatePicker(false);
     setMadeById('');
     setModalVisible(true);
   };
@@ -102,6 +110,26 @@ export default function BankScreen() {
   const closeModal = () => {
     if (submitting) return;
     setModalVisible(false);
+  };
+
+  const handleDelete = (tx: Tx) => {
+    Alert.alert(
+      'Delete transaction',
+      `Delete "${tx.description}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            try {
+              await deleteTransaction({ id: tx.id });
+              await refetch();
+            } catch {
+              Alert.alert('Error', 'Could not delete transaction.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleSubmit = async () => {
@@ -119,11 +147,11 @@ export default function BankScreen() {
     try {
       if (txType === 'deposit') {
         await createDeposit({
-          data: { amount: parsed, description: description.trim(), date: todayIso(), madeById: madeById || undefined },
+          data: { amount: parsed, description: description.trim(), date, madeById: madeById || undefined },
         });
       } else {
         await createDisbursement({
-          data: { amount: parsed, description: description.trim(), date: todayIso(), expenseCategory: expenseCategory || undefined },
+          data: { amount: parsed, description: description.trim(), date, expenseCategory: expenseCategory || undefined },
         });
       }
       setModalVisible(false);
@@ -228,10 +256,15 @@ export default function BankScreen() {
         renderItem={({ item }) => {
           const dep = item.type === 'deposit';
           return (
-            <View style={[styles.txRow, { borderBottomColor: colors.border }]}>
-              <View
-                style={[styles.txIcon, { backgroundColor: dep ? '#1a3320' : '#3a1a1a' }]}
-              >
+            <Pressable
+              onLongPress={() => handleDelete(item)}
+              delayLongPress={400}
+              style={({ pressed }) => [
+                styles.txRow,
+                { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <View style={[styles.txIcon, { backgroundColor: dep ? '#1a3320' : '#3a1a1a' }]}>
                 <Feather
                   name={dep ? 'arrow-down-left' : 'arrow-up-right'}
                   size={18}
@@ -254,7 +287,7 @@ export default function BankScreen() {
               <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
                 {dep ? '+' : '-'}KES {formatKES(item.amount)}
               </Text>
-            </View>
+            </Pressable>
           );
         }}
       />
@@ -414,6 +447,36 @@ export default function BankScreen() {
                   </View>
                 )}
               </>
+            )}
+
+            {/* Date */}
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>Date</Text>
+            <Pressable
+              onPress={() => setShowDatePicker(true)}
+              style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+            >
+              <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+              <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                {new Date(date + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </Text>
+              <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+            </Pressable>
+            {showDatePicker && (
+              <DateTimePicker
+                value={new Date(date + 'T00:00:00')}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                maximumDate={new Date()}
+                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                  setShowDatePicker(Platform.OS === 'ios');
+                  if (selected) {
+                    const y = selected.getFullYear();
+                    const m = String(selected.getMonth() + 1).padStart(2, '0');
+                    const d = String(selected.getDate()).padStart(2, '0');
+                    setDate(`${y}-${m}-${d}`);
+                  }
+                }}
+              />
             )}
 
             {/* Submit */}

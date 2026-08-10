@@ -217,6 +217,16 @@ router.get("/savings-goals/:id/contributions", async (req, res) => {
 
   const { id } = paramParsed.data;
 
+  // Verify the goal still exists before returning its history.
+  // Without this check a deleted goal returns 200 [] which the client
+  // can't distinguish from "goal exists but has no contributions yet".
+  const [goal] = await db
+    .select({ id: savingsGoalsTable.id })
+    .from(savingsGoalsTable)
+    .where(eq(savingsGoalsTable.id, id))
+    .limit(1);
+  if (!goal) { res.status(404).json({ error: "Goal not found" }); return; }
+
   const rows = await db
     .select({
       id: savingsGoalContributionsTable.id,
