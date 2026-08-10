@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   ScrollView,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -81,6 +82,28 @@ export default function HistoryScreen() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [pickerVisible, setPickerVisible] = useState(false);
+
+  // Build list of last 24 months (most-recent first)
+  const monthOptions = useMemo(() => {
+    const result: { month: number; year: number; label: string }[] = [];
+    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+    for (let i = 0; i < 24; i++) {
+      result.push({
+        month: d.getMonth() + 1,
+        year: d.getFullYear(),
+        label: `${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`,
+      });
+      d.setMonth(d.getMonth() - 1);
+    }
+    return result;
+  }, []);
+
+  function jumpToMonth(m: number, y: number) {
+    setMonth(m);
+    setYear(y);
+    setPickerVisible(false);
+  }
 
   const { data: expenses = [], isLoading, refetch } = useGetExpenses({ month, year });
   const { data: categories = [] } = useGetBudgetCategories();
@@ -192,12 +215,49 @@ export default function HistoryScreen() {
           <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
             <Feather name="chevron-left" size={20} color={colors.mutedForeground} />
           </Pressable>
-          <Text style={[styles.monthLabel, { color: colors.foreground }]}>{MONTHS_SHORT[month - 1]} {year}</Text>
+          <Pressable onPress={() => setPickerVisible(true)} hitSlop={6} style={styles.monthLabelBtn}>
+            <Text style={[styles.monthLabel, { color: colors.foreground }]}>{MONTHS_SHORT[month - 1]} {year}</Text>
+            <Feather name="chevron-down" size={12} color={colors.mutedForeground} style={{ marginLeft: 3 }} />
+          </Pressable>
           <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
             <Feather name="chevron-right" size={20} color={isCurrentMonth ? colors.border : colors.mutedForeground} />
           </Pressable>
         </View>
       </View>
+
+      {/* Month Picker Modal */}
+      <Modal visible={pickerVisible} animationType="slide" transparent onRequestClose={() => setPickerVisible(false)}>
+        <TouchableWithoutFeedback onPress={() => setPickerVisible(false)}>
+          <View style={styles.pickerOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={[styles.pickerSheet, { backgroundColor: colors.card }]}>
+                <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
+                <Text style={[styles.pickerTitle, { color: colors.foreground }]}>Jump to month</Text>
+                <FlatList
+                  data={monthOptions}
+                  keyExtractor={(item) => `${item.year}-${item.month}`}
+                  showsVerticalScrollIndicator={false}
+                  style={styles.pickerList}
+                  renderItem={({ item }) => {
+                    const selected = item.month === month && item.year === year;
+                    return (
+                      <Pressable
+                        onPress={() => jumpToMonth(item.month, item.year)}
+                        style={[styles.pickerItem, selected && { backgroundColor: colors.accent }]}
+                      >
+                        <Text style={[styles.pickerItemText, { color: selected ? colors.accentForeground : colors.foreground }, selected && { fontFamily: 'Inter_700Bold' }]}>
+                          {item.label}
+                        </Text>
+                        {selected && <Feather name="check" size={16} color={colors.accentForeground} />}
+                      </Pressable>
+                    );
+                  }}
+                />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
@@ -400,7 +460,16 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   navBtn: { padding: 4 },
+  monthLabelBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, paddingVertical: 4 },
   monthLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', minWidth: 56, textAlign: 'center' },
+
+  pickerOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: '60%' },
+  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  pickerTitle: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', textAlign: 'center', paddingVertical: 12 },
+  pickerList: { flexGrow: 0 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, marginHorizontal: 12, marginVertical: 1 },
+  pickerItemText: { fontSize: 16, fontFamily: 'Inter_500Medium' },
 
   list: { paddingHorizontal: 14, paddingTop: 14 },
 

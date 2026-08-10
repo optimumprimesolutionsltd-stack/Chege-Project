@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -118,8 +120,24 @@ export default function ContributionsScreen() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [pickerVisible, setPickerVisible] = useState(false);
 
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+
+  // Build list of last 24 months (most-recent first)
+  const monthOptions = useMemo(() => {
+    const result: { month: number; year: number; label: string }[] = [];
+    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+    for (let i = 0; i < 24; i++) {
+      result.push({
+        month: d.getMonth() + 1,
+        year: d.getFullYear(),
+        label: `${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`,
+      });
+      d.setMonth(d.getMonth() - 1);
+    }
+    return result;
+  }, []);
 
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear(y => y - 1); }
@@ -128,6 +146,12 @@ export default function ContributionsScreen() {
   function nextMonth() {
     if (month === 12) { setMonth(1); setYear(y => y + 1); }
     else setMonth(m => m + 1);
+  }
+
+  function jumpToMonth(m: number, y: number) {
+    setMonth(m);
+    setYear(y);
+    setPickerVisible(false);
   }
 
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useGetDashboardSummary({ month, year });
@@ -160,7 +184,10 @@ export default function ContributionsScreen() {
             <Pressable onPress={prevMonth} hitSlop={10} style={styles.navBtn}>
               <Feather name="chevron-left" size={20} color="rgba(247,250,246,0.7)" />
             </Pressable>
-            <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
+            <Pressable onPress={() => setPickerVisible(true)} hitSlop={6} style={styles.monthLabelBtn}>
+              <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
+              <Feather name="chevron-down" size={12} color="rgba(247,250,246,0.5)" style={{ marginLeft: 3 }} />
+            </Pressable>
             <Pressable onPress={nextMonth} hitSlop={10} style={styles.navBtn} disabled={isCurrentMonth}>
               <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
             </Pressable>
@@ -175,6 +202,36 @@ export default function ContributionsScreen() {
           </View>
         )}
       </LinearGradient>
+
+      {/* Month Picker Modal */}
+      <Modal visible={pickerVisible} animationType="slide" transparent onRequestClose={() => setPickerVisible(false)}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setPickerVisible(false)}>
+          <Pressable style={[styles.pickerSheet, { backgroundColor: colors.card }]} onPress={() => {}}>
+            <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.pickerTitle, { color: colors.foreground }]}>Jump to month</Text>
+            <FlatList
+              data={monthOptions}
+              keyExtractor={(item) => `${item.year}-${item.month}`}
+              showsVerticalScrollIndicator={false}
+              style={styles.pickerList}
+              renderItem={({ item }) => {
+                const selected = item.month === month && item.year === year;
+                return (
+                  <Pressable
+                    onPress={() => jumpToMonth(item.month, item.year)}
+                    style={[styles.pickerItem, selected && { backgroundColor: '#1a3320' }]}
+                  >
+                    <Text style={[styles.pickerItemText, { color: selected ? '#4ade80' : colors.foreground }, selected && { fontFamily: 'Inter_700Bold' }]}>
+                      {item.label}
+                    </Text>
+                    {selected && <Feather name="check" size={16} color="#4ade80" />}
+                  </Pressable>
+                );
+              }}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -274,7 +331,16 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   navBtn: { padding: 6 },
+  monthLabelBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 4 },
   monthLabel: { fontSize: 14, fontWeight: '600' as const, color: '#f7faf6', fontFamily: 'Inter_600SemiBold', minWidth: 64, textAlign: 'center' },
+
+  pickerOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: '60%' },
+  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  pickerTitle: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', textAlign: 'center', paddingVertical: 12 },
+  pickerList: { flexGrow: 0 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, marginHorizontal: 12, marginVertical: 1 },
+  pickerItemText: { fontSize: 16, fontFamily: 'Inter_500Medium' },
   totalRow: { alignItems: 'center' },
   totalLabel: { fontSize: 11, color: '#7aaa8a', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 2 },
   totalAmount: { fontSize: 28, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
