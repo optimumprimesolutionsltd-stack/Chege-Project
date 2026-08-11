@@ -11,15 +11,6 @@ import {
 } from "@workspace/api-client-react";
 import type { SavingsGoal, CascadeContributeAllocation } from "@workspace/api-client-react";
 
-interface SavingsGoalContribution {
-  id: number;
-  goalId: number;
-  amount: number;
-  note?: string | null;
-  createdByUserId: string;
-  contributorName: string;
-  createdAt: string;
-}
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +20,7 @@ import {
   filterByDateRange,
   computeContributorTotals,
 } from "@/lib/goal-history-utils";
-import type { QuickChip as GoalQuickChip } from "@/lib/goal-history-utils";
+import type { GoalContribution, QuickChip as GoalQuickChip } from "@/lib/goal-history-utils";
 import {
   Plus,
   Loader2,
@@ -152,14 +143,14 @@ function GoalContributionHistory({
     );
   }
 
-  const dateFiltered = filterByDateRange(contributions as SavingsGoalContribution[], fromDate, toDate);
+  const dateFiltered = filterByDateRange(contributions as GoalContribution[], fromDate, toDate);
 
   // Per-contributor totals (excluding manual adjustments) within the date-filtered window
-  const contributorTotals = computeContributorTotals(dateFiltered as SavingsGoalContribution[]);
+  const contributorTotals = computeContributorTotals(dateFiltered as GoalContribution[]);
   const hasMultipleContributors = contributorTotals.length > 1;
 
   const filtered = contributorFilter
-    ? dateFiltered.filter((c: SavingsGoalContribution) => c.contributorName === contributorFilter)
+    ? dateFiltered.filter((c: GoalContribution) => c.contributorName === contributorFilter)
     : dateFiltered;
 
   const hasFilter = fromDate || toDate;
@@ -254,8 +245,8 @@ function GoalContributionHistory({
           {filtered.length === 0 ? (
             "No contributions in this range."
           ) : (() => {
-            const realContribs = filtered.filter((c: SavingsGoalContribution) => c.note == null);
-            const total = realContribs.reduce((sum: number, c: SavingsGoalContribution) => sum + c.amount, 0);
+            const realContribs = filtered.filter((c: GoalContribution) => c.note == null);
+            const total = realContribs.reduce((sum: number, c: GoalContribution) => sum + c.amount, 0);
             const corrections = filtered.length - realContribs.length;
             return (
               <span>
@@ -275,7 +266,7 @@ function GoalContributionHistory({
 
       {filtered.length === 0 && (hasFilter || contributorFilter) ? null : (
         <div className="space-y-2">
-          {filtered.map((c: SavingsGoalContribution) => {
+          {filtered.map((c: GoalContribution) => {
             const isAdjustment = c.note != null;
             const isManualSentinel = c.note === "Manual adjustment";
             const customReason = isAdjustment && !isManualSentinel ? c.note : null;
