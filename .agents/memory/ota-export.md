@@ -58,6 +58,11 @@ The package.json MUST have `"babel-preset-expo": "~54.0.10"`, NOT `^57.0.6`.
 `57.x` targets Expo 57 and produces output that hermesc 0.12.0 (bundled with react-native@0.81.5) cannot compile — causes "private properties are not supported" during `expo export` and the EAS build's "Bundle JavaScript" step.  
 `54.0.12` (resolved from `~54.0.10`) produces hermesc-compatible `.hbc` output with zero errors.
 
+## Metro SHA-1 / resolveRequest rule
+The custom `resolveRequest` fallback in metro.config.js must NOT return absolute pnpm store paths (e.g. `/node_modules/.pnpm/…`). Metro's hasher fails with "Failed to get the SHA-1" for any path outside `watchFolders`. Always return paths through the LOCAL `node_modules/` directory (without following symlinks) so the path stays within `projectRoot`.
+
+`expo-entry.js` uses `import './node_modules/expo-router/entry-classic.js'` (relative, stays in projectRoot) instead of `import 'expo-router/entry-classic'` (resolved to absolute pnpm path by require.resolve).
+
 ## Channel
 EAS channel `preview` — created automatically when `eas update --channel preview` ran for the first time.  
 EAS project: `effa7c71-0641-41fb-ba15-219661b89ab8` (slug: `workspace`, team: `optimumprimesolutions`).
