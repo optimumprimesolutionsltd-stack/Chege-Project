@@ -305,6 +305,12 @@ export default function DashboardScreen() {
               </Text>
             </View>
           </View>
+          {bankAccount && bankAccount.balance === 0 && (!bankAccount.transactions || bankAccount.transactions.length === 0) && (
+            <View style={styles.bankEmptyState}>
+              <Feather name="inbox" size={15} color="#38bdf8" style={{ opacity: 0.6 }} />
+              <Text style={styles.bankEmptyText}>No deposits yet — tap to add one</Text>
+            </View>
+          )}
         </Pressable>
 
         {/* Recent Activity */}
@@ -440,4 +446,7 @@ const styles = StyleSheet.create({
   bankBalance: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
   bankStatValue: { fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
   bankStatDivider: { width: 1, marginVertical: 10 },
+
+  bankEmptyState: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
+  bankEmptyText: { fontSize: 13, color: '#38bdf8', fontFamily: 'Inter_400Regular', opacity: 0.8 },
 });
