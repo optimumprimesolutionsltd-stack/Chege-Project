@@ -47,16 +47,38 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     // fall through to manual retry below
   }
 
-  // Fallback: resolve using absolute node_modules paths so that pnpm symlinks
-  // are followed correctly regardless of Metro's perceived project root.
+  // Fallback: resolve via the local node_modules directory first (keeps paths
+  // within projectRoot so Metro's hasher can compute SHA-1 without the pnpm
+  // store being in watchFolders), then fall back to the workspace root.
+  const fs = require('fs');
   const searchBases = [
     path.resolve(projectRoot, 'node_modules'),
     path.resolve(workspaceRoot, 'node_modules'),
   ];
   for (const base of searchBases) {
     try {
-      const resolved = require.resolve(moduleName, { paths: [base] });
-      return { filePath: resolved, type: 'sourceFile' };
+      // Resolve without following symlinks when the local node_modules copy exists.
+      // This keeps the returned path inside projectRoot for Metro's SHA-1 hasher.
+      const parts = moduleName.split('/');
+      const pkgName = moduleName.startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0];
+      const subpath = moduleName.startsWith('@') ? parts.slice(2).join('/') : parts.slice(1).join('/');
+      const localPkg = path.resolve(base, pkgName);
+      if (fs.existsSync(localPkg)) {
+        if (subpath) {
+          for (const ext of ['.js', '.ts', '.tsx', '.jsx', '.json', '']) {
+            const candidate = path.resolve(localPkg, subpath) + ext;
+            if (fs.existsSync(candidate)) return { filePath: candidate, type: 'sourceFile' };
+          }
+        } else {
+          // Let require.resolve handle main field, but map back through local path.
+          const realResolved = require.resolve(moduleName, { paths: [base] });
+          const realPkg = fs.realpathSync(localPkg);
+          const rel = path.relative(realPkg, realResolved);
+          const localResolved = path.resolve(localPkg, rel);
+          if (fs.existsSync(localResolved)) return { filePath: localResolved, type: 'sourceFile' };
+          return { filePath: realResolved, type: 'sourceFile' };
+        }
+      }
     } catch {
       // not found in this base; try next
     }

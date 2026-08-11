@@ -1,6 +1,6 @@
 // Local entry-point wrapper.
-// This file exists so Metro can resolve the app entry as a direct project-root
-// file rather than following a pnpm symlink whose relative target path can't
-// be re-computed correctly when `expo export` / `eas update` run from a
-// different working directory than the app root.
-import 'expo-router/entry-classic';
+// Uses a relative path to the local node_modules symlink so Metro's file
+// hasher can compute a SHA-1 without needing the pnpm store in watchFolders.
+// This file exists so `expo export` / `eas update` can find the entry point
+// even when Metro incorrectly uses the workspace root as the project root.
+import './node_modules/expo-router/entry-classic.js';
