@@ -53,6 +53,11 @@ npx eas update --channel preview --platform android \
 
 **Why** `--no-bytecode`: the hermesc binary in RN 0.81.5 rejects ES2022 private class fields (`#x`, `#y`) in `react-native/src/private/webapis/geometry/DOMRectReadOnly.js`. OTA JS-only updates work fine without bytecode.
 
+## babel-preset-expo version (critical)
+The package.json MUST have `"babel-preset-expo": "~54.0.10"`, NOT `^57.0.6`.  
+`57.x` targets Expo 57 and produces output that hermesc 0.12.0 (bundled with react-native@0.81.5) cannot compile — causes "private properties are not supported" during `expo export` and the EAS build's "Bundle JavaScript" step.  
+`54.0.12` (resolved from `~54.0.10`) produces hermesc-compatible `.hbc` output with zero errors.
+
 ## Channel
 EAS channel `preview` — created automatically when `eas update --channel preview` ran for the first time.  
 EAS project: `effa7c71-0641-41fb-ba15-219661b89ab8` (slug: `workspace`, team: `optimumprimesolutions`).
