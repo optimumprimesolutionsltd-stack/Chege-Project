@@ -11,7 +11,9 @@ const config = getDefaultConfig(projectRoot);
 // During the dev server we must NOT watch the whole pnpm store — Replit temp
 // files in other workspace dirs cause inotify watch-limit crashes.
 // Detect the export mode by checking the process argv.
-const isExportMode = process.argv.some((a) => a === 'export' || a === 'export-embed');
+// expo export  → argv contains 'export'
+// expo export:embed (EAS build) → argv contains 'export:embed'
+const isExportMode = process.argv.some((a) => a === 'export' || a === 'export:embed');
 
 config.watchFolders = isExportMode
   ? [
