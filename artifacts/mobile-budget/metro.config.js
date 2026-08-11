@@ -88,4 +88,51 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return context.resolveRequest(context, moduleName, platform);
 };
 
+// Force Metro to run Babel on packages that use private class fields or class
+// declarations that the Hermes bytecode compiler (hermesc) rejects during
+// `expo export` / `eas update`.
+//
+// Two issues addressed here:
+//
+// 1. pnpm stores packages at node_modules/.pnpm/<pkg@ver>/node_modules/<pkg>/…
+//    A naïve allowlist pattern matches at the first "node_modules/" segment
+//    (before ".pnpm") because ".pnpm" is not in the allow-list, so every
+//    package in the pnpm store is excluded from Babel transformation.
+//    The (?!\.pnpm) lookahead causes the regex engine to skip that segment so
+//    evaluation only happens at the inner "node_modules/<pkg-name>" position.
+//    Note: the pattern must NOT have a trailing "/" after the closing ")" —
+//    after consuming "node_modules/" the next character is the first letter of
+//    the package name, not another slash.
+//
+// 2. react-native 0.81.5 ships Fabric/DOM APIs (DOMRect, ReadOnlyNode,
+//    ReactFabricHostComponent, etc.) using ES6 class declarations, Flow types,
+//    and private class fields.  Without Babel those files reach hermesc raw;
+//    hermesc rejects class syntax with "invalid statement encountered" and
+//    private fields with "private properties are not supported".
+//    With the hermes-v0 preset (see babel.config.js) Babel transforms all of
+//    these to prototype-based ES5 before hermesc sees them.
+config.transformIgnorePatterns = [
+  'node_modules/(?!\\.pnpm)(?!' +
+    [
+      'react-native',
+      '@react-native(-community)?',
+      '@react-native/[^/]+',
+      'expo',
+      '@expo/[^/]+',
+      '@expo-google-fonts/[^/]+',
+      '@unimodules/[^/]+',
+      'unimodules',
+      'react-native-reanimated',
+      'react-native-gesture-handler',
+      'react-native-screens',
+      'react-native-safe-area-context',
+      'react-native-svg',
+      'react-native-keyboard-controller',
+      'react-native-worklets',
+      'react-native-web',
+      '@react-navigation/[^/]+',
+    ].join('|') +
+    ')',
+];
+
 module.exports = config;
