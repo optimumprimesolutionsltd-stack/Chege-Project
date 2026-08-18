@@ -8,20 +8,87 @@ import {
   Alert,
   Platform,
   Image,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import { resolveAvatarProps, getDisplayName } from '@/utils/avatarHelper';
 
+type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
+
+const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6'];
+
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { user, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [newSource, setNewSource] = useState('');
+  const [addingSource, setAddingSource] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
+
+  const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
+    queryKey: ['income-sources', user?.userId],
+    queryFn: async () => {
+      if (!user?.userId) return [];
+      const res = await fetch(`/api/income-sources?userId=${user.userId}`, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!user?.userId,
+    staleTime: 30_000,
+  });
+
+  const handleAddSource = async () => {
+    const name = newSource.trim();
+    if (!name) return;
+    setAddingSource(true);
+    try {
+      const res = await fetch('/api/income-sources', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, name, isMain: false }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setNewSource('');
+      queryClient.invalidateQueries({ queryKey: ['income-sources', user?.userId] });
+      // Invalidate all income-source caches so forms update immediately
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+    } catch {
+      Alert.alert('Error', 'Could not add income source.');
+    } finally {
+      setAddingSource(false);
+    }
+  };
+
+  const handleDeleteSource = (src: IncomeSource) => {
+    Alert.alert(
+      'Remove income source',
+      `Remove "${src.name}"? This won't affect existing expenses.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`/api/income-sources/${src.id}`, { method: 'DELETE', credentials: 'include' });
+              queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+            } catch {
+              Alert.alert('Error', 'Could not remove income source.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -52,35 +119,20 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Settings</Text>
       </View>
 
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 },
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile card */}
         <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {avatar.kind === 'image' ? (
-            <Image
-              source={{ uri: avatar.uri }}
-              style={styles.avatar}
-              testID="settings-avatar-image"
-            />
+            <Image source={{ uri: avatar.uri }} style={styles.avatar} />
           ) : (
-            <View
-              style={[styles.avatarFallback, { backgroundColor: colors.primary + '22' }]}
-              testID="settings-avatar-fallback"
-            >
+            <View style={[styles.avatarFallback, { backgroundColor: colors.primary + '22' }]}>
               <Text style={[styles.avatarInitials, { color: colors.primary }]}>{avatar.text}</Text>
             </View>
           )}
@@ -92,10 +144,70 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Account section */}
+        {/* Income sources */}
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>INCOME SOURCES</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {sourcesLoading ? (
+            <View style={[styles.row, { justifyContent: 'center', borderBottomWidth: 0 }]}>
+              <ActivityIndicator size="small" color={colors.primary} />
+            </View>
+          ) : incomeSources.length === 0 ? (
+            <View style={[styles.row, { justifyContent: 'center', borderBottomWidth: 0 }]}>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>No sources yet — add one below</Text>
+            </View>
+          ) : (
+            incomeSources.map((src, idx) => {
+              const color = PALETTE[idx % PALETTE.length];
+              return (
+                <View key={src.id} style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: idx < incomeSources.length - 1 ? StyleSheet.hairlineWidth : 0 }]}>
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.rowIcon, { backgroundColor: color + '22' }]}>
+                      <Feather name="briefcase" size={15} color={color} />
+                    </View>
+                    <View>
+                      <Text style={[styles.rowLabel, { color: colors.foreground }]}>{src.name}</Text>
+                      {src.isMain && (
+                        <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Primary</Text>
+                      )}
+                    </View>
+                  </View>
+                  <Pressable onPress={() => handleDeleteSource(src)} hitSlop={12}>
+                    <Feather name="trash-2" size={16} color="#ef4444" />
+                  </Pressable>
+                </View>
+              );
+            })
+          )}
+
+          {/* Add new source */}
+          <View style={[styles.addRow, { borderTopColor: colors.border, borderTopWidth: incomeSources.length > 0 ? StyleSheet.hairlineWidth : 0 }]}>
+            <TextInput
+              style={[styles.addInput, { color: colors.foreground, flex: 1 }]}
+              placeholder="Add income source…"
+              placeholderTextColor={colors.mutedForeground}
+              value={newSource}
+              onChangeText={setNewSource}
+              returnKeyType="done"
+              onSubmitEditing={handleAddSource}
+            />
+            {newSource.trim().length > 0 && (
+              <Pressable
+                onPress={handleAddSource}
+                disabled={addingSource}
+                style={[styles.addBtn, { backgroundColor: colors.primary }]}
+              >
+                {addingSource
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Feather name="plus" size={16} color="#fff" />}
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {/* Account */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>ACCOUNT</Text>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.row, { borderBottomColor: colors.border }]}>
+          <View style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
             <View style={styles.rowLeft}>
               <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
                 <Feather name="user" size={16} color={colors.primary} />
@@ -112,24 +224,22 @@ export default function SettingsScreen() {
                 </View>
                 <Text style={[styles.rowLabel, { color: colors.foreground }]}>Email</Text>
               </View>
-              <Text style={[styles.rowValue, { color: colors.mutedForeground }]} numberOfLines={1}>
-                {user.email}
-              </Text>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground }]} numberOfLines={1}>{user.email}</Text>
             </View>
           ) : null}
         </View>
 
-        {/* App section */}
+        {/* App */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>APP</Text>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.row, { borderBottomColor: colors.border }]}>
+          <View style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
             <View style={styles.rowLeft}>
               <View style={[styles.rowIcon, { backgroundColor: '#1a3320' }]}>
                 <Feather name="users" size={16} color="#4ade80" />
               </View>
               <Text style={[styles.rowLabel, { color: colors.foreground }]}>Household</Text>
             </View>
-            <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>Chege &amp; Lydiah</Text>
+            <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>Chege & Lydiah</Text>
           </View>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
@@ -163,65 +273,45 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-  },
+  header: { paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
   headerTitle: { fontSize: 22, fontWeight: '700', fontFamily: 'Inter_700Bold' },
 
   content: { paddingHorizontal: 16, paddingTop: 20, gap: 4 },
 
   profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    padding: 16, borderRadius: 14, borderWidth: 1, marginBottom: 20,
   },
   avatar: { width: 56, height: 56, borderRadius: 28 },
-  avatarFallback: {
-    width: 56, height: 56, borderRadius: 28,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  avatarFallback: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   avatarInitials: { fontSize: 20, fontWeight: '700', fontFamily: 'Inter_700Bold' },
   profileInfo: { flex: 1 },
   profileName: { fontSize: 17, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
   profileEmail: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
 
   sectionLabel: {
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    letterSpacing: 0.8,
-    marginTop: 16,
-    marginBottom: 6,
-    marginLeft: 4,
+    fontSize: 11, fontFamily: 'Inter_500Medium', letterSpacing: 0.8,
+    marginTop: 16, marginBottom: 6, marginLeft: 4,
   },
   section: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 13,
   },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   rowIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   rowLabel: { fontSize: 15, fontFamily: 'Inter_400Regular' },
+  rowSub: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
   rowValue: { fontSize: 14, fontFamily: 'Inter_400Regular', maxWidth: 180 },
 
+  addRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
+  addInput: { fontSize: 14, fontFamily: 'Inter_400Regular', paddingVertical: 4 },
+  addBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+
   signOutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: 28,
-    padding: 15,
-    borderRadius: 14,
-    borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, marginTop: 28, padding: 15, borderRadius: 14, borderWidth: 1,
   },
   signOutText: { fontSize: 16, fontWeight: '600', fontFamily: 'Inter_600SemiBold', color: '#ef4444' },
 });

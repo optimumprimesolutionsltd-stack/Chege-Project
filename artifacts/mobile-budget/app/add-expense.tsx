@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
@@ -29,17 +29,8 @@ import {
   getGetDashboardSummaryQueryKey,
 } from '@workspace/api-client-react';
 
-const INCOME_SOURCES: { key: string; icon: keyof typeof Feather.glyphMap; bank: boolean; color: string }[] = [
-  { key: 'Salary',       icon: 'briefcase',       bank: false, color: '#22c55e' },
-  { key: 'Business',     icon: 'shopping-bag',    bank: false, color: '#f97316' },
-  { key: 'Freelance',    icon: 'monitor',         bank: false, color: '#8b5cf6' },
-  { key: 'Rental',       icon: 'home',            bank: false, color: '#f59e0b' },
-  { key: 'Investment',   icon: 'trending-up',     bank: false, color: '#06b6d4' },
-  { key: 'M-Pesa',       icon: 'smartphone',      bank: false, color: '#10b981' },
-  { key: 'Gift/Support', icon: 'gift',            bank: false, color: '#ec4899' },
-  { key: 'Joint bank',   icon: 'credit-card',     bank: true,  color: '#38bdf8' },
-  { key: 'Other',        icon: 'more-horizontal', bank: false, color: '#6b7280' },
-];
+const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
+type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
 
 const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Food: 'shopping-cart',
@@ -88,15 +79,32 @@ export default function AddExpenseSheet() {
   const [notes, setNotes] = useState('');
   const [paidById, setPaidById] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
-  // Funding sources — which income source(s) covered this expense (required)
+  // Funding — joint bank toggle + personal income sources from DB
+  const [paidFromBank, setPaidFromBank] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
-  const [otherLabel, setOtherLabel] = useState('');
   const [date, setDate] = useState(todayIso());
-
-  // Derived: expense fully from joint bank only when that's the sole selection
-  const paidFromBank = selectedSources.length === 1 && selectedSources[0] === 'Joint bank';
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Load this payer's income sources from DB
+  const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
+    queryKey: ['income-sources', paidById],
+    queryFn: async () => {
+      if (!paidById) return [];
+      const res = await fetch(`/api/income-sources?userId=${paidById}`, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!paidById,
+    staleTime: 60_000,
+  });
+
+  // Reset funding selections whenever the payer changes
+  useEffect(() => {
+    setPaidFromBank(false);
+    setSelectedSources([]);
+    setSplitAmounts({});
+  }, [paidById]);
 
   const { mutate: createExpense, isPending } = useCreateExpense({
     mutation: {
@@ -140,16 +148,12 @@ export default function AddExpenseSheet() {
       return;
     }
 
-    // Source of money is required
-    if (selectedSources.length === 0) {
+    // At least joint bank OR one personal source required
+    if (!paidFromBank && selectedSources.length === 0) {
       Alert.alert('Source required', 'Please choose where this money came from.');
       return;
     }
-    if (selectedSources.includes('Other') && !otherLabel.trim()) {
-      Alert.alert('Label required', 'Please describe the "Other" income source.');
-      return;
-    }
-    // When split across multiple sources, amounts must add up
+    // When split across multiple personal sources, amounts must add up
     if (selectedSources.length > 1) {
       const splitsTotal = selectedSources.reduce((s, k) => s + (parseFloat(splitAmounts[k] || '0') || 0), 0);
       if (Math.abs(splitsTotal - parsed) >= 1) {
@@ -159,10 +163,9 @@ export default function AddExpenseSheet() {
     }
 
     const isSplit = selectedSources.length > 1;
-    const nonBankSources = selectedSources.filter(k => k !== 'Joint bank');
-    const incomeSplits = nonBankSources.map(k => ({
-      label: k === 'Other' ? otherLabel.trim() : k,
-      amount: isSplit ? (parseFloat(splitAmounts[k] || '0') || 0) : parsed,
+    const incomeSplits = selectedSources.map(name => ({
+      label: name,
+      amount: isSplit ? (parseFloat(splitAmounts[name] || '0') || 0) : parsed,
     })).filter(s => s.amount > 0);
 
     createExpense({
@@ -178,7 +181,7 @@ export default function AddExpenseSheet() {
         ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
       } as Parameters<typeof createExpense>[0]['data'],
     });
-  }, [amount, category, description, notes, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, createExpense]);
+  }, [amount, category, description, notes, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, createExpense]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -293,93 +296,93 @@ export default function AddExpenseSheet() {
             <Text style={styles.fundingRequired}>* Required</Text>
           </View>
 
-          {/* Preset source chips */}
-          <View style={styles.sourceChipsGrid}>
-            {INCOME_SOURCES.map(src => {
-              const selected = selectedSources.includes(src.key);
-              return (
-                <Pressable
-                  key={src.key}
-                  onPress={() => setSelectedSources(prev =>
-                    prev.includes(src.key) ? prev.filter(k => k !== src.key) : [...prev, src.key]
-                  )}
-                  style={[
-                    styles.sourceChip,
-                    {
-                      backgroundColor: selected ? src.color + '22' : colors.background,
-                      borderColor: selected ? src.color : colors.border,
-                      borderRadius: colors.radius,
-                    },
-                  ]}
-                >
-                  <Feather name={src.icon} size={13} color={selected ? src.color : colors.mutedForeground} />
-                  <Text style={[styles.sourceChipText, { color: selected ? src.color : colors.foreground }]}>
-                    {src.key}
-                  </Text>
-                  {selected && <Feather name="check" size={11} color={src.color} />}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Other: free-text label */}
-          {selectedSources.includes('Other') && (
-            <TextInput
-              style={[styles.textInput, {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-                color: colors.foreground,
-                borderRadius: colors.radius,
-                marginTop: 8,
-                paddingVertical: 10,
-              }]}
-              placeholder="Describe the source (e.g. Consultancy, Parents)"
-              placeholderTextColor={colors.mutedForeground}
-              value={otherLabel}
-              onChangeText={setOtherLabel}
-              returnKeyType="done"
-            />
-          )}
-
-          {/* Bank hints */}
+          {/* Joint bank — always-visible standalone toggle */}
+          <Pressable
+            onPress={() => setPaidFromBank(b => !b)}
+            style={[styles.sourceChip, {
+              backgroundColor: paidFromBank ? 'rgba(56,189,248,0.15)' : colors.background,
+              borderColor: paidFromBank ? '#38bdf8' : colors.border,
+              borderRadius: colors.radius,
+              alignSelf: 'flex-start',
+              marginBottom: 8,
+            }]}
+          >
+            <Feather name="credit-card" size={13} color={paidFromBank ? '#38bdf8' : colors.mutedForeground} />
+            <Text style={[styles.sourceChipText, { color: paidFromBank ? '#38bdf8' : colors.foreground }]}>
+              Joint bank
+            </Text>
+            {paidFromBank && <Feather name="check" size={11} color="#38bdf8" />}
+          </Pressable>
           {paidFromBank && (
-            <Text style={[styles.hintText, { color: '#38bdf8', marginTop: 6 }]}>
-              Already counted via deposit — won't be double-counted as a contribution
-            </Text>
-          )}
-          {!paidFromBank && selectedSources.includes('Joint bank') && (
-            <Text style={[styles.hintText, { color: '#38bdf8', marginTop: 6 }]}>
-              Bank portion won't count as a personal contribution
+            <Text style={[styles.hintText, { color: '#38bdf8', marginBottom: 8 }]}>
+              Already counted via deposit — won't be double-counted
             </Text>
           )}
 
-          {/* Split amounts — shown when 2+ sources are selected */}
+          {/* Personal income sources — loaded from DB for the selected payer */}
+          {!paidById ? (
+            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+              Select who paid above to see their income sources
+            </Text>
+          ) : sourcesLoading ? (
+            <ActivityIndicator size="small" color={colors.primary} style={{ alignSelf: 'flex-start' }} />
+          ) : incomeSources.length === 0 ? (
+            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+              No income sources set up — add them in Settings
+            </Text>
+          ) : (
+            <View style={styles.sourceChipsGrid}>
+              {incomeSources.map((src, idx) => {
+                const color = PALETTE[idx % PALETTE.length];
+                const selected = selectedSources.includes(src.name);
+                return (
+                  <Pressable
+                    key={src.id}
+                    onPress={() => setSelectedSources(prev =>
+                      prev.includes(src.name) ? prev.filter(k => k !== src.name) : [...prev, src.name]
+                    )}
+                    style={[styles.sourceChip, {
+                      backgroundColor: selected ? color + '22' : colors.background,
+                      borderColor: selected ? color : colors.border,
+                      borderRadius: colors.radius,
+                    }]}
+                  >
+                    <Feather name="briefcase" size={13} color={selected ? color : colors.mutedForeground} />
+                    <Text style={[styles.sourceChipText, { color: selected ? color : colors.foreground }]}>
+                      {src.name}
+                    </Text>
+                    {selected && <Feather name="check" size={11} color={color} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Split amounts — shown when 2+ personal sources selected */}
           {selectedSources.length > 1 && (
             <View style={{ marginTop: 12, gap: 6 }}>
               <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
                 How much from each source?
               </Text>
-              {selectedSources.map(key => {
-                const src = INCOME_SOURCES.find(s => s.key === key)!;
+              {selectedSources.map((name, idx) => {
+                const color = PALETTE[idx % PALETTE.length];
                 return (
-                  <View key={key} style={[styles.splitAmountRow, {
+                  <View key={name} style={[styles.splitAmountRow, {
                     backgroundColor: colors.background,
-                    borderColor: src.color + '44',
+                    borderColor: color + '44',
                     borderRadius: colors.radius,
                   }]}>
-                    <Feather name={src.icon} size={14} color={src.color} />
-                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
-                      {key === 'Other' ? (otherLabel || 'Other') : key}
-                    </Text>
+                    <Feather name="briefcase" size={14} color={color} />
+                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>{name}</Text>
                     <View style={styles.splitAmountInputBox}>
                       <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
                       <TextInput
-                        style={[styles.splitAmountInput, { color: src.color }]}
+                        style={[styles.splitAmountInput, { color }]}
                         placeholder="0"
                         placeholderTextColor={colors.mutedForeground}
                         keyboardType="numeric"
-                        value={splitAmounts[key] || ''}
-                        onChangeText={v => setSplitAmounts(prev => ({ ...prev, [key]: v }))}
+                        value={splitAmounts[name] || ''}
+                        onChangeText={v => setSplitAmounts(prev => ({ ...prev, [name]: v }))}
                       />
                     </View>
                   </View>
@@ -395,9 +398,7 @@ export default function AddExpenseSheet() {
                     fontFamily: ok ? 'Inter_600SemiBold' : 'Inter_400Regular',
                     marginTop: 2,
                   }]}>
-                    {ok
-                      ? `✓ Sources add up to KES ${total.toLocaleString()}`
-                      : `Total: KES ${total.toLocaleString()} · need KES ${expAmt.toLocaleString()}`}
+                    {ok ? `✓ Sources add up to KES ${total.toLocaleString()}` : `Total: KES ${total.toLocaleString()} · need KES ${expAmt.toLocaleString()}`}
                   </Text>
                 );
               })()}

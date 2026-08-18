@@ -35,7 +35,7 @@ import {
   getGetDashboardActivityQueryKey,
   getGetDashboardCategoryBreakdownQueryKey,
 } from '@workspace/api-client-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 
@@ -52,17 +52,8 @@ const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Housing: 'home', Communication: 'phone', Other: 'more-horizontal',
 };
 
-const INCOME_SOURCES: { key: string; icon: keyof typeof Feather.glyphMap; bank: boolean; color: string }[] = [
-  { key: 'Salary',       icon: 'briefcase',       bank: false, color: '#22c55e' },
-  { key: 'Business',     icon: 'shopping-bag',    bank: false, color: '#f97316' },
-  { key: 'Freelance',    icon: 'monitor',         bank: false, color: '#8b5cf6' },
-  { key: 'Rental',       icon: 'home',            bank: false, color: '#f59e0b' },
-  { key: 'Investment',   icon: 'trending-up',     bank: false, color: '#06b6d4' },
-  { key: 'M-Pesa',       icon: 'smartphone',      bank: false, color: '#10b981' },
-  { key: 'Gift/Support', icon: 'gift',            bank: false, color: '#ec4899' },
-  { key: 'Joint bank',   icon: 'credit-card',     bank: true,  color: '#38bdf8' },
-  { key: 'Other',        icon: 'more-horizontal', bank: false, color: '#6b7280' },
-];
+const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
+type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
 
 function todayIso(): string {
   const d = new Date();
@@ -296,10 +287,23 @@ export default function HistoryScreen() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({ amount: '', category: '', description: '', notes: '', paidById: '', date: '' });
   const [saving, setSaving] = useState(false);
+  const [editPaidFromBank, setEditPaidFromBank] = useState(false);
   const [editSelectedSources, setEditSelectedSources] = useState<string[]>([]);
   const [editSplitAmounts, setEditSplitAmounts] = useState<Record<string, string>>({});
-  const [editOtherLabel, setEditOtherLabel] = useState('');
   const [editShowDatePicker, setEditShowDatePicker] = useState(false);
+
+  // Load income sources for whoever paid the expense being edited
+  const { data: editSources = [], isLoading: editSourcesLoading } = useQuery<IncomeSource[]>({
+    queryKey: ['income-sources', editForm.paidById],
+    queryFn: async () => {
+      if (!editForm.paidById) return [];
+      const res = await fetch(`/api/income-sources?userId=${editForm.paidById}`, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!editForm.paidById,
+    staleTime: 60_000,
+  });
 
   const openEdit = (exp: Expense) => {
     setEditForm({
@@ -311,9 +315,9 @@ export default function HistoryScreen() {
       paidById: exp.paidById ?? user?.userId ?? '',
       date: exp.date,
     });
+    setEditPaidFromBank(false);
     setEditSelectedSources([]);
     setEditSplitAmounts({});
-    setEditOtherLabel('');
     setEditShowDatePicker(false);
     setEditingExpense(exp);
   };
@@ -335,11 +339,7 @@ export default function HistoryScreen() {
       Alert.alert('Future date not allowed', 'Expenses must be today or earlier.');
       return;
     }
-    // Validate funding sources if any are chosen (optional when editing old expenses)
-    if (editSelectedSources.includes('Other') && !editOtherLabel.trim()) {
-      Alert.alert('Label required', 'Please describe the "Other" income source.');
-      return;
-    }
+    // Validate split amounts if multiple personal sources chosen
     if (editSelectedSources.length > 1) {
       const splitsTotal = editSelectedSources.reduce((s, k) => s + (parseFloat(editSplitAmounts[k] || '0') || 0), 0);
       if (Math.abs(splitsTotal - parsed) >= 1) {
@@ -347,12 +347,10 @@ export default function HistoryScreen() {
         return;
       }
     }
-    const editPaidFromBank = editSelectedSources.length === 1 && editSelectedSources[0] === 'Joint bank';
     const isSplit = editSelectedSources.length > 1;
-    const nonBankSources = editSelectedSources.filter(k => k !== 'Joint bank');
-    const incomeSplits = nonBankSources.map(k => ({
-      label: k === 'Other' ? editOtherLabel.trim() : k,
-      amount: isSplit ? (parseFloat(editSplitAmounts[k] || '0') || 0) : parsed,
+    const incomeSplits = editSelectedSources.map(name => ({
+      label: name,
+      amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
     })).filter(s => s.amount > 0);
     setSaving(true);
     try {
@@ -732,67 +730,82 @@ export default function HistoryScreen() {
                   </Text>
                 )}
 
-                {/* Funded From — optional when editing, uses same chip UI as add */}
+                {/* Funded From — optional when editing */}
                 <View style={[styles.editFundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '40' }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                     <Feather name="layers" size={13} color={colors.primary} />
                     <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FUNDED FROM</Text>
                     <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>(optional)</Text>
                   </View>
-                  <View style={styles.sourceChipsGrid}>
-                    {INCOME_SOURCES.map(src => {
-                      const selected = editSelectedSources.includes(src.key);
-                      return (
-                        <Pressable
-                          key={src.key}
-                          onPress={() => setEditSelectedSources(prev =>
-                            prev.includes(src.key) ? prev.filter(k => k !== src.key) : [...prev, src.key]
-                          )}
-                          style={[styles.sourceChip, {
-                            backgroundColor: selected ? src.color + '22' : colors.background,
-                            borderColor: selected ? src.color : colors.border,
-                          }]}
-                        >
-                          <Feather name={src.icon} size={12} color={selected ? src.color : colors.mutedForeground} />
-                          <Text style={[styles.sourceChipText, { color: selected ? src.color : colors.foreground }]}>
-                            {src.key}
-                          </Text>
-                          {selected && <Feather name="check" size={10} color={src.color} />}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  {editSelectedSources.includes('Other') && (
-                    <TextInput
-                      style={[styles.input, { marginTop: 8, backgroundColor: colors.background, paddingVertical: 8 }]}
-                      placeholder="Describe the source"
-                      placeholderTextColor={colors.mutedForeground}
-                      value={editOtherLabel}
-                      onChangeText={setEditOtherLabel}
-                    />
+
+                  {/* Joint bank — standalone toggle */}
+                  <Pressable
+                    onPress={() => setEditPaidFromBank(b => !b)}
+                    style={[styles.sourceChip, {
+                      backgroundColor: editPaidFromBank ? 'rgba(56,189,248,0.15)' : colors.background,
+                      borderColor: editPaidFromBank ? '#38bdf8' : colors.border,
+                      alignSelf: 'flex-start', marginBottom: 8,
+                    }]}
+                  >
+                    <Feather name="credit-card" size={12} color={editPaidFromBank ? '#38bdf8' : colors.mutedForeground} />
+                    <Text style={[styles.sourceChipText, { color: editPaidFromBank ? '#38bdf8' : colors.foreground }]}>Joint bank</Text>
+                    {editPaidFromBank && <Feather name="check" size={10} color="#38bdf8" />}
+                  </Pressable>
+
+                  {/* Personal income sources from DB */}
+                  {editSourcesLoading ? (
+                    <ActivityIndicator size="small" color={colors.primary} style={{ alignSelf: 'flex-start' }} />
+                  ) : editSources.length === 0 ? (
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>
+                      No income sources — add them in Settings
+                    </Text>
+                  ) : (
+                    <View style={styles.sourceChipsGrid}>
+                      {editSources.map((src, idx) => {
+                        const color = PALETTE[idx % PALETTE.length];
+                        const selected = editSelectedSources.includes(src.name);
+                        return (
+                          <Pressable
+                            key={src.id}
+                            onPress={() => setEditSelectedSources(prev =>
+                              prev.includes(src.name) ? prev.filter(k => k !== src.name) : [...prev, src.name]
+                            )}
+                            style={[styles.sourceChip, {
+                              backgroundColor: selected ? color + '22' : colors.background,
+                              borderColor: selected ? color : colors.border,
+                            }]}
+                          >
+                            <Feather name="briefcase" size={12} color={selected ? color : colors.mutedForeground} />
+                            <Text style={[styles.sourceChipText, { color: selected ? color : colors.foreground }]}>
+                              {src.name}
+                            </Text>
+                            {selected && <Feather name="check" size={10} color={color} />}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                   )}
+
                   {editSelectedSources.length > 1 && (
                     <View style={{ marginTop: 10, gap: 6 }}>
                       <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>
                         How much from each source?
                       </Text>
-                      {editSelectedSources.map(key => {
-                        const src = INCOME_SOURCES.find(s => s.key === key)!;
+                      {editSelectedSources.map((name, idx) => {
+                        const color = PALETTE[idx % PALETTE.length];
                         return (
-                          <View key={key} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: src.color + '44' }]}>
-                            <Feather name={src.icon} size={13} color={src.color} />
-                            <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
-                              {key === 'Other' ? (editOtherLabel || 'Other') : key}
-                            </Text>
+                          <View key={name} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: color + '44' }]}>
+                            <Feather name="briefcase" size={13} color={color} />
+                            <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>{name}</Text>
                             <View style={styles.splitAmountInputBox}>
                               <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
                               <TextInput
-                                style={[styles.splitAmountInput, { color: src.color }]}
+                                style={[styles.splitAmountInput, { color }]}
                                 placeholder="0"
                                 placeholderTextColor={colors.mutedForeground}
                                 keyboardType="numeric"
-                                value={editSplitAmounts[key] || ''}
-                                onChangeText={v => setEditSplitAmounts(prev => ({ ...prev, [key]: v }))}
+                                value={editSplitAmounts[name] || ''}
+                                onChangeText={v => setEditSplitAmounts(prev => ({ ...prev, [name]: v }))}
                               />
                             </View>
                           </View>
