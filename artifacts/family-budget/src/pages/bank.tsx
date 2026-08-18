@@ -29,7 +29,9 @@ export default function Bank() {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [madeById, setMadeById] = useState(user?.id ?? "");
+  const [depositorIds, setDepositorIds] = useState<string[]>(user?.id ? [user.id] : []);
+  const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
+  const madeById = depositorIds.length === 1 ? depositorIds[0] : "";
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [expenseCategory, setExpenseCategory] = useState("");
 
@@ -53,21 +55,41 @@ export default function Bank() {
 
   const resetForm = () => {
     setAmount(""); setDescription(""); setDate(new Date().toISOString().split("T")[0]);
-    setMadeById(user?.id ?? ""); setIncomeSourceId(null); setExpenseCategory(""); setMode(null);
+    setDepositorIds(user?.id ? [user.id] : []); setDepositorAmounts({});
+    setIncomeSourceId(null); setExpenseCategory(""); setMode(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description || !date) return;
+    const isMultiDepositor = depositorIds.length > 1;
+    if (mode === "deposit" && isMultiDepositor) {
+      const total = Number(amount);
+      const splitTotal = depositorIds.reduce((s, id) => s + (Number(depositorAmounts[id] || 0)), 0);
+      if (Math.abs(splitTotal - total) >= 1) {
+        toast({ variant: "destructive", title: "Amounts don't add up", description: `Portions total ${splitTotal} but deposit is ${total}.` });
+        return;
+      }
+    }
     try {
       if (mode === "deposit") {
-        await createDeposit.mutateAsync({
-          data: {
-            amount: Number(amount), description, date,
-            madeById: madeById || undefined,
-            ...(incomeSourceId ? { incomeSourceId } : {}),
-          } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
-        });
+        if (isMultiDepositor) {
+          for (const did of depositorIds) {
+            const portionAmt = Number(depositorAmounts[did] || 0);
+            if (portionAmt <= 0) continue;
+            await createDeposit.mutateAsync({
+              data: { amount: portionAmt, description, date, madeById: did } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
+            });
+          }
+        } else {
+          await createDeposit.mutateAsync({
+            data: {
+              amount: Number(amount), description, date,
+              madeById: madeById || undefined,
+              ...(incomeSourceId ? { incomeSourceId } : {}),
+            } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
+          });
+        }
         toast({ title: "Deposit recorded" });
       } else {
         await createDisbursement.mutateAsync({
@@ -171,15 +193,66 @@ export default function Bank() {
                 {mode === "deposit" && (
                   <>
                     <div className="space-y-2 sm:col-span-2">
-                      <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
+                      <label className="text-sm font-semibold text-foreground">
+                        Who is depositing?
+                        <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>
+                      </label>
                       <div className="grid grid-cols-3 gap-2">
-                        {[...(members ?? []).map(m => ({ id: m.userId, name: m.userName?.split(' ')[0] ?? 'Member' })), { id: "bank", name: "Bank" }].map(({ id, name }) => (
-                          <button key={id} type="button" onClick={() => { setMadeById(id); setIncomeSourceId(null); }}
-                            className={`h-12 rounded-xl border text-base font-semibold transition-colors ${madeById === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
-                            {name}
-                          </button>
-                        ))}
+                        {(members ?? []).map(m => {
+                          const name = m.userName?.split(' ')[0] ?? 'Member';
+                          const selected = depositorIds.includes(m.userId);
+                          return (
+                            <button key={m.userId} type="button"
+                              onClick={() => {
+                                setDepositorIds(prev =>
+                                  prev.includes(m.userId) ? prev.filter(id => id !== m.userId) : [...prev, m.userId]
+                                );
+                                setIncomeSourceId(null);
+                              }}
+                              className={`h-12 rounded-xl border text-base font-semibold transition-colors ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
+                              {name}
+                            </button>
+                          );
+                        })}
+                        <button type="button" onClick={() => { setDepositorIds([]); setIncomeSourceId(null); }}
+                          className={`h-12 rounded-xl border text-base font-semibold transition-colors ${depositorIds.length === 0 ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
+                          Bank
+                        </button>
                       </div>
+
+                      {/* Per-depositor split rows */}
+                      {depositorIds.length > 1 && (() => {
+                        const total = Number(amount) || 0;
+                        const splitTotal = depositorIds.reduce((s, id) => s + (Number(depositorAmounts[id] || 0)), 0);
+                        const diff = total - splitTotal;
+                        return (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs text-muted-foreground">
+                              How much is each person depositing?{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ""}
+                            </p>
+                            {depositorIds.map(did => {
+                              const member = (members ?? []).find(m => m.userId === did);
+                              const name = member?.userName?.split(' ')[0] ?? 'Member';
+                              return (
+                                <div key={did} className="flex items-center gap-3">
+                                  <span className="text-sm font-semibold w-20 shrink-0">{name}</span>
+                                  <input
+                                    type="number" placeholder="0" min="0"
+                                    value={depositorAmounts[did] ?? ""}
+                                    onChange={e => setDepositorAmounts(prev => ({ ...prev, [did]: e.target.value }))}
+                                    className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  />
+                                </div>
+                              );
+                            })}
+                            {Math.abs(diff) >= 1 && (
+                              <p className={`text-xs font-medium ${diff > 0 ? "text-amber-500" : "text-destructive"}`}>
+                                {diff > 0 ? `KES ${diff.toLocaleString()} still unassigned` : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     {madeById && madeById !== "bank" && depositSources && depositSources.length > 0 && (
                       <div className="space-y-2 sm:col-span-2">

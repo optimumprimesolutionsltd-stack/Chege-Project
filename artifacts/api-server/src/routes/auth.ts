@@ -23,6 +23,7 @@ const ExchangeMobileAuthorizationCodeBody = z.object({
 const ExchangeMobileAuthorizationCodeResponse = z.object({ token: z.string() });
 const LogoutMobileSessionResponse = z.object({ success: z.boolean() });
 import { db, usersTable } from '@workspace/db';
+import { eq } from 'drizzle-orm';
 import { Router, type IRouter, type Request, type Response } from 'express';
 import * as oidc from 'openid-client';
 
@@ -143,10 +144,31 @@ export async function upsertUser(claims: Record<string, unknown>) {
   return user;
 }
 
-router.get('/auth/user', (req: Request, res: Response) => {
+router.get('/auth/user', async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.json(GetCurrentAuthUserResponse.parse({ user: null }));
+    return;
+  }
+  // Always fetch fresh user data from DB — session snapshots can be stale
+  // (e.g. firstName/lastName added after the session was first created).
+  const [dbUser] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, req.user.id))
+    .limit(1);
+  if (!dbUser) {
+    res.json(GetCurrentAuthUserResponse.parse({ user: null }));
+    return;
+  }
   res.json(
     GetCurrentAuthUserResponse.parse({
-      user: req.isAuthenticated() ? req.user : null,
+      user: {
+        id: dbUser.id,
+        email: dbUser.email,
+        firstName: dbUser.firstName,
+        lastName: dbUser.lastName,
+        profileImageUrl: dbUser.profileImageUrl,
+      },
     }),
   );
 });

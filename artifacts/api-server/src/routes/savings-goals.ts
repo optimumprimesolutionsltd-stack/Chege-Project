@@ -159,12 +159,12 @@ router.post("/savings-goals/:id/contribute", async (req, res) => {
   const paramParsed = GoalIdParam.safeParse(req.params);
   if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const bodySchema = z.object({ amount: z.number().positive() });
+  const bodySchema = z.object({ amount: z.number().positive(), userId: z.string().optional() });
   const bodyParsed = bodySchema.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { id } = paramParsed.data;
-  const { amount } = bodyParsed.data;
+  const { amount, userId } = bodyParsed.data;
 
   // All reads and writes run inside a single transaction — a crash between them
   // rolls back everything.
@@ -197,7 +197,7 @@ router.post("/savings-goals/:id/contribute", async (req, res) => {
     await tx.insert(savingsGoalContributionsTable).values({
       goalId: id,
       amount: actualAmount,
-      createdByUserId: req.user.id,
+      createdByUserId: userId ?? req.user.id,
     });
 
     return updated;

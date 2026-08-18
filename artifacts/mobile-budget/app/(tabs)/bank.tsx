@@ -98,10 +98,12 @@ export default function BankScreen() {
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const { user } = useAuth();
-  const [madeById, setMadeById] = useState('');
+  const [depositorIds, setDepositorIds] = useState<string[]>([]);
+  const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
+  const madeById = depositorIds.length === 1 ? depositorIds[0] : '';
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
 
-  // Fetch income sources for selected depositor
+  // Fetch income sources for selected depositor (single only)
   const { data: depositSources = [] } = useQuery<IncomeSource[]>({
     queryKey: ['income-sources', madeById],
     queryFn: async () => {
@@ -122,7 +124,8 @@ export default function BankScreen() {
     setShowCategoryPicker(false);
     setDate(todayIso());
     setShowDatePicker(false);
-    setMadeById('');
+    setDepositorIds([]);
+    setDepositorAmounts({});
     setIncomeSourceId(null);
     setModalVisible(true);
   };
@@ -173,13 +176,30 @@ export default function BankScreen() {
     setSubmitting(true);
     try {
       if (txType === 'deposit') {
-        await createDeposit({
-          data: {
-            amount: parsed, description: description.trim(), date,
-            madeById: madeById || undefined,
-            ...(incomeSourceId ? { incomeSourceId } : {}),
-          } as Parameters<typeof createDeposit>[0]['data'],
-        });
+        const isMultiDepositor = depositorIds.length > 1;
+        if (isMultiDepositor) {
+          const splitTotal = depositorIds.reduce((s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0);
+          if (Math.abs(splitTotal - parsed) >= 1) {
+            Alert.alert("Amounts don't add up", `Depositor portions total KES ${splitTotal.toLocaleString()} but the deposit is KES ${parsed.toLocaleString()}.`);
+            setSubmitting(false);
+            return;
+          }
+          for (const did of depositorIds) {
+            const portionAmt = parseFloat(depositorAmounts[did] || '0') || 0;
+            if (portionAmt <= 0) continue;
+            await createDeposit({
+              data: { amount: portionAmt, description: description.trim(), date, madeById: did } as Parameters<typeof createDeposit>[0]['data'],
+            });
+          }
+        } else {
+          await createDeposit({
+            data: {
+              amount: parsed, description: description.trim(), date,
+              madeById: madeById || undefined,
+              ...(incomeSourceId ? { incomeSourceId } : {}),
+            } as Parameters<typeof createDeposit>[0]['data'],
+          });
+        }
       } else {
         await createDisbursement({
           data: { amount: parsed, description: description.trim(), date, expenseCategory: expenseCategory || undefined },
@@ -424,12 +444,13 @@ export default function BankScreen() {
             {/* Deposited by (deposits only) */}
             {isDeposit && members.length > 0 && (
               <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Who is adding this money?</Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  Who is depositing? <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>
+                </Text>
                 <View style={styles.memberRow}>
                   {members.map((m) => {
-                    const isMe = m.userId === user?.id;
-                    const selected = madeById === m.userId || (!madeById && isMe);
-                    const name = m.userName?.split(' ')[0] ?? (isMe ? 'Me' : 'Member');
+                    const selected = depositorIds.includes(m.userId);
+                    const name = m.userName?.split(' ')[0] ?? 'Member';
                     return (
                       <TouchableOpacity
                         key={m.userId}
@@ -437,7 +458,12 @@ export default function BankScreen() {
                           styles.memberPill,
                           { backgroundColor: selected ? '#4ade80' : colors.muted, borderColor: selected ? '#4ade80' : colors.border },
                         ]}
-                        onPress={() => { setMadeById(m.userId); setIncomeSourceId(null); }}
+                        onPress={() => {
+                          setDepositorIds(prev =>
+                            prev.includes(m.userId) ? prev.filter(id => id !== m.userId) : [...prev, m.userId]
+                          );
+                          setIncomeSourceId(null);
+                        }}
                         activeOpacity={0.7}
                       >
                         <Feather name="user" size={13} color={selected ? '#0a1a10' : colors.mutedForeground} />
@@ -448,6 +474,50 @@ export default function BankScreen() {
                     );
                   })}
                 </View>
+
+                {/* Per-depositor split rows */}
+                {depositorIds.length > 1 && (() => {
+                  const total = parseFloat(amount.replace(/,/g, '')) || 0;
+                  const splitTotal = depositorIds.reduce((s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0);
+                  const diff = total - splitTotal;
+                  return (
+                    <View style={{ marginTop: 8, gap: 8 }}>
+                      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                        How much is each person depositing?{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
+                      </Text>
+                      {depositorIds.map((did) => {
+                        const member = members.find(m => m.userId === did);
+                        const name = member?.userName?.split(' ')[0] ?? 'Member';
+                        return (
+                          <View key={did} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
+                              <Feather name="user" size={13} color={colors.mutedForeground} />
+                              <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                            </View>
+                            <TextInput
+                              style={{
+                                flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                                borderColor: colors.border, backgroundColor: colors.background,
+                                paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
+                                fontFamily: 'Inter_400Regular',
+                              }}
+                              keyboardType="numeric"
+                              placeholder="0"
+                              placeholderTextColor={colors.mutedForeground}
+                              value={depositorAmounts[did] || ''}
+                              onChangeText={val => setDepositorAmounts(prev => ({ ...prev, [did]: val }))}
+                            />
+                          </View>
+                        );
+                      })}
+                      {Math.abs(diff) >= 1 && (
+                        <Text style={{ fontSize: 12, color: diff > 0 ? '#f59e0b' : '#f87171', fontFamily: 'Inter_400Regular' }}>
+                          {diff > 0 ? `KES ${diff.toLocaleString()} still unassigned` : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })()}
               </>
             )}
 

@@ -36,6 +36,7 @@ import {
   useGetSavingsGoalContributions,
   getGetSavingsGoalContributionsQueryKey,
   getGetSavingsGoalsQueryKey,
+  useGetMembers,
   type SavingsGoalContribution,
 } from '@workspace/api-client-react';
 
@@ -719,20 +720,54 @@ export default function GoalsScreen() {
     setContributeVisible(false);
   };
 
+  const { data: members = [] } = useGetMembers();
+  const [contribPayerIds, setContribPayerIds] = useState<string[]>([]);
+  const [contribPayerAmounts, setContribPayerAmounts] = useState<Record<string, string>>({});
+
   const handleContribute = async () => {
     if (!selectedGoal) return;
-    const amount = parseFloat(contributeAmount.replace(/,/g, ''));
-    if (!amount || amount <= 0) {
+    const total = parseFloat(contributeAmount.replace(/,/g, ''));
+    if (!total || total <= 0) {
       Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
       return;
     }
 
+    const isMultiPayer = contribPayerIds.length > 1;
+    if (isMultiPayer) {
+      const splitTotal = contribPayerIds.reduce((s, id) => s + (parseFloat(contribPayerAmounts[id] || '0') || 0), 0);
+      if (Math.abs(splitTotal - total) >= 1) {
+        Alert.alert("Amounts don't add up", `Portions total KES ${splitTotal.toLocaleString()} but the contribution is KES ${total.toLocaleString()}.`);
+        return;
+      }
+    }
+
     setSubmittingContrib(true);
     try {
-      await contribute({ id: selectedGoal.id, data: { amount } });
+      if (isMultiPayer) {
+        for (const pid of contribPayerIds) {
+          const portionAmt = parseFloat(contribPayerAmounts[pid] || '0') || 0;
+          if (portionAmt <= 0) continue;
+          await fetch(`/api/savings-goals/${selectedGoal.id}/contribute`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: portionAmt, userId: pid }),
+          });
+        }
+      } else {
+        const userId = contribPayerIds.length === 1 ? contribPayerIds[0] : undefined;
+        await fetch(`/api/savings-goals/${selectedGoal.id}/contribute`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: total, ...(userId ? { userId } : {}) }),
+        });
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
       setContributeVisible(false);
+      setContribPayerIds([]);
+      setContribPayerAmounts({});
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', 'Failed to record contribution. Please try again.');
@@ -1134,6 +1169,82 @@ export default function GoalsScreen() {
                         onSubmitEditing={handleContribute}
                       />
                     </View>
+
+                    {/* Who is contributing */}
+                    {members.length > 0 && (
+                      <>
+                        <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 16 }]}>
+                          WHO IS CONTRIBUTING? <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional · tap multiple to split)</Text>
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {members.map((m) => {
+                            const sel = contribPayerIds.includes(m.userId);
+                            const name = m.userName?.split(' ')[0] ?? 'Member';
+                            return (
+                              <Pressable
+                                key={m.userId}
+                                onPress={() => setContribPayerIds(prev =>
+                                  prev.includes(m.userId) ? prev.filter(id => id !== m.userId) : [...prev, m.userId]
+                                )}
+                                style={{
+                                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                                  paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+                                  backgroundColor: sel ? colors.primary + '22' : colors.muted,
+                                  borderColor: sel ? colors.primary : colors.border,
+                                }}
+                              >
+                                <Feather name="user" size={13} color={sel ? colors.primary : colors.mutedForeground} />
+                                <Text style={{ fontSize: 14, color: sel ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+
+                        {/* Per-payer split rows */}
+                        {contribPayerIds.length > 1 && (() => {
+                          const total = parseFloat(contributeAmount.replace(/,/g, '')) || 0;
+                          const splitTotal = contribPayerIds.reduce((s, id) => s + (parseFloat(contribPayerAmounts[id] || '0') || 0), 0);
+                          const diff = total - splitTotal;
+                          return (
+                            <View style={{ marginTop: 10, gap: 8 }}>
+                              <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                                How much is each person contributing?{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
+                              </Text>
+                              {contribPayerIds.map((pid) => {
+                                const member = members.find(m => m.userId === pid);
+                                const name = member?.userName?.split(' ')[0] ?? 'Member';
+                                return (
+                                  <View key={pid} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
+                                      <Feather name="user" size={13} color={colors.mutedForeground} />
+                                      <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                                    </View>
+                                    <TextInput
+                                      style={{
+                                        flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                                        borderColor: colors.border, backgroundColor: colors.muted,
+                                        paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
+                                        fontFamily: 'Inter_400Regular',
+                                      }}
+                                      keyboardType="numeric"
+                                      placeholder="0"
+                                      placeholderTextColor={colors.mutedForeground}
+                                      value={contribPayerAmounts[pid] || ''}
+                                      onChangeText={val => setContribPayerAmounts(prev => ({ ...prev, [pid]: val }))}
+                                    />
+                                  </View>
+                                );
+                              })}
+                              {Math.abs(diff) >= 1 && (
+                                <Text style={{ fontSize: 12, color: diff > 0 ? '#f59e0b' : '#f87171', fontFamily: 'Inter_400Regular' }}>
+                                  {diff > 0 ? `KES ${diff.toLocaleString()} still unassigned` : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                                </Text>
+                              )}
+                            </View>
+                          );
+                        })()}
+                      </>
+                    )}
                   </View>
                 </View>
               </TouchableWithoutFeedback>

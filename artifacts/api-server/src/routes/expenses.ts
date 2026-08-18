@@ -149,16 +149,19 @@ router.post("/expenses", async (req, res) => {
     : undefined;
   const paidFromBank: boolean = (req.body as { paidFromBank?: unknown }).paidFromBank === true;
 
-  if (!paidById) {
-    res.status(400).json({ error: "paidById is required — choose who paid." });
+  // paidById is optional when paidFromBank is true (joint-bank expense — no individual attribution)
+  if (!paidById && !paidFromBank) {
+    res.status(400).json({ error: "paidById is required — choose who paid or select Joint bank." });
     return;
   }
 
-  // Validate paidById is a known household member
-  const member = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, paidById) });
-  if (!member) {
-    res.status(400).json({ error: "paidById must be a recognised household member." });
-    return;
+  // Validate paidById is a known household member (skip for joint-bank expenses)
+  if (paidById) {
+    const member = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, paidById) });
+    if (!member) {
+      res.status(400).json({ error: "paidById must be a recognised household member." });
+      return;
+    }
   }
 
   // Validate incomeSourceId if provided
@@ -169,7 +172,7 @@ router.post("/expenses", async (req, res) => {
 
   const [expense] = await db
     .insert(expensesTable)
-    .values({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId: incomeSourceId ?? null, paidFromBank, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
+    .values({ amount, category, description, notes: notes ?? null, paidById: paidById ?? null, incomeSourceId: incomeSourceId ?? null, paidFromBank, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .returning();
 
   // Save funding splits if provided (replaces paidFromBank/incomeSourceId approach for multi-source payments)
@@ -183,10 +186,10 @@ router.post("/expenses", async (req, res) => {
     }
   }
 
-  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
+  const user = paidById ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) }) : null;
   const splits = await db.select().from(expenseIncomeSplitsTable).where(eq(expenseIncomeSplitsTable.expenseId, expense.id));
 
-  res.status(201).json({ ...formatExpense({ ...expense, paidByName: user?.firstName ?? "Unknown" }), incomeSplits: splits });
+  res.status(201).json({ ...formatExpense({ ...expense, paidByName: user?.firstName ?? null }), incomeSplits: splits });
 });
 
 router.patch("/expenses/:id", async (req, res) => {
@@ -204,23 +207,26 @@ router.patch("/expenses/:id", async (req, res) => {
     : null;
   const paidFromBank: boolean = (req.body as { paidFromBank?: unknown }).paidFromBank === true;
 
-  if (!paidById) {
-    res.status(400).json({ error: "paidById is required — choose who paid." });
+  // paidById is optional when paidFromBank is true (joint-bank expense — no individual attribution)
+  if (!paidById && !paidFromBank) {
+    res.status(400).json({ error: "paidById is required — choose who paid or select Joint bank." });
     return;
   }
 
-  // Validate paidById is a known household member
-  const member = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, paidById) });
-  if (!member) {
-    res.status(400).json({ error: "paidById must be a recognised household member." });
-    return;
+  // Validate paidById is a known household member (skip for joint-bank expenses)
+  if (paidById) {
+    const member = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, paidById) });
+    if (!member) {
+      res.status(400).json({ error: "paidById must be a recognised household member." });
+      return;
+    }
   }
 
   const expenseId = Math.round(idParsed.data.id);
 
   const [updated] = await db
     .update(expensesTable)
-    .set({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId, paidFromBank, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
+    .set({ amount, category, description, notes: notes ?? null, paidById: paidById ?? null, incomeSourceId, paidFromBank, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .where(eq(expensesTable.id, expenseId))
     .returning();
 
@@ -238,9 +244,9 @@ router.patch("/expenses/:id", async (req, res) => {
     }
   }
 
-  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
+  const user = paidById ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) }) : null;
   const splits = await db.select().from(expenseIncomeSplitsTable).where(eq(expenseIncomeSplitsTable.expenseId, expenseId));
-  res.json({ ...formatExpense({ ...updated, paidByName: user?.firstName ?? "Unknown" }), incomeSplits: splits });
+  res.json({ ...formatExpense({ ...updated, paidByName: user?.firstName ?? null }), incomeSplits: splits });
 });
 
 router.delete("/expenses/:id", async (req, res) => {

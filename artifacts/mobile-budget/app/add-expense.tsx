@@ -77,7 +77,9 @@ export default function AddExpenseSheet() {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
-  const [paidById, setPaidById] = useState('');
+  const [payerIds, setPayerIds] = useState<string[]>([]);
+  const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
+  const paidById = payerIds.length === 1 ? payerIds[0] : '';
   const [isRecurring, setIsRecurring] = useState(false);
   // Funding — joint bank toggle + personal income sources from DB
   const [paidFromBank, setPaidFromBank] = useState(false);
@@ -108,26 +110,19 @@ export default function AddExpenseSheet() {
     setOtherLabel('');
   }, [paidById]);
 
-  const { mutate: createExpense, isPending } = useCreateExpense({
-    mutation: {
-      onSuccess: () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
-        const now = new Date();
-        queryClient.invalidateQueries({
-          queryKey: getGetDashboardSummaryQueryKey({ month: now.getMonth() + 1, year: now.getFullYear() }),
-        });
-        router.dismiss();
-      },
-      onError: () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert('Error', 'Failed to save expense. Please try again.');
-      },
-    },
-  });
+  const { mutateAsync: createExpenseAsync } = useCreateExpense();
+  const [isPending, setIsPending] = useState(false);
 
-  const handleSubmit = useCallback(() => {
+  const invalidateExpenses = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+    const now = new Date();
+    queryClient.invalidateQueries({
+      queryKey: getGetDashboardSummaryQueryKey({ month: now.getMonth() + 1, year: now.getFullYear() }),
+    });
+  }, [queryClient]);
+
+  const handleSubmit = useCallback(async () => {
     const parsed = parseFloat(amount.replace(/,/g, ''));
     if (!parsed || parsed <= 0) {
       Alert.alert('Amount required', 'Please enter a valid amount.');
@@ -141,8 +136,8 @@ export default function AddExpenseSheet() {
       Alert.alert('Description required', 'Please add a description.');
       return;
     }
-    if (!paidById) {
-      Alert.alert('Paid by required', 'Please choose who paid for this expense.');
+    if (payerIds.length === 0 && !paidFromBank) {
+      Alert.alert('Paid by required', 'Please choose who paid, or select Joint bank.');
       return;
     }
     if (date > todayIso()) {
@@ -150,44 +145,82 @@ export default function AddExpenseSheet() {
       return;
     }
 
-    // At least joint bank OR one personal source required
-    if (!paidFromBank && selectedSources.length === 0) {
-      Alert.alert('Source required', 'Please choose where this money came from.');
-      return;
-    }
-    if (selectedSources.includes('Other') && !otherLabel.trim()) {
-      Alert.alert('Label required', 'Please describe the "Other" source.');
-      return;
-    }
-    // When split across multiple personal sources, amounts must add up
-    if (selectedSources.length > 1) {
-      const splitsTotal = selectedSources.reduce((s, k) => s + (parseFloat(splitAmounts[k] || '0') || 0), 0);
-      if (Math.abs(splitsTotal - parsed) >= 1) {
-        Alert.alert("Amounts don't add up", `Sources total KES ${splitsTotal.toLocaleString()} but the expense is KES ${parsed.toLocaleString()}.`);
+    const isMultiPayer = payerIds.length > 1;
+
+    if (isMultiPayer) {
+      const splitTotal = payerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0);
+      if (Math.abs(splitTotal - parsed) >= 1) {
+        Alert.alert("Amounts don't add up", `Payer portions total KES ${splitTotal.toLocaleString()} but the expense is KES ${parsed.toLocaleString()}.`);
         return;
+      }
+    } else {
+      if (!paidFromBank && selectedSources.length === 0) {
+        Alert.alert('Source required', 'Please choose where this money came from.');
+        return;
+      }
+      if (selectedSources.includes('Other') && !otherLabel.trim()) {
+        Alert.alert('Label required', 'Please describe the "Other" source.');
+        return;
+      }
+      if (selectedSources.length > 1) {
+        const splitsTotal = selectedSources.reduce((s, k) => s + (parseFloat(splitAmounts[k] || '0') || 0), 0);
+        if (Math.abs(splitsTotal - parsed) >= 1) {
+          Alert.alert("Amounts don't add up", `Sources total KES ${splitsTotal.toLocaleString()} but the expense is KES ${parsed.toLocaleString()}.`);
+          return;
+        }
       }
     }
 
-    const isSplit = selectedSources.length > 1;
-    const incomeSplits = selectedSources.map(name => ({
-      label: name === 'Other' ? otherLabel.trim() : name,
-      amount: isSplit ? (parseFloat(splitAmounts[name] || '0') || 0) : parsed,
-    })).filter(s => s.amount > 0);
+    setIsPending(true);
+    try {
+      if (isMultiPayer) {
+        for (const pid of payerIds) {
+          const portionAmt = parseFloat(payerAmounts[pid] || '0') || 0;
+          if (portionAmt <= 0) continue;
+          await createExpenseAsync({
+            data: {
+              amount: portionAmt,
+              category,
+              description: description.trim(),
+              notes: notes.trim() || undefined,
+              paidById: pid,
+              isRecurring,
+              date,
+              paidFromBank: false,
+            } as Parameters<typeof createExpenseAsync>[0]['data'],
+          });
+        }
+      } else {
+        const isSplit = selectedSources.length > 1;
+        const incomeSplits = selectedSources.map(name => ({
+          label: name === 'Other' ? otherLabel.trim() : name,
+          amount: isSplit ? (parseFloat(splitAmounts[name] || '0') || 0) : parsed,
+        })).filter(s => s.amount > 0);
 
-    createExpense({
-      data: {
-        amount: parsed,
-        category,
-        description: description.trim(),
-        notes: notes.trim() || undefined,
-        paidById,
-        isRecurring,
-        date,
-        paidFromBank,
-        ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
-      } as Parameters<typeof createExpense>[0]['data'],
-    });
-  }, [amount, category, description, notes, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, createExpense]);
+        await createExpenseAsync({
+          data: {
+            amount: parsed,
+            category,
+            description: description.trim(),
+            notes: notes.trim() || undefined,
+            paidById: paidFromBank ? undefined : paidById,
+            isRecurring,
+            date,
+            paidFromBank,
+            ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
+          } as Parameters<typeof createExpenseAsync>[0]['data'],
+        });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      invalidateExpenses();
+      router.dismiss();
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', 'Failed to save expense. Please try again.');
+    } finally {
+      setIsPending(false);
+    }
+  }, [amount, category, description, notes, payerIds, payerAmounts, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, createExpenseAsync, invalidateExpenses]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -294,36 +327,14 @@ export default function AddExpenseSheet() {
           );
         })() : null}
 
-        {/* Funding breakdown — required */}
+        {/* Funding breakdown — only shown for a single named payer */}
+        {!paidFromBank && payerIds.length === 1 && (
         <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
           <View style={styles.fundingCardHeader}>
             <Feather name="layers" size={14} color={colors.primary} />
             <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FUNDED FROM</Text>
             <Text style={styles.fundingRequired}>* Required</Text>
           </View>
-
-          {/* Joint bank — always-visible standalone toggle */}
-          <Pressable
-            onPress={() => setPaidFromBank(b => !b)}
-            style={[styles.sourceChip, {
-              backgroundColor: paidFromBank ? 'rgba(56,189,248,0.15)' : colors.background,
-              borderColor: paidFromBank ? '#38bdf8' : colors.border,
-              borderRadius: colors.radius,
-              alignSelf: 'flex-start',
-              marginBottom: 8,
-            }]}
-          >
-            <Feather name="credit-card" size={13} color={paidFromBank ? '#38bdf8' : colors.mutedForeground} />
-            <Text style={[styles.sourceChipText, { color: paidFromBank ? '#38bdf8' : colors.foreground }]}>
-              Joint bank
-            </Text>
-            {paidFromBank && <Feather name="check" size={11} color="#38bdf8" />}
-          </Pressable>
-          {paidFromBank && (
-            <Text style={[styles.hintText, { color: '#38bdf8', marginBottom: 8 }]}>
-              Already counted via deposit — won't be double-counted
-            </Text>
-          )}
 
           {/* Personal income sources — loaded from DB for the selected payer */}
           {!paidById ? (
@@ -450,6 +461,7 @@ export default function AddExpenseSheet() {
             </View>
           )}
         </View>
+        )}
 
         {/* Description */}
         <Text style={[styles.label, { color: colors.mutedForeground }]}>DESCRIPTION</Text>
@@ -499,12 +511,40 @@ export default function AddExpenseSheet() {
               PAID BY <Text style={{ color: '#ef4444' }}>*</Text>
             </Text>
             <View style={styles.paidByRow}>
+              {/* Joint bank — unattributed, mutually exclusive with member chips */}
+              <Pressable
+                onPress={() => {
+                  if (paidFromBank) {
+                    setPaidFromBank(false);
+                  } else {
+                    setPayerIds([]);
+                    setPaidFromBank(true);
+                  }
+                }}
+                style={[styles.paidByPill, {
+                  backgroundColor: paidFromBank ? 'rgba(56,189,248,0.15)' : colors.muted,
+                  borderColor: paidFromBank ? '#38bdf8' : colors.border,
+                  borderRadius: colors.radius,
+                }]}
+              >
+                <Feather name="credit-card" size={14} color={paidFromBank ? '#38bdf8' : colors.mutedForeground} />
+                <Text style={[styles.paidByText, { color: paidFromBank ? '#38bdf8' : colors.foreground }]}>
+                  Joint bank
+                </Text>
+              </Pressable>
               {members.map((m) => {
-                const selected = paidById === m.userId;
+                const selected = payerIds.includes(m.userId);
                 return (
                   <Pressable
                     key={m.userId}
-                    onPress={() => setPaidById(m.userId)}
+                    onPress={() => {
+                      setPaidFromBank(false);
+                      setPayerIds(prev =>
+                        prev.includes(m.userId)
+                          ? prev.filter(id => id !== m.userId)
+                          : [...prev, m.userId]
+                      );
+                    }}
                     style={[
                       styles.paidByPill,
                       {
@@ -531,11 +571,57 @@ export default function AddExpenseSheet() {
                 );
               })}
             </View>
-            {!paidById && (
+            {payerIds.length === 0 && !paidFromBank && (
               <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-                Tap to choose who paid
+                Tap to select · select multiple to split the cost
               </Text>
             )}
+
+            {/* Per-payer split rows — shown when 2+ payers */}
+            {payerIds.length > 1 && (() => {
+              const total = parseFloat(amount.replace(/,/g, '')) || 0;
+              const splitTotal = payerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0);
+              const diff = total - splitTotal;
+              return (
+                <View style={{ marginTop: 10, gap: 8 }}>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                    How much did each person pay?{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
+                  </Text>
+                  {payerIds.map((pid) => {
+                    const member = members.find(m => m.userId === pid);
+                    const name = member?.userName?.split(' ')[0] ?? 'Member';
+                    return (
+                      <View key={pid} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
+                          <Feather name="user" size={13} color={colors.mutedForeground} />
+                          <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                        </View>
+                        <TextInput
+                          style={{
+                            flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                            borderColor: colors.border, backgroundColor: colors.muted,
+                            paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
+                            fontFamily: 'Inter_400Regular',
+                          }}
+                          keyboardType="numeric"
+                          placeholder="0"
+                          placeholderTextColor={colors.mutedForeground}
+                          value={payerAmounts[pid] || ''}
+                          onChangeText={val => setPayerAmounts(prev => ({ ...prev, [pid]: val }))}
+                        />
+                      </View>
+                    );
+                  })}
+                  {Math.abs(diff) >= 1 && (
+                    <Text style={{ fontSize: 12, color: diff > 0 ? '#f59e0b' : '#f87171', fontFamily: 'Inter_400Regular' }}>
+                      {diff > 0
+                        ? `KES ${diff.toLocaleString()} still unassigned`
+                        : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                    </Text>
+                  )}
+                </View>
+              );
+            })()}
           </>
         )}
 

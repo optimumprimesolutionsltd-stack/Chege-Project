@@ -66,11 +66,16 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [description, setDescription] = useState(defaults?.description ?? "");
   const [notes, setNotes] = useState(defaults?.notes ?? "");
   const [paidById, setPaidById] = useState(defaults?.paidById ?? "");
+  // Multi-payer support (add form only; edit uses single paidById)
+  const [payerIds, setPayerIds] = useState<string[]>(defaults?.paidById ? [defaults.paidById] : []);
+  const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [isRecurring, setIsRecurring] = useState(defaults?.isRecurring ?? false);
   const [date, setDate] = useState(defaults?.date ?? today.toISOString().split("T")[0]);
-  return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes, paidById, setPaidById, incomeSourceId, setIncomeSourceId, paidFromBank, setPaidFromBank, isRecurring, setIsRecurring, date, setDate };
+  return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes,
+           paidById, setPaidById, payerIds, setPayerIds, payerAmounts, setPayerAmounts,
+           incomeSourceId, setIncomeSourceId, paidFromBank, setPaidFromBank, isRecurring, setIsRecurring, date, setDate };
 }
 
 function useIncomeSources(userId: string) {
@@ -148,12 +153,13 @@ export default function Expenses() {
 
   const [addNewSource, setAddNewSource] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
-  const { data: addFormSources, refetch: refetchAddSources } = useIncomeSources(addForm.paidById);
+  const { data: addFormSources, refetch: refetchAddSources } = useIncomeSources(addForm.payerIds[0] ?? addForm.paidById);
   const { data: editFormSources } = useIncomeSources(editForm.paidById);
 
   const resetAdd = () => {
     addForm.setAmount(""); addForm.setCategory(""); addForm.setDescription(""); addForm.setNotes("");
-    addForm.setPaidById(""); addForm.setIncomeSourceId(null); addForm.setIsRecurring(false);
+    addForm.setPaidById(""); addForm.setPayerIds([]); addForm.setPayerAmounts({});
+    addForm.setIncomeSourceId(null); addForm.setIsRecurring(false);
     addForm.setDate(now.toISOString().split("T")[0]);
     setAddNewSource(false); setNewSourceName("");
     setIsAdding(false);
@@ -198,21 +204,42 @@ export default function Expenses() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addForm.amount || !addForm.category || !addForm.description || !addForm.date || !addForm.paidById) return;
+    const isMultiPayer = addForm.payerIds.length > 1;
+    const effectivePaidById = isMultiPayer ? '' : (addForm.payerIds[0] ?? addForm.paidById);
+    if (!addForm.amount || !addForm.category || !addForm.description || !addForm.date) return;
+    if (!effectivePaidById && !isMultiPayer && !addForm.paidFromBank) return;
+    if (isMultiPayer) {
+      const total = Number(addForm.amount);
+      const splitTotal = addForm.payerIds.reduce((s, id) => s + (Number(addForm.payerAmounts[id] || 0)), 0);
+      if (Math.abs(splitTotal - total) >= 1) {
+        toast({ variant: "destructive", title: "Amounts don't add up", description: `Portions total ${splitTotal} but expense is ${total}.` });
+        return;
+      }
+    }
     try {
-      await createExpense.mutateAsync({
-        data: {
-          amount: Number(addForm.amount),
-          category: addForm.category,
-          description: addForm.description,
-          notes: addForm.notes || undefined,
-          paidById: addForm.paidById || undefined,
-          isRecurring: addForm.isRecurring,
-          date: addForm.date,
-          paidFromBank: addForm.paidFromBank,
-          ...(addForm.incomeSourceId ? { incomeSourceId: addForm.incomeSourceId } : {}),
-        } as Parameters<typeof createExpense.mutateAsync>[0]["data"]
-      });
+      if (isMultiPayer) {
+        for (const pid of addForm.payerIds) {
+          const portionAmt = Number(addForm.payerAmounts[pid] || 0);
+          if (portionAmt <= 0) continue;
+          await createExpense.mutateAsync({
+            data: {
+              amount: portionAmt, category: addForm.category,
+              description: addForm.description, notes: addForm.notes || undefined,
+              paidById: pid, isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: false,
+            } as Parameters<typeof createExpense.mutateAsync>[0]["data"]
+          });
+        }
+      } else {
+        await createExpense.mutateAsync({
+          data: {
+            amount: Number(addForm.amount), category: addForm.category,
+            description: addForm.description, notes: addForm.notes || undefined,
+            paidById: addForm.paidFromBank ? undefined : (effectivePaidById || undefined), isRecurring: addForm.isRecurring,
+            date: addForm.date, paidFromBank: addForm.paidFromBank,
+            ...(addForm.incomeSourceId ? { incomeSourceId: addForm.incomeSourceId } : {}),
+          } as Parameters<typeof createExpense.mutateAsync>[0]["data"]
+        });
+      }
       toast({ title: "Expense recorded" });
       resetAdd();
       invalidate();
@@ -223,7 +250,7 @@ export default function Expenses() {
 
   const handleUpdate = async (e: React.FormEvent, id: number) => {
     e.preventDefault();
-    if (!editForm.amount || !editForm.category || !editForm.description || !editForm.date || !editForm.paidById) return;
+    if (!editForm.amount || !editForm.category || !editForm.description || !editForm.date || (!editForm.paidById && !editForm.paidFromBank)) return;
     try {
       await updateExpense.mutateAsync({
         id,
@@ -330,38 +357,104 @@ export default function Expenses() {
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">
             Paid by <span className="text-destructive">*</span>
+            {title === "Add expense" && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
           </label>
           <div className="grid grid-cols-2 gap-2">
+            {/* Joint bank — unattributed, no individual payer */}
+            {title === "Add expense" && (
+              <button type="button"
+                onClick={() => { form.setPayerIds([]); form.setPaidById(""); form.setPaidFromBank(true); form.setIncomeSourceId(null); }}
+                className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
+              >
+                🏦 Joint bank account
+              </button>
+            )}
             {(members ?? []).map((m) => {
               const name = m.userName?.split(" ")[0] ?? "Member";
+              const isMultiEnabled = title === "Add expense";
+              const selected = isMultiEnabled ? form.payerIds.includes(m.userId) : form.paidById === m.userId;
               return (
                 <button
-                  key={m.userId} type="button" onClick={() => form.setPaidById(m.userId)}
-                  className={`h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidById === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
+                  key={m.userId} type="button"
+                  onClick={() => {
+                    form.setPaidFromBank(false);
+                    if (isMultiEnabled) {
+                      const next = form.payerIds.includes(m.userId)
+                        ? form.payerIds.filter(id => id !== m.userId)
+                        : [...form.payerIds, m.userId];
+                      form.setPayerIds(next);
+                      // Keep single paidById in sync for income sources
+                      form.setPaidById(next.length === 1 ? next[0] : "");
+                    } else {
+                      form.setPaidById(m.userId);
+                    }
+                  }}
+                  className={`h-12 rounded-xl border text-base font-semibold transition-colors ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
                 >
                   {name}
                 </button>
               );
             })}
           </div>
-          {!form.paidById && (
+          {title === "Add expense" && form.payerIds.length === 0 && !form.paidFromBank && (
+            <p className="text-xs text-muted-foreground">Choose who paid, or select Joint bank account.</p>
+          )}
+          {title !== "Add expense" && !form.paidById && (
             <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>
           )}
+
+          {/* Per-payer split rows (add form only, 2+ payers) */}
+          {title === "Add expense" && form.payerIds.length > 1 && (() => {
+            const total = Number(form.amount) || 0;
+            const splitTotal = form.payerIds.reduce((s, id) => s + (Number(form.payerAmounts[id] || 0)), 0);
+            const diff = total - splitTotal;
+            return (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Enter how much each person paid{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ""}:
+                </p>
+                {form.payerIds.map(pid => {
+                  const member = (members ?? []).find(m => m.userId === pid);
+                  const name = member?.userName?.split(" ")[0] ?? "Member";
+                  return (
+                    <div key={pid} className="flex items-center gap-3">
+                      <span className="text-sm font-semibold w-20 shrink-0">{name}</span>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        min="0"
+                        value={form.payerAmounts[pid] ?? ""}
+                        onChange={e => form.setPayerAmounts(prev => ({ ...prev, [pid]: e.target.value }))}
+                        className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      />
+                    </div>
+                  );
+                })}
+                {Math.abs(diff) >= 1 && (
+                  <p className={`text-xs font-medium ${diff > 0 ? "text-amber-500" : "text-destructive"}`}>
+                    {diff > 0 ? `KES ${diff.toLocaleString()} still unassigned` : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
-        {/* Income source picker — shown after a payer is chosen */}
-        {form.paidById && (
+        {/* Income source picker — shown when a single named payer is chosen */}
+        {(title === "Add expense" ? (!form.paidFromBank && form.payerIds.length === 1) : form.paidById) && (
           <div className="md:col-span-2 space-y-2">
             <label className="text-sm font-semibold text-foreground">
               Paid from <span className="font-normal text-muted-foreground">(counts as contribution if personal)</span>
             </label>
             <div className="flex flex-wrap gap-2">
-              <button type="button"
-                onClick={() => { form.setIncomeSourceId(null); form.setPaidFromBank(true); }}
-                className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 font-semibold dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-muted-foreground hover:bg-muted/50"}`}
-              >
-                🏦 Joint bank account
-              </button>
+              {title === "Edit expense" && (
+                <button type="button"
+                  onClick={() => { form.setIncomeSourceId(null); form.setPaidFromBank(true); form.setPaidById(""); }}
+                  className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 font-semibold dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-muted-foreground hover:bg-muted/50"}`}
+                >
+                  🏦 Joint bank account
+                </button>
+              )}
               {(title === "Add expense" ? addFormSources : editFormSources)?.map(src => (
                 <button key={src.id} type="button"
                   onClick={() => { form.setIncomeSourceId(src.id); form.setPaidFromBank(false); }}
@@ -374,8 +467,8 @@ export default function Expenses() {
                 addNewSource ? (
                   <div className="flex items-center gap-1">
                     <Input autoFocus placeholder="Source name" value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
-                      className="h-9 text-sm w-36 bg-card" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddNewSource(form.paidById); } }} />
-                    <Button type="button" size="sm" className="h-9" onClick={() => handleAddNewSource(form.paidById)}>Add</Button>
+                      className="h-9 text-sm w-36 bg-card" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddNewSource(form.payerIds[0] ?? form.paidById); } }} />
+                    <Button type="button" size="sm" className="h-9" onClick={() => handleAddNewSource(form.payerIds[0] ?? form.paidById)}>Add</Button>
                     <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => { setAddNewSource(false); setNewSourceName(""); }}>✕</Button>
                   </div>
                 ) : (
@@ -553,10 +646,7 @@ export default function Expenses() {
                 })}
                 {/* Joint / unattributed expenses */}
                 {(() => {
-                  const jointExpenses = expenses.filter(e =>
-                    !e.paidByName ||
-                    (!e.paidByName.toLowerCase().startsWith("chege") && !e.paidByName.toLowerCase().startsWith("lydiah"))
-                  );
+                  const jointExpenses = expenses.filter(e => !e.paidByName);
                   if (jointExpenses.length === 0) return null;
                   const jointTotal = jointExpenses.reduce((s, e) => s + e.amount, 0);
                   return (

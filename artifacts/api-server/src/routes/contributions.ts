@@ -9,13 +9,9 @@ import {
 
 const router = Router();
 
-/** Returns a human-readable name from a user record, using email as fallback when firstName is null */
+/** Returns a human-readable name from a user record, using email prefix as fallback */
 function displayName(u: { firstName?: string | null; email?: string | null } | null | undefined): string {
   if (u?.firstName) return u.firstName;
-  const email = (u?.email ?? "").toLowerCase();
-  if (email.includes("mundarafrederick") || email.includes("chege")) return "Chege";
-  if (email.includes("lydiah")) return "Lydiah";
-  // Generic fallback: use the part before @ capitalised
   const prefix = u?.email?.split("@")[0] ?? "";
   return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : "Unknown";
 }

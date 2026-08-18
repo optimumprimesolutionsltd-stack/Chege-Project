@@ -8,6 +8,7 @@ import {
   useCascadeContribute,
   getGetSavingsGoalsQueryKey,
   useGetSavingsGoalContributions,
+  useGetMembers,
 } from "@workspace/api-client-react";
 import type { SavingsGoal, CascadeContributeAllocation } from "@workspace/api-client-react";
 
@@ -382,6 +383,9 @@ export default function SavingsGoals() {
   const [correctionReason, setCorrectionReason] = useState("");
   const [contributeId, setContributeId] = useState<number | null>(null);
   const [contributeAmount, setContributeAmount] = useState("");
+  const [contributePayers, setContributePayers] = useState<string[]>([]);
+  const [contributePayerAmounts, setContributePayerAmounts] = useState<Record<string, string>>({});
+  const { data: members } = useGetMembers();
 
   // Cascade payment state
   const [showCascade, setShowCascade] = useState(false);
@@ -517,14 +521,45 @@ export default function SavingsGoals() {
 
   const handleContribute = async (e: React.FormEvent, goal: SavingsGoal) => {
     e.preventDefault();
-    const amount = Number(contributeAmount);
-    if (!amount || amount <= 0) return;
+    const total = Number(contributeAmount);
+    if (!total || total <= 0) return;
+
+    const isMultiPayer = contributePayers.length > 1;
+    if (isMultiPayer) {
+      const splitTotal = contributePayers.reduce((s, id) => s + (Number(contributePayerAmounts[id] || 0)), 0);
+      if (Math.abs(splitTotal - total) >= 1) {
+        toast({ variant: "destructive", title: "Amounts don't add up", description: `Portions total ${splitTotal} but contribution is ${total}.` });
+        return;
+      }
+    }
+
+    const resetContribute = () => {
+      setContributeId(null); setContributeAmount("");
+      setContributePayers([]); setContributePayerAmounts({});
+    };
+
     try {
-      await contributeToGoal.mutateAsync({ id: goal.id, data: { amount } });
-      toast({ title: "Contribution added", description: `${formatKes(amount)} added to "${goal.name}".` });
+      if (isMultiPayer) {
+        for (const pid of contributePayers) {
+          const portionAmt = Number(contributePayerAmounts[pid] || 0);
+          if (portionAmt <= 0) continue;
+          await fetch(`/api/savings-goals/${goal.id}/contribute`, {
+            method: "POST", credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: portionAmt, userId: pid }),
+          });
+        }
+      } else {
+        const userId = contributePayers.length === 1 ? contributePayers[0] : undefined;
+        await fetch(`/api/savings-goals/${goal.id}/contribute`, {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: total, ...(userId ? { userId } : {}) }),
+        });
+      }
+      toast({ title: "Contribution added", description: `${formatKes(total)} added to "${goal.name}".` });
       invalidate();
-      setContributeId(null);
-      setContributeAmount("");
+      resetContribute();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to add contribution." });
     }
@@ -872,23 +907,78 @@ export default function SavingsGoals() {
                     )}
 
                     {goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount ? null : contributeId === goal.id ? (
-                      <form onSubmit={(e) => handleContribute(e, goal)} className="flex gap-3 items-center">
-                        <Input
-                          type="number"
-                          placeholder="Amount to add (KES)"
-                          value={contributeAmount}
-                          onChange={(e) => setContributeAmount(e.target.value)}
-                          min="1"
-                          required
-                          className="h-10 bg-muted/40"
-                          autoFocus
-                        />
-                        <Button type="submit" size="sm" className="h-10 rounded-lg shrink-0" disabled={contributeToGoal.isPending}>
-                          {contributeToGoal.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" className="h-10 rounded-lg" onClick={() => { setContributeId(null); setContributeAmount(""); }}>
-                          Cancel
-                        </Button>
+                      <form onSubmit={(e) => handleContribute(e, goal)} className="space-y-3">
+                        <div className="flex gap-3 items-center">
+                          <Input
+                            type="number"
+                            placeholder="Amount to add (KES)"
+                            value={contributeAmount}
+                            onChange={(e) => setContributeAmount(e.target.value)}
+                            min="1"
+                            required
+                            className="h-10 bg-muted/40"
+                            autoFocus
+                          />
+                          <Button type="submit" size="sm" className="h-10 rounded-lg shrink-0" disabled={contributeToGoal.isPending}>
+                            {contributeToGoal.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-10 rounded-lg shrink-0"
+                            onClick={() => { setContributeId(null); setContributeAmount(""); setContributePayers([]); setContributePayerAmounts({}); }}>
+                            Cancel
+                          </Button>
+                        </div>
+                        {/* Who is contributing */}
+                        {(members ?? []).length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground font-medium">
+                              Who is contributing? <span className="font-normal">(optional · select multiple to split)</span>
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {(members ?? []).map(m => {
+                                const name = m.userName?.split(" ")[0] ?? "Member";
+                                const sel = contributePayers.includes(m.userId);
+                                return (
+                                  <button key={m.userId} type="button"
+                                    onClick={() => setContributePayers(prev =>
+                                      prev.includes(m.userId) ? prev.filter(id => id !== m.userId) : [...prev, m.userId]
+                                    )}
+                                    className={`px-3 h-8 rounded-lg text-sm border transition-colors ${sel ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}>
+                                    {name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {/* Per-payer split rows */}
+                            {contributePayers.length > 1 && (() => {
+                              const total = Number(contributeAmount) || 0;
+                              const splitTotal = contributePayers.reduce((s, id) => s + (Number(contributePayerAmounts[id] || 0)), 0);
+                              const diff = total - splitTotal;
+                              return (
+                                <div className="space-y-1.5">
+                                  {contributePayers.map(pid => {
+                                    const member = (members ?? []).find(m => m.userId === pid);
+                                    const name = member?.userName?.split(" ")[0] ?? "Member";
+                                    return (
+                                      <div key={pid} className="flex items-center gap-3">
+                                        <span className="text-sm font-semibold w-20 shrink-0">{name}</span>
+                                        <input type="number" placeholder="0" min="0"
+                                          value={contributePayerAmounts[pid] ?? ""}
+                                          onChange={e => setContributePayerAmounts(prev => ({ ...prev, [pid]: e.target.value }))}
+                                          className="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                  {Math.abs(diff) >= 1 && (
+                                    <p className={`text-xs font-medium ${diff > 0 ? "text-amber-500" : "text-destructive"}`}>
+                                      {diff > 0 ? `KES ${diff.toLocaleString()} still unassigned` : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </form>
                     ) : (
                       <Button

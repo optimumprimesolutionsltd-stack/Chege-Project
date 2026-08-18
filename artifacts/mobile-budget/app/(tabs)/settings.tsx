@@ -232,15 +232,6 @@ export default function SettingsScreen() {
         {/* App */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>APP</Text>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-            <View style={styles.rowLeft}>
-              <View style={[styles.rowIcon, { backgroundColor: '#1a3320' }]}>
-                <Feather name="users" size={16} color="#4ade80" />
-              </View>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Household</Text>
-            </View>
-            <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>Chege & Lydiah</Text>
-          </View>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
               <View style={[styles.rowIcon, { backgroundColor: colors.muted }]}>

@@ -37,15 +37,13 @@ import { useToast } from "@/hooks/use-toast";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
-const CHEGE_ID = "63497598";
-const LYDIAH_ID = "63570605";
-
 // ── Quick Action: Bank Deposit ────────────────────────────────────────────────
 function IncomeForm({ onDone }: { onDone: () => void }) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [madeById, setMadeById] = useState<string>(CHEGE_ID);
+  const [madeById, setMadeById] = useState<string>("");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const { data: members = [] } = useGetMembers();
   const createDeposit = useCreateDeposit();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -79,7 +77,7 @@ function IncomeForm({ onDone }: { onDone: () => void }) {
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
       qc.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
-      const who = madeById === CHEGE_ID ? "Chege" : "Lydiah";
+      const who = members.find(m => m.userId === madeById)?.userName?.split(" ")[0] ?? "Member";
       toast({ title: "Deposit recorded", description: `${who} · ${formatKes(amt)} added to this month.` });
       onDone();
     } catch {
@@ -93,12 +91,15 @@ function IncomeForm({ onDone }: { onDone: () => void }) {
       <div className="space-y-1.5">
         <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
         <div className="grid grid-cols-2 gap-2">
-          {[{ id: CHEGE_ID, name: "Chege" }, { id: LYDIAH_ID, name: "Lydiah" }].map(({ id, name }) => (
-            <button key={id} type="button" onClick={() => { setMadeById(id); setIncomeSourceId(null); }}
-              className={`py-3 rounded-xl border text-sm font-semibold transition-colors ${madeById === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}>
-              {name}
-            </button>
-          ))}
+          {members.map((m) => {
+            const name = m.userName?.split(" ")[0] ?? "Member";
+            return (
+              <button key={m.userId} type="button" onClick={() => { setMadeById(m.userId); setIncomeSourceId(null); }}
+                className={`py-3 rounded-xl border text-sm font-semibold transition-colors ${madeById === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}>
+                {name}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
