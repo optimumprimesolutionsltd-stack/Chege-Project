@@ -12,4 +12,5 @@
 - [Activity type constants](activity-types.md) — ACTIVITY_TYPE = { EXPENSE, CONTRIBUTION } in lib/activityTypes.ts (mobile) and src/lib/activityTypes.ts (web); use instead of inline strings.
 - [Bank balance invalidation](bank-balance-invalidation.md) — after deposit/disbursement/delete on bank.tsx, call invalidateQueries({ queryKey: getGetJointAccountQueryKey() }) so home-screen card updates immediately.
 - [Deployment build script entry point](deployment-build-script.md) — scripts/build.js bundle URL must match package.json "main"; update downloadBundle() entryPath whenever main changes.
-- [Income source tracking](income-source-tracking.md) — contributions screen is a read-only report (no manual entry/delete). Totals derived from expenses + deposits + savings. Old contributions table kept for history only.
+- [Income source tracking](income-source-tracking.md) — contributions = expenses (paidFromBank=false) + bank deposits + savings contributions. paidFromBank=true expenses excluded to avoid double-counting with deposit.
+- [paidFromBank flag](paid-from-bank.md) — expenses.paid_from_bank boolean (default false); when true, dashboard excludes from contributions. Set via "Joint bank" chip in expense form (mobile + web).

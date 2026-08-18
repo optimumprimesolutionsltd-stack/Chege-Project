@@ -69,6 +69,7 @@ export default function DashboardScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [isPrivate, setIsPrivate] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
 
   // Load privacy preference
   useEffect(() => {
@@ -340,13 +341,36 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* FAB */}
+      {/* Multi-action FAB */}
+      {fabOpen && (
+        <Pressable style={styles.fabBackdrop} onPress={() => setFabOpen(false)} />
+      )}
+      {fabOpen && (
+        <View style={[styles.fabMenu, { bottom: Platform.OS === 'web' ? 166 : insets.bottom + 136 }]}>
+          {[
+            { icon: 'plus-circle' as const, label: 'Expense', color: '#4ade80', bg: '#1a3320', route: '/add-expense' },
+            { icon: 'credit-card' as const, label: 'Deposit', color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank' },
+            { icon: 'target' as const, label: 'Savings', color: '#f472b6', bg: '#2a0a1a', route: '/(tabs)/goals' },
+          ].map((item) => (
+            <Pressable
+              key={item.label}
+              style={[styles.fabMenuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => { setFabOpen(false); router.push(item.route as any); }}
+            >
+              <View style={[styles.fabMenuIcon, { backgroundColor: item.bg }]}>
+                <Feather name={item.icon} size={18} color={item.color} />
+              </View>
+              <Text style={[styles.fabMenuLabel, { color: colors.foreground }]}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
       <Pressable
-        style={[styles.fab, { backgroundColor: colors.secondary, bottom: Platform.OS === 'web' ? 100 : insets.bottom + 70 }]}
-        onPress={() => router.push('/add-expense')}
+        style={[styles.fab, { backgroundColor: fabOpen ? colors.foreground : colors.secondary, bottom: Platform.OS === 'web' ? 100 : insets.bottom + 70 }]}
+        onPress={() => setFabOpen(o => !o)}
         hitSlop={8}
       >
-        <Feather name="plus" size={28} color="#fff" />
+        <Feather name={fabOpen ? 'x' : 'plus'} size={28} color={fabOpen ? colors.background : '#fff'} />
       </Pressable>
     </View>
   );
@@ -434,6 +458,11 @@ const styles = StyleSheet.create({
   emptyBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
+  fabBackdrop: { ...StyleSheet.absoluteFillObject, zIndex: 10 },
+  fabMenu: { position: 'absolute', right: 12, zIndex: 11, gap: 8 },
+  fabMenuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
+  fabMenuIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  fabMenuLabel: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
 
   bankCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   bankCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },

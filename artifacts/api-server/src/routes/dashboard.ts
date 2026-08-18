@@ -52,7 +52,7 @@ router.get("/dashboard/summary", async (req, res) => {
       total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
     })
     .from(expensesTable)
-    .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
+    .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year} AND ${expensesTable.paidFromBank} = false`)
     .groupBy(expensesTable.paidById),
 
     db.select({

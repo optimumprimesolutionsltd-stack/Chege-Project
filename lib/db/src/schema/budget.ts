@@ -36,7 +36,8 @@ export const expensesTable = pgTable("expenses", {
   description: text("description").notNull(),
   notes: text("notes"),                          // optional extra notes
   paidById: text("paid_by_id").notNull(),
-  incomeSourceId: integer("income_source_id"), // set when paid directly from personal income; null = paid from joint bank
+  incomeSourceId: integer("income_source_id"),
+  paidFromBank: boolean("paid_from_bank").notNull().default(false), // true = funded from joint account deposit (already counted as contribution)
   isRecurring: boolean("is_recurring").notNull().default(false),
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -78,6 +78,7 @@ export default function AddExpenseSheet() {
   const [notes, setNotes] = useState('');
   const [paidById, setPaidById] = useState('');
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [paidFromBank, setPaidFromBank] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
 
   const { data: incomeSources = [] } = useQuery<IncomeSource[]>({
@@ -140,6 +141,7 @@ export default function AddExpenseSheet() {
         paidById,
         isRecurring,
         date,
+        paidFromBank,
         ...(incomeSourceId ? { incomeSourceId } : {}),
       } as Parameters<typeof createExpense>[0]['data'],
     });
@@ -344,19 +346,18 @@ export default function AddExpenseSheet() {
             <Text style={[styles.label, { color: colors.mutedForeground }]}>PAID FROM</Text>
             <View style={styles.paidByRow}>
               <Pressable
-                onPress={() => setIncomeSourceId(null)}
+                onPress={() => { setIncomeSourceId(null); setPaidFromBank(true); }}
                 style={[
                   styles.paidByPill,
                   {
-                    backgroundColor: incomeSourceId === null ? colors.muted : colors.muted,
-                    borderColor: incomeSourceId === null ? colors.foreground + '50' : colors.border,
+                    backgroundColor: paidFromBank ? '#0e4f6e22' : colors.muted,
+                    borderColor: paidFromBank ? '#38bdf8' : colors.border,
                     borderRadius: colors.radius,
-                    borderStyle: incomeSourceId === null ? 'solid' : 'solid',
                   },
                 ]}
               >
-                <Feather name="credit-card" size={14} color={incomeSourceId === null ? colors.foreground : colors.mutedForeground} />
-                <Text style={[styles.paidByText, { color: incomeSourceId === null ? colors.foreground : colors.mutedForeground, fontFamily: incomeSourceId === null ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
+                <Feather name="credit-card" size={14} color={paidFromBank ? '#38bdf8' : colors.mutedForeground} />
+                <Text style={[styles.paidByText, { color: paidFromBank ? '#38bdf8' : colors.mutedForeground, fontFamily: paidFromBank ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
                   Joint bank
                 </Text>
               </Pressable>
@@ -365,7 +366,7 @@ export default function AddExpenseSheet() {
                 return (
                   <Pressable
                     key={src.id}
-                    onPress={() => setIncomeSourceId(selected ? null : src.id)}
+                    onPress={() => { setIncomeSourceId(selected ? null : src.id); setPaidFromBank(false); }}
                     style={[
                       styles.paidByPill,
                       {
@@ -384,7 +385,7 @@ export default function AddExpenseSheet() {
               })}
             </View>
             <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              Tag which income stream funded this expense
+              {paidFromBank ? 'Paid from joint bank — already counted via deposit, not double-counted' : 'Tag which income stream funded this expense'}
             </Text>
           </>
         )}

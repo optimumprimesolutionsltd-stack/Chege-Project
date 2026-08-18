@@ -67,9 +67,10 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [notes, setNotes] = useState(defaults?.notes ?? "");
   const [paidById, setPaidById] = useState(defaults?.paidById ?? "");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [paidFromBank, setPaidFromBank] = useState(false);
   const [isRecurring, setIsRecurring] = useState(defaults?.isRecurring ?? false);
   const [date, setDate] = useState(defaults?.date ?? today.toISOString().split("T")[0]);
-  return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes, paidById, setPaidById, incomeSourceId, setIncomeSourceId, isRecurring, setIsRecurring, date, setDate };
+  return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes, paidById, setPaidById, incomeSourceId, setIncomeSourceId, paidFromBank, setPaidFromBank, isRecurring, setIsRecurring, date, setDate };
 }
 
 function useIncomeSources(userId: string) {
@@ -208,6 +209,7 @@ export default function Expenses() {
           paidById: addForm.paidById || undefined,
           isRecurring: addForm.isRecurring,
           date: addForm.date,
+          paidFromBank: addForm.paidFromBank,
           ...(addForm.incomeSourceId ? { incomeSourceId: addForm.incomeSourceId } : {}),
         } as Parameters<typeof createExpense.mutateAsync>[0]["data"]
       });
@@ -233,6 +235,7 @@ export default function Expenses() {
           paidById: editForm.paidById || undefined,
           isRecurring: editForm.isRecurring,
           date: editForm.date,
+          paidFromBank: editForm.paidFromBank,
           ...(editForm.incomeSourceId ? { incomeSourceId: editForm.incomeSourceId } : {}),
         } as Parameters<typeof updateExpense.mutateAsync>[0]["data"]
       });
@@ -354,14 +357,14 @@ export default function Expenses() {
             </label>
             <div className="flex flex-wrap gap-2">
               <button type="button"
-                onClick={() => form.setIncomeSourceId(null)}
-                className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.incomeSourceId === null ? "bg-muted text-foreground border-foreground/30 font-semibold" : "bg-card border-input text-muted-foreground hover:bg-muted/50"}`}
+                onClick={() => { form.setIncomeSourceId(null); form.setPaidFromBank(true); }}
+                className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 font-semibold dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-muted-foreground hover:bg-muted/50"}`}
               >
-                Joint bank account
+                🏦 Joint bank account
               </button>
               {(title === "Add expense" ? addFormSources : editFormSources)?.map(src => (
                 <button key={src.id} type="button"
-                  onClick={() => form.setIncomeSourceId(src.id)}
+                  onClick={() => { form.setIncomeSourceId(src.id); form.setPaidFromBank(false); }}
                   className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.incomeSourceId === src.id ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
                 >
                   {src.name}

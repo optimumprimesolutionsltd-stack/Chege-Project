@@ -147,6 +147,7 @@ router.post("/expenses", async (req, res) => {
   const incomeSourceId: number | undefined = (req.body as { incomeSourceId?: unknown }).incomeSourceId != null
     ? Number((req.body as { incomeSourceId: unknown }).incomeSourceId)
     : undefined;
+  const paidFromBank: boolean = (req.body as { paidFromBank?: unknown }).paidFromBank === true;
 
   if (!paidById) {
     res.status(400).json({ error: "paidById is required — choose who paid." });
@@ -168,7 +169,7 @@ router.post("/expenses", async (req, res) => {
 
   const [expense] = await db
     .insert(expensesTable)
-    .values({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId: incomeSourceId ?? null, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
+    .values({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId: incomeSourceId ?? null, paidFromBank, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .returning();
 
   const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
@@ -189,6 +190,7 @@ router.patch("/expenses/:id", async (req, res) => {
   const incomeSourceId: number | null = (req.body as { incomeSourceId?: unknown }).incomeSourceId != null
     ? Number((req.body as { incomeSourceId: unknown }).incomeSourceId)
     : null;
+  const paidFromBank: boolean = (req.body as { paidFromBank?: unknown }).paidFromBank === true;
 
   if (!paidById) {
     res.status(400).json({ error: "paidById is required — choose who paid." });
@@ -204,7 +206,7 @@ router.patch("/expenses/:id", async (req, res) => {
 
   const [updated] = await db
     .update(expensesTable)
-    .set({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
+    .set({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId, paidFromBank, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .where(eq(expensesTable.id, Math.round(idParsed.data.id)))
     .returning();
 
