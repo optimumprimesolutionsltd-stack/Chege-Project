@@ -15,8 +15,28 @@ import {
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
+import * as Updates from 'expo-updates';
 import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
+
+// Check for OTA updates and reload immediately when one is available.
+// Skipped in development (Expo Go / dev-client) where Updates is not active.
+function useAutoUpdate() {
+  useEffect(() => {
+    if (__DEV__ || !Updates.isEnabled) return;
+    (async () => {
+      try {
+        const result = await Updates.checkForUpdateAsync();
+        if (result.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch {
+        // Network unavailable or server error — silently ignore, user keeps current bundle
+      }
+    })();
+  }, []);
+}
 
 // Configure API client at module level — must be before any component renders.
 // Fall back to the production domain so API calls never silently fail if
@@ -92,6 +112,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  useAutoUpdate();
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
