@@ -455,23 +455,23 @@ export default function Dashboard() {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Balance</p>
-                <p className="text-2xl font-display font-bold text-sky-600 dark:text-sky-400">
+                <p className="text-lg sm:text-2xl font-display font-bold text-sky-600 dark:text-sky-400 break-all">
                   {bankAccount ? formatKes(bankAccount.balance) : "—"}
                 </p>
               </div>
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Deposited</p>
-                <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                <p className="text-sm sm:text-lg font-semibold text-emerald-600 dark:text-emerald-400 break-all">
                   +{formatKes(monthlyDeposited)}
                 </p>
                 <p className="text-xs text-muted-foreground">this month</p>
               </div>
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Disbursed</p>
-                <p className="text-lg font-semibold text-rose-600 dark:text-rose-400">
+                <p className="text-sm sm:text-lg font-semibold text-rose-600 dark:text-rose-400 break-all">
                   -{formatKes(monthlyDisbursed)}
                 </p>
                 <p className="text-xs text-muted-foreground">this month</p>

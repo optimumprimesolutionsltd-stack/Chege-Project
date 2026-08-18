@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, PiggyBank, Activity, LogOut, Menu, Settings, Target, Landmark } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, PiggyBank, Activity, LogOut, Menu, X, Settings, Target, Landmark } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -85,13 +85,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <span className="font-display font-bold text-lg">Chege Project</span>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-sidebar-foreground">
-          <Menu className="w-6 h-6" />
+          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-sidebar pt-16 flex flex-col">
+        <div className="md:hidden fixed inset-0 z-40 bg-sidebar pt-16 flex flex-col" onClick={(e) => { if (e.target === e.currentTarget) setIsMobileMenuOpen(false); }}>
           <nav className="flex-1 p-4 space-y-2">
             {navItems.map((item) => {
               const isActive = location === item.href;

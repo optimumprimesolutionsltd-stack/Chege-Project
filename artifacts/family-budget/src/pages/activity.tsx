@@ -30,34 +30,34 @@ export default function Activity() {
           ) : (
             <div className="divide-y divide-border/50">
               {activity.map((item) => (
-                <div key={item.id} className="p-5 sm:p-6 flex items-center justify-between hover:bg-muted/10 transition-colors">
-                  <div className="flex items-center gap-5">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
-                      item.type === ACTIVITY_TYPE.EXPENSE ? 'bg-accent/50 text-accent-foreground border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
-                    }`}>
-                      {item.type === ACTIVITY_TYPE.EXPENSE ? <ArrowDownRight className="w-6 h-6" /> : <ArrowUpRight className="w-6 h-6" />}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground text-lg">{item.description}</p>
-                      <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                        <span className="font-medium text-foreground/70">{item.userName}</span>
-                        <span className="w-1 h-1 rounded-full bg-border"></span>
-                        <span>{formatDate(item.date)}</span>
-                        {item.category && (
-                          <>
-                            <span className="w-1 h-1 rounded-full bg-border"></span>
-                            <span className="px-2 py-0.5 bg-secondary/10 text-secondary-foreground rounded text-xs border border-secondary/20">
-                              {item.category}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className={`font-display font-bold text-xl whitespace-nowrap ${
-                    item.type === ACTIVITY_TYPE.EXPENSE ? 'text-foreground' : 'text-primary'
+                <div key={item.id} className="p-4 sm:p-6 flex items-start sm:items-center gap-3 sm:gap-5 hover:bg-muted/10 transition-colors">
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+                    item.type === ACTIVITY_TYPE.EXPENSE ? 'bg-accent/50 text-accent-foreground border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
                   }`}>
-                    {item.type === ACTIVITY_TYPE.EXPENSE ? '-' : '+'}{formatKes(item.amount)}
+                    {item.type === ACTIVITY_TYPE.EXPENSE ? <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6" /> : <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-foreground text-sm sm:text-base leading-tight truncate">{item.description}</p>
+                      <span className={`font-display font-bold text-base sm:text-lg whitespace-nowrap shrink-0 ${
+                        item.type === ACTIVITY_TYPE.EXPENSE ? 'text-foreground' : 'text-primary'
+                      }`}>
+                        {item.type === ACTIVITY_TYPE.EXPENSE ? '-' : '+'}{formatKes(item.amount)}
+                      </span>
+                    </div>
+                    <div className="text-xs sm:text-sm text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                      <span className="font-medium text-foreground/70">{item.userName}</span>
+                      <span className="w-1 h-1 rounded-full bg-border"></span>
+                      <span>{formatDate(item.date)}</span>
+                      {item.category && (
+                        <>
+                          <span className="w-1 h-1 rounded-full bg-border hidden sm:inline-block"></span>
+                          <span className="px-1.5 py-0.5 bg-secondary/10 text-secondary-foreground rounded text-xs border border-secondary/20">
+                            {item.category}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

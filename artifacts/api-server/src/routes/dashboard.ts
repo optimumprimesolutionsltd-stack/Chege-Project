@@ -12,7 +12,6 @@ import { GetDashboardSummaryQueryParams, GetDashboardCategoryBreakdownQueryParam
 
 const CHEGE_TARGET = 267094;
 const LYDIAH_TARGET = 50000;
-const TOTAL_BUDGET = 317094;
 
 const router = Router();
 
@@ -23,6 +22,12 @@ router.get("/dashboard/summary", async (req, res) => {
   const parsed = GetDashboardSummaryQueryParams.safeParse(req.query);
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+
+  // Sum budget_categories for the live total — never hardcoded
+  const [budgetRow] = await db
+    .select({ total: sql<number>`COALESCE(SUM(${budgetCategoriesTable.budgetAmount}), 0)` })
+    .from(budgetCategoriesTable);
+  const totalBudget = Number(budgetRow.total);
 
   const [spentRow] = await db
     .select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
@@ -98,9 +103,9 @@ router.get("/dashboard/summary", async (req, res) => {
   const totalSpent = Number(spentRow.total) + Number(categorisedDisbursementsRow.total);
   res.json({
     month, year,
-    totalBudget: TOTAL_BUDGET,
+    totalBudget,
     totalSpent,
-    remaining: TOTAL_BUDGET - totalSpent,
+    remaining: totalBudget - totalSpent,
     chegeContributed,
     lydiahContributed,
     chegeSpent,
