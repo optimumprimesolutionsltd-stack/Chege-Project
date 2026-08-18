@@ -19,8 +19,11 @@ import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
 
 // Configure API client at module level — must be before any component renders.
+// Fall back to the production domain so API calls never silently fail if
+// EXPO_PUBLIC_DOMAIN is absent from an OTA bundle (it is baked in at export time).
+const PRODUCTION_API_BASE = 'https://delete-project.replit.app';
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
-if (domain) setBaseUrl(`https://${domain}`);
+setBaseUrl(domain ? `https://${domain}` : PRODUCTION_API_BASE);
 setAuthTokenGetter(() => SecureStore.getItemAsync(AUTH_TOKEN_KEY));
 
 SplashScreen.preventAutoHideAsync();

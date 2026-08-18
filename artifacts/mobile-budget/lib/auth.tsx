@@ -31,11 +31,13 @@ const AuthContext = createContext<AuthContextValue>({
   logout: async () => {},
 });
 
+const PRODUCTION_API = 'https://delete-project.replit.app';
+
 function getApiBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_DOMAIN) {
     return `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
   }
-  return '';
+  return PRODUCTION_API;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

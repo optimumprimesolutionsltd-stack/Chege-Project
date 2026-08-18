@@ -42,14 +42,20 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 ## Export + push recipe
 ```bash
 cd artifacts/mobile-budget
-# Export (skip Hermes bytecode — hermesc can't handle DOMRectReadOnly.js private fields)
-node_modules/.bin/expo export --platform android --output-dir /tmp/expo-dist --no-bytecode --dump-assetmap
+# Export — MUST set EXPO_PUBLIC_* env vars to production values so the OTA bundle
+# hits the production API, not a blank/dev domain.
+EXPO_PUBLIC_DOMAIN=delete-project.replit.app \
+EXPO_PUBLIC_REPL_ID=fe31a091-a4ed-426d-b193-7f5e5c036bb9 \
+node_modules/.bin/expo export --platform android --output-dir /tmp/ota-dist --no-bytecode --dump-assetmap --clear
 
 # Push OTA update (skip re-bundling to avoid hermesc)
 npx eas update --channel preview --platform android \
-  --skip-bundler --input-dir /tmp/expo-dist \
+  --skip-bundler --input-dir /tmp/ota-dist \
   --message "..." --non-interactive
 ```
+
+**Critical**: `EXPO_PUBLIC_*` vars are baked into the JS bundle at export time. If omitted,
+`getApiBaseUrl()` returns `''` and all API calls (including sign-in) silently fail on device.
 
 **Why** `--no-bytecode`: the hermesc binary in RN 0.81.5 rejects ES2022 private class fields (`#x`, `#y`) in `react-native/src/private/webapis/geometry/DOMRectReadOnly.js`. OTA JS-only updates work fine without bytecode.
 
