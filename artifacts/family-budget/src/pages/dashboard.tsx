@@ -524,23 +524,23 @@ export default function Dashboard() {
             <CardDescription>Target vs Contributed for this month</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
-            {[
-              { name: "Chege",  contributed: summary.chegeContributed,  target: summary.chegeTarget,  color: "bg-primary" },
-              { name: "Lydiah", contributed: summary.lydiahContributed, target: summary.lydiahTarget, color: "bg-secondary" },
-            ].map(({ name, contributed, target, color }) => (
-              <div key={name} className="space-y-3">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="font-semibold text-foreground text-lg">{name}</p>
-                    <p className="text-sm text-muted-foreground">Target: {formatKes(target)}</p>
+            {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(({ name, contributed, target }: {name: string; contributed: number; target: number | null}, idx: number) => {
+              const color = idx === 0 ? "bg-primary" : "bg-secondary";
+              return (
+                <div key={name} className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="font-semibold text-foreground text-lg">{name}</p>
+                      {target != null && <p className="text-sm text-muted-foreground">Target: {formatKes(target)}</p>}
+                    </div>
+                    <p className="font-display font-bold text-xl text-primary">{formatKes(contributed)}</p>
                   </div>
-                  <p className="font-display font-bold text-xl text-primary">{formatKes(contributed)}</p>
+                  <div className="h-2.5 w-full bg-secondary/20 rounded-full overflow-hidden">
+                    <div className={`h-full ${color} rounded-full transition-all duration-1000`} style={{ width: `${Math.min(target && target > 0 ? (contributed / target) * 100 : 0, 100)}%` }} />
+                  </div>
                 </div>
-                <div className="h-2.5 w-full bg-secondary/20 rounded-full overflow-hidden">
-                  <div className={`h-full ${color} rounded-full transition-all duration-1000`} style={{ width: `${Math.min((contributed / target) * 100 || 0, 100)}%` }} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
             <Link href="/contributions" className="text-sm font-medium text-primary hover:underline block pt-2">View contribution history →</Link>
           </CardContent>
         </Card>

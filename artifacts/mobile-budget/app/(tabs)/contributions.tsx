@@ -390,11 +390,16 @@ export default function ContributionsScreen() {
 
   const { data: summary, isLoading, refetch } = useGetDashboardSummary({ month, year });
 
-  // Summary data with safe fallbacks
-  const chegeId = summary?.chegeId as string | undefined;
-  const lydiahId = summary?.lydiahId as string | undefined;
-  const chegeNet = (summary?.chegeContributed ?? 0) - (summary?.chegeSpent ?? 0);
-  const lydiahNet = (summary?.lydiahContributed ?? 0) - (summary?.lydiahSpent ?? 0);
+  type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
+  const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
+
+  const MEMBER_PALETTE = [
+    { accent: '#4ade80', gradient: ['#132a1c', '#0f2217'] as [string, string] },
+    { accent: '#f97316', gradient: ['#2a1c0a', '#1c130a'] as [string, string] },
+    { accent: '#38bdf8', gradient: ['#0e2030', '#0a1c2a'] as [string, string] },
+    { accent: '#f472b6', gradient: ['#2a0a1a', '#1c0a14'] as [string, string] },
+    { accent: '#a78bfa', gradient: ['#1a0a2a', '#12081c'] as [string, string] },
+  ];
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -444,7 +449,7 @@ export default function ContributionsScreen() {
         {!isLoading && summary && (
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total contributed</Text>
-            <Text style={styles.totalAmount}>KES {formatKES((summary.chegeContributed ?? 0) + (summary.lydiahContributed ?? 0))}</Text>
+            <Text style={styles.totalAmount}>KES {formatKES(memberContribs.reduce((s, m) => s + m.contributed, 0))}</Text>
           </View>
         )}
       </LinearGradient>
@@ -496,30 +501,24 @@ export default function ContributionsScreen() {
           <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
         ) : summary ? (
           <View style={styles.cards}>
-            <MemberCard
-              userId="63497598"
-              name="Chege"
-              initial="C"
-              contributed={summary.chegeContributed ?? 0}
-              spent={summary.chegeSpent ?? 0}
-              net={chegeNet}
-              target={summary.chegeTarget ?? 0}
-              accentColor="#4ade80"
-              gradientColors={['#132a1c', '#0f2217']}
-              onPress={() => openBreakdown('63497598', 'Chege', '#4ade80')}
-            />
-            <MemberCard
-              userId="63570605"
-              name="Lydiah"
-              initial="L"
-              contributed={summary.lydiahContributed ?? 0}
-              spent={summary.lydiahSpent ?? 0}
-              net={lydiahNet}
-              target={summary.lydiahTarget ?? 0}
-              accentColor="#cf7217"
-              gradientColors={['#2a1c0a', '#1c130a']}
-              onPress={() => openBreakdown('63570605', 'Lydiah', '#cf7217')}
-            />
+            {memberContribs.map((m, idx) => {
+              const palette = MEMBER_PALETTE[idx % MEMBER_PALETTE.length];
+              return (
+                <MemberCard
+                  key={m.userId}
+                  userId={m.userId}
+                  name={m.name}
+                  initial={m.name[0]?.toUpperCase() ?? '?'}
+                  contributed={m.contributed}
+                  spent={m.spent}
+                  net={m.net}
+                  target={m.target ?? 0}
+                  accentColor={palette.accent}
+                  gradientColors={palette.gradient}
+                  onPress={() => openBreakdown(m.userId, m.name, palette.accent)}
+                />
+              );
+            })}
           </View>
         ) : null}
       </ScrollView>

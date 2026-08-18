@@ -1,6 +1,6 @@
-# Family Budget
+# Bajeti
 
-A shared kids' budget tracker for Chege and Lydiah covering Nathan, Keren, Hadassah & David. Both parents sign in, track expenses, record monthly contributions, and monitor spending against the KES 317,094/month joint budget.
+A household budget tracker for families, couples, or individuals. Any number of household members can sign in, track expenses, record contributions, set savings goals, and monitor spending — all together in one place.
 
 ## Run & Operate
 
@@ -34,8 +34,7 @@ A shared kids' budget tracker for Chege and Lydiah covering Nathan, Keren, Hadas
 
 ## Architecture decisions
 
-- Income-proportional split: Chege 84.2% (KES 267,094), Lydiah 15.8% (KES 50,000)
-- Budget total is KES 317,094/month across 14 categories in 5 priority tiers
+- Budget total is derived from the sum of budget_categories — never hardcoded
 - Budget categories are seeded at startup, not user-managed (stable reference data)
 - Sessions stored in PostgreSQL via Replit Auth; no local auth (no passwords)
 - All API routes require authentication (401 if not signed in)
@@ -50,7 +49,7 @@ A shared kids' budget tracker for Chege and Lydiah covering Nathan, Keren, Hadas
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- **Public-friendly**: The app is for the masses — no hardcoded personal names, IDs, or targets anywhere in UI or API code. All member data must be dynamic (loaded from the members table / API). Contribution targets are optional per-member fields set in the DB, not constants in code.
 
 ## Gotchas
 

@@ -7,12 +7,10 @@ import {
   jointAccountTxTable,
   savingsGoalContributionsTable,
   savingsGoalsTable,
+  membersTable,
 } from "@workspace/db";
 import { sql, eq } from "drizzle-orm";
 import { GetDashboardSummaryQueryParams, GetDashboardCategoryBreakdownQueryParams } from "@workspace/api-zod";
-
-const CHEGE_TARGET = 267094;
-const LYDIAH_TARGET = 50000;
 
 const router = Router();
 
@@ -107,41 +105,26 @@ router.get("/dashboard/summary", async (req, res) => {
     .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
     .groupBy(expensesTable.paidById);
 
-  const users = await db.select().from(usersTable);
+  // Load all household members with their names and optional monthly targets
+  const memberRows = await db
+    .select({ userId: membersTable.userId, firstName: usersTable.firstName, monthlyTarget: membersTable.monthlyTarget })
+    .from(membersTable)
+    .leftJoin(usersTable, eq(usersTable.id, membersTable.userId));
 
-  // Identify Chege and Lydiah by name OR email (firstName may be null if they
-  // haven't logged in since the profile-save was added, so email is the reliable fallback)
-  const isChege = (u?: typeof usersTable.$inferSelect | null) => {
-    const n = (u?.firstName ?? "").toLowerCase();
-    const e = (u?.email ?? "").toLowerCase();
-    return n.includes("chege") || n.includes("george") || n.includes("frederick") || e.includes("mundarafrederick");
-  };
-  const isLydiah = (u?: typeof usersTable.$inferSelect | null) => {
-    const n = (u?.firstName ?? "").toLowerCase();
-    const e = (u?.email ?? "").toLowerCase();
-    return n.includes("lydiah") || n.includes("lydia") || e.includes("lydiah");
-  };
-
-  let chegeContributed = 0;
-  let lydiahContributed = 0;
-  let chegeSpent = 0;
-  let lydiahSpent = 0;
-
-  for (const c of contribs) {
-    const user = users.find((u) => u.id === c.userId);
-    if (isChege(user)) chegeContributed += Number(c.total);
-    else if (isLydiah(user)) lydiahContributed += Number(c.total);
-    else if (chegeContributed === 0) chegeContributed += Number(c.total);
-    else lydiahContributed += Number(c.total);
-  }
-
-  for (const e of memberExpenses) {
-    const user = users.find((u) => u.id === e.userId);
-    if (isChege(user)) chegeSpent += Number(e.total);
-    else if (isLydiah(user)) lydiahSpent += Number(e.total);
-    else if (chegeSpent === 0) chegeSpent += Number(e.total);
-    else lydiahSpent += Number(e.total);
-  }
+  // Build fully dynamic memberContributions[] — no hardcoded names or targets
+  const spentByMember = new Map(memberExpenses.map(e => [e.userId, Number(e.total)]));
+  const memberContributions = memberRows.map(m => {
+    const contributed = contribMap.get(m.userId) ?? 0;
+    const spent = spentByMember.get(m.userId) ?? 0;
+    return {
+      userId: m.userId,
+      name: m.firstName ?? "Member",
+      contributed,
+      spent,
+      net: contributed - spent,
+      target: m.monthlyTarget ?? null,
+    };
+  });
 
   const totalSpent = Number(spentRow.total) + Number(categorisedDisbursementsRow.total);
   res.json({
@@ -149,15 +132,8 @@ router.get("/dashboard/summary", async (req, res) => {
     totalBudget,
     totalSpent,
     remaining: totalBudget - totalSpent,
-    chegeContributed,
-    lydiahContributed,
-    chegeSpent,
-    lydiahSpent,
-    chegeNet: chegeContributed - chegeSpent,
-    lydiahNet: lydiahContributed - lydiahSpent,
-    chegeTarget: CHEGE_TARGET,
-    lydiahTarget: LYDIAH_TARGET,
     expenseCount: Number(countRow.count),
+    memberContributions,
   });
 });
 

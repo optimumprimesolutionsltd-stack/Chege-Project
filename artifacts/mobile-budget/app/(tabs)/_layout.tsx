@@ -8,14 +8,20 @@ import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GlobalFAB } from '@/components/GlobalFAB';
 
 // iOS 26+: NativeTabs with liquid glass support
+// 5 core tabs — Bank, Reports, Settings accessible via Home shortcuts / header gear
 function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'house', selected: 'house.fill' }} />
         <Label>Home</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="history">
+        <Icon sf={{ default: 'clock', selected: 'clock.fill' }} />
+        <Label>Activity</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="budget">
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
@@ -27,15 +33,7 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="contributions">
         <Icon sf={{ default: 'person.2', selected: 'person.2.fill' }} />
-        <Label>Contributions</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="bank">
-        <Icon sf={{ default: 'banknote', selected: 'banknote.fill' }} />
-        <Label>Account</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} />
-        <Label>Settings</Label>
+        <Label>Members</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -82,6 +80,7 @@ function ClassicTabLayout() {
           ) : null,
       }}
     >
+      {/* ── 5 visible tabs ── */}
       <Tabs.Screen
         name="index"
         options={{
@@ -94,8 +93,18 @@ function ClassicTabLayout() {
             ),
         }}
       />
-      {/* history screen kept accessible via router.push but hidden from tab bar */}
-      <Tabs.Screen name="history" options={{ href: null }} />
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'Activity',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="clock.fill" tintColor={color} size={24} />
+            ) : (
+              <Feather name="activity" size={22} color={color} />
+            ),
+        }}
+      />
       <Tabs.Screen
         name="budget"
         options={{
@@ -123,7 +132,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="contributions"
         options={{
-          title: 'Contributions',
+          title: 'Members',
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person.2.fill" tintColor={color} size={24} />
@@ -132,37 +141,28 @@ function ClassicTabLayout() {
             ),
         }}
       />
-      <Tabs.Screen
-        name="bank"
-        options={{
-          title: 'Account',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="banknote" tintColor={color} size={24} />
-            ) : (
-              <Feather name="credit-card" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="gearshape.fill" tintColor={color} size={24} />
-            ) : (
-              <Feather name="settings" size={22} color={color} />
-            ),
-        }}
-      />
+
+      {/* ── Hidden — accessible via Home shortcuts / header gear ── */}
+      <Tabs.Screen name="bank"     options={{ href: null }} />
+      <Tabs.Screen name="reports"  options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );
 }
 
 export default function TabLayout() {
   if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
+    return (
+      <View style={{ flex: 1 }}>
+        <NativeTabLayout />
+        <GlobalFAB />
+      </View>
+    );
   }
-  return <ClassicTabLayout />;
+  return (
+    <View style={{ flex: 1 }}>
+      <ClassicTabLayout />
+      <GlobalFAB />
+    </View>
+  );
 }

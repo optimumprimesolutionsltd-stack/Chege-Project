@@ -10,18 +10,8 @@ import { Button } from "@/components/ui/button";
 import { formatKes, formatMonthYear } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, Calendar, TrendingUp } from "lucide-react";
 
-const CHEGE_ID = "63497598";
-const LYDIAH_ID = "63570605";
-
-const MEMBER_TARGETS: Record<string, number> = {
-  [CHEGE_ID]: 267094,
-  [LYDIAH_ID]: 50000,
-};
-
-const MEMBER_NAMES: Record<string, string> = {
-  [CHEGE_ID]: "Chege",
-  [LYDIAH_ID]: "Lydiah",
-};
+type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
+const MEMBER_ACCENT_COLORS = ["#4ade80", "#f97316", "#38bdf8", "#f472b6", "#a78bfa"];
 
 const CONTRIBUTIONS_MONTH_KEY = "contributions-month-pref";
 
@@ -48,13 +38,10 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 }
 
 function MemberCard({
-  userId, contributed, spent, net,
-}: { userId: string; contributed: number; spent: number; net: number }) {
-  const target = MEMBER_TARGETS[userId] ?? 0;
-  const name = MEMBER_NAMES[userId] ?? "Member";
-  const pct = target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
-  const isChege = userId === CHEGE_ID;
-  const accentColor = isChege ? "#4ade80" : "#f97316";
+  member, accentColor,
+}: { member: MemberContrib; accentColor: string }) {
+  const { userId, name, contributed, spent, net, target } = member;
+  const pct = target && target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
   const { data: sources } = useIncomeSources(userId);
 
   return (
@@ -148,8 +135,9 @@ export default function Contributions() {
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
 
-  const totalContrib = (summary?.chegeContributed ?? 0) + (summary?.lydiahContributed ?? 0);
-  const totalTarget = Object.values(MEMBER_TARGETS).reduce((a, b) => a + b, 0);
+  const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
+  const totalContrib = memberContribs.reduce((s, m) => s + m.contributed, 0);
+  const totalTarget = memberContribs.reduce((s, m) => s + (m.target ?? 0), 0);
 
   return (
     <div className="space-y-8 pb-12">
@@ -234,18 +222,13 @@ export default function Contributions() {
         </div>
       ) : summary ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <MemberCard
-            userId={CHEGE_ID}
-            contributed={summary.chegeContributed}
-            spent={summary.chegeSpent}
-            net={summary.chegeNet}
-          />
-          <MemberCard
-            userId={LYDIAH_ID}
-            contributed={summary.lydiahContributed}
-            spent={summary.lydiahSpent}
-            net={summary.lydiahNet}
-          />
+          {memberContribs.map((m, idx) => (
+            <MemberCard
+              key={m.userId}
+              member={m}
+              accentColor={MEMBER_ACCENT_COLORS[idx % MEMBER_ACCENT_COLORS.length]}
+            />
+          ))}
         </div>
       ) : null}
     </div>

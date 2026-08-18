@@ -15,6 +15,7 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
 } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -35,7 +36,8 @@ import {
   getGetDashboardCategoryBreakdownQueryKey,
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
-import ActivityCard from '@/components/ActivityCard';
+import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
+import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 
 const MONTH_PREF_KEY = 'expenses_month_pref';
 
@@ -49,6 +51,23 @@ const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Utilities: 'zap', Entertainment: 'tv', Clothing: 'tag', Savings: 'archive',
   Housing: 'home', Communication: 'phone', Other: 'more-horizontal',
 };
+
+const INCOME_SOURCES: { key: string; icon: keyof typeof Feather.glyphMap; bank: boolean; color: string }[] = [
+  { key: 'Salary',       icon: 'briefcase',       bank: false, color: '#22c55e' },
+  { key: 'Business',     icon: 'shopping-bag',    bank: false, color: '#f97316' },
+  { key: 'Freelance',    icon: 'monitor',         bank: false, color: '#8b5cf6' },
+  { key: 'Rental',       icon: 'home',            bank: false, color: '#f59e0b' },
+  { key: 'Investment',   icon: 'trending-up',     bank: false, color: '#06b6d4' },
+  { key: 'M-Pesa',       icon: 'smartphone',      bank: false, color: '#10b981' },
+  { key: 'Gift/Support', icon: 'gift',            bank: false, color: '#ec4899' },
+  { key: 'Joint bank',   icon: 'credit-card',     bank: true,  color: '#38bdf8' },
+  { key: 'Other',        icon: 'more-horizontal', bank: false, color: '#6b7280' },
+];
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function formatKES(n: number) {
   return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
@@ -167,6 +186,101 @@ export default function HistoryScreen() {
   // Activity feed (for the "Activity" tab)
   const { data: activityFeed = [], isLoading: activityLoading, refetch: refetchActivity } = useGetDashboardActivity();
 
+  // Grouped activity — collapsed by default, tap header to expand
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((date: string) => {
+    setExpandedGroups(s => {
+      const next = new Set(s);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  }, []);
+
+  type GroupHeaderRow = {
+    _kind: 'header';
+    date: string; dateLabel: string;
+    items: ActivityItem[];
+    totalExpenses: number; totalDeposits: number; count: number;
+  };
+  type GroupChildRow = { _kind: 'child'; groupDate: string; item: ActivityItem };
+  type ActivityRow = GroupHeaderRow | GroupChildRow;
+
+  const activityRows = useMemo((): ActivityRow[] => {
+    const groups = new Map<string, ActivityItem[]>();
+    for (const raw of activityFeed) {
+      const item = raw as ActivityItem;
+      const day = (item.date ?? '').slice(0, 10);
+      if (!day) continue;
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day)!.push(item);
+    }
+    const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const rows: ActivityRow[] = [];
+    for (const date of sortedDates) {
+      const items = groups.get(date)!;
+      const totalExpenses = items
+        .filter(i => i.type === ACTIVITY_TYPE.EXPENSE)
+        .reduce((s, i) => s + (i.amount ?? 0), 0);
+      const totalDeposits = items
+        .filter(i => i.type !== ACTIVITY_TYPE.EXPENSE)
+        .reduce((s, i) => s + (i.amount ?? 0), 0);
+      let dateLabel: string;
+      if (date === todayStr) dateLabel = 'Today';
+      else if (date === yesterdayStr) dateLabel = 'Yesterday';
+      else {
+        const d = new Date(date + 'T12:00:00');
+        dateLabel = d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' });
+      }
+      rows.push({ _kind: 'header', date, dateLabel, items, totalExpenses, totalDeposits, count: items.length });
+      if (expandedGroups.has(date)) {
+        for (const item of items) rows.push({ _kind: 'child', groupDate: date, item });
+      }
+    }
+    return rows;
+  }, [activityFeed, expandedGroups]);
+
+  // Grouped expenses — same expand/collapse pattern as activity
+  type ExpGroupHeader = {
+    _kind: 'exp-header';
+    date: string; dateLabel: string;
+    items: Expense[];
+    total: number; count: number;
+  };
+  type ExpGroupChild = { _kind: 'exp-child'; groupDate: string; item: Expense };
+  type ExpGroupRow = ExpGroupHeader | ExpGroupChild;
+
+  const expenseRows = useMemo((): ExpGroupRow[] => {
+    const groups = new Map<string, Expense[]>();
+    for (const exp of expenses as Expense[]) {
+      const day = (exp.date ?? '').slice(0, 10);
+      if (!day) continue;
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day)!.push(exp);
+    }
+    const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const result: ExpGroupRow[] = [];
+    for (const date of sortedDates) {
+      const items = groups.get(date)!;
+      const total = items.reduce((s, e) => s + e.amount, 0);
+      let dateLabel: string;
+      if (date === todayStr) dateLabel = 'Today';
+      else if (date === yesterdayStr) dateLabel = 'Yesterday';
+      else {
+        const d = new Date(date + 'T12:00:00');
+        dateLabel = d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' });
+      }
+      result.push({ _kind: 'exp-header', date, dateLabel, items, total, count: items.length });
+      if (expandedGroups.has(date)) {
+        for (const item of items) result.push({ _kind: 'exp-child', groupDate: date, item });
+      }
+    }
+    return result;
+  }, [expenses, expandedGroups]);
+
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -180,9 +294,12 @@ export default function HistoryScreen() {
 
   // Edit modal state
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [fabOpen, setFabOpen] = useState(false);
   const [editForm, setEditForm] = useState<EditForm>({ amount: '', category: '', description: '', notes: '', paidById: '', date: '' });
   const [saving, setSaving] = useState(false);
+  const [editSelectedSources, setEditSelectedSources] = useState<string[]>([]);
+  const [editSplitAmounts, setEditSplitAmounts] = useState<Record<string, string>>({});
+  const [editOtherLabel, setEditOtherLabel] = useState('');
+  const [editShowDatePicker, setEditShowDatePicker] = useState(false);
 
   const openEdit = (exp: Expense) => {
     setEditForm({
@@ -190,9 +307,14 @@ export default function HistoryScreen() {
       category: exp.category,
       description: exp.description,
       notes: exp.notes ?? '',
-      paidById: exp.paidById ?? '',
+      // Fall back to the logged-in user when paidById is missing on old expenses
+      paidById: exp.paidById ?? user?.userId ?? '',
       date: exp.date,
     });
+    setEditSelectedSources([]);
+    setEditSplitAmounts({});
+    setEditOtherLabel('');
+    setEditShowDatePicker(false);
     setEditingExpense(exp);
   };
 
@@ -209,6 +331,29 @@ export default function HistoryScreen() {
       Alert.alert('Paid by required', 'Please choose who paid for this expense.');
       return;
     }
+    if (editForm.date > todayIso()) {
+      Alert.alert('Future date not allowed', 'Expenses must be today or earlier.');
+      return;
+    }
+    // Validate funding sources if any are chosen (optional when editing old expenses)
+    if (editSelectedSources.includes('Other') && !editOtherLabel.trim()) {
+      Alert.alert('Label required', 'Please describe the "Other" income source.');
+      return;
+    }
+    if (editSelectedSources.length > 1) {
+      const splitsTotal = editSelectedSources.reduce((s, k) => s + (parseFloat(editSplitAmounts[k] || '0') || 0), 0);
+      if (Math.abs(splitsTotal - parsed) >= 1) {
+        Alert.alert("Amounts don't add up", `Sources total KES ${splitsTotal.toLocaleString()} but expense is KES ${parsed.toLocaleString()}.`);
+        return;
+      }
+    }
+    const editPaidFromBank = editSelectedSources.length === 1 && editSelectedSources[0] === 'Joint bank';
+    const isSplit = editSelectedSources.length > 1;
+    const nonBankSources = editSelectedSources.filter(k => k !== 'Joint bank');
+    const incomeSplits = nonBankSources.map(k => ({
+      label: k === 'Other' ? editOtherLabel.trim() : k,
+      amount: isSplit ? (parseFloat(editSplitAmounts[k] || '0') || 0) : parsed,
+    })).filter(s => s.amount > 0);
     setSaving(true);
     try {
       await updateExpense.mutateAsync({
@@ -221,7 +366,9 @@ export default function HistoryScreen() {
           paidById: editForm.paidById,
           date: editForm.date,
           isRecurring: editingExpense.isRecurring,
-        },
+          paidFromBank: editPaidFromBank,
+          ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
+        } as Parameters<typeof updateExpense.mutateAsync>[0]['data'],
       });
       queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
       queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
@@ -375,16 +522,53 @@ export default function HistoryScreen() {
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
         ) : (
           <FlatList
-            data={expenses as Expense[]}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={({ item }) => (
-              <ExpenseRow
-                expense={item}
-                colors={colors}
-                onEdit={() => openEdit(item)}
-                onDelete={() => handleDelete(item)}
-              />
-            )}
+            data={expenseRows}
+            keyExtractor={(row) =>
+              row._kind === 'exp-header'
+                ? `ehdr-${row.date}`
+                : `echild-${row.groupDate}-${row.item.id}`
+            }
+            renderItem={({ item: row }) => {
+              if (row._kind === 'exp-header') {
+                const expanded = expandedGroups.has(row.date);
+                return (
+                  <Pressable
+                    onPress={() => toggleGroup(row.date)}
+                    style={[styles.groupHeader, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  >
+                    <View style={styles.groupHeaderLeft}>
+                      <Text style={[styles.groupDate, { color: colors.foreground }]}>{row.dateLabel}</Text>
+                      <Text style={[styles.groupCount, { color: colors.mutedForeground }]}>
+                        {row.count} expense{row.count !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                    <View style={styles.groupHeaderRight}>
+                      <Text style={[styles.groupExpenseTotal, { color: colors.foreground }]}>
+                        −{row.total.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
+                      </Text>
+                      <Feather
+                        name={expanded ? 'chevron-down' : 'chevron-right'}
+                        size={16}
+                        color={colors.mutedForeground}
+                      />
+                    </View>
+                  </Pressable>
+                );
+              }
+              return (
+                <View style={styles.groupChild}>
+                  <View style={[styles.groupChildLine, { backgroundColor: colors.border }]} />
+                  <View style={styles.groupChildCard}>
+                    <ExpenseRow
+                      expense={row.item}
+                      colors={colors}
+                      onEdit={() => openEdit(row.item)}
+                      onDelete={() => handleDelete(row.item)}
+                    />
+                  </View>
+                </View>
+              );
+            }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
             showsVerticalScrollIndicator={false}
@@ -402,11 +586,57 @@ export default function HistoryScreen() {
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
         ) : (
           <FlatList
-            data={activityFeed as Array<{ id: string; type: string; amount: number; description: string; userName: string; category: string | null; date: string }>}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <ActivityCard item={item} colors={colors} />
-            )}
+            data={activityRows}
+            keyExtractor={(row) =>
+              row._kind === 'header' ? `hdr-${row.date}` : `child-${row.groupDate}-${row.item.id}`
+            }
+            renderItem={({ item: row }) => {
+              if (row._kind === 'header') {
+                const expanded = expandedGroups.has(row.date);
+                return (
+                  <Pressable
+                    onPress={() => toggleGroup(row.date)}
+                    style={[styles.groupHeader, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  >
+                    {/* Left: date + count */}
+                    <View style={styles.groupHeaderLeft}>
+                      <Text style={[styles.groupDate, { color: colors.foreground }]}>{row.dateLabel}</Text>
+                      <Text style={[styles.groupCount, { color: colors.mutedForeground }]}>
+                        {row.count} item{row.count !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+
+                    {/* Right: totals + chevron */}
+                    <View style={styles.groupHeaderRight}>
+                      {row.totalExpenses > 0 && (
+                        <Text style={[styles.groupExpenseTotal, { color: colors.foreground }]}>
+                          −{row.totalExpenses.toLocaleString()}
+                        </Text>
+                      )}
+                      {row.totalDeposits > 0 && (
+                        <Text style={styles.groupDepositTotal}>
+                          +{row.totalDeposits.toLocaleString()}
+                        </Text>
+                      )}
+                      <Feather
+                        name={expanded ? 'chevron-down' : 'chevron-right'}
+                        size={16}
+                        color={colors.mutedForeground}
+                      />
+                    </View>
+                  </Pressable>
+                );
+              }
+              // Child row — indented ActivityCard
+              return (
+                <View style={styles.groupChild}>
+                  <View style={[styles.groupChildLine, { backgroundColor: colors.border }]} />
+                  <View style={styles.groupChildCard}>
+                    <ActivityCard item={row.item} colors={colors} />
+                  </View>
+                </View>
+              );
+            }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
             showsVerticalScrollIndicator={false}
@@ -420,38 +650,6 @@ export default function HistoryScreen() {
           />
         )
       )}
-
-      {/* Multi-action FAB */}
-      {fabOpen && (
-        <Pressable style={styles.fabBackdrop} onPress={() => setFabOpen(false)} />
-      )}
-      {fabOpen && (
-        <View style={[styles.fabMenu, { bottom: Platform.OS === 'web' ? 166 : insets.bottom + 136 }]}>
-          {[
-            { icon: 'plus-circle' as const, label: 'Expense', color: '#4ade80', bg: '#1a3320', route: '/add-expense' },
-            { icon: 'credit-card' as const, label: 'Deposit', color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank' },
-            { icon: 'target' as const, label: 'Savings', color: '#f472b6', bg: '#2a0a1a', route: '/(tabs)/goals' },
-          ].map((item) => (
-            <Pressable
-              key={item.label}
-              style={[styles.fabMenuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => { setFabOpen(false); router.push(item.route as any); }}
-            >
-              <View style={[styles.fabMenuIcon, { backgroundColor: item.bg }]}>
-                <Feather name={item.icon} size={18} color={item.color} />
-              </View>
-              <Text style={[styles.fabMenuLabel, { color: colors.foreground }]}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-      <Pressable
-        style={[styles.fab, { backgroundColor: fabOpen ? colors.foreground : colors.secondary, bottom: Platform.OS === 'web' ? 100 : insets.bottom + 70 }]}
-        onPress={() => setFabOpen(o => !o)}
-        hitSlop={8}
-      >
-        <Feather name={fabOpen ? 'x' : 'plus'} size={28} color={fabOpen ? colors.background : '#fff'} />
-      </Pressable>
 
       {/* Edit Modal */}
       <Modal visible={!!editingExpense} animationType="slide" transparent onRequestClose={closeEdit}>
@@ -534,6 +732,86 @@ export default function HistoryScreen() {
                   </Text>
                 )}
 
+                {/* Funded From — optional when editing, uses same chip UI as add */}
+                <View style={[styles.editFundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '40' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <Feather name="layers" size={13} color={colors.primary} />
+                    <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FUNDED FROM</Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>(optional)</Text>
+                  </View>
+                  <View style={styles.sourceChipsGrid}>
+                    {INCOME_SOURCES.map(src => {
+                      const selected = editSelectedSources.includes(src.key);
+                      return (
+                        <Pressable
+                          key={src.key}
+                          onPress={() => setEditSelectedSources(prev =>
+                            prev.includes(src.key) ? prev.filter(k => k !== src.key) : [...prev, src.key]
+                          )}
+                          style={[styles.sourceChip, {
+                            backgroundColor: selected ? src.color + '22' : colors.background,
+                            borderColor: selected ? src.color : colors.border,
+                          }]}
+                        >
+                          <Feather name={src.icon} size={12} color={selected ? src.color : colors.mutedForeground} />
+                          <Text style={[styles.sourceChipText, { color: selected ? src.color : colors.foreground }]}>
+                            {src.key}
+                          </Text>
+                          {selected && <Feather name="check" size={10} color={src.color} />}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  {editSelectedSources.includes('Other') && (
+                    <TextInput
+                      style={[styles.input, { marginTop: 8, backgroundColor: colors.background, paddingVertical: 8 }]}
+                      placeholder="Describe the source"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={editOtherLabel}
+                      onChangeText={setEditOtherLabel}
+                    />
+                  )}
+                  {editSelectedSources.length > 1 && (
+                    <View style={{ marginTop: 10, gap: 6 }}>
+                      <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>
+                        How much from each source?
+                      </Text>
+                      {editSelectedSources.map(key => {
+                        const src = INCOME_SOURCES.find(s => s.key === key)!;
+                        return (
+                          <View key={key} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: src.color + '44' }]}>
+                            <Feather name={src.icon} size={13} color={src.color} />
+                            <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
+                              {key === 'Other' ? (editOtherLabel || 'Other') : key}
+                            </Text>
+                            <View style={styles.splitAmountInputBox}>
+                              <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
+                              <TextInput
+                                style={[styles.splitAmountInput, { color: src.color }]}
+                                placeholder="0"
+                                placeholderTextColor={colors.mutedForeground}
+                                keyboardType="numeric"
+                                value={editSplitAmounts[key] || ''}
+                                onChangeText={v => setEditSplitAmounts(prev => ({ ...prev, [key]: v }))}
+                              />
+                            </View>
+                          </View>
+                        );
+                      })}
+                      {(() => {
+                        const total = editSelectedSources.reduce((s, k) => s + (parseFloat(editSplitAmounts[k] || '0') || 0), 0);
+                        const expAmt = parseFloat(editForm.amount) || 0;
+                        const ok = expAmt > 0 && Math.abs(total - expAmt) < 1;
+                        return (
+                          <Text style={{ fontSize: 12, fontFamily: ok ? 'Inter_600SemiBold' : 'Inter_400Regular', color: ok ? '#4ade80' : '#f87171' }}>
+                            {ok ? `✓ Sources add up to KES ${total.toLocaleString()}` : `Total: KES ${total.toLocaleString()} · need KES ${expAmt.toLocaleString()}`}
+                          </Text>
+                        );
+                      })()}
+                    </View>
+                  )}
+                </View>
+
                 {/* Notes */}
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Notes <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
                 <TextInput
@@ -545,14 +823,47 @@ export default function HistoryScreen() {
                 />
 
                 {/* Date */}
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Date</Text>
-                <TextInput
-                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
-                  value={editForm.date}
-                  onChangeText={v => setEditForm(f => ({ ...f, date: v }))}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.mutedForeground}
-                />
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0 }]}>
+                    Date <Text style={{ color: '#ef4444' }}>*</Text>
+                  </Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>
+                    No future dates
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setEditShowDatePicker(true)}
+                  style={[styles.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+                >
+                  <Feather name="calendar" size={15} color={colors.primary} />
+                  <Text style={{ flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium', color: colors.foreground }}>
+                    {editForm.date
+                      ? new Date(editForm.date + 'T00:00:00').toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+                      : 'Select date'}
+                  </Text>
+                  {editForm.date === todayIso()
+                    ? <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: colors.primary, backgroundColor: colors.primary + '22', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, overflow: 'hidden' }}>Today</Text>
+                    : editForm.date
+                    ? <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5, overflow: 'hidden' }}>Backdated</Text>
+                    : null}
+                </Pressable>
+                {editShowDatePicker && (
+                  <DateTimePicker
+                    value={editForm.date ? new Date(editForm.date + 'T00:00:00') : new Date()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                    maximumDate={new Date()}
+                    onChange={(_e: DateTimePickerEvent, sel?: Date) => {
+                      setEditShowDatePicker(Platform.OS === 'ios');
+                      if (sel) {
+                        const y = sel.getFullYear();
+                        const mo = String(sel.getMonth() + 1).padStart(2, '0');
+                        const d = String(sel.getDate()).padStart(2, '0');
+                        setEditForm(f => ({ ...f, date: `${y}-${mo}-${d}` }));
+                      }
+                    }}
+                  />
+                )}
 
                 {/* Save */}
                 <Pressable
@@ -655,13 +966,6 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
 
-  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
-  fabBackdrop: { ...StyleSheet.absoluteFillObject, zIndex: 10 },
-  fabMenu: { position: 'absolute', right: 12, zIndex: 11, gap: 8 },
-  fabMenuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
-  fabMenuIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  fabMenuLabel: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
-
   // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalKAV: { justifyContent: 'flex-end' },
@@ -684,4 +988,31 @@ const styles = StyleSheet.create({
 
   saveBtn: { marginTop: 24, backgroundColor: '#4ade80', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   saveBtnText: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', color: '#0a1a10' },
+
+  // Grouped activity
+  groupHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    marginBottom: 4,
+  },
+  groupHeaderLeft: { gap: 2 },
+  groupDate: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  groupCount: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  groupHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  groupExpenseTotal: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  groupDepositTotal: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#22c55e' },
+  groupChild: { flexDirection: 'row', marginBottom: 0 },
+  groupChildLine: { width: 2, marginLeft: 20, marginRight: 10, borderRadius: 1 },
+  groupChildCard: { flex: 1 },
+
+  // Funding card + source chips (edit modal)
+  editFundingCard: { borderWidth: 1.5, borderRadius: 14, padding: 14, marginTop: 4 },
+  sourceChipsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  sourceChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1.5, borderRadius: 8 },
+  sourceChipText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  splitAmountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 },
+  splitAmountLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', flex: 1 },
+  splitAmountInputBox: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  splitCurrency: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  splitAmountInput: { fontSize: 15, fontFamily: 'Inter_700Bold', minWidth: 80, textAlign: 'right' as const },
 });

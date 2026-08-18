@@ -56,4 +56,13 @@ router.post("/income-sources", async (req, res) => {
   res.status(201).json(row);
 });
 
+// DELETE /api/income-sources/:id
+router.delete("/income-sources/:id", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  await db.delete(incomeSourcesTable).where(eq(incomeSourcesTable.id, id));
+  res.json({ ok: true });
+});
+
 export default router;

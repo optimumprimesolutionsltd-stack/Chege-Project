@@ -53,11 +53,11 @@ type Shortcut = {
 };
 
 const SHORTCUTS: Shortcut[] = [
-  { icon: 'plus-circle', label: 'Expense', color: '#4ade80', bg: '#1a3320', route: '/add-expense' },
-  { icon: 'credit-card', label: 'Deposit', color: '#cf7217', bg: '#2a1c0a', route: '/(tabs)/bank' },
-  { icon: 'bar-chart-2', label: 'Budget', color: '#60a5fa', bg: '#0a1a2a', route: '/(tabs)/budget' },
-  { icon: 'target', label: 'Goals', color: '#f472b6', bg: '#2a0a1a', route: '/(tabs)/goals' },
-  { icon: 'users', label: 'Contributions', color: '#a78bfa', bg: '#1a0a2a', route: '/(tabs)/contributions' },
+  { icon: 'plus-circle', label: 'Expense',  color: '#4ade80', bg: '#1a3320', route: '/add-expense'            },
+  { icon: 'credit-card', label: 'Deposit',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank'            },
+  { icon: 'pie-chart',   label: 'Reports',  color: '#60a5fa', bg: '#0a1a2a', route: '/(tabs)/reports'         },
+  { icon: 'bar-chart-2', label: 'Budget',   color: '#a78bfa', bg: '#1a0a2a', route: '/(tabs)/budget'          },
+  { icon: 'settings',    label: 'Settings', color: '#94a3b8', bg: '#1a1a28', route: '/(tabs)/settings'        },
 ];
 
 export default function DashboardScreen() {
@@ -69,7 +69,6 @@ export default function DashboardScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [isPrivate, setIsPrivate] = useState(false);
-  const [fabOpen, setFabOpen] = useState(false);
 
   // Load privacy preference
   useEffect(() => {
@@ -145,7 +144,7 @@ export default function DashboardScreen() {
     return 'Good evening';
   }, []);
 
-  const firstName = user?.firstName ?? '';
+  const displayName = user?.firstName?.trim() || user?.userName?.trim() || '';
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
@@ -158,13 +157,10 @@ export default function DashboardScreen() {
     else setMonth((m) => m + 1);
   }
 
-  // Contribution bars
-  const chegeTotal = summary?.chegeContributed ?? 0;
-  const chegeTarget = summary?.chegeTarget ?? 1;
-  const lydiahTotal = summary?.lydiahContributed ?? 0;
-  const lydiahTarget = summary?.lydiahTarget ?? 1;
-  const chegeSpent = summary?.chegeSpent ?? 0;
-  const lydiahSpent = summary?.lydiahSpent ?? 0;
+  // Contribution bars — dynamic per member
+  type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
+  const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
+  const CONTRIBS_COLORS = ['#4ade80', '#f97316', '#38bdf8', '#f472b6', '#a78bfa'];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -183,13 +179,23 @@ export default function DashboardScreen() {
           {/* Top row: greeting + controls */}
           <View style={styles.headerTop}>
             <View>
-              <Text style={styles.greeting}>{greeting}</Text>
-              {firstName ? <Text style={styles.name}>{firstName}</Text> : null}
+              {displayName ? (
+                <Text>
+                  <Text style={styles.greeting}>{greeting}, </Text>
+                  <Text style={styles.name}>{displayName}!</Text>
+                </Text>
+              ) : (
+                <Text style={styles.greeting}>{greeting}</Text>
+              )}
             </View>
             <View style={styles.headerControls}>
               {/* Privacy toggle */}
               <Pressable onPress={togglePrivacy} hitSlop={10} style={styles.iconBtn}>
                 <Feather name={isPrivate ? 'eye-off' : 'eye'} size={20} color="rgba(247,250,246,0.7)" />
+              </Pressable>
+              {/* Settings */}
+              <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={10} style={styles.iconBtn}>
+                <Feather name="settings" size={19} color="rgba(247,250,246,0.7)" />
               </Pressable>
               {/* Month nav */}
               <View style={styles.monthNav}>
@@ -230,26 +236,22 @@ export default function DashboardScreen() {
             <StatCell label="Left" value={isPrivate ? '••••' : shortKES(summary?.remaining)} valueColor={isOver ? '#f87171' : '#4ade80'} />
           </View>
 
-          {/* Contribution mini-bars */}
-          {summary && (
+          {/* Contribution mini-bars — one per household member */}
+          {summary && memberContribs.length > 0 && (
             <View style={styles.contribRow}>
-              <ContribBar
-                name="Chege"
-                contributed={chegeTotal}
-                spent={chegeSpent}
-                target={chegeTarget}
-                color="#4ade80"
-                hidden={isPrivate}
-              />
-              <View style={styles.contribDivider} />
-              <ContribBar
-                name="Lydiah"
-                contributed={lydiahTotal}
-                spent={lydiahSpent}
-                target={lydiahTarget}
-                color="#cf7217"
-                hidden={isPrivate}
-              />
+              {memberContribs.map((m, idx) => (
+                <React.Fragment key={m.userId}>
+                  {idx > 0 && <View style={styles.contribDivider} />}
+                  <ContribBar
+                    name={m.name}
+                    contributed={m.contributed}
+                    spent={m.spent}
+                    target={m.target ?? 1}
+                    color={CONTRIBS_COLORS[idx % CONTRIBS_COLORS.length]}
+                    hidden={isPrivate}
+                  />
+                </React.Fragment>
+              ))}
             </View>
           )}
         </LinearGradient>
@@ -341,37 +343,6 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* Multi-action FAB */}
-      {fabOpen && (
-        <Pressable style={styles.fabBackdrop} onPress={() => setFabOpen(false)} />
-      )}
-      {fabOpen && (
-        <View style={[styles.fabMenu, { bottom: Platform.OS === 'web' ? 166 : insets.bottom + 136 }]}>
-          {[
-            { icon: 'plus-circle' as const, label: 'Expense', color: '#4ade80', bg: '#1a3320', route: '/add-expense' },
-            { icon: 'credit-card' as const, label: 'Deposit', color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank' },
-            { icon: 'target' as const, label: 'Savings', color: '#f472b6', bg: '#2a0a1a', route: '/(tabs)/goals' },
-          ].map((item) => (
-            <Pressable
-              key={item.label}
-              style={[styles.fabMenuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => { setFabOpen(false); router.push(item.route as any); }}
-            >
-              <View style={[styles.fabMenuIcon, { backgroundColor: item.bg }]}>
-                <Feather name={item.icon} size={18} color={item.color} />
-              </View>
-              <Text style={[styles.fabMenuLabel, { color: colors.foreground }]}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-      <Pressable
-        style={[styles.fab, { backgroundColor: fabOpen ? colors.foreground : colors.secondary, bottom: Platform.OS === 'web' ? 100 : insets.bottom + 70 }]}
-        onPress={() => setFabOpen(o => !o)}
-        hitSlop={8}
-      >
-        <Feather name={fabOpen ? 'x' : 'plus'} size={28} color={fabOpen ? colors.background : '#fff'} />
-      </Pressable>
     </View>
   );
 }
@@ -456,13 +427,6 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15, fontFamily: 'Inter_400Regular' },
   emptyBtn: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
   emptyBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
-
-  fab: { position: 'absolute', right: 20, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
-  fabBackdrop: { ...StyleSheet.absoluteFillObject, zIndex: 10 },
-  fabMenu: { position: 'absolute', right: 12, zIndex: 11, gap: 8 },
-  fabMenuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6 },
-  fabMenuIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  fabMenuLabel: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
 
   bankCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   bankCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },

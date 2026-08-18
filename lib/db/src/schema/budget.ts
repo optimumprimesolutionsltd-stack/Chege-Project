@@ -90,11 +90,12 @@ export const insertJointAccountTxSchema = createInsertSchema(jointAccountTxTable
 export type InsertJointAccountTx = z.infer<typeof insertJointAccountTxSchema>;
 export type JointAccountTx = typeof jointAccountTxTable.$inferSelect;
 
-// Members — the two users allowed to access this app
+// Members — the household members allowed to access this app
 export const membersTable = pgTable("members", {
   userId: text("user_id").primaryKey(),
   addedByUserId: text("added_by_user_id"),
   addedAt: timestamp("added_at").defaultNow().notNull(),
+  monthlyTarget: integer("monthly_target"),  // optional contribution target in KES; null = no target set
 });
 
 export type Member = typeof membersTable.$inferSelect;

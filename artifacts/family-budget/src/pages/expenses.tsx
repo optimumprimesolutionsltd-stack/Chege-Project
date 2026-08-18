@@ -490,22 +490,19 @@ export default function Expenses() {
               <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                 <TrendingUp className="w-4 h-4 text-green-600" /> Income
               </span>
-              {[
-                { name: "Chege", contributed: summary.chegeContributed, target: summary.chegeTarget },
-                { name: "Lydiah", contributed: summary.lydiahContributed, target: summary.lydiahTarget },
-              ].map(({ name, contributed, target }) => (
+              {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(({ name, contributed, target }: {name: string; contributed: number; target: number | null}) => (
                 <div key={name} className="space-y-1">
                   <div className="flex justify-between text-xs">
                     <span className="font-medium text-foreground">{name}</span>
                     <span className="font-mono">
-                      <span className={contributed >= target ? "text-green-600 font-bold" : "text-foreground"}>{formatKes(contributed)}</span>
-                      <span className="text-muted-foreground"> / {formatKes(target)}</span>
+                      <span className={target != null && contributed >= target ? "text-green-600 font-bold" : "text-foreground"}>{formatKes(contributed)}</span>
+                      {target != null && <span className="text-muted-foreground"> / {formatKes(target)}</span>}
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${contributed >= target ? "bg-green-500" : "bg-amber-400"}`}
-                      style={{ width: `${Math.min(100, target > 0 ? (contributed / target) * 100 : 0)}%` }}
+                      className={`h-full rounded-full transition-all ${target != null && contributed >= target ? "bg-green-500" : "bg-amber-400"}`}
+                      style={{ width: `${Math.min(100, target && target > 0 ? (contributed / target) * 100 : 0)}%` }}
                     />
                   </div>
                 </div>
@@ -516,10 +513,7 @@ export default function Expenses() {
             {members && members.length > 0 && expenses && (
               <div className="space-y-3 pt-1 border-t border-border/40">
                 <span className="text-sm font-semibold text-foreground">Individual Ledgers</span>
-                {[
-                  { name: "Chege", contributed: summary.chegeContributed, target: summary.chegeTarget },
-                  { name: "Lydiah", contributed: summary.lydiahContributed, target: summary.lydiahTarget },
-                ].map(({ name, contributed, target }) => {
+                {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(({ name, contributed, target }: {name: string; contributed: number; target: number | null}) => {
                   const myExpenses = expenses.filter(e => e.paidByName?.toLowerCase().startsWith(name.toLowerCase()));
                   const spent = myExpenses.reduce((s, e) => s + e.amount, 0);
                   const net = contributed - spent;
