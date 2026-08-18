@@ -745,7 +745,7 @@ export default function GoalsScreen() {
   const active = (goals as SavingsGoal[]).filter((g) => !g.isCompleted);
   const done = (goals as SavingsGoal[]).filter((g) => g.isCompleted);
 
-  // Unique contributors derived from loaded data (excluding manual adjustments)
+  // Unique contributors derived from loaded data (excluding all correction rows)
   const uniqueContributors = Array.from(
     new Set(
       (contributions as SavingsGoalContribution[])
@@ -765,8 +765,9 @@ export default function GoalsScreen() {
 
   const filteredContributions = dateFilteredContributions.filter((c) => {
     if (filterContributor) {
-      // Corrections (with or without a custom reason) don't belong to any single
-      // contributor — hide them when filtering by person so the count is accurate.
+      // Correction rows (sentinel or custom-reason) don't belong to any single
+      // contributor — hide them when filtering by person so the count and total
+      // are accurate.
       if (isCorrectionRow(c)) return false;
       if ((c.contributorName ?? 'Unknown') !== filterContributor) return false;
     }
@@ -1566,7 +1567,8 @@ export default function GoalsScreen() {
                   contentContainerStyle={styles.historyList}
                 >
                   {filtered.map((c, idx) => {
-                    const isAdjustment = isCorrectionRow(c);
+                    const isCorrection = isCorrectionRow(c);
+                    const isCustomReason = isCorrection && c.note !== MANUAL_ADJUSTMENT_NOTE;
                     const isNegative = c.amount < 0;
                     const absAmount = Math.abs(c.amount);
                     const amountLabel = isNegative
@@ -1580,7 +1582,7 @@ export default function GoalsScreen() {
                           {
                             borderBottomColor: colors.border,
                             borderBottomWidth: idx < filtered.length - 1 ? 1 : 0,
-                            opacity: isAdjustment ? 0.8 : 1,
+                            opacity: isCorrection ? 0.8 : 1,
                           },
                         ]}
                       >
@@ -1588,14 +1590,14 @@ export default function GoalsScreen() {
                           style={[
                             styles.historyDot,
                             {
-                              backgroundColor: isAdjustment ? colors.muted : '#1a3320',
+                              backgroundColor: isCorrection ? colors.muted : '#1a3320',
                             },
                           ]}
                         >
                           <Feather
-                            name={isAdjustment ? 'sliders' : 'arrow-up-circle'}
+                            name={isCorrection ? 'sliders' : 'arrow-up-circle'}
                             size={16}
-                            color={isAdjustment ? colors.mutedForeground : '#4ade80'}
+                            color={isCorrection ? colors.mutedForeground : '#4ade80'}
                           />
                         </View>
                         <View style={styles.historyRowInfo}>
@@ -1604,7 +1606,7 @@ export default function GoalsScreen() {
                               style={[
                                 styles.historyAmount,
                                 {
-                                  color: isAdjustment
+                                  color: isCorrection
                                     ? isNegative
                                       ? colors.destructive ?? '#ef4444'
                                       : colors.mutedForeground
@@ -1614,10 +1616,10 @@ export default function GoalsScreen() {
                             >
                               {amountLabel}
                             </Text>
-                            {isAdjustment ? (
+                            {isCorrection ? (
                               <View style={styles.historyAdjustmentBadge}>
                                 <Text style={[styles.historyAdjustmentBadgeText, { color: colors.mutedForeground }]}>
-                                  Manual
+                                  Adjustment
                                 </Text>
                               </View>
                             ) : (
@@ -1627,16 +1629,19 @@ export default function GoalsScreen() {
                             )}
                           </View>
                           <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
-                            {isAdjustment ? 'Balance correction' : formatDate(c.createdAt)}
+                            {isCorrection ? 'Balance correction' : formatDate(c.createdAt)}
                           </Text>
-                          {isAdjustment && (
+                          {isCorrection && (
                             <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
                               {formatDate(c.createdAt)}
                             </Text>
                           )}
-                          {isAdjustment && c.note && c.note !== MANUAL_ADJUSTMENT_NOTE && (
-                            <Text style={[styles.historyDate, { color: colors.mutedForeground, fontStyle: 'italic' }]}>
-                              "{c.note}"
+                          {isCustomReason && (
+                            <Text
+                              style={[styles.historyDate, { color: colors.mutedForeground, fontStyle: 'italic', marginTop: 2 }]}
+                              numberOfLines={2}
+                            >
+                              {c.note}
                             </Text>
                           )}
                         </View>
