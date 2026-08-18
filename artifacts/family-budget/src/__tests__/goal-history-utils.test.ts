@@ -150,6 +150,35 @@ describe("computeContributorTotals", () => {
     expect(byName["Lydiah"]).toBe(3000);
   });
 
+  it("excludes a custom-reason correction (non-sentinel note) from contributor totals", () => {
+    // A PATCH with an explicit reason stores that string as the note instead of
+    // "Manual adjustment".  The filter must exclude ANY non-null note, not just
+    // the sentinel, so a custom-reason correction cannot inflate a contributor's total.
+    const contributions = [
+      makeContribution({ createdAt: "2026-03-01T00:00:00Z", contributorName: "Chege", amount: 2000 }),
+      makeContribution({
+        createdAt: "2026-03-05T00:00:00Z",
+        contributorName: "Chege",
+        amount: -500,
+        note: "Emergency withdrawal approved",
+      }),
+      makeContribution({ createdAt: "2026-03-10T00:00:00Z", contributorName: "Lydiah", amount: 3000 }),
+      makeContribution({
+        createdAt: "2026-03-12T00:00:00Z",
+        contributorName: "Lydiah",
+        amount: 100,
+        note: "Petty cash top-up",
+      }),
+    ];
+
+    const totals = computeContributorTotals(contributions);
+    const byName = Object.fromEntries(totals.map((t) => [t.name, t.total]));
+
+    // Only the null-note entries count; both custom-reason corrections are excluded.
+    expect(byName["Chege"]).toBe(2000);
+    expect(byName["Lydiah"]).toBe(3000);
+  });
+
   it("only counts real contributions within a date-filtered window (integration with filterByDateRange)", () => {
     const all = [
       // January contributions
