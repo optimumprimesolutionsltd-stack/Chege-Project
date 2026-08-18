@@ -577,7 +577,7 @@ export default function ContributionsScreen() {
                   <Feather name="inbox" size={36} color={colors.mutedForeground} />
                   <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No legacy records</Text>
                   <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                    Contributions are now tracked automatically from deposits and direct payments.
+                    Contributions are tracked from expenses paid, bank deposits, and savings added each month.
                   </Text>
                 </View>
               ) : (

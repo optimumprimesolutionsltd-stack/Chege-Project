@@ -157,7 +157,7 @@ export default function Contributions() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Contributions</h1>
-          <p className="text-muted-foreground mt-1">Automatic — from deposits and direct payments.</p>
+          <p className="text-muted-foreground mt-1">Automatic — expenses paid, deposits made, and savings added.</p>
         </div>
 
         {/* Month picker */}
@@ -200,7 +200,7 @@ export default function Contributions() {
         <div>
           <p className="text-sm font-semibold text-foreground">Contributions are tracked automatically</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Every expense and bank deposit counts automatically. Tag an income source when logging to track which stream the money came from.
+            Every expense you pay, bank deposit you make, and savings goal contribution you add counts toward your total. Tag an income source to track which stream funded it.
           </p>
         </div>
       </div>

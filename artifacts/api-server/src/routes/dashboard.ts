@@ -5,6 +5,7 @@ import {
   budgetCategoriesTable,
   usersTable,
   jointAccountTxTable,
+  savingsGoalContributionsTable,
 } from "@workspace/db";
 import { sql, eq } from "drizzle-orm";
 import { GetDashboardSummaryQueryParams, GetDashboardCategoryBreakdownQueryParams } from "@workspace/api-zod";
@@ -44,29 +45,37 @@ router.get("/dashboard/summary", async (req, res) => {
     .from(jointAccountTxTable)
     .where(sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
 
-  // Contributions = all expense payments (personal money regardless of source) + bank deposits
-  const directPayments = await db
-    .select({
+  // Contributions = expenses paid + bank deposits + savings goal contributions
+  const [expenseContribs, depositContribs, savingsContribs] = await Promise.all([
+    db.select({
       userId: expensesTable.paidById,
       total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
     })
     .from(expensesTable)
     .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
-    .groupBy(expensesTable.paidById);
+    .groupBy(expensesTable.paidById),
 
-  const depositContribs = await db
-    .select({
+    db.select({
       userId: jointAccountTxTable.madeById,
       total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`,
     })
     .from(jointAccountTxTable)
     .where(sql`${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.madeById} IS NOT NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
-    .groupBy(jointAccountTxTable.madeById);
+    .groupBy(jointAccountTxTable.madeById),
 
-  // Merge into a single per-user map
+    db.select({
+      userId: savingsGoalContributionsTable.createdByUserId,
+      total: sql<number>`COALESCE(SUM(${savingsGoalContributionsTable.amount}), 0)`,
+    })
+    .from(savingsGoalContributionsTable)
+    .where(sql`EXTRACT(MONTH FROM ${savingsGoalContributionsTable.createdAt}) = ${month} AND EXTRACT(YEAR FROM ${savingsGoalContributionsTable.createdAt}) = ${year}`)
+    .groupBy(savingsGoalContributionsTable.createdByUserId),
+  ]);
+
   const contribMap = new Map<string, number>();
-  for (const r of [...directPayments, ...depositContribs]) {
-    contribMap.set(r.userId!, (contribMap.get(r.userId!) ?? 0) + Number(r.total));
+  for (const r of [...expenseContribs, ...depositContribs, ...savingsContribs]) {
+    const uid = (r as { userId: string | null }).userId;
+    if (uid) contribMap.set(uid, (contribMap.get(uid) ?? 0) + Number(r.total));
   }
   const contribs = Array.from(contribMap.entries()).map(([userId, total]) => ({ userId, total }));
 
