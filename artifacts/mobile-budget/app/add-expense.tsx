@@ -83,6 +83,7 @@ export default function AddExpenseSheet() {
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
+  const [otherLabel, setOtherLabel] = useState('');
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -104,6 +105,7 @@ export default function AddExpenseSheet() {
     setPaidFromBank(false);
     setSelectedSources([]);
     setSplitAmounts({});
+    setOtherLabel('');
   }, [paidById]);
 
   const { mutate: createExpense, isPending } = useCreateExpense({
@@ -153,6 +155,10 @@ export default function AddExpenseSheet() {
       Alert.alert('Source required', 'Please choose where this money came from.');
       return;
     }
+    if (selectedSources.includes('Other') && !otherLabel.trim()) {
+      Alert.alert('Label required', 'Please describe the "Other" source.');
+      return;
+    }
     // When split across multiple personal sources, amounts must add up
     if (selectedSources.length > 1) {
       const splitsTotal = selectedSources.reduce((s, k) => s + (parseFloat(splitAmounts[k] || '0') || 0), 0);
@@ -164,7 +170,7 @@ export default function AddExpenseSheet() {
 
     const isSplit = selectedSources.length > 1;
     const incomeSplits = selectedSources.map(name => ({
-      label: name,
+      label: name === 'Other' ? otherLabel.trim() : name,
       amount: isSplit ? (parseFloat(splitAmounts[name] || '0') || 0) : parsed,
     })).filter(s => s.amount > 0);
 
@@ -181,7 +187,7 @@ export default function AddExpenseSheet() {
         ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
       } as Parameters<typeof createExpense>[0]['data'],
     });
-  }, [amount, category, description, notes, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, createExpense]);
+  }, [amount, category, description, notes, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, createExpense]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -355,7 +361,44 @@ export default function AddExpenseSheet() {
                   </Pressable>
                 );
               })}
+              {/* Other — free-text for unlisted sources */}
+              {(() => {
+                const selected = selectedSources.includes('Other');
+                return (
+                  <Pressable
+                    onPress={() => setSelectedSources(prev =>
+                      prev.includes('Other') ? prev.filter(k => k !== 'Other') : [...prev, 'Other']
+                    )}
+                    style={[styles.sourceChip, {
+                      backgroundColor: selected ? '#6b728022' : colors.background,
+                      borderColor: selected ? '#6b7280' : colors.border,
+                      borderRadius: colors.radius,
+                    }]}
+                  >
+                    <Feather name="more-horizontal" size={13} color={selected ? '#6b7280' : colors.mutedForeground} />
+                    <Text style={[styles.sourceChipText, { color: selected ? '#6b7280' : colors.foreground }]}>Other</Text>
+                    {selected && <Feather name="check" size={11} color="#6b7280" />}
+                  </Pressable>
+                );
+              })()}
             </View>
+          )}
+          {selectedSources.includes('Other') && (
+            <TextInput
+              style={[styles.textInput, {
+                backgroundColor: colors.background,
+                borderColor: colors.border,
+                color: colors.foreground,
+                borderRadius: colors.radius,
+                marginTop: 8,
+                paddingVertical: 10,
+              }]}
+              placeholder="Describe the source (e.g. Consultancy, Parents)"
+              placeholderTextColor={colors.mutedForeground}
+              value={otherLabel}
+              onChangeText={setOtherLabel}
+              returnKeyType="done"
+            />
           )}
 
           {/* Split amounts — shown when 2+ personal sources selected */}
@@ -372,8 +415,10 @@ export default function AddExpenseSheet() {
                     borderColor: color + '44',
                     borderRadius: colors.radius,
                   }]}>
-                    <Feather name="briefcase" size={14} color={color} />
-                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>{name}</Text>
+                    <Feather name={name === 'Other' ? 'more-horizontal' : 'briefcase'} size={14} color={color} />
+                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
+                      {name === 'Other' ? (otherLabel || 'Other') : name}
+                    </Text>
                     <View style={styles.splitAmountInputBox}>
                       <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
                       <TextInput

@@ -290,6 +290,7 @@ export default function HistoryScreen() {
   const [editPaidFromBank, setEditPaidFromBank] = useState(false);
   const [editSelectedSources, setEditSelectedSources] = useState<string[]>([]);
   const [editSplitAmounts, setEditSplitAmounts] = useState<Record<string, string>>({});
+  const [editOtherLabel, setEditOtherLabel] = useState('');
   const [editShowDatePicker, setEditShowDatePicker] = useState(false);
 
   // Load income sources for whoever paid the expense being edited
@@ -318,6 +319,7 @@ export default function HistoryScreen() {
     setEditPaidFromBank(false);
     setEditSelectedSources([]);
     setEditSplitAmounts({});
+    setEditOtherLabel('');
     setEditShowDatePicker(false);
     setEditingExpense(exp);
   };
@@ -339,7 +341,10 @@ export default function HistoryScreen() {
       Alert.alert('Future date not allowed', 'Expenses must be today or earlier.');
       return;
     }
-    // Validate split amounts if multiple personal sources chosen
+    if (editSelectedSources.includes('Other') && !editOtherLabel.trim()) {
+      Alert.alert('Label required', 'Please describe the "Other" source.');
+      return;
+    }
     if (editSelectedSources.length > 1) {
       const splitsTotal = editSelectedSources.reduce((s, k) => s + (parseFloat(editSplitAmounts[k] || '0') || 0), 0);
       if (Math.abs(splitsTotal - parsed) >= 1) {
@@ -349,7 +354,7 @@ export default function HistoryScreen() {
     }
     const isSplit = editSelectedSources.length > 1;
     const incomeSplits = editSelectedSources.map(name => ({
-      label: name,
+      label: name === 'Other' ? editOtherLabel.trim() : name,
       amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
     })).filter(s => s.amount > 0);
     setSaving(true);
@@ -783,7 +788,35 @@ export default function HistoryScreen() {
                           </Pressable>
                         );
                       })}
+                      {/* Other — free-text for unlisted sources */}
+                      {(() => {
+                        const selected = editSelectedSources.includes('Other');
+                        return (
+                          <Pressable
+                            onPress={() => setEditSelectedSources(prev =>
+                              prev.includes('Other') ? prev.filter(k => k !== 'Other') : [...prev, 'Other']
+                            )}
+                            style={[styles.sourceChip, {
+                              backgroundColor: selected ? '#6b728022' : colors.background,
+                              borderColor: selected ? '#6b7280' : colors.border,
+                            }]}
+                          >
+                            <Feather name="more-horizontal" size={12} color={selected ? '#6b7280' : colors.mutedForeground} />
+                            <Text style={[styles.sourceChipText, { color: selected ? '#6b7280' : colors.foreground }]}>Other</Text>
+                            {selected && <Feather name="check" size={10} color="#6b7280" />}
+                          </Pressable>
+                        );
+                      })()}
                     </View>
+                  )}
+                  {editSelectedSources.includes('Other') && (
+                    <TextInput
+                      style={[styles.input, { marginTop: 8, backgroundColor: colors.background, paddingVertical: 8 }]}
+                      placeholder="Describe the source (e.g. Consultancy, Parents)"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={editOtherLabel}
+                      onChangeText={setEditOtherLabel}
+                    />
                   )}
 
                   {editSelectedSources.length > 1 && (
@@ -795,8 +828,10 @@ export default function HistoryScreen() {
                         const color = PALETTE[idx % PALETTE.length];
                         return (
                           <View key={name} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: color + '44' }]}>
-                            <Feather name="briefcase" size={13} color={color} />
-                            <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>{name}</Text>
+                            <Feather name={name === 'Other' ? 'more-horizontal' : 'briefcase'} size={13} color={color} />
+                            <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
+                              {name === 'Other' ? (editOtherLabel || 'Other') : name}
+                            </Text>
                             <View style={styles.splitAmountInputBox}>
                               <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
                               <TextInput
