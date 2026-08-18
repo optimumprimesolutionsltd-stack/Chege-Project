@@ -6,23 +6,18 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// During `expo export` / `eas update`, Metro's hasher needs access to pnpm
-// store files whose SHA-1 it can't compute unless they're in a watched folder.
-// During the dev server we must NOT watch the whole pnpm store — Replit temp
-// files in other workspace dirs cause inotify watch-limit crashes.
-// Detect the export mode by checking the process argv.
-// expo export  → argv contains 'export'
-// expo export:embed (EAS build) → argv contains 'export:embed'
-const isExportMode = process.argv.some((a) => a === 'export' || a === 'export:embed');
-
-config.watchFolders = isExportMode
-  ? [
-      path.resolve(workspaceRoot, 'lib'),
-      path.resolve(workspaceRoot, 'node_modules', '.pnpm'),
-    ]
-  : [
-      path.resolve(workspaceRoot, 'lib'),
-    ];
+// Metro's hasher needs access to pnpm store files — symlinks in
+// artifacts/mobile-budget/node_modules/ resolve to paths inside
+// node_modules/.pnpm/, which Metro treats as outside projectRoot.
+// Without .pnpm in watchFolders, SHA-1 computation fails for any
+// pnpm-symlinked file (affects `expo export`, EAS eager bundle, and
+// the createReleaseUpdatesResources Gradle task).
+// inotify limit on this host is 65536; the pnpm store has ~1,165 entries,
+// so watching it is safe even in dev mode.
+config.watchFolders = [
+  path.resolve(workspaceRoot, 'lib'),
+  path.resolve(workspaceRoot, 'node_modules', '.pnpm'),
+];
 
 // Resolve packages from both the artifact's own node_modules and the root
 config.resolver.nodeModulesPaths = [
