@@ -6,6 +6,7 @@ import {
   usersTable,
   jointAccountTxTable,
   savingsGoalContributionsTable,
+  savingsGoalsTable,
 } from "@workspace/db";
 import { sql, eq } from "drizzle-orm";
 import { GetDashboardSummaryQueryParams, GetDashboardCategoryBreakdownQueryParams } from "@workspace/api-zod";
@@ -140,6 +141,72 @@ router.get("/dashboard/summary", async (req, res) => {
     chegeTarget: CHEGE_TARGET,
     lydiahTarget: LYDIAH_TARGET,
     expenseCount: Number(countRow.count),
+  });
+});
+
+// Per-member contribution breakdown (individual transactions)
+router.get("/dashboard/member-breakdown", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const userId = (req.query.userId as string) ?? "";
+  const now = new Date();
+  const month = parseInt(req.query.month as string) || now.getMonth() + 1;
+  const year  = parseInt(req.query.year  as string) || now.getFullYear();
+
+  if (!userId) { res.status(400).json({ error: "userId required" }); return; }
+
+  const [expenses, deposits, savings] = await Promise.all([
+    db.select({
+      id: expensesTable.id,
+      description: expensesTable.description,
+      amount: expensesTable.amount,
+      category: expensesTable.category,
+      date: expensesTable.date,
+      paidFromBank: expensesTable.paidFromBank,
+    })
+    .from(expensesTable)
+    .where(sql`${expensesTable.paidById} = ${userId}
+           AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month}
+           AND EXTRACT(YEAR  FROM ${expensesTable.date}) = ${year}
+           AND ${expensesTable.paidFromBank} = false`)
+    .orderBy(sql`${expensesTable.date} DESC`),
+
+    db.select({
+      id: jointAccountTxTable.id,
+      description: jointAccountTxTable.description,
+      amount: jointAccountTxTable.amount,
+      date: jointAccountTxTable.date,
+    })
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.type} = 'deposit'
+           AND ${jointAccountTxTable.madeById} = ${userId}
+           AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
+           AND EXTRACT(YEAR  FROM ${jointAccountTxTable.date}) = ${year}`)
+    .orderBy(sql`${jointAccountTxTable.date} DESC`),
+
+    db.select({
+      id: savingsGoalContributionsTable.id,
+      goalName: savingsGoalsTable.name,
+      amount: savingsGoalContributionsTable.amount,
+      date: savingsGoalContributionsTable.createdAt,
+    })
+    .from(savingsGoalContributionsTable)
+    .leftJoin(savingsGoalsTable, eq(savingsGoalContributionsTable.goalId, savingsGoalsTable.id))
+    .where(sql`${savingsGoalContributionsTable.createdByUserId} = ${userId}
+           AND EXTRACT(MONTH FROM ${savingsGoalContributionsTable.createdAt}) = ${month}
+           AND EXTRACT(YEAR  FROM ${savingsGoalContributionsTable.createdAt}) = ${year}`)
+    .orderBy(sql`${savingsGoalContributionsTable.createdAt} DESC`),
+  ]);
+
+  const expenseTotal  = expenses.reduce((s, r) => s + Number(r.amount), 0);
+  const depositTotal  = deposits.reduce((s, r) => s + Number(r.amount), 0);
+  const savingsTotal  = savings.reduce((s,  r) => s + Number(r.amount), 0);
+
+  res.json({
+    expenses:  expenses.map(r => ({ ...r, amount: Number(r.amount), date: r.date ? String(r.date) : null })),
+    deposits:  deposits.map(r => ({ ...r, amount: Number(r.amount), date: r.date ? String(r.date) : null })),
+    savingsContributions: savings.map(r => ({ ...r, amount: Number(r.amount), date: r.date ? String(r.date) : null })),
+    totals: { expenses: expenseTotal, deposits: depositTotal, savings: savingsTotal, grand: expenseTotal + depositTotal + savingsTotal },
   });
 });
 

@@ -14,25 +14,17 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
   useGetDashboardSummary,
-  getGetDashboardSummaryQueryKey,
+  customFetch,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
-
-const CHEGE_ID = '63497598';
-const LYDIAH_ID = '63570605';
-
-
-const MEMBER_NAMES: Record<string, string> = {
-  [CHEGE_ID]: 'Chege',
-  [LYDIAH_ID]: 'Lydiah',
-};
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -42,7 +34,7 @@ function formatKES(n?: number | null): string {
 function formatDate(s?: string | null): string {
   if (!s) return '';
   const d = new Date(s);
-  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
 }
 
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
@@ -55,7 +47,10 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
   );
 }
 
+// ── Member card (tappable) ────────────────────────────────────────────────────
+
 function MemberCard({
+  userId,
   name,
   initial,
   contributed,
@@ -64,7 +59,9 @@ function MemberCard({
   target,
   accentColor,
   gradientColors,
+  onPress,
 }: {
+  userId: string;
   name: string;
   initial: string;
   contributed: number;
@@ -73,51 +70,279 @@ function MemberCard({
   target: number;
   accentColor: string;
   gradientColors: [string, string];
+  onPress: () => void;
 }) {
   const pct = target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
   const netPositive = net >= 0;
 
   return (
-    <LinearGradient colors={gradientColors} style={styles.memberCard}>
-      <View style={styles.memberCardTop}>
-        <View>
-          <Text style={styles.memberName}>{name}</Text>
-          <Text style={styles.memberTarget}>Target: KES {formatKES(target)}</Text>
+    <Pressable onPress={onPress} android_ripple={{ color: 'rgba(255,255,255,0.08)' }}>
+      <LinearGradient colors={gradientColors} style={styles.memberCard}>
+        <View style={styles.memberCardTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.memberName}>{name}</Text>
+            <Text style={styles.memberTarget}>Target: KES {formatKES(target)}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={[styles.memberAvatar, { backgroundColor: accentColor + '33' }]}>
+              <Text style={[styles.memberInitial, { color: accentColor }]}>{initial}</Text>
+            </View>
+            <Feather name="chevron-right" size={16} color="rgba(247,250,246,0.35)" />
+          </View>
         </View>
-        <View style={[styles.memberAvatar, { backgroundColor: accentColor + '33' }]}>
-          <Text style={[styles.memberInitial, { color: accentColor }]}>{initial}</Text>
-        </View>
-      </View>
 
-      {/* Three-column stats */}
-      <View style={styles.memberStats}>
-        <View style={styles.memberStatCell}>
-          <Text style={styles.memberStatLabel}>Contributed</Text>
-          <Text style={[styles.memberStatValue, { color: accentColor }]}>KES {formatKES(contributed)}</Text>
+        <View style={styles.memberStats}>
+          <View style={styles.memberStatCell}>
+            <Text style={styles.memberStatLabel}>Contributed</Text>
+            <Text style={[styles.memberStatValue, { color: accentColor }]}>KES {formatKES(contributed)}</Text>
+          </View>
+          <View style={styles.memberStatDivider} />
+          <View style={styles.memberStatCell}>
+            <Text style={styles.memberStatLabel}>Spent</Text>
+            <Text style={[styles.memberStatValue, { color: '#f87171' }]}>KES {formatKES(spent)}</Text>
+          </View>
+          <View style={styles.memberStatDivider} />
+          <View style={styles.memberStatCell}>
+            <Text style={styles.memberStatLabel}>Net</Text>
+            <Text style={[styles.memberStatValue, { color: netPositive ? '#4ade80' : '#f87171' }]}>
+              {netPositive ? '+' : ''}KES {formatKES(net)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.memberStatDivider} />
-        <View style={styles.memberStatCell}>
-          <Text style={styles.memberStatLabel}>Spent</Text>
-          <Text style={[styles.memberStatValue, { color: '#f87171' }]}>KES {formatKES(spent)}</Text>
-        </View>
-        <View style={styles.memberStatDivider} />
-        <View style={styles.memberStatCell}>
-          <Text style={styles.memberStatLabel}>Net</Text>
-          <Text style={[styles.memberStatValue, { color: netPositive ? '#4ade80' : '#f87171' }]}>
-            {netPositive ? '+' : ''}KES {formatKES(net)}
+
+        <ProgressBar value={contributed} max={target} color={accentColor} />
+
+        <View style={styles.memberFooter}>
+          <Text style={styles.memberPct}>{Math.round(pct)}% of target</Text>
+          <Text style={[styles.memberRemaining, { color: netPositive ? 'rgba(247,250,246,0.55)' : '#f87171' }]}>
+            {netPositive ? `KES ${formatKES(Math.max(target - contributed, 0))} to go` : `Deficit KES ${formatKES(Math.abs(net))}`}
           </Text>
         </View>
-      </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
 
-      <ProgressBar value={contributed} max={target} color={accentColor} />
+// ── Breakdown types ───────────────────────────────────────────────────────────
 
-      <View style={styles.memberFooter}>
-        <Text style={styles.memberPct}>{Math.round(pct)}% of target</Text>
-        <Text style={[styles.memberRemaining, { color: netPositive ? 'rgba(247,250,246,0.55)' : '#f87171' }]}>
-          {netPositive ? `KES ${formatKES(Math.max(target - contributed, 0))} to go` : `Deficit KES ${formatKES(Math.abs(net))}`}
-        </Text>
+type BreakdownExpense = { id: number; description: string; amount: number; category: string; date: string | null; paidFromBank: boolean };
+type BreakdownDeposit = { id: number; description: string; amount: number; date: string | null };
+type BreakdownSavings = { id: number; goalName: string | null; amount: number; date: string | null };
+type Breakdown = {
+  expenses: BreakdownExpense[];
+  deposits: BreakdownDeposit[];
+  savingsContributions: BreakdownSavings[];
+  totals: { expenses: number; deposits: number; savings: number; grand: number };
+};
+
+// ── Breakdown modal ───────────────────────────────────────────────────────────
+
+function BreakdownModal({
+  visible,
+  member,
+  onClose,
+  colors,
+}: {
+  visible: boolean;
+  member: { userId: string; name: string; accentColor: string; month: number; year: number; setMonth: (m: number) => void; setYear: (y: number) => void } | null;
+  onClose: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const now = new Date();
+
+  const monthOptions = useMemo(() => {
+    const result: { month: number; year: number; label: string }[] = [];
+    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+    for (let i = 0; i < 24; i++) {
+      result.push({ month: d.getMonth() + 1, year: d.getFullYear(), label: `${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}` });
+      d.setMonth(d.getMonth() - 1);
+    }
+    return result;
+  }, []);
+
+  const { data: breakdown, isLoading } = useQuery<Breakdown>({
+    queryKey: ['member-breakdown', member?.userId, member?.month, member?.year],
+    queryFn: () => customFetch(`/api/dashboard/member-breakdown?userId=${member!.userId}&month=${member!.month}&year=${member!.year}`),
+    enabled: !!member && visible,
+  });
+
+  if (!member) return null;
+
+  const isCurrentMonth = member.month === now.getMonth() + 1 && member.year === now.getFullYear();
+
+  function prevMonth() {
+    if (!member) return;
+    if (member.month === 1) { member.setMonth(12); member.setYear(member.year - 1); }
+    else member.setMonth(member.month - 1);
+  }
+  function nextMonth() {
+    if (!member || isCurrentMonth) return;
+    if (member.month === 12) { member.setMonth(1); member.setYear(member.year + 1); }
+    else member.setMonth(member.month + 1);
+  }
+
+  const hasData = breakdown && (breakdown.expenses.length > 0 || breakdown.deposits.length > 0 || breakdown.savingsContributions.length > 0);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={bStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[bStyles.sheet, { backgroundColor: '#0a1a10' }]}>
+          {/* Handle */}
+          <View style={[bStyles.handle, { backgroundColor: 'rgba(255,255,255,0.15)' }]} />
+
+          {/* Header */}
+          <View style={bStyles.header}>
+            <Pressable onPress={onClose} hitSlop={12} style={bStyles.closeBtn}>
+              <Feather name="x" size={20} color="rgba(247,250,246,0.6)" />
+            </Pressable>
+            <Text style={bStyles.headerTitle}>{member.name}'s breakdown</Text>
+            <View style={bStyles.monthNav}>
+              <Pressable onPress={prevMonth} hitSlop={10}>
+                <Feather name="chevron-left" size={18} color="rgba(247,250,246,0.7)" />
+              </Pressable>
+              <Pressable onPress={() => setPickerVisible(true)} style={bStyles.monthBtn}>
+                <Text style={bStyles.monthLabel}>{MONTHS_SHORT[member.month - 1]} {member.year}</Text>
+                <Feather name="chevron-down" size={10} color="rgba(247,250,246,0.5)" style={{ marginLeft: 2 }} />
+              </Pressable>
+              <Pressable onPress={nextMonth} hitSlop={10} disabled={isCurrentMonth}>
+                <Feather name="chevron-right" size={18} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Month picker sub-modal */}
+          <Modal visible={pickerVisible} animationType="slide" transparent onRequestClose={() => setPickerVisible(false)}>
+            <Pressable style={bStyles.pickerOverlay} onPress={() => setPickerVisible(false)}>
+              <Pressable style={[bStyles.pickerSheet, { backgroundColor: colors.card }]} onPress={() => {}}>
+                <View style={[bStyles.pickerHandle, { backgroundColor: colors.border }]} />
+                <Text style={[bStyles.pickerTitle, { color: colors.foreground }]}>Jump to month</Text>
+                <FlatList
+                  data={monthOptions}
+                  keyExtractor={item => `${item.year}-${item.month}`}
+                  showsVerticalScrollIndicator={false}
+                  style={{ flexGrow: 0 }}
+                  renderItem={({ item }) => {
+                    const selected = item.month === member.month && item.year === member.year;
+                    return (
+                      <Pressable
+                        onPress={() => { member.setMonth(item.month); member.setYear(item.year); setPickerVisible(false); }}
+                        style={[bStyles.pickerItem, selected && { backgroundColor: '#1a3320' }]}
+                      >
+                        <Text style={[bStyles.pickerItemText, { color: selected ? '#4ade80' : colors.foreground }, selected && { fontFamily: 'Inter_700Bold' }]}>
+                          {item.label}
+                        </Text>
+                        {selected && <Feather name="check" size={16} color="#4ade80" />}
+                      </Pressable>
+                    );
+                  }}
+                />
+              </Pressable>
+            </Pressable>
+          </Modal>
+
+          {/* Content */}
+          {isLoading ? (
+            <View style={bStyles.loadingBox}>
+              <ActivityIndicator color={member.accentColor} />
+              <Text style={bStyles.loadingText}>Loading breakdown…</Text>
+            </View>
+          ) : !hasData ? (
+            <View style={bStyles.emptyBox}>
+              <Feather name="inbox" size={32} color="rgba(122,170,138,0.4)" />
+              <Text style={bStyles.emptyText}>No contributions in {MONTHS_SHORT[member.month - 1]} {member.year}</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={bStyles.content}>
+              {/* Expenses section */}
+              {breakdown.expenses.length > 0 && (
+                <Section
+                  title="Expenses paid"
+                  total={breakdown.totals.expenses}
+                  accentColor={member.accentColor}
+                  rows={breakdown.expenses.map(e => ({
+                    key: String(e.id),
+                    label: e.description || e.category,
+                    sub: e.category,
+                    amount: e.amount,
+                    date: e.date,
+                  }))}
+                />
+              )}
+
+              {/* Deposits section */}
+              {breakdown.deposits.length > 0 && (
+                <Section
+                  title="Bank deposits"
+                  total={breakdown.totals.deposits}
+                  accentColor={member.accentColor}
+                  rows={breakdown.deposits.map(d => ({
+                    key: String(d.id),
+                    label: d.description || 'Deposit',
+                    amount: d.amount,
+                    date: d.date,
+                  }))}
+                />
+              )}
+
+              {/* Savings section */}
+              {breakdown.savingsContributions.length > 0 && (
+                <Section
+                  title="Savings goals"
+                  total={breakdown.totals.savings}
+                  accentColor={member.accentColor}
+                  rows={breakdown.savingsContributions.map(s => ({
+                    key: String(s.id),
+                    label: s.goalName || 'Savings',
+                    amount: s.amount,
+                    date: s.date,
+                  }))}
+                />
+              )}
+
+              {/* Grand total */}
+              <View style={[bStyles.grandTotal, { borderColor: 'rgba(255,255,255,0.1)' }]}>
+                <Text style={bStyles.grandLabel}>Total contribution</Text>
+                <Text style={[bStyles.grandAmount, { color: member.accentColor }]}>
+                  KES {formatKES(breakdown.totals.grand)}
+                </Text>
+              </View>
+            </ScrollView>
+          )}
+        </View>
       </View>
-    </LinearGradient>
+    </Modal>
+  );
+}
+
+function Section({ title, total, accentColor, rows }: {
+  title: string;
+  total: number;
+  accentColor: string;
+  rows: { key: string; label: string; sub?: string; amount: number; date: string | null }[];
+}) {
+  return (
+    <View style={bStyles.section}>
+      <View style={bStyles.sectionHeader}>
+        <Text style={bStyles.sectionTitle}>{title}</Text>
+        <Text style={[bStyles.sectionTotal, { color: accentColor }]}>KES {formatKES(total)}</Text>
+      </View>
+      {rows.map(row => (
+        <View key={row.key} style={bStyles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={bStyles.rowLabel} numberOfLines={1}>{row.label}</Text>
+            {row.sub && row.sub !== row.label && (
+              <Text style={bStyles.rowSub} numberOfLines={1}>{row.sub}</Text>
+            )}
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={bStyles.rowAmount}>KES {formatKES(row.amount)}</Text>
+            {row.date && <Text style={bStyles.rowDate}>{formatDate(row.date)}</Text>}
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -133,6 +358,11 @@ export default function ContributionsScreen() {
   const [year, setYear] = useState(now.getFullYear());
   const [pickerVisible, setPickerVisible] = useState(false);
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+
+  // Breakdown modal state
+  const [bMember, setBMember] = useState<{ userId: string; name: string; accentColor: string } | null>(null);
+  const [bMonth, setBMonth] = useState(month);
+  const [bYear, setBYear] = useState(year);
 
   const monthOptions = useMemo(() => {
     const result: { month: number; year: number; label: string }[] = [];
@@ -156,11 +386,13 @@ export default function ContributionsScreen() {
     if (month === 12) { setMonth(1); setYear(y => y + 1); }
     else setMonth(m => m + 1);
   }
-  function jumpToMonth(m: number, y: number) {
-    setMonth(m); setYear(y); setPickerVisible(false);
-  }
+  function jumpToMonth(m: number, y: number) { setMonth(m); setYear(y); setPickerVisible(false); }
 
   const { data: summary, isLoading, refetch } = useGetDashboardSummary({ month, year });
+
+  // Summary data with safe fallbacks
+  const chegeId = summary?.chegeId as string | undefined;
+  const lydiahId = summary?.lydiahId as string | undefined;
   const chegeNet = (summary?.chegeContributed ?? 0) - (summary?.chegeSpent ?? 0);
   const lydiahNet = (summary?.lydiahContributed ?? 0) - (summary?.lydiahSpent ?? 0);
 
@@ -170,6 +402,21 @@ export default function ContributionsScreen() {
     await refetch();
     setRefreshing(false);
   }, [refetch]);
+
+  function openBreakdown(userId: string, name: string, accentColor: string) {
+    setBMonth(month);
+    setBYear(year);
+    setBMember({ userId, name, accentColor });
+  }
+
+  // Breakdown member object with setter callbacks
+  const breakdownMember = bMember ? {
+    ...bMember,
+    month: bMonth,
+    year: bYear,
+    setMonth: setBMonth,
+    setYear: setBYear,
+  } : null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -232,6 +479,14 @@ export default function ContributionsScreen() {
         </Pressable>
       </Modal>
 
+      {/* Breakdown Modal */}
+      <BreakdownModal
+        visible={!!bMember}
+        member={breakdownMember}
+        onClose={() => setBMember(null)}
+        colors={colors}
+      />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4ade80" />}
@@ -242,6 +497,7 @@ export default function ContributionsScreen() {
         ) : summary ? (
           <View style={styles.cards}>
             <MemberCard
+              userId="63497598"
               name="Chege"
               initial="C"
               contributed={summary.chegeContributed ?? 0}
@@ -250,8 +506,10 @@ export default function ContributionsScreen() {
               target={summary.chegeTarget ?? 0}
               accentColor="#4ade80"
               gradientColors={['#132a1c', '#0f2217']}
+              onPress={() => openBreakdown('63497598', 'Chege', '#4ade80')}
             />
             <MemberCard
+              userId="63570605"
               name="Lydiah"
               initial="L"
               contributed={summary.lydiahContributed ?? 0}
@@ -260,6 +518,7 @@ export default function ContributionsScreen() {
               target={summary.lydiahTarget ?? 0}
               accentColor="#cf7217"
               gradientColors={['#2a1c0a', '#1c130a']}
+              onPress={() => openBreakdown('63570605', 'Lydiah', '#cf7217')}
             />
           </View>
         ) : null}
@@ -267,6 +526,8 @@ export default function ContributionsScreen() {
     </View>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -309,4 +570,45 @@ const styles = StyleSheet.create({
   memberFooter: { flexDirection: 'row', justifyContent: 'space-between' },
   memberPct: { fontSize: 12, color: 'rgba(247,250,246,0.55)', fontFamily: 'Inter_400Regular' },
   memberRemaining: { fontSize: 12, color: 'rgba(247,250,246,0.55)', fontFamily: 'Inter_400Regular' },
+});
+
+const bStyles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '85%', minHeight: 300 },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)' },
+  closeBtn: { padding: 4, marginRight: 8 },
+  headerTitle: { flex: 1, fontSize: 15, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+  monthNav: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  monthBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 3 },
+  monthLabel: { fontSize: 13, fontWeight: '600' as const, color: '#f7faf6', fontFamily: 'Inter_600SemiBold', minWidth: 56, textAlign: 'center' },
+
+  content: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40, gap: 0 },
+
+  section: { marginBottom: 20 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  sectionTitle: { fontSize: 11, color: 'rgba(122,170,138,0.8)', fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase' as const, letterSpacing: 0.6 },
+  sectionTotal: { fontSize: 13, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.07)' },
+  rowLabel: { fontSize: 14, color: '#f7faf6', fontFamily: 'Inter_500Medium' },
+  rowSub: { fontSize: 11, color: 'rgba(247,250,246,0.45)', fontFamily: 'Inter_400Regular', marginTop: 1 },
+  rowAmount: { fontSize: 14, fontWeight: '600' as const, color: '#f7faf6', fontFamily: 'Inter_600SemiBold' },
+  rowDate: { fontSize: 11, color: 'rgba(247,250,246,0.4)', fontFamily: 'Inter_400Regular', marginTop: 1, textAlign: 'right' },
+
+  grandTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, marginTop: 4, borderTopWidth: 1 },
+  grandLabel: { fontSize: 14, fontWeight: '600' as const, color: 'rgba(247,250,246,0.7)', fontFamily: 'Inter_600SemiBold' },
+  grandAmount: { fontSize: 20, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+
+  loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
+  loadingText: { fontSize: 13, color: 'rgba(247,250,246,0.5)', fontFamily: 'Inter_400Regular' },
+  emptyBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 48, gap: 12 },
+  emptyText: { fontSize: 14, color: 'rgba(247,250,246,0.5)', fontFamily: 'Inter_400Regular', textAlign: 'center' },
+
+  pickerOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: '60%' },
+  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  pickerTitle: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', textAlign: 'center', paddingVertical: 12 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, marginHorizontal: 12, marginVertical: 1 },
+  pickerItemText: { fontSize: 16, fontFamily: 'Inter_500Medium' },
 });
