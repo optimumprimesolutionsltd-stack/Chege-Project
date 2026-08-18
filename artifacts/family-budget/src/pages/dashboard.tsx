@@ -8,17 +8,19 @@ import {
   useGetBudgetCategories,
   useGetMembers,
   useCreateExpense,
-  useCreateContribution,
+  useCreateDeposit,
   useContributeToSavingsGoal,
   useCascadeContribute,
   useGetJointAccount,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
   getGetSavingsGoalsQueryKey,
-  getGetContributionsQueryKey,
+  getGetJointAccountQueryKey,
   getGetExpensesQueryKey,
   type SavingsGoal,
+  type IncomeSource,
 } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -38,28 +40,46 @@ type QuickAction = "none" | "income" | "expense" | "goal";
 const CHEGE_ID = "63497598";
 const LYDIAH_ID = "63570605";
 
-// ── Quick Action: Make a Bank Deposit ────────────────────────────────────────
+// ── Quick Action: Bank Deposit ────────────────────────────────────────────────
 function IncomeForm({ onDone }: { onDone: () => void }) {
   const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [forUserId, setForUserId] = useState<string>(CHEGE_ID);
-  const createContribution = useCreateContribution();
+  const [description, setDescription] = useState("");
+  const [madeById, setMadeById] = useState<string>(CHEGE_ID);
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const createDeposit = useCreateDeposit();
   const qc = useQueryClient();
   const { toast } = useToast();
   const now = new Date();
+
+  const { data: incomeSources } = useQuery<IncomeSource[]>({
+    queryKey: ["income-sources", madeById],
+    queryFn: async () => {
+      const res = await fetch(`/api/income-sources?userId=${madeById}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!madeById,
+    staleTime: 60_000,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
     if (!amt || amt <= 0) return;
     try {
-      await createContribution.mutateAsync({
-        data: { amount: amt, month: now.getMonth() + 1, year: now.getFullYear(), note: note || undefined, forUserId },
+      await createDeposit.mutateAsync({
+        data: {
+          amount: amt,
+          description: description.trim() || "Deposit",
+          date: now.toISOString().split("T")[0],
+          madeById,
+          ...(incomeSourceId ? { incomeSourceId } : {}),
+        } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
-      qc.invalidateQueries({ queryKey: getGetContributionsQueryKey() });
-      const who = forUserId === CHEGE_ID ? "Chege" : "Lydiah";
+      qc.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      const who = madeById === CHEGE_ID ? "Chege" : "Lydiah";
       toast({ title: "Deposit recorded", description: `${who} · ${formatKes(amt)} added to this month.` });
       onDone();
     } catch {
@@ -74,8 +94,8 @@ function IncomeForm({ onDone }: { onDone: () => void }) {
         <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
         <div className="grid grid-cols-2 gap-2">
           {[{ id: CHEGE_ID, name: "Chege" }, { id: LYDIAH_ID, name: "Lydiah" }].map(({ id, name }) => (
-            <button key={id} type="button" onClick={() => setForUserId(id)}
-              className={`py-3 rounded-xl border text-sm font-semibold transition-colors ${forUserId === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}>
+            <button key={id} type="button" onClick={() => { setMadeById(id); setIncomeSourceId(null); }}
+              className={`py-3 rounded-xl border text-sm font-semibold transition-colors ${madeById === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}>
               {name}
             </button>
           ))}
@@ -87,14 +107,29 @@ function IncomeForm({ onDone }: { onDone: () => void }) {
           <Input type="number" placeholder="e.g. 50000" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-12 bg-card text-base" autoFocus />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Note <span className="text-muted-foreground font-normal">(optional)</span></label>
-          <Input placeholder="e.g. Salary, rental…" value={note} onChange={e => setNote(e.target.value)} className="h-12 bg-card" />
+          <label className="text-sm font-semibold text-foreground">Description <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <Input placeholder="e.g. Salary, rental income…" value={description} onChange={e => setDescription(e.target.value)} className="h-12 bg-card" />
         </div>
       </div>
+      {/* Income source */}
+      {incomeSources && incomeSources.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Income source <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <div className="flex flex-wrap gap-2">
+            {incomeSources.map(src => (
+              <button key={src.id} type="button"
+                onClick={() => setIncomeSourceId(incomeSourceId === src.id ? null : src.id)}
+                className={`px-3 h-9 rounded-lg text-sm border transition-colors ${incomeSourceId === src.id ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}>
+                {src.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex gap-3">
-        <Button type="submit" className="h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex-1 text-base" disabled={createContribution.isPending}>
-          {createContribution.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-          Make Deposit
+        <Button type="submit" className="h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex-1 text-base" disabled={createDeposit.isPending}>
+          {createDeposit.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          Record Deposit
         </Button>
         <Button type="button" variant="ghost" className="h-12" onClick={onDone}>Cancel</Button>
       </div>

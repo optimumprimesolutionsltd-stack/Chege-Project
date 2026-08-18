@@ -35,7 +35,9 @@ import {
   useGetDashboardSummary, useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
   getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
+  type IncomeSource,
 } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -64,9 +66,24 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [description, setDescription] = useState(defaults?.description ?? "");
   const [notes, setNotes] = useState(defaults?.notes ?? "");
   const [paidById, setPaidById] = useState(defaults?.paidById ?? "");
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [isRecurring, setIsRecurring] = useState(defaults?.isRecurring ?? false);
   const [date, setDate] = useState(defaults?.date ?? today.toISOString().split("T")[0]);
-  return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes, paidById, setPaidById, isRecurring, setIsRecurring, date, setDate };
+  return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes, paidById, setPaidById, incomeSourceId, setIncomeSourceId, isRecurring, setIsRecurring, date, setDate };
+}
+
+function useIncomeSources(userId: string) {
+  return useQuery<IncomeSource[]>({
+    queryKey: ["income-sources", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const res = await fetch(`/api/income-sources?userId=${userId}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!userId,
+    staleTime: 60_000,
+  });
 }
 
 const EXPENSES_MONTH_KEY = "expenses-month-pref";
@@ -128,10 +145,16 @@ export default function Expenses() {
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
 
+  const [addNewSource, setAddNewSource] = useState(false);
+  const [newSourceName, setNewSourceName] = useState("");
+  const { data: addFormSources, refetch: refetchAddSources } = useIncomeSources(addForm.paidById);
+  const { data: editFormSources } = useIncomeSources(editForm.paidById);
+
   const resetAdd = () => {
     addForm.setAmount(""); addForm.setCategory(""); addForm.setDescription(""); addForm.setNotes("");
-    addForm.setPaidById(""); addForm.setIsRecurring(false);
+    addForm.setPaidById(""); addForm.setIncomeSourceId(null); addForm.setIsRecurring(false);
     addForm.setDate(now.toISOString().split("T")[0]);
+    setAddNewSource(false); setNewSourceName("");
     setIsAdding(false);
   };
 
@@ -141,6 +164,7 @@ export default function Expenses() {
     editForm.setDescription(expense.description);
     editForm.setNotes(expense.notes ?? "");
     editForm.setPaidById(expense.paidById);
+    editForm.setIncomeSourceId(null);
     editForm.setIsRecurring(expense.isRecurring);
     editForm.setDate(expense.date);
     setEditingId(expense.id);
@@ -148,6 +172,28 @@ export default function Expenses() {
   };
 
   const cancelEdit = () => setEditingId(null);
+
+  const handleAddNewSource = async (paidById: string) => {
+    if (!newSourceName.trim()) return;
+    try {
+      const res = await fetch("/api/income-sources", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: paidById, name: newSourceName.trim(), isMain: false }),
+      });
+      if (res.ok) {
+        const src: IncomeSource = await res.json();
+        addForm.setIncomeSourceId(src.id);
+        setNewSourceName("");
+        setAddNewSource(false);
+        refetchAddSources();
+        toast({ title: "Income source added" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Could not add income source." });
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,7 +208,8 @@ export default function Expenses() {
           paidById: addForm.paidById || undefined,
           isRecurring: addForm.isRecurring,
           date: addForm.date,
-        }
+          ...(addForm.incomeSourceId ? { incomeSourceId: addForm.incomeSourceId } : {}),
+        } as Parameters<typeof createExpense.mutateAsync>[0]["data"]
       });
       toast({ title: "Expense recorded" });
       resetAdd();
@@ -186,7 +233,8 @@ export default function Expenses() {
           paidById: editForm.paidById || undefined,
           isRecurring: editForm.isRecurring,
           date: editForm.date,
-        }
+          ...(editForm.incomeSourceId ? { incomeSourceId: editForm.incomeSourceId } : {}),
+        } as Parameters<typeof updateExpense.mutateAsync>[0]["data"]
       });
       toast({ title: "Expense updated" });
       setEditingId(null);
@@ -297,6 +345,46 @@ export default function Expenses() {
             <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>
           )}
         </div>
+
+        {/* Income source picker — shown after a payer is chosen */}
+        {form.paidById && (
+          <div className="md:col-span-2 space-y-2">
+            <label className="text-sm font-semibold text-foreground">
+              Paid from <span className="font-normal text-muted-foreground">(counts as contribution if personal)</span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button type="button"
+                onClick={() => form.setIncomeSourceId(null)}
+                className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.incomeSourceId === null ? "bg-muted text-foreground border-foreground/30 font-semibold" : "bg-card border-input text-muted-foreground hover:bg-muted/50"}`}
+              >
+                Joint bank account
+              </button>
+              {(title === "Add expense" ? addFormSources : editFormSources)?.map(src => (
+                <button key={src.id} type="button"
+                  onClick={() => form.setIncomeSourceId(src.id)}
+                  className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.incomeSourceId === src.id ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
+                >
+                  {src.name}
+                </button>
+              ))}
+              {title === "Add expense" && (
+                addNewSource ? (
+                  <div className="flex items-center gap-1">
+                    <Input autoFocus placeholder="Source name" value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
+                      className="h-9 text-sm w-36 bg-card" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddNewSource(form.paidById); } }} />
+                    <Button type="button" size="sm" className="h-9" onClick={() => handleAddNewSource(form.paidById)}>Add</Button>
+                    <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => { setAddNewSource(false); setNewSourceName(""); }}>✕</Button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setAddNewSource(true)}
+                    className="px-3 h-9 rounded-lg text-sm border border-dashed border-input text-muted-foreground hover:bg-muted/50 transition-colors">
+                    + New source
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="md:col-span-2 flex items-center gap-3 bg-card rounded-xl p-4 border border-border/50">
           <input type="checkbox" id={`isRecurring-${title}`} checked={form.isRecurring} onChange={e => form.setIsRecurring(e.target.checked)}

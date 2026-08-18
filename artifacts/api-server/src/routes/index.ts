@@ -12,6 +12,7 @@ import membersRouter from "./members";
 import digestRouter from "./digest";
 import savingsGoalsRouter from "./savings-goals";
 import jointAccountRouter from "./joint-account";
+import incomeSourcesRouter from "./income-sources";
 
 const MAX_MEMBERS = 2;
 
@@ -78,5 +79,6 @@ router.use(membersRouter);
 router.use(digestRouter);
 router.use(savingsGoalsRouter);
 router.use(jointAccountRouter);
+router.use(incomeSourcesRouter);
 
 export default router;

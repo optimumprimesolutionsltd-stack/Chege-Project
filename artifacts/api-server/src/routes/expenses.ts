@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { expensesTable, usersTable, membersTable } from "@workspace/db";
+import { expensesTable, usersTable, membersTable, incomeSourcesTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -144,6 +144,9 @@ router.post("/expenses", async (req, res) => {
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { amount, category, description, notes, paidById, isRecurring, date } = parsed.data;
+  const incomeSourceId: number | undefined = (req.body as { incomeSourceId?: unknown }).incomeSourceId != null
+    ? Number((req.body as { incomeSourceId: unknown }).incomeSourceId)
+    : undefined;
 
   if (!paidById) {
     res.status(400).json({ error: "paidById is required — choose who paid." });
@@ -157,9 +160,15 @@ router.post("/expenses", async (req, res) => {
     return;
   }
 
+  // Validate incomeSourceId if provided
+  if (incomeSourceId) {
+    const src = await db.query.incomeSourcesTable.findFirst({ where: eq(incomeSourcesTable.id, incomeSourceId) });
+    if (!src) { res.status(400).json({ error: "incomeSourceId not found." }); return; }
+  }
+
   const [expense] = await db
     .insert(expensesTable)
-    .values({ amount, category, description, notes: notes ?? null, paidById, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
+    .values({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId: incomeSourceId ?? null, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .returning();
 
   const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
@@ -177,6 +186,9 @@ router.patch("/expenses/:id", async (req, res) => {
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
 
   const { amount, category, description, notes, paidById, isRecurring, date } = parsed.data;
+  const incomeSourceId: number | null = (req.body as { incomeSourceId?: unknown }).incomeSourceId != null
+    ? Number((req.body as { incomeSourceId: unknown }).incomeSourceId)
+    : null;
 
   if (!paidById) {
     res.status(400).json({ error: "paidById is required — choose who paid." });
@@ -192,7 +204,7 @@ router.patch("/expenses/:id", async (req, res) => {
 
   const [updated] = await db
     .update(expensesTable)
-    .set({ amount, category, description, notes: notes ?? null, paidById, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
+    .set({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .where(eq(expensesTable.id, Math.round(idParsed.data.id)))
     .returning();
 

@@ -10,9 +10,7 @@ import {
   Pressable,
   Modal,
   FlatList,
-  TextInput,
   Alert,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -23,7 +21,6 @@ import { useColors } from '@/hooks/useColors';
 import {
   useGetContributions,
   useGetDashboardSummary,
-  useCreateContribution,
   useDeleteContribution,
   getGetContributionsQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -141,9 +138,9 @@ function MemberCard({
   );
 }
 
-// ── Record-deposit bottom sheet ──────────────────────────────────────────────
-
-function RecordDepositModal({
+// ── Record-deposit bottom sheet (removed — deposits tracked via bank tab) ────
+// Kept as a dead stub to avoid removing too many lines at once; will be pruned.
+function _RecordDepositModal_REMOVED({
   visible,
   onClose,
   month,
@@ -383,8 +380,6 @@ export default function ContributionsScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [depositModalVisible, setDepositModalVisible] = useState(false);
-
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
   // Build list of last 24 months (most-recent first)
@@ -486,14 +481,6 @@ export default function ContributionsScreen() {
                 <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
               </Pressable>
             </View>
-            <Pressable
-              onPress={() => setDepositModalVisible(true)}
-              style={styles.recordBtn}
-              hitSlop={8}
-            >
-              <Feather name="plus" size={16} color="#0a1a10" />
-              <Text style={styles.recordBtnText}>Record</Text>
-            </Pressable>
           </View>
         </View>
 
@@ -536,14 +523,6 @@ export default function ContributionsScreen() {
         </Pressable>
       </Modal>
 
-      {/* Record Deposit Modal */}
-      <RecordDepositModal
-        visible={depositModalVisible}
-        onClose={() => setDepositModalVisible(false)}
-        month={month}
-        year={year}
-        onSuccess={() => setDepositModalVisible(false)}
-      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -596,17 +575,10 @@ export default function ContributionsScreen() {
               {!contributions || contributions.length === 0 ? (
                 <View style={styles.empty}>
                   <Feather name="inbox" size={36} color={colors.mutedForeground} />
-                  <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No contributions yet</Text>
+                  <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No legacy records</Text>
                   <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                    Tap Record above to log a deposit for Chege or Lydiah.
+                    Contributions are now tracked automatically from deposits and direct payments.
                   </Text>
-                  <Pressable
-                    onPress={() => setDepositModalVisible(true)}
-                    style={[styles.emptyBtn, { borderColor: '#4ade80' }]}
-                  >
-                    <Feather name="plus" size={14} color="#4ade80" />
-                    <Text style={[styles.emptyBtnText, { color: '#4ade80' }]}>Record first deposit</Text>
-                  </Pressable>
                 </View>
               ) : (
                 <>

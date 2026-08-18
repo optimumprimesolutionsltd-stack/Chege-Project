@@ -27,7 +27,9 @@ import {
   getGetExpensesQueryKey,
   getGetDashboardActivityQueryKey,
   getGetDashboardSummaryQueryKey,
+  type IncomeSource,
 } from '@workspace/api-client-react';
+import { useQuery } from '@tanstack/react-query';
 
 const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Food: 'shopping-cart',
@@ -75,7 +77,20 @@ export default function AddExpenseSheet() {
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [paidById, setPaidById] = useState('');
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
+
+  const { data: incomeSources = [] } = useQuery<IncomeSource[]>({
+    queryKey: ['income-sources', paidById],
+    queryFn: async () => {
+      if (!paidById) return [];
+      const res = await fetch(`/api/income-sources?userId=${paidById}`, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!paidById,
+    staleTime: 60_000,
+  });
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -125,9 +140,10 @@ export default function AddExpenseSheet() {
         paidById,
         isRecurring,
         date,
-      },
+        ...(incomeSourceId ? { incomeSourceId } : {}),
+      } as Parameters<typeof createExpense>[0]['data'],
     });
-  }, [amount, category, description, notes, paidById, isRecurring, date, createExpense]);
+  }, [amount, category, description, notes, paidById, incomeSourceId, isRecurring, date, createExpense]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -319,6 +335,57 @@ export default function AddExpenseSheet() {
                 Tap to choose who paid
               </Text>
             )}
+          </>
+        )}
+
+        {/* Income source — shown when a payer is selected */}
+        {paidById && incomeSources.length > 0 && (
+          <>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>PAID FROM</Text>
+            <View style={styles.paidByRow}>
+              <Pressable
+                onPress={() => setIncomeSourceId(null)}
+                style={[
+                  styles.paidByPill,
+                  {
+                    backgroundColor: incomeSourceId === null ? colors.muted : colors.muted,
+                    borderColor: incomeSourceId === null ? colors.foreground + '50' : colors.border,
+                    borderRadius: colors.radius,
+                    borderStyle: incomeSourceId === null ? 'solid' : 'solid',
+                  },
+                ]}
+              >
+                <Feather name="credit-card" size={14} color={incomeSourceId === null ? colors.foreground : colors.mutedForeground} />
+                <Text style={[styles.paidByText, { color: incomeSourceId === null ? colors.foreground : colors.mutedForeground, fontFamily: incomeSourceId === null ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
+                  Joint bank
+                </Text>
+              </Pressable>
+              {incomeSources.map((src) => {
+                const selected = incomeSourceId === src.id;
+                return (
+                  <Pressable
+                    key={src.id}
+                    onPress={() => setIncomeSourceId(selected ? null : src.id)}
+                    style={[
+                      styles.paidByPill,
+                      {
+                        backgroundColor: selected ? '#6366f1' : colors.muted,
+                        borderColor: selected ? '#6366f1' : colors.border,
+                        borderRadius: colors.radius,
+                      },
+                    ]}
+                  >
+                    <Feather name="zap" size={14} color={selected ? '#fff' : colors.mutedForeground} />
+                    <Text style={[styles.paidByText, { color: selected ? '#fff' : colors.foreground }]}>
+                      {src.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+              Personal source = counts as your contribution
+            </Text>
           </>
         )}
 

@@ -30,8 +30,9 @@ import {
   useGetBudgetCategories,
   useGetMembers,
   getGetJointAccountQueryKey,
+  type IncomeSource,
 } from '@workspace/api-client-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -97,6 +98,20 @@ export default function BankScreen() {
   const { data: members = [] } = useGetMembers();
   const { user } = useAuth();
   const [madeById, setMadeById] = useState('');
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+
+  // Fetch income sources for selected depositor
+  const { data: depositSources = [] } = useQuery<IncomeSource[]>({
+    queryKey: ['income-sources', madeById],
+    queryFn: async () => {
+      if (!madeById) return [];
+      const res = await fetch(`/api/income-sources?userId=${madeById}`, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!madeById && txType === 'deposit',
+    staleTime: 60_000,
+  });
 
   const openModal = (type: TxType) => {
     setTxType(type);
@@ -107,6 +122,7 @@ export default function BankScreen() {
     setDate(todayIso());
     setShowDatePicker(false);
     setMadeById('');
+    setIncomeSourceId(null);
     setModalVisible(true);
   };
 
@@ -155,7 +171,11 @@ export default function BankScreen() {
     try {
       if (txType === 'deposit') {
         await createDeposit({
-          data: { amount: parsed, description: description.trim(), date, madeById: madeById || undefined },
+          data: {
+            amount: parsed, description: description.trim(), date,
+            madeById: madeById || undefined,
+            ...(incomeSourceId ? { incomeSourceId } : {}),
+          } as Parameters<typeof createDeposit>[0]['data'],
         });
       } else {
         await createDisbursement({
@@ -414,12 +434,39 @@ export default function BankScreen() {
                           styles.memberPill,
                           { backgroundColor: selected ? '#4ade80' : colors.muted, borderColor: selected ? '#4ade80' : colors.border },
                         ]}
-                        onPress={() => setMadeById(m.userId)}
+                        onPress={() => { setMadeById(m.userId); setIncomeSourceId(null); }}
                         activeOpacity={0.7}
                       >
                         <Feather name="user" size={13} color={selected ? '#0a1a10' : colors.mutedForeground} />
                         <Text style={[styles.memberPillText, { color: selected ? '#0a1a10' : colors.foreground }]}>
                           {name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* Income source (deposits only, when a person is selected) */}
+            {isDeposit && madeById && depositSources.length > 0 && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Income source <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text></Text>
+                <View style={styles.memberRow}>
+                  {depositSources.map((src) => {
+                    const selected = incomeSourceId === src.id;
+                    return (
+                      <TouchableOpacity
+                        key={src.id}
+                        style={[
+                          styles.memberPill,
+                          { backgroundColor: selected ? '#6366f1' : colors.muted, borderColor: selected ? '#6366f1' : colors.border },
+                        ]}
+                        onPress={() => setIncomeSourceId(selected ? null : src.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                          {src.name}
                         </Text>
                       </TouchableOpacity>
                     );

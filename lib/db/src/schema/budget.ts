@@ -1,4 +1,17 @@
 import { pgTable, serial, text, integer, boolean, date, timestamp, unique } from "drizzle-orm/pg-core";
+
+// Income sources — per-person named income streams (e.g. Lydiah–EISH, Chege–Salary)
+export const incomeSourcesTable = pgTable("income_sources", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  isMain: boolean("is_main").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertIncomeSourceSchema = createInsertSchema(incomeSourcesTable).omit({ id: true, createdAt: true });
+export type InsertIncomeSource = z.infer<typeof insertIncomeSourceSchema>;
+export type IncomeSource = typeof incomeSourcesTable.$inferSelect;
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -23,6 +36,7 @@ export const expensesTable = pgTable("expenses", {
   description: text("description").notNull(),
   notes: text("notes"),                          // optional extra notes
   paidById: text("paid_by_id").notNull(),
+  incomeSourceId: integer("income_source_id"), // set when paid directly from personal income; null = paid from joint bank
   isRecurring: boolean("is_recurring").notNull().default(false),
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -54,6 +68,7 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   amount: integer("amount").notNull(), // in KES
   description: text("description").notNull(),
   madeById: text("made_by_id"), // userId for deposits; null ok for disbursements
+  incomeSourceId: integer("income_source_id"), // which income source funded this deposit
   expenseCategory: text("expense_category"), // optional: which expense category this disbursement covers
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

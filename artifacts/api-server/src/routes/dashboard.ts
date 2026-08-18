@@ -2,7 +2,6 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   expensesTable,
-  contributionsTable,
   budgetCategoriesTable,
   usersTable,
   jointAccountTxTable,
@@ -45,14 +44,31 @@ router.get("/dashboard/summary", async (req, res) => {
     .from(jointAccountTxTable)
     .where(sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
 
-  const contribs = await db
+  // Contributions = direct expense payments (incomeSourceId set) + bank deposits
+  const directPayments = await db
     .select({
-      userId: contributionsTable.userId,
-      total: sql<number>`COALESCE(SUM(${contributionsTable.amount}), 0)`,
+      userId: expensesTable.paidById,
+      total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
     })
-    .from(contributionsTable)
-    .where(sql`${contributionsTable.month} = ${month} AND ${contributionsTable.year} = ${year}`)
-    .groupBy(contributionsTable.userId);
+    .from(expensesTable)
+    .where(sql`${expensesTable.incomeSourceId} IS NOT NULL AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
+    .groupBy(expensesTable.paidById);
+
+  const depositContribs = await db
+    .select({
+      userId: jointAccountTxTable.madeById,
+      total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`,
+    })
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.madeById} IS NOT NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
+    .groupBy(jointAccountTxTable.madeById);
+
+  // Merge into a single per-user map
+  const contribMap = new Map<string, number>();
+  for (const r of [...directPayments, ...depositContribs]) {
+    contribMap.set(r.userId!, (contribMap.get(r.userId!) ?? 0) + Number(r.total));
+  }
+  const contribs = Array.from(contribMap.entries()).map(([userId, total]) => ({ userId, total }));
 
   // Per-person spending breakdown
   const memberExpenses = await db
@@ -137,19 +153,20 @@ router.get("/dashboard/activity", async (req, res) => {
     .orderBy(sql`${expensesTable.createdAt} DESC`)
     .limit(10);
 
-  const contributions = await db
+  // Show recent deposits as contribution items in the activity feed
+  const deposits = await db
     .select({
-      id: contributionsTable.id,
-      amount: contributionsTable.amount,
-      userId: contributionsTable.userId,
-      userName: usersTable.firstName,
-      month: contributionsTable.month,
-      year: contributionsTable.year,
-      createdAt: contributionsTable.createdAt,
+      id: jointAccountTxTable.id,
+      amount: jointAccountTxTable.amount,
+      description: jointAccountTxTable.description,
+      madeById: jointAccountTxTable.madeById,
+      madeByName: usersTable.firstName,
+      createdAt: jointAccountTxTable.createdAt,
     })
-    .from(contributionsTable)
-    .leftJoin(usersTable, eq(contributionsTable.userId, usersTable.id))
-    .orderBy(sql`${contributionsTable.createdAt} DESC`)
+    .from(jointAccountTxTable)
+    .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
+    .where(eq(jointAccountTxTable.type, "deposit"))
+    .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
     .limit(10);
 
   const items = [
@@ -162,14 +179,14 @@ router.get("/dashboard/activity", async (req, res) => {
       category: e.category,
       date: e.createdAt instanceof Date ? e.createdAt.toISOString() : String(e.createdAt),
     })),
-    ...contributions.map((c) => ({
-      id: `contribution-${c.id}`,
+    ...deposits.map((d) => ({
+      id: `contribution-${d.id}`,
       type: "contribution",
-      amount: c.amount,
-      description: `Contribution for ${new Date(c.year, c.month - 1).toLocaleString("default", { month: "long" })} ${c.year}`,
-      userName: c.userName ?? "Unknown",
+      amount: d.amount,
+      description: `Bank deposit: ${d.description}`,
+      userName: d.madeByName ?? "Unknown",
       category: null,
-      date: c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
+      date: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
     })),
   ]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())

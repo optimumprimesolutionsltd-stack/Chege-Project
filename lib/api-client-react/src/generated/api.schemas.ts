@@ -205,6 +205,16 @@ export interface DepositInput {
   date: string;
   /** Defaults to the logged-in user */
   madeById?: string;
+  /** Income source that funded this deposit */
+  incomeSourceId?: number;
+}
+
+export interface IncomeSource {
+  id: number;
+  userId: string;
+  name: string;
+  isMain: boolean;
+  createdAt: string;
 }
 
 export interface DisbursementInput {

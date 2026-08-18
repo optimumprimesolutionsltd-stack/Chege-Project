@@ -2,7 +2,9 @@ import { useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useDeleteJointAccountTransaction,
   useGetMembers, useGetBudgetCategories, getGetJointAccountQueryKey,
+  type IncomeSource,
 } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,14 +29,28 @@ export default function Bank() {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [madeById, setMadeById] = useState("");
+  const [madeById, setMadeById] = useState(user?.id ?? "");
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [expenseCategory, setExpenseCategory] = useState("");
+
+  // Fetch income sources for the selected depositor
+  const { data: depositSources } = useQuery<IncomeSource[]>({
+    queryKey: ["income-sources", madeById],
+    queryFn: async () => {
+      if (!madeById || madeById === "bank") return [];
+      const res = await fetch(`/api/income-sources?userId=${madeById}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!madeById && madeById !== "bank",
+    staleTime: 60_000,
+  });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
 
   const resetForm = () => {
     setAmount(""); setDescription(""); setDate(new Date().toISOString().split("T")[0]);
-    setMadeById(""); setExpenseCategory(""); setMode(null);
+    setMadeById(user?.id ?? ""); setIncomeSourceId(null); setExpenseCategory(""); setMode(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +59,11 @@ export default function Bank() {
     try {
       if (mode === "deposit") {
         await createDeposit.mutateAsync({
-          data: { amount: Number(amount), description, date, madeById: madeById || undefined },
+          data: {
+            amount: Number(amount), description, date,
+            madeById: madeById || undefined,
+            ...(incomeSourceId ? { incomeSourceId } : {}),
+          } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
         });
         toast({ title: "Deposit recorded" });
       } else {
@@ -146,17 +166,36 @@ export default function Bank() {
                     value={description} onChange={e => setDescription(e.target.value)} required className="h-12 bg-card" />
                 </div>
                 {mode === "deposit" && (
-                  <div className="space-y-2 sm:col-span-2">
-                    <label className="text-sm font-semibold text-foreground">Deposited by</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[{ id: "63497598", name: "Chege" }, { id: "63570605", name: "Lydiah" }, { id: "bank", name: "Bank" }].map(({ id, name }) => (
-                        <button key={id} type="button" onClick={() => setMadeById(id)}
-                          className={`h-12 rounded-xl border text-base font-semibold transition-colors ${madeById === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
-                          {name}
-                        </button>
-                      ))}
+                  <>
+                    <div className="space-y-2 sm:col-span-2">
+                      <label className="text-sm font-semibold text-foreground">Deposited by</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[{ id: "63497598", name: "Chege" }, { id: "63570605", name: "Lydiah" }, { id: "bank", name: "Bank" }].map(({ id, name }) => (
+                          <button key={id} type="button" onClick={() => { setMadeById(id); setIncomeSourceId(null); }}
+                            className={`h-12 rounded-xl border text-base font-semibold transition-colors ${madeById === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
+                            {name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                    {madeById && madeById !== "bank" && depositSources && depositSources.length > 0 && (
+                      <div className="space-y-2 sm:col-span-2">
+                        <label className="text-sm font-semibold text-foreground">
+                          Income source <span className="font-normal text-muted-foreground">(which stream funded this deposit?)</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {depositSources.map(src => (
+                            <button key={src.id} type="button"
+                              onClick={() => setIncomeSourceId(incomeSourceId === src.id ? null : src.id)}
+                              className={`px-3 h-9 rounded-lg text-sm border transition-colors ${incomeSourceId === src.id ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}>
+                              {src.name}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Optional — select the source so the deposit is attributed to the right income stream.</p>
+                      </div>
+                    )}
+                  </>
                 )}
                 {mode === "disbursement" && (
                   <div className="space-y-2 sm:col-span-2">
