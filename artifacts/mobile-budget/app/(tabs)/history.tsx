@@ -362,10 +362,10 @@ export default function HistoryScreen() {
         >
           <Feather name="refresh-cw" size={15} color={colors.primary} />
           <Text style={[styles.recurringBannerText, { color: colors.foreground }]}>
-            {recurringFromPrev.length} recurring expense{recurringFromPrev.length !== 1 ? 's' : ''} from last month
+            {recurringFromPrev.length} repeating expense{recurringFromPrev.length !== 1 ? 's' : ''} from last month — tap to add them
           </Text>
           <Text style={[styles.recurringBannerAction, { color: colors.primary }]}>
-            {applyingRecurring ? 'Applying…' : 'Apply'}
+            {applyingRecurring ? 'Adding…' : 'Add now'}
           </Text>
         </Pressable>
       )}

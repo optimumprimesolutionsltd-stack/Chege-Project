@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Trash2, UserPlus, Shield, Copy, Check, GitCompare } from "lucide-react";
-import { Link } from "wouter";
+import { Trash2, UserPlus, Shield, Copy, Check } from "lucide-react";
 
 export default function Settings() {
   const { user } = useAuth();
@@ -25,11 +24,11 @@ export default function Settings() {
     if (!newUserId.trim()) return;
     try {
       await addMember.mutateAsync({ data: { userId: newUserId.trim() } });
-      toast({ title: "Partner added", description: "They can now sign in to the app." });
+      toast({ title: "Member added", description: "They can now sign in to the app." });
       setNewUserId("");
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not add partner. Check the user ID and try again." });
+      toast({ variant: "destructive", title: "Error", description: "Could not add member. Check the User ID and try again." });
     }
   };
 
@@ -37,7 +36,7 @@ export default function Settings() {
     if (!confirm("Remove this person? They will lose access to the app.")) return;
     try {
       await removeMember.mutateAsync({ userId });
-      toast({ title: "Partner removed" });
+      toast({ title: "Member removed" });
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not remove partner." });
@@ -55,28 +54,8 @@ export default function Settings() {
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your couple's access and your account.</p>
+        <p className="text-muted-foreground mt-1">Manage who has access to this household's budget.</p>
       </div>
-
-      {/* Platform Parity */}
-      <Link href="/parity">
-        <Card className="border-none shadow-md cursor-pointer hover:shadow-lg transition-shadow group">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <GitCompare className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">Platform Parity</p>
-                  <p className="text-sm text-muted-foreground">See which features exist on web vs mobile</p>
-                </div>
-              </div>
-              <span className="text-muted-foreground group-hover:text-foreground transition-colors text-lg">→</span>
-            </div>
-          </CardContent>
-        </Card>
-      </Link>
 
       {/* Your account */}
       <Card className="border-none shadow-md">
@@ -85,7 +64,7 @@ export default function Settings() {
             <Shield className="w-5 h-5 text-primary" />
             <CardTitle>Your Account</CardTitle>
           </div>
-          <CardDescription>Share your User ID with your partner so they can add you.</CardDescription>
+          <CardDescription>Copy your ID and share it with anyone you want to give access to this household.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-3">
@@ -107,10 +86,10 @@ export default function Settings() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
-            <CardTitle>Couple Access</CardTitle>
+            <CardTitle>Household Members</CardTitle>
           </div>
           <CardDescription>
-            Only these two accounts can access the app. The first two people to sign in are automatically registered.
+            The people listed here have access to this budget. Works for individuals, couples, or small families.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -149,12 +128,12 @@ export default function Settings() {
           )}
 
           {/* Add member form */}
-          {(members?.length ?? 0) < 2 && (
+          {(members?.length ?? 0) < 5 && (
             <form onSubmit={handleAdd} className="space-y-3 pt-2 border-t border-border/50">
-              <p className="text-sm font-medium text-foreground">Add your partner by their User ID</p>
+              <p className="text-sm font-medium text-foreground">Give someone access</p>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Paste Replit user ID..."
+                  placeholder="Paste their User ID here..."
                   value={newUserId}
                   onChange={(e) => setNewUserId(e.target.value)}
                   className="font-mono text-sm h-11 bg-card"
@@ -164,7 +143,7 @@ export default function Settings() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Ask your partner to find their User ID on this Settings page, then paste it here.
+                Ask the person to open Settings and copy their User ID, then paste it above.
               </p>
             </form>
           )}

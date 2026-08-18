@@ -223,7 +223,7 @@ export default function BankScreen() {
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Feather name="arrow-up-circle" size={14} color="#f87171" />
-                <Text style={styles.statLabel}>Disbursed</Text>
+                <Text style={styles.statLabel}>Withdrawn</Text>
                 <Text style={styles.statValue}>KES {formatKES(data?.totalDisbursements)}</Text>
               </View>
             </View>
@@ -244,7 +244,7 @@ export default function BankScreen() {
                 activeOpacity={0.8}
               >
                 <Feather name="arrow-up-right" size={16} color="#f87171" />
-                <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Disburse</Text>
+                <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -279,7 +279,7 @@ export default function BankScreen() {
                 No transactions yet
               </Text>
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                Deposits and disbursements will appear here
+                Money you put in or take out will appear here
               </Text>
             </View>
           ) : null
@@ -312,7 +312,7 @@ export default function BankScreen() {
                     : ((item as Tx & { expenseCategory?: string | null }).expenseCategory
                         ? `→ ${(item as Tx & { expenseCategory?: string | null }).expenseCategory} · `
                         : '')}
-                  {formatDateTime(item.createdAt)}
+                  {formatDateTime(item.createdAt)} · Hold to delete
                 </Text>
               </View>
               <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
@@ -374,13 +374,13 @@ export default function BankScreen() {
                     { color: txType === 'disbursement' ? '#fff' : colors.mutedForeground },
                   ]}
                 >
-                  Disburse
+                  Withdraw
                 </Text>
               </TouchableOpacity>
             </View>
 
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-              {isDeposit ? 'Add a Deposit' : 'Record a Disbursement'}
+              {isDeposit ? 'Add Money to Account' : 'Take Money Out'}
             </Text>
 
             {/* Amount */}
@@ -424,7 +424,7 @@ export default function BankScreen() {
             {/* Deposited by (deposits only) */}
             {isDeposit && members.length > 0 && (
               <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Deposited by</Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Who is adding this money?</Text>
                 <View style={styles.memberRow}>
                   {members.map((m) => {
                     const isMe = m.userId === user?.id;
@@ -454,7 +454,7 @@ export default function BankScreen() {
             {/* Income source (deposits only, when a person is selected) */}
             {isDeposit && madeById && depositSources.length > 0 && (
               <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Income source <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text></Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Where did this money come from? <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text></Text>
                 <View style={styles.memberRow}>
                   {depositSources.map((src) => {
                     const selected = incomeSourceId === src.id;
@@ -481,14 +481,14 @@ export default function BankScreen() {
             {/* Expense category (disbursements only) */}
             {!isDeposit && (
               <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Expense Category <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>What was this for? <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
                 <TouchableOpacity
                   style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
                   onPress={() => setShowCategoryPicker(!showCategoryPicker)}
                   activeOpacity={0.7}
                 >
                   <Text style={{ color: expenseCategory ? colors.foreground : colors.mutedForeground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
-                    {expenseCategory || 'Not linked to a category'}
+                    {expenseCategory || 'No category'}
                   </Text>
                   <Feather name={showCategoryPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
@@ -552,7 +552,7 @@ export default function BankScreen() {
                 <ActivityIndicator color={isDeposit ? '#0a1a10' : '#fff'} />
               ) : (
                 <Text style={[styles.submitText, !isDeposit && { color: '#fff' }]}>
-                  {isDeposit ? 'Deposit' : 'Disburse'}
+                  {isDeposit ? 'Add Money' : 'Withdraw'}
                 </Text>
               )}
             </TouchableOpacity>

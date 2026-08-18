@@ -1,53 +1,65 @@
 import { useAuth } from '@workspace/replit-auth-web';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { TrendingUp } from 'lucide-react';
+
+function FeatureRow({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex items-center gap-4 p-4 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(207,114,23,0.18)' }}>
+        {icon}
+      </div>
+      <span className="text-sm font-medium" style={{ color: 'rgba(247,250,246,0.85)' }}>{text}</span>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const { login } = useAuth();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden">
-      {/* Decorative background elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-secondary/10 blur-3xl pointer-events-none" />
-      
-      <div className="w-full max-w-md p-4 relative z-10">
-        <Card className="border-none shadow-2xl bg-white/80 backdrop-blur-sm">
-          <CardHeader className="text-center pb-2">
-            <div className="mx-auto mb-4 relative w-20 h-20">
-              {/* Left person */}
-              <div className="absolute left-0 bottom-0 w-10 h-10 bg-primary rounded-full flex items-center justify-center shadow-md">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-primary-foreground">
-                  <path d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" />
-                </svg>
-              </div>
-              {/* Right person */}
-              <div className="absolute right-0 bottom-0 w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center shadow-md">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white">
-                  <path d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" />
-                </svg>
-              </div>
-              {/* Heart / link in the middle-top */}
-              <div className="absolute left-1/2 top-0 -translate-x-1/2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-primary/20">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-rose-500">
-                  <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 0 1-.383-.218 25.18 25.18 0 0 1-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0 1 12 5.052 5.5 5.5 0 0 1 16.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 0 1-4.244 3.17 15.247 15.247 0 0 1-.383.219l-.022.012-.007.004-.003.001a.752.752 0 0 1-.704 0l-.003-.001Z" />
-                </svg>
-              </div>
-            </div>
-            <CardTitle className="text-3xl font-bold font-display text-foreground">Chege Project</CardTitle>
-            <CardDescription className="text-base mt-2 font-medium">
-              Manage your family's finances together with clarity and confidence.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <Button onClick={login} size="lg" className="w-full text-lg h-14 rounded-xl shadow-md transition-transform hover:scale-[1.02]">
-              Sign In to Continue
-            </Button>
-            <p className="text-center text-xs text-muted-foreground mt-6">
-              Secure authentication via Replit
-            </p>
-          </CardContent>
-        </Card>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(160deg, #0a1a10 0%, #0f2217 50%, #163020 100%)' }}>
+      <div className="w-full max-w-sm px-6 flex flex-col items-center gap-10">
+
+        {/* Brand mark */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl" style={{ backgroundColor: 'rgba(207,114,23,0.25)', border: '1px solid rgba(207,114,23,0.3)' }}>
+            <TrendingUp className="w-10 h-10" style={{ color: '#cf7217' }} />
+          </div>
+          <div className="text-center">
+            <h1 className="text-4xl font-display font-bold tracking-tight" style={{ color: '#f7faf6' }}>Bajeti</h1>
+            <p className="text-sm mt-1 font-medium" style={{ color: '#7aaa8a' }}>Family finances, together</p>
+          </div>
+        </div>
+
+        {/* Feature list */}
+        <div className="w-full space-y-3">
+          <FeatureRow
+            icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
+            text="Track every shilling your household spends"
+          />
+          <FeatureRow
+            icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>}
+            text="Log expenses anywhere, anytime"
+          />
+          <FeatureRow
+            icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
+            text="Everyone in your household stays in sync"
+          />
+        </div>
+
+        {/* Sign in */}
+        <div className="w-full space-y-4">
+          <button
+            onClick={login}
+            className="w-full h-14 rounded-2xl text-base font-bold transition-opacity hover:opacity-90 active:opacity-80 flex items-center justify-center gap-2"
+            style={{ backgroundColor: '#2d6a4f', color: '#f7faf6', boxShadow: '0 4px 20px rgba(74,222,128,0.2)' }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Sign in to continue
+          </button>
+          <p className="text-center text-xs" style={{ color: 'rgba(122,170,138,0.7)' }}>
+            Your account works on web and mobile
+          </p>
+        </div>
       </div>
     </div>
   );

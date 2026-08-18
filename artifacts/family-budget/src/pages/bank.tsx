@@ -99,7 +99,7 @@ export default function Bank() {
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">Bank Account</h1>
-        <p className="text-muted-foreground mt-1">Track deposits and disbursements from the shared bank account.</p>
+        <p className="text-muted-foreground mt-1">Track money going in and out of your shared account.</p>
       </div>
 
       {/* Balance card */}
@@ -136,14 +136,14 @@ export default function Bank() {
             <ArrowDownLeft className="w-5 h-5 mr-2" /> Deposit
           </Button>
           <Button onClick={() => setMode("disbursement")} variant="outline" className="h-12 px-6 rounded-xl flex-1">
-            <ArrowUpRight className="w-5 h-5 mr-2" /> Disburse
+            <ArrowUpRight className="w-5 h-5 mr-2" /> Withdraw
           </Button>
         </div>
       ) : (
         <Card className="border-none shadow-md bg-accent/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">
-              {mode === "deposit" ? "Record Deposit" : "Record Disbursement"}
+              {mode === "deposit" ? "Add Money to Account" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
               {mode === "deposit"
@@ -171,9 +171,9 @@ export default function Bank() {
                 {mode === "deposit" && (
                   <>
                     <div className="space-y-2 sm:col-span-2">
-                      <label className="text-sm font-semibold text-foreground">Deposited by</label>
+                      <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
                       <div className="grid grid-cols-3 gap-2">
-                        {[{ id: "63497598", name: "Chege" }, { id: "63570605", name: "Lydiah" }, { id: "bank", name: "Bank" }].map(({ id, name }) => (
+                        {[...(members ?? []).map(m => ({ id: m.userId, name: m.userName?.split(' ')[0] ?? 'Member' })), { id: "bank", name: "Bank" }].map(({ id, name }) => (
                           <button key={id} type="button" onClick={() => { setMadeById(id); setIncomeSourceId(null); }}
                             className={`h-12 rounded-xl border text-base font-semibold transition-colors ${madeById === id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
                             {name}
@@ -184,7 +184,7 @@ export default function Bank() {
                     {madeById && madeById !== "bank" && depositSources && depositSources.length > 0 && (
                       <div className="space-y-2 sm:col-span-2">
                         <label className="text-sm font-semibold text-foreground">
-                          Income source <span className="font-normal text-muted-foreground">(which stream funded this deposit?)</span>
+                          Where did this money come from? <span className="font-normal text-muted-foreground">(optional)</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
                           {depositSources.map(src => (
@@ -202,11 +202,11 @@ export default function Bank() {
                 )}
                 {mode === "disbursement" && (
                   <div className="space-y-2 sm:col-span-2">
-                    <label className="text-sm font-semibold text-foreground">Expense category <span className="font-normal text-muted-foreground">(optional)</span></label>
+                    <label className="text-sm font-semibold text-foreground">Category <span className="font-normal text-muted-foreground">(optional — helps track what the money was used for)</span></label>
                     <select
                       className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       value={expenseCategory} onChange={e => setExpenseCategory(e.target.value)}>
-                      <option value="">Not linked to an expense category</option>
+                      <option value="">No category</option>
                       {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>

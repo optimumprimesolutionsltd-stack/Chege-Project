@@ -53,9 +53,9 @@ export default function LoginScreen() {
 
       {/* Feature list */}
       <View style={styles.features}>
-        <FeatureRow icon="bar-chart-2" text="Track every shilling spent" />
-        <FeatureRow icon="refresh-cw" text="Log expenses on the go" />
-        <FeatureRow icon="users" text="Shared between both of you" />
+        <FeatureRow icon="bar-chart-2" text="Track every shilling your household spends" />
+        <FeatureRow icon="refresh-cw" text="Log expenses anywhere, anytime" />
+        <FeatureRow icon="users" text="Everyone in your household stays in sync" />
       </View>
 
       {/* Sign in button */}
@@ -78,7 +78,7 @@ export default function LoginScreen() {
           )}
         </Pressable>
         <Text style={styles.disclaimer}>
-          Same account as the web app
+          Your account works on web and mobile
         </Text>
       </View>
     </LinearGradient>
