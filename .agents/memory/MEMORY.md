@@ -11,3 +11,4 @@
 - [OTA bundling fix for RN 0.81.5 + pnpm](ota-bundling-fix.md) — pnpm-safe transformIgnorePatterns pattern + hermes-v0 profile needed for hermesc to compile the bundle
 - [Activity type constants](activity-types.md) — ACTIVITY_TYPE = { EXPENSE, CONTRIBUTION } in lib/activityTypes.ts (mobile) and src/lib/activityTypes.ts (web); use instead of inline strings.
 - [Bank balance invalidation](bank-balance-invalidation.md) — after deposit/disbursement/delete on bank.tsx, call invalidateQueries({ queryKey: getGetJointAccountQueryKey() }) so home-screen card updates immediately.
+- [Deployment build script entry point](deployment-build-script.md) — scripts/build.js bundle URL must match package.json "main"; update downloadBundle() entryPath whenever main changes.
