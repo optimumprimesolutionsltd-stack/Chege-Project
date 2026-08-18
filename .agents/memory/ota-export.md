@@ -61,7 +61,9 @@ The package.json MUST have `"babel-preset-expo": "~54.0.10"`, NOT `^57.0.6`.
 ## Metro SHA-1 / resolveRequest rule
 The custom `resolveRequest` fallback in metro.config.js must NOT return absolute pnpm store paths (e.g. `/node_modules/.pnpm/…`). Metro's hasher fails with "Failed to get the SHA-1" for any path outside `watchFolders`. Always return paths through the LOCAL `node_modules/` directory (without following symlinks) so the path stays within `projectRoot`.
 
-`expo-entry.js` uses `import './node_modules/expo-router/entry-classic.js'` (relative, stays in projectRoot) instead of `import 'expo-router/entry-classic'` (resolved to absolute pnpm path by require.resolve).
+`expo-entry.js` MUST use `import 'expo-router/entry-classic'` (standard package import, no relative path, no `.js` extension).
+
+**Why NOT the relative path**: EAS's `createReleaseUpdatesResources` Gradle task runs its own Metro bundler that does NOT load metro.config.js. It can't resolve `./node_modules/expo-router/entry-classic.js` because pnpm on EAS build servers doesn't create per-artifact `node_modules` symlinks. Using the package import lets EAS's Metro find it via standard node_modules lookup, and our custom resolver still returns local paths during `expo export` so SHA-1 stays within projectRoot.
 
 ## Channel
 EAS channel `preview` — created automatically when `eas update --channel preview` ran for the first time.  
