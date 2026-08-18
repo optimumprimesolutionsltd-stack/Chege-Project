@@ -503,6 +503,15 @@ export const DeleteSavingsGoalResponse = zod.object({
 
 
 /**
+ * @summary List income source presets per household member
+ */
+export const GetIncomeSourcesResponse = zod.record(zod.string(), zod.array(zod.object({
+  "label": zod.string(),
+  "amount": zod.number()
+})))
+
+
+/**
  * @summary List all members with access to this app
  */
 export const GetMembersResponseItem = zod.object({

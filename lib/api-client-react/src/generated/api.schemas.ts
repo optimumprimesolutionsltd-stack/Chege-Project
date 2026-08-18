@@ -5,6 +5,11 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+export interface IncomeSource {
+  label: string;
+  amount: number;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -309,3 +314,4 @@ export type GetDashboardTrendsParams = {
 months?: number;
 };
 
+export type GetIncomeSources200 = {[key: string]: IncomeSource[]};

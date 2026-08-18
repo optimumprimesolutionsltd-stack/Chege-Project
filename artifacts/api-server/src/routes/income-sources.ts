@@ -6,6 +6,20 @@ import { z } from "zod";
 
 const router = Router();
 
+/**
+ * Income source presets keyed by userId.
+ * Served from the API so both web and mobile share one source of truth.
+ * Update labels / amounts here and both clients pick them up on next fetch.
+ */
+const INCOME_SOURCES: Record<string, { label: string; amount: number }[]> = {
+  "63497598": [
+    { label: "Ujenzi Salary", amount: 76140 },
+    { label: "Rental Income", amount: 150000 },
+    { label: "Optimum", amount: 40954 },
+  ],
+  "63570605": [{ label: "EISH", amount: 50000 }],
+};
+
 const CHEGE_ID = "63497598";
 const LYDIAH_ID = "63570605";
 

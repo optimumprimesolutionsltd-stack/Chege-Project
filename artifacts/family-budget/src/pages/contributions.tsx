@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   useGetDashboardSummary,
-  getGetDashboardSummaryQueryKey,
-  type IncomeSource,
+  useGetIncomeSources,
 } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatKes, formatMonthYear } from "@/lib/utils";
@@ -14,19 +12,6 @@ type MemberContrib = { userId: string; name: string; contributed: number; spent:
 const MEMBER_ACCENT_COLORS = ["#4ade80", "#f97316", "#38bdf8", "#f472b6", "#a78bfa"];
 
 const CONTRIBUTIONS_MONTH_KEY = "contributions-month-pref";
-
-function useIncomeSources(userId?: string) {
-  return useQuery<IncomeSource[]>({
-    queryKey: ["income-sources", userId ?? "all"],
-    queryFn: async () => {
-      const url = userId ? `/api/income-sources?userId=${userId}` : "/api/income-sources";
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    staleTime: 60_000,
-  });
-}
 
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(value / max, 1) : 0;
@@ -42,7 +27,8 @@ function MemberCard({
 }: { member: MemberContrib; accentColor: string }) {
   const { userId, name, contributed, spent, net, target } = member;
   const pct = target && target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
-  const { data: sources } = useIncomeSources(userId);
+  const { data: allSources } = useGetIncomeSources();
+  const sources = allSources?.[userId] ?? [];
 
   return (
     <Card className="border-none shadow-md overflow-hidden">
@@ -66,8 +52,8 @@ function MemberCard({
         <ProgressBar value={contributed} max={target} color={accentColor} />
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{Math.round(pct)}% of target</span>
-          {contributed < target
-            ? <span>{formatKes(target - contributed)} remaining</span>
+          {contributed < (target ?? 0)
+            ? <span>{formatKes((target ?? 0) - contributed)} remaining</span>
             : <span className="font-semibold" style={{ color: accentColor }}>Target hit ✓</span>}
         </div>
 
@@ -90,15 +76,15 @@ function MemberCard({
         </div>
 
         {/* Income sources */}
-        {sources && sources.length > 0 && (
+        {sources.length > 0 && (
           <div className="space-y-1.5 pt-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Income streams</p>
             <div className="flex flex-wrap gap-1.5">
               {sources.map(src => (
-                <span key={src.id}
+                <span key={src.label}
                   className="px-2.5 py-1 rounded-full text-xs border font-medium"
                   style={{ borderColor: accentColor + "60", color: accentColor, backgroundColor: accentColor + "12" }}>
-                  {src.name}{src.isMain ? " ★" : ""}
+                  {src.label} — {formatKes(src.amount)}
                 </span>
               ))}
             </div>

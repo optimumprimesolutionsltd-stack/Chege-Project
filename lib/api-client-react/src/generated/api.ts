@@ -42,6 +42,7 @@ import type {
   GetDashboardSummaryParams,
   GetDashboardTrendsParams,
   GetExpensesParams,
+  GetIncomeSources200,
   HealthStatus,
   JointAccountSummary,
   JointAccountTransaction,
@@ -2037,6 +2038,83 @@ export const useDeleteSavingsGoal = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getDeleteSavingsGoalMutationOptions(options));
     }
+
+export const getGetIncomeSourcesUrl = () => {
+
+
+
+
+  return `/api/income-sources`
+}
+
+/**
+ * @summary List income source presets per household member
+ */
+export const getIncomeSources = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetIncomeSources200> => {
+
+  return customFetch<GetIncomeSources200>(getGetIncomeSourcesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetIncomeSourcesQueryKey = () => {
+    return [
+    `/api/income-sources`
+    ] as const;
+    }
+
+
+export const getGetIncomeSourcesQueryOptions = <TData = Awaited<ReturnType<typeof getIncomeSources>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIncomeSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetIncomeSourcesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getIncomeSources>>> = ({ signal }) => getIncomeSources({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getIncomeSources>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetIncomeSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof getIncomeSources>>>
+export type GetIncomeSourcesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List income source presets per household member
+ */
+
+export function useGetIncomeSources<TData = Awaited<ReturnType<typeof getIncomeSources>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIncomeSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetIncomeSourcesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetMembersUrl = () => {
 

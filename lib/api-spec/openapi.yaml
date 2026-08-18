@@ -26,6 +26,8 @@ tags:
     description: Savings goals tracking
   - name: joint-account
     description: Joint bank account deposits and disbursements
+  - name: income-sources
+    description: Income source presets per household member
 
 paths:
   /healthz:
@@ -579,6 +581,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /income-sources:
+    get:
+      operationId: getIncomeSources
+      tags: [income-sources]
+      summary: List income source presets per household member
+      responses:
+        "200":
+          description: Income sources keyed by userId
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/IncomeSource"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /members:
     get:
       operationId: getMembers
@@ -644,6 +669,17 @@ paths:
 
 components:
   schemas:
+    IncomeSource:
+      type: object
+      properties:
+        label:
+          type: string
+        amount:
+          type: number
+      required:
+        - label
+        - amount
+
     HealthStatus:
       type: object
       properties:
