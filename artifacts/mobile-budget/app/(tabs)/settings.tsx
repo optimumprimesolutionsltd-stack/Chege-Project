@@ -58,7 +58,7 @@ export default function SettingsScreen() {
           { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border },
         ]}
       >
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Settings ✓</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Settings</Text>
       </View>
 
       <ScrollView
