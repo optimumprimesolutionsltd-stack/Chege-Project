@@ -30,6 +30,7 @@ import {
   useGetBudgetCategories,
   useGetMembers,
   getGetJointAccountQueryKey,
+  getGetDashboardSummaryQueryKey,
   type IncomeSource,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -133,8 +134,10 @@ export default function BankScreen() {
 
   // Invalidate everywhere that displays the joint-account balance so all
   // screens (home card + bank tab) update immediately after any mutation.
-  const invalidateBalance = () =>
+  const invalidateBalance = () => {
     queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+  };
 
   const handleDelete = (tx: Tx) => {
     Alert.alert(

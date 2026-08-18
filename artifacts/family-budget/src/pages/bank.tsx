@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useDeleteJointAccountTransaction,
-  useGetMembers, useGetBudgetCategories, getGetJointAccountQueryKey,
+  useGetMembers, useGetBudgetCategories, getGetJointAccountQueryKey, getGetDashboardSummaryQueryKey,
   type IncomeSource,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
@@ -46,7 +46,10 @@ export default function Bank() {
     staleTime: 60_000,
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+  };
 
   const resetForm = () => {
     setAmount(""); setDescription(""); setDate(new Date().toISOString().split("T")[0]);
