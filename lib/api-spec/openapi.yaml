@@ -193,6 +193,31 @@ paths:
                 items:
                   $ref: "#/components/schemas/BudgetCategory"
 
+  /contributions/{id}:
+    delete:
+      operationId: deleteContribution
+      tags: [contributions]
+      summary: Delete a contribution by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /contributions:
     get:
       operationId: getContributions

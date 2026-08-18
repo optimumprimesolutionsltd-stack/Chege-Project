@@ -24,6 +24,7 @@ import {
   useGetContributions,
   useGetDashboardSummary,
   useCreateContribution,
+  useDeleteContribution,
   getGetContributionsQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
@@ -376,6 +377,7 @@ export default function ContributionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
+  const queryClient = useQueryClient();
 
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -421,6 +423,36 @@ export default function ContributionsScreen() {
   const chegeNet = (summary?.chegeContributed ?? 0) - (summary?.chegeSpent ?? 0);
   const lydiahNet = (summary?.lydiahContributed ?? 0) - (summary?.lydiahSpent ?? 0);
   const { data: contributions, isLoading: contribLoading, refetch: refetchContrib } = useGetContributions({ month, year });
+
+  const { mutate: deleteContribution } = useDeleteContribution({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: getGetContributionsQueryKey({ month, year }) });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+      },
+      onError: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Error', 'Failed to delete contribution. Please try again.');
+      },
+    },
+  });
+
+  function handleDeleteContribution(id: number, name: string, amount: number) {
+    Alert.alert(
+      'Remove contribution?',
+      `This will permanently remove the KES ${formatKES(amount)} deposit for ${name}. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => deleteContribution({ id }),
+        },
+      ],
+    );
+  }
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -577,31 +609,42 @@ export default function ContributionsScreen() {
                   </Pressable>
                 </View>
               ) : (
-                <View style={[styles.list, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                  {contributions.map((c, i) => (
-                    <View
-                      key={c.id}
-                      style={[
-                        styles.row,
-                        { borderBottomColor: colors.border },
-                        i === contributions.length - 1 && { borderBottomWidth: 0 },
-                      ]}
-                    >
-                      <View style={[styles.rowIcon, { backgroundColor: c.userName?.toLowerCase().startsWith('c') ? '#1a3320' : '#2a1c0a' }]}>
-                        <Text style={[styles.rowInitial, { color: c.userName?.toLowerCase().startsWith('c') ? '#4ade80' : '#cf7217' }]}>
-                          {(c.userName ?? '?').charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.rowInfo}>
-                        <Text style={[styles.rowName, { color: colors.foreground }]}>{c.userName}</Text>
-                        <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
-                          {c.note ? c.note : 'Contribution'} · {formatDate(c.createdAt)}
-                        </Text>
-                      </View>
-                      <Text style={styles.rowAmount}>+KES {formatKES(c.amount)}</Text>
-                    </View>
-                  ))}
-                </View>
+                <>
+                  <View style={[styles.list, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    {contributions.map((c, i) => (
+                      <Pressable
+                        key={c.id}
+                        onLongPress={() => handleDeleteContribution(c.id, c.userName ?? 'Member', c.amount)}
+                        delayLongPress={400}
+                        style={({ pressed }) => [
+                          styles.row,
+                          { borderBottomColor: colors.border },
+                          i === contributions.length - 1 && { borderBottomWidth: 0 },
+                          pressed && { backgroundColor: colors.muted + '60' },
+                        ]}
+                      >
+                        <View style={[styles.rowIcon, { backgroundColor: c.userName?.toLowerCase().startsWith('c') ? '#1a3320' : '#2a1c0a' }]}>
+                          <Text style={[styles.rowInitial, { color: c.userName?.toLowerCase().startsWith('c') ? '#4ade80' : '#cf7217' }]}>
+                            {(c.userName ?? '?').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.rowInfo}>
+                          <Text style={[styles.rowName, { color: colors.foreground }]}>{c.userName}</Text>
+                          <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
+                            {c.note ? c.note : 'Contribution'} · {formatDate(c.createdAt)}
+                          </Text>
+                        </View>
+                        <View style={styles.rowRight}>
+                          <Text style={styles.rowAmount}>+KES {formatKES(c.amount)}</Text>
+                          <Feather name="more-vertical" size={14} color={colors.mutedForeground} style={{ marginTop: 1 }} />
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={[styles.longPressHint, { color: colors.mutedForeground }]}>
+                    Long-press a row to remove it
+                  </Text>
+                </>
               )}
             </View>
           </>
@@ -677,6 +720,8 @@ const styles = StyleSheet.create({
   rowName: { fontSize: 15, fontWeight: '500' as const, fontFamily: 'Inter_500Medium' },
   rowMeta: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   rowAmount: { fontSize: 15, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', color: '#4ade80' },
+  rowRight: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  longPressHint: { fontSize: 11, fontFamily: 'Inter_400Regular', textAlign: 'center' as const, marginTop: 6, opacity: 0.6 },
 
   empty: { alignItems: 'center', paddingVertical: 40, gap: 8 },
   emptyTitle: { fontSize: 17, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },

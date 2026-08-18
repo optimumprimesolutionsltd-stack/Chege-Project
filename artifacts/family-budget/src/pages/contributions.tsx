@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
-  useGetContributions, useCreateContribution, useGetDashboardSummary,
+  useGetContributions, useCreateContribution, useDeleteContribution, useGetDashboardSummary,
   getGetContributionsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardActivityQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { Loader2, ArrowLeft, ArrowRight, PiggyBank, Calendar, ChevronDown } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, PiggyBank, Calendar, ChevronDown, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -65,6 +65,7 @@ export default function Contributions() {
   const { data: contributions, isLoading } = useGetContributions({ month, year });
   const { data: summary } = useGetDashboardSummary({ month, year });
   const createContribution = useCreateContribution();
+  const deleteContribution = useDeleteContribution();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -72,6 +73,17 @@ export default function Contributions() {
     queryClient.invalidateQueries({ queryKey: getGetContributionsQueryKey({ month, year }) });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
     queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+  };
+
+  const handleDelete = async (id: number, name: string, amount: number) => {
+    if (!window.confirm(`Remove the ${formatKes(amount)} deposit for ${name}? This cannot be undone.`)) return;
+    try {
+      await deleteContribution.mutateAsync({ id });
+      toast({ title: "Contribution removed", description: `${name} · ${formatKes(amount)}` });
+      invalidate();
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Failed to remove contribution." });
+    }
   };
 
   const handlePrevMonth = () => {
@@ -329,14 +341,24 @@ export default function Contributions() {
           <>
             <div className="divide-y divide-border/30">
               {contributions.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors gap-3">
+                <div key={item.id} className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors gap-3 group">
                   <div className="min-w-0">
                     <p className="font-semibold text-base text-foreground">{item.userName}</p>
                     <p className="text-sm text-muted-foreground">{item.note || "—"} · {formatDate(item.createdAt)}</p>
                   </div>
-                  <p className="font-display font-bold text-primary whitespace-nowrap text-base shrink-0">
-                    +{formatKes(item.amount)}
-                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <p className="font-display font-bold text-primary whitespace-nowrap text-base">
+                      +{formatKes(item.amount)}
+                    </p>
+                    <button
+                      onClick={() => handleDelete(item.id, item.userName ?? "Member", item.amount)}
+                      disabled={deleteContribution.isPending}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed"
+                      title="Remove contribution"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

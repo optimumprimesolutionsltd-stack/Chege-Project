@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { contributionsTable, usersTable } from "@workspace/db";
+import { contributionsTable, usersTable, membersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
   CreateContributionBody,
@@ -111,6 +111,40 @@ router.post("/contributions", async (req, res) => {
     userName: displayName(user),
     createdAt: contribution.createdAt instanceof Date ? contribution.createdAt.toISOString() : contribution.createdAt,
   });
+});
+
+router.delete("/contributions/:id", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  // Only registered household members may delete contributions
+  const caller = await db.query.membersTable.findFirst({
+    where: eq(membersTable.userId, req.user.id),
+  });
+  if (!caller) {
+    res.status(403).json({ error: "Forbidden: not a household member" });
+    return;
+  }
+
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [deleted] = await db
+    .delete(contributionsTable)
+    .where(eq(contributionsTable.id, id))
+    .returning();
+
+  if (!deleted) {
+    res.status(404).json({ error: "Contribution not found" });
+    return;
+  }
+
+  res.json({ success: true });
 });
 
 export default router;

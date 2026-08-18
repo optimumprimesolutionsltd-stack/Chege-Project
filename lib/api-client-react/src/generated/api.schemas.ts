@@ -98,6 +98,7 @@ export interface ContributionInput {
   month: number;
   year: number;
   note?: string;
+  /** Record this contribution on behalf of another household member (their ID) */
   forUserId?: string;
 }
 

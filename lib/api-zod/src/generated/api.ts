@@ -149,6 +149,18 @@ export const GetBudgetCategoriesResponse = zod.array(GetBudgetCategoriesResponse
 
 
 /**
+ * @summary Delete a contribution by ID
+ */
+export const DeleteContributionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteContributionResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
  * @summary List contributions
  */
 export const GetContributionsQueryParams = zod.object({
@@ -177,7 +189,7 @@ export const CreateContributionBody = zod.object({
   "month": zod.number(),
   "year": zod.number(),
   "note": zod.string().optional(),
-  "forUserId": zod.string().optional()
+  "forUserId": zod.string().optional().describe('Record this contribution on behalf of another household member (their ID)')
 })
 
 export const CreateContributionResponse = zod.object({
@@ -208,6 +220,10 @@ export const GetDashboardSummaryResponse = zod.object({
   "remaining": zod.number(),
   "chegeContributed": zod.number(),
   "lydiahContributed": zod.number(),
+  "chegeSpent": zod.number(),
+  "lydiahSpent": zod.number(),
+  "chegeNet": zod.number(),
+  "lydiahNet": zod.number(),
   "chegeTarget": zod.number(),
   "lydiahTarget": zod.number(),
   "expenseCount": zod.number()
