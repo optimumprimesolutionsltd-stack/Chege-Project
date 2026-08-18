@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
+import { resolveAvatarProps, getDisplayName } from '@/utils/avatarHelper';
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -45,14 +46,8 @@ export default function SettingsScreen() {
     );
   };
 
-  const displayName =
-    [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Family Member';
-  const initials = displayName
-    .split(' ')
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const displayName = getDisplayName(user);
+  const avatar = resolveAvatarProps(user);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -75,14 +70,18 @@ export default function SettingsScreen() {
       >
         {/* Profile card */}
         <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {user?.profileImageUrl ? (
+          {avatar.kind === 'image' ? (
             <Image
-              source={{ uri: user.profileImageUrl }}
+              source={{ uri: avatar.uri }}
               style={styles.avatar}
+              testID="settings-avatar-image"
             />
           ) : (
-            <View style={[styles.avatarFallback, { backgroundColor: colors.primary + '22' }]}>
-              <Text style={[styles.avatarInitials, { color: colors.primary }]}>{initials}</Text>
+            <View
+              style={[styles.avatarFallback, { backgroundColor: colors.primary + '22' }]}
+              testID="settings-avatar-fallback"
+            >
+              <Text style={[styles.avatarInitials, { color: colors.primary }]}>{avatar.text}</Text>
             </View>
           )}
           <View style={styles.profileInfo}>
