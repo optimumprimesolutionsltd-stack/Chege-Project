@@ -25,7 +25,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
-import { deriveContributorTotals, applyDateFilter, MANUAL_ADJUSTMENT_NOTE } from '@/utils/contributorTotals';
+import { deriveContributorTotals, applyDateFilter, isCorrectionRow, MANUAL_ADJUSTMENT_NOTE } from '@/utils/contributorTotals';
 import {
   useGetSavingsGoals,
   useCreateSavingsGoal,
@@ -749,7 +749,7 @@ export default function GoalsScreen() {
   const uniqueContributors = Array.from(
     new Set(
       (contributions as SavingsGoalContribution[])
-        .filter((c) => c.note !== MANUAL_ADJUSTMENT_NOTE)
+        .filter((c) => !isCorrectionRow(c))
         .map((c) => c.contributorName ?? 'Unknown')
     )
   );
@@ -765,9 +765,9 @@ export default function GoalsScreen() {
 
   const filteredContributions = dateFilteredContributions.filter((c) => {
     if (filterContributor) {
-      // Manual adjustments don't belong to any single contributor — hide them
-      // when filtering by person so the count and total are accurate.
-      if (c.note === MANUAL_ADJUSTMENT_NOTE) return false;
+      // Corrections (with or without a custom reason) don't belong to any single
+      // contributor — hide them when filtering by person so the count is accurate.
+      if (isCorrectionRow(c)) return false;
       if ((c.contributorName ?? 'Unknown') !== filterContributor) return false;
     }
     return true;
@@ -1566,7 +1566,7 @@ export default function GoalsScreen() {
                   contentContainerStyle={styles.historyList}
                 >
                   {filtered.map((c, idx) => {
-                    const isAdjustment = c.note === 'Manual adjustment';
+                    const isAdjustment = isCorrectionRow(c);
                     const isNegative = c.amount < 0;
                     const absAmount = Math.abs(c.amount);
                     const amountLabel = isNegative
@@ -1632,6 +1632,11 @@ export default function GoalsScreen() {
                           {isAdjustment && (
                             <Text style={[styles.historyDate, { color: colors.mutedForeground }]}>
                               {formatDate(c.createdAt)}
+                            </Text>
+                          )}
+                          {isAdjustment && c.note && c.note !== MANUAL_ADJUSTMENT_NOTE && (
+                            <Text style={[styles.historyDate, { color: colors.mutedForeground, fontStyle: 'italic' }]}>
+                              "{c.note}"
                             </Text>
                           )}
                         </View>
