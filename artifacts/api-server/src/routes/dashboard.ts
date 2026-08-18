@@ -44,14 +44,14 @@ router.get("/dashboard/summary", async (req, res) => {
     .from(jointAccountTxTable)
     .where(sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
 
-  // Contributions = direct expense payments (incomeSourceId set) + bank deposits
+  // Contributions = all expense payments (personal money regardless of source) + bank deposits
   const directPayments = await db
     .select({
       userId: expensesTable.paidById,
       total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
     })
     .from(expensesTable)
-    .where(sql`${expensesTable.incomeSourceId} IS NOT NULL AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
+    .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
     .groupBy(expensesTable.paidById);
 
   const depositContribs = await db

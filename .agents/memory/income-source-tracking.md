@@ -25,11 +25,11 @@ Contributions are now **derived**, not manually recorded:
 ## Dashboard contributions query
 
 `artifacts/api-server/src/routes/dashboard.ts` now calculates:
-1. `directPayments` = SUM expenses WHERE incomeSourceId IS NOT NULL, grouped by paidById
+1. `directPayments` = SUM **all** expenses, grouped by paidById (incomeSourceId is optional metadata only — does NOT gate contribution counting)
 2. `depositContribs` = SUM joint_account_transactions WHERE type='deposit', grouped by madeById
 3. Merge into contribMap by userId
 
-**Why:** Replaces manual `contributions` table reads. The old `contributionsTable` still exists for history but no new rows are written.
+**Why:** All expenses represent personal money spent on the household. incomeSourceId is purely for categorisation. The old `contributionsTable` still exists for history but no new rows are written.
 
 ## Removed
 

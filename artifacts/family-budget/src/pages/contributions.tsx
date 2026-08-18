@@ -200,7 +200,7 @@ export default function Contributions() {
         <div>
           <p className="text-sm font-semibold text-foreground">Contributions are tracked automatically</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Every bank deposit counts in full. Expenses paid directly from a personal income source (not the joint account) also count. Pick the source when logging an expense or deposit.
+            Every expense and bank deposit counts automatically. Tag an income source when logging to track which stream the money came from.
           </p>
         </div>
       </div>

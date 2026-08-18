@@ -384,7 +384,7 @@ export default function AddExpenseSheet() {
               })}
             </View>
             <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              Personal source = counts as your contribution
+              Tag which income stream funded this expense
             </Text>
           </>
         )}
