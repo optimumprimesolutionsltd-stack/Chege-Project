@@ -47,14 +47,31 @@ router.get("/dashboard/summary", async (req, res) => {
     .where(sql`${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
 
   // Contributions = expenses paid + bank deposits + savings goal contributions
+  //
+  // Expense contribution logic (split-aware):
+  //   • If the expense has income splits → only the non-bank split amounts count
+  //   • If no splits → full amount counts when paidFromBank = false
   const [expenseContribs, depositContribs, savingsContribs] = await Promise.all([
-    db.select({
-      userId: expensesTable.paidById,
-      total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
-    })
-    .from(expensesTable)
-    .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year} AND ${expensesTable.paidFromBank} = false`)
-    .groupBy(expensesTable.paidById),
+    db.execute(sql`
+      SELECT e.paid_by_id AS "userId",
+             COALESCE(SUM(
+               CASE
+                 WHEN EXISTS (
+                   SELECT 1 FROM expense_income_splits s WHERE s.expense_id = e.id
+                 )
+                 THEN (
+                   SELECT COALESCE(SUM(s.amount), 0)
+                   FROM expense_income_splits s
+                   WHERE s.expense_id = e.id AND s.from_bank = false
+                 )
+                 ELSE CASE WHEN e.paid_from_bank = false THEN e.amount ELSE 0 END
+               END
+             ), 0) AS total
+      FROM expenses e
+      WHERE EXTRACT(MONTH FROM e.date) = ${month}
+        AND EXTRACT(YEAR  FROM e.date) = ${year}
+      GROUP BY e.paid_by_id
+    `).then(r => (r.rows as { userId: string; total: string }[]).map(x => ({ userId: x.userId, total: Number(x.total) }))),
 
     db.select({
       userId: jointAccountTxTable.madeById,

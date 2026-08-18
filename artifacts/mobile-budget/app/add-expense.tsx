@@ -27,9 +27,7 @@ import {
   getGetExpensesQueryKey,
   getGetDashboardActivityQueryKey,
   getGetDashboardSummaryQueryKey,
-  type IncomeSource,
 } from '@workspace/api-client-react';
-import { useQuery } from '@tanstack/react-query';
 
 const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Food: 'shopping-cart',
@@ -77,21 +75,10 @@ export default function AddExpenseSheet() {
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
   const [paidById, setPaidById] = useState('');
-  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
-
-  const { data: incomeSources = [] } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', paidById],
-    queryFn: async () => {
-      if (!paidById) return [];
-      const res = await fetch(`/api/income-sources?userId=${paidById}`, { credentials: 'include' });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!paidById,
-    staleTime: 60_000,
-  });
+  // Multi-source funding splits: each entry is one income stream that funded this expense
+  const [fundingSplits, setFundingSplits] = useState<{ label: string; amount: string; fromBank: boolean }[]>([]);
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -132,6 +119,23 @@ export default function AddExpenseSheet() {
       Alert.alert('Paid by required', 'Please choose who paid for this expense.');
       return;
     }
+
+    // Validate funding splits if provided
+    const activeSplits = fundingSplits.filter(s => s.label.trim() || s.amount);
+    if (activeSplits.length > 0 && !paidFromBank) {
+      const missingLabel = activeSplits.some(s => !s.label.trim());
+      if (missingLabel) { Alert.alert('Label required', 'Give each income source a name.'); return; }
+      const splitsTotal = activeSplits.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+      if (Math.abs(splitsTotal - parsed) >= 1) {
+        Alert.alert('Amounts don\'t add up', `Your sources total KES ${splitsTotal.toLocaleString()} but the expense is KES ${parsed.toLocaleString()}. Adjust until they match.`);
+        return;
+      }
+    }
+
+    const incomeSplits = !paidFromBank && activeSplits.length > 0
+      ? activeSplits.map(s => ({ label: s.label.trim(), amount: parseFloat(s.amount) || 0 }))
+      : [];
+
     createExpense({
       data: {
         amount: parsed,
@@ -142,10 +146,10 @@ export default function AddExpenseSheet() {
         isRecurring,
         date,
         paidFromBank,
-        ...(incomeSourceId ? { incomeSourceId } : {}),
+        ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
       } as Parameters<typeof createExpense>[0]['data'],
     });
-  }, [amount, category, description, notes, paidById, incomeSourceId, isRecurring, date, createExpense]);
+  }, [amount, category, description, notes, paidById, fundingSplits, isRecurring, date, paidFromBank, createExpense]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -340,53 +344,114 @@ export default function AddExpenseSheet() {
           </>
         )}
 
-        {/* Income source — shown when a payer is selected */}
-        {paidById && incomeSources.length > 0 && (
+        {/* Funding breakdown — shown when payer selected */}
+        {paidById && (
           <>
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>PAID FROM</Text>
-            <View style={styles.paidByRow}>
-              <Pressable
-                onPress={() => { setIncomeSourceId(null); setPaidFromBank(true); }}
-                style={[
-                  styles.paidByPill,
-                  {
-                    backgroundColor: paidFromBank ? '#0e4f6e22' : colors.muted,
-                    borderColor: paidFromBank ? '#38bdf8' : colors.border,
-                    borderRadius: colors.radius,
-                  },
-                ]}
-              >
-                <Feather name="credit-card" size={14} color={paidFromBank ? '#38bdf8' : colors.mutedForeground} />
-                <Text style={[styles.paidByText, { color: paidFromBank ? '#38bdf8' : colors.mutedForeground, fontFamily: paidFromBank ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
-                  Joint bank
-                </Text>
-              </Pressable>
-              {incomeSources.map((src) => {
-                const selected = incomeSourceId === src.id;
-                return (
-                  <Pressable
-                    key={src.id}
-                    onPress={() => { setIncomeSourceId(selected ? null : src.id); setPaidFromBank(false); }}
-                    style={[
-                      styles.paidByPill,
-                      {
-                        backgroundColor: selected ? '#6366f1' : colors.muted,
-                        borderColor: selected ? '#6366f1' : colors.border,
-                        borderRadius: colors.radius,
-                      },
-                    ]}
-                  >
-                    <Feather name="zap" size={14} color={selected ? '#fff' : colors.mutedForeground} />
-                    <Text style={[styles.paidByText, { color: selected ? '#fff' : colors.foreground }]}>
-                      {src.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              {paidFromBank ? 'Paid from joint bank — already counted via deposit, not double-counted' : 'Tag which income stream funded this expense'}
-            </Text>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>FUNDED FROM</Text>
+
+            {/* Joint bank toggle — mutually exclusive with splits */}
+            <Pressable
+              onPress={() => { setPaidFromBank(b => !b); if (!paidFromBank) setFundingSplits([]); }}
+              style={[
+                styles.bankChip,
+                {
+                  backgroundColor: paidFromBank ? 'rgba(14,79,110,0.15)' : colors.muted,
+                  borderColor: paidFromBank ? '#38bdf8' : colors.border,
+                  borderRadius: colors.radius,
+                },
+              ]}
+            >
+              <Feather name="credit-card" size={14} color={paidFromBank ? '#38bdf8' : colors.mutedForeground} />
+              <Text style={[styles.paidByText, { flex: 1, color: paidFromBank ? '#38bdf8' : colors.foreground }]}>
+                Paid from joint bank account
+              </Text>
+              {paidFromBank && <Feather name="check" size={14} color="#38bdf8" />}
+            </Pressable>
+            {paidFromBank && (
+              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                Already counted via deposit — won't be double-counted as a contribution
+              </Text>
+            )}
+
+            {/* Multi-source splits — shown when joint bank is NOT selected */}
+            {!paidFromBank && (
+              <>
+                {fundingSplits.map((split, idx) => (
+                    <View key={idx} style={[styles.splitRow, {
+                      borderColor: split.fromBank ? '#38bdf8' : colors.border,
+                      backgroundColor: split.fromBank ? 'rgba(14,79,110,0.12)' : colors.muted,
+                      borderRadius: colors.radius,
+                    }]}>
+                      <TextInput
+                        style={[styles.splitLabel, { color: colors.foreground }]}
+                        placeholder="Source name"
+                        placeholderTextColor={colors.mutedForeground}
+                        value={split.label}
+                        onChangeText={v => setFundingSplits(ss => ss.map((s, i) => i === idx ? { ...s, label: v } : s))}
+                        returnKeyType="next"
+                      />
+                      <View style={[styles.splitAmountBox, { borderLeftColor: split.fromBank ? '#38bdf850' : colors.border }]}>
+                        <Text style={[styles.splitCurrency, { color: split.fromBank ? '#38bdf8' : colors.mutedForeground }]}>KES</Text>
+                        <TextInput
+                          style={[styles.splitAmountInput, { color: split.fromBank ? '#38bdf8' : colors.foreground }]}
+                          placeholder="0"
+                          placeholderTextColor={colors.mutedForeground}
+                          keyboardType="numeric"
+                          value={split.amount}
+                          onChangeText={v => setFundingSplits(ss => ss.map((s, i) => i === idx ? { ...s, amount: v } : s))}
+                        />
+                      </View>
+                      {/* Bank toggle — marks this portion as already-counted via deposit */}
+                      <Pressable
+                        onPress={() => setFundingSplits(ss => ss.map((s, i) => i === idx ? { ...s, fromBank: !s.fromBank, label: !s.fromBank ? (s.label || 'Joint bank') : s.label } : s))}
+                        hitSlop={8}
+                        style={[styles.splitBankBtn, { borderLeftColor: split.fromBank ? '#38bdf850' : colors.border, backgroundColor: split.fromBank ? 'rgba(56,189,248,0.15)' : 'transparent' }]}
+                      >
+                        <Feather name="credit-card" size={14} color={split.fromBank ? '#38bdf8' : colors.mutedForeground} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setFundingSplits(ss => ss.filter((_, i) => i !== idx))}
+                        hitSlop={10}
+                        style={[styles.splitRemoveBtn, { borderLeftColor: split.fromBank ? '#38bdf850' : colors.border }]}
+                      >
+                        <Feather name="x" size={16} color={colors.mutedForeground} />
+                      </Pressable>
+                    </View>
+                ))}
+
+                {/* Add source button */}
+                <Pressable
+                  onPress={() => setFundingSplits(ss => [...ss, { label: '', amount: '' }])}
+                  style={[styles.addSplitBtn, { borderColor: colors.border, borderRadius: colors.radius }]}
+                >
+                  <Feather name="plus" size={14} color={colors.primary} />
+                  <Text style={[styles.addSplitText, { color: colors.primary }]}>Split across income sources</Text>
+                </Pressable>
+
+                {/* Running total hint */}
+                {fundingSplits.length > 0 && (() => {
+                  const splitsTotal = fundingSplits.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+                  const bankTotal  = fundingSplits.filter(r => r.fromBank).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+                  const countable  = splitsTotal - bankTotal;
+                  const expAmt = parseFloat(amount.replace(/,/g, '')) || 0;
+                  const ok = expAmt > 0 && Math.abs(splitsTotal - expAmt) < 1;
+                  return (
+                    <>
+                      <Text style={[styles.hintText, { color: ok ? '#4ade80' : '#f87171', fontFamily: ok ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
+                        {ok
+                          ? `✓ Sources add up to KES ${splitsTotal.toLocaleString()}`
+                          : `Sources total KES ${splitsTotal.toLocaleString()} — expense is KES ${expAmt.toLocaleString()}`}
+                      </Text>
+                      {ok && bankTotal > 0 && (
+                        <Text style={[styles.hintText, { color: 'rgba(56,189,248,0.8)' }]}>
+                          KES {countable.toLocaleString()} counts as contribution · KES {bankTotal.toLocaleString()} from bank (already counted)
+                        </Text>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
+            )}
           </>
         )}
 
@@ -617,5 +682,69 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     marginTop: 6,
+  },
+  bankChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  splitLabel: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+  },
+  splitAmountBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  splitCurrency: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+  },
+  splitAmountInput: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    minWidth: 72,
+    textAlign: 'right',
+  },
+  splitBankBtn: {
+    padding: 12,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+  },
+  splitRemoveBtn: {
+    padding: 12,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: 'rgba(255,255,255,0.1)',
+  },
+  addSplitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    marginBottom: 4,
+  },
+  addSplitText: {
+    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
   },
 });

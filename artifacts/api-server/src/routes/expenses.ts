@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { expensesTable, usersTable, membersTable, incomeSourcesTable } from "@workspace/db";
+import { expensesTable, usersTable, membersTable, incomeSourcesTable, expenseIncomeSplitsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -172,9 +172,21 @@ router.post("/expenses", async (req, res) => {
     .values({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId: incomeSourceId ?? null, paidFromBank, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
     .returning();
 
-  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
+  // Save funding splits if provided (replaces paidFromBank/incomeSourceId approach for multi-source payments)
+  const rawSplits = (req.body as { incomeSplits?: unknown }).incomeSplits;
+  if (Array.isArray(rawSplits) && rawSplits.length > 0) {
+    const validSplits = rawSplits.filter((s): s is { label: string; amount: number; fromBank?: boolean } =>
+      s && typeof s === 'object' && typeof (s as any).label === 'string' && typeof (s as any).amount === 'number' && (s as any).amount > 0
+    );
+    if (validSplits.length > 0) {
+      await db.insert(expenseIncomeSplitsTable).values(validSplits.map(s => ({ expenseId: expense.id, label: s.label, amount: Math.round(s.amount), fromBank: s.fromBank === true })));
+    }
+  }
 
-  res.status(201).json(formatExpense({ ...expense, paidByName: user?.firstName ?? "Unknown" }));
+  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
+  const splits = await db.select().from(expenseIncomeSplitsTable).where(eq(expenseIncomeSplitsTable.expenseId, expense.id));
+
+  res.status(201).json({ ...formatExpense({ ...expense, paidByName: user?.firstName ?? "Unknown" }), incomeSplits: splits });
 });
 
 router.patch("/expenses/:id", async (req, res) => {
@@ -204,16 +216,31 @@ router.patch("/expenses/:id", async (req, res) => {
     return;
   }
 
+  const expenseId = Math.round(idParsed.data.id);
+
   const [updated] = await db
     .update(expensesTable)
     .set({ amount, category, description, notes: notes ?? null, paidById, incomeSourceId, paidFromBank, isRecurring: isRecurring ?? false, date: date instanceof Date ? date.toISOString().split('T')[0] : date })
-    .where(eq(expensesTable.id, Math.round(idParsed.data.id)))
+    .where(eq(expensesTable.id, expenseId))
     .returning();
 
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
+  // Replace funding splits
+  await db.delete(expenseIncomeSplitsTable).where(eq(expenseIncomeSplitsTable.expenseId, expenseId));
+  const rawSplits = (req.body as { incomeSplits?: unknown }).incomeSplits;
+  if (Array.isArray(rawSplits) && rawSplits.length > 0) {
+    const validSplits = rawSplits.filter((s): s is { label: string; amount: number; fromBank?: boolean } =>
+      s && typeof s === 'object' && typeof (s as any).label === 'string' && typeof (s as any).amount === 'number' && (s as any).amount > 0
+    );
+    if (validSplits.length > 0) {
+      await db.insert(expenseIncomeSplitsTable).values(validSplits.map(s => ({ expenseId, label: s.label, amount: Math.round(s.amount), fromBank: s.fromBank === true })));
+    }
+  }
+
   const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, paidById) });
-  res.json(formatExpense({ ...updated, paidByName: user?.firstName ?? "Unknown" }));
+  const splits = await db.select().from(expenseIncomeSplitsTable).where(eq(expenseIncomeSplitsTable.expenseId, expenseId));
+  res.json({ ...formatExpense({ ...updated, paidByName: user?.firstName ?? "Unknown" }), incomeSplits: splits });
 });
 
 router.delete("/expenses/:id", async (req, res) => {

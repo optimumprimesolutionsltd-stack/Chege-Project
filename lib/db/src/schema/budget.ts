@@ -47,6 +47,17 @@ export const insertExpenseSchema = createInsertSchema(expensesTable).omit({ id: 
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type Expense = typeof expensesTable.$inferSelect;
 
+// Per-expense funding splits — when money comes from multiple sources for one payment
+export const expenseIncomeSplitsTable = pgTable("expense_income_splits", {
+  id: serial("id").primaryKey(),
+  expenseId: integer("expense_id").notNull().references(() => expensesTable.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),       // e.g. "Salary", "Generator income", "Joint bank"
+  amount: integer("amount").notNull(),  // in KES
+  fromBank: boolean("from_bank").notNull().default(false), // true = this portion came from joint bank deposit (already counted, excluded from contribution)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type ExpenseIncomeSplit = typeof expenseIncomeSplitsTable.$inferSelect;
+
 // Contributions (monthly deposits into joint account)
 export const contributionsTable = pgTable("contributions", {
   id: serial("id").primaryKey(),
