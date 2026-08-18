@@ -516,19 +516,32 @@ export default function Dashboard() {
             <div className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">Top Spending</CardTitle></div>
             <CardDescription>Where the money is going</CardDescription>
           </CardHeader>
-          <CardContent className="p-6 h-[300px] flex items-center justify-center">
+          <CardContent className="p-4 sm:p-6">
             {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={chartData} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={2} dataKey="value" stroke="none">
-                    {chartData.map((_, i) => <Cell key={i} fill={chartData[i].color} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => formatKes(v)} contentStyle={{ borderRadius: "0.75rem", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                </PieChart>
-              </ResponsiveContainer>
+              <>
+                <div className="h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none">
+                        {chartData.map((_, i) => <Cell key={i} fill={chartData[i].color} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => formatKes(v)} contentStyle={{ borderRadius: "0.75rem", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
+                  {chartData.map((entry, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                      <span className="text-xs text-muted-foreground">{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
-              <p className="text-center text-muted-foreground">No expenses recorded this month yet.</p>
+              <div className="h-[220px] flex items-center justify-center">
+                <p className="text-center text-muted-foreground">No expenses recorded this month yet.</p>
+              </div>
             )}
           </CardContent>
         </Card>

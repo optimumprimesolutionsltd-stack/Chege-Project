@@ -187,22 +187,22 @@ export default function Contributions() {
             return (
               <Card key={name} className="border-none shadow-md overflow-hidden">
                 <CardContent className={`p-5 space-y-3 bg-gradient-to-br ${bgClass} to-transparent`}>
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col xs:flex-row xs:justify-between xs:items-center gap-0.5">
                     <h3 className="font-display font-bold text-xl text-foreground">{name}</h3>
-                    <p className="text-sm text-muted-foreground">Target: {formatKes(target)}</p>
+                    <p className="text-xs text-muted-foreground">Target: {formatKes(target)}</p>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center bg-background/50 rounded-xl p-3">
+                  <div className="grid grid-cols-3 gap-1 text-center bg-background/50 rounded-xl p-2 sm:p-3">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">In</p>
-                      <p className={`text-base font-bold font-mono ${colorClass}`}>{formatKes(contributed)}</p>
+                      <p className={`text-xs sm:text-sm font-bold tabular-nums leading-tight ${colorClass}`}>{formatKes(contributed)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Out</p>
-                      <p className="text-base font-bold font-mono text-destructive">{formatKes(spent)}</p>
+                      <p className="text-xs sm:text-sm font-bold tabular-nums leading-tight text-destructive">{formatKes(spent)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Net</p>
-                      <p className={`text-base font-bold font-mono ${netPos ? "text-green-600" : "text-destructive"}`}>
+                      <p className={`text-xs sm:text-sm font-bold tabular-nums leading-tight ${netPos ? "text-green-600" : "text-destructive"}`}>
                         {netPos ? "+" : ""}{formatKes(net)}
                       </p>
                     </div>
