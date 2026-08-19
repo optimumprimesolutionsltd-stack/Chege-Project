@@ -34,14 +34,14 @@ export default function SettingsScreen() {
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
   const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', user?.userId],
+    queryKey: ['income-sources', user?.id],
     queryFn: async () => {
-      if (!user?.userId) return [];
-      const res = await fetch(`/api/income-sources?userId=${user.userId}`, { credentials: 'include' });
+      if (!user?.id) return [];
+      const res = await fetch(`/api/income-sources?userId=${user.id}`, { credentials: 'include' });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!user?.userId,
+    enabled: !!user?.id,
     staleTime: 30_000,
   });
 
@@ -54,11 +54,11 @@ export default function SettingsScreen() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.userId, name, isMain: false }),
+        body: JSON.stringify({ userId: user?.id, name, isMain: false }),
       });
       if (!res.ok) throw new Error('Failed');
       setNewSource('');
-      queryClient.invalidateQueries({ queryKey: ['income-sources', user?.userId] });
+      queryClient.invalidateQueries({ queryKey: ['income-sources', user?.id] });
       // Invalidate all income-source caches so forms update immediately
       queryClient.invalidateQueries({ queryKey: ['income-sources'] });
     } catch {

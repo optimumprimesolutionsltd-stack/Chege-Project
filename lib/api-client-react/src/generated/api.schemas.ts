@@ -6,8 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 export interface IncomeSource {
-  label: string;
-  amount: number;
+  id: number;
+  userId: string;
+  name: string;
+  isMain: boolean;
+  createdAt: string;
 }
 
 export interface HealthStatus {
@@ -32,6 +35,10 @@ export interface AuthUser {
   lastName?: string | null;
   /** @nullable */
   profileImageUrl?: string | null;
+}
+
+export interface AuthUserEnvelope {
+  user: AuthUser | null;
 }
 
 export interface Expense {
@@ -130,6 +137,7 @@ export interface ActivityItem {
   type: string;
   amount: number;
   description: string;
+  /** Display name of the actor. "Joint bank" for shared deposits/ disbursements with no individual attribution. */
   userName: string;
   /** @nullable */
   category?: string | null;
@@ -205,27 +213,38 @@ export interface JointAccountSummary {
 }
 
 export interface DepositInput {
+  /**
+     * Whole KES only; must be a positive integer amount
+     * @minimum 1
+     */
   amount: number;
   description: string;
   date: string;
-  /** Defaults to the logged-in user */
-  madeById?: string;
-  /** Income source that funded this deposit */
+  /**
+     * ID of the household member who made this deposit. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null.
+     * @nullable
+     */
+  madeById?: string | null;
+  /**
+     * Optional income-source preset that funded this deposit. Used only with a single named depositor.
+     * @minimum 1
+     */
   incomeSourceId?: number;
 }
 
-export interface IncomeSource {
-  id: number;
-  userId: string;
-  name: string;
-  isMain: boolean;
-  createdAt: string;
-}
-
 export interface DisbursementInput {
+  /**
+     * Whole KES only; must be a positive integer amount
+     * @minimum 1
+     */
   amount: number;
   description: string;
   date: string;
+  /**
+     * ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.
+     * @nullable
+     */
+  madeById?: string | null;
   /** Optional expense category this disbursement is paying for */
   expenseCategory?: string;
 }
@@ -237,11 +256,32 @@ export interface SavingsGoalInput {
   deadline?: string;
 }
 
+/**
+ * Attribution of a portion of a cascade contribution to one member or the Joint bank
+ */
+export interface ContributorSplit {
+  /**
+     * Household member ID, or null for Joint bank. Must be a valid member ID when non-null.
+     * @nullable
+     */
+  userId: string | null;
+  /**
+     * Amount attributed to this contributor (whole KES only; positive integer)
+     * @minimum 1
+     */
+  amount: number;
+}
+
 export interface CascadeContributeInput {
-  /** Total payment amount to distribute (in KES) */
+  /**
+     * Total payment amount to distribute (whole KES only; positive integer)
+     * @minimum 1
+     */
   amount: number;
   /** Optional ordered list of goal IDs; defaults to all active goals by creation date */
   goalIds?: number[];
+  /** Optional attribution splits. When provided the sum of all split amounts must equal the total amount. Each goal allocation is recorded as one contribution row per split proportionally. Omit (or omit the field entirely) to record the whole contribution as Joint bank. */
+  contributorSplits?: ContributorSplit[];
 }
 
 export interface CascadeContributeAllocation {
@@ -263,17 +303,34 @@ export interface SavingsGoalContribution {
   goalId: number;
   /** Amount contributed in KES */
   amount: number;
-  /** Optional note — "Manual adjustment" for balance corrections */
+  /**
+     * Optional note — "Manual adjustment" for balance corrections
+     * @nullable
+     */
   note?: string | null;
-  createdByUserId: string;
-  /** Display name of the user who made the contribution */
+  /**
+     * Household member ID, or null for Joint bank
+     * @nullable
+     */
+  createdByUserId: string | null;
+  /** Display name of the contributor. "Joint bank" when createdByUserId is null. */
   contributorName: string;
   createdAt: string;
 }
 
 export interface SavingsGoalContributeInput {
-  /** Amount to add to the goal (in KES) */
+  /**
+     * Amount to add to the goal (whole KES only; positive integer)
+     * @minimum 1
+     */
   amount: number;
+  /**
+     * ID of the household member making this contribution. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null. Cannot be combined with contributorSplits.
+     * @nullable
+     */
+  userId?: string | null;
+  /** Optional attribution splits. When provided the sum of all split amounts must equal amount exactly, and userId must be omitted. Each split is recorded as a separate contribution row (proportionally reduced when the goal cap limits the applied amount). Omit to record the whole contribution against userId (or Joint bank when userId is also omitted). */
+  contributorSplits?: ContributorSplit[];
   /** Optional note for this contribution */
   note?: string;
 }
@@ -314,4 +371,9 @@ export type GetDashboardTrendsParams = {
 months?: number;
 };
 
-export type GetIncomeSources200 = {[key: string]: IncomeSource[]};
+export type GetIncomeSourcesParams = {
+/**
+ * Optional household member ID to filter by
+ */
+userId?: string;
+};

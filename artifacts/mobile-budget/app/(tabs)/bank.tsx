@@ -21,7 +21,6 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
-import { useAuth } from '@/lib/auth';
 import {
   useGetJointAccount,
   useCreateDeposit,
@@ -31,7 +30,6 @@ import {
   useGetMembers,
   getGetJointAccountQueryKey,
   getGetDashboardSummaryQueryKey,
-  type IncomeSource,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 
@@ -55,12 +53,18 @@ type Tx = {
   type: string;
   amount: number;
   description: string;
+  madeById?: string | null;
   madeByName?: string | null;
   expenseCategory?: string | null;
   createdAt?: string | null;
 };
 
 type TxType = 'deposit' | 'disbursement';
+
+type MemberIncomeSource = {
+  id: number;
+  name: string;
+};
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -92,27 +96,37 @@ export default function BankScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // ── Deposit payer state ────────────────────────────────────────────────────
+  // depositorIds: [] = Joint bank (null madeById)
+  //               [id] = single named member
+  //               [id1, id2, …] = multi-split named members
+  const [depositorIds, setDepositorIds] = useState<string[]>([]);
+  const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+
+  // ── Withdrawal payer state ─────────────────────────────────────────────────
+  // withdrawerId: null = Joint bank; string = named member
+  const [withdrawerId, setWithdrawerId] = useState<string | null>(null);
+
+  // Derived: for income sources, only show when exactly one depositor is selected
+  const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
+
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
-  const { user } = useAuth();
-  const [depositorIds, setDepositorIds] = useState<string[]>([]);
-  const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
-  const madeById = depositorIds.length === 1 ? depositorIds[0] : '';
-  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
 
-  // Fetch income sources for selected depositor (single only)
-  const { data: depositSources = [] } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', madeById],
+  // Fetch income sources for selected depositor (single named only)
+  const { data: depositSources = [] } = useQuery<MemberIncomeSource[]>({
+    queryKey: ['income-sources', singleDepositorId],
     queryFn: async () => {
-      if (!madeById) return [];
-      const res = await fetch(`/api/income-sources?userId=${madeById}`, { credentials: 'include' });
+      if (!singleDepositorId) return [];
+      const res = await fetch(`/api/income-sources?userId=${singleDepositorId}`, { credentials: 'include' });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!madeById && txType === 'deposit',
+    enabled: !!singleDepositorId && txType === 'deposit',
     staleTime: 60_000,
   });
 
@@ -124,9 +138,11 @@ export default function BankScreen() {
     setShowCategoryPicker(false);
     setDate(todayIso());
     setShowDatePicker(false);
+    // Default to Joint bank for both deposits and withdrawals
     setDepositorIds([]);
     setDepositorAmounts({});
     setIncomeSourceId(null);
+    setWithdrawerId(null);
     setModalVisible(true);
   };
 
@@ -162,10 +178,41 @@ export default function BankScreen() {
     );
   };
 
+  // ── Toggle depositor member chip ───────────────────────────────────────────
+  // Selecting a member deselects Joint bank (and vice versa).
+  // Selecting all-off means Joint bank again.
+  const toggleDepositor = (memberId: string) => {
+    setDepositorIds(prev => {
+      if (prev.includes(memberId)) {
+        // Deselect this member
+        return prev.filter(id => id !== memberId);
+      } else {
+        // Add member (removes Joint bank implicitly since joint = empty array)
+        return [...prev, memberId];
+      }
+    });
+    setIncomeSourceId(null);
+  };
+
+  // Selecting Joint bank chip explicitly clears all named members
+  const selectJointBank = () => {
+    setDepositorIds([]);
+    setDepositorAmounts({});
+    setIncomeSourceId(null);
+  };
+
+  // ── Validate member IDs against known members ──────────────────────────────
+  const knownMemberIds = new Set(members.map(m => m.userId));
+  const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
+
   const handleSubmit = async () => {
     const parsed = parseFloat(amount.replace(/,/g, ''));
     if (!parsed || parsed <= 0) {
       Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
+      return;
+    }
+    if (!Number.isInteger(parsed)) {
+      Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
       return;
     }
     if (!description.trim()) {
@@ -176,33 +223,79 @@ export default function BankScreen() {
     setSubmitting(true);
     try {
       if (txType === 'deposit') {
-        const isMultiDepositor = depositorIds.length > 1;
+        const isJoint = validDepositorIds.length === 0;
+        const isMultiDepositor = validDepositorIds.length > 1;
+
         if (isMultiDepositor) {
-          const splitTotal = depositorIds.reduce((s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0);
-          if (Math.abs(splitTotal - parsed) >= 1) {
-            Alert.alert("Amounts don't add up", `Depositor portions total KES ${splitTotal.toLocaleString()} but the deposit is KES ${parsed.toLocaleString()}.`);
+          // Multiple named depositors: validate split sums match total
+          const splitTotal = validDepositorIds.reduce(
+            (s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0
+          );
+          const splitAmounts = validDepositorIds.map(
+            id => parseFloat(depositorAmounts[id] || '0') || 0,
+          );
+          if (splitAmounts.some(portion => !Number.isInteger(portion) || portion <= 0)) {
+            Alert.alert(
+              'Enter every amount',
+              'Each depositor portion must be a positive whole-shilling amount.',
+            );
             setSubmitting(false);
             return;
           }
-          for (const did of depositorIds) {
+          if (splitTotal !== parsed) {
+            Alert.alert(
+              "Amounts don't add up",
+              `Depositor portions total KES ${splitTotal.toLocaleString()} but the deposit is KES ${parsed.toLocaleString()}.`,
+            );
+            setSubmitting(false);
+            return;
+          }
+          for (const did of validDepositorIds) {
             const portionAmt = parseFloat(depositorAmounts[did] || '0') || 0;
             if (portionAmt <= 0) continue;
             await createDeposit({
-              data: { amount: portionAmt, description: description.trim(), date, madeById: did } as Parameters<typeof createDeposit>[0]['data'],
+              data: {
+                amount: portionAmt,
+                description: description.trim(),
+                date,
+                madeById: did,
+              },
             });
           }
-        } else {
+        } else if (isJoint) {
+          // Joint bank: send madeById: null explicitly
           await createDeposit({
             data: {
-              amount: parsed, description: description.trim(), date,
-              madeById: madeById || undefined,
+              amount: parsed,
+              description: description.trim(),
+              date,
+              madeById: null,
               ...(incomeSourceId ? { incomeSourceId } : {}),
-            } as Parameters<typeof createDeposit>[0]['data'],
+            },
+          });
+        } else {
+          // Single named depositor
+          const singleId = validDepositorIds[0];
+          await createDeposit({
+            data: {
+              amount: parsed,
+              description: description.trim(),
+              date,
+              madeById: singleId,
+              ...(incomeSourceId ? { incomeSourceId } : {}),
+            },
           });
         }
       } else {
+        // Disbursement — include madeById: null for Joint bank or the selected member
         await createDisbursement({
-          data: { amount: parsed, description: description.trim(), date, expenseCategory: expenseCategory || undefined },
+          data: {
+            amount: parsed,
+            description: description.trim(),
+            date,
+            expenseCategory: expenseCategory || undefined,
+            madeById: withdrawerId ?? null,
+          },
         });
       }
       setModalVisible(false);
@@ -219,6 +312,19 @@ export default function BankScreen() {
   const transactions: Tx[] = data?.transactions ?? [];
 
   const isDeposit = txType === 'deposit';
+
+  // Derive a display label for a transaction in the list
+  const txPayerLabel = (tx: Tx): string => {
+    if (tx.type === 'deposit') {
+      if (tx.madeByName) return tx.madeByName;
+      if (tx.madeById === null || tx.madeById === undefined) return 'Joint bank';
+      return 'Joint bank';
+    }
+    // disbursement
+    if (tx.madeByName) return tx.madeByName;
+    if (tx.madeById === null || tx.madeById === undefined) return 'Joint bank';
+    return 'Joint bank';
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -306,6 +412,7 @@ export default function BankScreen() {
         }
         renderItem={({ item }) => {
           const dep = item.type === 'deposit';
+          const payerLabel = txPayerLabel(item);
           return (
             <Pressable
               onLongPress={() => handleDelete(item)}
@@ -328,10 +435,10 @@ export default function BankScreen() {
                 </Text>
                 <Text style={[styles.txMeta, { color: colors.mutedForeground }]}>
                   {dep
-                    ? (item.madeByName ? `${item.madeByName} · ` : '')
-                    : ((item as Tx & { expenseCategory?: string | null }).expenseCategory
-                        ? `→ ${(item as Tx & { expenseCategory?: string | null }).expenseCategory} · `
-                        : '')}
+                    ? `${payerLabel} · `
+                    : ((item.expenseCategory
+                        ? `→ ${item.expenseCategory} · `
+                        : `${payerLabel} · `))}
                   {formatDateTime(item.createdAt)} · Hold to delete
                 </Text>
               </View>
@@ -371,6 +478,7 @@ export default function BankScreen() {
                   txType === 'deposit' && styles.toggleActive,
                 ]}
                 onPress={() => setTxType('deposit')}
+                testID="bank-toggle-deposit"
               >
                 <Text
                   style={[
@@ -387,6 +495,7 @@ export default function BankScreen() {
                   txType === 'disbursement' && styles.toggleActiveDisburse,
                 ]}
                 onPress={() => setTxType('disbursement')}
+                testID="bank-toggle-withdraw"
               >
                 <Text
                   style={[
@@ -420,6 +529,7 @@ export default function BankScreen() {
               value={amount}
               onChangeText={setAmount}
               returnKeyType="next"
+              testID="bank-amount-input"
             />
 
             {/* Description */}
@@ -439,35 +549,74 @@ export default function BankScreen() {
               onChangeText={setDescription}
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
+              testID="bank-description-input"
             />
 
-            {/* Deposited by (deposits only) */}
+            {/* ── Deposited by (deposits only) ── */}
             {isDeposit && members.length > 0 && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  Who is depositing? <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>
+                  Who is depositing?{' '}
+                  <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>
                 </Text>
                 <View style={styles.memberRow}>
+                  {/* Joint bank chip — selected when no named members chosen */}
+                  <TouchableOpacity
+                    testID="bank-deposit-joint-chip"
+                    style={[
+                      styles.memberPill,
+                      {
+                        backgroundColor: depositorIds.length === 0 ? '#1a6b3a' : colors.muted,
+                        borderColor: depositorIds.length === 0 ? '#4ade80' : colors.border,
+                      },
+                    ]}
+                    onPress={selectJointBank}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name="home"
+                      size={13}
+                      color={depositorIds.length === 0 ? '#4ade80' : colors.mutedForeground}
+                    />
+                    <Text
+                      style={[
+                        styles.memberPillText,
+                        { color: depositorIds.length === 0 ? '#4ade80' : colors.foreground },
+                      ]}
+                    >
+                      Joint bank
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Named member chips */}
                   {members.map((m) => {
                     const selected = depositorIds.includes(m.userId);
                     const name = m.userName?.split(' ')[0] ?? 'Member';
                     return (
                       <TouchableOpacity
                         key={m.userId}
+                        testID={`bank-deposit-member-${m.userId}`}
                         style={[
                           styles.memberPill,
-                          { backgroundColor: selected ? '#4ade80' : colors.muted, borderColor: selected ? '#4ade80' : colors.border },
+                          {
+                            backgroundColor: selected ? '#4ade80' : colors.muted,
+                            borderColor: selected ? '#4ade80' : colors.border,
+                          },
                         ]}
-                        onPress={() => {
-                          setDepositorIds(prev =>
-                            prev.includes(m.userId) ? prev.filter(id => id !== m.userId) : [...prev, m.userId]
-                          );
-                          setIncomeSourceId(null);
-                        }}
+                        onPress={() => toggleDepositor(m.userId)}
                         activeOpacity={0.7}
                       >
-                        <Feather name="user" size={13} color={selected ? '#0a1a10' : colors.mutedForeground} />
-                        <Text style={[styles.memberPillText, { color: selected ? '#0a1a10' : colors.foreground }]}>
+                        <Feather
+                          name="user"
+                          size={13}
+                          color={selected ? '#0a1a10' : colors.mutedForeground}
+                        />
+                        <Text
+                          style={[
+                            styles.memberPillText,
+                            { color: selected ? '#0a1a10' : colors.foreground },
+                          ]}
+                        >
                           {name}
                         </Text>
                       </TouchableOpacity>
@@ -475,24 +624,29 @@ export default function BankScreen() {
                   })}
                 </View>
 
-                {/* Per-depositor split rows */}
-                {depositorIds.length > 1 && (() => {
+                {/* Per-depositor split rows (multi only) */}
+                {validDepositorIds.length > 1 && (() => {
                   const total = parseFloat(amount.replace(/,/g, '')) || 0;
-                  const splitTotal = depositorIds.reduce((s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0);
+                  const splitTotal = validDepositorIds.reduce(
+                    (s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0
+                  );
                   const diff = total - splitTotal;
                   return (
                     <View style={{ marginTop: 8, gap: 8 }}>
                       <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                        How much is each person depositing?{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
+                        How much is each person depositing?
+                        {total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
                       </Text>
-                      {depositorIds.map((did) => {
+                      {validDepositorIds.map((did) => {
                         const member = members.find(m => m.userId === did);
                         const name = member?.userName?.split(' ')[0] ?? 'Member';
                         return (
                           <View key={did} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
                               <Feather name="user" size={13} color={colors.mutedForeground} />
-                              <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                              <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
+                                {name}
+                              </Text>
                             </View>
                             <TextInput
                               style={{
@@ -505,14 +659,25 @@ export default function BankScreen() {
                               placeholder="0"
                               placeholderTextColor={colors.mutedForeground}
                               value={depositorAmounts[did] || ''}
-                              onChangeText={val => setDepositorAmounts(prev => ({ ...prev, [did]: val }))}
+                              onChangeText={val =>
+                                setDepositorAmounts(prev => ({ ...prev, [did]: val }))
+                              }
+                              testID={`bank-deposit-split-${did}`}
                             />
                           </View>
                         );
                       })}
                       {Math.abs(diff) >= 1 && (
-                        <Text style={{ fontSize: 12, color: diff > 0 ? '#f59e0b' : '#f87171', fontFamily: 'Inter_400Regular' }}>
-                          {diff > 0 ? `KES ${diff.toLocaleString()} still unassigned` : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: diff > 0 ? '#f59e0b' : '#f87171',
+                            fontFamily: 'Inter_400Regular',
+                          }}
+                        >
+                          {diff > 0
+                            ? `KES ${diff.toLocaleString()} still unassigned`
+                            : `Over by KES ${Math.abs(diff).toLocaleString()}`}
                         </Text>
                       )}
                     </View>
@@ -521,25 +686,110 @@ export default function BankScreen() {
               </>
             )}
 
-            {/* Income source (deposits only, when a person is selected) */}
-            {isDeposit && madeById && depositSources.length > 0 && (
+            {/* Income source — only when exactly one named depositor is selected */}
+            {isDeposit && singleDepositorId && depositSources.length > 0 && (
               <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Where did this money come from? <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text></Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  Where did this money come from?{' '}
+                  <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
+                </Text>
                 <View style={styles.memberRow}>
                   {depositSources.map((src) => {
                     const selected = incomeSourceId === src.id;
                     return (
                       <TouchableOpacity
                         key={src.id}
+                        testID={`bank-income-source-${src.id}`}
                         style={[
                           styles.memberPill,
-                          { backgroundColor: selected ? '#6366f1' : colors.muted, borderColor: selected ? '#6366f1' : colors.border },
+                          {
+                            backgroundColor: selected ? '#6366f1' : colors.muted,
+                            borderColor: selected ? '#6366f1' : colors.border,
+                          },
                         ]}
                         onPress={() => setIncomeSourceId(selected ? null : src.id)}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                        <Text
+                          style={[
+                            styles.memberPillText,
+                            { color: selected ? '#fff' : colors.foreground },
+                          ]}
+                        >
                           {src.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* ── Withdrawal payer (disbursements only) ── */}
+            {!isDeposit && members.length > 0 && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  Who is withdrawing?
+                </Text>
+                <View style={styles.memberRow}>
+                  {/* Joint bank chip */}
+                  <TouchableOpacity
+                    testID="bank-withdraw-joint-chip"
+                    style={[
+                      styles.memberPill,
+                      {
+                        backgroundColor: withdrawerId === null ? '#3a1820' : colors.muted,
+                        borderColor: withdrawerId === null ? '#f87171' : colors.border,
+                      },
+                    ]}
+                    onPress={() => setWithdrawerId(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name="home"
+                      size={13}
+                      color={withdrawerId === null ? '#f87171' : colors.mutedForeground}
+                    />
+                    <Text
+                      style={[
+                        styles.memberPillText,
+                        { color: withdrawerId === null ? '#f87171' : colors.foreground },
+                      ]}
+                    >
+                      Joint bank
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Named member chips (one at a time) */}
+                  {members.map((m) => {
+                    const selected = withdrawerId === m.userId;
+                    const name = m.userName?.split(' ')[0] ?? 'Member';
+                    return (
+                      <TouchableOpacity
+                        key={m.userId}
+                        testID={`bank-withdraw-member-${m.userId}`}
+                        style={[
+                          styles.memberPill,
+                          {
+                            backgroundColor: selected ? '#f87171' : colors.muted,
+                            borderColor: selected ? '#f87171' : colors.border,
+                          },
+                        ]}
+                        onPress={() => setWithdrawerId(m.userId)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather
+                          name="user"
+                          size={13}
+                          color={selected ? '#fff' : colors.mutedForeground}
+                        />
+                        <Text
+                          style={[
+                            styles.memberPillText,
+                            { color: selected ? '#fff' : colors.foreground },
+                          ]}
+                        >
+                          {name}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -551,24 +801,48 @@ export default function BankScreen() {
             {/* Expense category (disbursements only) */}
             {!isDeposit && (
               <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>What was this for? <Text style={{ fontWeight: '400' }}>(optional)</Text></Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  What was this for?{' '}
+                  <Text style={{ fontWeight: '400' }}>(optional)</Text>
+                </Text>
                 <TouchableOpacity
                   style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
                   onPress={() => setShowCategoryPicker(!showCategoryPicker)}
                   activeOpacity={0.7}
+                  testID="bank-category-picker"
                 >
-                  <Text style={{ color: expenseCategory ? colors.foreground : colors.mutedForeground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                  <Text
+                    style={{
+                      color: expenseCategory ? colors.foreground : colors.mutedForeground,
+                      fontSize: 16,
+                      fontFamily: 'Inter_400Regular',
+                      flex: 1,
+                    }}
+                  >
                     {expenseCategory || 'No category'}
                   </Text>
-                  <Feather name={showCategoryPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                  <Feather
+                    name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={colors.mutedForeground}
+                  />
                 </TouchableOpacity>
                 {showCategoryPicker && (
                   <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                    <TouchableOpacity style={styles.categoryOption} onPress={() => { setExpenseCategory(''); setShowCategoryPicker(false); }}>
-                      <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>Not linked to a category</Text>
+                    <TouchableOpacity
+                      style={styles.categoryOption}
+                      onPress={() => { setExpenseCategory(''); setShowCategoryPicker(false); }}
+                    >
+                      <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                        Not linked to a category
+                      </Text>
                     </TouchableOpacity>
                     {categories.map(c => (
-                      <TouchableOpacity key={c.id} style={styles.categoryOption} onPress={() => { setExpenseCategory(c.name); setShowCategoryPicker(false); }}>
+                      <TouchableOpacity
+                        key={c.id}
+                        style={styles.categoryOption}
+                        onPress={() => { setExpenseCategory(c.name); setShowCategoryPicker(false); }}
+                      >
                         <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>{c.name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -582,6 +856,7 @@ export default function BankScreen() {
             <Pressable
               onPress={() => setShowDatePicker(true)}
               style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+              testID="bank-date-picker"
             >
               <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
               <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
@@ -617,6 +892,7 @@ export default function BankScreen() {
               onPress={handleSubmit}
               disabled={submitting}
               activeOpacity={0.85}
+              testID="bank-submit-btn"
             >
               {submitting ? (
                 <ActivityIndicator color={isDeposit ? '#0a1a10' : '#fff'} />
@@ -851,6 +1127,7 @@ const styles = StyleSheet.create({
   },
   memberRow: {
     flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
     gap: 10,
     marginBottom: 16,
   },
@@ -858,7 +1135,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 6,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,

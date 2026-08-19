@@ -12,6 +12,7 @@ export interface ActivityItem {
   type: string;
   amount: number;
   description: string;
+  /** Display name of the actor. "Joint bank" for shared deposits/ disbursements with no individual attribution. */
   userName: string;
   /** @nullable */
   category?: string | null;

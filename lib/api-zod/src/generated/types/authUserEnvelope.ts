@@ -5,6 +5,8 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
-import type { IncomeSource } from './incomeSource';
+import type { AuthUser } from './authUser';
 
-export type GetIncomeSources200 = {[key: string]: IncomeSource[]};
+export interface AuthUserEnvelope {
+  user: AuthUser | null;
+}

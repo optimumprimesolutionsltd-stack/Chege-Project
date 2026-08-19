@@ -617,10 +617,12 @@ export default function Expenses() {
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
                           <p className="text-xs text-muted-foreground mb-0.5">Income</p>
-                          <p className={`text-sm font-bold font-mono ${contributed >= target ? "text-green-600" : "text-amber-500"}`}>
+                          <p className={`text-sm font-bold font-mono ${target != null && contributed >= target ? "text-green-600" : "text-amber-500"}`}>
                             {formatKes(contributed)}
                           </p>
-                          <p className="text-xs text-muted-foreground">of {formatKes(target)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {target == null ? "No target" : `of ${formatKes(target)}`}
+                          </p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-0.5">Spent</p>

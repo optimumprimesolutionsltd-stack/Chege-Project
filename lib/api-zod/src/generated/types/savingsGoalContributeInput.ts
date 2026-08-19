@@ -5,10 +5,21 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { ContributorSplit } from './contributorSplit';
 
 export interface SavingsGoalContributeInput {
-  /** Amount to add to the goal (in KES) */
+  /**
+     * Amount to add to the goal (whole KES only; positive integer)
+     * @minimum 1
+     */
   amount: number;
+  /**
+     * ID of the household member making this contribution. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null. Cannot be combined with contributorSplits.
+     * @nullable
+     */
+  userId?: string | null;
+  /** Optional attribution splits. When provided the sum of all split amounts must equal amount exactly, and userId must be omitted. Each split is recorded as a separate contribution row (proportionally reduced when the goal cap limits the applied amount). Omit to record the whole contribution against userId (or Joint bank when userId is also omitted). */
+  contributorSplits?: ContributorSplit[];
   /** Optional note for this contribution */
   note?: string;
 }

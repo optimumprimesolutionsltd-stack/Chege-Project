@@ -54,7 +54,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthUser"
+                $ref: "#/components/schemas/AuthUserEnvelope"
         "401":
           description: Not authenticated
           content:
@@ -586,17 +586,21 @@ paths:
       operationId: getIncomeSources
       tags: [income-sources]
       summary: List income source presets per household member
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+          description: Optional household member ID to filter by
       responses:
         "200":
-          description: Income sources keyed by userId
+          description: Income source presets
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/IncomeSource"
+                type: array
+                items:
+                  $ref: "#/components/schemas/IncomeSource"
         "401":
           description: Unauthorized
           content:
@@ -672,13 +676,23 @@ components:
     IncomeSource:
       type: object
       properties:
-        label:
-          type: string
-        amount:
+        id:
           type: number
+        userId:
+          type: string
+        name:
+          type: string
+        isMain:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
       required:
-        - label
-        - amount
+        - id
+        - userId
+        - name
+        - isMain
+        - createdAt
 
     HealthStatus:
       type: object
@@ -719,6 +733,16 @@ components:
           type: ["string", "null"]
       required:
         - id
+
+    AuthUserEnvelope:
+      type: object
+      properties:
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/AuthUser"
+            - type: "null"
+      required:
+        - user
 
     Expense:
       type: object
@@ -938,6 +962,9 @@ components:
           type: string
         userName:
           type: string
+          description: >
+            Display name of the actor. "Joint bank" for shared deposits/
+            disbursements with no individual attribution.
         category:
           type: ["string", "null"]
         date:
@@ -1112,14 +1139,26 @@ components:
       properties:
         amount:
           type: number
+          minimum: 1
+          multipleOf: 1
+          description: Whole KES only; must be a positive integer amount
         description:
           type: string
         date:
           type: string
           format: date
         madeById:
-          type: string
-          description: Defaults to the logged-in user
+          type: ["string", "null"]
+          description: >
+            ID of the household member who made this deposit. Omit or pass null
+            to attribute to the Joint bank (shared). Must be a valid household
+            member ID when non-null.
+        incomeSourceId:
+          type: number
+          minimum: 1
+          description: >
+            Optional income-source preset that funded this deposit. Used only
+            with a single named depositor.
       required:
         - amount
         - description
@@ -1130,11 +1169,20 @@ components:
       properties:
         amount:
           type: number
+          minimum: 1
+          multipleOf: 1
+          description: Whole KES only; must be a positive integer amount
         description:
           type: string
         date:
           type: string
           format: date
+        madeById:
+          type: ["string", "null"]
+          description: >
+            ID of the household member responsible for this disbursement. Omit
+            or pass null for Joint bank. Must be a valid household member ID
+            when non-null.
         expenseCategory:
           type: string
           description: Optional expense category this disbursement is paying for
@@ -1158,17 +1206,47 @@ components:
         - name
         - targetAmount
 
+    ContributorSplit:
+      type: object
+      description: Attribution of a portion of a cascade contribution to one member or the Joint bank
+      properties:
+        userId:
+          type: ["string", "null"]
+          description: >
+            Household member ID, or null for Joint bank. Must be a valid member
+            ID when non-null.
+        amount:
+          type: number
+          minimum: 1
+          multipleOf: 1
+          description: Amount attributed to this contributor (whole KES only; positive integer)
+      required:
+        - userId
+        - amount
+
     CascadeContributeInput:
       type: object
       properties:
         amount:
           type: number
-          description: Total payment amount to distribute (in KES)
+          minimum: 1
+          multipleOf: 1
+          description: Total payment amount to distribute (whole KES only; positive integer)
         goalIds:
           type: array
           items:
             type: number
           description: Optional ordered list of goal IDs; defaults to all active goals by creation date
+        contributorSplits:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContributorSplit"
+          description: >
+            Optional attribution splits. When provided the sum of all split
+            amounts must equal the total amount. Each goal allocation is
+            recorded as one contribution row per split proportionally.
+            Omit (or omit the field entirely) to record the whole contribution
+            as Joint bank.
       required:
         - amount
 
@@ -1219,14 +1297,16 @@ components:
           type: number
           description: Amount contributed in KES
         note:
-          type: string
-          nullable: true
+          type: ["string", "null"]
           description: Optional note — "Manual adjustment" for balance corrections
         createdByUserId:
-          type: string
+          type: ["string", "null"]
+          description: Household member ID, or null for Joint bank
         contributorName:
           type: string
-          description: Display name of the user who made the contribution
+          description: >
+            Display name of the contributor. "Joint bank" when createdByUserId
+            is null.
         createdAt:
           type: string
       required:
@@ -1242,7 +1322,27 @@ components:
       properties:
         amount:
           type: number
-          description: Amount to add to the goal (in KES)
+          minimum: 1
+          multipleOf: 1
+          description: Amount to add to the goal (whole KES only; positive integer)
+        userId:
+          type: ["string", "null"]
+          description: >
+            ID of the household member making this contribution. Omit or pass
+            null to attribute to the Joint bank (shared). Must be a valid
+            household member ID when non-null. Cannot be combined with
+            contributorSplits.
+        contributorSplits:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContributorSplit"
+          description: >
+            Optional attribution splits. When provided the sum of all split
+            amounts must equal amount exactly, and userId must be omitted. Each
+            split is recorded as a separate contribution row (proportionally
+            reduced when the goal cap limits the applied amount). Omit to record
+            the whole contribution against userId (or Joint bank when userId is
+            also omitted).
         note:
           type: string
           description: Optional note for this contribution

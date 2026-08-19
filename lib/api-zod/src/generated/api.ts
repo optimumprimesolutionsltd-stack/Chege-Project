@@ -20,11 +20,13 @@ export const HealthCheckResponse = zod.object({
  * @summary Get current authenticated user
  */
 export const GetAuthUserResponse = zod.object({
+  "user": zod.union([zod.object({
   "id": zod.string(),
   "email": zod.string().nullish(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
   "profileImageUrl": zod.string().nullish()
+}),zod.null()])
 })
 
 
@@ -238,7 +240,7 @@ export const GetDashboardActivityResponseItem = zod.object({
   "type": zod.string().describe('expense or contribution'),
   "amount": zod.number(),
   "description": zod.string(),
-  "userName": zod.string(),
+  "userName": zod.string().describe('Display name of the actor. \"Joint bank\" for shared deposits\/ disbursements with no individual attribution.\n'),
   "category": zod.string().nullish(),
   "date": zod.coerce.date()
 })
@@ -343,11 +345,17 @@ export const GetJointAccountResponse = zod.object({
 /**
  * @summary Deposit money into the joint account
  */
+export const createDepositBodyAmountMultipleOf = 1;
+
+
+
+
 export const CreateDepositBody = zod.object({
-  "amount": zod.number(),
+  "amount": zod.number().min(1).multipleOf(createDepositBodyAmountMultipleOf).describe('Whole KES only; must be a positive integer amount'),
   "description": zod.string(),
   "date": zod.coerce.date(),
-  "madeById": zod.string().optional().describe('Defaults to the logged-in user')
+  "madeById": zod.string().nullish().describe('ID of the household member who made this deposit. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null.\n'),
+  "incomeSourceId": zod.number().min(1).optional().describe('Optional income-source preset that funded this deposit. Used only with a single named depositor.\n')
 })
 
 export const CreateDepositResponse = zod.object({
@@ -366,10 +374,15 @@ export const CreateDepositResponse = zod.object({
 /**
  * @summary Disburse money from the joint account
  */
+export const createDisbursementBodyAmountMultipleOf = 1;
+
+
+
 export const CreateDisbursementBody = zod.object({
-  "amount": zod.number(),
+  "amount": zod.number().min(1).multipleOf(createDisbursementBodyAmountMultipleOf).describe('Whole KES only; must be a positive integer amount'),
   "description": zod.string(),
   "date": zod.coerce.date(),
+  "madeById": zod.string().nullish().describe('ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.\n'),
   "expenseCategory": zod.string().optional().describe('Optional expense category this disbursement is paying for')
 })
 
@@ -401,9 +414,19 @@ export const DeleteJointAccountTransactionResponse = zod.object({
 /**
  * @summary Distribute a payment waterfall-style across multiple savings goals
  */
+export const cascadeContributeBodyAmountMultipleOf = 1;
+
+export const cascadeContributeBodyContributorSplitsItemAmountMultipleOf = 1;
+
+
+
 export const CascadeContributeBody = zod.object({
-  "amount": zod.number().describe('Total payment amount to distribute (in KES)'),
-  "goalIds": zod.array(zod.number()).optional().describe('Optional ordered list of goal IDs; defaults to all active goals by creation date')
+  "amount": zod.number().min(1).multipleOf(cascadeContributeBodyAmountMultipleOf).describe('Total payment amount to distribute (whole KES only; positive integer)'),
+  "goalIds": zod.array(zod.number()).optional().describe('Optional ordered list of goal IDs; defaults to all active goals by creation date'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().nullable().describe('Household member ID, or null for Joint bank. Must be a valid member ID when non-null.\n'),
+  "amount": zod.number().min(1).multipleOf(cascadeContributeBodyContributorSplitsItemAmountMultipleOf).describe('Amount attributed to this contributor (whole KES only; positive integer)')
+}).describe('Attribution of a portion of a cascade contribution to one member or the Joint bank')).optional().describe('Optional attribution splits. When provided the sum of all split amounts must equal the total amount. Each goal allocation is recorded as one contribution row per split proportionally. Omit (or omit the field entirely) to record the whole contribution as Joint bank.\n')
 })
 
 export const CascadeContributeResponse = zod.object({
@@ -431,8 +454,8 @@ export const GetSavingsGoalContributionsResponseItem = zod.object({
   "goalId": zod.number(),
   "amount": zod.number().describe('Amount contributed in KES'),
   "note": zod.string().nullish().describe('Optional note — \"Manual adjustment\" for balance corrections'),
-  "createdByUserId": zod.string(),
-  "contributorName": zod.string().describe('Display name of the user who made the contribution'),
+  "createdByUserId": zod.string().nullable().describe('Household member ID, or null for Joint bank'),
+  "contributorName": zod.string().describe('Display name of the contributor. \"Joint bank\" when createdByUserId is null.\n'),
   "createdAt": zod.string()
 })
 export const GetSavingsGoalContributionsResponse = zod.array(GetSavingsGoalContributionsResponseItem)
@@ -445,8 +468,19 @@ export const ContributeToSavingsGoalParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const contributeToSavingsGoalBodyAmountMultipleOf = 1;
+
+export const contributeToSavingsGoalBodyContributorSplitsItemAmountMultipleOf = 1;
+
+
+
 export const ContributeToSavingsGoalBody = zod.object({
-  "amount": zod.number().describe('Amount to add to the goal (in KES)'),
+  "amount": zod.number().min(1).multipleOf(contributeToSavingsGoalBodyAmountMultipleOf).describe('Amount to add to the goal (whole KES only; positive integer)'),
+  "userId": zod.string().nullish().describe('ID of the household member making this contribution. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null. Cannot be combined with contributorSplits.\n'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().nullable().describe('Household member ID, or null for Joint bank. Must be a valid member ID when non-null.\n'),
+  "amount": zod.number().min(1).multipleOf(contributeToSavingsGoalBodyContributorSplitsItemAmountMultipleOf).describe('Amount attributed to this contributor (whole KES only; positive integer)')
+}).describe('Attribution of a portion of a cascade contribution to one member or the Joint bank')).optional().describe('Optional attribution splits. When provided the sum of all split amounts must equal amount exactly, and userId must be omitted. Each split is recorded as a separate contribution row (proportionally reduced when the goal cap limits the applied amount). Omit to record the whole contribution against userId (or Joint bank when userId is also omitted).\n'),
   "note": zod.string().optional().describe('Optional note for this contribution')
 })
 
@@ -505,10 +539,18 @@ export const DeleteSavingsGoalResponse = zod.object({
 /**
  * @summary List income source presets per household member
  */
-export const GetIncomeSourcesResponse = zod.record(zod.string(), zod.array(zod.object({
-  "label": zod.string(),
-  "amount": zod.number()
-})))
+export const GetIncomeSourcesQueryParams = zod.object({
+  "userId": zod.coerce.string().optional().describe('Optional household member ID to filter by')
+})
+
+export const GetIncomeSourcesResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.string(),
+  "name": zod.string(),
+  "isMain": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const GetIncomeSourcesResponse = zod.array(GetIncomeSourcesResponseItem)
 
 
 /**

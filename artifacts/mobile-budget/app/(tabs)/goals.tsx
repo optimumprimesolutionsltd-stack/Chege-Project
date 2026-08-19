@@ -36,6 +36,8 @@ import {
   useGetSavingsGoalContributions,
   getGetSavingsGoalContributionsQueryKey,
   getGetSavingsGoalsQueryKey,
+  getGetJointAccountQueryKey,
+  getGetDashboardSummaryQueryKey,
   useGetMembers,
   type SavingsGoalContribution,
 } from '@workspace/api-client-react';
@@ -662,15 +664,22 @@ export default function GoalsScreen() {
   const [cascadeVisible, setCascadeVisible] = useState(false);
   const [cascadeAmount, setCascadeAmount] = useState('');
   const [cascadeOrder, setCascadeOrder] = useState<number[]>([]);
-  const [cascadeResult, setCascadeResult] = useState<Array<{ goalId: number; allocated: number; completed: boolean }> | null>(null);
+  const [cascadeResult, setCascadeResult] = useState<Array<{ goalId: number; goalName: string; allocated: number; newTotal: number; completed: boolean }> | null>(null);
   const [submittingCascade, setSubmittingCascade] = useState(false);
 
+  // Cascade payer: [] = Joint bank (null userId), [id] = single member, [id1, id2...] = split
+  const [cascadePayerIds, setCascadePayerIds] = useState<string[]>([]);
+  const [cascadePayerAmounts, setCascadePayerAmounts] = useState<Record<string, string>>({});
+
   const { mutateAsync: cascadeContribute } = useCascadeContribute();
+  const { data: members = [] } = useGetMembers();
 
   const openCascade = () => {
     setCascadeOrder(active.map((g) => g.id));
     setCascadeAmount('');
     setCascadeResult(null);
+    setCascadePayerIds([]);
+    setCascadePayerAmounts({});
     setCascadeVisible(true);
   };
 
@@ -689,17 +698,74 @@ export default function GoalsScreen() {
     });
   };
 
+  // Validate cascade payer IDs against known members
+  const knownMemberIds = new Set(members.map(m => m.userId));
+  const validCascadePayerIds = cascadePayerIds.filter(id => knownMemberIds.has(id));
+
+  const invalidateGoalQueries = () => {
+    queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+  };
+
+  const invalidateContribHistory = (goalId: number) => {
+    queryClient.invalidateQueries({ queryKey: getGetSavingsGoalContributionsQueryKey(goalId) });
+  };
+
   const handleCascade = async () => {
     const amount = parseFloat(cascadeAmount.replace(/,/g, ''));
     if (!amount || amount <= 0) {
       Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
       return;
     }
+    if (!Number.isInteger(amount)) {
+      Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
+      return;
+    }
+
+    const contributorSplits =
+      validCascadePayerIds.length === 0
+        ? [{ userId: null, amount }]
+        : validCascadePayerIds.length === 1
+          ? [{ userId: validCascadePayerIds[0], amount }]
+          : validCascadePayerIds.map(userId => ({
+              userId,
+              amount: parseFloat(cascadePayerAmounts[userId] || '0') || 0,
+            }));
+
+    if (contributorSplits.some(split => !Number.isInteger(split.amount) || split.amount <= 0)) {
+      Alert.alert(
+        'Enter every amount',
+        'Each portion must be a positive whole-shilling amount.',
+      );
+      return;
+    }
+
+    const splitTotal = contributorSplits.reduce((sum, split) => sum + split.amount, 0);
+    if (splitTotal !== amount) {
+      Alert.alert(
+        "Amounts don't add up",
+        `Payer portions total KES ${splitTotal.toLocaleString()} but the distribution is KES ${amount.toLocaleString()}.`,
+      );
+      return;
+    }
+
     setSubmittingCascade(true);
     try {
-      const result = await cascadeContribute({ data: { amount, goalIds: cascadeOrder } });
+      const result = await cascadeContribute({
+        data: {
+          amount,
+          goalIds: cascadeOrder,
+          contributorSplits,
+        },
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+      invalidateGoalQueries();
+      (result.allocations ?? []).forEach(allocation => {
+        invalidateContribHistory(allocation.goalId);
+      });
+      setCascadePayerIds([]);
+      setCascadePayerAmounts({});
       setCascadeResult(result.allocations ?? []);
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -712,6 +778,9 @@ export default function GoalsScreen() {
   const openContribute = (goal: SavingsGoal) => {
     setSelectedGoal(goal);
     setContributeAmount('');
+    // Default to Joint bank (empty array = no named payer = null userId)
+    setContribPayerIds([]);
+    setContribPayerAmounts({});
     setContributeVisible(true);
   };
 
@@ -720,9 +789,23 @@ export default function GoalsScreen() {
     setContributeVisible(false);
   };
 
-  const { data: members = [] } = useGetMembers();
+  // contribPayerIds: [] = Joint bank (userId: null), [id] = single member, [id1, id2...] = multi-split
   const [contribPayerIds, setContribPayerIds] = useState<string[]>([]);
   const [contribPayerAmounts, setContribPayerAmounts] = useState<Record<string, string>>({});
+
+  // Validate contrib payer IDs against known members
+  const validContribPayerIds = contribPayerIds.filter(id => knownMemberIds.has(id));
+
+  const toggleContribPayer = (memberId: string) => {
+    setContribPayerIds(prev =>
+      prev.includes(memberId) ? prev.filter(id => id !== memberId) : [...prev, memberId]
+    );
+  };
+
+  const selectContribJoint = () => {
+    setContribPayerIds([]);
+    setContribPayerAmounts({});
+  };
 
   const handleContribute = async () => {
     if (!selectedGoal) return;
@@ -731,40 +814,49 @@ export default function GoalsScreen() {
       Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
       return;
     }
+    if (!Number.isInteger(total)) {
+      Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
+      return;
+    }
 
-    const isMultiPayer = contribPayerIds.length > 1;
-    if (isMultiPayer) {
-      const splitTotal = contribPayerIds.reduce((s, id) => s + (parseFloat(contribPayerAmounts[id] || '0') || 0), 0);
-      if (Math.abs(splitTotal - total) >= 1) {
-        Alert.alert("Amounts don't add up", `Portions total KES ${splitTotal.toLocaleString()} but the contribution is KES ${total.toLocaleString()}.`);
+    const isJoint = validContribPayerIds.length === 0;
+    const isMultiPayer = validContribPayerIds.length > 1;
+    const contributorSplits = isMultiPayer
+      ? validContribPayerIds.map(userId => ({
+          userId,
+          amount: parseFloat(contribPayerAmounts[userId] || '0') || 0,
+        }))
+      : undefined;
+
+    if (contributorSplits) {
+      if (contributorSplits.some(split => !Number.isInteger(split.amount) || split.amount <= 0)) {
+        Alert.alert(
+          'Enter every amount',
+          'Each contributor portion must be a positive whole-shilling amount.',
+        );
+        return;
+      }
+      const splitTotal = contributorSplits.reduce((sum, split) => sum + split.amount, 0);
+      if (splitTotal !== total) {
+        Alert.alert(
+          "Amounts don't add up",
+          `Portions total KES ${splitTotal.toLocaleString()} but the contribution is KES ${total.toLocaleString()}.`,
+        );
         return;
       }
     }
 
     setSubmittingContrib(true);
     try {
-      if (isMultiPayer) {
-        for (const pid of contribPayerIds) {
-          const portionAmt = parseFloat(contribPayerAmounts[pid] || '0') || 0;
-          if (portionAmt <= 0) continue;
-          await fetch(`/api/savings-goals/${selectedGoal.id}/contribute`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: portionAmt, userId: pid }),
-          });
-        }
-      } else {
-        const userId = contribPayerIds.length === 1 ? contribPayerIds[0] : undefined;
-        await fetch(`/api/savings-goals/${selectedGoal.id}/contribute`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: total, ...(userId ? { userId } : {}) }),
-        });
-      }
+      await contribute({
+        id: selectedGoal.id,
+        data: contributorSplits
+          ? { amount: total, contributorSplits }
+          : { amount: total, userId: isJoint ? null : validContribPayerIds[0] },
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+      invalidateGoalQueries();
+      invalidateContribHistory(selectedGoal.id);
       setContributeVisible(false);
       setContribPayerIds([]);
       setContribPayerAmounts({});
@@ -1174,18 +1266,45 @@ export default function GoalsScreen() {
                     {members.length > 0 && (
                       <>
                         <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 16 }]}>
-                          WHO IS CONTRIBUTING? <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional · tap multiple to split)</Text>
+                          WHO IS CONTRIBUTING?{' '}
+                          <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>
                         </Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {/* Joint bank chip — default, selected when no named members */}
+                          <Pressable
+                            testID="goals-contrib-joint-chip"
+                            onPress={selectContribJoint}
+                            style={{
+                              flexDirection: 'row', alignItems: 'center', gap: 6,
+                              paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+                              backgroundColor: validContribPayerIds.length === 0 ? '#1a3320' : colors.muted,
+                              borderColor: validContribPayerIds.length === 0 ? '#4ade80' : colors.border,
+                            }}
+                          >
+                            <Feather
+                              name="home"
+                              size={13}
+                              color={validContribPayerIds.length === 0 ? '#4ade80' : colors.mutedForeground}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 14, fontFamily: 'Inter_600SemiBold',
+                                color: validContribPayerIds.length === 0 ? '#4ade80' : colors.foreground,
+                              }}
+                            >
+                              Joint bank
+                            </Text>
+                          </Pressable>
+
+                          {/* Named member chips */}
                           {members.map((m) => {
                             const sel = contribPayerIds.includes(m.userId);
                             const name = m.userName?.split(' ')[0] ?? 'Member';
                             return (
                               <Pressable
                                 key={m.userId}
-                                onPress={() => setContribPayerIds(prev =>
-                                  prev.includes(m.userId) ? prev.filter(id => id !== m.userId) : [...prev, m.userId]
-                                )}
+                                testID={`goals-contrib-member-${m.userId}`}
+                                onPress={() => toggleContribPayer(m.userId)}
                                 style={{
                                   flexDirection: 'row', alignItems: 'center', gap: 6,
                                   paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
@@ -1200,17 +1319,20 @@ export default function GoalsScreen() {
                           })}
                         </View>
 
-                        {/* Per-payer split rows */}
-                        {contribPayerIds.length > 1 && (() => {
+                        {/* Per-payer split rows (multi named payers only) */}
+                        {validContribPayerIds.length > 1 && (() => {
                           const total = parseFloat(contributeAmount.replace(/,/g, '')) || 0;
-                          const splitTotal = contribPayerIds.reduce((s, id) => s + (parseFloat(contribPayerAmounts[id] || '0') || 0), 0);
+                          const splitTotal = validContribPayerIds.reduce(
+                            (s, id) => s + (parseFloat(contribPayerAmounts[id] || '0') || 0), 0
+                          );
                           const diff = total - splitTotal;
                           return (
                             <View style={{ marginTop: 10, gap: 8 }}>
                               <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                                How much is each person contributing?{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
+                                How much is each person contributing?
+                                {total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
                               </Text>
-                              {contribPayerIds.map((pid) => {
+                              {validContribPayerIds.map((pid) => {
                                 const member = members.find(m => m.userId === pid);
                                 const name = member?.userName?.split(' ')[0] ?? 'Member';
                                 return (
@@ -1231,13 +1353,16 @@ export default function GoalsScreen() {
                                       placeholderTextColor={colors.mutedForeground}
                                       value={contribPayerAmounts[pid] || ''}
                                       onChangeText={val => setContribPayerAmounts(prev => ({ ...prev, [pid]: val }))}
+                                      testID={`goals-contrib-split-${pid}`}
                                     />
                                   </View>
                                 );
                               })}
                               {Math.abs(diff) >= 1 && (
                                 <Text style={{ fontSize: 12, color: diff > 0 ? '#f59e0b' : '#f87171', fontFamily: 'Inter_400Regular' }}>
-                                  {diff > 0 ? `KES ${diff.toLocaleString()} still unassigned` : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                                  {diff > 0
+                                    ? `KES ${diff.toLocaleString()} still unassigned`
+                                    : `Over by KES ${Math.abs(diff).toLocaleString()}`}
                                 </Text>
                               )}
                             </View>
@@ -1318,7 +1443,7 @@ export default function GoalsScreen() {
                             >
                               <View style={{ flex: 1 }}>
                                 <Text style={[styles.cascadeGoalName, { color: colors.foreground }]} numberOfLines={1}>
-                                  {goal?.name ?? `Goal ${alloc.goalId}`}
+                                  {alloc.goalName ?? goal?.name ?? `Goal ${alloc.goalId}`}
                                 </Text>
                                 {alloc.completed && (
                                   <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 }}>
@@ -1356,6 +1481,119 @@ export default function GoalsScreen() {
                             onSubmitEditing={Keyboard.dismiss}
                           />
                         </View>
+
+                        {/* Who is paying (cascade payer) */}
+                        {members.length > 0 && (
+                          <>
+                            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
+                              WHO IS PAYING?{' '}
+                              <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>
+                            </Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                              {/* Joint bank chip — default */}
+                              <Pressable
+                                testID="goals-cascade-joint-chip"
+                                onPress={() => { setCascadePayerIds([]); setCascadePayerAmounts({}); }}
+                                style={{
+                                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                                  paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+                                  backgroundColor: validCascadePayerIds.length === 0 ? '#1a3320' : colors.muted,
+                                  borderColor: validCascadePayerIds.length === 0 ? '#4ade80' : colors.border,
+                                }}
+                              >
+                                <Feather
+                                  name="home"
+                                  size={13}
+                                  color={validCascadePayerIds.length === 0 ? '#4ade80' : colors.mutedForeground}
+                                />
+                                <Text
+                                  style={{
+                                    fontSize: 14, fontFamily: 'Inter_600SemiBold',
+                                    color: validCascadePayerIds.length === 0 ? '#4ade80' : colors.foreground,
+                                  }}
+                                >
+                                  Joint bank
+                                </Text>
+                              </Pressable>
+                              {members.map((m) => {
+                                const sel = cascadePayerIds.includes(m.userId);
+                                const name = m.userName?.split(' ')[0] ?? 'Member';
+                                return (
+                                  <Pressable
+                                    key={m.userId}
+                                    testID={`goals-cascade-member-${m.userId}`}
+                                    onPress={() =>
+                                      setCascadePayerIds(prev =>
+                                        prev.includes(m.userId)
+                                          ? prev.filter(id => id !== m.userId)
+                                          : [...prev, m.userId]
+                                      )
+                                    }
+                                    style={{
+                                      flexDirection: 'row', alignItems: 'center', gap: 6,
+                                      paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+                                      backgroundColor: sel ? colors.primary + '22' : colors.muted,
+                                      borderColor: sel ? colors.primary : colors.border,
+                                    }}
+                                  >
+                                    <Feather name="user" size={13} color={sel ? colors.primary : colors.mutedForeground} />
+                                    <Text style={{ fontSize: 14, color: sel ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+
+                            {/* Per-payer split amounts (multi named payers) */}
+                            {validCascadePayerIds.length > 1 && (() => {
+                              const total = parseFloat(cascadeAmount.replace(/,/g, '')) || 0;
+                              const splitTotal = validCascadePayerIds.reduce(
+                                (s, id) => s + (parseFloat(cascadePayerAmounts[id] || '0') || 0), 0
+                              );
+                              const diff = total - splitTotal;
+                              return (
+                                <View style={{ marginBottom: 12, gap: 8 }}>
+                                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                                    How much is each person paying?
+                                    {total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
+                                  </Text>
+                                  {validCascadePayerIds.map((pid) => {
+                                    const member = members.find(m => m.userId === pid);
+                                    const name = member?.userName?.split(' ')[0] ?? 'Member';
+                                    return (
+                                      <View key={pid} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
+                                          <Feather name="user" size={13} color={colors.mutedForeground} />
+                                          <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                                        </View>
+                                        <TextInput
+                                          style={{
+                                            flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                                            borderColor: colors.border, backgroundColor: colors.muted,
+                                            paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
+                                            fontFamily: 'Inter_400Regular',
+                                          }}
+                                          keyboardType="numeric"
+                                          placeholder="0"
+                                          placeholderTextColor={colors.mutedForeground}
+                                          value={cascadePayerAmounts[pid] || ''}
+                                          onChangeText={val => setCascadePayerAmounts(prev => ({ ...prev, [pid]: val }))}
+                                          testID={`goals-cascade-split-${pid}`}
+                                        />
+                                      </View>
+                                    );
+                                  })}
+                                  {Math.abs(diff) >= 1 && (
+                                    <Text style={{ fontSize: 12, color: diff > 0 ? '#f59e0b' : '#f87171', fontFamily: 'Inter_400Regular' }}>
+                                      {diff > 0
+                                        ? `KES ${diff.toLocaleString()} still unassigned`
+                                        : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                                    </Text>
+                                  )}
+                                </View>
+                              );
+                            })()}
+                          </>
+                        )}
 
                         {/* Goal priority order */}
                         <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginBottom: 8 }]}>GOAL PRIORITY ORDER</Text>

@@ -7,9 +7,18 @@
  */
 
 export interface DisbursementInput {
+  /**
+     * Whole KES only; must be a positive integer amount
+     * @minimum 1
+     */
   amount: number;
   description: string;
   date: Date;
+  /**
+     * ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.
+     * @nullable
+     */
+  madeById?: string | null;
   /** Optional expense category this disbursement is paying for */
   expenseCategory?: string;
 }

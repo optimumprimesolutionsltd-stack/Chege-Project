@@ -24,7 +24,7 @@ import type {
   AddMemberInput,
   ApplyRecurringInput,
   ApplyRecurringResult,
-  AuthUser,
+  AuthUserEnvelope,
   BudgetCategory,
   CascadeContributeInput,
   CascadeContributeResult,
@@ -42,8 +42,9 @@ import type {
   GetDashboardSummaryParams,
   GetDashboardTrendsParams,
   GetExpensesParams,
-  GetIncomeSources200,
+  GetIncomeSourcesParams,
   HealthStatus,
+  IncomeSource,
   JointAccountSummary,
   JointAccountTransaction,
   Member,
@@ -171,9 +172,9 @@ export const getGetAuthUserUrl = () => {
 /**
  * @summary Get current authenticated user
  */
-export const getAuthUser = async ( options?: Parameters<typeof customFetch>[1]): Promise<AuthUser> => {
+export const getAuthUser = async ( options?: Parameters<typeof customFetch>[1]): Promise<AuthUserEnvelope> => {
 
-  return customFetch<AuthUser>(getGetAuthUserUrl(),
+  return customFetch<AuthUserEnvelope>(getGetAuthUserUrl(),
   {
     ...options,
     method: 'GET'
@@ -2039,20 +2040,27 @@ export const useDeleteSavingsGoal = <TError = ErrorType<ErrorResponse>,
       return useMutation(getDeleteSavingsGoalMutationOptions(options));
     }
 
-export const getGetIncomeSourcesUrl = () => {
+export const getGetIncomeSourcesUrl = (params?: GetIncomeSourcesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/income-sources`
+  return stringifiedParams.length > 0 ? `/api/income-sources?${stringifiedParams}` : `/api/income-sources`
 }
 
 /**
  * @summary List income source presets per household member
  */
-export const getIncomeSources = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetIncomeSources200> => {
+export const getIncomeSources = async (params?: GetIncomeSourcesParams, options?: Parameters<typeof customFetch>[1]): Promise<IncomeSource[]> => {
 
-  return customFetch<GetIncomeSources200>(getGetIncomeSourcesUrl(),
+  return customFetch<IncomeSource[]>(getGetIncomeSourcesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2065,23 +2073,23 @@ export const getIncomeSources = async ( options?: Parameters<typeof customFetch>
 
 
 
-export const getGetIncomeSourcesQueryKey = () => {
+export const getGetIncomeSourcesQueryKey = (params?: GetIncomeSourcesParams,) => {
     return [
-    `/api/income-sources`
+    `/api/income-sources`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetIncomeSourcesQueryOptions = <TData = Awaited<ReturnType<typeof getIncomeSources>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIncomeSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetIncomeSourcesQueryOptions = <TData = Awaited<ReturnType<typeof getIncomeSources>>, TError = ErrorType<ErrorResponse>>(params?: GetIncomeSourcesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIncomeSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetIncomeSourcesQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetIncomeSourcesQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getIncomeSources>>> = ({ signal }) => getIncomeSources({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getIncomeSources>>> = ({ signal }) => getIncomeSources(params, { signal, ...requestOptions });
 
 
 
@@ -2099,11 +2107,11 @@ export type GetIncomeSourcesQueryError = ErrorType<ErrorResponse>
  */
 
 export function useGetIncomeSources<TData = Awaited<ReturnType<typeof getIncomeSources>>, TError = ErrorType<ErrorResponse>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIncomeSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetIncomeSourcesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIncomeSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetIncomeSourcesQueryOptions(options)
+  const queryOptions = getGetIncomeSourcesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

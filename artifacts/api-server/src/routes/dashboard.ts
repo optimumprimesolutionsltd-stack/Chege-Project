@@ -84,7 +84,7 @@ router.get("/dashboard/summary", async (req, res) => {
       total: sql<number>`COALESCE(SUM(${savingsGoalContributionsTable.amount}), 0)`,
     })
     .from(savingsGoalContributionsTable)
-    .where(sql`EXTRACT(MONTH FROM ${savingsGoalContributionsTable.createdAt}) = ${month} AND EXTRACT(YEAR FROM ${savingsGoalContributionsTable.createdAt}) = ${year}`)
+    .where(sql`${savingsGoalContributionsTable.createdByUserId} IS NOT NULL AND EXTRACT(MONTH FROM ${savingsGoalContributionsTable.createdAt}) = ${month} AND EXTRACT(YEAR FROM ${savingsGoalContributionsTable.createdAt}) = ${year}`)
     .groupBy(savingsGoalContributionsTable.createdByUserId),
   ]);
 
@@ -253,7 +253,8 @@ router.get("/dashboard/activity", async (req, res) => {
       type: "contribution",
       amount: d.amount,
       description: `Bank deposit: ${d.description}`,
-      userName: d.madeByName ?? "Unknown",
+      // null madeById = Joint bank (shared deposit with no individual attribution)
+      userName: d.madeById === null ? "Joint bank" : (d.madeByName ?? "Unknown"),
       category: null,
       date: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
     })),

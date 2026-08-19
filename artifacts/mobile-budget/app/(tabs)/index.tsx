@@ -144,7 +144,7 @@ export default function DashboardScreen() {
     return 'Good evening';
   }, []);
 
-  const displayName = user?.firstName?.trim() || user?.userName?.trim() || '';
+  const displayName = user?.firstName?.trim() || user?.email?.trim() || '';
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 

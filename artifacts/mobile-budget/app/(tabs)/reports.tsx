@@ -175,11 +175,11 @@ export default function ReportsScreen() {
     setMonth(m); setYear(y);
   }, []);
 
-  const q = { month: month.toString(), year: year.toString() };
+  const queryParams = { month, year };
 
-  const { data: expenses    = [], isLoading: loadingExp,     refetch: refetchExp     } = useGetExpenses({ params: { query: q } });
-  const { data: catBreakdown = [], isLoading: loadingCat,    refetch: refetchCat     } = useGetDashboardCategoryBreakdown({ params: { query: q } });
-  const { data: summary,          isLoading: loadingSummary, refetch: refetchSummary } = useGetDashboardSummary({ params: { query: q } });
+  const { data: expenses    = [], isLoading: loadingExp,     refetch: refetchExp     } = useGetExpenses(queryParams);
+  const { data: catBreakdown = [], isLoading: loadingCat,    refetch: refetchCat     } = useGetDashboardCategoryBreakdown(queryParams);
+  const { data: summary,          isLoading: loadingSummary, refetch: refetchSummary } = useGetDashboardSummary(queryParams);
   const { data: members = [] } = useGetMembers();
 
   const isLoading = loadingExp || loadingCat || loadingSummary;

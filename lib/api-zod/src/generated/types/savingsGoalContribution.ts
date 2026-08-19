@@ -11,10 +11,17 @@ export interface SavingsGoalContribution {
   goalId: number;
   /** Amount contributed in KES */
   amount: number;
-  /** Optional note — "Manual adjustment" for balance corrections */
+  /**
+     * Optional note — "Manual adjustment" for balance corrections
+     * @nullable
+     */
   note?: string | null;
-  createdByUserId: string;
-  /** Display name of the user who made the contribution */
+  /**
+     * Household member ID, or null for Joint bank
+     * @nullable
+     */
+  createdByUserId: string | null;
+  /** Display name of the contributor. "Joint bank" when createdByUserId is null. */
   contributorName: string;
   createdAt: string;
 }

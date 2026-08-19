@@ -6,10 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface IncomeSource {
-  id: number;
-  userId: string;
-  name: string;
-  isMain: boolean;
-  createdAt: Date;
-}
+export type GetIncomeSourcesParams = {
+/**
+ * Optional household member ID to filter by
+ */
+userId?: string;
+};

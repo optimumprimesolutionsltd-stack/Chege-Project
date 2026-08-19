@@ -5,10 +5,16 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { ContributorSplit } from './contributorSplit';
 
 export interface CascadeContributeInput {
-  /** Total payment amount to distribute (in KES) */
+  /**
+     * Total payment amount to distribute (whole KES only; positive integer)
+     * @minimum 1
+     */
   amount: number;
   /** Optional ordered list of goal IDs; defaults to all active goals by creation date */
   goalIds?: number[];
+  /** Optional attribution splits. When provided the sum of all split amounts must equal the total amount. Each goal allocation is recorded as one contribution row per split proportionally. Omit (or omit the field entirely) to record the whole contribution as Joint bank. */
+  contributorSplits?: ContributorSplit[];
 }

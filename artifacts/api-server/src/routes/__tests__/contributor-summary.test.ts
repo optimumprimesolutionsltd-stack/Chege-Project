@@ -27,6 +27,7 @@ vi.mock("@workspace/db", () => {
     savingsGoalsTable: makeTable("savings_goals"),
     savingsGoalContributionsTable: makeTable("savings_goal_contributions"),
     usersTable: makeTable("users"),
+    membersTable: makeTable("members"),
     db: {
       select: vi.fn(),
       transaction: vi.fn(),
@@ -75,14 +76,32 @@ describe("GET /savings-goals/:id/contributions — note field contract", () => {
   });
 
   function stubSelect(rows: object[]) {
-    mockedDb.select = vi.fn().mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        leftJoin: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockResolvedValue(rows),
+    // The contributions route issues two selects:
+    //   1. Goal existence check: .from().where().limit(1) → returns [{ id }]
+    //   2. Contributions join:   .from().leftJoin().where().orderBy() → returns rows
+    let callCount = 0;
+    mockedDb.select = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Goal existence check
+        return {
+          from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              limit: vi.fn().mockResolvedValue([{ id: 42 }]),
+            }),
+          }),
+        };
+      }
+      // Contributions join query
+      return {
+        from: vi.fn().mockReturnValue({
+          leftJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              orderBy: vi.fn().mockResolvedValue(rows),
+            }),
           }),
         }),
-      }),
+      };
     });
   }
 

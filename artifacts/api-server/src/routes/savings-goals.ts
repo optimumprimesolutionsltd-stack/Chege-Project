@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { savingsGoalsTable, savingsGoalContributionsTable, usersTable } from "@workspace/db";
+import { savingsGoalsTable, savingsGoalContributionsTable, usersTable, membersTable } from "@workspace/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 
@@ -33,7 +33,76 @@ function formatGoal(g: typeof savingsGoalsTable.$inferSelect) {
   };
 }
 
-router.get("/savings-goals", async (req, res) => {
+/** Validate that a non-null member ID belongs to the household. Returns an error string or null. */
+async function validateMemberId(id: string): Promise<string | null> {
+  const [member] = await db
+    .select({ userId: membersTable.userId })
+    .from(membersTable)
+    .where(eq(membersTable.userId, id))
+    .limit(1);
+  if (!member) return `Member ID '${id}' is not a recognised household member`;
+  return null;
+}
+
+// Contributor split attribution. Amounts are whole KES only — DB columns are
+// integer, so decimals would be silently truncated and break sum invariants.
+const ContributorSplitSchema = z.object({
+  userId: z.string().nullable(),
+  amount: z.number().int().positive(),
+});
+
+type ContributorSplit = z.infer<typeof ContributorSplitSchema>;
+
+/**
+ * Distribute a whole-KES `total` across contributor splits using the
+ * largest-remainder (Hamilton) method so the per-split integers always sum
+ * exactly to `total`, with no rounding-based over- or under-attribution.
+ * Returns one { userId, amount } per split whose allocated amount is > 0.
+ */
+function distributeSplits(
+  splits: ContributorSplit[],
+  total: number,
+): { userId: string | null; amount: number }[] {
+  const totalSplits = splits.reduce((s, c) => s + c.amount, 0);
+  // Floor each proportional share first, then hand any remaining whole units to
+  // the contributors with the largest fractional remainders.
+  const floored = splits.map((split) => {
+    const exact = (split.amount / totalSplits) * total;
+    const floor = Math.floor(exact);
+    return { split, floor, remainder: exact - floor };
+  });
+  const remainder = total - floored.reduce((s, e) => s + e.floor, 0);
+  const sorted = [...floored].sort((a, b) => b.remainder - a.remainder);
+  for (let i = 0; i < remainder; i++) sorted[i].floor += 1;
+
+  return floored
+    .filter((e) => e.floor > 0)
+    .map((e) => ({ userId: e.split.userId ?? null, amount: e.floor }));
+}
+
+/**
+ * Validate contributor splits: sum must equal `total` exactly, and every named
+ * (non-null) member ID must belong to the household. Returns an error string or
+ * null.
+ */
+async function validateContributorSplits(
+  splits: ContributorSplit[],
+  total: number,
+): Promise<string | null> {
+  const splitTotal = splits.reduce((s, c) => s + c.amount, 0);
+  if (splitTotal !== total) {
+    return `Contributor split amounts (${splitTotal}) must sum to the total amount (${total})`;
+  }
+  for (const split of splits) {
+    if (split.userId !== null) {
+      const err = await validateMemberId(split.userId);
+      if (err) return err;
+    }
+  }
+  return null;
+}
+
+router.get("/savings-goals", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const goals = await db
@@ -44,7 +113,7 @@ router.get("/savings-goals", async (req, res) => {
   res.json(goals.map(formatGoal));
 });
 
-router.post("/savings-goals", async (req, res) => {
+router.post("/savings-goals", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const parsed = CreateGoalBody.safeParse(req.body);
@@ -68,24 +137,36 @@ router.post("/savings-goals", async (req, res) => {
 });
 
 // POST /savings-goals/cascade-contribute — distribute a payment waterfall-style across goals
-router.post("/savings-goals/cascade-contribute", async (req, res) => {
+router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const bodySchema = z.object({
-    amount: z.number().positive(),
+    amount: z.number().int().positive(),
     goalIds: z.array(z.number().int().positive()).optional(),
+    contributorSplits: z.array(ContributorSplitSchema).optional(),
   });
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
-  const { amount: totalAmount, goalIds } = parsed.data;
+  const { amount: totalAmount, goalIds, contributorSplits } = parsed.data;
+
+  // Reject duplicate goalIds before opening any transaction. Duplicates would
+  // cause the same goal row to be updated and funded twice (or more), silently
+  // overfunding it and inserting duplicate contribution history rows.
+  if (goalIds && goalIds.length !== new Set(goalIds).size) {
+    res.status(400).json({ error: "goalIds must not contain duplicates" });
+    return;
+  }
+
+  // Validate contributor splits if provided
+  if (contributorSplits && contributorSplits.length > 0) {
+    const err = await validateContributorSplits(contributorSplits, totalAmount);
+    if (err) { res.status(400).json({ error: err }); return; }
+  }
 
   const { allocations, leftover } = await db.transaction(async (tx) => {
     // Fetch and lock goals inside the transaction so two concurrent cascades
     // cannot both read the same stale balances and doubly-fund the same goals.
-    // The FOR UPDATE lock serialises concurrent transactions at the DB level:
-    // the second request blocks on the lock until the first commits, then reads
-    // the freshly-committed balances before allocating.
     let goals: (typeof savingsGoalsTable.$inferSelect)[];
     if (goalIds && goalIds.length > 0) {
       const all = await tx
@@ -130,12 +211,25 @@ router.post("/savings-goals/cascade-contribute", async (req, res) => {
         .where(eq(savingsGoalsTable.id, goal.id))
         .returning();
 
-      // Both writes run in the same transaction — a crash between them rolls back both.
-      await tx.insert(savingsGoalContributionsTable).values({
-        goalId: goal.id,
-        amount: allocated,
-        createdByUserId: req.user.id,
-      });
+      if (contributorSplits && contributorSplits.length > 0) {
+        // Distribute `allocated` across contributor splits with the largest-remainder
+        // (Hamilton) method so per-split integers sum exactly to `allocated`.
+        for (const row of distributeSplits(contributorSplits, allocated)) {
+          await tx.insert(savingsGoalContributionsTable).values({
+            goalId: goal.id,
+            amount: row.amount,
+            // null = Joint bank; named ID = individual member
+            createdByUserId: row.userId,
+          });
+        }
+      } else {
+        // No splits provided → attribute to Joint bank (null). Never fall back to req.user.
+        await tx.insert(savingsGoalContributionsTable).values({
+          goalId: goal.id,
+          amount: allocated,
+          createdByUserId: null,
+        });
+      }
 
       allocations.push({
         goalId: goal.id,
@@ -153,18 +247,42 @@ router.post("/savings-goals/cascade-contribute", async (req, res) => {
 });
 
 // POST /savings-goals/:id/contribute — atomic server-side increment (before /:id PATCH)
-router.post("/savings-goals/:id/contribute", async (req, res) => {
+router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const paramParsed = GoalIdParam.safeParse(req.params);
   if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const bodySchema = z.object({ amount: z.number().positive(), userId: z.string().optional() });
+  const bodySchema = z.object({
+    amount: z.number().int().positive(),
+    userId: z.string().nullable().optional(),
+    contributorSplits: z.array(ContributorSplitSchema).optional(),
+    note: z.string().optional(),
+  });
   const bodyParsed = bodySchema.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { id } = paramParsed.data;
-  const { amount, userId } = bodyParsed.data;
+  const { amount, note, contributorSplits } = bodyParsed.data;
+  const hasSplits = !!(contributorSplits && contributorSplits.length > 0);
+
+  // Reject ambiguous payloads: a single userId attribution and per-contributor
+  // splits are mutually exclusive.
+  if (hasSplits && bodyParsed.data.userId !== undefined && bodyParsed.data.userId !== null) {
+    res.status(400).json({ error: "Provide either userId or contributorSplits, not both" });
+    return;
+  }
+
+  // Explicit null or omitted → Joint bank (null). Never fall back to req.user.
+  const userId = bodyParsed.data.userId ?? null;
+
+  if (hasSplits) {
+    const err = await validateContributorSplits(contributorSplits!, amount);
+    if (err) { res.status(400).json({ error: err }); return; }
+  } else if (userId !== null) {
+    const err = await validateMemberId(userId);
+    if (err) { res.status(400).json({ error: err }); return; }
+  }
 
   // All reads and writes run inside a single transaction — a crash between them
   // rolls back everything.
@@ -194,11 +312,27 @@ router.post("/savings-goals/:id/contribute", async (req, res) => {
 
     if (!updated) return null;
 
-    await tx.insert(savingsGoalContributionsTable).values({
-      goalId: id,
-      amount: actualAmount,
-      createdByUserId: userId ?? req.user.id,
-    });
+    if (hasSplits) {
+      // Distribute the (possibly capped) actualAmount across splits with the
+      // largest-remainder method so inserted rows sum exactly to actualAmount.
+      for (const row of distributeSplits(contributorSplits!, actualAmount)) {
+        await tx.insert(savingsGoalContributionsTable).values({
+          goalId: id,
+          amount: row.amount,
+          // null = Joint bank; named ID = individual member
+          createdByUserId: row.userId,
+          note: note ?? null,
+        });
+      }
+    } else {
+      await tx.insert(savingsGoalContributionsTable).values({
+        goalId: id,
+        amount: actualAmount,
+        // null = Joint bank; named userId = individual member
+        createdByUserId: userId,
+        note: note ?? null,
+      });
+    }
 
     return updated;
   });
@@ -209,7 +343,7 @@ router.post("/savings-goals/:id/contribute", async (req, res) => {
 });
 
 // GET /savings-goals/:id/contributions — chronological contribution history
-router.get("/savings-goals/:id/contributions", async (req, res) => {
+router.get("/savings-goals/:id/contributions", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const paramParsed = GoalIdParam.safeParse(req.params);
@@ -218,8 +352,6 @@ router.get("/savings-goals/:id/contributions", async (req, res) => {
   const { id } = paramParsed.data;
 
   // Verify the goal still exists before returning its history.
-  // Without this check a deleted goal returns 200 [] which the client
-  // can't distinguish from "goal exists but has no contributions yet".
   const [goal] = await db
     .select({ id: savingsGoalsTable.id })
     .from(savingsGoalsTable)
@@ -244,29 +376,16 @@ router.get("/savings-goals/:id/contributions", async (req, res) => {
 
   res.json(rows.map((c) => ({
     ...c,
-    contributorName: c.contributorName ?? "Unknown",
+    // null createdByUserId = Joint bank; non-null but no user found = still use name or fallback
+    contributorName: c.createdByUserId === null ? "Joint bank" : (c.contributorName ?? "Unknown"),
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
   })));
 });
 
 // GET /savings-goals/consistency-check — surface goals with balance/history mismatches.
-//
-// A Postgres transaction guarantees that the goal UPDATE and the contribution
-// INSERT both commit or both roll back. If a connection ever drops between those
-// two writes, the DB will roll back the entire transaction and neither change
-// will persist. This endpoint provides a secondary safety net: it queries the DB
-// directly and returns any goals where currentAmount ≠ SUM(contributions), which
-// would indicate a partial write that somehow survived (e.g. a logic bug, a
-// manual DB edit, or a future refactor that breaks transactionality).
-//
-// Returns: { ok: true, inconsistentGoals: [...] }
-//   inconsistentGoals is empty when everything is consistent.
-//   Each entry has: id, name, currentAmount, contributionTotal, discrepancy
-router.get("/savings-goals/consistency-check", async (req, res) => {
+router.get("/savings-goals/consistency-check", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  // Aggregate contribution totals per goal with a LEFT JOIN so goals that have
-  // no contributions at all still appear (their contributionTotal will be 0).
   const rows = await db
     .select({
       id: savingsGoalsTable.id,
@@ -294,7 +413,7 @@ router.get("/savings-goals/consistency-check", async (req, res) => {
   res.json({ ok: inconsistentGoals.length === 0, inconsistentGoals });
 });
 
-router.patch("/savings-goals/:id", async (req, res) => {
+router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const paramParsed = GoalIdParam.safeParse(req.params);
@@ -317,30 +436,22 @@ router.patch("/savings-goals/:id", async (req, res) => {
   }
 
   const result = await db.transaction(async (tx) => {
-    // If currentAmount is being set directly, fetch the current value with a
-    // row-level lock so concurrent PATCH requests serialize instead of racing.
     let delta: number | undefined;
     if (updates.currentAmount !== undefined) {
       const [existing] = await tx
         .select({ currentAmount: savingsGoalsTable.currentAmount })
         .from(savingsGoalsTable)
         .where(eq(savingsGoalsTable.id, id))
-        .for("update"); // prevents concurrent reads from seeing the same snapshot
+        .for("update");
       if (!existing) return null;
       const previousAmount = existing.currentAmount;
 
-      // Guard against accidental large negative corrections.
-      // If the new amount would wipe more than 50% of the current balance,
-      // require an explicit reason so the intent is clear.
       delta = updates.currentAmount - previousAmount;
       if (delta < 0 && previousAmount > 0 && Math.abs(delta) > previousAmount * 0.5 && !reason) {
         return { validationError: `A correction of ${Math.abs(delta).toFixed(2)} would reduce the balance by more than 50%. Provide a 'reason' field to confirm this is intentional.` };
       }
     }
 
-    // Apply currentAmount as an atomic delta (currentAmount + delta) rather than
-    // writing the raw caller-supplied value. This ensures two concurrent edits
-    // both take effect rather than the second silently overwriting the first.
     const { currentAmount: _ignored, ...otherUpdates } = updates;
     const setClause: Record<string, unknown> = { ...otherUpdates };
     if (delta !== undefined) {
@@ -355,8 +466,8 @@ router.patch("/savings-goals/:id", async (req, res) => {
 
     if (!updated) return null;
 
-    // Record a manual adjustment contribution so history totals stay consistent.
-    // Both writes succeed or both roll back — no partial state possible.
+    // Record a manual adjustment contribution — note req.user as the actor (manual adjustments
+    // are always by the signed-in user, not attributed to Joint bank)
     if (delta !== undefined && delta !== 0) {
       await tx.insert(savingsGoalContributionsTable).values({
         goalId: id,
@@ -379,7 +490,7 @@ router.patch("/savings-goals/:id", async (req, res) => {
   res.json(formatGoal(result));
 });
 
-router.delete("/savings-goals/:id", async (req, res) => {
+router.delete("/savings-goals/:id", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const parsed = GoalIdParam.safeParse(req.params);
@@ -387,10 +498,7 @@ router.delete("/savings-goals/:id", async (req, res) => {
 
   const { id } = parsed.data;
 
-  // Both deletes run inside a single transaction — if either write fails, both
-  // roll back so we never leave orphaned contribution rows behind.
   const deleted = await db.transaction(async (tx) => {
-    // Remove all contribution history rows first (FK child before parent).
     await tx
       .delete(savingsGoalContributionsTable)
       .where(eq(savingsGoalContributionsTable.goalId, id));

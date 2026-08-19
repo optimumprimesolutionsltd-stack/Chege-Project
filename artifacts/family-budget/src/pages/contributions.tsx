@@ -28,7 +28,7 @@ function MemberCard({
   const { userId, name, contributed, spent, net, target } = member;
   const pct = target && target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
   const { data: allSources } = useGetIncomeSources();
-  const sources = allSources?.[userId] ?? [];
+  const sources = allSources?.filter((source) => source.userId === userId) ?? [];
 
   return (
     <Card className="border-none shadow-md overflow-hidden">
@@ -38,7 +38,9 @@ function MemberCard({
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xl font-display font-bold text-foreground">{name}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Target: {formatKes(target)}/month</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Target: {target == null ? "Not set" : `${formatKes(target)}/month`}
+            </p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-display font-bold" style={{ color: accentColor }}>
@@ -49,7 +51,7 @@ function MemberCard({
         </div>
 
         {/* Progress */}
-        <ProgressBar value={contributed} max={target} color={accentColor} />
+        <ProgressBar value={contributed} max={target ?? 0} color={accentColor} />
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{Math.round(pct)}% of target</span>
           {contributed < (target ?? 0)
@@ -81,10 +83,10 @@ function MemberCard({
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Income streams</p>
             <div className="flex flex-wrap gap-1.5">
               {sources.map(src => (
-                <span key={src.label}
+                <span key={src.id}
                   className="px-2.5 py-1 rounded-full text-xs border font-medium"
                   style={{ borderColor: accentColor + "60", color: accentColor, backgroundColor: accentColor + "12" }}>
-                  {src.label} — {formatKes(src.amount)}
+                  {src.name}
                 </span>
               ))}
             </div>

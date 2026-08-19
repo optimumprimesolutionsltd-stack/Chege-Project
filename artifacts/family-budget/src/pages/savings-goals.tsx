@@ -7,6 +7,8 @@ import {
   useContributeToSavingsGoal,
   useCascadeContribute,
   getGetSavingsGoalsQueryKey,
+  getGetSavingsGoalContributionsQueryKey,
+  getGetDashboardSummaryQueryKey,
   useGetSavingsGoalContributions,
   useGetMembers,
 } from "@workspace/api-client-react";
@@ -392,9 +394,17 @@ export default function SavingsGoals() {
   const [cascadeAmount, setCascadeAmount] = useState("");
   const [cascadeOrder, setCascadeOrder] = useState<number[]>([]);
   const [cascadeResult, setCascadeResult] = useState<CascadeContributeAllocation[] | null>(null);
+  // Cascade attribution — empty = Joint bank, one or more IDs = named contributors
+  const [cascadeAttributionIds, setCascadeAttributionIds] = useState<string[]>([]);
+  const [cascadeAttributionAmounts, setCascadeAttributionAmounts] = useState<Record<string, string>>({});
 
-  const invalidate = () =>
+  const invalidate = (goalId?: number) => {
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    if (goalId !== undefined) {
+      queryClient.invalidateQueries({ queryKey: getGetSavingsGoalContributionsQueryKey(goalId) });
+    }
+  };
 
   const activeGoals = goals?.filter((g) => !g.isCompleted) ?? [];
   const completedGoals = goals?.filter((g) => g.isCompleted) ?? [];
@@ -412,6 +422,9 @@ export default function SavingsGoals() {
     setCascadeOrder(activeGoals.map((g) => g.id));
     setCascadeAmount("");
     setCascadeResult(null);
+    // Reset attribution to Joint bank
+    setCascadeAttributionIds([]);
+    setCascadeAttributionAmounts({});
     setShowCascade(true);
   };
 
@@ -426,17 +439,61 @@ export default function SavingsGoals() {
   const handleCascade = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = Number(cascadeAmount);
-    if (!amount || amount <= 0) return;
+    if (!Number.isInteger(amount) || amount <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Savings contributions are recorded in whole shillings.",
+      });
+      return;
+    }
+
+    const contributorSplits =
+      cascadeAttributionIds.length === 0
+        ? [{ userId: null, amount }]
+        : cascadeAttributionIds.length === 1
+          ? [{ userId: cascadeAttributionIds[0], amount }]
+          : cascadeAttributionIds.map((userId) => ({
+              userId,
+              amount: Number(cascadeAttributionAmounts[userId] || 0),
+            }));
+
+    if (contributorSplits.some((split) => !Number.isInteger(split.amount) || split.amount <= 0)) {
+      toast({
+        variant: "destructive",
+        title: "Enter every contributor's amount",
+        description: "Each portion must be a positive whole-shilling amount.",
+      });
+      return;
+    }
+
+    const splitTotal = contributorSplits.reduce((sum, split) => sum + split.amount, 0);
+    if (splitTotal !== amount) {
+      toast({
+        variant: "destructive",
+        title: "Amounts don't add up",
+        description: `Contributor portions total ${formatKes(splitTotal)} but the payment is ${formatKes(amount)}.`,
+      });
+      return;
+    }
 
     try {
       const result = await cascadeContribute.mutateAsync({
         data: {
           amount,
           goalIds: cascadeOrder.length > 0 ? cascadeOrder : undefined,
+          contributorSplits,
         },
       });
       setCascadeResult(result.allocations);
       invalidate();
+      result.allocations.forEach((allocation) => {
+        queryClient.invalidateQueries({
+          queryKey: getGetSavingsGoalContributionsQueryKey(allocation.goalId),
+        });
+      });
+      setCascadeAttributionIds([]);
+      setCascadeAttributionAmounts({});
 
       const distributed = result.allocations.reduce((s, a) => s + a.allocated, 0);
       const completed = result.allocations.filter((a) => a.completed).length;
@@ -522,12 +579,36 @@ export default function SavingsGoals() {
   const handleContribute = async (e: React.FormEvent, goal: SavingsGoal) => {
     e.preventDefault();
     const total = Number(contributeAmount);
-    if (!total || total <= 0) return;
+    if (!Number.isInteger(total) || total <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Savings contributions are recorded in whole shillings.",
+      });
+      return;
+    }
 
     const isMultiPayer = contributePayers.length > 1;
-    if (isMultiPayer) {
-      const splitTotal = contributePayers.reduce((s, id) => s + (Number(contributePayerAmounts[id] || 0)), 0);
-      if (Math.abs(splitTotal - total) >= 1) {
+    // Empty array = Joint bank (null); single = named member; multiple = split
+    const isJointBank = contributePayers.length === 0;
+    const contributorSplits = isMultiPayer
+      ? contributePayers.map((userId) => ({
+          userId,
+          amount: Number(contributePayerAmounts[userId] || 0),
+        }))
+      : undefined;
+
+    if (contributorSplits) {
+      if (contributorSplits.some((split) => !Number.isInteger(split.amount) || split.amount <= 0)) {
+        toast({
+          variant: "destructive",
+          title: "Enter every contributor's amount",
+          description: "Each portion must be a positive whole-shilling amount.",
+        });
+        return;
+      }
+      const splitTotal = contributorSplits.reduce((sum, split) => sum + split.amount, 0);
+      if (splitTotal !== total) {
         toast({ variant: "destructive", title: "Amounts don't add up", description: `Portions total ${splitTotal} but contribution is ${total}.` });
         return;
       }
@@ -535,30 +616,19 @@ export default function SavingsGoals() {
 
     const resetContribute = () => {
       setContributeId(null); setContributeAmount("");
+      // Reset to Joint bank (empty = no named payers selected)
       setContributePayers([]); setContributePayerAmounts({});
     };
 
     try {
-      if (isMultiPayer) {
-        for (const pid of contributePayers) {
-          const portionAmt = Number(contributePayerAmounts[pid] || 0);
-          if (portionAmt <= 0) continue;
-          await fetch(`/api/savings-goals/${goal.id}/contribute`, {
-            method: "POST", credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ amount: portionAmt, userId: pid }),
-          });
-        }
-      } else {
-        const userId = contributePayers.length === 1 ? contributePayers[0] : undefined;
-        await fetch(`/api/savings-goals/${goal.id}/contribute`, {
-          method: "POST", credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: total, ...(userId ? { userId } : {}) }),
-        });
-      }
+      await contributeToGoal.mutateAsync({
+        id: goal.id,
+        data: contributorSplits
+          ? { amount: total, contributorSplits }
+          : { amount: total, userId: isJointBank ? null : contributePayers[0] },
+      });
       toast({ title: "Contribution added", description: `${formatKes(total)} added to "${goal.name}".` });
-      invalidate();
+      invalidate(goal.id);
       resetContribute();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to add contribution." });
@@ -569,7 +639,7 @@ export default function SavingsGoals() {
     try {
       await updateGoal.mutateAsync({ id: goal.id, data: { isCompleted: !goal.isCompleted } });
       toast({ title: goal.isCompleted ? "Goal reopened" : "Goal completed! 🎉" });
-      invalidate();
+      invalidate(goal.id);
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to update goal." });
     }
@@ -632,7 +702,12 @@ export default function SavingsGoals() {
                   Enter the total amount — it fills goals in order, top to bottom.
                 </p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => { setShowCascade(false); setCascadeResult(null); }}>
+              <Button variant="ghost" size="sm" onClick={() => {
+                setShowCascade(false);
+                setCascadeResult(null);
+                setCascadeAttributionIds([]);
+                setCascadeAttributionAmounts({});
+              }}>
                 Cancel
               </Button>
             </div>
@@ -681,6 +756,101 @@ export default function SavingsGoals() {
               })}
             </div>
 
+            {/* Attribution — Joint bank (default) or one or more named members */}
+            {(members ?? []).length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Contributed by
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {/* Joint bank — default */}
+                  <button
+                    type="button"
+                    data-testid="chip-joint-bank-cascade"
+                    onClick={() => { setCascadeAttributionIds([]); setCascadeAttributionAmounts({}); }}
+                    className={`px-3 h-8 rounded-lg text-sm border transition-colors ${cascadeAttributionIds.length === 0 ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
+                  >
+                    Joint bank
+                  </button>
+                  {/* Named members — select multiple to split */}
+                  {(members ?? []).map(m => {
+                    const name = m.userName?.split(" ")[0] ?? "Member";
+                    const sel = cascadeAttributionIds.includes(m.userId);
+                    return (
+                      <button
+                        key={m.userId}
+                        type="button"
+                        data-testid={`chip-cascade-contributor-${m.userId}`}
+                        onClick={() => {
+                          setCascadeAttributionIds(prev =>
+                             prev.includes(m.userId)
+                               ? prev.filter(id => id !== m.userId)
+                               : [...prev, m.userId]
+                          );
+                           setCascadeAttributionAmounts(prev => {
+                             const next = { ...prev };
+                             delete next[m.userId];
+                             return next;
+                           });
+                        }}
+                        className={`px-3 h-8 rounded-lg text-sm border transition-colors ${sel ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {cascadeAttributionIds.length > 1 && (
+                  <div className="space-y-2 rounded-xl border border-border/50 bg-card/60 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      How much is each person contributing?
+                      {Number(cascadeAmount) > 0 ? ` Total: ${formatKes(Number(cascadeAmount))}` : ""}
+                    </p>
+                    {cascadeAttributionIds.map((userId) => {
+                      const member = (members ?? []).find((item) => item.userId === userId);
+                      const memberName = member?.userName?.split(" ")[0] ?? "Member";
+                      return (
+                        <div key={userId} className="flex items-center gap-3">
+                          <span className="w-20 shrink-0 text-sm font-semibold">{memberName}</span>
+                          <Input
+                            type="number"
+                            min="1"
+                            step="1"
+                            placeholder="0"
+                            value={cascadeAttributionAmounts[userId] ?? ""}
+                            onChange={(event) =>
+                              setCascadeAttributionAmounts((prev) => ({
+                                ...prev,
+                                [userId]: event.target.value,
+                              }))
+                            }
+                            data-testid={`input-cascade-contributor-${userId}`}
+                            className="h-10 bg-background"
+                          />
+                        </div>
+                      );
+                    })}
+                    {(() => {
+                      const entered = cascadeAttributionIds.reduce(
+                        (sum, userId) => sum + Number(cascadeAttributionAmounts[userId] || 0),
+                        0,
+                      );
+                      const difference = Number(cascadeAmount || 0) - entered;
+                      if (difference === 0) return null;
+                      return (
+                        <p className={`text-xs font-medium ${difference > 0 ? "text-amber-500" : "text-destructive"}`}>
+                          {difference > 0
+                            ? `${formatKes(difference)} still unassigned`
+                            : `Over by ${formatKes(Math.abs(difference))}`}
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Amount + submit */}
             <form onSubmit={handleCascade} className="flex gap-3 items-center">
               <Input
@@ -689,6 +859,7 @@ export default function SavingsGoals() {
                 value={cascadeAmount}
                 onChange={(e) => { setCascadeAmount(e.target.value); setCascadeResult(null); }}
                 min="1"
+                step="1"
                 required
                 className="h-12 bg-card text-lg flex-1"
               />
@@ -915,6 +1086,7 @@ export default function SavingsGoals() {
                             value={contributeAmount}
                             onChange={(e) => setContributeAmount(e.target.value)}
                             min="1"
+                            step="1"
                             required
                             className="h-10 bg-muted/40"
                             autoFocus
@@ -927,22 +1099,37 @@ export default function SavingsGoals() {
                             Cancel
                           </Button>
                         </div>
-                        {/* Who is contributing */}
+                        {/* Who is contributing — Joint bank (default) or named member(s) */}
                         {(members ?? []).length > 0 && (
                           <div className="space-y-2">
                             <p className="text-xs text-muted-foreground font-medium">
-                              Who is contributing? <span className="font-normal">(optional · select multiple to split)</span>
+                              Who is contributing? <span className="font-normal">(select multiple to split)</span>
                             </p>
                             <div className="flex flex-wrap gap-2">
+                              {/* Joint bank chip — mutually exclusive with named members */}
+                              <button
+                                type="button"
+                                data-testid={`chip-joint-bank-contribute-${goal.id}`}
+                                onClick={() => { setContributePayers([]); setContributePayerAmounts({}); }}
+                                className={`px-3 h-8 rounded-lg text-sm border transition-colors ${contributePayers.length === 0 ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
+                              >
+                                Joint bank
+                              </button>
+
+                              {/* Named member chips */}
                               {(members ?? []).map(m => {
                                 const name = m.userName?.split(" ")[0] ?? "Member";
                                 const sel = contributePayers.includes(m.userId);
                                 return (
-                                  <button key={m.userId} type="button"
+                                  <button
+                                    key={m.userId}
+                                    type="button"
+                                    data-testid={`chip-contributor-${m.userId}-${goal.id}`}
                                     onClick={() => setContributePayers(prev =>
                                       prev.includes(m.userId) ? prev.filter(id => id !== m.userId) : [...prev, m.userId]
                                     )}
-                                    className={`px-3 h-8 rounded-lg text-sm border transition-colors ${sel ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}>
+                                    className={`px-3 h-8 rounded-lg text-sm border transition-colors ${sel ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
+                                  >
                                     {name}
                                   </button>
                                 );
@@ -961,7 +1148,7 @@ export default function SavingsGoals() {
                                     return (
                                       <div key={pid} className="flex items-center gap-3">
                                         <span className="text-sm font-semibold w-20 shrink-0">{name}</span>
-                                        <input type="number" placeholder="0" min="0"
+                                        <input type="number" placeholder="0" min="1" step="1"
                                           value={contributePayerAmounts[pid] ?? ""}
                                           onChange={e => setContributePayerAmounts(prev => ({ ...prev, [pid]: e.target.value }))}
                                           className="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

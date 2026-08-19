@@ -7,9 +7,21 @@
  */
 
 export interface DepositInput {
+  /**
+     * Whole KES only; must be a positive integer amount
+     * @minimum 1
+     */
   amount: number;
   description: string;
   date: Date;
-  /** Defaults to the logged-in user */
-  madeById?: string;
+  /**
+     * ID of the household member who made this deposit. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null.
+     * @nullable
+     */
+  madeById?: string | null;
+  /**
+     * Optional income-source preset that funded this deposit. Used only with a single named depositor.
+     * @minimum 1
+     */
+  incomeSourceId?: number;
 }

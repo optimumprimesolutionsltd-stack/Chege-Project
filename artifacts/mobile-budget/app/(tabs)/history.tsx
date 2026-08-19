@@ -313,7 +313,7 @@ export default function HistoryScreen() {
       description: exp.description,
       notes: exp.notes ?? '',
       // Fall back to the logged-in user when paidById is missing on old expenses
-      paidById: exp.paidById ?? user?.userId ?? '',
+      paidById: exp.paidById ?? user?.id ?? '',
       date: exp.date,
     });
     setEditPaidFromBank(false);
