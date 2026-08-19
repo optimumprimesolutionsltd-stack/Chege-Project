@@ -27,6 +27,7 @@ import {
   getGetExpensesQueryKey,
   getGetDashboardActivityQueryKey,
   getGetDashboardSummaryQueryKey,
+  customFetch,
 } from '@workspace/api-client-react';
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
@@ -94,9 +95,7 @@ export default function AddExpenseSheet() {
     queryKey: ['income-sources', paidById],
     queryFn: async () => {
       if (!paidById) return [];
-      const res = await fetch(`/api/income-sources?userId=${paidById}`, { credentials: 'include' });
-      if (!res.ok) return [];
-      return res.json();
+      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${paidById}`);
     },
     enabled: !!paidById,
     staleTime: 60_000,

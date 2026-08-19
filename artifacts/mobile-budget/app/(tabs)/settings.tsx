@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import { resolveAvatarProps, getDisplayName } from '@/utils/avatarHelper';
@@ -37,9 +38,7 @@ export default function SettingsScreen() {
     queryKey: ['income-sources', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      const res = await fetch(`/api/income-sources?userId=${user.id}`, { credentials: 'include' });
-      if (!res.ok) return [];
-      return res.json();
+      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${user.id}`);
     },
     enabled: !!user?.id,
     staleTime: 30_000,
@@ -50,13 +49,11 @@ export default function SettingsScreen() {
     if (!name) return;
     setAddingSource(true);
     try {
-      const res = await fetch('/api/income-sources', {
+      await customFetch('/api/income-sources', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user?.id, name, isMain: false }),
       });
-      if (!res.ok) throw new Error('Failed');
       setNewSource('');
       queryClient.invalidateQueries({ queryKey: ['income-sources', user?.id] });
       // Invalidate all income-source caches so forms update immediately
@@ -79,7 +76,7 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await fetch(`/api/income-sources/${src.id}`, { method: 'DELETE', credentials: 'include' });
+              await customFetch(`/api/income-sources/${src.id}`, { method: 'DELETE' });
               queryClient.invalidateQueries({ queryKey: ['income-sources'] });
             } catch {
               Alert.alert('Error', 'Could not remove income source.');
