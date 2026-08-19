@@ -267,8 +267,23 @@ export interface JointAccountTransaction {
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
-  /** Expense category this disbursement covers (optional) */
+  /**
+     * Expense category this disbursement covers (optional)
+     * @nullable
+     */
   expenseCategory?: string | null;
+  /**
+     * Linked savings goal for a bank transfer
+     * @nullable
+     */
+  savingsGoalId?: number | null;
+  /** @nullable */
+  savingsGoalName?: string | null;
+  /**
+     * to_savings or from_savings for linked transfers
+     * @nullable
+     */
+  transferDirection?: string | null;
   date: string;
   createdAt: string;
 }
@@ -279,6 +294,17 @@ export interface JointAccountSummary {
   totalDisbursements: number;
   transactions: JointAccountTransaction[];
 }
+
+/**
+ * Choose other only when the required description is a narration.
+ */
+export type DepositInputSourceKind = typeof DepositInputSourceKind[keyof typeof DepositInputSourceKind];
+
+
+export const DepositInputSourceKind = {
+  income_source: 'income_source',
+  other: 'other',
+} as const;
 
 export interface DepositInput {
   /**
@@ -298,7 +324,20 @@ export interface DepositInput {
      * @minimum 1
      */
   incomeSourceId?: number;
+  /** Choose other only when the required description is a narration. */
+  sourceKind?: DepositInputSourceKind;
 }
+
+/**
+ * Choose other only when the required description is a narration.
+ */
+export type DisbursementInputDestinationKind = typeof DisbursementInputDestinationKind[keyof typeof DisbursementInputDestinationKind];
+
+
+export const DisbursementInputDestinationKind = {
+  category: 'category',
+  other: 'other',
+} as const;
 
 export interface DisbursementInput {
   /**
@@ -315,7 +354,25 @@ export interface DisbursementInput {
   madeById?: string | null;
   /** Required budget category this disbursement is paying for */
   expenseCategory: string;
+  /** Choose other only when the required description is a narration. */
+  destinationKind?: DisbursementInputDestinationKind;
 }
+
+export type UpdateJointAccountTransactionInputSourceKind = typeof UpdateJointAccountTransactionInputSourceKind[keyof typeof UpdateJointAccountTransactionInputSourceKind];
+
+
+export const UpdateJointAccountTransactionInputSourceKind = {
+  income_source: 'income_source',
+  other: 'other',
+} as const;
+
+export type UpdateJointAccountTransactionInputDestinationKind = typeof UpdateJointAccountTransactionInputDestinationKind[keyof typeof UpdateJointAccountTransactionInputDestinationKind];
+
+
+export const UpdateJointAccountTransactionInputDestinationKind = {
+  category: 'category',
+  other: 'other',
+} as const;
 
 export interface UpdateJointAccountTransactionInput {
   /** @minimum 1 */
@@ -332,6 +389,23 @@ export interface UpdateJointAccountTransactionInput {
   incomeSourceId?: number | null;
   /** Required for withdrawals; deposits ignore this field */
   expenseCategory?: string;
+  sourceKind?: UpdateJointAccountTransactionInputSourceKind;
+  destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
+}
+
+export interface SavingsTransferInput {
+  /** @minimum 1 */
+  amount: number;
+  /** @minimum 1 */
+  goalId: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  narration: string;
+  date: string;
+  /** @nullable */
+  madeById?: string | null;
 }
 
 export interface SavingsGoalInput {

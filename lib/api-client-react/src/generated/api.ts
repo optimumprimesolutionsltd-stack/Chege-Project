@@ -57,6 +57,7 @@ import type {
   SavingsGoalContribution,
   SavingsGoalInput,
   SavingsGoalUpdateInput,
+  SavingsTransferInput,
   SuccessResponse,
   UpdateJointAccountTransactionInput
 } from './api.schemas';
@@ -1893,6 +1894,148 @@ export const useCreateDisbursement = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateDisbursementMutationOptions(options));
+    }
+
+export const getTransferBankToSavingsUrl = () => {
+
+
+
+
+  return `/api/joint-account/transfers/to-savings`
+}
+
+/**
+ * @summary Move money from the joint bank account into a savings goal
+ */
+export const transferBankToSavings = async (savingsTransferInput: SavingsTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<JointAccountTransaction> => {
+
+  return customFetch<JointAccountTransaction>(getTransferBankToSavingsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(savingsTransferInput)
+  }
+);}
+
+
+
+
+
+export const getTransferBankToSavingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferBankToSavings>>, TError,{data: BodyType<SavingsTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof transferBankToSavings>>, TError,{data: BodyType<SavingsTransferInput>}, TContext> => {
+
+const mutationKey = ['transferBankToSavings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof transferBankToSavings>>, {data: BodyType<SavingsTransferInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  transferBankToSavings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TransferBankToSavingsMutationResult = NonNullable<Awaited<ReturnType<typeof transferBankToSavings>>>
+    export type TransferBankToSavingsMutationBody = BodyType<SavingsTransferInput>
+    export type TransferBankToSavingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Move money from the joint bank account into a savings goal
+ */
+export const useTransferBankToSavings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferBankToSavings>>, TError,{data: BodyType<SavingsTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof transferBankToSavings>>,
+        TError,
+        {data: BodyType<SavingsTransferInput>},
+        TContext
+      > => {
+      return useMutation(getTransferBankToSavingsMutationOptions(options));
+    }
+
+export const getTransferSavingsToBankUrl = () => {
+
+
+
+
+  return `/api/joint-account/transfers/from-savings`
+}
+
+/**
+ * @summary Move money from a savings goal into the joint bank account
+ */
+export const transferSavingsToBank = async (savingsTransferInput: SavingsTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<JointAccountTransaction> => {
+
+  return customFetch<JointAccountTransaction>(getTransferSavingsToBankUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(savingsTransferInput)
+  }
+);}
+
+
+
+
+
+export const getTransferSavingsToBankMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferSavingsToBank>>, TError,{data: BodyType<SavingsTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof transferSavingsToBank>>, TError,{data: BodyType<SavingsTransferInput>}, TContext> => {
+
+const mutationKey = ['transferSavingsToBank'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof transferSavingsToBank>>, {data: BodyType<SavingsTransferInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  transferSavingsToBank(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TransferSavingsToBankMutationResult = NonNullable<Awaited<ReturnType<typeof transferSavingsToBank>>>
+    export type TransferSavingsToBankMutationBody = BodyType<SavingsTransferInput>
+    export type TransferSavingsToBankMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Move money from a savings goal into the joint bank account
+ */
+export const useTransferSavingsToBank = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof transferSavingsToBank>>, TError,{data: BodyType<SavingsTransferInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof transferSavingsToBank>>,
+        TError,
+        {data: BodyType<SavingsTransferInput>},
+        TContext
+      > => {
+      return useMutation(getTransferSavingsToBankMutationOptions(options));
     }
 
 export const getUpdateJointAccountTransactionUrl = (id: number,) => {

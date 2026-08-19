@@ -2,7 +2,8 @@ import { useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
-  getGetJointAccountQueryKey, getGetDashboardSummaryQueryKey,
+  useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank,
+  getGetJointAccountQueryKey, getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,6 +30,9 @@ type EditableTransaction = {
   date: string;
   madeById?: string | null;
   expenseCategory?: string | null;
+  savingsGoalId?: number | null;
+  savingsGoalName?: string | null;
+  transferDirection?: string | null;
 };
 
 export default function Bank() {
@@ -39,10 +43,13 @@ export default function Bank() {
   const createDisbursement = useCreateDisbursement();
   const updateTx = useUpdateJointAccountTransaction();
   const deleteTx = useDeleteJointAccountTransaction();
+  const transferToSavings = useTransferBankToSavings();
+  const transferFromSavings = useTransferSavingsToBank();
+  const { data: savingsGoals = [] } = useGetSavingsGoals();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [mode, setMode] = useState<"deposit" | "disbursement" | null>(null);
+  const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -52,18 +59,22 @@ export default function Bank() {
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
   const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [depositSourceKind, setDepositSourceKind] = useState<"income_source" | "other" | null>(null);
 
   // Withdrawal attribution — null = Joint bank, string = named member ID
   // Default: Joint bank
   const [withdrawerId, setWithdrawerId] = useState<string | null>(JOINT_BANK_ID);
   const [expenseCategory, setExpenseCategory] = useState("");
+  const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other">("category");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [addingCategory, setAddingCategory] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<EditableTransaction | null>(null);
+  const [transferDirection, setTransferDirection] = useState<"to_savings" | "from_savings">("to_savings");
+  const [transferGoalId, setTransferGoalId] = useState<number | null>(null);
 
   // Income sources — only fetch when exactly one named depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
-  const { data: depositSources } = useQuery<MemberIncomeSource[]>({
+  const { data: depositSources = [] } = useQuery<MemberIncomeSource[]>({
     queryKey: ["income-sources", singleDepositorId],
     queryFn: async () => {
       if (!singleDepositorId) return [];
@@ -78,6 +89,7 @@ export default function Bank() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
   };
 
   const handleCreateCategory = async () => {
@@ -120,14 +132,18 @@ export default function Bank() {
     setDepositorIds([]);
     setDepositorAmounts({});
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
     setWithdrawerId(JOINT_BANK_ID);
     setExpenseCategory("");
+    setWithdrawalDestinationKind("category");
+    setTransferDirection("to_savings");
+    setTransferGoalId(null);
     setNewCategoryName("");
     setEditingTransaction(null);
     setMode(null);
   };
 
-  const openMode = (m: "deposit" | "disbursement") => {
+  const openMode = (m: "deposit" | "disbursement" | "transfer") => {
     // Reset attribution to Joint bank every time a form opens
     setAmount("");
     setDescription("");
@@ -135,14 +151,25 @@ export default function Bank() {
     setDepositorIds([]);
     setDepositorAmounts({});
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
     setWithdrawerId(JOINT_BANK_ID);
     setExpenseCategory("");
+    setWithdrawalDestinationKind("category");
+    setTransferDirection("to_savings");
+    setTransferGoalId(null);
     setNewCategoryName("");
     setEditingTransaction(null);
     setMode(m);
   };
 
   const openEdit = (tx: EditableTransaction) => {
+    if (tx.savingsGoalId) {
+      toast({
+        title: "Transfer cannot be edited",
+        description: "Delete and recreate a savings transfer to keep both balances in sync.",
+      });
+      return;
+    }
     const transactionMode = tx.type === "deposit" ? "deposit" : "disbursement";
     setEditingTransaction(tx);
     setMode(transactionMode);
@@ -152,19 +179,29 @@ export default function Bank() {
     setDepositorIds(transactionMode === "deposit" && tx.madeById ? [tx.madeById] : []);
     setDepositorAmounts({});
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
     setWithdrawerId(transactionMode === "disbursement" ? tx.madeById ?? null : JOINT_BANK_ID);
     setExpenseCategory(tx.expenseCategory ?? "");
+    setWithdrawalDestinationKind(tx.description !== tx.expenseCategory ? "other" : "category");
     setNewCategoryName("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || !date || (mode === "deposit" && !description.trim())) return;
+    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer") && !description.trim())) return;
     if (mode === "disbursement" && !expenseCategory) {
       toast({
         variant: "destructive",
         title: "Category required",
         description: "Choose or add a category before recording this withdrawal.",
+      });
+      return;
+    }
+    if (mode === "disbursement" && withdrawalDestinationKind === "other" && !description.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Narration required",
+        description: "Explain where the money is going when you choose Other.",
       });
       return;
     }
@@ -203,6 +240,27 @@ export default function Bank() {
     }
 
     try {
+      if (mode === "transfer") {
+        if (!transferGoalId) {
+          toast({
+            variant: "destructive",
+            title: "Choose a savings goal",
+            description: "Select the savings goal for this transfer.",
+          });
+          return;
+        }
+        const data = { amount: total, goalId: transferGoalId, narration: description.trim(), date, madeById: null };
+        if (transferDirection === "to_savings") {
+          await transferToSavings.mutateAsync({ data });
+          toast({ title: "Moved to savings" });
+        } else {
+          await transferFromSavings.mutateAsync({ data });
+          toast({ title: "Moved to bank" });
+        }
+        resetForm();
+        invalidate();
+        return;
+      }
       if (editingTransaction) {
         if (mode === "deposit" && depositorIds.length > 1) {
           toast({
@@ -219,7 +277,8 @@ export default function Bank() {
             description: description.trim() || expenseCategory,
             date,
             madeById: mode === "deposit" ? depositorIds[0] ?? null : withdrawerId,
-            ...(mode === "disbursement" ? { expenseCategory } : {}),
+            ...(mode === "deposit" && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+            ...(mode === "disbursement" ? { expenseCategory, destinationKind: withdrawalDestinationKind } : {}),
           },
         });
         toast({ title: "Transaction updated" });
@@ -235,6 +294,7 @@ export default function Bank() {
                 description,
                 date,
                 madeById: did,
+                ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
               },
             });
           }
@@ -248,6 +308,7 @@ export default function Bank() {
               date,
               madeById,
               ...(madeById && incomeSourceId ? { incomeSourceId } : {}),
+              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             },
           });
         }
@@ -260,6 +321,7 @@ export default function Bank() {
             date,
             expenseCategory,
             madeById: withdrawerId,
+            destinationKind: withdrawalDestinationKind,
           },
         });
         toast({ title: "Disbursement recorded" });
@@ -282,7 +344,8 @@ export default function Bank() {
     }
   };
 
-  const isPending = createDeposit.isPending || createDisbursement.isPending || updateTx.isPending || addingCategory;
+  const isPending = createDeposit.isPending || createDisbursement.isPending || updateTx.isPending ||
+    transferToSavings.isPending || transferFromSavings.isPending || addingCategory;
 
   // Helpers for attribution labels in transaction list
   const madeByLabel = (madeByName: string | null | undefined, type: string) => {
@@ -326,7 +389,7 @@ export default function Bank() {
 
       {/* Action buttons / form */}
       {!mode ? (
-        <div className="flex gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Button
             data-testid="button-deposit"
             onClick={() => openMode("deposit")}
@@ -342,6 +405,14 @@ export default function Bank() {
           >
             <ArrowUpRight className="w-5 h-5 mr-2" /> Withdraw
           </Button>
+          <Button
+            data-testid="button-transfer"
+            onClick={() => openMode("transfer")}
+            variant="secondary"
+            className="h-12 px-4 rounded-xl"
+          >
+            Transfer
+          </Button>
         </div>
       ) : (
         <Card className="border-none shadow-md bg-accent/20">
@@ -349,12 +420,14 @@ export default function Bank() {
             <CardTitle className="text-xl font-display">
               {editingTransaction
                 ? `Edit ${mode === "deposit" ? "Deposit" : "Withdrawal"}`
-                : mode === "deposit" ? "Add Money to Account" : "Take Money Out"}
+                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
               {mode === "deposit"
                 ? "Money going into the joint bank account."
-                : "Money going out of the joint bank account."}
+                : mode === "transfer"
+                  ? "Move household funds between the joint bank account and a savings goal."
+                  : "Money going out of the joint bank account."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -430,20 +503,51 @@ export default function Bank() {
                     </p>
                   </div>
                 )}
-                <div className="space-y-2 sm:col-span-2">
+                {mode !== "transfer" && <div className="space-y-2 sm:col-span-2">
                   <label className="text-sm font-semibold text-foreground">
-                    {mode === "deposit" ? "Description" : "Details"}
-                    {mode === "disbursement" && <span className="font-normal text-muted-foreground"> (optional)</span>}
+                    {mode === "deposit"
+                      ? depositSourceKind === "other" ? "Other source narration" : "Description"
+                      : withdrawalDestinationKind === "other" ? "Other destination narration" : "Details"}
+                    {mode === "disbursement" && withdrawalDestinationKind !== "other" && <span className="font-normal text-muted-foreground"> (optional)</span>}
                   </label>
                   <Input
                     data-testid="input-description"
-                    placeholder={mode === "deposit" ? "e.g. Salary deposit" : "e.g. Paid school fees for term two"}
+                    placeholder={mode === "deposit"
+                      ? depositSourceKind === "other" ? "e.g. Family gift from aunt" : "e.g. Salary deposit"
+                      : withdrawalDestinationKind === "other" ? "e.g. Emergency cash support" : "e.g. Paid school fees for term two"}
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    required={mode === "deposit"}
+                    required={mode === "deposit" || withdrawalDestinationKind === "other"}
                     className="h-12 bg-card"
                   />
-                </div>
+                </div>}
+
+                {mode === "transfer" && <div className="space-y-4 sm:col-span-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">Transfer direction</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button type="button" variant={transferDirection === "to_savings" ? "default" : "outline"} onClick={() => setTransferDirection("to_savings")}>Bank → Savings</Button>
+                      <Button type="button" variant={transferDirection === "from_savings" ? "default" : "outline"} onClick={() => setTransferDirection("from_savings")}>Savings → Bank</Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">Savings goal <span className="text-destructive">*</span></label>
+                    <select
+                      data-testid="select-transfer-goal"
+                      required
+                      value={transferGoalId?.toString() ?? ""}
+                      onChange={e => setTransferGoalId(e.target.value ? Number(e.target.value) : null)}
+                      className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
+                    >
+                      <option value="" disabled>Choose a savings goal...</option>
+                      {savingsGoals.map(goal => <option key={goal.id} value={goal.id}>{goal.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground">Transfer narration <span className="text-destructive">*</span></label>
+                    <Input data-testid="input-transfer-narration" value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Set aside for school fees" required className="h-12 bg-card" />
+                  </div>
+                </div>}
 
                 {/* ── DEPOSIT: who is depositing ── */}
                 {mode === "deposit" && (
@@ -542,7 +646,7 @@ export default function Bank() {
                     </div>
 
                     {/* Income source — only for exactly one named depositor */}
-                    {singleDepositorId && depositSources && depositSources.length > 0 && (
+                    {singleDepositorId && (
                       <div className="space-y-2 sm:col-span-2">
                         <label className="text-sm font-semibold text-foreground">
                           Where did this money come from?{" "}
@@ -551,8 +655,16 @@ export default function Bank() {
                         <select
                           data-testid="select-income-source"
                           className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          value={incomeSourceId?.toString() ?? ""}
-                          onChange={e => setIncomeSourceId(e.target.value ? Number(e.target.value) : null)}
+                          value={depositSourceKind === "other" ? "other" : incomeSourceId?.toString() ?? ""}
+                          onChange={e => {
+                            if (e.target.value === "other") {
+                              setDepositSourceKind("other");
+                              setIncomeSourceId(null);
+                            } else {
+                              setDepositSourceKind(e.target.value ? "income_source" : null);
+                              setIncomeSourceId(e.target.value ? Number(e.target.value) : null);
+                            }
+                          }}
                         >
                           <option value="">Select an income source...</option>
                           {depositSources.map(src => (
@@ -560,9 +672,10 @@ export default function Bank() {
                               {src.name}
                             </option>
                           ))}
+                          <option value="other">Other — add narration</option>
                         </select>
                         <p className="text-xs text-muted-foreground">
-                          Optional — select the source so the deposit is attributed to the right income stream.
+                          Select a saved stream or choose Other and add a narration.
                         </p>
                       </div>
                     )}
@@ -613,6 +726,17 @@ export default function Bank() {
                       </div>
                     </div>
 
+                    <div className="space-y-2 sm:col-span-2">
+                      <label className="text-sm font-semibold text-foreground">Where is the money going?</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button type="button" variant={withdrawalDestinationKind === "category" ? "default" : "outline"} onClick={() => setWithdrawalDestinationKind("category")}>Budget category</Button>
+                        <Button type="button" variant={withdrawalDestinationKind === "other" ? "default" : "outline"} onClick={() => setWithdrawalDestinationKind("other")}>Other</Button>
+                      </div>
+                      {withdrawalDestinationKind === "other" && (
+                        <p className="text-xs text-muted-foreground">A narration is required for an Other destination.</p>
+                      )}
+                    </div>
+
                   </>
                 )}
               </div>
@@ -643,6 +767,7 @@ export default function Bank() {
           <div className="divide-y divide-border/50">
             {account.transactions.map((tx) => {
               const isDeposit = tx.type === "deposit";
+              const isTransfer = !!tx.savingsGoalId;
               const attribution = madeByLabel(tx.madeByName, tx.type);
               return (
                 <div
@@ -658,12 +783,16 @@ export default function Bank() {
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-foreground truncate">
-                        {!isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
+                        {isTransfer
+                          ? `${tx.transferDirection === "to_savings" ? "Bank → Savings" : "Savings → Bank"}: ${tx.savingsGoalName ?? "Savings goal"}`
+                          : !isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5" data-testid={`tx-meta-${tx.id}`}>
-                        {isDeposit
-                          ? `Deposited by ${attribution}`
-                          : `Withdrawn by ${attribution}${tx.expenseCategory && tx.description !== tx.expenseCategory ? ` · ${tx.description}` : ""}`}
+                        {isTransfer
+                          ? tx.description
+                          : isDeposit
+                            ? `Deposited by ${attribution} · ${tx.description}`
+                            : `Withdrawn by ${attribution}${tx.expenseCategory && tx.description !== tx.expenseCategory ? ` · ${tx.description}` : ""}`}
                         {" · "}{formatDate(tx.date)}
                       </p>
                     </div>
@@ -672,7 +801,7 @@ export default function Bank() {
                     <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
                       {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
                     </p>
-                    <Button
+                    {!isTransfer && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-edit-tx-${tx.id}`}
@@ -680,7 +809,7 @@ export default function Bank() {
                       onClick={() => openEdit(tx)}
                     >
                       <Pencil className="w-4 h-4" />
-                    </Button>
+                    </Button>}
                     <Button
                       variant="ghost"
                       size="icon"

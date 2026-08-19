@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { savingsGoalsTable, savingsGoalContributionsTable, usersTable, membersTable } from "@workspace/db";
+import {
+  savingsGoalsTable,
+  savingsGoalContributionsTable,
+  jointAccountTxTable,
+  usersTable,
+  membersTable,
+} from "@workspace/db";
 import { eq, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 
@@ -499,6 +505,22 @@ router.delete("/savings-goals/:id", async (req, res): Promise<void> => {
   const { id } = parsed.data;
 
   const deleted = await db.transaction(async (tx) => {
+    const [existingGoal] = await tx
+      .select({ id: savingsGoalsTable.id })
+      .from(savingsGoalsTable)
+      .where(eq(savingsGoalsTable.id, id))
+      .for("update");
+    if (!existingGoal) return null;
+
+    // A transfer is a linked two-ledger movement. Leaving its bank side behind
+    // would make the household's history misleading and impossible to reverse.
+    const [linkedTransfer] = await tx
+      .select({ id: jointAccountTxTable.id })
+      .from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.savingsGoalId, id))
+      .limit(1);
+    if (linkedTransfer) return { linkedTransfer: true };
+
     await tx
       .delete(savingsGoalContributionsTable)
       .where(eq(savingsGoalContributionsTable.goalId, id));
@@ -512,6 +534,12 @@ router.delete("/savings-goals/:id", async (req, res): Promise<void> => {
   });
 
   if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
+  if ("linkedTransfer" in deleted) {
+    res.status(409).json({
+      error: "Delete or reverse the linked bank transfers before deleting this savings goal.",
+    });
+    return;
+  }
 
   res.json({ success: true });
 });

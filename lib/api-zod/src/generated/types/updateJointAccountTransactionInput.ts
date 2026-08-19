@@ -5,6 +5,8 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateJointAccountTransactionInputDestinationKind } from './updateJointAccountTransactionInputDestinationKind';
+import type { UpdateJointAccountTransactionInputSourceKind } from './updateJointAccountTransactionInputSourceKind';
 
 export interface UpdateJointAccountTransactionInput {
   /** @minimum 1 */
@@ -21,4 +23,6 @@ export interface UpdateJointAccountTransactionInput {
   incomeSourceId?: number | null;
   /** Required for withdrawals; deposits ignore this field */
   expenseCategory?: string;
+  sourceKind?: UpdateJointAccountTransactionInputSourceKind;
+  destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
 }

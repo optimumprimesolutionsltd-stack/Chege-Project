@@ -551,6 +551,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/JointAccountTransaction"
 
+  /joint-account/transfers/to-savings:
+    post:
+      operationId: transferBankToSavings
+      tags: [joint-account]
+      summary: Move money from the joint bank account into a savings goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsTransferInput"
+      responses:
+        "201":
+          description: Linked bank and savings transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+
+  /joint-account/transfers/from-savings:
+    post:
+      operationId: transferSavingsToBank
+      tags: [joint-account]
+      summary: Move money from a savings goal into the joint bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsTransferInput"
+      responses:
+        "201":
+          description: Linked savings and bank transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+
   /joint-account/{id}:
     put:
       operationId: updateJointAccountTransaction
@@ -1342,9 +1380,17 @@ components:
           type: string
           nullable: true
         expenseCategory:
-          type: string
+          type: ["string", "null"]
           nullable: true
           description: Expense category this disbursement covers (optional)
+        savingsGoalId:
+          type: ["number", "null"]
+          description: Linked savings goal for a bank transfer
+        savingsGoalName:
+          type: ["string", "null"]
+        transferDirection:
+          type: ["string", "null"]
+          description: to_savings or from_savings for linked transfers
         date:
           type: string
           format: date
@@ -1402,6 +1448,10 @@ components:
           description: >
             Optional income-source preset that funded this deposit. Used only
             with a single named depositor.
+        sourceKind:
+          type: string
+          enum: [income_source, other]
+          description: Choose other only when the required description is a narration.
       required:
         - amount
         - description
@@ -1429,6 +1479,10 @@ components:
         expenseCategory:
           type: string
           description: Required budget category this disbursement is paying for
+        destinationKind:
+          type: string
+          enum: [category, other]
+          description: Choose other only when the required description is a narration.
       required:
         - amount
         - date
@@ -1455,8 +1509,39 @@ components:
         expenseCategory:
           type: string
           description: Required for withdrawals; deposits ignore this field
+        sourceKind:
+          type: string
+          enum: [income_source, other]
+        destinationKind:
+          type: string
+          enum: [category, other]
       required:
         - amount
+        - date
+
+    SavingsTransferInput:
+      type: object
+      properties:
+        amount:
+          type: number
+          minimum: 1
+          multipleOf: 1
+        goalId:
+          type: number
+          minimum: 1
+        narration:
+          type: string
+          minLength: 1
+          maxLength: 200
+        date:
+          type: string
+          format: date
+        madeById:
+          type: ["string", "null"]
+      required:
+        - amount
+        - goalId
+        - narration
         - date
 
     SavingsGoalInput:

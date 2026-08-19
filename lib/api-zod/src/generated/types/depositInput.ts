@@ -5,6 +5,7 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { DepositInputSourceKind } from './depositInputSourceKind';
 
 export interface DepositInput {
   /**
@@ -24,4 +25,6 @@ export interface DepositInput {
      * @minimum 1
      */
   incomeSourceId?: number;
+  /** Choose other only when the required description is a narration. */
+  sourceKind?: DepositInputSourceKind;
 }

@@ -31,8 +31,11 @@ import {
   getGetBudgetCategoriesQueryKey,
   useGetMembers,
   useGetSavingsGoals,
+  useTransferBankToSavings,
+  useTransferSavingsToBank,
   getGetJointAccountQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetSavingsGoalsQueryKey,
   customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -60,11 +63,14 @@ type Tx = {
   madeById?: string | null;
   madeByName?: string | null;
   expenseCategory?: string | null;
+  savingsGoalId?: number | null;
+  savingsGoalName?: string | null;
+  transferDirection?: string | null;
   date: string;
   createdAt?: string | null;
 };
 
-type TxType = 'deposit' | 'disbursement';
+type TxType = 'deposit' | 'disbursement' | 'transfer';
 
 type MemberIncomeSource = {
   id: number;
@@ -111,6 +117,7 @@ export default function BankScreen() {
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
   const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [depositSourceKind, setDepositSourceKind] = useState<'income_source' | 'other' | null>(null);
 
   // ── Withdrawal payer state ─────────────────────────────────────────────────
   // withdrawerId: null = Joint bank; string = named member
@@ -124,6 +131,7 @@ export default function BankScreen() {
   const [withdrawSourceName, setWithdrawSourceName] = useState<string | null>(null);
   const [withdrawGoalId, setWithdrawGoalId] = useState<number | null>(null);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
+  const [transferDirection, setTransferDirection] = useState<'to_savings' | 'from_savings'>('to_savings');
 
   // Derived: for income sources, only show when exactly one depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
@@ -132,6 +140,8 @@ export default function BankScreen() {
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
   const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
+  const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
+  const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
 
@@ -177,12 +187,14 @@ export default function BankScreen() {
     setDepositorIds([]);
     setDepositorAmounts({});
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
     setWithdrawerId(null);
     // Reset withdrawal destination
     setWithdrawDest(null);
     setWithdrawSourceName(null);
     setWithdrawGoalId(null);
     setShowGoalPicker(false);
+    setTransferDirection('to_savings');
     setModalVisible(true);
   };
 
@@ -198,6 +210,7 @@ export default function BankScreen() {
   const invalidateBalance = () => {
     queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
   };
 
   const handleDelete = (tx: Tx) => {
@@ -221,6 +234,10 @@ export default function BankScreen() {
   };
 
   const openEdit = (tx: Tx) => {
+    if (tx.savingsGoalId) {
+      Alert.alert('Transfer cannot be edited', 'Delete and recreate a savings transfer to keep both balances in sync.');
+      return;
+    }
     const type: TxType = tx.type === 'deposit' ? 'deposit' : 'disbursement';
     setTxType(type);
     setEditingTransactionId(tx.id);
@@ -232,6 +249,7 @@ export default function BankScreen() {
     setDepositorIds(type === 'deposit' && tx.madeById ? [tx.madeById] : []);
     setDepositorAmounts({});
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
     setWithdrawerId(type === 'disbursement' ? tx.madeById ?? null : null);
     setWithdrawDest(type === 'disbursement' ? 'other' : null);
     setWithdrawSourceName(null);
@@ -307,6 +325,42 @@ export default function BankScreen() {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
       return;
     }
+    if (txType === 'disbursement' && withdrawDest === 'other' && !description.trim()) {
+      Alert.alert('Narration required', 'Explain where the money is going when you choose Other.');
+      return;
+    }
+    if (txType === 'transfer') {
+      if (!selectedGoal) {
+        Alert.alert('Select a goal', 'Choose the savings goal for this transfer.');
+        return;
+      }
+      if (!description.trim()) {
+        Alert.alert('Narration required', 'Add a short narration for this transfer.');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const transfer = {
+          amount: parsed,
+          goalId: selectedGoal.id,
+          narration: description.trim(),
+          date,
+          madeById: null,
+        };
+        if (transferDirection === 'to_savings') {
+          await transferBankToSavings({ data: transfer });
+        } else {
+          await transferSavingsToBank({ data: transfer });
+        }
+        setModalVisible(false);
+        await invalidateBalance();
+      } catch (err: unknown) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'Could not create transfer.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     // For withdrawals, derive description from destination selection
     let finalDescription = description.trim();
     if (txType === 'disbursement') {
@@ -348,7 +402,8 @@ export default function BankScreen() {
             madeById: txType === 'deposit'
               ? validDepositorIds[0] ?? null
               : withdrawerId ?? null,
-            ...(txType === 'disbursement' ? { expenseCategory } : {}),
+            ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+            ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
           },
         });
       } else if (txType === 'deposit') {
@@ -388,6 +443,7 @@ export default function BankScreen() {
                 description: description.trim(),
                 date,
                 madeById: did,
+                ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
               },
             });
           }
@@ -400,6 +456,7 @@ export default function BankScreen() {
               date,
               madeById: null,
               ...(incomeSourceId ? { incomeSourceId } : {}),
+              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             },
           });
         } else {
@@ -412,6 +469,7 @@ export default function BankScreen() {
               date,
               madeById: singleId,
               ...(incomeSourceId ? { incomeSourceId } : {}),
+              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             },
           });
         }
@@ -424,6 +482,7 @@ export default function BankScreen() {
             date,
             expenseCategory,
             madeById: withdrawerId ?? null,
+            destinationKind: withdrawDest === 'other' ? 'other' : 'category',
           },
         });
       }
@@ -442,6 +501,8 @@ export default function BankScreen() {
   const transactions: Tx[] = data?.transactions ?? [];
 
   const isDeposit = txType === 'deposit';
+  const isWithdrawal = txType === 'disbursement';
+  const isTransfer = txType === 'transfer';
 
   // Derive a display label for a transaction in the list
   const txPayerLabel = (tx: Tx): string => {
@@ -502,6 +563,15 @@ export default function BankScreen() {
                 <Feather name="arrow-up-right" size={16} color="#f87171" />
                 <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#164e63' }]}
+                onPress={() => openModal('transfer')}
+                activeOpacity={0.8}
+                testID="bank-transfer-action"
+              >
+                <Feather name="repeat" size={16} color="#67e8f9" />
+                <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Transfer</Text>
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -559,13 +629,17 @@ export default function BankScreen() {
               </View>
               <View style={styles.txInfo}>
                 <Text style={[styles.txDesc, { color: colors.foreground }]} numberOfLines={1}>
-                  {!dep && item.expenseCategory ? item.expenseCategory : item.description}
+                  {item.savingsGoalId
+                    ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
+                    : !dep && item.expenseCategory ? item.expenseCategory : item.description}
                 </Text>
                 <Text style={[styles.txMeta, { color: colors.mutedForeground }]}>
-                  {dep
-                    ? `${payerLabel} · `
-                    : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
-                  {formatDateTime(item.createdAt)} · Edit or delete
+                  {item.savingsGoalId
+                    ? `${item.description} · `
+                    : dep
+                      ? `${payerLabel} · ${item.description} · `
+                      : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
+                  {formatDateTime(item.createdAt)} · {item.savingsGoalId ? 'Delete' : 'Edit or delete'}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
@@ -573,13 +647,13 @@ export default function BankScreen() {
                   {dep ? '+' : '-'}KES {formatKES(item.amount)}
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <TouchableOpacity
+                  {!item.savingsGoalId && <TouchableOpacity
                     onPress={() => openEdit(item)}
                     hitSlop={8}
                     testID={`bank-edit-transaction-${item.id}`}
                   >
                     <Feather name="edit-2" size={16} color={colors.mutedForeground} />
-                  </TouchableOpacity>
+                  </TouchableOpacity>}
                   <TouchableOpacity
                     onPress={() => handleDelete(item)}
                     hitSlop={8}
@@ -651,13 +725,20 @@ export default function BankScreen() {
                   Withdraw
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.toggleOption, txType === 'transfer' && styles.toggleActiveDisburse]}
+                onPress={() => setTxType('transfer')}
+                testID="bank-toggle-transfer"
+              >
+                <Text style={[styles.toggleText, { color: txType === 'transfer' ? '#fff' : colors.mutedForeground }]}>Transfer</Text>
+              </TouchableOpacity>
             </View>
             ) : null}
 
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
               {editingTransactionId !== null
                 ? `Edit ${isDeposit ? 'Deposit' : 'Withdrawal'}`
-                : isDeposit ? 'Add Money to Account' : 'Take Money Out'}
+                : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : 'Take Money Out'}
             </Text>
 
             {/* Amount */}
@@ -700,6 +781,55 @@ export default function BankScreen() {
                   returnKeyType="done"
                   onSubmitEditing={Keyboard.dismiss}
                   testID="bank-description-input"
+                />
+              </>
+            )}
+
+            {isTransfer && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Transfer direction</Text>
+                <View style={styles.memberRow}>
+                  <TouchableOpacity
+                    style={[styles.memberPill, { backgroundColor: transferDirection === 'to_savings' ? '#0891b2' : colors.muted, borderColor: transferDirection === 'to_savings' ? '#0891b2' : colors.border }]}
+                    onPress={() => setTransferDirection('to_savings')}
+                  >
+                    <Text style={[styles.memberPillText, { color: transferDirection === 'to_savings' ? '#fff' : colors.foreground }]}>Bank → Savings</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.memberPill, { backgroundColor: transferDirection === 'from_savings' ? '#0891b2' : colors.muted, borderColor: transferDirection === 'from_savings' ? '#0891b2' : colors.border }]}
+                    onPress={() => setTransferDirection('from_savings')}
+                  >
+                    <Text style={[styles.memberPillText, { color: transferDirection === 'from_savings' ? '#fff' : colors.foreground }]}>Savings → Bank</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Savings goal</Text>
+                <TouchableOpacity
+                  style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                  onPress={() => setShowGoalPicker(!showGoalPicker)}
+                  testID="bank-transfer-goal"
+                >
+                  <Text style={{ flex: 1, color: selectedGoal ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                    {selectedGoal?.name ?? 'Choose a savings goal'}
+                  </Text>
+                  <Feather name={showGoalPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                </TouchableOpacity>
+                {showGoalPicker && (
+                  <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    {savingsGoals.map(goal => (
+                      <TouchableOpacity key={goal.id} style={styles.categoryOption} onPress={() => { setWithdrawGoalId(goal.id); setShowGoalPicker(false); }}>
+                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>{goal.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  placeholder="e.g. Set aside for school fees"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={description}
+                  onChangeText={setDescription}
+                  testID="bank-transfer-narration"
                 />
               </>
             )}
@@ -839,7 +969,7 @@ export default function BankScreen() {
             )}
 
             {/* Income source — only when exactly one named depositor is selected */}
-            {isDeposit && singleDepositorId && depositSources.length > 0 && (
+            {isDeposit && singleDepositorId && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
                   Where did this money come from?{' '}
@@ -859,7 +989,10 @@ export default function BankScreen() {
                             borderColor: selected ? '#6366f1' : colors.border,
                           },
                         ]}
-                        onPress={() => setIncomeSourceId(selected ? null : src.id)}
+                        onPress={() => {
+                          setIncomeSourceId(selected ? null : src.id);
+                          setDepositSourceKind(selected ? null : 'income_source');
+                        }}
                         activeOpacity={0.7}
                       >
                         <Text
@@ -873,12 +1006,31 @@ export default function BankScreen() {
                       </TouchableOpacity>
                     );
                   })}
+                  <TouchableOpacity
+                    testID="bank-income-source-other"
+                    style={[
+                      styles.memberPill,
+                      {
+                        backgroundColor: depositSourceKind === 'other' ? '#64748b' : colors.muted,
+                        borderColor: depositSourceKind === 'other' ? '#64748b' : colors.border,
+                      },
+                    ]}
+                    onPress={() => { setDepositSourceKind(depositSourceKind === 'other' ? null : 'other'); setIncomeSourceId(null); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.memberPillText, { color: depositSourceKind === 'other' ? '#fff' : colors.foreground }]}>Other</Text>
+                  </TouchableOpacity>
                 </View>
+                {depositSourceKind === 'other' && (
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                    Use the required description above as the source narration.
+                  </Text>
+                )}
               </>
             )}
 
             {/* ── Withdrawal payer (disbursements only) ── */}
-            {!isDeposit && members.length > 0 && (
+            {isWithdrawal && members.length > 0 && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
                   Who is withdrawing?
@@ -951,7 +1103,7 @@ export default function BankScreen() {
             )}
 
             {/* ── Withdrawal destination ────────────────────────────────────── */}
-            {!isDeposit && (
+            {isWithdrawal && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
                   Where is this money going?{' '}
@@ -1109,7 +1261,7 @@ export default function BankScreen() {
             )}
 
             {/* Expense category (disbursements only) */}
-            {!isDeposit && (
+            {isWithdrawal && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
                   Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
@@ -1184,7 +1336,7 @@ export default function BankScreen() {
             )}
 
             {/* Categories drive withdrawal reports; details remain optional context. */}
-            {!isDeposit && (
+            {isWithdrawal && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
                   Details <Text style={{ fontWeight: '400' }}>(optional)</Text>

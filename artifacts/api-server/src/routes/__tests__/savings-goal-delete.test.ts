@@ -3,8 +3,9 @@
  *
  * Strategy: mock @workspace/db so that:
  *   - db.transaction() executes the callback with a mock tx
- *   - tx.delete().where()            → contribution rows deleted (no return value needed)
- *   - tx.delete().where().returning() → goal row returned (or empty array for 404)
+ *   - tx.select() locks the goal then checks for linked bank transfers
+ *   - tx.delete().where() removes contribution rows after the guard passes
+ *   - tx.delete().where().returning() removes the goal row
  *
  * The rollback test simulates a crash after contributions are deleted but
  * before the goal row is deleted.  Because db.transaction re-throws when the
@@ -26,6 +27,7 @@ vi.mock("@workspace/db", () => {
   return {
     savingsGoalsTable: makeTable("savings_goals"),
     savingsGoalContributionsTable: makeTable("savings_goal_contributions"),
+    jointAccountTxTable: makeTable("joint_account_transactions"),
     usersTable: makeTable("users"),
     db: {
       select: vi.fn(),
@@ -77,18 +79,33 @@ function makeGoal(id: number) {
 /**
  * Build a mock tx for the DELETE handler:
  *
- *   First  tx.delete().where()            → deletes contributions (resolves void)
- *   Second tx.delete().where().returning() → returns [goalRow] (or [])
+ *   First select locks the goal; second select checks linked bank transfers.
+ *   Then tx.delete removes contribution rows and the goal.
  *
  * deleteContribImpl lets individual tests override the contribution-delete step.
  */
 function makeDeleteTx(
   goalRow: ReturnType<typeof makeGoal> | null,
   deleteContribImpl: () => Promise<void> = () => Promise.resolve(),
+  linkedTransfer = false,
 ) {
   let callCount = 0;
 
   const tx: Record<string, unknown> = {};
+  let selectCallCount = 0;
+  tx.select = vi.fn().mockImplementation(() => {
+    selectCallCount += 1;
+    const rows = selectCallCount === 1
+      ? (goalRow ? [goalRow] : [])
+      : (linkedTransfer ? [{ id: 99 }] : []);
+    const terminal = {
+      where: vi.fn().mockReturnValue({
+        for: vi.fn().mockResolvedValue(rows),
+        limit: vi.fn().mockResolvedValue(rows),
+      }),
+    };
+    return { from: vi.fn().mockReturnValue(terminal) };
+  });
 
   tx.delete = vi.fn().mockImplementation(() => {
     callCount += 1;
@@ -155,7 +172,7 @@ describe("DELETE /savings-goals/:id", () => {
   // 404 — goal does not exist
   // -------------------------------------------------------------------------
   it("returns 404 when the goal row does not exist", async () => {
-    const tx = makeDeleteTx(null); // goal delete returns []
+    const tx = makeDeleteTx(null);
 
     mockedDb.transaction = vi
       .fn()
@@ -165,6 +182,19 @@ describe("DELETE /savings-goals/:id", () => {
 
     expect(res.status).toBe(404);
     expect(res.body).toMatchObject({ error: "Not found" });
+  });
+
+  it("refuses to delete a goal while a linked bank transfer exists", async () => {
+    const tx = makeDeleteTx(makeGoal(8), undefined, true);
+    mockedDb.transaction = vi
+      .fn()
+      .mockImplementation(async (cb: (tx: MockTx) => Promise<unknown>) => cb(tx));
+
+    const res = await request(app).delete("/savings-goals/8");
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/linked bank transfers/i);
+    expect(tx.delete).not.toHaveBeenCalled();
   });
 
   // -------------------------------------------------------------------------

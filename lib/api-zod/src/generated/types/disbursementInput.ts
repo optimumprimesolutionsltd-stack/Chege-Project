@@ -5,6 +5,7 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { DisbursementInputDestinationKind } from './disbursementInputDestinationKind';
 
 export interface DisbursementInput {
   /**
@@ -21,4 +22,6 @@ export interface DisbursementInput {
   madeById?: string | null;
   /** Required budget category this disbursement is paying for */
   expenseCategory: string;
+  /** Choose other only when the required description is a narration. */
+  destinationKind?: DisbursementInputDestinationKind;
 }

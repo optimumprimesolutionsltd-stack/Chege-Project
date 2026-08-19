@@ -14,8 +14,23 @@ export interface JointAccountTransaction {
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
-  /** Expense category this disbursement covers (optional) */
+  /**
+     * Expense category this disbursement covers (optional)
+     * @nullable
+     */
   expenseCategory?: string | null;
+  /**
+     * Linked savings goal for a bank transfer
+     * @nullable
+     */
+  savingsGoalId?: number | null;
+  /** @nullable */
+  savingsGoalName?: string | null;
+  /**
+     * to_savings or from_savings for linked transfers
+     * @nullable
+     */
+  transferDirection?: string | null;
   date: Date;
   createdAt: string;
 }

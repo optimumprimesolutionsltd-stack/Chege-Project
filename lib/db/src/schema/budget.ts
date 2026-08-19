@@ -85,6 +85,8 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   madeById: text("made_by_id"), // userId for deposits; null ok for disbursements
   incomeSourceId: integer("income_source_id"), // which income source funded this deposit
   expenseCategory: text("expense_category"), // optional: which expense category this disbursement covers
+  savingsGoalId: integer("savings_goal_id"), // set only for a linked bank <-> savings transfer
+  transferDirection: text("transfer_direction"), // 'to_savings' | 'from_savings' for linked transfers
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -143,6 +145,7 @@ export const savingsGoalContributionsTable = pgTable("savings_goal_contributions
   amount: integer("amount").notNull(), // in KES; negative values indicate manual downward adjustments
   note: text("note"),                 // null for regular contributions; set for manual adjustments
   createdByUserId: text("created_by_user_id"),  // null = Joint bank (shared household); named = individual member
+  bankTransactionId: integer("bank_transaction_id"), // links a bank <-> savings transfer for safe reversal
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
