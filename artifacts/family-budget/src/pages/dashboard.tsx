@@ -26,7 +26,7 @@ import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
-  Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2,
+  Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -324,12 +324,14 @@ export default function Dashboard() {
   const year = now.getFullYear();
   const [activeAction, setActiveAction] = useState<QuickAction>("none");
 
-  const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary({ month, year });
+  const { data: summary, isLoading: isSummaryLoading, isError: isSummaryError } = useGetDashboardSummary({ month, year });
   const { data: activity, isLoading: isActivityLoading } = useGetDashboardActivity();
   const { data: breakdown, isLoading: isBreakdownLoading } = useGetDashboardCategoryBreakdown({ month, year });
   const { data: trends, isLoading: isTrendsLoading } = useGetDashboardTrends({ months: 6 });
   const { data: goals } = useGetSavingsGoals();
   const { data: bankAccount } = useGetJointAccount();
+  const { data: members = [] } = useGetMembers();
+  const [setupDismissed, setSetupDismissed] = useState(false);
 
   // Compute this-month totals from the transactions array
   const monthlyDeposited = bankAccount?.transactions
@@ -371,6 +373,25 @@ export default function Dashboard() {
     );
   }
 
+  if (isSummaryError) {
+    return (
+      <div className="min-h-[55vh] flex items-center justify-center">
+        <Card className="max-w-xl w-full border border-primary/20 shadow-lg overflow-hidden">
+          <CardContent className="p-7 sm:p-9 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl mx-auto">🏠</div>
+            <h1 className="font-display font-bold text-2xl text-foreground mt-5">Join this household first</h1>
+            <p className="text-muted-foreground mt-2 leading-relaxed">
+              Bajeti keeps each household’s shared funds, budgets, and savings goals private. Ask someone already in this household to add you from Settings.
+            </p>
+            <Link href="/settings">
+              <Button className="mt-6 rounded-xl">Open Settings</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!summary || !activity || !breakdown) return null;
 
   const percentSpent = summary.totalBudget > 0 ? (summary.totalSpent / summary.totalBudget) * 100 : 0;
@@ -385,6 +406,38 @@ export default function Dashboard() {
   if (breakdown.filter(b => b.spentAmount > 0).length > 5) {
     chartData.push({ name: "Others", value: breakdown.filter(b => b.spentAmount > 0).sort((a,b) => b.spentAmount - a.spentAmount).slice(5).reduce((s,b) => s + b.spentAmount, 0), color: "hsl(var(--muted-foreground))" });
   }
+  const setupSteps = [
+    {
+      label: "Set your monthly budget",
+      description: "Give your household spending a clear plan for this month.",
+      href: "/budget",
+      icon: "📊",
+      done: summary.totalBudget > 0,
+    },
+    {
+      label: "Set up your shared bank",
+      description: "Record the first deposit so everyone can follow shared money.",
+      href: "/bank",
+      icon: "🏦",
+      done: (bankAccount?.transactions?.length ?? 0) > 0,
+    },
+    {
+      label: "Create a savings goal",
+      description: "Start saving together for something that matters.",
+      href: "/savings-goals",
+      icon: "🎯",
+      done: (goals?.length ?? 0) > 0,
+    },
+    {
+      label: "Invite your household",
+      description: "Add the people who will budget and track money with you.",
+      href: "/settings",
+      icon: "👥",
+      done: members.length > 1,
+    },
+  ];
+  const completeSetupSteps = setupSteps.filter(step => step.done).length;
+  const pendingSetupSteps = setupSteps.filter(step => !step.done);
 
   return (
     <div className="space-y-8 pb-12">
@@ -394,6 +447,56 @@ export default function Dashboard() {
           {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
         </p>
       </div>
+
+      {!setupDismissed && pendingSetupSteps.length > 0 && (
+        <Card className="border border-primary/20 shadow-md overflow-hidden bg-gradient-to-br from-primary/10 via-card to-secondary/10">
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-primary font-bold">Start here</p>
+                <h2 className="text-xl sm:text-2xl font-display font-bold text-foreground mt-1">Build your household money hub</h2>
+                <p className="text-sm text-muted-foreground mt-1">A few simple steps will make Bajeti useful from day one.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSetupDismissed(true)}
+                className="text-xs text-muted-foreground hover:text-foreground shrink-0 flex items-center gap-1"
+                aria-label="Hide setup suggestions"
+              >
+                <X className="w-4 h-4" /> Hide
+              </button>
+            </div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-2 flex-1 rounded-full bg-primary/15 overflow-hidden">
+                <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${(completeSetupSteps / setupSteps.length) * 100}%` }} />
+              </div>
+              <span className="text-xs font-semibold text-muted-foreground">{completeSetupSteps}/{setupSteps.length} ready</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {pendingSetupSteps.map(step => (
+                <Link
+                  key={step.label}
+                  href={step.href}
+                  className="group flex items-center gap-3 rounded-xl border border-border/70 bg-card/80 p-3.5 hover:border-primary/50 hover:shadow-sm transition-all"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl shrink-0">{step.icon}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5 font-semibold text-foreground group-hover:text-primary">
+                      {step.label}<ChevronRight className="w-4 h-4" />
+                    </span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">{step.description}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+            {completeSetupSteps > 0 && (
+              <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Great start—keep going when you are ready.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Quick Actions ── */}
       <Card className="border-none shadow-md overflow-hidden">

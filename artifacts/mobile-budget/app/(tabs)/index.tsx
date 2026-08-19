@@ -22,6 +22,8 @@ import {
   useGetDashboardSummary,
   useGetDashboardActivity,
   useGetJointAccount,
+  useGetSavingsGoals,
+  useGetMembers,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
@@ -90,6 +92,7 @@ export default function DashboardScreen() {
   const {
     data: summary,
     isLoading: summaryLoading,
+    isError: summaryError,
     refetch: refetchSummary,
   } = useGetDashboardSummary({ month, year });
 
@@ -103,11 +106,13 @@ export default function DashboardScreen() {
     data: bankAccount,
     refetch: refetchBank,
   } = useGetJointAccount();
+  const { data: savingsGoals = [], refetch: refetchGoals } = useGetSavingsGoals();
+  const { data: members = [], refetch: refetchMembers } = useGetMembers();
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchSummary(), refetchActivity(), refetchBank()]);
+    await Promise.all([refetchSummary(), refetchActivity(), refetchBank(), refetchGoals(), refetchMembers()]);
     setRefreshing(false);
   }, [refetchSummary, refetchActivity, refetchBank]);
 
@@ -147,6 +152,42 @@ export default function DashboardScreen() {
   const displayName = user?.firstName?.trim() || '';
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+  const setupSteps = [
+    {
+      label: 'Set a monthly budget',
+      detail: 'Plan what your household can spend this month.',
+      icon: 'bar-chart-2' as const,
+      color: '#a78bfa',
+      route: '/(tabs)/budget',
+      done: (summary?.totalBudget ?? 0) > 0,
+    },
+    {
+      label: 'Set up shared bank',
+      detail: 'Record the first deposit into your joint funds.',
+      icon: 'credit-card' as const,
+      color: '#38bdf8',
+      route: '/(tabs)/bank',
+      done: (bankAccount?.transactions?.length ?? 0) > 0,
+    },
+    {
+      label: 'Create a savings goal',
+      detail: 'Save together for something important.',
+      icon: 'target' as const,
+      color: '#f59e0b',
+      route: '/(tabs)/goals',
+      done: savingsGoals.length > 0,
+    },
+    {
+      label: 'Invite your household',
+      detail: 'Add the people who will use this budget.',
+      icon: 'users' as const,
+      color: '#4ade80',
+      route: '/(tabs)/settings',
+      done: members.length > 1,
+    },
+  ];
+  const completeSetupSteps = setupSteps.filter(step => step.done).length;
+  const pendingSetupSteps = setupSteps.filter(step => !step.done);
 
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear((y) => y - 1); }
@@ -161,6 +202,28 @@ export default function DashboardScreen() {
   type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
   const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
   const CONTRIBS_COLORS = ['#4ade80', '#f97316', '#38bdf8', '#f472b6', '#a78bfa'];
+
+  if (summaryError) {
+    return (
+      <View style={[styles.accessContainer, { backgroundColor: colors.background }]}>
+        <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.accessIcon, { backgroundColor: `${colors.primary}18` }]}>
+            <Feather name="home" size={25} color={colors.primary} />
+          </View>
+          <Text style={[styles.accessTitle, { color: colors.foreground }]}>Join this household first</Text>
+          <Text style={[styles.accessText, { color: colors.mutedForeground }]}>
+            Shared funds, budgets, and savings goals stay private. Ask someone already in this household to add you from Settings.
+          </Text>
+          <Pressable
+            onPress={() => router.push('/(tabs)/settings')}
+            style={[styles.accessButton, { backgroundColor: colors.primary }]}
+          >
+            <Text style={styles.accessButtonText}>Open Settings</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -270,6 +333,40 @@ export default function DashboardScreen() {
             </Pressable>
           ))}
         </View>
+
+        {pendingSetupSteps.length > 0 && (
+          <View style={[styles.setupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.setupHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.setupEyebrow, { color: colors.secondary }]}>START HERE</Text>
+                <Text style={[styles.setupTitle, { color: colors.foreground }]}>Set up your household</Text>
+                <Text style={[styles.setupSubtitle, { color: colors.mutedForeground }]}>A few steps make your budget ready to use.</Text>
+              </View>
+              <Text style={[styles.setupProgress, { color: colors.mutedForeground }]}>{completeSetupSteps}/4</Text>
+            </View>
+            <View style={[styles.setupTrack, { backgroundColor: colors.muted }]}>
+              <View style={[styles.setupFill, { backgroundColor: colors.secondary, width: `${completeSetupSteps * 25}%` }]} />
+            </View>
+            <View style={styles.setupList}>
+              {pendingSetupSteps.map(step => (
+                <Pressable
+                  key={step.label}
+                  onPress={() => router.push(step.route as any)}
+                  style={({ pressed }) => [styles.setupItem, { borderColor: colors.border, backgroundColor: colors.background, opacity: pressed ? 0.72 : 1 }]}
+                >
+                  <View style={[styles.setupIcon, { backgroundColor: `${step.color}22` }]}>
+                    <Feather name={step.icon} size={17} color={step.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.setupItemTitle, { color: colors.foreground }]}>{step.label}</Text>
+                    <Text style={[styles.setupItemDetail, { color: colors.mutedForeground }]}>{step.detail}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Bank Account Balance Card */}
         <Pressable
@@ -384,6 +481,13 @@ function ContribBar({ name, contributed, spent, target, color, hidden }: { name:
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  accessContainer: { flex: 1, padding: 20, justifyContent: 'center' },
+  accessCard: { borderWidth: 1, borderRadius: 20, padding: 24, alignItems: 'center' },
+  accessIcon: { width: 54, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  accessTitle: { marginTop: 18, fontSize: 21, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  accessText: { marginTop: 9, fontSize: 14, lineHeight: 21, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  accessButton: { marginTop: 22, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
+  accessButtonText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   header: { paddingHorizontal: 20, paddingBottom: 20 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
@@ -417,6 +521,20 @@ const styles = StyleSheet.create({
   shortcutRow: { flexDirection: 'row', paddingHorizontal: 12, paddingTop: 16, paddingBottom: 4, gap: 8 },
   shortcutBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 14, gap: 5 },
   shortcutLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+
+  setupCard: { marginHorizontal: 20, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
+  setupHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  setupEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  setupTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 3 },
+  setupSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  setupProgress: { fontSize: 13, fontFamily: 'Inter_700Bold', paddingTop: 4 },
+  setupTrack: { height: 6, borderRadius: 4, overflow: 'hidden', marginTop: 14 },
+  setupFill: { height: '100%', borderRadius: 4 },
+  setupList: { gap: 8, marginTop: 14 },
+  setupItem: { borderWidth: 1, borderRadius: 13, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  setupIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  setupItemTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  setupItemDetail: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
 
   section: { paddingHorizontal: 20, paddingTop: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
