@@ -62,6 +62,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/display-name:
+    put:
+      operationId: updateDisplayName
+      tags: [auth]
+      summary: Save the authenticated user's preferred display name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisplayNameInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          description: Invalid name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /expenses:
     get:
       operationId: getExpenses
@@ -194,6 +225,29 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/BudgetCategory"
+    post:
+      operationId: createBudgetCategory
+      tags: [budget-categories]
+      summary: Create a budget category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetCategoryInput"
+      responses:
+        "201":
+          description: Created budget category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetCategory"
+        "400":
+          description: Invalid category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /contributions/{id}:
     delete:
@@ -426,6 +480,41 @@ paths:
                 $ref: "#/components/schemas/JointAccountTransaction"
 
   /joint-account/{id}:
+    put:
+      operationId: updateJointAccountTransaction
+      tags: [joint-account]
+      summary: Edit a joint account transaction without changing its type
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJointAccountTransactionInput"
+      responses:
+        "200":
+          description: Updated transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+        "400":
+          description: Invalid transaction details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: deleteJointAccountTransaction
       tags: [joint-account]
@@ -718,6 +807,14 @@ components:
       required:
         - success
 
+    DisplayNameInput:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
     AuthUser:
       type: object
       properties:
@@ -731,8 +828,11 @@ components:
           type: ["string", "null"]
         profileImageUrl:
           type: ["string", "null"]
+        needsDisplayName:
+          type: boolean
       required:
         - id
+        - needsDisplayName
 
     AuthUserEnvelope:
       type: object
@@ -851,6 +951,22 @@ components:
         - budgetAmount
         - priority
         - color
+
+    BudgetCategoryInput:
+      type: object
+      properties:
+        name:
+          type: string
+        budgetAmount:
+          type: number
+          description: Monthly budget in KES; use 0 when creating a category from a withdrawal
+        priority:
+          type: number
+        color:
+          type: string
+      required:
+        - name
+        - budgetAmount
 
     Contribution:
       type: object
@@ -1185,10 +1301,35 @@ components:
             when non-null.
         expenseCategory:
           type: string
-          description: Optional expense category this disbursement is paying for
+          description: Required budget category this disbursement is paying for
       required:
         - amount
-        - description
+        - date
+        - expenseCategory
+
+    UpdateJointAccountTransactionInput:
+      type: object
+      properties:
+        amount:
+          type: number
+          minimum: 1
+          multipleOf: 1
+        description:
+          type: string
+          description: Optional supporting detail; withdrawals fall back to their category
+        date:
+          type: string
+          format: date
+        madeById:
+          type: ["string", "null"]
+        incomeSourceId:
+          type: ["number", "null"]
+          description: Preserved for deposits unless explicitly changed
+        expenseCategory:
+          type: string
+          description: Required for withdrawals; deposits ignore this field
+      required:
+        - amount
         - date
 
     SavingsGoalInput:

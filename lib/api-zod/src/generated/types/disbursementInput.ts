@@ -12,13 +12,13 @@ export interface DisbursementInput {
      * @minimum 1
      */
   amount: number;
-  description: string;
+  description?: string;
   date: Date;
   /**
      * ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.
      * @nullable
      */
   madeById?: string | null;
-  /** Optional expense category this disbursement is paying for */
-  expenseCategory?: string;
+  /** Required budget category this disbursement is paying for */
+  expenseCategory: string;
 }

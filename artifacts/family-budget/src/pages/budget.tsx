@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useGetDashboardCategoryBreakdown } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
+import { getGetDashboardCategoryBreakdownQueryKey, useGetDashboardCategoryBreakdown } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type BudgetCategory = { id: number; name: string; budgetAmount: number; priority: number; color: string };
@@ -34,6 +34,12 @@ function CategoryDialog({
   const [amount, setAmount] = useState(initial?.budgetAmount?.toString() ?? "");
   const [priority, setPriority] = useState(initial?.priority?.toString() ?? "1");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setName(initial?.name ?? "");
+    setAmount(initial?.budgetAmount?.toString() ?? "");
+    setPriority(initial?.priority?.toString() ?? "1");
+  }, [initial, open]);
 
   const handleSave = async () => {
     const amt = parseInt(amount, 10);
@@ -120,11 +126,13 @@ export default function Budget() {
 
   const [editTarget, setEditTarget] = useState<BudgetCategory | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<BudgetCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const refreshAll = () => {
     refetchCats();
+    qc.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
   };
 
@@ -160,6 +168,9 @@ export default function Budget() {
     acc[c.priority].push(c);
     return acc;
   }, {} as Record<number, BudgetCategory[]>);
+  const reportBudget = (breakdown ?? []).reduce((sum, item) => sum + item.budgetAmount, 0);
+  const reportActual = (breakdown ?? []).reduce((sum, item) => sum + item.spentAmount, 0);
+  const reportVariance = reportBudget - reportActual;
 
   return (
     <div className="space-y-8 pb-12">
@@ -169,6 +180,33 @@ export default function Budget() {
         initial={editTarget}
         onSaved={refreshAll}
       />
+      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit existing budgets</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {allCategories.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No budget categories yet.</p>
+            ) : allCategories.map(category => (
+              <div key={category.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{category.name}</p>
+                  <p className="text-xs text-muted-foreground">{formatKes(category.budgetAmount)} monthly</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 shrink-0"
+                  onClick={() => { setManageOpen(false); setEditTarget(category); }}
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -204,11 +242,44 @@ export default function Budget() {
               <ArrowRight className="h-5 w-5 text-foreground/70" />
             </Button>
           </div>
-          <Button onClick={() => setAddOpen(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> Add category
-          </Button>
+           <div className="flex items-center gap-2">
+             <Button variant="outline" onClick={() => setManageOpen(true)} className="gap-2">
+               <SlidersHorizontal className="w-4 h-4" /> Edit existing
+             </Button>
+             <Button onClick={() => setAddOpen(true)} className="gap-2">
+               <Plus className="w-4 h-4" /> Add category
+             </Button>
+           </div>
         </div>
       </div>
+
+       {!isLoading && (
+         <Card className="border-none shadow-sm bg-card">
+           <CardContent className="p-5">
+             <div className="flex items-center justify-between gap-4 mb-4">
+               <div>
+                 <p className="text-sm font-semibold text-foreground">Budget vs actual</p>
+                 <p className="text-xs text-muted-foreground mt-0.5">{formatMonthYear(month, year)} across all categories</p>
+               </div>
+               <Target className="w-5 h-5 text-primary" />
+             </div>
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+               <div>
+                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Budget</p>
+                 <p className="font-display font-bold text-xl text-foreground mt-1">{formatKes(reportBudget)}</p>
+               </div>
+               <div>
+                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Actual</p>
+                 <p className={`font-display font-bold text-xl mt-1 ${reportActual > reportBudget ? "text-destructive" : "text-primary"}`}>{formatKes(reportActual)}</p>
+               </div>
+               <div>
+                 <p className="text-xs uppercase tracking-wide text-muted-foreground">{reportVariance < 0 ? "Over budget" : "Remaining"}</p>
+                 <p className={`font-display font-bold text-xl mt-1 ${reportVariance < 0 ? "text-destructive" : "text-primary"}`}>{formatKes(Math.abs(reportVariance))}</p>
+               </div>
+             </div>
+           </CardContent>
+         </Card>
+       )}
 
       {isLoading ? (
         <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>
@@ -219,9 +290,9 @@ export default function Budget() {
             const unusedItems = unusedByPriority[priority] ?? [];
             if (breakdownItems.length === 0 && unusedItems.length === 0) return null;
 
-            const allItems = breakdownItems;
-            const groupTotal = allItems.reduce((s, i) => s + i.budgetAmount, 0);
-            const groupSpent = allItems.reduce((s, i) => s + i.spentAmount, 0);
+             const groupTotal = breakdownItems.reduce((s, i) => s + i.budgetAmount, 0)
+               + unusedItems.reduce((s, i) => s + i.budgetAmount, 0);
+             const groupSpent = breakdownItems.reduce((s, i) => s + i.spentAmount, 0);
 
             return (
               <div key={priority} className="space-y-4">
@@ -231,7 +302,7 @@ export default function Budget() {
                     Tier {priority}: {priorityMap[priority] ?? `Priority ${priority}`}
                   </h2>
                   <div className="text-sm font-medium text-muted-foreground">
-                    {formatKes(groupSpent)} / {formatKes(groupTotal)}
+                     Actual {formatKes(groupSpent)} / Budget {formatKes(groupTotal)}
                   </div>
                 </div>
 

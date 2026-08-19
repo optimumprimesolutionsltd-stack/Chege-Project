@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -20,23 +21,35 @@ import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
 
-// Check for OTA updates and reload immediately when one is available.
+// Check for OTA updates and show an update prompt when one is available.
 // Skipped in development (Expo Go / dev-client) where Updates is not active.
-function useAutoUpdate() {
+// Returns state consumed by RootLayout to render the <UpdatePrompt> overlay.
+function useUpdatePrompt() {
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+
   useEffect(() => {
     if (__DEV__ || !Updates.isEnabled) return;
     (async () => {
       try {
         const result = await Updates.checkForUpdateAsync();
-        if (result.isAvailable) {
-          await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
-        }
+        if (!result.isAvailable) return;
+        // Pull the message from the EAS Update manifest (set via --message flag).
+        // The field is present at runtime even though it is not typed on the manifest type.
+        const manifest = result.manifest as Record<string, unknown> | undefined;
+        const metadata = manifest?.metadata as Record<string, unknown> | undefined;
+        const raw = metadata?.message;
+        const message =
+          typeof raw === 'string' && raw.trim()
+            ? raw.trim()
+            : 'A new version of Bajeti is ready with the latest improvements and fixes.';
+        setUpdateMessage(message);
       } catch {
-        // Network unavailable or server error — silently ignore, user keeps current bundle
+        // Network unavailable or server error — silently ignore.
       }
     })();
   }, []);
+
+  return { updateMessage, dismiss: () => setUpdateMessage(null) };
 }
 
 // Configure API client at module level — must be before any component renders.
@@ -74,7 +87,7 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   // Re-fetch all data the moment the user signs in so queries that ran
   // before auth completed (with no token) get a fresh attempt.
@@ -88,11 +101,13 @@ function RootLayoutNav() {
     if (!isLoading) {
       if (!isAuthenticated) {
         router.replace('/login');
+      } else if (user?.needsDisplayName) {
+        router.replace('/profile-setup');
       } else {
         router.replace('/(tabs)');
       }
     }
-  }, [isLoading, isAuthenticated]);
+  }, [isLoading, isAuthenticated, user?.needsDisplayName]);
 
   if (isLoading) {
     return (
@@ -113,6 +128,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="profile-setup" options={{ gestureEnabled: false }} />
       <Stack.Screen
         name="add-expense"
         options={{
@@ -128,7 +144,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  useAutoUpdate();
+  const { updateMessage, dismiss } = useUpdatePrompt();
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -157,6 +173,12 @@ export default function RootLayout() {
           </GestureHandlerRootView>
         </QueryClientProvider>
       </ErrorBoundary>
+      {/* Update prompt — rendered outside QueryClientProvider so it works even
+          before the user is authenticated, and outside ErrorBoundary so a
+          render error in the main tree doesn't swallow the prompt. */}
+      {updateMessage && (
+        <UpdatePrompt message={updateMessage} onDismiss={dismiss} />
+      )}
     </SafeAreaProvider>
   );
 }

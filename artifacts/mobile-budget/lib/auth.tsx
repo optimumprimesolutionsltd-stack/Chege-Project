@@ -21,6 +21,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
+  saveDisplayName: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -29,6 +30,7 @@ const AuthContext = createContext<AuthContextValue>({
   isAuthenticated: false,
   login: async () => {},
   logout: async () => {},
+  saveDisplayName: async () => {},
 });
 
 const PRODUCTION_API = 'https://delete-project.replit.app';
@@ -145,8 +147,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const saveDisplayName = useCallback(async (name: string) => {
+    const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    if (!token) throw new Error('Your sign-in session has expired.');
+
+    const response = await fetch(`${getApiBaseUrl()}/api/auth/display-name`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.error || 'Could not save your name.');
+    }
+
+    const data = await response.json();
+    setUser(data.user as AuthUser);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, saveDisplayName }}>
       {children}
     </AuthContext.Provider>
   );

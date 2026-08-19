@@ -8,6 +8,7 @@ const GetCurrentAuthUserResponse = z.object({
       firstName: z.string().nullable().optional(),
       lastName: z.string().nullable().optional(),
       profileImageUrl: z.string().nullable().optional(),
+      needsDisplayName: z.boolean(),
     })
     .nullable(),
 });
@@ -22,6 +23,14 @@ const ExchangeMobileAuthorizationCodeBody = z.object({
 
 const ExchangeMobileAuthorizationCodeResponse = z.object({ token: z.string() });
 const LogoutMobileSessionResponse = z.object({ success: z.boolean() });
+const UpdateDisplayNameBody = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Enter a name.')
+    .max(40, 'Use 40 characters or fewer.')
+    .regex(/^[\p{L}][\p{L}\p{M}' -]*$/u, 'Use letters, spaces, apostrophes, or hyphens.'),
+});
 import { db, usersTable } from '@workspace/db';
 import { eq } from 'drizzle-orm';
 import { Router, type IRouter, type Request, type Response } from 'express';
@@ -136,7 +145,10 @@ export async function upsertUser(claims: Record<string, unknown>) {
     .onConflictDoUpdate({
       target: usersTable.id,
       set: {
-        ...userData,
+        // Identity details can refresh on sign-in, but a person's chosen
+        // household name must remain theirs.
+        email: userData.email,
+        profileImageUrl: userData.profileImageUrl,
         updatedAt: new Date(),
       },
     })
@@ -165,9 +177,54 @@ router.get('/auth/user', async (req: Request, res: Response) => {
       user: {
         id: dbUser.id,
         email: dbUser.email,
-        firstName: dbUser.firstName,
-        lastName: dbUser.lastName,
+        firstName: dbUser.preferredName ?? dbUser.firstName,
+        lastName: dbUser.preferredName ? null : dbUser.lastName,
         profileImageUrl: dbUser.profileImageUrl,
+        needsDisplayName: !dbUser.preferredName,
+      },
+    }),
+  );
+});
+
+router.put('/auth/display-name', async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const parsed = UpdateDisplayNameBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter a valid name.' });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({
+      preferredName: parsed.data.name,
+      // Mirror the chosen name into firstName so household activity and member
+      // lists use the same friendly name without a separate lookup strategy.
+      firstName: parsed.data.name,
+      lastName: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(usersTable.id, req.user.id))
+    .returning();
+
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  res.json(
+    GetCurrentAuthUserResponse.parse({
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.preferredName ?? user.firstName,
+        lastName: user.preferredName ? null : user.lastName,
+        profileImageUrl: user.profileImageUrl,
+        needsDisplayName: false,
       },
     }),
   );

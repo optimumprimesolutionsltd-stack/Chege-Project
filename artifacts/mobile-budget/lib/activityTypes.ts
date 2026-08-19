@@ -6,6 +6,7 @@
 export const ACTIVITY_TYPE = {
   EXPENSE: 'expense',
   CONTRIBUTION: 'contribution',
+  SAVINGS: 'savings',
 } as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPE)[keyof typeof ACTIVITY_TYPE];

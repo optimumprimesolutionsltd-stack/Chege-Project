@@ -20,7 +20,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
   useGetDashboardCategoryBreakdown,
-  useGetDashboardSummary,
+  customFetch,
 } from '@workspace/api-client-react';
 
 type BudgetCategory = { id: number; name: string; budgetAmount: number; priority: number; color: string };
@@ -60,29 +60,25 @@ export default function BudgetScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
-  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } =
-    useGetDashboardSummary({ month, year });
   const { data: breakdown = [], isLoading: breakdownLoading, refetch: refetchBreakdown } =
     useGetDashboardCategoryBreakdown({ month, year });
   const { data: allCategories = [], refetch: refetchCats } = useQuery<BudgetCategory[]>({
     queryKey: ['budget-categories-full'],
-    queryFn: async () => {
-      const res = await fetch('/api/budget-categories', { credentials: 'include' });
-      return res.json();
-    },
+    queryFn: () => customFetch<BudgetCategory[]>('/api/budget-categories'),
     staleTime: 30_000,
   });
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchSummary(), refetchBreakdown(), refetchCats()]);
+    await Promise.all([refetchBreakdown(), refetchCats()]);
     setRefreshing(false);
-  }, [refetchSummary, refetchBreakdown, refetchCats]);
+  }, [refetchBreakdown, refetchCats]);
 
   // Add / Edit modal state
   const [editTarget, setEditTarget] = useState<BudgetCategory | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
   const [formPriority, setFormPriority] = useState('1');
@@ -94,6 +90,7 @@ export default function BudgetScreen() {
     setAddOpen(true);
   };
   const openEdit = (cat: BudgetCategory) => {
+    setManageOpen(false);
     setEditTarget(cat);
     setFormName(cat.name);
     setFormAmount(cat.budgetAmount.toString());
@@ -105,7 +102,6 @@ export default function BudgetScreen() {
   const refreshAll = () => {
     refetchCats();
     refetchBreakdown();
-    refetchSummary();
     qc.invalidateQueries({ queryKey: ['dashboard'] });
   };
 
@@ -118,13 +114,11 @@ export default function BudgetScreen() {
     setSaving(true);
     try {
       const url = editTarget ? `/api/budget-categories/${editTarget.id}` : '/api/budget-categories';
-      const res = await fetch(url, {
+      await customFetch(url, {
         method: editTarget ? 'PUT' : 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: formName.trim(), budgetAmount: amt, priority: parseInt(formPriority, 10) || 1 }),
       });
-      if (!res.ok) throw new Error('Failed');
       closeModal();
       refreshAll();
     } catch {
@@ -144,7 +138,7 @@ export default function BudgetScreen() {
           text: 'Remove', style: 'destructive',
           onPress: async () => {
             try {
-              await fetch(`/api/budget-categories/${cat.id}`, { method: 'DELETE', credentials: 'include' });
+              await customFetch(`/api/budget-categories/${cat.id}`, { method: 'DELETE' });
               refreshAll();
             } catch {
               Alert.alert('Error', 'Could not remove category.');
@@ -155,18 +149,16 @@ export default function BudgetScreen() {
     );
   };
 
-  const isLoading = summaryLoading || breakdownLoading;
+  const isLoading = breakdownLoading;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
   function prevMonth() { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); }
   function nextMonth() { if (month === 12) { setMonth(1); setYear(y => y + 1); } else setMonth(m => m + 1); }
 
-  const overallPct = summary && summary.totalBudget > 0
-    ? Math.min(summary.totalSpent / summary.totalBudget, 1) : 0;
-
-  // Categories that exist but have no spending this month
-  const catNamesInBreakdown = new Set(breakdown.map(b => b.category));
-  const unusedCats = allCategories.filter(c => !catNamesInBreakdown.has(c.name));
+  const reportBudget = breakdown.reduce((sum, category) => sum + category.budgetAmount, 0);
+  const reportActual = breakdown.reduce((sum, category) => sum + category.spentAmount, 0);
+  const reportVariance = reportBudget - reportActual;
+  const overallPct = reportBudget > 0 ? Math.min(reportActual / reportBudget, 1) : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -237,6 +229,36 @@ export default function BudgetScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      <Modal visible={manageOpen} animationType="slide" transparent onRequestClose={() => setManageOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit existing budgets</Text>
+              <Pressable onPress={() => setManageOpen(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {allCategories.length === 0 ? (
+                <Text style={[styles.manageEmpty, { color: colors.mutedForeground }]}>No budget categories yet.</Text>
+              ) : allCategories.map(category => (
+                <Pressable
+                  key={category.id}
+                  onPress={() => openEdit(category)}
+                  style={[styles.manageRow, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.manageName, { color: colors.foreground }]}>{category.name}</Text>
+                    <Text style={[styles.manageAmount, { color: colors.mutedForeground }]}>KES {formatKES(category.budgetAmount)} monthly</Text>
+                  </View>
+                  <Feather name="edit-2" size={16} color={colors.primary} />
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -257,27 +279,43 @@ export default function BudgetScreen() {
                   <Feather name="chevron-right" size={20} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
                 </Pressable>
               </View>
-              <Pressable onPress={openAdd} style={styles.addBtn} hitSlop={4}>
-                <Feather name="plus" size={18} color="#4ade80" />
-              </Pressable>
+              <View style={styles.reportActions}>
+                <Pressable onPress={() => setManageOpen(true)} style={styles.manageBtn} hitSlop={4}>
+                  <Feather name="edit-2" size={14} color="#d9fbe5" />
+                  <Text style={styles.manageBtnText}>Edit</Text>
+                </Pressable>
+                <Pressable onPress={openAdd} style={styles.addBtn} hitSlop={4}>
+                  <Feather name="plus" size={18} color="#4ade80" />
+                </Pressable>
+              </View>
             </View>
           </View>
 
-          {!summaryLoading && summary ? (
+          {!breakdownLoading ? (
             <View style={styles.overallCard}>
               <View style={styles.overallRow}>
-                <Text style={styles.overallLabel}>Total Spent</Text>
+                <Text style={styles.overallLabel}>BUDGET VS ACTUAL</Text>
                 <Text style={styles.overallPct}>{Math.round(overallPct * 100)}%</Text>
               </View>
               <View style={[styles.barTrack, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
                 <View style={[styles.barFill, { width: `${overallPct * 100}%`, backgroundColor: overallPct >= 1 ? '#f87171' : '#4ade80' }]} />
               </View>
               <View style={styles.overallAmounts}>
-                <Text style={styles.overallSpent}>KES {formatKES(summary.totalSpent)}</Text>
-                <Text style={styles.overallTarget}>of KES {formatKES(summary.totalBudget)}</Text>
+                <View>
+                  <Text style={styles.overallMiniLabel}>BUDGET</Text>
+                  <Text style={styles.overallSpent}>KES {formatKES(reportBudget)}</Text>
+                </View>
+                <View>
+                  <Text style={styles.overallMiniLabel}>ACTUAL</Text>
+                  <Text style={styles.overallSpent}>KES {formatKES(reportActual)}</Text>
+                </View>
+                <View>
+                  <Text style={styles.overallMiniLabel}>{reportVariance < 0 ? 'OVER' : 'LEFT'}</Text>
+                  <Text style={[styles.overallSpent, reportVariance < 0 && { color: '#f87171' }]}>KES {formatKES(Math.abs(reportVariance))}</Text>
+                </View>
               </View>
             </View>
-          ) : summaryLoading ? <ActivityIndicator color="#4ade80" style={{ marginVertical: 16 }} /> : null}
+          ) : <ActivityIndicator color="#4ade80" style={{ marginVertical: 16 }} />}
         </LinearGradient>
 
         {/* Category list */}
@@ -286,7 +324,7 @@ export default function BudgetScreen() {
 
           {isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} size="large" />
-          ) : breakdown.length === 0 && unusedCats.length === 0 ? (
+           ) : breakdown.length === 0 ? (
             <View style={styles.empty}>
               <Feather name="bar-chart-2" size={40} color={colors.mutedForeground} />
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No categories yet</Text>
@@ -340,39 +378,6 @@ export default function BudgetScreen() {
                   </Pressable>
                 );
               })}
-              {unusedCats.map(cat => {
-                const icon = CATEGORY_ICONS[cat.name] ?? 'more-horizontal';
-                return (
-                  <Pressable
-                    key={cat.id}
-                    onLongPress={() => Alert.alert(cat.name, undefined, [
-                      { text: 'Edit', onPress: () => openEdit(cat) },
-                      { text: 'Remove', style: 'destructive', onPress: () => handleDelete(cat) },
-                      { text: 'Cancel', style: 'cancel' },
-                    ])}
-                    style={[styles.catCard, { backgroundColor: colors.card, borderColor: colors.border, opacity: 0.6 }]}
-                  >
-                    <View style={styles.catTop}>
-                      <View style={[styles.catIcon, { backgroundColor: '#1a1a2a' }]}>
-                        <Feather name={icon} size={16} color={colors.mutedForeground} />
-                      </View>
-                      <View style={styles.catInfo}>
-                        <Text style={[styles.catName, { color: colors.foreground }]}>{cat.name}</Text>
-                        <Text style={[styles.catRemaining, { color: colors.mutedForeground }]}>No spending yet</Text>
-                      </View>
-                      <View style={styles.catActions}>
-                        <Text style={[styles.catBudget, { color: colors.mutedForeground }]}>KES {formatKES(cat.budgetAmount)}</Text>
-                        <Pressable onPress={() => openEdit(cat)} hitSlop={8} style={styles.editBtn}>
-                          <Feather name="edit-2" size={13} color={colors.mutedForeground} />
-                        </Pressable>
-                      </View>
-                    </View>
-                    <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-                      <View style={[styles.barFill, { width: '0%', backgroundColor: colors.border }]} />
-                    </View>
-                  </Pressable>
-                );
-              })}
             </>
           )}
         </View>
@@ -386,16 +391,20 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingBottom: 24 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   headerTitle: { fontSize: 26, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+   reportActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   navBtn: { padding: 4 },
   monthLabel: { fontSize: 14, color: '#f7faf6', fontFamily: 'Inter_500Medium', minWidth: 64, textAlign: 'center' },
   addBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,222,128,0.15)', alignItems: 'center', justifyContent: 'center' },
+   manageBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.10)' },
+   manageBtnText: { color: '#d9fbe5', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   overallCard: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 16, padding: 16 },
   overallRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   overallLabel: { fontSize: 12, color: '#7aaa8a', fontFamily: 'Inter_400Regular', letterSpacing: 0.5 },
   overallPct: { fontSize: 14, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
-  overallAmounts: { flexDirection: 'row', gap: 6, marginTop: 10 },
+   overallAmounts: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 12 },
+   overallMiniLabel: { color: '#7aaa8a', fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5, marginBottom: 3 },
   overallSpent: { fontSize: 16, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
   overallTarget: { fontSize: 14, color: '#7aaa8a', fontFamily: 'Inter_400Regular', alignSelf: 'flex-end' },
   barTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
@@ -432,4 +441,8 @@ const styles = StyleSheet.create({
   priorityHint: { fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 4 },
   saveBtn: { padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 16 },
   saveBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+   manageRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 8 },
+   manageName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+   manageAmount: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+   manageEmpty: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingVertical: 28 },
 });

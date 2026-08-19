@@ -34,6 +34,7 @@ import {
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
   getGetDashboardCategoryBreakdownQueryKey,
+  customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
@@ -298,9 +299,7 @@ export default function HistoryScreen() {
     queryKey: ['income-sources', editForm.paidById],
     queryFn: async () => {
       if (!editForm.paidById) return [];
-      const res = await fetch(`/api/income-sources?userId=${editForm.paidById}`, { credentials: 'include' });
-      if (!res.ok) return [];
-      return res.json();
+      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${editForm.paidById}`);
     },
     enabled: !!editForm.paidById,
     staleTime: 60_000,
@@ -899,7 +898,7 @@ export default function HistoryScreen() {
                   <DateTimePicker
                     value={editForm.date ? new Date(editForm.date + 'T00:00:00') : new Date()}
                     mode="date"
-                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                    display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
                     maximumDate={new Date()}
                     onChange={(_e: DateTimePickerEvent, sel?: Date) => {
                       setEditShowDatePicker(Platform.OS === 'ios');

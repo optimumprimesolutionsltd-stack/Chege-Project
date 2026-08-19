@@ -25,6 +25,10 @@ export interface SuccessResponse {
   success: boolean;
 }
 
+export interface DisplayNameInput {
+  name: string;
+}
+
 export interface AuthUser {
   id: string;
   /** @nullable */
@@ -35,6 +39,7 @@ export interface AuthUser {
   lastName?: string | null;
   /** @nullable */
   profileImageUrl?: string | null;
+  needsDisplayName: boolean;
 }
 
 export interface AuthUserEnvelope {
@@ -90,6 +95,14 @@ export interface BudgetCategory {
   /** 1=survival essentials, 2=health/education, 3=household, 4=connectivity, 5=discretionary */
   priority: number;
   color: string;
+}
+
+export interface BudgetCategoryInput {
+  name: string;
+  /** Monthly budget in KES; use 0 when creating a category from a withdrawal */
+  budgetAmount: number;
+  priority?: number;
+  color?: string;
 }
 
 export interface Contribution {
@@ -238,14 +251,31 @@ export interface DisbursementInput {
      * @minimum 1
      */
   amount: number;
-  description: string;
+  description?: string;
   date: string;
   /**
      * ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.
      * @nullable
      */
   madeById?: string | null;
-  /** Optional expense category this disbursement is paying for */
+  /** Required budget category this disbursement is paying for */
+  expenseCategory: string;
+}
+
+export interface UpdateJointAccountTransactionInput {
+  /** @minimum 1 */
+  amount: number;
+  /** Optional supporting detail; withdrawals fall back to their category */
+  description?: string;
+  date: string;
+  /** @nullable */
+  madeById?: string | null;
+  /**
+     * Preserved for deposits unless explicitly changed
+     * @nullable
+     */
+  incomeSourceId?: number | null;
+  /** Required for withdrawals; deposits ignore this field */
   expenseCategory?: string;
 }
 
@@ -377,3 +407,4 @@ export type GetIncomeSourcesParams = {
  */
 userId?: string;
 };
+

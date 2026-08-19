@@ -52,11 +52,6 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function shiftDate(iso: string, days: number): string {
-  const d = new Date(iso);
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 function formatDateDisplay(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
@@ -653,7 +648,7 @@ export default function AddExpenseSheet() {
           <DateTimePicker
             value={new Date(date + 'T00:00:00')}
             mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+            display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
             maximumDate={new Date()}
             onChange={(_event: DateTimePickerEvent, selected?: Date) => {
               setShowDatePicker(Platform.OS === 'ios');
@@ -827,7 +822,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginRight: 10,
   },
-  dateArrow: { padding: 14 },
+
   dateText: {
     flex: 1,
     textAlign: 'center',

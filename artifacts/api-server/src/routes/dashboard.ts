@@ -238,6 +238,22 @@ router.get("/dashboard/activity", async (req, res) => {
     .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
     .limit(10);
 
+  // Include recent savings-goal contributions in the feed
+  const savingsContribs = await db
+    .select({
+      id: savingsGoalContributionsTable.id,
+      amount: savingsGoalContributionsTable.amount,
+      goalName: savingsGoalsTable.name,
+      createdByUserId: savingsGoalContributionsTable.createdByUserId,
+      contributorName: usersTable.firstName,
+      createdAt: savingsGoalContributionsTable.createdAt,
+    })
+    .from(savingsGoalContributionsTable)
+    .leftJoin(savingsGoalsTable, eq(savingsGoalContributionsTable.goalId, savingsGoalsTable.id))
+    .leftJoin(usersTable, eq(savingsGoalContributionsTable.createdByUserId, usersTable.id))
+    .orderBy(sql`${savingsGoalContributionsTable.createdAt} DESC`)
+    .limit(10);
+
   const items = [
     ...expenses.map((e) => ({
       id: `expense-${e.id}`,
@@ -257,6 +273,15 @@ router.get("/dashboard/activity", async (req, res) => {
       userName: d.madeById === null ? "Joint bank" : (d.madeByName ?? "Unknown"),
       category: null,
       date: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+    })),
+    ...savingsContribs.map((s) => ({
+      id: `savings-${s.id}`,
+      type: "savings",
+      amount: s.amount,
+      description: `${s.goalName ?? "Savings"} contribution`,
+      userName: s.createdByUserId === null ? "Joint bank" : (s.contributorName ?? "Unknown"),
+      category: null,
+      date: s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
     })),
   ]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())

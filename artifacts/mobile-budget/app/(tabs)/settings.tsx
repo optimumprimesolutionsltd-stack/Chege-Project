@@ -138,6 +138,14 @@ export default function SettingsScreen() {
             {user?.email ? (
               <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>{user.email}</Text>
             ) : null}
+            {user?.id ? (
+              <Text
+                selectable
+                style={[styles.profileEmail, { color: colors.mutedForeground, fontSize: 10, marginTop: 2, fontFamily: 'Inter_400Regular' }]}
+              >
+                ID: {user.id}
+              </Text>
+            ) : null}
           </View>
         </View>
 

@@ -25,11 +25,15 @@ import {
   useGetJointAccount,
   useCreateDeposit,
   useCreateDisbursement,
+  useUpdateJointAccountTransaction,
   useDeleteJointAccountTransaction,
   useGetBudgetCategories,
+  getGetBudgetCategoriesQueryKey,
   useGetMembers,
+  useGetSavingsGoals,
   getGetJointAccountQueryKey,
   getGetDashboardSummaryQueryKey,
+  customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 
@@ -56,6 +60,7 @@ type Tx = {
   madeById?: string | null;
   madeByName?: string | null;
   expenseCategory?: string | null;
+  date: string;
   createdAt?: string | null;
 };
 
@@ -92,9 +97,12 @@ export default function BankScreen() {
   const [description, setDescription] = useState('');
   const [expenseCategory, setExpenseCategory] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
 
   // ── Deposit payer state ────────────────────────────────────────────────────
   // depositorIds: [] = Joint bank (null madeById)
@@ -108,11 +116,21 @@ export default function BankScreen() {
   // withdrawerId: null = Joint bank; string = named member
   const [withdrawerId, setWithdrawerId] = useState<string | null>(null);
 
+  // ── Withdrawal destination state ───────────────────────────────────────────
+  // 'source' = an income stream they defined, 'savings' = a savings goal,
+  // 'other' = free-text description
+  type WithdrawDestType = 'source' | 'savings' | 'other';
+  const [withdrawDest, setWithdrawDest] = useState<WithdrawDestType | null>(null);
+  const [withdrawSourceName, setWithdrawSourceName] = useState<string | null>(null);
+  const [withdrawGoalId, setWithdrawGoalId] = useState<number | null>(null);
+  const [showGoalPicker, setShowGoalPicker] = useState(false);
+
   // Derived: for income sources, only show when exactly one depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
 
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
+  const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
@@ -122,20 +140,37 @@ export default function BankScreen() {
     queryKey: ['income-sources', singleDepositorId],
     queryFn: async () => {
       if (!singleDepositorId) return [];
-      const res = await fetch(`/api/income-sources?userId=${singleDepositorId}`, { credentials: 'include' });
-      if (!res.ok) return [];
-      return res.json();
+      return customFetch<MemberIncomeSource[]>(`/api/income-sources?userId=${singleDepositorId}`);
     },
     enabled: !!singleDepositorId && txType === 'deposit',
     staleTime: 60_000,
   });
 
+  // Fetch income sources for the selected withdrawer (withdrawal destination chips)
+  const { data: withdrawSources = [] } = useQuery<MemberIncomeSource[]>({
+    queryKey: ['income-sources', withdrawerId],
+    queryFn: async () => {
+      if (!withdrawerId) return [];
+      return customFetch<MemberIncomeSource[]>(`/api/income-sources?userId=${withdrawerId}`);
+    },
+    enabled: !!withdrawerId && txType === 'disbursement',
+    staleTime: 60_000,
+  });
+
+  // Savings goals for the "Savings" destination option
+  const { data: savingsGoals = [] } = useGetSavingsGoals();
+
+  // The savings goal matching the current withdrawGoalId selection
+  const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
+
   const openModal = (type: TxType) => {
+    setEditingTransactionId(null);
     setTxType(type);
     setAmount('');
     setDescription('');
     setExpenseCategory('');
     setShowCategoryPicker(false);
+    setNewCategoryName('');
     setDate(todayIso());
     setShowDatePicker(false);
     // Default to Joint bank for both deposits and withdrawals
@@ -143,12 +178,19 @@ export default function BankScreen() {
     setDepositorAmounts({});
     setIncomeSourceId(null);
     setWithdrawerId(null);
+    // Reset withdrawal destination
+    setWithdrawDest(null);
+    setWithdrawSourceName(null);
+    setWithdrawGoalId(null);
+    setShowGoalPicker(false);
     setModalVisible(true);
   };
 
   const closeModal = () => {
     if (submitting) return;
     setModalVisible(false);
+    setNewCategoryName('');
+    setEditingTransactionId(null);
   };
 
   // Invalidate everywhere that displays the joint-account balance so all
@@ -178,6 +220,27 @@ export default function BankScreen() {
     );
   };
 
+  const openEdit = (tx: Tx) => {
+    const type: TxType = tx.type === 'deposit' ? 'deposit' : 'disbursement';
+    setTxType(type);
+    setEditingTransactionId(tx.id);
+    setAmount(String(tx.amount));
+    setDescription(tx.description);
+    setDate(tx.date);
+    setExpenseCategory(tx.expenseCategory ?? '');
+    setShowCategoryPicker(false);
+    setDepositorIds(type === 'deposit' && tx.madeById ? [tx.madeById] : []);
+    setDepositorAmounts({});
+    setIncomeSourceId(null);
+    setWithdrawerId(type === 'disbursement' ? tx.madeById ?? null : null);
+    setWithdrawDest(type === 'disbursement' ? 'other' : null);
+    setWithdrawSourceName(null);
+    setWithdrawGoalId(null);
+    setShowGoalPicker(false);
+    setShowDatePicker(false);
+    setModalVisible(true);
+  };
+
   // ── Toggle depositor member chip ───────────────────────────────────────────
   // Selecting a member deselects Joint bank (and vice versa).
   // Selecting all-off means Joint bank again.
@@ -201,6 +264,31 @@ export default function BankScreen() {
     setIncomeSourceId(null);
   };
 
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      Alert.alert('Enter a category name', 'Give the new category a short name first.');
+      return;
+    }
+
+    setAddingCategory(true);
+    try {
+      const category = await customFetch<{ id: number; name: string }>('/api/budget-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, budgetAmount: 0, priority: 1, color: '#6B7280' }),
+      });
+      setExpenseCategory(category.name);
+      setNewCategoryName('');
+      setShowCategoryPicker(false);
+      queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+    } catch {
+      Alert.alert('Could not add category', 'Please try again.');
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
   // ── Validate member IDs against known members ──────────────────────────────
   const knownMemberIds = new Set(members.map(m => m.userId));
   const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
@@ -215,14 +303,55 @@ export default function BankScreen() {
       Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
       return;
     }
-    if (!description.trim()) {
+    if (txType === 'disbursement' && !expenseCategory.trim()) {
+      Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
+      return;
+    }
+    // For withdrawals, derive description from destination selection
+    let finalDescription = description.trim();
+    if (txType === 'disbursement') {
+      if (withdrawDest === 'source') {
+        if (!withdrawSourceName) {
+          Alert.alert('Destination required', 'Please select where this money is going.');
+          return;
+        }
+        finalDescription = description.trim() || withdrawSourceName;
+      } else if (withdrawDest === 'savings') {
+        if (!selectedGoal) {
+          Alert.alert('Select a goal', 'Please choose which savings goal this is for.');
+          return;
+        }
+        finalDescription = description.trim() || `Savings – ${selectedGoal.name}`;
+      } else {
+        // Details are optional for a withdrawal — its category is the primary
+        // reportable label, and becomes the fallback transaction description.
+        finalDescription = description.trim() || expenseCategory;
+      }
+    } else if (!finalDescription) {
       Alert.alert('Description required', 'Please enter a description.');
       return;
     }
 
     setSubmitting(true);
     try {
-      if (txType === 'deposit') {
+      if (editingTransactionId !== null) {
+        if (txType === 'deposit' && validDepositorIds.length > 1) {
+          Alert.alert('One depositor per entry', 'Edit each deposited entry separately.');
+          return;
+        }
+        await updateTransaction({
+          id: editingTransactionId,
+          data: {
+            amount: parsed,
+            description: finalDescription,
+            date,
+            madeById: txType === 'deposit'
+              ? validDepositorIds[0] ?? null
+              : withdrawerId ?? null,
+            ...(txType === 'disbursement' ? { expenseCategory } : {}),
+          },
+        });
+      } else if (txType === 'deposit') {
         const isJoint = validDepositorIds.length === 0;
         const isMultiDepositor = validDepositorIds.length > 1;
 
@@ -291,14 +420,15 @@ export default function BankScreen() {
         await createDisbursement({
           data: {
             amount: parsed,
-            description: description.trim(),
+            description: finalDescription,
             date,
-            expenseCategory: expenseCategory || undefined,
+            expenseCategory,
             madeById: withdrawerId ?? null,
           },
         });
       }
       setModalVisible(false);
+      setEditingTransactionId(null);
       await invalidateBalance();
     } catch (err: unknown) {
       const message =
@@ -415,8 +545,6 @@ export default function BankScreen() {
           const payerLabel = txPayerLabel(item);
           return (
             <Pressable
-              onLongPress={() => handleDelete(item)}
-              delayLongPress={400}
               style={({ pressed }) => [
                 styles.txRow,
                 { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 },
@@ -431,20 +559,36 @@ export default function BankScreen() {
               </View>
               <View style={styles.txInfo}>
                 <Text style={[styles.txDesc, { color: colors.foreground }]} numberOfLines={1}>
-                  {item.description}
+                  {!dep && item.expenseCategory ? item.expenseCategory : item.description}
                 </Text>
                 <Text style={[styles.txMeta, { color: colors.mutedForeground }]}>
                   {dep
                     ? `${payerLabel} · `
-                    : ((item.expenseCategory
-                        ? `→ ${item.expenseCategory} · `
-                        : `${payerLabel} · `))}
-                  {formatDateTime(item.createdAt)} · Hold to delete
+                    : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
+                  {formatDateTime(item.createdAt)} · Edit or delete
                 </Text>
               </View>
-              <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
-                {dep ? '+' : '-'}KES {formatKES(item.amount)}
-              </Text>
+              <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
+                  {dep ? '+' : '-'}KES {formatKES(item.amount)}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => openEdit(item)}
+                    hitSlop={8}
+                    testID={`bank-edit-transaction-${item.id}`}
+                  >
+                    <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDelete(item)}
+                    hitSlop={8}
+                    testID={`bank-delete-transaction-${item.id}`}
+                  >
+                    <Feather name="trash-2" size={16} color="#f87171" />
+                  </TouchableOpacity>
+                </View>
+              </View>
             </Pressable>
           );
         }}
@@ -470,7 +614,8 @@ export default function BankScreen() {
             {/* Sheet handle */}
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
-            {/* Type toggle */}
+            {/* Type stays fixed when editing so a deposit cannot become a withdrawal. */}
+            {editingTransactionId === null ? (
             <View style={[styles.toggle, { backgroundColor: colors.muted }]}>
               <TouchableOpacity
                 style={[
@@ -507,9 +652,12 @@ export default function BankScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            ) : null}
 
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-              {isDeposit ? 'Add Money to Account' : 'Take Money Out'}
+              {editingTransactionId !== null
+                ? `Edit ${isDeposit ? 'Deposit' : 'Withdrawal'}`
+                : isDeposit ? 'Add Money to Account' : 'Take Money Out'}
             </Text>
 
             {/* Amount */}
@@ -532,25 +680,29 @@ export default function BankScreen() {
               testID="bank-amount-input"
             />
 
-            {/* Description */}
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>Description</Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.foreground,
-                  borderColor: colors.border,
-                  backgroundColor: colors.muted,
-                },
-              ]}
-              placeholder={isDeposit ? 'e.g. Monthly contribution' : 'e.g. School fees'}
-              placeholderTextColor={colors.mutedForeground}
-              value={description}
-              onChangeText={setDescription}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-              testID="bank-description-input"
-            />
+            {/* Deposits require a description. Withdrawal details come after the required category. */}
+            {isDeposit && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Description</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.foreground,
+                      borderColor: colors.border,
+                      backgroundColor: colors.muted,
+                    },
+                  ]}
+                  placeholder="e.g. Monthly contribution"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={description}
+                  onChangeText={setDescription}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                  testID="bank-description-input"
+                />
+              </>
+            )}
 
             {/* ── Deposited by (deposits only) ── */}
             {isDeposit && members.length > 0 && (
@@ -798,12 +950,169 @@ export default function BankScreen() {
               </>
             )}
 
+            {/* ── Withdrawal destination ────────────────────────────────────── */}
+            {!isDeposit && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  Where is this money going?{' '}
+                  <Text style={{ fontWeight: '400', fontSize: 11 }}>* required</Text>
+                </Text>
+                <View style={styles.memberRow}>
+                  {/* Income source chips for the selected withdrawer */}
+                  {withdrawSources.map((src) => {
+                    const selected = withdrawDest === 'source' && withdrawSourceName === src.name;
+                    return (
+                      <TouchableOpacity
+                        key={src.id}
+                        testID={`bank-withdraw-dest-src-${src.id}`}
+                        style={[
+                          styles.memberPill,
+                          {
+                            backgroundColor: selected ? '#6366f1' : colors.muted,
+                            borderColor: selected ? '#6366f1' : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          setWithdrawDest('source');
+                          setWithdrawSourceName(src.name);
+                          setWithdrawGoalId(null);
+                          setShowGoalPicker(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="briefcase" size={12} color={selected ? '#fff' : colors.mutedForeground} />
+                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                          {src.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  {/* Savings chip */}
+                  {(() => {
+                    const selected = withdrawDest === 'savings';
+                    return (
+                      <TouchableOpacity
+                        testID="bank-withdraw-dest-savings"
+                        style={[
+                          styles.memberPill,
+                          {
+                            backgroundColor: selected ? '#0891b2' : colors.muted,
+                            borderColor: selected ? '#0891b2' : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          setWithdrawDest('savings');
+                          setWithdrawSourceName(null);
+                          setShowGoalPicker(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="target" size={12} color={selected ? '#fff' : colors.mutedForeground} />
+                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                          Savings
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
+
+                  {/* Other chip */}
+                  {(() => {
+                    const selected = withdrawDest === 'other';
+                    return (
+                      <TouchableOpacity
+                        testID="bank-withdraw-dest-other"
+                        style={[
+                          styles.memberPill,
+                          {
+                            backgroundColor: selected ? '#64748b' : colors.muted,
+                            borderColor: selected ? '#64748b' : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          setWithdrawDest('other');
+                          setWithdrawSourceName(null);
+                          setWithdrawGoalId(null);
+                          setShowGoalPicker(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="edit-3" size={12} color={selected ? '#fff' : colors.mutedForeground} />
+                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                          Other
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
+                </View>
+
+                {/* Savings goal dropdown */}
+                {withdrawDest === 'savings' && showGoalPicker && savingsGoals.length > 0 && (
+                  <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    {savingsGoals
+                      .filter(g => !g.isCompleted)
+                      .map(g => {
+                        const pct = g.targetAmount > 0
+                          ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100))
+                          : 0;
+                        return (
+                          <TouchableOpacity
+                            key={g.id}
+                            style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                            onPress={() => {
+                              setWithdrawGoalId(g.id);
+                              setShowGoalPicker(false);
+                            }}
+                          >
+                            <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>{g.name}</Text>
+                            <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                              {pct}% funded
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    {savingsGoals.filter(g => !g.isCompleted).length === 0 && (
+                      <TouchableOpacity style={styles.categoryOption}>
+                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>No active goals</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
+                {/* Selected goal badge */}
+                {withdrawDest === 'savings' && selectedGoal && !showGoalPicker && (
+                  <TouchableOpacity
+                    onPress={() => setShowGoalPicker(true)}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 8,
+                      paddingVertical: 10, paddingHorizontal: 14,
+                      borderRadius: 10, borderWidth: 1,
+                      borderColor: '#0891b2', backgroundColor: '#0891b222',
+                      marginTop: 6,
+                    }}
+                  >
+                    <Feather name="target" size={14} color="#0891b2" />
+                    <Text style={{ flex: 1, color: '#0891b2', fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>
+                      {selectedGoal.name}
+                    </Text>
+                    <Feather name="chevron-down" size={14} color="#0891b2" />
+                  </TouchableOpacity>
+                )}
+
+                {/* No goal selected yet hint */}
+                {withdrawDest === 'savings' && !selectedGoal && !showGoalPicker && savingsGoals.length === 0 && (
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+                    No savings goals set up yet
+                  </Text>
+                )}
+              </>
+            )}
+
             {/* Expense category (disbursements only) */}
             {!isDeposit && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  What was this for?{' '}
-                  <Text style={{ fontWeight: '400' }}>(optional)</Text>
+                  Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
                 </Text>
                 <TouchableOpacity
                   style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -819,7 +1128,7 @@ export default function BankScreen() {
                       flex: 1,
                     }}
                   >
-                    {expenseCategory || 'No category'}
+                    {expenseCategory || 'Choose a category'}
                   </Text>
                   <Feather
                     name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
@@ -829,14 +1138,6 @@ export default function BankScreen() {
                 </TouchableOpacity>
                 {showCategoryPicker && (
                   <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                    <TouchableOpacity
-                      style={styles.categoryOption}
-                      onPress={() => { setExpenseCategory(''); setShowCategoryPicker(false); }}
-                    >
-                      <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                        Not linked to a category
-                      </Text>
-                    </TouchableOpacity>
                     {categories.map(c => (
                       <TouchableOpacity
                         key={c.id}
@@ -846,8 +1147,61 @@ export default function BankScreen() {
                         <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>{c.name}</Text>
                       </TouchableOpacity>
                     ))}
+                    <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }}>
+                      <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                        CAN'T FIND IT? ADD A CATEGORY
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          value={newCategoryName}
+                          onChangeText={setNewCategoryName}
+                          editable={!addingCategory}
+                          placeholder="e.g. Transport"
+                          placeholderTextColor={colors.mutedForeground}
+                          style={{
+                            flex: 1, height: 40, borderWidth: 1, borderColor: colors.border,
+                            borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                            fontFamily: 'Inter_400Regular', backgroundColor: colors.background,
+                          }}
+                          testID="bank-new-category-input"
+                        />
+                        <TouchableOpacity
+                          disabled={addingCategory || !newCategoryName.trim()}
+                          onPress={handleCreateCategory}
+                          style={{
+                            minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+                            backgroundColor: colors.primary, opacity: addingCategory || !newCategoryName.trim() ? 0.55 : 1,
+                          }}
+                          testID="bank-add-category"
+                        >
+                          {addingCategory ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
                 )}
+              </>
+            )}
+
+            {/* Categories drive withdrawal reports; details remain optional context. */}
+            {!isDeposit && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  Details <Text style={{ fontWeight: '400' }}>(optional)</Text>
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted },
+                  ]}
+                  placeholder="e.g. School books for term two"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={description}
+                  onChangeText={setDescription}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                  testID="bank-description-input"
+                />
               </>
             )}
 
@@ -898,7 +1252,7 @@ export default function BankScreen() {
                 <ActivityIndicator color={isDeposit ? '#0a1a10' : '#fff'} />
               ) : (
                 <Text style={[styles.submitText, !isDeposit && { color: '#fff' }]}>
-                  {isDeposit ? 'Add Money' : 'Withdraw'}
+                  {editingTransactionId !== null ? 'Save Changes' : isDeposit ? 'Add Money' : 'Withdraw'}
                 </Text>
               )}
             </TouchableOpacity>

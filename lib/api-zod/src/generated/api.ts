@@ -25,7 +25,27 @@ export const GetAuthUserResponse = zod.object({
   "email": zod.string().nullish(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
-  "profileImageUrl": zod.string().nullish()
+  "profileImageUrl": zod.string().nullish(),
+  "needsDisplayName": zod.boolean()
+}),zod.null()])
+})
+
+
+/**
+ * @summary Save the authenticated user's preferred display name
+ */
+export const UpdateDisplayNameBody = zod.object({
+  "name": zod.string()
+})
+
+export const UpdateDisplayNameResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "profileImageUrl": zod.string().nullish(),
+  "needsDisplayName": zod.boolean()
 }),zod.null()])
 })
 
@@ -148,6 +168,25 @@ export const GetBudgetCategoriesResponseItem = zod.object({
   "color": zod.string()
 })
 export const GetBudgetCategoriesResponse = zod.array(GetBudgetCategoriesResponseItem)
+
+
+/**
+ * @summary Create a budget category
+ */
+export const CreateBudgetCategoryBody = zod.object({
+  "name": zod.string(),
+  "budgetAmount": zod.number().describe('Monthly budget in KES; use 0 when creating a category from a withdrawal'),
+  "priority": zod.number().optional(),
+  "color": zod.string().optional()
+})
+
+export const CreateBudgetCategoryResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "budgetAmount": zod.number().describe('Monthly budget in KES'),
+  "priority": zod.number().describe('1=survival essentials, 2=health\/education, 3=household, 4=connectivity, 5=discretionary'),
+  "color": zod.string()
+})
 
 
 /**
@@ -380,13 +419,46 @@ export const createDisbursementBodyAmountMultipleOf = 1;
 
 export const CreateDisbursementBody = zod.object({
   "amount": zod.number().min(1).multipleOf(createDisbursementBodyAmountMultipleOf).describe('Whole KES only; must be a positive integer amount'),
-  "description": zod.string(),
+  "description": zod.string().optional(),
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish().describe('ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.\n'),
-  "expenseCategory": zod.string().optional().describe('Optional expense category this disbursement is paying for')
+  "expenseCategory": zod.string().describe('Required budget category this disbursement is paying for')
 })
 
 export const CreateDisbursementResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.string().describe('deposit or disbursement'),
+  "amount": zod.number(),
+  "description": zod.string(),
+  "madeById": zod.string().nullish(),
+  "madeByName": zod.string().nullish(),
+  "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
+  "date": zod.coerce.date(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Edit a joint account transaction without changing its type
+ */
+export const UpdateJointAccountTransactionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateJointAccountTransactionBodyAmountMultipleOf = 1;
+
+
+
+export const UpdateJointAccountTransactionBody = zod.object({
+  "amount": zod.number().min(1).multipleOf(updateJointAccountTransactionBodyAmountMultipleOf),
+  "description": zod.string().optional().describe('Optional supporting detail; withdrawals fall back to their category'),
+  "date": zod.coerce.date(),
+  "madeById": zod.string().nullish(),
+  "incomeSourceId": zod.number().nullish().describe('Preserved for deposits unless explicitly changed'),
+  "expenseCategory": zod.string().optional().describe('Required for withdrawals; deposits ignore this field')
+})
+
+export const UpdateJointAccountTransactionResponse = zod.object({
   "id": zod.number(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),

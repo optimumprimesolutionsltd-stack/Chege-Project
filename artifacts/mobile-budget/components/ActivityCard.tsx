@@ -52,9 +52,15 @@ function formatDate(dateStr: string): string {
 
 export default function ActivityCard({ item, colors }: Props) {
   const isExpense = item.type === ACTIVITY_TYPE.EXPENSE;
+  const isSavings = item.type === ACTIVITY_TYPE.SAVINGS;
+
   const iconName: keyof typeof Feather.glyphMap =
     (item.category ? CATEGORY_ICONS[item.category] : undefined) ??
-    (isExpense ? 'shopping-bag' : 'arrow-down-circle');
+    (isExpense ? 'shopping-bag' : isSavings ? 'target' : 'arrow-down-circle');
+
+  const iconBg = isExpense ? colors.accent : isSavings ? '#1a3320' : colors.muted;
+  const iconColor = isExpense ? colors.accentForeground : isSavings ? '#4ade80' : colors.primary;
+  const amountColor = isExpense ? colors.foreground : isSavings ? '#4ade80' : colors.primary;
 
   return (
     <View
@@ -71,16 +77,12 @@ export default function ActivityCard({ item, colors }: Props) {
         style={[
           styles.iconWrap,
           {
-            backgroundColor: isExpense ? colors.accent : colors.muted,
+            backgroundColor: iconBg,
             borderRadius: colors.radius - 2,
           },
         ]}
       >
-        <Feather
-          name={iconName}
-          size={18}
-          color={isExpense ? colors.accentForeground : colors.primary}
-        />
+        <Feather name={iconName} size={18} color={iconColor} />
       </View>
 
       <View style={styles.info}>
@@ -95,12 +97,7 @@ export default function ActivityCard({ item, colors }: Props) {
         </Text>
       </View>
 
-      <Text
-        style={[
-          styles.amount,
-          { color: isExpense ? colors.foreground : colors.primary },
-        ]}
-      >
+      <Text style={[styles.amount, { color: amountColor }]}>
         {isExpense ? '−' : '+'}
         {item.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
       </Text>

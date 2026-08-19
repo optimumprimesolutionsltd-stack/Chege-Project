@@ -1,14 +1,15 @@
 import { useState } from "react";
 import {
-  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useDeleteJointAccountTransaction,
-  useGetMembers, useGetBudgetCategories, getGetJointAccountQueryKey, getGetDashboardSummaryQueryKey,
+  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
+  useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
+  getGetJointAccountQueryKey, getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKes, formatDate } from "@/lib/utils";
-import { Trash2, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown } from "lucide-react";
+import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -20,12 +21,23 @@ type MemberIncomeSource = {
   name: string;
 };
 
+type EditableTransaction = {
+  id: number;
+  type: string;
+  amount: number;
+  description: string;
+  date: string;
+  madeById?: string | null;
+  expenseCategory?: string | null;
+};
+
 export default function Bank() {
   const { data: account, isLoading } = useGetJointAccount();
   const { data: members } = useGetMembers();
   const { data: categories } = useGetBudgetCategories();
   const createDeposit = useCreateDeposit();
   const createDisbursement = useCreateDisbursement();
+  const updateTx = useUpdateJointAccountTransaction();
   const deleteTx = useDeleteJointAccountTransaction();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -45,6 +57,9 @@ export default function Bank() {
   // Default: Joint bank
   const [withdrawerId, setWithdrawerId] = useState<string | null>(JOINT_BANK_ID);
   const [expenseCategory, setExpenseCategory] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<EditableTransaction | null>(null);
 
   // Income sources — only fetch when exactly one named depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
@@ -65,6 +80,38 @@ export default function Bank() {
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
   };
 
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+
+    const existing = categories?.find((category) => category.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setExpenseCategory(existing.name);
+      setNewCategoryName("");
+      return;
+    }
+
+    setAddingCategory(true);
+    try {
+      const response = await fetch("/api/budget-categories", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, budgetAmount: 0, priority: 1, color: "#6B7280" }),
+      });
+      if (!response.ok) throw new Error("Could not create category");
+      const category = await response.json();
+      setExpenseCategory(category.name);
+      setNewCategoryName("");
+      queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      toast({ title: "Category added", description: `${category.name} is ready to use.` });
+    } catch {
+      toast({ variant: "destructive", title: "Could not add category", description: "Please try again." });
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
   const resetForm = () => {
     setAmount("");
     setDescription("");
@@ -75,6 +122,8 @@ export default function Bank() {
     setIncomeSourceId(null);
     setWithdrawerId(JOINT_BANK_ID);
     setExpenseCategory("");
+    setNewCategoryName("");
+    setEditingTransaction(null);
     setMode(null);
   };
 
@@ -88,12 +137,37 @@ export default function Bank() {
     setIncomeSourceId(null);
     setWithdrawerId(JOINT_BANK_ID);
     setExpenseCategory("");
+    setNewCategoryName("");
+    setEditingTransaction(null);
     setMode(m);
+  };
+
+  const openEdit = (tx: EditableTransaction) => {
+    const transactionMode = tx.type === "deposit" ? "deposit" : "disbursement";
+    setEditingTransaction(tx);
+    setMode(transactionMode);
+    setAmount(String(tx.amount));
+    setDescription(tx.description);
+    setDate(tx.date);
+    setDepositorIds(transactionMode === "deposit" && tx.madeById ? [tx.madeById] : []);
+    setDepositorAmounts({});
+    setIncomeSourceId(null);
+    setWithdrawerId(transactionMode === "disbursement" ? tx.madeById ?? null : JOINT_BANK_ID);
+    setExpenseCategory(tx.expenseCategory ?? "");
+    setNewCategoryName("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || !description || !date) return;
+    if (!amount || !date || (mode === "deposit" && !description.trim())) return;
+    if (mode === "disbursement" && !expenseCategory) {
+      toast({
+        variant: "destructive",
+        title: "Category required",
+        description: "Choose or add a category before recording this withdrawal.",
+      });
+      return;
+    }
 
     const total = Number(amount);
     if (!Number.isInteger(total) || total <= 0) {
@@ -129,7 +203,27 @@ export default function Bank() {
     }
 
     try {
-      if (mode === "deposit") {
+      if (editingTransaction) {
+        if (mode === "deposit" && depositorIds.length > 1) {
+          toast({
+            variant: "destructive",
+            title: "One depositor per entry",
+            description: "Edit each deposited entry separately.",
+          });
+          return;
+        }
+        await updateTx.mutateAsync({
+          id: editingTransaction.id,
+          data: {
+            amount: total,
+            description: description.trim() || expenseCategory,
+            date,
+            madeById: mode === "deposit" ? depositorIds[0] ?? null : withdrawerId,
+            ...(mode === "disbursement" ? { expenseCategory } : {}),
+          },
+        });
+        toast({ title: "Transaction updated" });
+      } else if (mode === "deposit") {
         if (isMultiDepositor) {
           // Multiple named depositors — split into per-person deposits
           for (const did of depositorIds) {
@@ -162,9 +256,9 @@ export default function Bank() {
         await createDisbursement.mutateAsync({
           data: {
             amount: total,
-            description,
+            description: description.trim() || expenseCategory,
             date,
-            expenseCategory: expenseCategory || undefined,
+            expenseCategory,
             madeById: withdrawerId,
           },
         });
@@ -188,7 +282,7 @@ export default function Bank() {
     }
   };
 
-  const isPending = createDeposit.isPending || createDisbursement.isPending;
+  const isPending = createDeposit.isPending || createDisbursement.isPending || updateTx.isPending || addingCategory;
 
   // Helpers for attribution labels in transaction list
   const madeByLabel = (madeByName: string | null | undefined, type: string) => {
@@ -253,7 +347,9 @@ export default function Bank() {
         <Card className="border-none shadow-md bg-accent/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">
-              {mode === "deposit" ? "Add Money to Account" : "Take Money Out"}
+              {editingTransaction
+                ? `Edit ${mode === "deposit" ? "Deposit" : "Withdrawal"}`
+                : mode === "deposit" ? "Add Money to Account" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
               {mode === "deposit"
@@ -289,14 +385,62 @@ export default function Bank() {
                     className="h-12 bg-card"
                   />
                 </div>
+                {mode === "disbursement" && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-sm font-semibold text-foreground">
+                      Category <span className="text-destructive">*</span>
+                    </label>
+                    <select
+                      data-testid="select-expense-category"
+                      required
+                      className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={expenseCategory}
+                      onChange={e => setExpenseCategory(e.target.value)}
+                    >
+                      <option value="" disabled>Choose a category...</option>
+                      {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        data-testid="input-new-expense-category"
+                        value={newCategoryName}
+                        onChange={e => setNewCategoryName(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleCreateCategory();
+                          }
+                        }}
+                        placeholder="Can't find it? Add a category, e.g. Transport"
+                        className="h-10 bg-card"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!newCategoryName.trim() || addingCategory}
+                        onClick={() => void handleCreateCategory()}
+                        className="h-10 shrink-0"
+                        data-testid="button-add-expense-category"
+                      >
+                        {addingCategory ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add category"}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Categories make bank withdrawals appear accurately in expense and savings reports.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2 sm:col-span-2">
-                  <label className="text-sm font-semibold text-foreground">Description</label>
+                  <label className="text-sm font-semibold text-foreground">
+                    {mode === "deposit" ? "Description" : "Details"}
+                    {mode === "disbursement" && <span className="font-normal text-muted-foreground"> (optional)</span>}
+                  </label>
                   <Input
                     data-testid="input-description"
-                    placeholder={mode === "deposit" ? "e.g. Salary deposit" : "e.g. Paid school fees"}
+                    placeholder={mode === "deposit" ? "e.g. Salary deposit" : "e.g. Paid school fees for term two"}
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    required
+                    required={mode === "deposit"}
                     className="h-12 bg-card"
                   />
                 </div>
@@ -469,21 +613,6 @@ export default function Bank() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 sm:col-span-2">
-                      <label className="text-sm font-semibold text-foreground">
-                        Category{" "}
-                        <span className="font-normal text-muted-foreground">(optional — helps track what the money was used for)</span>
-                      </label>
-                      <select
-                        data-testid="select-expense-category"
-                        className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        value={expenseCategory}
-                        onChange={e => setExpenseCategory(e.target.value)}
-                      >
-                        <option value="">No category</option>
-                        {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                      </select>
-                    </div>
                   </>
                 )}
               </div>
@@ -492,7 +621,7 @@ export default function Bank() {
                 <Button type="button" variant="outline" onClick={resetForm} className="h-12 px-6">Cancel</Button>
                 <Button type="submit" disabled={isPending} data-testid="button-save-transaction" className="h-12 px-8">
                   {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Save
+                  {editingTransaction ? "Save changes" : "Save"}
                 </Button>
               </div>
             </form>
@@ -528,11 +657,13 @@ export default function Bank() {
                         : <ArrowUpRight className="w-5 h-5 text-destructive" />}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-foreground truncate">{tx.description}</p>
+                      <p className="font-semibold text-foreground truncate">
+                        {!isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
+                      </p>
                       <p className="text-xs text-muted-foreground mt-0.5" data-testid={`tx-meta-${tx.id}`}>
                         {isDeposit
                           ? `Deposited by ${attribution}`
-                          : `Withdrawn by ${attribution}${tx.expenseCategory ? ` · ${tx.expenseCategory}` : ""}`}
+                          : `Withdrawn by ${attribution}${tx.expenseCategory && tx.description !== tx.expenseCategory ? ` · ${tx.description}` : ""}`}
                         {" · "}{formatDate(tx.date)}
                       </p>
                     </div>
@@ -541,6 +672,15 @@ export default function Bank() {
                     <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
                       {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
                     </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      data-testid={`button-edit-tx-${tx.id}`}
+                      className="hover:bg-muted h-9 w-9"
+                      onClick={() => openEdit(tx)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
