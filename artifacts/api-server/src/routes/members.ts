@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { groupMembershipsTable, membersTable, usersTable } from "@workspace/db";
+import { groupMembershipsTable, usersTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { MAX_MEMBERS } from "../middlewares/requireMember";
-import { getActiveGroupId } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 
 const router = Router();
 
@@ -44,6 +44,7 @@ router.get("/members", async (req, res): Promise<void> => {
 router.post("/members", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const schema = z.object({ userId: z.string().min(1) });
   const parsed = schema.safeParse(req.body);
@@ -68,23 +69,12 @@ router.post("/members", async (req, res): Promise<void> => {
     return;
   }
 
-  // Insert into both groupMembershipsTable and legacy membersTable for compatibility
   await db.insert(groupMembershipsTable).values({
     groupId,
     userId,
     role: "member",
     addedByUserId: req.user!.id,
   });
-
-  // Keep membersTable in sync for legacy routes
-  const [legacyExisting] = await db
-    .select({ userId: membersTable.userId })
-    .from(membersTable)
-    .where(eq(membersTable.userId, userId))
-    .limit(1);
-  if (!legacyExisting) {
-    await db.insert(membersTable).values({ userId, groupId, addedByUserId: req.user!.id });
-  }
 
   const members = await getGroupMembersWithNames(groupId);
   const [member] = members.filter((x) => x.userId === userId);
@@ -95,6 +85,7 @@ router.post("/members", async (req, res): Promise<void> => {
 router.delete("/members/:userId", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const { userId } = req.params;
 
@@ -113,11 +104,6 @@ router.delete("/members/:userId", async (req, res): Promise<void> => {
     .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, userId)))
     .returning();
   if (!deleted) { res.status(404).json({ error: "Member not found" }); return; }
-
-  // Keep membersTable in sync
-  await db.delete(membersTable).where(
-    and(eq(membersTable.userId, userId), eq(membersTable.groupId, groupId))
-  );
 
   res.json({ success: true });
 });

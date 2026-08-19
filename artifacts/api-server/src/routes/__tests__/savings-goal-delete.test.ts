@@ -53,6 +53,7 @@ function buildApp() {
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: 99 };
+    req.group = { id: 1, role: "owner" };
     next();
   });
   app.use("/", savingsGoalsRouter);

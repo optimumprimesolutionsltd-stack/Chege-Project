@@ -8,21 +8,27 @@ import request from "supertest";
 import {
   db,
   pool,
+  groupMembershipsTable,
+  groupsTable,
   jointAccountTxTable,
   savingsGoalContributionsTable,
   savingsGoalsTable,
+  usersTable,
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import jointAccountRouter from "../joint-account.js";
 
 const hasDb = !!process.env.DATABASE_URL;
+const TEST_USER_ID = "transfer-integration-user";
+let testGroupId: number;
 
 function buildApp() {
   const app = express();
   app.use(express.json());
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
-    req.user = { id: "transfer-integration-user" };
+    req.user = { id: TEST_USER_ID };
+    req.group = { id: testGroupId, role: "owner" };
     next();
   });
   app.use("/", jointAccountRouter);
@@ -34,9 +40,26 @@ describe.skipIf(!hasDb)("linked bank and savings transfers (integration)", () =>
   let goalId: number;
 
   beforeAll(async () => {
+    await db.insert(usersTable).values({
+      id: TEST_USER_ID,
+      firstName: "Transfer",
+      lastName: "Tester",
+    }).onConflictDoNothing();
+    const [group] = await db.insert(groupsTable).values({
+      name: `Transfer test group ${Date.now()}`,
+      legacyKey: `transfer-test-${Date.now()}`,
+      createdByUserId: TEST_USER_ID,
+    }).returning();
+    testGroupId = group.id;
+    await db.insert(groupMembershipsTable).values({
+      groupId: testGroupId,
+      userId: TEST_USER_ID,
+      role: "owner",
+    });
     const [goal] = await db
       .insert(savingsGoalsTable)
       .values({
+        groupId: testGroupId,
         name: `Transfer Integration Goal ${Date.now()}`,
         targetAmount: 10_000,
         currentAmount: 1_000,
@@ -53,6 +76,9 @@ describe.skipIf(!hasDb)("linked bank and savings transfers (integration)", () =>
       await db.delete(savingsGoalContributionsTable).where(eq(savingsGoalContributionsTable.goalId, goalId));
       await db.delete(savingsGoalsTable).where(eq(savingsGoalsTable.id, goalId));
     }
+    await db.delete(groupMembershipsTable).where(eq(groupMembershipsTable.groupId, testGroupId));
+    await db.delete(groupsTable).where(eq(groupsTable.id, testGroupId));
+    await db.delete(usersTable).where(eq(usersTable.id, TEST_USER_ID));
     await pool.end();
   });
 

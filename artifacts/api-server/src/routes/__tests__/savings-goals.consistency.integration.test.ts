@@ -50,6 +50,8 @@ let pool: DbModule["pool"];
 let savingsGoalsTable: DbModule["savingsGoalsTable"];
 let savingsGoalContributionsTable: DbModule["savingsGoalContributionsTable"];
 let usersTable: DbModule["usersTable"];
+let groupsTable: DbModule["groupsTable"];
+let groupMembershipsTable: DbModule["groupMembershipsTable"];
 let eq: DrizzleOrm["eq"];
 let inArray: DrizzleOrm["inArray"];
 let sql: DrizzleOrm["sql"];
@@ -58,6 +60,7 @@ let sql: DrizzleOrm["sql"];
 // App factory
 // ---------------------------------------------------------------------------
 const TEST_USER_ID = "integration-test-user-consistency";
+let testGroupId: number;
 
 function buildApp(savingsGoalsRouter: RouterModule["default"]) {
   const app = express();
@@ -65,6 +68,7 @@ function buildApp(savingsGoalsRouter: RouterModule["default"]) {
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: TEST_USER_ID };
+    req.group = { id: testGroupId, role: "owner" };
     next();
   });
   app.use("/", savingsGoalsRouter);
@@ -91,6 +95,8 @@ describe.skipIf(!hasDb)(
       savingsGoalsTable = dbModule.savingsGoalsTable;
       savingsGoalContributionsTable = dbModule.savingsGoalContributionsTable;
       usersTable = dbModule.usersTable;
+      groupsTable = dbModule.groupsTable;
+      groupMembershipsTable = dbModule.groupMembershipsTable;
 
       const drizzle = await import("drizzle-orm");
       eq = drizzle.eq;
@@ -105,6 +111,17 @@ describe.skipIf(!hasDb)(
         .insert(usersTable)
         .values({ id: TEST_USER_ID, firstName: "Consistency", lastName: "Tester" })
         .onConflictDoNothing();
+      const [group] = await db.insert(groupsTable).values({
+        name: `Consistency test group ${ts}`,
+        legacyKey: `consistency-test-${ts}`,
+        createdByUserId: TEST_USER_ID,
+      }).returning();
+      testGroupId = group.id;
+      await db.insert(groupMembershipsTable).values({
+        groupId: testGroupId,
+        userId: TEST_USER_ID,
+        role: "owner",
+      });
     });
 
     afterAll(async () => {
@@ -121,6 +138,8 @@ describe.skipIf(!hasDb)(
       await db
         .delete(usersTable)
         .where(eq(usersTable.id, TEST_USER_ID));
+      await db.delete(groupMembershipsTable).where(eq(groupMembershipsTable.groupId, testGroupId));
+      await db.delete(groupsTable).where(eq(groupsTable.id, testGroupId));
 
       await pool.end();
     });
@@ -185,6 +204,7 @@ describe.skipIf(!hasDb)(
         const [goal] = await db
           .insert(savingsGoalsTable)
           .values({
+            groupId: testGroupId,
             name: `Consistency Partial-Write Goal ${ts}`,
             targetAmount: 5_000,
             currentAmount: 0,
@@ -245,6 +265,7 @@ describe.skipIf(!hasDb)(
         const [goodGoal] = await db
           .insert(savingsGoalsTable)
           .values({
+            groupId: testGroupId,
             name: `Consistency Good Goal ${ts}`,
             targetAmount: 10_000,
             currentAmount: 1_000,
@@ -257,6 +278,7 @@ describe.skipIf(!hasDb)(
 
         // Insert the matching contribution row so goodGoal is consistent.
         await db.insert(savingsGoalContributionsTable).values({
+          groupId: testGroupId,
           goalId: goodGoal.id,
           amount: 1_000,
           createdByUserId: TEST_USER_ID,
@@ -265,6 +287,7 @@ describe.skipIf(!hasDb)(
         const [badGoal] = await db
           .insert(savingsGoalsTable)
           .values({
+            groupId: testGroupId,
             name: `Consistency Bad Goal ${ts}`,
             targetAmount: 10_000,
             currentAmount: 3_000, // no contributions — simulated partial write
@@ -317,6 +340,7 @@ describe.skipIf(!hasDb)(
         const [goal] = await db
           .insert(savingsGoalsTable)
           .values({
+            groupId: testGroupId,
             name: `Consistency Orphan-Contrib Goal ${ts}`,
             targetAmount: 5_000,
             currentAmount: 0, // balance was never updated
@@ -330,6 +354,7 @@ describe.skipIf(!hasDb)(
         // Insert a contribution row without updating currentAmount — simulates
         // the state where the INSERT committed but the UPDATE rolled back.
         await db.insert(savingsGoalContributionsTable).values({
+          groupId: testGroupId,
           goalId: goal.id,
           amount: 1_500,
           createdByUserId: TEST_USER_ID,

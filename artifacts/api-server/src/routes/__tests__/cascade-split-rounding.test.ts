@@ -45,6 +45,7 @@ vi.mock("@workspace/db", () => {
     savingsGoalContributionsTable: makeTable("savings_goal_contributions"),
     usersTable: makeTable("users"),
     membersTable: makeTable("members"),
+    groupMembershipsTable: makeTable("group_memberships"),
     db: {
       select: vi.fn(),
       insert: vi.fn(),
@@ -69,6 +70,7 @@ function buildApp() {
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: "authed-user" };
+    req.group = { id: 1, role: "owner" };
     next();
   });
   app.use("/", savingsGoalsRouter);

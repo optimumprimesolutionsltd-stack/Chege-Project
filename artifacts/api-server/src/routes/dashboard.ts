@@ -348,6 +348,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
           AND NOT EXISTS (
             SELECT 1 FROM expense_income_splits split
             WHERE split.expense_id = ${expensesTable.id}
+              AND split.group_id = ${groupId}
           )
         `),
       db.select({
@@ -385,6 +386,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
           AND NOT EXISTS (
             SELECT 1 FROM joint_account_deposit_splits split
             WHERE split.transaction_id = ${jointAccountTxTable.id}
+              AND split.group_id = ${groupId}
           )
         `),
     ]);

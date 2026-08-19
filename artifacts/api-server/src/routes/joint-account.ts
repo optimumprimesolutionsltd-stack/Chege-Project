@@ -2,9 +2,9 @@ import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import {
   budgetCategoriesTable,
+  groupMembershipsTable,
   jointAccountTxTable,
   usersTable,
-  membersTable,
   savingsGoalsTable,
   savingsGoalContributionsTable,
   jointAccountDepositSplitsTable,
@@ -58,13 +58,28 @@ const SavingsTransferInput = z.object({
   madeById: z.string().nullable().optional(),
 });
 
-async function enrichTx(tx: typeof jointAccountTxTable.$inferSelect) {
+async function enrichTx(
+  tx: typeof jointAccountTxTable.$inferSelect,
+  groupId: number,
+) {
   const [user, savingsGoal, contributorSplits] = await Promise.all([
     tx.madeById
-      ? db.query.usersTable.findFirst({ where: eq(usersTable.id, tx.madeById) })
+      ? db.select({ firstName: usersTable.firstName })
+          .from(groupMembershipsTable)
+          .innerJoin(usersTable, eq(usersTable.id, groupMembershipsTable.userId))
+          .where(and(
+            eq(groupMembershipsTable.groupId, groupId),
+            eq(groupMembershipsTable.userId, tx.madeById),
+          ))
+          .then((rows) => rows[0] ?? null)
       : null,
     tx.savingsGoalId
-      ? db.query.savingsGoalsTable.findFirst({ where: eq(savingsGoalsTable.id, tx.savingsGoalId) })
+      ? db.query.savingsGoalsTable.findFirst({
+          where: and(
+            eq(savingsGoalsTable.id, tx.savingsGoalId),
+            eq(savingsGoalsTable.groupId, groupId),
+          ),
+        })
       : null,
     tx.type === "deposit"
       ? db.select({
@@ -75,7 +90,10 @@ async function enrichTx(tx: typeof jointAccountTxTable.$inferSelect) {
       })
         .from(jointAccountDepositSplitsTable)
         .leftJoin(usersTable, eq(jointAccountDepositSplitsTable.userId, usersTable.id))
-        .where(eq(jointAccountDepositSplitsTable.transactionId, tx.id))
+        .where(and(
+          eq(jointAccountDepositSplitsTable.transactionId, tx.id),
+          eq(jointAccountDepositSplitsTable.groupId, groupId),
+        ))
       : Promise.resolve([]),
   ]);
   const madeByName = contributorSplits.length === 1
@@ -105,9 +123,9 @@ async function enrichTx(tx: typeof jointAccountTxTable.$inferSelect) {
 /** Validate that a non-null member ID belongs to the active group. Returns an error string or null. */
 async function validateMemberId(id: string, groupId: number): Promise<string | null> {
   const [member] = await db
-    .select({ userId: membersTable.userId })
-    .from(membersTable)
-    .where(and(eq(membersTable.userId, id), eq(membersTable.groupId, groupId)))
+    .select({ userId: groupMembershipsTable.userId })
+    .from(groupMembershipsTable)
+    .where(and(eq(groupMembershipsTable.userId, id), eq(groupMembershipsTable.groupId, groupId)))
     .limit(1);
   if (!member) return `Member ID '${id}' is not a recognised household member`;
   return null;
@@ -124,7 +142,7 @@ router.get("/joint-account", async (req, res): Promise<void> => {
     .where(eq(jointAccountTxTable.groupId, groupId))
     .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.createdAt} DESC`);
 
-  const enriched = await Promise.all(txs.map(enrichTx));
+  const enriched = await Promise.all(txs.map((tx) => enrichTx(tx, groupId)));
 
   const totalDeposits = txs.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
   const totalDisbursements = txs.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
@@ -192,7 +210,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
     return created;
   });
 
-  res.status(201).json(await enrichTx(tx));
+  res.status(201).json(await enrichTx(tx, groupId));
 });
 
 // POST /joint-account/disbursement
@@ -241,7 +259,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
     })
     .returning();
 
-  res.status(201).json(await enrichTx(tx));
+  res.status(201).json(await enrichTx(tx, groupId));
 });
 
 async function createSavingsTransfer(
@@ -326,7 +344,7 @@ async function createSavingsTransfer(
     res.status(result.status ?? 400).json({ error: result.error ?? "Could not create transfer." });
     return;
   }
-  res.status(201).json(await enrichTx(bankTx));
+  res.status(201).json(await enrichTx(bankTx, groupId));
 }
 
 router.post("/joint-account/transfers/to-savings", async (req, res): Promise<void> => {
@@ -396,7 +414,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
       .set({ amount, date, madeById, description, incomeSourceId, expenseCategory: null })
       .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
       .returning();
-    res.json(await enrichTx(updated));
+    res.json(await enrichTx(updated, groupId));
     return;
   }
 
@@ -427,7 +445,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     .set({ amount, date, madeById, description, expenseCategory })
     .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
     .returning();
-  res.json(await enrichTx(updated));
+  res.json(await enrichTx(updated, groupId));
 });
 
 // DELETE /joint-account/:id

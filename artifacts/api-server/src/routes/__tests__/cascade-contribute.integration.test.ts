@@ -42,6 +42,8 @@ let pool: DbModule["pool"];
 let savingsGoalsTable: DbModule["savingsGoalsTable"];
 let savingsGoalContributionsTable: DbModule["savingsGoalContributionsTable"];
 let usersTable: DbModule["usersTable"];
+let groupsTable: DbModule["groupsTable"];
+let groupMembershipsTable: DbModule["groupMembershipsTable"];
 let eq: (typeof import("drizzle-orm"))["eq"];
 let inArray: (typeof import("drizzle-orm"))["inArray"];
 
@@ -49,6 +51,7 @@ let inArray: (typeof import("drizzle-orm"))["inArray"];
 // App factory — accepts the router so it can be built after dynamic import.
 // ---------------------------------------------------------------------------
 const TEST_USER_ID = "integration-test-user-cascade";
+let testGroupId: number;
 
 function buildApp(savingsGoalsRouter: RouterModule["default"]) {
   const app = express();
@@ -56,6 +59,7 @@ function buildApp(savingsGoalsRouter: RouterModule["default"]) {
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: TEST_USER_ID };
+    req.group = { id: testGroupId, role: "owner" };
     next();
   });
   app.use("/", savingsGoalsRouter);
@@ -84,6 +88,8 @@ describe.skipIf(!hasDb)(
       savingsGoalsTable = dbModule.savingsGoalsTable;
       savingsGoalContributionsTable = dbModule.savingsGoalContributionsTable;
       usersTable = dbModule.usersTable;
+      groupsTable = dbModule.groupsTable;
+      groupMembershipsTable = dbModule.groupMembershipsTable;
 
       const drizzle = await import("drizzle-orm");
       eq = drizzle.eq;
@@ -97,11 +103,23 @@ describe.skipIf(!hasDb)(
         .insert(usersTable)
         .values({ id: TEST_USER_ID, firstName: "Cascade", lastName: "Tester" })
         .onConflictDoNothing();
+      const [group] = await db.insert(groupsTable).values({
+        name: `Cascade test group ${ts}`,
+        legacyKey: `cascade-test-${ts}`,
+        createdByUserId: TEST_USER_ID,
+      }).returning();
+      testGroupId = group.id;
+      await db.insert(groupMembershipsTable).values({
+        groupId: testGroupId,
+        userId: TEST_USER_ID,
+        role: "owner",
+      });
 
       // Create two isolated goals for the concurrent race test.
       const [goal1] = await db
         .insert(savingsGoalsTable)
         .values({
+          groupId: testGroupId,
           name: `Cascade Integration Goal A ${ts}`,
           targetAmount: 1_000_000, // large so neither request caps out
           currentAmount: 0,
@@ -113,6 +131,7 @@ describe.skipIf(!hasDb)(
       const [goal2] = await db
         .insert(savingsGoalsTable)
         .values({
+          groupId: testGroupId,
           name: `Cascade Integration Goal B ${ts}`,
           targetAmount: 1_000_000,
           currentAmount: 0,
@@ -139,6 +158,8 @@ describe.skipIf(!hasDb)(
       await db
         .delete(usersTable)
         .where(eq(usersTable.id, TEST_USER_ID));
+      await db.delete(groupMembershipsTable).where(eq(groupMembershipsTable.groupId, testGroupId));
+      await db.delete(groupsTable).where(eq(groupsTable.id, testGroupId));
 
       // End the connection pool so the Vitest worker process exits cleanly.
       await pool.end();
@@ -256,6 +277,7 @@ describe.skipIf(!hasDb)(
         const [gA] = await db
           .insert(savingsGoalsTable)
           .values({
+            groupId: testGroupId,
             name: `Cascade Leftover A ${ts}`,
             targetAmount: 500,
             currentAmount: 480,
@@ -267,6 +289,7 @@ describe.skipIf(!hasDb)(
         const [gB] = await db
           .insert(savingsGoalsTable)
           .values({
+            groupId: testGroupId,
             name: `Cascade Leftover B ${ts}`,
             targetAmount: 500,
             currentAmount: 480,
@@ -327,6 +350,7 @@ describe.skipIf(!hasDb)(
         const [gFirst] = await db
           .insert(savingsGoalsTable)
           .values({
+            groupId: testGroupId,
             name: `Cascade Order First ${ts}`,
             targetAmount: 100,
             currentAmount: 0,
@@ -338,6 +362,7 @@ describe.skipIf(!hasDb)(
         const [gSecond] = await db
           .insert(savingsGoalsTable)
           .values({
+            groupId: testGroupId,
             name: `Cascade Order Second ${ts}`,
             targetAmount: 100,
             currentAmount: 0,

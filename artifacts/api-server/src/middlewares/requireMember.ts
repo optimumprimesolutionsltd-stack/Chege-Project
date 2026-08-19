@@ -33,6 +33,10 @@ const LEGACY_GROUP_NAME = "Shared budget";
  */
 async function adoptLegacyGroup(userId: string) {
   return db.transaction(async (tx) => {
+    // Serialise the once-only adoption path. This prevents two first requests
+    // from creating competing memberships while the old ledger has no group.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(4815162342)`);
+
     const [existingMembership] = await tx
       .select({
         groupId: groupMembershipsTable.groupId,
@@ -116,7 +120,10 @@ async function adoptLegacyGroup(userId: string) {
         legacyMembers.map((member, index) => ({
           groupId: group.id,
           userId: member.userId,
-          role: index === 0 ? "owner" : "member",
+          // The current two-person experience allowed both people to manage
+          // access. Preserve that capability while making the owner/admin
+          // distinction explicit for future invitations.
+          role: index === 0 ? "owner" : "admin",
           addedByUserId: member.addedByUserId,
           addedAt: member.addedAt,
           monthlyTarget: member.monthlyTarget,
@@ -145,25 +152,29 @@ export async function requireMember(
   req: Request,
   res: Response,
   next: NextFunction,
-) {
+): Promise<void> {
   if (!req.isAuthenticated()) {
-    next();
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
-  const userId = req.user.id;
-  const membership = await adoptLegacyGroup(userId);
-  if (membership) {
-    req.group = {
-      id: membership.groupId,
-      role: membership.role as "owner" | "admin" | "member",
-    };
-    next();
-    return;
-  }
+  try {
+    const userId = req.user.id;
+    const membership = await adoptLegacyGroup(userId);
+    if (membership) {
+      req.group = {
+        id: membership.groupId,
+        role: membership.role as "owner" | "admin" | "member",
+      };
+      next();
+      return;
+    }
 
-  res.status(403).json({
-    error: "You are not a member of this shared group.",
-    hint: "Ask a current group member to add you.",
-  });
+    res.status(403).json({
+      error: "You are not a member of this shared group.",
+      hint: "Ask a current group member to add you.",
+    });
+  } catch (error) {
+    next(error);
+  }
 }

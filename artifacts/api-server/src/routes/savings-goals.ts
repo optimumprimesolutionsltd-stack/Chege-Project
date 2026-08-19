@@ -5,7 +5,7 @@ import {
   savingsGoalContributionsTable,
   jointAccountTxTable,
   usersTable,
-  membersTable,
+  groupMembershipsTable,
 } from "@workspace/db";
 import { and, eq, sql, desc } from "drizzle-orm";
 import { z } from "zod";
@@ -43,9 +43,9 @@ function formatGoal(g: typeof savingsGoalsTable.$inferSelect) {
 /** Validate that a non-null member ID belongs to the active group. Returns an error string or null. */
 async function validateMemberId(id: string, groupId: number): Promise<string | null> {
   const [member] = await db
-    .select({ userId: membersTable.userId })
-    .from(membersTable)
-    .where(and(eq(membersTable.userId, id), eq(membersTable.groupId, groupId)))
+    .select({ userId: groupMembershipsTable.userId })
+    .from(groupMembershipsTable)
+    .where(and(eq(groupMembershipsTable.userId, id), eq(groupMembershipsTable.groupId, groupId)))
     .limit(1);
   if (!member) return `Member ID '${id}' is not a recognised household member`;
   return null;

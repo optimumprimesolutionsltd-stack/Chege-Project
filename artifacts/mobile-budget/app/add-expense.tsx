@@ -327,7 +327,7 @@ export default function AddExpenseSheet() {
         })() : null}
 
         {/* Funding breakdown — only shown for a single named payer */}
-        {!paidFromBank && payerIds.length === 1 && (
+        {false && !paidFromBank && payerIds.length === 1 && (
         <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
           <View style={styles.fundingCardHeader}>
             <Feather name="layers" size={14} color={colors.primary} />
@@ -630,6 +630,58 @@ export default function AddExpenseSheet() {
               );
             })()}
           </>
+        )}
+
+        {/* Keep sources directly below the person who paid, not above the choice. */}
+        {!paidFromBank && payerIds.length === 1 && (
+          <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
+            <View style={styles.fundingCardHeader}>
+              <Feather name="layers" size={14} color={colors.primary} />
+              <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FUNDED FROM</Text>
+              <Text style={styles.fundingRequired}>* Required</Text>
+            </View>
+            {sourcesLoading ? (
+              <ActivityIndicator size="small" color={colors.primary} style={{ alignSelf: 'flex-start' }} />
+            ) : incomeSources.length === 0 ? (
+              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>No income sources set up — add them in Settings</Text>
+            ) : (
+              <View style={styles.sourceChipsGrid}>
+                {incomeSources.map((src, idx) => {
+                  const color = PALETTE[idx % PALETTE.length];
+                  const selected = selectedSources.includes(src.name);
+                  return (
+                    <Pressable key={src.id} onPress={() => setSelectedSources(prev => prev.includes(src.name) ? prev.filter(name => name !== src.name) : [...prev, src.name])}
+                      style={[styles.sourceChip, { backgroundColor: selected ? color + '22' : colors.background, borderColor: selected ? color : colors.border, borderRadius: colors.radius }]}>
+                      <Feather name="briefcase" size={13} color={selected ? color : colors.mutedForeground} />
+                      <Text style={[styles.sourceChipText, { color: selected ? color : colors.foreground }]}>{src.name}</Text>
+                      {selected && <Feather name="check" size={11} color={color} />}
+                    </Pressable>
+                  );
+                })}
+                <Pressable onPress={() => setSelectedSources(prev => prev.includes('Other') ? prev.filter(name => name !== 'Other') : [...prev, 'Other'])}
+                  style={[styles.sourceChip, { backgroundColor: selectedSources.includes('Other') ? '#6b728022' : colors.background, borderColor: selectedSources.includes('Other') ? '#6b7280' : colors.border, borderRadius: colors.radius }]}>
+                  <Feather name="more-horizontal" size={13} color={colors.mutedForeground} />
+                  <Text style={[styles.sourceChipText, { color: colors.foreground }]}>Other</Text>
+                </Pressable>
+              </View>
+            )}
+            {selectedSources.includes('Other') && (
+              <TextInput style={[styles.textInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, borderRadius: colors.radius, marginTop: 8, paddingVertical: 10 }]}
+                placeholder="Describe the source" placeholderTextColor={colors.mutedForeground} value={otherLabel} onChangeText={setOtherLabel} />
+            )}
+            {selectedSources.length > 1 && (
+              <View style={{ marginTop: 12, gap: 6 }}>
+                <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>How much from each source?</Text>
+                {selectedSources.map((name, index) => (
+                  <View key={name} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: PALETTE[index % PALETTE.length] + '44', borderRadius: colors.radius }]}>
+                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]}>{name === 'Other' ? (otherLabel || 'Other') : name}</Text>
+                    <TextInput style={[styles.splitAmountInput, { color: colors.foreground }]} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground}
+                      value={splitAmounts[name] || ''} onChangeText={value => setSplitAmounts(prev => ({ ...prev, [name]: value }))} />
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         )}
 
         {/* Date — required, no future dates */}

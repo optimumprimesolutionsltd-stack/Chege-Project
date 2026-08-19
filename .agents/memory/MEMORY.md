@@ -17,3 +17,4 @@
 - [Member-centered groups](member-centered-groups.md) — one account owner can invite flexible household, chama, club, or team members; never hardcode spouse roles.
 - [OpenAPI Zod request schemas](openapi-zod-request-schemas.md) — define request bodies as named components to avoid generated type/schema name collisions.
 - [Drizzle Zod schema types](drizzle-zod-types.md) — derive DB insert types from Drizzle tables to avoid incompatible Zod type packages.
+- [Group workspace migration](group-workspace-migration.md) — legacy shared data is adopted atomically on the first authenticated protected request, not during server startup.

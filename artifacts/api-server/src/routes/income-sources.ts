@@ -1,11 +1,25 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { incomeSourcesTable } from "@workspace/db";
+import { groupMembershipsTable, incomeSourcesTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveGroupId } from "../lib/activeGroup";
 
 const router = Router();
+
+async function isGroupMember(userId: string, groupId: number): Promise<boolean> {
+  const [member] = await db
+    .select({ userId: groupMembershipsTable.userId })
+    .from(groupMembershipsTable)
+    .where(
+      and(
+        eq(groupMembershipsTable.groupId, groupId),
+        eq(groupMembershipsTable.userId, userId),
+      ),
+    )
+    .limit(1);
+  return Boolean(member);
+}
 
 // GET /api/income-sources?userId=xxx  — list all, or filtered by userId
 router.get("/income-sources", async (req, res) => {
@@ -13,6 +27,10 @@ router.get("/income-sources", async (req, res) => {
   if (groupId === null) return;
 
   const userId = req.query.userId as string | undefined;
+  if (userId && !(await isGroupMember(userId, groupId))) {
+    res.status(400).json({ error: "User is not a member of this shared group." });
+    return;
+  }
   const rows = userId
     ? await db.select().from(incomeSourcesTable)
         .where(and(eq(incomeSourcesTable.groupId, groupId), eq(incomeSourcesTable.userId, userId)))
@@ -36,6 +54,10 @@ router.post("/income-sources", async (req, res) => {
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  if (!(await isGroupMember(parsed.data.userId, groupId))) {
+    res.status(400).json({ error: "User is not a member of this shared group." });
+    return;
+  }
 
   const [row] = await db.insert(incomeSourcesTable).values({ ...parsed.data, groupId }).returning();
   res.status(201).json(row);

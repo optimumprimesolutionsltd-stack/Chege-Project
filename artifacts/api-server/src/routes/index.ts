@@ -16,11 +16,11 @@ const router: IRouter = Router();
 
 // Auth routes bypass member check
 router.use(authRouter);
+router.use(healthRouter);
 
 // Apply member check to everything else
 router.use(requireMember);
 
-router.use(healthRouter);
 router.use(expensesRouter);
 router.use(contributionsRouter);
 router.use(budgetCategoriesRouter);

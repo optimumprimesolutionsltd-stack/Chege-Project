@@ -23,7 +23,15 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import express from "express";
-import { db, pool, savingsGoalsTable, savingsGoalContributionsTable, usersTable } from "@workspace/db";
+import {
+  db,
+  pool,
+  groupMembershipsTable,
+  groupsTable,
+  savingsGoalsTable,
+  savingsGoalContributionsTable,
+  usersTable,
+} from "@workspace/db";
 import { eq } from "drizzle-orm";
 import savingsGoalsRouter from "../savings-goals.js";
 
@@ -36,6 +44,7 @@ const hasDb = !!process.env.DATABASE_URL;
 // Minimal Express app — same auth-bypass pattern as the unit test suite.
 // ---------------------------------------------------------------------------
 const TEST_USER_ID = "integration-test-user-contribute";
+let testGroupId: number;
 
 function buildApp() {
   const app = express();
@@ -43,6 +52,7 @@ function buildApp() {
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: TEST_USER_ID };
+    req.group = { id: testGroupId, role: "owner" };
     next();
   });
   app.use("/", savingsGoalsRouter);
@@ -64,11 +74,23 @@ describe.skipIf(!hasDb)(
         .insert(usersTable)
         .values({ id: TEST_USER_ID, firstName: "Integration", lastName: "Test" })
         .onConflictDoNothing();
+      const [group] = await db.insert(groupsTable).values({
+        name: `Contribution test group ${Date.now()}`,
+        legacyKey: `contribute-test-${Date.now()}`,
+        createdByUserId: TEST_USER_ID,
+      }).returning();
+      testGroupId = group.id;
+      await db.insert(groupMembershipsTable).values({
+        groupId: testGroupId,
+        userId: TEST_USER_ID,
+        role: "owner",
+      });
 
       // Create an isolated goal for this test run.
       const [goal] = await db
         .insert(savingsGoalsTable)
         .values({
+          groupId: testGroupId,
           name: `Integration Test Goal ${Date.now()}`,
           targetAmount: 1_000_000, // large enough that no contribution caps out
           currentAmount: 0,
@@ -95,6 +117,8 @@ describe.skipIf(!hasDb)(
       await db
         .delete(usersTable)
         .where(eq(usersTable.id, TEST_USER_ID));
+      await db.delete(groupMembershipsTable).where(eq(groupMembershipsTable.groupId, testGroupId));
+      await db.delete(groupsTable).where(eq(groupsTable.id, testGroupId));
 
       // End the connection pool so the Vitest worker process exits cleanly.
       await pool.end();
@@ -208,6 +232,7 @@ describe.skipIf(!hasDb)(
       const [cappedGoal] = await db
         .insert(savingsGoalsTable)
         .values({
+          groupId: testGroupId,
           name: `Cap Test Goal ${Date.now()}`,
           targetAmount: 1_000,
           currentAmount: 800,

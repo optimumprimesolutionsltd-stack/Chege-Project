@@ -229,22 +229,11 @@ function buildEmailHtml(opts: {
 export async function sendMonthlyDigest(
   month: number,
   year: number,
-  opts: { force?: boolean; groupId?: number } = {},
+  opts: { force?: boolean; groupId: number },
 ): Promise<{ id: string; to: string[]; skipped?: boolean }> {
   logger.info({ month, year, force: opts.force, groupId: opts.groupId }, "Building monthly digest");
 
-  // Resolve group — if a specific groupId was passed use it; otherwise use the
-  // first group found (legacy single-group path for the cron scheduler).
-  let resolvedGroupId = opts.groupId;
-  if (resolvedGroupId === undefined) {
-    const [firstGroup] = await db.select({ id: groupsTable.id }).from(groupsTable).limit(1);
-    if (!firstGroup) {
-      throw new Error("No group found. Cannot send digest.");
-    }
-    resolvedGroupId = firstGroup.id;
-  }
-
-  const groupId = resolvedGroupId;
+  const groupId = opts.groupId;
 
   // ── Idempotency guard — one send per (groupId, month, year) ──────────────
   if (opts.force) {
@@ -356,16 +345,11 @@ export async function sendMonthlyDigest(
   const memberEmails: string[] = membershipRows
     .map((m) => m.email)
     .filter((e): e is string => Boolean(e));
-  const envEmails = (process.env.DIGEST_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean);
-  const to = [...new Set([...memberEmails, ...envEmails])];
+  const to = [...new Set(memberEmails)];
 
   if (to.length === 0) {
     throw new Error(
-      "No recipient emails found. Set the DIGEST_EMAILS environment variable (comma-separated) " +
-        "or ensure your user account has an email address.",
+      "No recipient emails found for this shared group.",
     );
   }
 
@@ -411,7 +395,10 @@ export async function sendMonthlyDigest(
   const result = (await response.json()) as { id?: string; message?: string; name?: string };
   if (!response.ok) {
     // Release the claim so the next cron tick can retry.
-    await db.delete(digestSendsTable).where(sql`${digestSendsTable.id} = ${claimId}`);
+    await db.delete(digestSendsTable).where(and(
+      eq(digestSendsTable.id, claimId),
+      eq(digestSendsTable.groupId, groupId),
+    ));
     throw new Error(`Resend API error (${response.status}): ${JSON.stringify(result)}`);
   }
 
@@ -419,7 +406,10 @@ export async function sendMonthlyDigest(
   await db
     .update(digestSendsTable)
     .set({ emailId: result.id, recipients: to })
-    .where(sql`${digestSendsTable.id} = ${claimId}`);
+    .where(and(
+      eq(digestSendsTable.id, claimId),
+      eq(digestSendsTable.groupId, groupId),
+    ));
 
   logger.info({ emailId: result.id, to, month, year, groupId }, "Monthly digest sent");
   return { id: result.id ?? "unknown", to };

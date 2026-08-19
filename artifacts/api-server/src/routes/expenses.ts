@@ -2,13 +2,13 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   expensesTable,
+  groupMembershipsTable,
   usersTable,
-  membersTable,
   incomeSourcesTable,
   expenseIncomeSplitsTable,
   jointAccountTxTable,
 } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   CreateExpenseBody,
@@ -60,9 +60,14 @@ function formatExpense(e: ExpenseRow, incomeSplits: unknown[] = []) {
 }
 
 async function validateMemberId(id: string, groupId: number): Promise<string | null> {
-  const member = await db.query.membersTable.findFirst({
-    where: and(eq(membersTable.userId, id), eq(membersTable.groupId, groupId)),
-  });
+  const [member] = await db
+    .select({ userId: groupMembershipsTable.userId })
+    .from(groupMembershipsTable)
+    .where(and(
+      eq(groupMembershipsTable.userId, id),
+      eq(groupMembershipsTable.groupId, groupId),
+    ))
+    .limit(1);
   return member ? null : "Each personal funding source must be a recognised household member.";
 }
 
@@ -127,7 +132,7 @@ async function getExpenseSplits(expenseIds: number[], groupId: number) {
     })
     .from(expenseIncomeSplitsTable)
     .where(and(
-      sql`${expenseIncomeSplitsTable.expenseId} = ANY(${expenseIds})`,
+      inArray(expenseIncomeSplitsTable.expenseId, expenseIds),
       eq(expenseIncomeSplitsTable.groupId, groupId),
     ));
   return rows.reduce((byExpense, row) => {

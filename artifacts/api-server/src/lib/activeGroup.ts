@@ -18,3 +18,12 @@ export function getActiveGroupId(req: Request, res: Response): number | null {
 
   return req.group.id;
 }
+
+export function requireGroupManager(req: Request, res: Response): boolean {
+  if (!req.group || req.group.role === "member") {
+    res.status(403).json({ error: "Forbidden" });
+    return false;
+  }
+
+  return true;
+}

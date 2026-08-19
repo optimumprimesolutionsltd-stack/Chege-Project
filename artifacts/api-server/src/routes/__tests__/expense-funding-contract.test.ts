@@ -5,11 +5,19 @@ import request from "supertest";
 vi.mock("@workspace/db", () => {
   const table = new Proxy({}, { get: () => ({}) });
   return {
-    db: { query: {
-      membersTable: { findFirst: vi.fn() },
-      incomeSourcesTable: { findFirst: vi.fn() },
-    } },
+    db: {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({ limit: vi.fn(async () => []) })),
+        })),
+      })),
+      query: {
+        membersTable: { findFirst: vi.fn() },
+        incomeSourcesTable: { findFirst: vi.fn() },
+      },
+    },
     expensesTable: table, usersTable: table, membersTable: table,
+    groupMembershipsTable: table,
     incomeSourcesTable: table, expenseIncomeSplitsTable: table, jointAccountTxTable: table,
   };
 });
@@ -20,7 +28,11 @@ import expensesRouter from "../expenses.js";
 function app() {
   const server = express();
   server.use(express.json());
-  server.use((_req: any, _res, next) => { _req.isAuthenticated = () => true; next(); });
+  server.use((_req: any, _res, next) => {
+    _req.isAuthenticated = () => true;
+    _req.group = { id: 1, role: "owner" };
+    next();
+  });
   server.use("/", expensesRouter);
   return server;
 }

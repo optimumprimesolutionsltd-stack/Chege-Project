@@ -37,6 +37,7 @@ vi.mock("@workspace/db", () => {
     savingsGoalContributionsTable: makeTable("savings_goal_contributions"),
     usersTable: makeTable("users"),
     membersTable: makeTable("members"),
+    groupMembershipsTable: makeTable("group_memberships"),
     db: {
       select: vi.fn(),
       insert: vi.fn(),
@@ -83,6 +84,7 @@ function buildJointApp() {
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: AUTHED_USER_ID };
+    req.group = { id: 1, role: "owner" };
     next();
   });
   app.use("/", jointAccountRouter);
@@ -95,6 +97,7 @@ function buildSavingsApp() {
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: AUTHED_USER_ID };
+    req.group = { id: 1, role: "owner" };
     next();
   });
   app.use("/", savingsGoalsRouter);
@@ -114,6 +117,7 @@ function makeSelectChainWith(rows: unknown[]) {
   chain.from = vi.fn().mockReturnValue(chain);
   chain.where = vi.fn().mockReturnValue(chain);
   chain.leftJoin = vi.fn().mockReturnValue(chain);
+  chain.innerJoin = vi.fn().mockReturnValue(chain);
   chain.orderBy = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockResolvedValue(rows);
   chain.for = vi.fn().mockResolvedValue(rows);
