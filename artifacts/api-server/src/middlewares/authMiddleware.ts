@@ -19,6 +19,10 @@ declare global {
       isAuthenticated(): this is AuthedRequest;
 
       user?: User | undefined;
+      group?: {
+        id: number;
+        role: "owner" | "admin" | "member";
+      };
     }
 
     export interface AuthedRequest {

@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { contributionsTable, usersTable, membersTable } from "@workspace/db";
+import { contributionsTable, usersTable, groupMembershipsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
   CreateContributionBody,
   GetContributionsQueryParams,
 } from "@workspace/api-zod";
+import { getActiveGroupId } from "../lib/activeGroup";
 
 const router = Router();
 
@@ -16,16 +17,14 @@ function displayName(u: { firstName?: string | null; email?: string | null } | n
   return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : "Unknown";
 }
 
-router.get("/contributions", async (req, res) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+router.get("/contributions", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const parsed = GetContributionsQueryParams.safeParse(req.query);
   const { month, year } = parsed.success ? parsed.data : {};
 
-  const conditions = [];
+  const conditions: ReturnType<typeof eq>[] = [eq(contributionsTable.groupId, groupId)];
   if (month !== undefined) conditions.push(eq(contributionsTable.month, Math.round(month)));
   if (year !== undefined) conditions.push(eq(contributionsTable.year, Math.round(year)));
 
@@ -43,7 +42,7 @@ router.get("/contributions", async (req, res) => {
     })
     .from(contributionsTable)
     .leftJoin(usersTable, eq(contributionsTable.userId, usersTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(contributionsTable.year, contributionsTable.month, contributionsTable.createdAt);
 
   res.json(
@@ -60,11 +59,9 @@ router.get("/contributions", async (req, res) => {
   );
 });
 
-router.post("/contributions", async (req, res) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+router.post("/contributions", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const parsed = CreateContributionBody.safeParse(req.body);
   if (!parsed.success) {
@@ -74,14 +71,16 @@ router.post("/contributions", async (req, res) => {
 
   const { amount, month, year, note, forUserId } = parsed.data;
 
-  // If forUserId is provided, verify that user is a household member
-  let targetUserId = req.user.id;
-  if (forUserId && forUserId !== req.user.id) {
-    const targetUser = await db.query.usersTable.findFirst({
-      where: eq(usersTable.id, forUserId),
-    });
-    if (!targetUser) {
-      res.status(400).json({ error: "User not found" });
+  // If forUserId is provided, verify that user is a group member
+  let targetUserId = req.user!.id;
+  if (forUserId && forUserId !== req.user!.id) {
+    const [membership] = await db
+      .select({ userId: groupMembershipsTable.userId })
+      .from(groupMembershipsTable)
+      .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, forUserId)))
+      .limit(1);
+    if (!membership) {
+      res.status(400).json({ error: "User not found or not a member of this group" });
       return;
     }
     targetUserId = forUserId;
@@ -90,6 +89,7 @@ router.post("/contributions", async (req, res) => {
   const [contribution] = await db
     .insert(contributionsTable)
     .values({
+      groupId,
       userId: targetUserId,
       amount,
       month: Math.round(month),
@@ -109,18 +109,18 @@ router.post("/contributions", async (req, res) => {
   });
 });
 
-router.delete("/contributions/:id", async (req, res) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+router.delete("/contributions/:id", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
-  // Only registered household members may delete contributions
-  const caller = await db.query.membersTable.findFirst({
-    where: eq(membersTable.userId, req.user.id),
-  });
+  // Only registered group members may delete contributions
+  const [caller] = await db
+    .select({ userId: groupMembershipsTable.userId })
+    .from(groupMembershipsTable)
+    .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, req.user!.id)))
+    .limit(1);
   if (!caller) {
-    res.status(403).json({ error: "Forbidden: not a household member" });
+    res.status(403).json({ error: "Forbidden: not a group member" });
     return;
   }
 
@@ -132,7 +132,7 @@ router.delete("/contributions/:id", async (req, res) => {
 
   const [deleted] = await db
     .delete(contributionsTable)
-    .where(eq(contributionsTable.id, id))
+    .where(and(eq(contributionsTable.id, id), eq(contributionsTable.groupId, groupId)))
     .returning();
 
   if (!deleted) {

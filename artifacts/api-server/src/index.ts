@@ -2,6 +2,8 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { schedule as cronSchedule } from "node-cron";
 import { sendMonthlyDigest, previousMonth } from "./lib/digest";
+import { db } from "@workspace/db";
+import { groupsTable } from "@workspace/db";
 
 // Backfill removed — contributions are now derived from deposits + direct expense payments
 
@@ -30,10 +32,17 @@ app.listen(port, (err) => {
 
 // ── Monthly digest cron — runs at 08:00 on the 1st of every month ─────────
 // The job covers the *previous* calendar month so all data is complete.
-cronSchedule("0 8 1 * *", () => {
+// Processes each group separately so every household gets its own digest.
+cronSchedule("0 8 1 * *", async () => {
   const { month, year } = previousMonth();
-  logger.info({ month, year }, "Running scheduled monthly digest");
-  sendMonthlyDigest(month, year).catch((err) => {
-    logger.error({ err }, "Scheduled digest failed");
-  });
+  logger.info({ month, year }, "Running scheduled monthly digest for all groups");
+
+  const groups = await db.select({ id: groupsTable.id }).from(groupsTable);
+
+  for (const group of groups) {
+    logger.info({ month, year, groupId: group.id }, "Sending scheduled digest for group");
+    await sendMonthlyDigest(month, year, { groupId: group.id }).catch((err) => {
+      logger.error({ err, groupId: group.id }, "Scheduled digest failed for group");
+    });
+  }
 });

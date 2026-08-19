@@ -5,15 +5,12 @@ import {
   budgetCategoriesTable,
   contributionsTable,
   usersTable,
-  membersTable,
+  groupMembershipsTable,
+  groupsTable,
   digestSendsTable,
 } from "@workspace/db";
-import { sql, eq, desc } from "drizzle-orm";
+import { sql, eq, desc, and } from "drizzle-orm";
 import { logger } from "./logger";
-
-const TOTAL_BUDGET = 317094;
-const CHEGE_TARGET = 267094;
-const LYDIAH_TARGET = 50000;
 
 function fmt(kes: number): string {
   return `KES ${Math.round(kes).toLocaleString()}`;
@@ -45,27 +42,33 @@ interface ExpenseRow {
   date: string;
 }
 
+interface MemberContribution {
+  name: string;
+  contributed: number;
+  target: number | null;
+}
+
 function buildEmailHtml(opts: {
   label: string;
+  totalBudget: number;
   totalSpent: number;
   remaining: number;
   pctUsed: number;
   categories: CategoryRow[];
   spentMap: Map<string, number>;
   top5: ExpenseRow[];
-  chegeContributed: number;
-  lydiahContributed: number;
+  memberContributions: MemberContribution[];
 }): string {
   const {
     label,
+    totalBudget,
     totalSpent,
     remaining,
     pctUsed,
     categories,
     spentMap,
     top5,
-    chegeContributed,
-    lydiahContributed,
+    memberContributions,
   } = opts;
 
   const overBudget = remaining < 0;
@@ -100,8 +103,21 @@ function buildEmailHtml(opts: {
     )
     .join("");
 
-  const chegeGap = CHEGE_TARGET - chegeContributed;
-  const lydiahGap = LYDIAH_TARGET - lydiahContributed;
+  const memberRows = memberContributions
+    .map((m) => {
+      const gap = m.target != null ? m.target - m.contributed : null;
+      return `
+      <td style="padding:12px 16px;background:#f8fafc;border-radius:8px;margin-right:8px" width="${Math.floor(96 / memberContributions.length)}%">
+        <p style="margin:0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">${m.name}</p>
+        <p style="margin:4px 0 0;font-size:20px;font-weight:700;color:#111827">${fmt(m.contributed)}</p>
+        ${m.target != null
+          ? `<p style="margin:4px 0 0;font-size:12px;color:${m.contributed >= m.target ? "#059669" : "#6b7280"}">
+               Target: ${fmt(m.target)} ${m.contributed >= m.target ? "✓" : `· Gap: ${fmt(gap ?? 0)}`}
+             </p>`
+          : ""}
+      </td>`;
+    })
+    .join('<td width="4%"></td>');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -129,7 +145,7 @@ function buildEmailHtml(opts: {
             <tr>
               <td style="padding:0 8px 16px 0" width="33%">
                 <p style="margin:0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Total Budget</p>
-                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#111827">${fmt(TOTAL_BUDGET)}</p>
+                <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#111827">${fmt(totalBudget)}</p>
               </td>
               <td style="padding:0 8px 16px" width="33%">
                 <p style="margin:0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Total Spent</p>
@@ -182,28 +198,14 @@ function buildEmailHtml(opts: {
         }
 
         <!-- Contributions Split -->
-        <tr><td style="padding:28px 32px 0">
+        ${memberContributions.length > 0 ? `<tr><td style="padding:28px 32px 0">
           <h2 style="margin:0 0 16px;font-size:16px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.05em">Contributions</h2>
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="padding:12px 16px;background:#f8fafc;border-radius:8px;margin-right:8px" width="48%">
-                <p style="margin:0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Chege</p>
-                <p style="margin:4px 0 0;font-size:20px;font-weight:700;color:#111827">${fmt(chegeContributed)}</p>
-                <p style="margin:4px 0 0;font-size:12px;color:${chegeContributed >= CHEGE_TARGET ? "#059669" : "#6b7280"}">
-                  Target: ${fmt(CHEGE_TARGET)} ${chegeContributed >= CHEGE_TARGET ? "✓" : `· Gap: ${fmt(chegeGap)}`}
-                </p>
-              </td>
-              <td width="4%"></td>
-              <td style="padding:12px 16px;background:#f8fafc;border-radius:8px" width="48%">
-                <p style="margin:0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Lydiah</p>
-                <p style="margin:4px 0 0;font-size:20px;font-weight:700;color:#111827">${fmt(lydiahContributed)}</p>
-                <p style="margin:4px 0 0;font-size:12px;color:${lydiahContributed >= LYDIAH_TARGET ? "#059669" : "#6b7280"}">
-                  Target: ${fmt(LYDIAH_TARGET)} ${lydiahContributed >= LYDIAH_TARGET ? "✓" : `· Gap: ${fmt(lydiahGap)}`}
-                </p>
-              </td>
+              ${memberRows}
             </tr>
           </table>
-        </td></tr>
+        </td></tr>` : ""}
 
         <!-- Footer -->
         <tr><td style="padding:28px 32px">
@@ -220,30 +222,51 @@ function buildEmailHtml(opts: {
 </html>`;
 }
 
+/**
+ * Sends the monthly digest for a single group.
+ * Idempotency key is (groupId, month, year).
+ */
 export async function sendMonthlyDigest(
   month: number,
   year: number,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; groupId?: number } = {},
 ): Promise<{ id: string; to: string[]; skipped?: boolean }> {
-  logger.info({ month, year, force: opts.force }, "Building monthly digest");
+  logger.info({ month, year, force: opts.force, groupId: opts.groupId }, "Building monthly digest");
 
-  // ── Idempotency guard — one send per (month, year) ────────────────────────
-  // Uses a DB unique constraint so concurrent instances cannot double-send.
+  // Resolve group — if a specific groupId was passed use it; otherwise use the
+  // first group found (legacy single-group path for the cron scheduler).
+  let resolvedGroupId = opts.groupId;
+  if (resolvedGroupId === undefined) {
+    const [firstGroup] = await db.select({ id: groupsTable.id }).from(groupsTable).limit(1);
+    if (!firstGroup) {
+      throw new Error("No group found. Cannot send digest.");
+    }
+    resolvedGroupId = firstGroup.id;
+  }
+
+  const groupId = resolvedGroupId;
+
+  // ── Idempotency guard — one send per (groupId, month, year) ──────────────
   if (opts.force) {
     await db
       .delete(digestSendsTable)
-      .where(sql`${digestSendsTable.month} = ${month} AND ${digestSendsTable.year} = ${year}`);
+      .where(
+        and(
+          sql`${digestSendsTable.groupId} = ${groupId}`,
+          sql`${digestSendsTable.month} = ${month}`,
+          sql`${digestSendsTable.year} = ${year}`,
+        ),
+      );
   }
 
   const claimed = await db
     .insert(digestSendsTable)
-    .values({ month, year })
+    .values({ groupId, month, year })
     .onConflictDoNothing()
     .returning({ id: digestSendsTable.id });
 
   if (claimed.length === 0) {
-    // Another instance already claimed this month — skip silently.
-    logger.info({ month, year }, "Digest already sent for this month — skipping");
+    logger.info({ month, year, groupId }, "Digest already sent for this group/month — skipping");
     return { id: "already-sent", to: [], skipped: true };
   }
 
@@ -254,16 +277,27 @@ export async function sendMonthlyDigest(
     .select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
     .from(expensesTable)
     .where(
-      sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
+      sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
     );
 
-  const [categories, spentByCategory, top5, contribs, users, memberRows] = await Promise.all([
-    db.select().from(budgetCategoriesTable).orderBy(budgetCategoriesTable.priority),
+  const [budgetRow] = await db
+    .select({ total: sql<number>`COALESCE(SUM(${budgetCategoriesTable.budgetAmount}), 0)` })
+    .from(budgetCategoriesTable)
+    .where(
+      sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`,
+    );
+
+  const [categories, spentByCategory, top5, contribs, membershipRows] = await Promise.all([
+    db
+      .select()
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.groupId, groupId))
+      .orderBy(budgetCategoriesTable.priority),
     db
       .select({ category: expensesTable.category, total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
       .from(expensesTable)
       .where(
-        sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
+        sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
       )
       .groupBy(expensesTable.category),
     db
@@ -277,7 +311,7 @@ export async function sendMonthlyDigest(
       .from(expensesTable)
       .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
       .where(
-        sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
+        sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
       )
       .orderBy(desc(expensesTable.amount))
       .limit(5),
@@ -287,30 +321,41 @@ export async function sendMonthlyDigest(
         total: sql<number>`COALESCE(SUM(${contributionsTable.amount}), 0)`,
       })
       .from(contributionsTable)
-      .where(sql`${contributionsTable.month} = ${month} AND ${contributionsTable.year} = ${year}`)
+      .where(
+        sql`${contributionsTable.groupId} = ${groupId} AND ${contributionsTable.month} = ${month} AND ${contributionsTable.year} = ${year}`,
+      )
       .groupBy(contributionsTable.userId),
-    db.select().from(usersTable),
-    db.select().from(membersTable),
+    db
+      .select({
+        userId: groupMembershipsTable.userId,
+        monthlyTarget: groupMembershipsTable.monthlyTarget,
+        firstName: usersTable.firstName,
+        email: usersTable.email,
+      })
+      .from(groupMembershipsTable)
+      .leftJoin(usersTable, eq(usersTable.id, groupMembershipsTable.userId))
+      .where(eq(groupMembershipsTable.groupId, groupId)),
   ]);
 
-  // ── Resolve contributions ─────────────────────────────────────────────────
-  let chegeContributed = 0;
-  let lydiahContributed = 0;
-  for (const c of contribs) {
-    const user = users.find((u) => u.id === c.userId);
-    const name = (user?.firstName ?? "").toLowerCase();
-    if (name.includes("chege") || name.includes("george")) chegeContributed += Number(c.total);
-    else if (name.includes("lydiah") || name.includes("lydia")) lydiahContributed += Number(c.total);
-    else if (chegeContributed === 0) chegeContributed += Number(c.total);
-    else lydiahContributed += Number(c.total);
-  }
+  // ── Build per-member contribution summary ─────────────────────────────────
+  const contribByUserId = new Map(contribs.map((c) => [c.userId, Number(c.total)]));
+
+  const memberContributions: MemberContribution[] = membershipRows.map((m) => {
+    const name =
+      m.firstName ??
+      m.email?.split("@")[0]?.replace(/^./, (c) => c.toUpperCase()) ??
+      "Member";
+    return {
+      name,
+      contributed: contribByUserId.get(m.userId) ?? 0,
+      target: m.monthlyTarget ?? null,
+    };
+  });
 
   // ── Recipient emails ──────────────────────────────────────────────────────
-  const memberEmails: string[] = [];
-  for (const m of memberRows) {
-    const u = users.find((u) => u.id === m.userId);
-    if (u?.email) memberEmails.push(u.email);
-  }
+  const memberEmails: string[] = membershipRows
+    .map((m) => m.email)
+    .filter((e): e is string => Boolean(e));
   const envEmails = (process.env.DIGEST_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim())
@@ -326,13 +371,15 @@ export async function sendMonthlyDigest(
 
   // ── Build HTML ────────────────────────────────────────────────────────────
   const totalSpent = Number(spentRow.total);
-  const remaining = TOTAL_BUDGET - totalSpent;
-  const pctUsed = TOTAL_BUDGET > 0 ? Math.round((totalSpent / TOTAL_BUDGET) * 100) : 0;
+  const totalBudget = Number(budgetRow.total);
+  const remaining = totalBudget - totalSpent;
+  const pctUsed = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
   const spentMap = new Map(spentByCategory.map((s) => [s.category, Number(s.total)]));
   const label = monthName(month, year);
 
   const html = buildEmailHtml({
     label,
+    totalBudget,
     totalSpent,
     remaining,
     pctUsed,
@@ -340,10 +387,10 @@ export async function sendMonthlyDigest(
     spentMap,
     top5: top5.map((e) => ({
       ...e,
-      date: String(e.date), // Drizzle `date` columns return ISO strings, not Date objects
+      amount: Number(e.amount),
+      date: String(e.date),
     })),
-    chegeContributed,
-    lydiahContributed,
+    memberContributions,
   });
 
   // ── Send via Resend ───────────────────────────────────────────────────────
@@ -374,7 +421,7 @@ export async function sendMonthlyDigest(
     .set({ emailId: result.id, recipients: to })
     .where(sql`${digestSendsTable.id} = ${claimId}`);
 
-  logger.info({ emailId: result.id, to, month, year }, "Monthly digest sent");
+  logger.info({ emailId: result.id, to, month, year, groupId }, "Monthly digest sent");
   return { id: result.id ?? "unknown", to };
 }
 

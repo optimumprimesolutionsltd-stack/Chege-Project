@@ -7,8 +7,9 @@ import {
   usersTable,
   membersTable,
 } from "@workspace/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { and, eq, sql, desc } from "drizzle-orm";
 import { z } from "zod";
+import { getActiveGroupId } from "../lib/activeGroup";
 
 const router = Router();
 
@@ -39,12 +40,12 @@ function formatGoal(g: typeof savingsGoalsTable.$inferSelect) {
   };
 }
 
-/** Validate that a non-null member ID belongs to the household. Returns an error string or null. */
-async function validateMemberId(id: string): Promise<string | null> {
+/** Validate that a non-null member ID belongs to the active group. Returns an error string or null. */
+async function validateMemberId(id: string, groupId: number): Promise<string | null> {
   const [member] = await db
     .select({ userId: membersTable.userId })
     .from(membersTable)
-    .where(eq(membersTable.userId, id))
+    .where(and(eq(membersTable.userId, id), eq(membersTable.groupId, groupId)))
     .limit(1);
   if (!member) return `Member ID '${id}' is not a recognised household member`;
   return null;
@@ -88,12 +89,13 @@ function distributeSplits(
 
 /**
  * Validate contributor splits: sum must equal `total` exactly, and every named
- * (non-null) member ID must belong to the household. Returns an error string or
+ * (non-null) member ID must belong to the active group. Returns an error string or
  * null.
  */
 async function validateContributorSplits(
   splits: ContributorSplit[],
   total: number,
+  groupId: number,
 ): Promise<string | null> {
   const splitTotal = splits.reduce((s, c) => s + c.amount, 0);
   if (splitTotal !== total) {
@@ -101,7 +103,7 @@ async function validateContributorSplits(
   }
   for (const split of splits) {
     if (split.userId !== null) {
-      const err = await validateMemberId(split.userId);
+      const err = await validateMemberId(split.userId, groupId);
       if (err) return err;
     }
   }
@@ -109,18 +111,21 @@ async function validateContributorSplits(
 }
 
 router.get("/savings-goals", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const goals = await db
     .select()
     .from(savingsGoalsTable)
+    .where(eq(savingsGoalsTable.groupId, groupId))
     .orderBy(savingsGoalsTable.createdAt);
 
   res.json(goals.map(formatGoal));
 });
 
 router.post("/savings-goals", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const parsed = CreateGoalBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
@@ -130,11 +135,12 @@ router.post("/savings-goals", async (req, res): Promise<void> => {
   const [goal] = await db
     .insert(savingsGoalsTable)
     .values({
+      groupId,
       name,
       targetAmount,
       currentAmount: 0,
       deadline: deadline ?? null,
-      createdByUserId: req.user.id,
+      createdByUserId: req.user!.id,
       isCompleted: false,
     })
     .returning();
@@ -144,7 +150,8 @@ router.post("/savings-goals", async (req, res): Promise<void> => {
 
 // POST /savings-goals/cascade-contribute — distribute a payment waterfall-style across goals
 router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const bodySchema = z.object({
     amount: z.number().int().positive(),
@@ -166,7 +173,7 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
 
   // Validate contributor splits if provided
   if (contributorSplits && contributorSplits.length > 0) {
-    const err = await validateContributorSplits(contributorSplits, totalAmount);
+    const err = await validateContributorSplits(contributorSplits, totalAmount, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
@@ -178,7 +185,7 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
       const all = await tx
         .select()
         .from(savingsGoalsTable)
-        .where(eq(savingsGoalsTable.isCompleted, false))
+        .where(and(eq(savingsGoalsTable.isCompleted, false), eq(savingsGoalsTable.groupId, groupId)))
         .for("update");
       const byId = Object.fromEntries(all.map((g) => [g.id, g]));
       goals = goalIds.map((id) => byId[id]).filter(Boolean);
@@ -186,7 +193,7 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
       goals = await tx
         .select()
         .from(savingsGoalsTable)
-        .where(eq(savingsGoalsTable.isCompleted, false))
+        .where(and(eq(savingsGoalsTable.isCompleted, false), eq(savingsGoalsTable.groupId, groupId)))
         .orderBy(savingsGoalsTable.createdAt)
         .for("update");
     }
@@ -214,7 +221,7 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
           currentAmount: sql`${savingsGoalsTable.currentAmount} + ${allocated}`,
           isCompleted: goal.currentAmount + allocated >= goal.targetAmount ? true : goal.isCompleted,
         })
-        .where(eq(savingsGoalsTable.id, goal.id))
+        .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)))
         .returning();
 
       if (contributorSplits && contributorSplits.length > 0) {
@@ -222,6 +229,7 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
         // (Hamilton) method so per-split integers sum exactly to `allocated`.
         for (const row of distributeSplits(contributorSplits, allocated)) {
           await tx.insert(savingsGoalContributionsTable).values({
+            groupId,
             goalId: goal.id,
             amount: row.amount,
             // null = Joint bank; named ID = individual member
@@ -231,6 +239,7 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
       } else {
         // No splits provided → attribute to Joint bank (null). Never fall back to req.user.
         await tx.insert(savingsGoalContributionsTable).values({
+          groupId,
           goalId: goal.id,
           amount: allocated,
           createdByUserId: null,
@@ -254,7 +263,8 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
 
 // POST /savings-goals/:id/contribute — atomic server-side increment (before /:id PATCH)
 router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const paramParsed = GoalIdParam.safeParse(req.params);
   if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -283,10 +293,10 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
   const userId = bodyParsed.data.userId ?? null;
 
   if (hasSplits) {
-    const err = await validateContributorSplits(contributorSplits!, amount);
+    const err = await validateContributorSplits(contributorSplits!, amount, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   } else if (userId !== null) {
-    const err = await validateMemberId(userId);
+    const err = await validateMemberId(userId, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
@@ -297,7 +307,7 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
     const [goal] = await tx
       .select()
       .from(savingsGoalsTable)
-      .where(eq(savingsGoalsTable.id, id))
+      .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
       .for("update");
 
     if (!goal) return null;
@@ -313,7 +323,7 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
         currentAmount: sql`${savingsGoalsTable.currentAmount} + ${actualAmount}`,
         isCompleted: willComplete ? true : goal.isCompleted,
       })
-      .where(eq(savingsGoalsTable.id, id))
+      .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
       .returning();
 
     if (!updated) return null;
@@ -323,6 +333,7 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
       // largest-remainder method so inserted rows sum exactly to actualAmount.
       for (const row of distributeSplits(contributorSplits!, actualAmount)) {
         await tx.insert(savingsGoalContributionsTable).values({
+          groupId,
           goalId: id,
           amount: row.amount,
           // null = Joint bank; named ID = individual member
@@ -332,6 +343,7 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
       }
     } else {
       await tx.insert(savingsGoalContributionsTable).values({
+        groupId,
         goalId: id,
         amount: actualAmount,
         // null = Joint bank; named userId = individual member
@@ -350,18 +362,19 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
 
 // GET /savings-goals/:id/contributions — chronological contribution history
 router.get("/savings-goals/:id/contributions", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const paramParsed = GoalIdParam.safeParse(req.params);
   if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { id } = paramParsed.data;
 
-  // Verify the goal still exists before returning its history.
+  // Verify the goal still exists and belongs to this group before returning its history.
   const [goal] = await db
     .select({ id: savingsGoalsTable.id })
     .from(savingsGoalsTable)
-    .where(eq(savingsGoalsTable.id, id))
+    .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
     .limit(1);
   if (!goal) { res.status(404).json({ error: "Goal not found" }); return; }
 
@@ -377,7 +390,12 @@ router.get("/savings-goals/:id/contributions", async (req, res): Promise<void> =
     })
     .from(savingsGoalContributionsTable)
     .leftJoin(usersTable, eq(savingsGoalContributionsTable.createdByUserId, usersTable.id))
-    .where(eq(savingsGoalContributionsTable.goalId, id))
+    .where(
+      and(
+        eq(savingsGoalContributionsTable.goalId, id),
+        eq(savingsGoalContributionsTable.groupId, groupId),
+      ),
+    )
     .orderBy(desc(savingsGoalContributionsTable.createdAt));
 
   res.json(rows.map((c) => ({
@@ -390,7 +408,8 @@ router.get("/savings-goals/:id/contributions", async (req, res): Promise<void> =
 
 // GET /savings-goals/consistency-check — surface goals with balance/history mismatches.
 router.get("/savings-goals/consistency-check", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const rows = await db
     .select({
@@ -402,8 +421,12 @@ router.get("/savings-goals/consistency-check", async (req, res): Promise<void> =
     .from(savingsGoalsTable)
     .leftJoin(
       savingsGoalContributionsTable,
-      eq(savingsGoalContributionsTable.goalId, savingsGoalsTable.id),
+      and(
+        eq(savingsGoalContributionsTable.goalId, savingsGoalsTable.id),
+        eq(savingsGoalContributionsTable.groupId, groupId),
+      ),
     )
+    .where(eq(savingsGoalsTable.groupId, groupId))
     .groupBy(savingsGoalsTable.id);
 
   const inconsistentGoals = rows
@@ -420,7 +443,8 @@ router.get("/savings-goals/consistency-check", async (req, res): Promise<void> =
 });
 
 router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const paramParsed = GoalIdParam.safeParse(req.params);
   if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -447,7 +471,7 @@ router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
       const [existing] = await tx
         .select({ currentAmount: savingsGoalsTable.currentAmount })
         .from(savingsGoalsTable)
-        .where(eq(savingsGoalsTable.id, id))
+        .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
         .for("update");
       if (!existing) return null;
       const previousAmount = existing.currentAmount;
@@ -467,7 +491,7 @@ router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
     const [updated] = await tx
       .update(savingsGoalsTable)
       .set(setClause)
-      .where(eq(savingsGoalsTable.id, id))
+      .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
       .returning();
 
     if (!updated) return null;
@@ -476,10 +500,11 @@ router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
     // are always by the signed-in user, not attributed to Joint bank)
     if (delta !== undefined && delta !== 0) {
       await tx.insert(savingsGoalContributionsTable).values({
+        groupId,
         goalId: id,
         amount: delta,
         note: reason ?? "Manual adjustment",
-        createdByUserId: req.user.id,
+        createdByUserId: req.user!.id,
       });
     }
 
@@ -497,7 +522,8 @@ router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/savings-goals/:id", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const parsed = GoalIdParam.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -508,7 +534,7 @@ router.delete("/savings-goals/:id", async (req, res): Promise<void> => {
     const [existingGoal] = await tx
       .select({ id: savingsGoalsTable.id })
       .from(savingsGoalsTable)
-      .where(eq(savingsGoalsTable.id, id))
+      .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
       .for("update");
     if (!existingGoal) return null;
 
@@ -517,17 +543,22 @@ router.delete("/savings-goals/:id", async (req, res): Promise<void> => {
     const [linkedTransfer] = await tx
       .select({ id: jointAccountTxTable.id })
       .from(jointAccountTxTable)
-      .where(eq(jointAccountTxTable.savingsGoalId, id))
+      .where(and(eq(jointAccountTxTable.savingsGoalId, id), eq(jointAccountTxTable.groupId, groupId)))
       .limit(1);
     if (linkedTransfer) return { linkedTransfer: true };
 
     await tx
       .delete(savingsGoalContributionsTable)
-      .where(eq(savingsGoalContributionsTable.goalId, id));
+      .where(
+        and(
+          eq(savingsGoalContributionsTable.goalId, id),
+          eq(savingsGoalContributionsTable.groupId, groupId),
+        ),
+      );
 
     const [goal] = await tx
       .delete(savingsGoalsTable)
-      .where(eq(savingsGoalsTable.id, id))
+      .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
       .returning();
 
     return goal ?? null;

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { sendMonthlyDigest, previousMonth } from "../lib/digest";
 import { logger } from "../lib/logger";
 import { z } from "zod";
+import { getActiveGroupId } from "../lib/activeGroup";
 
 const router = Router();
 
@@ -10,12 +11,11 @@ const router = Router();
  * Manually trigger the monthly digest (authenticated members only).
  * Body (optional): { month: number, year: number }
  * Omit body to default to the previous calendar month.
+ * The group is resolved from the authenticated session — never from client input.
  */
-router.post("/digest/send", async (req, res) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+router.post("/digest/send", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const bodySchema = z.object({
     month: z.number().int().min(1).max(12).optional(),
@@ -35,7 +35,7 @@ router.post("/digest/send", async (req, res) => {
   const year = parsed.data.year ?? prev.year;
 
   try {
-    const result = await sendMonthlyDigest(month, year, { force: parsed.data.force });
+    const result = await sendMonthlyDigest(month, year, { force: parsed.data.force, groupId });
     res.json({ ok: true, emailId: result.id, to: result.to, skipped: result.skipped, month, year });
   } catch (err) {
     logger.error({ err }, "Failed to send digest");

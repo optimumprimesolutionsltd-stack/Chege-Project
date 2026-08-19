@@ -3,14 +3,17 @@ import { db } from "@workspace/db";
 import { budgetCategoriesTable } from "@workspace/db";
 import { and, asc, eq, ne } from "drizzle-orm";
 import { z } from "zod";
+import { getActiveGroupId } from "../lib/activeGroup";
 
 const router = Router();
 
 router.get("/budget-categories", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
   const categories = await db
     .select()
     .from(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.groupId, groupId))
     .orderBy(asc(budgetCategoriesTable.priority), asc(budgetCategoriesTable.name));
   res.json(categories);
 });
@@ -36,16 +39,21 @@ const categorySchema = categoryFields.superRefine((data, ctx) => {
 });
 
 router.post("/budget-categories", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
   const parsed = categorySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
   const duplicate = await db.query.budgetCategoriesTable.findFirst({
-    where: eq(budgetCategoriesTable.name, parsed.data.name),
+    where: and(
+      eq(budgetCategoriesTable.name, parsed.data.name),
+      eq(budgetCategoriesTable.groupId, groupId),
+    ),
   });
   if (duplicate) { res.status(409).json({ error: "A category with this name already exists" }); return; }
   try {
     const [row] = await db.insert(budgetCategoriesTable).values({
       ...parsed.data,
+      groupId,
       activeMonth: parsed.data.isRecurring ? null : parsed.data.activeMonth,
       activeYear: parsed.data.isRecurring ? null : parsed.data.activeYear,
     }).returning();
@@ -60,18 +68,22 @@ router.post("/budget-categories", async (req, res) => {
 });
 
 router.put("/budget-categories/:id", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = categoryFields.partial().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
-  const [existing] = await db.select().from(budgetCategoriesTable).where(eq(budgetCategoriesTable.id, id)).limit(1);
+  const [existing] = await db.select().from(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId)))
+    .limit(1);
   if (!existing) { res.status(404).json({ error: "Category not found" }); return; }
   const merged = categorySchema.safeParse({ ...existing, ...parsed.data });
   if (!merged.success) { res.status(400).json({ error: "Invalid input", details: merged.error.flatten() }); return; }
   const duplicate = await db.query.budgetCategoriesTable.findFirst({
     where: and(
       eq(budgetCategoriesTable.name, merged.data.name),
+      eq(budgetCategoriesTable.groupId, groupId),
       ne(budgetCategoriesTable.id, id),
     ),
   });
@@ -81,7 +93,7 @@ router.put("/budget-categories/:id", async (req, res) => {
       ...merged.data,
       activeMonth: merged.data.isRecurring ? null : merged.data.activeMonth,
       activeYear: merged.data.isRecurring ? null : merged.data.activeYear,
-    }).where(eq(budgetCategoriesTable.id, id)).returning();
+    }).where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId))).returning();
     if (!row) { res.status(404).json({ error: "Category not found" }); return; }
     res.json(row);
   } catch (error) {
@@ -94,10 +106,13 @@ router.put("/budget-categories/:id", async (req, res) => {
 });
 
 router.delete("/budget-categories/:id", async (req, res) => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [deleted] = await db.delete(budgetCategoriesTable).where(eq(budgetCategoriesTable.id, id)).returning();
+  const [deleted] = await db.delete(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId)))
+    .returning();
   if (!deleted) { res.status(404).json({ error: "Category not found" }); return; }
   res.json({ success: true });
 });

@@ -9,8 +9,9 @@ import {
   savingsGoalContributionsTable,
   jointAccountDepositSplitsTable,
 } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { getActiveGroupId } from "../lib/activeGroup";
 
 const router = Router();
 
@@ -101,12 +102,12 @@ async function enrichTx(tx: typeof jointAccountTxTable.$inferSelect) {
   };
 }
 
-/** Validate that a non-null member ID belongs to the household. Returns an error string or null. */
-async function validateMemberId(id: string): Promise<string | null> {
+/** Validate that a non-null member ID belongs to the active group. Returns an error string or null. */
+async function validateMemberId(id: string, groupId: number): Promise<string | null> {
   const [member] = await db
     .select({ userId: membersTable.userId })
     .from(membersTable)
-    .where(eq(membersTable.userId, id))
+    .where(and(eq(membersTable.userId, id), eq(membersTable.groupId, groupId)))
     .limit(1);
   if (!member) return `Member ID '${id}' is not a recognised household member`;
   return null;
@@ -114,11 +115,13 @@ async function validateMemberId(id: string): Promise<string | null> {
 
 // GET /joint-account — returns balance + all transactions ordered newest first
 router.get("/joint-account", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const txs = await db
     .select()
     .from(jointAccountTxTable)
+    .where(eq(jointAccountTxTable.groupId, groupId))
     .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.createdAt} DESC`);
 
   const enriched = await Promise.all(txs.map(enrichTx));
@@ -132,7 +135,8 @@ router.get("/joint-account", async (req, res): Promise<void> => {
 
 // POST /joint-account/deposit
 router.post("/joint-account/deposit", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const parsed = DepositInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
@@ -153,7 +157,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
       return;
     }
     for (const split of contributorSplits) {
-      const err = await validateMemberId(split.userId);
+      const err = await validateMemberId(split.userId, groupId);
       if (err) { res.status(400).json({ error: err }); return; }
     }
   }
@@ -162,7 +166,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
   const madeById = parsed.data.madeById ?? null;
 
   if (madeById !== null) {
-    const err = await validateMemberId(madeById);
+    const err = await validateMemberId(madeById, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
@@ -170,6 +174,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
     const [created] = await transaction
       .insert(jointAccountTxTable)
       .values({
+        groupId,
         type: "deposit", amount, description, date,
         madeById: contributorSplits ? null : madeById,
         incomeSourceId: contributorSplits ? null : incomeSourceId ?? null,
@@ -177,6 +182,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
       .returning();
     if (contributorSplits) {
       await transaction.insert(jointAccountDepositSplitsTable).values(contributorSplits.map((split) => ({
+        groupId,
         transactionId: created.id,
         userId: split.userId,
         amount: split.amount,
@@ -191,7 +197,8 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
 
 // POST /joint-account/disbursement
 router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const parsed = DisbursementInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
@@ -205,14 +212,14 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   const madeById = parsed.data.madeById ?? null;
 
   if (madeById !== null) {
-    const err = await validateMemberId(madeById);
+    const err = await validateMemberId(madeById, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
   const [category] = await db
     .select({ id: budgetCategoriesTable.id })
     .from(budgetCategoriesTable)
-    .where(eq(budgetCategoriesTable.name, expenseCategory))
+    .where(and(eq(budgetCategoriesTable.name, expenseCategory), eq(budgetCategoriesTable.groupId, groupId)))
     .limit(1);
   if (!category) {
     res.status(400).json({ error: "Choose a valid budget category." });
@@ -222,6 +229,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   const [tx] = await db
     .insert(jointAccountTxTable)
     .values({
+      groupId,
       type: "disbursement",
       amount,
       // Description is a supporting note. When omitted, retain a meaningful
@@ -241,7 +249,8 @@ async function createSavingsTransfer(
   res: Response,
   direction: "to_savings" | "from_savings",
 ): Promise<void> {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const parsed = SavingsTransferInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid transfer details" }); return; }
@@ -249,7 +258,7 @@ async function createSavingsTransfer(
   const { amount, goalId, narration, date } = parsed.data;
   const madeById = parsed.data.madeById ?? null;
   if (madeById !== null) {
-    const err = await validateMemberId(madeById);
+    const err = await validateMemberId(madeById, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
@@ -257,7 +266,7 @@ async function createSavingsTransfer(
     const [goal] = await tx
       .select()
       .from(savingsGoalsTable)
-      .where(eq(savingsGoalsTable.id, goalId))
+      .where(and(eq(savingsGoalsTable.id, goalId), eq(savingsGoalsTable.groupId, groupId)))
       .for("update");
     if (!goal) return { error: "Savings goal not found.", status: 404 as const };
 
@@ -277,6 +286,7 @@ async function createSavingsTransfer(
     const [bankTx] = await tx
       .insert(jointAccountTxTable)
       .values({
+        groupId,
         type,
         amount,
         description,
@@ -297,8 +307,9 @@ async function createSavingsTransfer(
         currentAmount: nextAmount,
         isCompleted: nextAmount >= goal.targetAmount,
       })
-      .where(eq(savingsGoalsTable.id, goal.id));
+      .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)));
     await tx.insert(savingsGoalContributionsTable).values({
+      groupId,
       goalId: goal.id,
       amount: delta,
       note: direction === "to_savings"
@@ -328,7 +339,8 @@ router.post("/joint-account/transfers/from-savings", async (req, res): Promise<v
 
 // PUT /joint-account/:id — edit a transaction without changing its type.
 router.put("/joint-account/:id", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const params = IdParam.safeParse(req.params);
   const parsed = UpdateJointAccountInput.safeParse(req.body);
@@ -337,7 +349,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(jointAccountTxTable)
-    .where(eq(jointAccountTxTable.id, params.data.id))
+    .where(and(eq(jointAccountTxTable.id, params.data.id), eq(jointAccountTxTable.groupId, groupId)))
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
   if (existing.savingsGoalId !== null) {
@@ -350,7 +362,12 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   }
   const existingSplits = await db.select({ id: jointAccountDepositSplitsTable.id })
     .from(jointAccountDepositSplitsTable)
-    .where(eq(jointAccountDepositSplitsTable.transactionId, existing.id))
+    .where(
+      and(
+        eq(jointAccountDepositSplitsTable.transactionId, existing.id),
+        eq(jointAccountDepositSplitsTable.groupId, groupId),
+      ),
+    )
     .limit(1);
   if (existingSplits.length > 0) {
     res.status(400).json({ error: "A split deposit cannot be edited. Delete and recreate it to preserve its contributor history." });
@@ -360,7 +377,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const { amount, date } = parsed.data;
   const madeById = parsed.data.madeById === undefined ? existing.madeById : parsed.data.madeById;
   if (madeById !== null) {
-    const err = await validateMemberId(madeById);
+    const err = await validateMemberId(madeById, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
@@ -377,7 +394,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     const [updated] = await db
       .update(jointAccountTxTable)
       .set({ amount, date, madeById, description, incomeSourceId, expenseCategory: null })
-      .where(eq(jointAccountTxTable.id, existing.id))
+      .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
       .returning();
     res.json(await enrichTx(updated));
     return;
@@ -391,7 +408,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const [category] = await db
     .select({ id: budgetCategoriesTable.id })
     .from(budgetCategoriesTable)
-    .where(eq(budgetCategoriesTable.name, expenseCategory))
+    .where(and(eq(budgetCategoriesTable.name, expenseCategory), eq(budgetCategoriesTable.groupId, groupId)))
     .limit(1);
   if (!category) {
     res.status(400).json({ error: "Choose a valid budget category." });
@@ -408,14 +425,15 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(jointAccountTxTable)
     .set({ amount, date, madeById, description, expenseCategory })
-    .where(eq(jointAccountTxTable.id, existing.id))
+    .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
     .returning();
   res.json(await enrichTx(updated));
 });
 
 // DELETE /joint-account/:id
 router.delete("/joint-account/:id", async (req, res): Promise<void> => {
-  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
 
   const parsed = IdParam.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -424,7 +442,7 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
     const [existing] = await tx
       .select()
       .from(jointAccountTxTable)
-      .where(eq(jointAccountTxTable.id, parsed.data.id))
+      .where(and(eq(jointAccountTxTable.id, parsed.data.id), eq(jointAccountTxTable.groupId, groupId)))
       .for("update");
     if (!existing) return null;
 
@@ -432,7 +450,7 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
       const [goal] = await tx
         .select()
         .from(savingsGoalsTable)
-        .where(eq(savingsGoalsTable.id, existing.savingsGoalId))
+        .where(and(eq(savingsGoalsTable.id, existing.savingsGoalId), eq(savingsGoalsTable.groupId, groupId)))
         .for("update");
       if (!goal) return { orphanedTransfer: true };
       const reverseDelta = existing.transferDirection === "to_savings"
@@ -446,10 +464,15 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
           currentAmount: nextAmount,
           isCompleted: nextAmount >= goal.targetAmount,
         })
-        .where(eq(savingsGoalsTable.id, goal.id));
+        .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)));
       await tx
         .delete(savingsGoalContributionsTable)
-        .where(eq(savingsGoalContributionsTable.bankTransactionId, existing.id));
+        .where(
+          and(
+            eq(savingsGoalContributionsTable.bankTransactionId, existing.id),
+            eq(savingsGoalContributionsTable.groupId, groupId),
+          ),
+        );
     }
     if (existing.expenseId !== null) {
       return { linkedExpense: true };
@@ -457,7 +480,7 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
 
     const [removed] = await tx
       .delete(jointAccountTxTable)
-      .where(eq(jointAccountTxTable.id, existing.id))
+      .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
       .returning();
     return { deleted: removed };
   });
