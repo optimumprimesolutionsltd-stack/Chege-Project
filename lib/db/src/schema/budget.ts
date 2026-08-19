@@ -10,10 +10,9 @@ export const incomeSourcesTable = pgTable("income_sources", {
 });
 
 export const insertIncomeSourceSchema = createInsertSchema(incomeSourcesTable).omit({ id: true, createdAt: true });
-export type InsertIncomeSource = z.infer<typeof insertIncomeSourceSchema>;
+export type InsertIncomeSource = typeof incomeSourcesTable.$inferInsert;
 export type IncomeSource = typeof incomeSourcesTable.$inferSelect;
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 
 // Budget categories (seeded, not user-managed)
 export const budgetCategoriesTable = pgTable("budget_categories", {
@@ -28,7 +27,7 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
 });
 
 export const insertBudgetCategorySchema = createInsertSchema(budgetCategoriesTable).omit({ id: true });
-export type InsertBudgetCategory = z.infer<typeof insertBudgetCategorySchema>;
+export type InsertBudgetCategory = typeof budgetCategoriesTable.$inferInsert;
 export type BudgetCategory = typeof budgetCategoriesTable.$inferSelect;
 
 // Expenses
@@ -38,7 +37,10 @@ export const expensesTable = pgTable("expenses", {
   category: text("category").notNull(),
   description: text("description").notNull(),
   notes: text("notes"),                          // optional extra notes
-  paidById: text("paid_by_id").notNull(),
+  // Legacy single-payer attribution. Split-funded expenses use
+  // expenseIncomeSplitsTable as the source of truth, so a fully Joint-bank
+  // expense has no named payer here.
+  paidById: text("paid_by_id"),
   incomeSourceId: integer("income_source_id"),
   paidFromBank: boolean("paid_from_bank").notNull().default(false), // true = funded from joint account deposit (already counted as contribution)
   isRecurring: boolean("is_recurring").notNull().default(false),
@@ -47,16 +49,20 @@ export const expensesTable = pgTable("expenses", {
 });
 
 export const insertExpenseSchema = createInsertSchema(expensesTable).omit({ id: true, createdAt: true });
-export type InsertExpense = z.infer<typeof insertExpenseSchema>;
+export type InsertExpense = typeof expensesTable.$inferInsert;
 export type Expense = typeof expensesTable.$inferSelect;
 
 // Per-expense funding splits — when money comes from multiple sources for one payment
 export const expenseIncomeSplitsTable = pgTable("expense_income_splits", {
   id: serial("id").primaryKey(),
   expenseId: integer("expense_id").notNull().references(() => expensesTable.id, { onDelete: "cascade" }),
-  label: text("label").notNull(),       // e.g. "Salary", "Generator income", "Joint bank"
+  // userId is null only when fromBank is true. label remains for readable
+  // legacy history, while userId is the durable attribution used in reports.
+  userId: text("user_id"),
+  label: text("label").notNull(),       // e.g. "Chege", "Joint bank"
   amount: integer("amount").notNull(),  // in KES
-  fromBank: boolean("from_bank").notNull().default(false), // true = this portion came from joint bank deposit (already counted, excluded from contribution)
+  incomeSourceId: integer("income_source_id"),
+  fromBank: boolean("from_bank").notNull().default(false), // true = this portion is funded by the shared Joint bank
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export type ExpenseIncomeSplit = typeof expenseIncomeSplitsTable.$inferSelect;
@@ -73,7 +79,7 @@ export const contributionsTable = pgTable("contributions", {
 });
 
 export const insertContributionSchema = createInsertSchema(contributionsTable).omit({ id: true, createdAt: true });
-export type InsertContribution = z.infer<typeof insertContributionSchema>;
+export type InsertContribution = typeof contributionsTable.$inferInsert;
 export type Contribution = typeof contributionsTable.$inferSelect;
 
 // Joint Account Transactions — deposits and disbursements from the shared pool
@@ -87,13 +93,28 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   expenseCategory: text("expense_category"), // optional: which expense category this disbursement covers
   savingsGoalId: integer("savings_goal_id"), // set only for a linked bank <-> savings transfer
   transferDirection: text("transfer_direction"), // 'to_savings' | 'from_savings' for linked transfers
+  // Set for the Joint-bank portion of a single split-funded expense. The
+  // expense route owns this ledger row so both records stay in sync.
+  expenseId: integer("expense_id").references(() => expensesTable.id, { onDelete: "cascade" }),
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertJointAccountTxSchema = createInsertSchema(jointAccountTxTable).omit({ id: true, createdAt: true });
-export type InsertJointAccountTx = z.infer<typeof insertJointAccountTxSchema>;
+export type InsertJointAccountTx = typeof jointAccountTxTable.$inferInsert;
 export type JointAccountTx = typeof jointAccountTxTable.$inferSelect;
+
+// Per-deposit contributor attribution. A deposit remains one bank ledger row,
+// with these portions showing which household members supplied it.
+export const jointAccountDepositSplitsTable = pgTable("joint_account_deposit_splits", {
+  id: serial("id").primaryKey(),
+  transactionId: integer("transaction_id").notNull().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  amount: integer("amount").notNull(),
+  incomeSourceId: integer("income_source_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type JointAccountDepositSplit = typeof jointAccountDepositSplitsTable.$inferSelect;
 
 // Members — the household members allowed to access this app
 export const membersTable = pgTable("members", {
@@ -135,7 +156,7 @@ export const savingsGoalsTable = pgTable("savings_goals", {
 });
 
 export const insertSavingsGoalSchema = createInsertSchema(savingsGoalsTable).omit({ id: true, createdAt: true });
-export type InsertSavingsGoal = z.infer<typeof insertSavingsGoalSchema>;
+export type InsertSavingsGoal = typeof savingsGoalsTable.$inferInsert;
 export type SavingsGoal = typeof savingsGoalsTable.$inferSelect;
 
 // Savings Goal Contributions — one row per individual contribution

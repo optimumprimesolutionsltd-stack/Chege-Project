@@ -5,6 +5,7 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { DepositContributorSplit } from './depositContributorSplit';
 
 export interface JointAccountTransaction {
   id: number;
@@ -31,6 +32,12 @@ export interface JointAccountTransaction {
      * @nullable
      */
   transferDirection?: string | null;
+  /**
+     * Expense that owns this linked Joint-bank funding disbursement.
+     * @nullable
+     */
+  expenseId?: number | null;
+  contributorSplits?: DepositContributorSplit[];
   date: Date;
   createdAt: string;
 }

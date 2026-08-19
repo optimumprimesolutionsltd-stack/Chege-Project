@@ -387,6 +387,7 @@ export default function SavingsGoals() {
   const [contributeAmount, setContributeAmount] = useState("");
   const [contributePayers, setContributePayers] = useState<string[]>([]);
   const [contributePayerAmounts, setContributePayerAmounts] = useState<Record<string, string>>({});
+  const [contributeFromBank, setContributeFromBank] = useState(true);
   const { data: members } = useGetMembers();
 
   // Cascade payment state
@@ -588,14 +589,16 @@ export default function SavingsGoals() {
       return;
     }
 
-    const isMultiPayer = contributePayers.length > 1;
-    // Empty array = Joint bank (null); single = named member; multiple = split
-    const isJointBank = contributePayers.length === 0;
-    const contributorSplits = isMultiPayer
-      ? contributePayers.map((userId) => ({
+    const sourceCount = contributePayers.length + (contributeFromBank ? 1 : 0);
+    const isJointBank = contributeFromBank && contributePayers.length === 0;
+    const contributorSplits = sourceCount > 1
+      ? [
+          ...(contributeFromBank ? [{ userId: null, amount: Number(contributePayerAmounts.__joint_bank__ || 0) }] : []),
+          ...contributePayers.map((userId) => ({
           userId,
           amount: Number(contributePayerAmounts[userId] || 0),
-        }))
+          })),
+        ]
       : undefined;
 
     if (contributorSplits) {
@@ -617,7 +620,7 @@ export default function SavingsGoals() {
     const resetContribute = () => {
       setContributeId(null); setContributeAmount("");
       // Reset to Joint bank (empty = no named payers selected)
-      setContributePayers([]); setContributePayerAmounts({});
+      setContributePayers([]); setContributePayerAmounts({}); setContributeFromBank(true);
     };
 
     try {
@@ -1106,12 +1109,12 @@ export default function SavingsGoals() {
                               Who is contributing? <span className="font-normal">(select multiple to split)</span>
                             </p>
                             <div className="flex flex-wrap gap-2">
-                              {/* Joint bank chip — mutually exclusive with named members */}
+                              {/* Joint bank can be combined with individual contributors. */}
                               <button
                                 type="button"
                                 data-testid={`chip-joint-bank-contribute-${goal.id}`}
-                                onClick={() => { setContributePayers([]); setContributePayerAmounts({}); }}
-                                className={`px-3 h-8 rounded-lg text-sm border transition-colors ${contributePayers.length === 0 ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
+                                onClick={() => setContributeFromBank((value) => !value)}
+                                className={`px-3 h-8 rounded-lg text-sm border transition-colors ${contributeFromBank ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
                               >
                                 Joint bank
                               </button>
@@ -1136,12 +1139,22 @@ export default function SavingsGoals() {
                               })}
                             </div>
                             {/* Per-payer split rows */}
-                            {contributePayers.length > 1 && (() => {
+                            {contributePayers.length + (contributeFromBank ? 1 : 0) > 1 && (() => {
                               const total = Number(contributeAmount) || 0;
-                              const splitTotal = contributePayers.reduce((s, id) => s + (Number(contributePayerAmounts[id] || 0)), 0);
+                              const splitTotal = contributePayers.reduce((s, id) => s + Number(contributePayerAmounts[id] || 0), 0)
+                                + (contributeFromBank ? Number(contributePayerAmounts.__joint_bank__ || 0) : 0);
                               const diff = total - splitTotal;
                               return (
                                 <div className="space-y-1.5">
+                                  {contributeFromBank && (
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-sm font-semibold w-20 shrink-0">Joint bank</span>
+                                      <input type="number" placeholder="0" min="1" step="1"
+                                        value={contributePayerAmounts.__joint_bank__ ?? ""}
+                                        onChange={e => setContributePayerAmounts(prev => ({ ...prev, __joint_bank__: e.target.value }))}
+                                        className="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                                    </div>
+                                  )}
                                   {contributePayers.map(pid => {
                                     const member = (members ?? []).find(m => m.userId === pid);
                                     const name = member?.userName?.split(" ")[0] ?? "Member";

@@ -53,10 +53,11 @@ type Expense = {
   category: string;
   description: string;
   notes?: string | null;
-  paidById: string;
+  paidById: string | null;
   paidByName: string;
   isRecurring: boolean;
   date: string;
+  incomeSplits?: { userId: string | null; label: string; amount: number; fromBank: boolean }[];
 };
 
 function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
@@ -174,7 +175,7 @@ export default function Expenses() {
     editForm.setCategory(expense.category);
     editForm.setDescription(expense.description);
     editForm.setNotes(expense.notes ?? "");
-    editForm.setPaidById(expense.paidById);
+    editForm.setPaidById(expense.paidById ?? "");
     editForm.setIncomeSourceId(null);
     editForm.setIsRecurring(expense.isRecurring);
     editForm.setDate(expense.date);
@@ -208,42 +209,40 @@ export default function Expenses() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isMultiPayer = addForm.payerIds.length > 1;
-    const effectivePaidById = isMultiPayer ? '' : (addForm.payerIds[0] ?? addForm.paidById);
+    const sourceCount = addForm.payerIds.length + (addForm.paidFromBank ? 1 : 0);
+    const isSplitPayment = sourceCount > 1;
+    const effectivePaidById = addForm.payerIds[0] ?? addForm.paidById;
     if (!addForm.amount || !addForm.category || !addForm.description || !addForm.date) return;
-    if (!effectivePaidById && !isMultiPayer && !addForm.paidFromBank) return;
-    if (isMultiPayer) {
+    if (!effectivePaidById && !addForm.paidFromBank) return;
+    if (isSplitPayment) {
       const total = Number(addForm.amount);
-      const splitTotal = addForm.payerIds.reduce((s, id) => s + (Number(addForm.payerAmounts[id] || 0)), 0);
-      if (Math.abs(splitTotal - total) >= 1) {
+      const splitTotal = addForm.payerIds.reduce((s, id) => s + Number(addForm.payerAmounts[id] || 0), 0)
+        + (addForm.paidFromBank ? Number(addForm.payerAmounts.__joint_bank__ || 0) : 0);
+      if (!Number.isInteger(total) || splitTotal !== total) {
         toast({ variant: "destructive", title: "Amounts don't add up", description: `Portions total ${splitTotal} but expense is ${total}.` });
         return;
       }
     }
     try {
-      if (isMultiPayer) {
-        for (const pid of addForm.payerIds) {
-          const portionAmt = Number(addForm.payerAmounts[pid] || 0);
-          if (portionAmt <= 0) continue;
-          await createExpense.mutateAsync({
-            data: {
-              amount: portionAmt, category: addForm.category,
-              description: addForm.description, notes: addForm.notes || undefined,
-              paidById: pid, isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: false,
-            } as Parameters<typeof createExpense.mutateAsync>[0]["data"]
-          });
-        }
-      } else {
-        await createExpense.mutateAsync({
-          data: {
-            amount: Number(addForm.amount), category: addForm.category,
-            description: addForm.description, notes: addForm.notes || undefined,
-            paidById: addForm.paidFromBank ? undefined : (effectivePaidById || undefined), isRecurring: addForm.isRecurring,
-            date: addForm.date, paidFromBank: addForm.paidFromBank,
-            ...(addForm.incomeSourceId ? { incomeSourceId: addForm.incomeSourceId } : {}),
-          } as Parameters<typeof createExpense.mutateAsync>[0]["data"]
-        });
-      }
+      const incomeSplits = isSplitPayment
+        ? [
+          ...(addForm.paidFromBank ? [{ amount: Number(addForm.payerAmounts.__joint_bank__ || 0), fromBank: true, userId: null, label: "Joint bank" }] : []),
+          ...addForm.payerIds.map((userId) => ({
+            userId, amount: Number(addForm.payerAmounts[userId] || 0), fromBank: false,
+            label: (members ?? []).find((member) => member.userId === userId)?.userName?.split(" ")[0] ?? "Member",
+          })),
+        ]
+        : undefined;
+      await createExpense.mutateAsync({
+        data: {
+          amount: Number(addForm.amount), category: addForm.category,
+          description: addForm.description, notes: addForm.notes || undefined,
+          paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
+          isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
+          ...(addForm.incomeSourceId && !isSplitPayment ? { incomeSourceId: addForm.incomeSourceId } : {}),
+          ...(incomeSplits ? { incomeSplits } : {}),
+        } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
+      });
       toast({ title: "Expense recorded" });
       resetAdd();
       invalidate();
@@ -367,7 +366,7 @@ export default function Expenses() {
             {/* Joint bank — unattributed, no individual payer */}
             {title === "Add expense" && (
               <button type="button"
-                onClick={() => { form.setPayerIds([]); form.setPaidById(""); form.setPaidFromBank(true); form.setIncomeSourceId(null); }}
+                onClick={() => { form.setPaidFromBank(!form.paidFromBank); form.setIncomeSourceId(null); }}
                 className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
               >
                 🏦 Joint bank account
@@ -381,8 +380,7 @@ export default function Expenses() {
                 <button
                   key={m.userId} type="button"
                   onClick={() => {
-                    form.setPaidFromBank(false);
-                    form.setIncomeSourceId(null);
+                      form.setIncomeSourceId(null);
                     if (isMultiEnabled) {
                       const next = form.payerIds.includes(m.userId)
                         ? form.payerIds.filter(id => id !== m.userId)
@@ -408,17 +406,27 @@ export default function Expenses() {
             <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>
           )}
 
-          {/* Per-payer split rows (add form only, 2+ payers) */}
-          {title === "Add expense" && form.payerIds.length > 1 && (() => {
+           {/* Per-source split rows. Joint bank can be combined with members. */}
+           {title === "Add expense" && form.payerIds.length + (form.paidFromBank ? 1 : 0) > 1 && (() => {
             const total = Number(form.amount) || 0;
-            const splitTotal = form.payerIds.reduce((s, id) => s + (Number(form.payerAmounts[id] || 0)), 0);
+             const splitTotal = form.payerIds.reduce((s, id) => s + Number(form.payerAmounts[id] || 0), 0)
+               + (form.paidFromBank ? Number(form.payerAmounts.__joint_bank__ || 0) : 0);
             const diff = total - splitTotal;
             return (
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-muted-foreground">
                   Enter how much each person paid{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ""}:
                 </p>
-                {form.payerIds.map(pid => {
+                 {form.paidFromBank && (
+                   <div className="flex items-center gap-3">
+                     <span className="text-sm font-semibold w-20 shrink-0">Joint bank</span>
+                     <input type="number" placeholder="0" min="0" step="1"
+                       value={form.payerAmounts.__joint_bank__ ?? ""}
+                       onChange={e => form.setPayerAmounts(prev => ({ ...prev, __joint_bank__: e.target.value }))}
+                       className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
+                   </div>
+                 )}
+                 {form.payerIds.map(pid => {
                   const member = (members ?? []).find(m => m.userId === pid);
                   const name = member?.userName?.split(" ")[0] ?? "Member";
                   return (
@@ -446,7 +454,7 @@ export default function Expenses() {
         </div>
 
         {/* Income source picker — shown when a single named payer is chosen */}
-        {(title === "Add expense" ? (!form.paidFromBank && form.payerIds.length === 1) : form.paidById) && (
+         {(title === "Add expense" ? (!form.paidFromBank && form.payerIds.length === 1) : form.paidById) && (
           <div className="md:col-span-2 space-y-2">
             <label className="text-sm font-semibold text-foreground">
               Paid from <span className="font-normal text-muted-foreground">(counts as contribution if personal)</span>
@@ -850,6 +858,13 @@ export default function Expenses() {
                           <span className="w-1 h-1 rounded-full bg-border" />
                           <span>{formatDate(expense.date)}</span>
                         </p>
+                        {expense.incomeSplits && expense.incomeSplits.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Funded by {expense.incomeSplits.map((split) =>
+                              `${split.fromBank ? "Joint bank" : split.label}: ${formatKes(split.amount)}`
+                            ).join(" · ")}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">

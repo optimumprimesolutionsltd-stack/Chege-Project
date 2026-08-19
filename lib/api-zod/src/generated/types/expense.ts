@@ -5,6 +5,7 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { ExpenseFundingSplit } from './expenseFundingSplit';
 
 export interface Expense {
   id: number;
@@ -17,8 +18,11 @@ export interface Expense {
      * @nullable
      */
   notes?: string | null;
-  paidById: string;
+  /** @nullable */
+  paidById: string | null;
   paidByName: string;
+  paidFromBank?: boolean;
+  incomeSplits?: ExpenseFundingSplit[];
   isRecurring: boolean;
   date: Date;
   createdAt: Date;

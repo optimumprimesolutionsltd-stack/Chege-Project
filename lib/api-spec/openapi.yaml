@@ -970,9 +970,15 @@ components:
           type: ["string", "null"]
           description: Optional extra notes
         paidById:
-          type: string
+          type: ["string", "null"]
         paidByName:
           type: string
+        paidFromBank:
+          type: boolean
+        incomeSplits:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseFundingSplit"
         isRecurring:
           type: boolean
         date:
@@ -1004,8 +1010,18 @@ components:
         notes:
           type: string
         paidById:
-          type: string
-          description: User ID of who paid — must be a recognised household member
+          type: ["string", "null"]
+          description: Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.
+        paidFromBank:
+          type: boolean
+          description: Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment.
+        incomeSourceId:
+          type: number
+        incomeSplits:
+          type: array
+          description: Whole-KES funding portions. Their amounts must equal amount exactly.
+          items:
+            $ref: "#/components/schemas/ExpenseFundingSplit"
         isRecurring:
           type: boolean
         date:
@@ -1015,8 +1031,28 @@ components:
         - amount
         - category
         - description
-        - paidById
         - date
+
+    ExpenseFundingSplit:
+      type: object
+      properties:
+        userId:
+          type: ["string", "null"]
+          description: Household member who funded this portion. Null only for Joint bank.
+        label:
+          type: string
+          description: Optional readable source label retained for history.
+        amount:
+          type: number
+          minimum: 1
+          multipleOf: 1
+        incomeSourceId:
+          type: number
+          minimum: 1
+        fromBank:
+          type: boolean
+          description: True when this amount came from the shared Joint bank.
+      required: [amount, fromBank]
 
     ApplyRecurringInput:
       type: object
@@ -1391,6 +1427,13 @@ components:
         transferDirection:
           type: ["string", "null"]
           description: to_savings or from_savings for linked transfers
+        expenseId:
+          type: ["number", "null"]
+          description: Expense that owns this linked Joint-bank funding disbursement.
+        contributorSplits:
+          type: array
+          items:
+            $ref: "#/components/schemas/DepositContributorSplit"
         date:
           type: string
           format: date
@@ -1452,10 +1495,30 @@ components:
           type: string
           enum: [income_source, other]
           description: Choose other only when the required description is a narration.
+        contributorSplits:
+          type: array
+          description: Whole-KES household contributor portions that must equal amount exactly.
+          items:
+            $ref: "#/components/schemas/DepositContributorSplit"
       required:
         - amount
         - description
         - date
+
+    DepositContributorSplit:
+      type: object
+      properties:
+        userId:
+          type: string
+          description: Household member who supplied this deposit portion.
+        amount:
+          type: number
+          minimum: 1
+          multipleOf: 1
+        incomeSourceId:
+          type: number
+          minimum: 1
+      required: [userId, amount]
 
     DisbursementInput:
       type: object

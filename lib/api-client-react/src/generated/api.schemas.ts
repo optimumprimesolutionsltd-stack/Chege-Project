@@ -46,6 +46,22 @@ export interface AuthUserEnvelope {
   user: AuthUser | null;
 }
 
+export interface ExpenseFundingSplit {
+  /**
+     * Household member who funded this portion. Null only for Joint bank.
+     * @nullable
+     */
+  userId?: string | null;
+  /** Optional readable source label retained for history. */
+  label?: string;
+  /** @minimum 1 */
+  amount: number;
+  /** @minimum 1 */
+  incomeSourceId?: number;
+  /** True when this amount came from the shared Joint bank. */
+  fromBank: boolean;
+}
+
 export interface Expense {
   id: number;
   /** Amount in KES */
@@ -57,8 +73,11 @@ export interface Expense {
      * @nullable
      */
   notes?: string | null;
-  paidById: string;
+  /** @nullable */
+  paidById: string | null;
   paidByName: string;
+  paidFromBank?: boolean;
+  incomeSplits?: ExpenseFundingSplit[];
   isRecurring: boolean;
   date: string;
   createdAt: string;
@@ -69,8 +88,16 @@ export interface ExpenseInput {
   category: string;
   description: string;
   notes?: string;
-  /** User ID of who paid — must be a recognised household member */
-  paidById: string;
+  /**
+     * Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.
+     * @nullable
+     */
+  paidById?: string | null;
+  /** Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment. */
+  paidFromBank?: boolean;
+  incomeSourceId?: number;
+  /** Whole-KES funding portions. Their amounts must equal amount exactly. */
+  incomeSplits?: ExpenseFundingSplit[];
   isRecurring?: boolean;
   date: string;
 }
@@ -259,6 +286,15 @@ export interface SavingsGoal {
   createdAt: string;
 }
 
+export interface DepositContributorSplit {
+  /** Household member who supplied this deposit portion. */
+  userId: string;
+  /** @minimum 1 */
+  amount: number;
+  /** @minimum 1 */
+  incomeSourceId?: number;
+}
+
 export interface JointAccountTransaction {
   id: number;
   /** deposit or disbursement */
@@ -284,6 +320,12 @@ export interface JointAccountTransaction {
      * @nullable
      */
   transferDirection?: string | null;
+  /**
+     * Expense that owns this linked Joint-bank funding disbursement.
+     * @nullable
+     */
+  expenseId?: number | null;
+  contributorSplits?: DepositContributorSplit[];
   date: string;
   createdAt: string;
 }
@@ -326,6 +368,8 @@ export interface DepositInput {
   incomeSourceId?: number;
   /** Choose other only when the required description is a narration. */
   sourceKind?: DepositInputSourceKind;
+  /** Whole-KES household contributor portions that must equal amount exactly. */
+  contributorSplits?: DepositContributorSplit[];
 }
 
 /**

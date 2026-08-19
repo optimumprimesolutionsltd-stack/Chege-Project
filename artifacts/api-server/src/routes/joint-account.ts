@@ -7,6 +7,7 @@ import {
   membersTable,
   savingsGoalsTable,
   savingsGoalContributionsTable,
+  jointAccountDepositSplitsTable,
 } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -20,6 +21,11 @@ const DepositInput = z.object({
   madeById: z.string().nullable().optional(),
   incomeSourceId: z.number().int().positive().optional(),
   sourceKind: z.enum(["income_source", "other"]).optional(),
+  contributorSplits: z.array(z.object({
+    userId: z.string().min(1),
+    amount: z.number().int().positive(),
+    incomeSourceId: z.number().int().positive().optional(),
+  })).min(1).optional(),
 });
 
 const DisbursementInput = z.object({
@@ -52,22 +58,45 @@ const SavingsTransferInput = z.object({
 });
 
 async function enrichTx(tx: typeof jointAccountTxTable.$inferSelect) {
-  const [user, savingsGoal] = await Promise.all([
+  const [user, savingsGoal, contributorSplits] = await Promise.all([
     tx.madeById
       ? db.query.usersTable.findFirst({ where: eq(usersTable.id, tx.madeById) })
       : null,
     tx.savingsGoalId
       ? db.query.savingsGoalsTable.findFirst({ where: eq(savingsGoalsTable.id, tx.savingsGoalId) })
       : null,
+    tx.type === "deposit"
+      ? db.select({
+        userId: jointAccountDepositSplitsTable.userId,
+        amount: jointAccountDepositSplitsTable.amount,
+        incomeSourceId: jointAccountDepositSplitsTable.incomeSourceId,
+        userName: usersTable.firstName,
+      })
+        .from(jointAccountDepositSplitsTable)
+        .leftJoin(usersTable, eq(jointAccountDepositSplitsTable.userId, usersTable.id))
+        .where(eq(jointAccountDepositSplitsTable.transactionId, tx.id))
+      : Promise.resolve([]),
   ]);
+  const madeByName = contributorSplits.length === 1
+    ? (contributorSplits[0].userName ?? "Member")
+    : contributorSplits.length > 1
+      ? `${contributorSplits.length} contributors`
+      : (user?.firstName ?? null);
   return {
     ...tx,
     // null madeById = Joint bank (shared household); name resolves to null so UI can show "Joint bank"
-    madeByName: user?.firstName ?? null,
+    madeByName,
     expenseCategory: tx.expenseCategory ?? null,
     savingsGoalId: tx.savingsGoalId ?? null,
     savingsGoalName: savingsGoal?.name ?? null,
     transferDirection: tx.transferDirection ?? null,
+    expenseId: tx.expenseId ?? null,
+    contributorSplits: contributorSplits.map((split) => ({
+      userId: split.userId,
+      userName: split.userName ?? "Member",
+      amount: split.amount,
+      incomeSourceId: split.incomeSourceId ?? null,
+    })),
     createdAt: tx.createdAt instanceof Date ? tx.createdAt.toISOString() : tx.createdAt,
   };
 }
@@ -108,12 +137,28 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
   const parsed = DepositInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
 
-  const { amount, description, date, incomeSourceId, sourceKind } = parsed.data;
+  const { amount, description, date, incomeSourceId, sourceKind, contributorSplits } = parsed.data;
   if (sourceKind === "other" && !description.trim()) {
     res.status(400).json({ error: "Add a narration for an Other source." });
     return;
   }
-  // Explicit null or omitted → Joint bank (null). Never fall back to req.user.
+  if (contributorSplits && parsed.data.madeById !== undefined) {
+    res.status(400).json({ error: "Provide either madeById or contributorSplits, not both." });
+    return;
+  }
+  if (contributorSplits) {
+    const splitTotal = contributorSplits.reduce((sum, split) => sum + split.amount, 0);
+    if (splitTotal !== amount) {
+      res.status(400).json({ error: `Contributor portions (${splitTotal}) must equal the deposit total (${amount}).` });
+      return;
+    }
+    for (const split of contributorSplits) {
+      const err = await validateMemberId(split.userId);
+      if (err) { res.status(400).json({ error: err }); return; }
+    }
+  }
+  // Explicit null or omitted keeps an older un-attributed deposit as a
+  // household record. New split deposits must always name their contributors.
   const madeById = parsed.data.madeById ?? null;
 
   if (madeById !== null) {
@@ -121,10 +166,25 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
-  const [tx] = await db
-    .insert(jointAccountTxTable)
-    .values({ type: "deposit", amount, description, date, madeById, incomeSourceId: incomeSourceId ?? null })
-    .returning();
+  const tx = await db.transaction(async (transaction) => {
+    const [created] = await transaction
+      .insert(jointAccountTxTable)
+      .values({
+        type: "deposit", amount, description, date,
+        madeById: contributorSplits ? null : madeById,
+        incomeSourceId: contributorSplits ? null : incomeSourceId ?? null,
+      })
+      .returning();
+    if (contributorSplits) {
+      await transaction.insert(jointAccountDepositSplitsTable).values(contributorSplits.map((split) => ({
+        transactionId: created.id,
+        userId: split.userId,
+        amount: split.amount,
+        incomeSourceId: split.incomeSourceId ?? null,
+      })));
+    }
+    return created;
+  });
 
   res.status(201).json(await enrichTx(tx));
 });
@@ -284,6 +344,18 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Savings transfers cannot be edited. Delete and recreate the transfer instead." });
     return;
   }
+  if (existing.expenseId !== null) {
+    res.status(400).json({ error: "This is the Joint-bank portion of an expense. Edit the expense instead." });
+    return;
+  }
+  const existingSplits = await db.select({ id: jointAccountDepositSplitsTable.id })
+    .from(jointAccountDepositSplitsTable)
+    .where(eq(jointAccountDepositSplitsTable.transactionId, existing.id))
+    .limit(1);
+  if (existingSplits.length > 0) {
+    res.status(400).json({ error: "A split deposit cannot be edited. Delete and recreate it to preserve its contributor history." });
+    return;
+  }
 
   const { amount, date } = parsed.data;
   const madeById = parsed.data.madeById === undefined ? existing.madeById : parsed.data.madeById;
@@ -379,6 +451,9 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
         .delete(savingsGoalContributionsTable)
         .where(eq(savingsGoalContributionsTable.bankTransactionId, existing.id));
     }
+    if (existing.expenseId !== null) {
+      return { linkedExpense: true };
+    }
 
     const [removed] = await tx
       .delete(jointAccountTxTable)
@@ -394,6 +469,10 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
   }
   if ("cannotReverse" in deleteResult) {
     res.status(409).json({ error: "Savings balance changed; this transfer can no longer be reversed." });
+    return;
+  }
+  if ("linkedExpense" in deleteResult) {
+    res.status(409).json({ error: "This is the Joint-bank portion of an expense. Delete the expense instead." });
     return;
   }
   if (!deleteResult.deleted) { res.status(404).json({ error: "Not found" }); return; }

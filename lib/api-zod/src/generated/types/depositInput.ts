@@ -5,6 +5,7 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { DepositContributorSplit } from './depositContributorSplit';
 import type { DepositInputSourceKind } from './depositInputSourceKind';
 
 export interface DepositInput {
@@ -27,4 +28,6 @@ export interface DepositInput {
   incomeSourceId?: number;
   /** Choose other only when the required description is a narration. */
   sourceKind?: DepositInputSourceKind;
+  /** Whole-KES household contributor portions that must equal amount exactly. */
+  contributorSplits?: DepositContributorSplit[];
 }

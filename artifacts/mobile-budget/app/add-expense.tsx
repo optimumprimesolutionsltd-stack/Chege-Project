@@ -139,11 +139,13 @@ export default function AddExpenseSheet() {
       return;
     }
 
-    const isMultiPayer = payerIds.length > 1;
+    const sourceCount = payerIds.length + (paidFromBank ? 1 : 0);
+    const isSplitPayment = sourceCount > 1;
 
-    if (isMultiPayer) {
-      const splitTotal = payerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0);
-      if (Math.abs(splitTotal - parsed) >= 1) {
+    if (isSplitPayment) {
+      const splitTotal = payerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)
+        + (paidFromBank ? parseFloat(payerAmounts.__joint_bank__ || '0') || 0 : 0);
+      if (!Number.isInteger(parsed) || splitTotal !== parsed) {
         Alert.alert("Amounts don't add up", `Payer portions total KES ${splitTotal.toLocaleString()} but the expense is KES ${parsed.toLocaleString()}.`);
         return;
       }
@@ -167,29 +169,32 @@ export default function AddExpenseSheet() {
 
     setIsPending(true);
     try {
-      if (isMultiPayer) {
-        for (const pid of payerIds) {
-          const portionAmt = parseFloat(payerAmounts[pid] || '0') || 0;
-          if (portionAmt <= 0) continue;
-          await createExpenseAsync({
-            data: {
-              amount: portionAmt,
-              category,
-              description: description.trim(),
-              notes: notes.trim() || undefined,
-              paidById: pid,
-              isRecurring,
-              date,
-              paidFromBank: false,
-            } as Parameters<typeof createExpenseAsync>[0]['data'],
-          });
-        }
+      if (isSplitPayment) {
+        await createExpenseAsync({
+          data: {
+            amount: parsed, category, description: description.trim(), notes: notes.trim() || undefined,
+            paidById: payerIds[0] ?? null, isRecurring, date, paidFromBank: false,
+            incomeSplits: [
+              ...(paidFromBank ? [{ userId: null, label: 'Joint bank', amount: parseFloat(payerAmounts.__joint_bank__ || '0') || 0, fromBank: true }] : []),
+              ...payerIds.map((userId) => ({
+                userId, label: members.find((member) => member.userId === userId)?.userName ?? 'Member',
+                amount: parseFloat(payerAmounts[userId] || '0') || 0, fromBank: false,
+              })),
+            ],
+          } as Parameters<typeof createExpenseAsync>[0]['data'],
+        });
       } else {
         const isSplit = selectedSources.length > 1;
-        const incomeSplits = selectedSources.map(name => ({
-          label: name === 'Other' ? otherLabel.trim() : name,
-          amount: isSplit ? (parseFloat(splitAmounts[name] || '0') || 0) : parsed,
-        })).filter(s => s.amount > 0);
+        const incomeSplits = selectedSources.map(name => {
+          const source = incomeSources.find((item) => item.name === name);
+          return {
+            userId: paidById,
+            fromBank: false,
+            label: name === 'Other' ? otherLabel.trim() : name,
+            amount: isSplit ? (parseFloat(splitAmounts[name] || '0') || 0) : parsed,
+            ...(source ? { incomeSourceId: source.id } : {}),
+          };
+        }).filter(s => s.amount > 0);
 
         await createExpenseAsync({
           data: {
@@ -214,7 +219,7 @@ export default function AddExpenseSheet() {
     } finally {
       setIsPending(false);
     }
-  }, [amount, category, description, notes, payerIds, payerAmounts, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, createExpenseAsync, invalidateExpenses]);
+  }, [amount, category, description, notes, payerIds, payerAmounts, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, members, createExpenseAsync, invalidateExpenses]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -505,15 +510,12 @@ export default function AddExpenseSheet() {
               PAID BY <Text style={{ color: '#ef4444' }}>*</Text>
             </Text>
             <View style={styles.paidByRow}>
-              {/* Joint bank — unattributed, mutually exclusive with member chips */}
+              {/* Joint bank can be combined with one or more household members. */}
               <Pressable
                 onPress={() => {
                   if (paidFromBank) {
                     setPaidFromBank(false);
-                  } else {
-                    setPayerIds([]);
-                    setPaidFromBank(true);
-                  }
+                  } else setPaidFromBank(true);
                 }}
                 style={[styles.paidByPill, {
                   backgroundColor: paidFromBank ? 'rgba(56,189,248,0.15)' : colors.muted,
@@ -532,7 +534,6 @@ export default function AddExpenseSheet() {
                   <Pressable
                     key={m.userId}
                     onPress={() => {
-                      setPaidFromBank(false);
                       setPayerIds(prev =>
                         prev.includes(m.userId)
                           ? prev.filter(id => id !== m.userId)
@@ -571,16 +572,28 @@ export default function AddExpenseSheet() {
               </Text>
             )}
 
-            {/* Per-payer split rows — shown when 2+ payers */}
-            {payerIds.length > 1 && (() => {
+            {/* Per-source split rows — Joint bank can be mixed with people. */}
+            {payerIds.length + (paidFromBank ? 1 : 0) > 1 && (() => {
               const total = parseFloat(amount.replace(/,/g, '')) || 0;
-              const splitTotal = payerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0);
+              const splitTotal = payerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)
+                + (paidFromBank ? parseFloat(payerAmounts.__joint_bank__ || '0') || 0 : 0);
               const diff = total - splitTotal;
               return (
                 <View style={{ marginTop: 10, gap: 8 }}>
                   <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
                     How much did each person pay?{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
                   </Text>
+                  {paidFromBank && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold', width: 76 }}>Joint bank</Text>
+                      <TextInput
+                        style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted, paddingHorizontal: 12, fontSize: 16, color: colors.foreground, fontFamily: 'Inter_400Regular' }}
+                        keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground}
+                        value={payerAmounts.__joint_bank__ || ''}
+                        onChangeText={val => setPayerAmounts(prev => ({ ...prev, __joint_bank__: val }))}
+                      />
+                    </View>
+                  )}
                   {payerIds.map((pid) => {
                     const member = members.find(m => m.userId === pid);
                     const name = member?.userName?.split(' ')[0] ?? 'Member';

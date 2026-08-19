@@ -31,6 +31,8 @@ vi.mock("@workspace/db", () => {
 
   return {
     jointAccountTxTable: makeTable("joint_account_transactions"),
+    jointAccountDepositSplitsTable: makeTable("joint_account_deposit_splits"),
+    budgetCategoriesTable: makeTable("budget_categories"),
     savingsGoalsTable: makeTable("savings_goals"),
     savingsGoalContributionsTable: makeTable("savings_goal_contributions"),
     usersTable: makeTable("users"),
@@ -111,6 +113,7 @@ function makeSelectChainWith(rows: unknown[]) {
   const chain: Record<string, unknown> = {};
   chain.from = vi.fn().mockReturnValue(chain);
   chain.where = vi.fn().mockReturnValue(chain);
+  chain.leftJoin = vi.fn().mockReturnValue(chain);
   chain.orderBy = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockResolvedValue(rows);
   chain.for = vi.fn().mockResolvedValue(rows);
@@ -153,6 +156,11 @@ function wireUnknownMemberSelect() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedDb.transaction.mockImplementation(async (callback: (transaction: { insert: (...args: unknown[]) => unknown }) => unknown) =>
+    callback({ insert: (...args: unknown[]) => (mockedDb.insert as unknown as (...args: unknown[]) => unknown)(...args) }),
+  );
+  // Ordinary bank routes also verify the selected reporting category.
+  mockedDb.select.mockImplementation(() => makeSelectChainWith([{ id: 1 }]));
   // Default: enrich query finds no user (madeByName = null)
   mockedDb.query.usersTable.findFirst.mockResolvedValue(undefined);
 });
@@ -228,7 +236,7 @@ describe("POST /joint-account/disbursement — madeById attribution", () => {
 
     const res = await request(jointApp)
       .post("/joint-account/disbursement")
-      .send({ amount: 200, description: "Groceries", date: "2024-06-01" });
+      .send({ amount: 200, description: "Groceries", expenseCategory: "Food", date: "2024-06-01" });
 
     expect(res.status).toBe(201);
     expect((captured.current as { madeById: unknown }).madeById).toBeNull();
@@ -241,7 +249,7 @@ describe("POST /joint-account/disbursement — madeById attribution", () => {
 
     const res = await request(jointApp)
       .post("/joint-account/disbursement")
-      .send({ amount: 200, description: "Groceries", date: "2024-06-01", madeById: null });
+      .send({ amount: 200, description: "Groceries", expenseCategory: "Food", date: "2024-06-01", madeById: null });
 
     expect(res.status).toBe(201);
     expect((captured.current as { madeById: unknown }).madeById).toBeNull();
@@ -254,7 +262,7 @@ describe("POST /joint-account/disbursement — madeById attribution", () => {
 
     const res = await request(jointApp)
       .post("/joint-account/disbursement")
-      .send({ amount: 200, description: "Lydiah rent", date: "2024-06-01", madeById: VALID_MEMBER_ID });
+      .send({ amount: 200, description: "Lydiah rent", expenseCategory: "Food", date: "2024-06-01", madeById: VALID_MEMBER_ID });
 
     expect(res.status).toBe(201);
     expect((captured.current as { madeById: unknown }).madeById).toBe(VALID_MEMBER_ID);
@@ -265,7 +273,7 @@ describe("POST /joint-account/disbursement — madeById attribution", () => {
 
     const res = await request(jointApp)
       .post("/joint-account/disbursement")
-      .send({ amount: 200, description: "Ghost", date: "2024-06-01", madeById: UNKNOWN_MEMBER_ID });
+      .send({ amount: 200, description: "Ghost", expenseCategory: "Food", date: "2024-06-01", madeById: UNKNOWN_MEMBER_ID });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/not a recognised household member/i);

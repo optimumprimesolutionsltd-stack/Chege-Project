@@ -5,14 +5,23 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { ExpenseFundingSplit } from './expenseFundingSplit';
 
 export interface ExpenseInput {
   amount: number;
   category: string;
   description: string;
   notes?: string;
-  /** User ID of who paid — must be a recognised household member */
-  paidById: string;
+  /**
+     * Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.
+     * @nullable
+     */
+  paidById?: string | null;
+  /** Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment. */
+  paidFromBank?: boolean;
+  incomeSourceId?: number;
+  /** Whole-KES funding portions. Their amounts must equal amount exactly. */
+  incomeSplits?: ExpenseFundingSplit[];
   isRecurring?: boolean;
   date: Date;
 }

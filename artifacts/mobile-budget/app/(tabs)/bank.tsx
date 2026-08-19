@@ -434,19 +434,18 @@ export default function BankScreen() {
             setSubmitting(false);
             return;
           }
-          for (const did of validDepositorIds) {
-            const portionAmt = parseFloat(depositorAmounts[did] || '0') || 0;
-            if (portionAmt <= 0) continue;
-            await createDeposit({
-              data: {
-                amount: portionAmt,
-                description: description.trim(),
-                date,
-                madeById: did,
-                ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
-              },
-            });
-          }
+          await createDeposit({
+            data: {
+              amount: parsed,
+              description: description.trim(),
+              date,
+              contributorSplits: validDepositorIds.map((userId) => ({
+                userId,
+                amount: parseFloat(depositorAmounts[userId] || '0') || 0,
+              })),
+              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+            },
+          });
         } else if (isJoint) {
           // Joint bank: send madeById: null explicitly
           await createDeposit({

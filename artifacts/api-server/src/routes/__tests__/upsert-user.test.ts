@@ -376,10 +376,10 @@ describe('upsertUser — OIDC claim mapping', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Conflict-update — values passed to onConflictDoUpdate match values()
+  // Conflict-update — identity fields update while household names are kept.
   // -------------------------------------------------------------------------
   describe('Upsert (onConflictDoUpdate) passes correct data', () => {
-    it('passes the same field values to onConflictDoUpdate as to values()', async () => {
+    it('keeps the household name while refreshing identity details', async () => {
       const returnedUser = {
         id: 'google-uid-4',
         email: 'frank@example.com',
@@ -401,8 +401,8 @@ describe('upsertUser — OIDC claim mapping', () => {
       const insertedValues = (values as AnyMock).mock.calls[0][0] as Record<string, unknown>;
       const { set } = (onConflictDoUpdate as AnyMock).mock.calls[0][0] as { set: Record<string, unknown> };
 
-      expect(set.firstName).toBe(insertedValues.firstName);
-      expect(set.lastName).toBe(insertedValues.lastName);
+      expect(set.firstName).toBeUndefined();
+      expect(set.lastName).toBeUndefined();
       expect(set.email).toBe(insertedValues.email);
       // updatedAt is added by the upsert path; it should be present.
       expect(set.updatedAt).toBeInstanceOf(Date);

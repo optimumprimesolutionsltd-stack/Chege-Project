@@ -75,7 +75,7 @@ type Expense = {
   category: string;
   description: string;
   notes?: string | null;
-  paidById: string;
+  paidById: string | null;
   paidByName: string;
   isRecurring: boolean;
   date: string;
@@ -352,10 +352,16 @@ export default function HistoryScreen() {
       }
     }
     const isSplit = editSelectedSources.length > 1;
-    const incomeSplits = editSelectedSources.map(name => ({
-      label: name === 'Other' ? editOtherLabel.trim() : name,
-      amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
-    })).filter(s => s.amount > 0);
+    const incomeSplits = editSelectedSources.map(name => {
+      const source = editSources.find((item) => item.name === name);
+      return {
+        userId: editForm.paidById,
+        fromBank: false,
+        label: name === 'Other' ? editOtherLabel.trim() : name,
+        amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
+        ...(source ? { incomeSourceId: source.id } : {}),
+      };
+    }).filter(s => s.amount > 0);
     setSaving(true);
     try {
       await updateExpense.mutateAsync({

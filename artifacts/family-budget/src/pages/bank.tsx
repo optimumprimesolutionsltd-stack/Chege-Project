@@ -33,6 +33,7 @@ type EditableTransaction = {
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
   transferDirection?: string | null;
+  contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
 };
 
 export default function Bank() {
@@ -263,11 +264,7 @@ export default function Bank() {
       }
       if (editingTransaction) {
         if (mode === "deposit" && depositorIds.length > 1) {
-          toast({
-            variant: "destructive",
-            title: "One depositor per entry",
-            description: "Edit each deposited entry separately.",
-          });
+          toast({ variant: "destructive", title: "Split deposit", description: "Delete and recreate it to preserve each contributor's history." });
           return;
         }
         await updateTx.mutateAsync({
@@ -284,20 +281,19 @@ export default function Bank() {
         toast({ title: "Transaction updated" });
       } else if (mode === "deposit") {
         if (isMultiDepositor) {
-          // Multiple named depositors — split into per-person deposits
-          for (const did of depositorIds) {
-            const portionAmt = Number(depositorAmounts[did] || 0);
-            if (portionAmt <= 0) continue;
-            await createDeposit.mutateAsync({
-              data: {
-                amount: portionAmt,
-                description,
-                date,
-                madeById: did,
-                ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
-              },
-            });
-          }
+          // One ledger transaction, with visible contributor portions.
+          await createDeposit.mutateAsync({
+            data: {
+              amount: total,
+              description,
+              date,
+              contributorSplits: depositorIds.map((userId) => ({
+                userId,
+                amount: Number(depositorAmounts[userId] || 0),
+              })),
+              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+            },
+          });
         } else {
           // Single named depositor or Joint bank (null)
           const madeById = depositorIds.length === 1 ? depositorIds[0] : null;

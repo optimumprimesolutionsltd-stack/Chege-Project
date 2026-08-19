@@ -59,14 +59,27 @@ export const GetExpensesQueryParams = zod.object({
   "category": zod.coerce.string().optional()
 })
 
+export const getExpensesResponseIncomeSplitsItemAmountMultipleOf = 1;
+
+
+
+
 export const GetExpensesResponseItem = zod.object({
   "id": zod.number(),
   "amount": zod.number().describe('Amount in KES'),
   "category": zod.string(),
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
-  "paidById": zod.string(),
+  "paidById": zod.string().nullable(),
   "paidByName": zod.string(),
+  "paidFromBank": zod.boolean().optional(),
+  "incomeSplits": zod.array(zod.object({
+  "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
+  "label": zod.string().optional().describe('Optional readable source label retained for history.'),
+  "amount": zod.number().min(1).multipleOf(getExpensesResponseIncomeSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional(),
+  "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
+})).optional(),
   "isRecurring": zod.boolean(),
   "date": zod.coerce.date(),
   "createdAt": zod.coerce.date()
@@ -77,15 +90,34 @@ export const GetExpensesResponse = zod.array(GetExpensesResponseItem)
 /**
  * @summary Create a new expense
  */
+export const createExpenseBodyIncomeSplitsItemAmountMultipleOf = 1;
+
+
+
+
 export const CreateExpenseBody = zod.object({
   "amount": zod.number(),
   "category": zod.string(),
   "description": zod.string(),
   "notes": zod.string().optional(),
-  "paidById": zod.string().describe('User ID of who paid — must be a recognised household member'),
+  "paidById": zod.string().nullish().describe('Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.'),
+  "paidFromBank": zod.boolean().optional().describe('Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment.'),
+  "incomeSourceId": zod.number().optional(),
+  "incomeSplits": zod.array(zod.object({
+  "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
+  "label": zod.string().optional().describe('Optional readable source label retained for history.'),
+  "amount": zod.number().min(1).multipleOf(createExpenseBodyIncomeSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional(),
+  "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
+})).optional().describe('Whole-KES funding portions. Their amounts must equal amount exactly.'),
   "isRecurring": zod.boolean().optional(),
   "date": zod.coerce.date()
 })
+
+export const createExpenseResponseIncomeSplitsItemAmountMultipleOf = 1;
+
+
+
 
 export const CreateExpenseResponse = zod.object({
   "id": zod.number(),
@@ -93,8 +125,16 @@ export const CreateExpenseResponse = zod.object({
   "category": zod.string(),
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
-  "paidById": zod.string(),
+  "paidById": zod.string().nullable(),
   "paidByName": zod.string(),
+  "paidFromBank": zod.boolean().optional(),
+  "incomeSplits": zod.array(zod.object({
+  "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
+  "label": zod.string().optional().describe('Optional readable source label retained for history.'),
+  "amount": zod.number().min(1).multipleOf(createExpenseResponseIncomeSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional(),
+  "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
+})).optional(),
   "isRecurring": zod.boolean(),
   "date": zod.coerce.date(),
   "createdAt": zod.coerce.date()
@@ -108,15 +148,34 @@ export const UpdateExpenseParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateExpenseBodyIncomeSplitsItemAmountMultipleOf = 1;
+
+
+
+
 export const UpdateExpenseBody = zod.object({
   "amount": zod.number(),
   "category": zod.string(),
   "description": zod.string(),
   "notes": zod.string().optional(),
-  "paidById": zod.string().describe('User ID of who paid — must be a recognised household member'),
+  "paidById": zod.string().nullish().describe('Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.'),
+  "paidFromBank": zod.boolean().optional().describe('Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment.'),
+  "incomeSourceId": zod.number().optional(),
+  "incomeSplits": zod.array(zod.object({
+  "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
+  "label": zod.string().optional().describe('Optional readable source label retained for history.'),
+  "amount": zod.number().min(1).multipleOf(updateExpenseBodyIncomeSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional(),
+  "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
+})).optional().describe('Whole-KES funding portions. Their amounts must equal amount exactly.'),
   "isRecurring": zod.boolean().optional(),
   "date": zod.coerce.date()
 })
+
+export const updateExpenseResponseIncomeSplitsItemAmountMultipleOf = 1;
+
+
+
 
 export const UpdateExpenseResponse = zod.object({
   "id": zod.number(),
@@ -124,8 +183,16 @@ export const UpdateExpenseResponse = zod.object({
   "category": zod.string(),
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
-  "paidById": zod.string(),
+  "paidById": zod.string().nullable(),
   "paidByName": zod.string(),
+  "paidFromBank": zod.boolean().optional(),
+  "incomeSplits": zod.array(zod.object({
+  "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
+  "label": zod.string().optional().describe('Optional readable source label retained for history.'),
+  "amount": zod.number().min(1).multipleOf(updateExpenseResponseIncomeSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional(),
+  "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
+})).optional(),
   "isRecurring": zod.boolean(),
   "date": zod.coerce.date(),
   "createdAt": zod.coerce.date()
@@ -432,6 +499,11 @@ export const CreateSavingsGoalResponse = zod.object({
 /**
  * @summary Get joint account balance and all transactions
  */
+export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf = 1;
+
+
+
+
 export const GetJointAccountResponse = zod.object({
   "balance": zod.number(),
   "totalDeposits": zod.number(),
@@ -447,6 +519,12 @@ export const GetJointAccountResponse = zod.object({
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
+  "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "amount": zod.number().min(1).multipleOf(getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional()
+})).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 }))
@@ -459,6 +537,9 @@ export const GetJointAccountResponse = zod.object({
 export const createDepositBodyAmountMultipleOf = 1;
 
 
+export const createDepositBodyContributorSplitsItemAmountMultipleOf = 1;
+
+
 
 
 export const CreateDepositBody = zod.object({
@@ -467,8 +548,18 @@ export const CreateDepositBody = zod.object({
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish().describe('ID of the household member who made this deposit. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null.\n'),
   "incomeSourceId": zod.number().min(1).optional().describe('Optional income-source preset that funded this deposit. Used only with a single named depositor.\n'),
-  "sourceKind": zod.enum(['income_source', 'other']).optional().describe('Choose other only when the required description is a narration.')
+  "sourceKind": zod.enum(['income_source', 'other']).optional().describe('Choose other only when the required description is a narration.'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "amount": zod.number().min(1).multipleOf(createDepositBodyContributorSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional()
+})).optional().describe('Whole-KES household contributor portions that must equal amount exactly.')
 })
+
+export const createDepositResponseContributorSplitsItemAmountMultipleOf = 1;
+
+
+
 
 export const CreateDepositResponse = zod.object({
   "id": zod.number(),
@@ -481,6 +572,12 @@ export const CreateDepositResponse = zod.object({
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
+  "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "amount": zod.number().min(1).multipleOf(createDepositResponseContributorSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional()
+})).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -502,6 +599,11 @@ export const CreateDisbursementBody = zod.object({
   "destinationKind": zod.enum(['category', 'other']).optional().describe('Choose other only when the required description is a narration.')
 })
 
+export const createDisbursementResponseContributorSplitsItemAmountMultipleOf = 1;
+
+
+
+
 export const CreateDisbursementResponse = zod.object({
   "id": zod.number(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -513,6 +615,12 @@ export const CreateDisbursementResponse = zod.object({
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
+  "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "amount": zod.number().min(1).multipleOf(createDisbursementResponseContributorSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional()
+})).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -536,6 +644,11 @@ export const TransferBankToSavingsBody = zod.object({
   "madeById": zod.string().nullish()
 })
 
+export const transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf = 1;
+
+
+
+
 export const TransferBankToSavingsResponse = zod.object({
   "id": zod.number(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -547,6 +660,12 @@ export const TransferBankToSavingsResponse = zod.object({
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
+  "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "amount": zod.number().min(1).multipleOf(transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional()
+})).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -570,6 +689,11 @@ export const TransferSavingsToBankBody = zod.object({
   "madeById": zod.string().nullish()
 })
 
+export const transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf = 1;
+
+
+
+
 export const TransferSavingsToBankResponse = zod.object({
   "id": zod.number(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -581,6 +705,12 @@ export const TransferSavingsToBankResponse = zod.object({
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
+  "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "amount": zod.number().min(1).multipleOf(transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional()
+})).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -608,6 +738,11 @@ export const UpdateJointAccountTransactionBody = zod.object({
   "destinationKind": zod.enum(['category', 'other']).optional()
 })
 
+export const updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf = 1;
+
+
+
+
 export const UpdateJointAccountTransactionResponse = zod.object({
   "id": zod.number(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -619,6 +754,12 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
   "transferDirection": zod.string().nullish().describe('to_savings or from_savings for linked transfers'),
+  "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "amount": zod.number().min(1).multipleOf(updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional()
+})).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
