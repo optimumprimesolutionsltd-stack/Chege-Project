@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { membersTable, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { MAX_MEMBERS } from "../middlewares/requireMember";
 
 const router = Router();
 
@@ -41,6 +42,12 @@ router.post("/members", async (req, res) => {
   // Check if already a member
   const existing = await db.query.membersTable.findFirst({ where: eq(membersTable.userId, userId) });
   if (existing) { res.status(400).json({ error: "Already a member" }); return; }
+
+  const [countRow] = await db.select({ count: sql<number>`COUNT(*)` }).from(membersTable);
+  if (Number(countRow.count) >= MAX_MEMBERS) {
+    res.status(400).json({ error: "This household already has the maximum number of members" });
+    return;
+  }
 
   await db.insert(membersTable).values({ userId, addedByUserId: req.user.id });
   const [member] = await getMembersWithNames().then((m) => m.filter((x) => x.userId === userId));

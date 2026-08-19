@@ -88,7 +88,11 @@ function useIncomeSources(userId: string) {
       return res.json();
     },
     enabled: !!userId,
-    staleTime: 60_000,
+    // Sources can be added from the mobile Settings screen. Always refresh
+    // when this picker is mounted for a person so the web form does not retain
+    // an earlier empty result.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }
 
@@ -378,6 +382,7 @@ export default function Expenses() {
                   key={m.userId} type="button"
                   onClick={() => {
                     form.setPaidFromBank(false);
+                    form.setIncomeSourceId(null);
                     if (isMultiEnabled) {
                       const next = form.payerIds.includes(m.userId)
                         ? form.payerIds.filter(id => id !== m.userId)
@@ -446,25 +451,30 @@ export default function Expenses() {
             <label className="text-sm font-semibold text-foreground">
               Paid from <span className="font-normal text-muted-foreground">(counts as contribution if personal)</span>
             </label>
-            <div className="flex flex-wrap gap-2">
-              {title === "Edit expense" && (
-                <button type="button"
-                  onClick={() => { form.setIncomeSourceId(null); form.setPaidFromBank(true); form.setPaidById(""); }}
-                  className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 font-semibold dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-muted-foreground hover:bg-muted/50"}`}
-                >
-                  🏦 Joint bank account
-                </button>
-              )}
+            <select
+              className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              value={form.paidFromBank ? "bank" : (form.incomeSourceId?.toString() ?? "")}
+              onChange={e => {
+                const value = e.target.value;
+                if (value === "bank") {
+                  form.setIncomeSourceId(null);
+                  form.setPaidFromBank(true);
+                  if (title === "Edit expense") form.setPaidById("");
+                  return;
+                }
+                form.setIncomeSourceId(value ? Number(value) : null);
+                form.setPaidFromBank(false);
+              }}
+            >
+              <option value="">Select an income source...</option>
+              {title === "Edit expense" && <option value="bank">🏦 Joint bank account</option>}
               {(title === "Add expense" ? addFormSources : editFormSources)?.map(src => (
-                <button key={src.id} type="button"
-                  onClick={() => { form.setIncomeSourceId(src.id); form.setPaidFromBank(false); }}
-                  className={`px-3 h-9 rounded-lg text-sm border transition-colors ${form.incomeSourceId === src.id ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
-                >
-                  {src.name}
-                </button>
+                <option key={src.id} value={src.id}>{src.name}</option>
               ))}
-              {title === "Add expense" && (
-                addNewSource ? (
+            </select>
+            {title === "Add expense" && (
+              <div className="flex flex-wrap gap-2">
+                {addNewSource ? (
                   <div className="flex items-center gap-1">
                     <Input autoFocus placeholder="Source name" value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
                       className="h-9 text-sm w-36 bg-card" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddNewSource(form.payerIds[0] ?? form.paidById); } }} />
@@ -476,9 +486,9 @@ export default function Expenses() {
                     className="px-3 h-9 rounded-lg text-sm border border-dashed border-input text-muted-foreground hover:bg-muted/50 transition-colors">
                     + New source
                   </button>
-                )
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

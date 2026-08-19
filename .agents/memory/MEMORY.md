@@ -12,8 +12,6 @@
 - [Activity type constants](activity-types.md) — ACTIVITY_TYPE = { EXPENSE, CONTRIBUTION } in lib/activityTypes.ts (mobile) and src/lib/activityTypes.ts (web); use instead of inline strings.
 - [Bank balance invalidation](bank-balance-invalidation.md) — after deposit/disbursement/delete on bank.tsx, call invalidateQueries({ queryKey: getGetJointAccountQueryKey() }) so home-screen card updates immediately.
 - [Mobile deployment build script entry point](deployment-build-script.md) — scripts/build.js bundle URL must match package.json "main"; update downloadBundle() entryPath whenever main changes.
-- [Metro port collisions](mobile-metro-port-collisions.md) — run concurrent Expo build/preview processes on distinct ports; noninteractive Expo start fails on an occupied default.
-- [Mobile web auth testing](mobile-web-auth-testing.md) — Expo web renders, but SecureStore cannot retain the mobile session token; verify authenticated mobile flows natively.
 - [Income source tracking](income-source-tracking.md) — contributions = expenses (paidFromBank=false) + bank deposits + savings contributions. paidFromBank=true expenses excluded to avoid double-counting with deposit.
 - [paidFromBank flag](paid-from-bank.md) — expenses.paid_from_bank boolean (default false); when true, dashboard excludes from contributions. Set via "Joint bank" chip in expense form (mobile + web).
 - [Member-centered groups](member-centered-groups.md) — one account owner can invite flexible household, chama, club, or team members; never hardcode spouse roles.

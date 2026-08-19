@@ -162,6 +162,29 @@ describe.skipIf(!hasDb)(
       15_000,
     );
 
+    it("records an omitted contributor as a Joint bank contribution", async () => {
+      const amount = 1_234;
+
+      const res = await request(app)
+        .post(`/savings-goals/${testGoalId}/contribute`)
+        .send({ amount });
+
+      expect(res.status).toBe(200);
+
+      const contributions = await db
+        .select()
+        .from(savingsGoalContributionsTable)
+        .where(eq(savingsGoalContributionsTable.goalId, testGoalId));
+
+      const jointBankContribution = contributions.find(
+        (contribution) =>
+          contribution.amount === amount &&
+          contribution.createdByUserId === null,
+      );
+
+      expect(jointBankContribution).toBeDefined();
+    });
+
     // -----------------------------------------------------------------------
     // Verify that the transaction rolls back atomically when the goal row
     // is absent. This exercises the 404 path on a real DB rather than a mock.

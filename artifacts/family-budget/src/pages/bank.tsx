@@ -404,23 +404,19 @@ export default function Bank() {
                           Where did this money come from?{" "}
                           <span className="font-normal text-muted-foreground">(optional)</span>
                         </label>
-                        <div className="flex flex-wrap gap-2">
+                        <select
+                          data-testid="select-income-source"
+                          className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={incomeSourceId?.toString() ?? ""}
+                          onChange={e => setIncomeSourceId(e.target.value ? Number(e.target.value) : null)}
+                        >
+                          <option value="">Select an income source...</option>
                           {depositSources.map(src => (
-                            <button
-                              key={src.id}
-                              type="button"
-                              data-testid={`chip-income-source-${src.id}`}
-                              onClick={() => setIncomeSourceId(incomeSourceId === src.id ? null : src.id)}
-                              className={`px-3 h-9 rounded-lg text-sm border transition-colors ${
-                                incomeSourceId === src.id
-                                  ? "bg-primary text-primary-foreground border-primary font-semibold"
-                                  : "bg-card border-input text-foreground hover:bg-muted/50"
-                              }`}
-                            >
+                            <option key={src.id} value={src.id}>
                               {src.name}
-                            </button>
+                            </option>
                           ))}
-                        </div>
+                        </select>
                         <p className="text-xs text-muted-foreground">
                           Optional — select the source so the deposit is attributed to the right income stream.
                         </p>
