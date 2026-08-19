@@ -8,7 +8,6 @@ import { Layout } from '@/components/layout';
 import Dashboard from '@/pages/dashboard';
 import Expenses from '@/pages/expenses';
 import Budget from '@/pages/budget';
-import Contributions from '@/pages/contributions';
 import Activity from '@/pages/activity';
 import NotFound from '@/pages/not-found';
 import AuthDone from '@/pages/auth-done';
@@ -26,7 +25,7 @@ function AuthenticatedApp() {
         <Route path="/" component={Dashboard} />
         <Route path="/expenses" component={Expenses} />
         <Route path="/budget" component={Budget} />
-        <Route path="/contributions" component={Contributions} />
+        <Route path="/contributions" component={Activity} />
         <Route path="/activity" component={Activity} />
         <Route path="/savings-goals" component={SavingsGoals} />
         <Route path="/bank" component={Bank} />

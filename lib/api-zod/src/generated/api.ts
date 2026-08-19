@@ -404,8 +404,13 @@ export const GetDashboardSummaryResponse = zod.object({
 
 
 /**
- * @summary Recent activity feed — latest expenses and contributions
+ * @summary Household activity feed — latest items or all activity for a selected month
  */
+export const GetDashboardActivityQueryParams = zod.object({
+  "month": zod.coerce.number().optional(),
+  "year": zod.coerce.number().optional()
+})
+
 export const GetDashboardActivityResponseItem = zod.object({
   "id": zod.string(),
   "type": zod.string().describe('expense or contribution'),

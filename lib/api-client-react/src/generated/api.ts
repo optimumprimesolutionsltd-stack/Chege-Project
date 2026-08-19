@@ -41,6 +41,7 @@ import type {
   Expense,
   ExpenseInput,
   GetContributionsParams,
+  GetDashboardActivityParams,
   GetDashboardCategoryBreakdownParams,
   GetDashboardSummaryParams,
   GetDashboardTrendsParams,
@@ -1284,20 +1285,27 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
 
 
 
-export const getGetDashboardActivityUrl = () => {
+export const getGetDashboardActivityUrl = (params?: GetDashboardActivityParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/dashboard/activity`
+  return stringifiedParams.length > 0 ? `/api/dashboard/activity?${stringifiedParams}` : `/api/dashboard/activity`
 }
 
 /**
- * @summary Recent activity feed — latest expenses and contributions
+ * @summary Household activity feed — latest items or all activity for a selected month
  */
-export const getDashboardActivity = async ( options?: Parameters<typeof customFetch>[1]): Promise<ActivityItem[]> => {
+export const getDashboardActivity = async (params?: GetDashboardActivityParams, options?: Parameters<typeof customFetch>[1]): Promise<ActivityItem[]> => {
 
-  return customFetch<ActivityItem[]>(getGetDashboardActivityUrl(),
+  return customFetch<ActivityItem[]>(getGetDashboardActivityUrl(params),
   {
     ...options,
     method: 'GET'
@@ -1310,23 +1318,23 @@ export const getDashboardActivity = async ( options?: Parameters<typeof customFe
 
 
 
-export const getGetDashboardActivityQueryKey = () => {
+export const getGetDashboardActivityQueryKey = (params?: GetDashboardActivityParams,) => {
     return [
-    `/api/dashboard/activity`
+    `/api/dashboard/activity`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetDashboardActivityQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardActivity>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActivity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDashboardActivityQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardActivity>>, TError = ErrorType<unknown>>(params?: GetDashboardActivityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActivity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDashboardActivityQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardActivityQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardActivity>>> = ({ signal }) => getDashboardActivity({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardActivity>>> = ({ signal }) => getDashboardActivity(params, { signal, ...requestOptions });
 
 
 
@@ -1340,15 +1348,15 @@ export type GetDashboardActivityQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Recent activity feed — latest expenses and contributions
+ * @summary Household activity feed — latest items or all activity for a selected month
  */
 
 export function useGetDashboardActivity<TData = Awaited<ReturnType<typeof getDashboardActivity>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActivity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetDashboardActivityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardActivity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetDashboardActivityQueryOptions(options)
+  const queryOptions = getGetDashboardActivityQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

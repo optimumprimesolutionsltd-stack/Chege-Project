@@ -26,7 +26,7 @@ export default function LoginPage() {
           </div>
           <div className="text-center">
             <h1 className="text-4xl font-display font-bold tracking-tight" style={{ color: '#f7faf6' }}>Bajeti</h1>
-            <p className="text-sm mt-1 font-medium" style={{ color: '#7aaa8a' }}>Family finances, together</p>
+            <p className="text-sm mt-1 font-medium" style={{ color: '#7aaa8a' }}>Shared finances, together</p>
           </div>
         </div>
 
@@ -34,7 +34,7 @@ export default function LoginPage() {
         <div className="w-full space-y-3">
           <FeatureRow
             icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
-            text="Track every shilling your household spends"
+            text="Track every shilling your group spends"
           />
           <FeatureRow
             icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>}
@@ -42,7 +42,7 @@ export default function LoginPage() {
           />
           <FeatureRow
             icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
-            text="Everyone in your household stays in sync"
+            text="Everyone in your group stays in sync"
           />
         </div>
 

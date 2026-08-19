@@ -12,7 +12,7 @@ import {
   membersTable,
 } from "@workspace/db";
 import { sql, eq } from "drizzle-orm";
-import { GetDashboardSummaryQueryParams, GetDashboardCategoryBreakdownQueryParams } from "@workspace/api-zod";
+import { GetDashboardSummaryQueryParams, GetDashboardCategoryBreakdownQueryParams, GetDashboardActivityQueryParams } from "@workspace/api-zod";
 
 const router = Router();
 
@@ -212,6 +212,12 @@ router.get("/dashboard/member-breakdown", async (req, res) => {
 
 router.get("/dashboard/activity", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const now = new Date();
+  const parsed = GetDashboardActivityQueryParams.safeParse(req.query);
+  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
+  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+  const isMonthlyReport = parsed.success && (parsed.data.month != null || parsed.data.year != null);
+  const monthlyLimit = isMonthlyReport ? 500 : 10;
 
   const expenses = await db
     .select({
@@ -226,8 +232,11 @@ router.get("/dashboard/activity", async (req, res) => {
     })
     .from(expensesTable)
     .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
+    .where(isMonthlyReport
+      ? sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`
+      : undefined)
     .orderBy(sql`${expensesTable.createdAt} DESC`)
-    .limit(10);
+    .limit(monthlyLimit);
 
   // Show recent deposits as contribution items in the activity feed
   const deposits = await db
@@ -237,13 +246,16 @@ router.get("/dashboard/activity", async (req, res) => {
       description: jointAccountTxTable.description,
       madeById: jointAccountTxTable.madeById,
       madeByName: usersTable.firstName,
+      date: jointAccountTxTable.date,
       createdAt: jointAccountTxTable.createdAt,
     })
     .from(jointAccountTxTable)
     .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
-    .where(eq(jointAccountTxTable.type, "deposit"))
+    .where(isMonthlyReport
+      ? sql`${jointAccountTxTable.type} = 'deposit' AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`
+      : eq(jointAccountTxTable.type, "deposit"))
     .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
-    .limit(10);
+    .limit(monthlyLimit);
 
   // Include recent savings-goal contributions in the feed
   const savingsContribs = await db
@@ -258,10 +270,148 @@ router.get("/dashboard/activity", async (req, res) => {
     .from(savingsGoalContributionsTable)
     .leftJoin(savingsGoalsTable, eq(savingsGoalContributionsTable.goalId, savingsGoalsTable.id))
     .leftJoin(usersTable, eq(savingsGoalContributionsTable.createdByUserId, usersTable.id))
+    .where(isMonthlyReport
+      ? sql`EXTRACT(MONTH FROM ${savingsGoalContributionsTable.createdAt}) = ${month} AND EXTRACT(YEAR FROM ${savingsGoalContributionsTable.createdAt}) = ${year}`
+      : undefined)
     .orderBy(sql`${savingsGoalContributionsTable.createdAt} DESC`)
-    .limit(10);
+    .limit(monthlyLimit);
 
-  const items = [
+  // A monthly contribution report must use the same attribution units as the
+  // summary above. A mixed expense or deposit therefore becomes one row per
+  // funding portion instead of a misleading transaction-level total.
+  let monthlyContributionItems: Array<{
+    id: string;
+    type: string;
+    amount: number;
+    description: string;
+    userName: string;
+    category: string | null;
+    date: string;
+  }> = [];
+
+  if (isMonthlyReport) {
+    const [expenseSplits, legacyExpenseRows, depositSplits, legacyDepositRows] = await Promise.all([
+      db.select({
+        id: expenseIncomeSplitsTable.id,
+        expenseId: expensesTable.id,
+        amount: expenseIncomeSplitsTable.amount,
+        description: expensesTable.description,
+        category: expensesTable.category,
+        date: expensesTable.date,
+        label: expenseIncomeSplitsTable.label,
+        fromBank: expenseIncomeSplitsTable.fromBank,
+        userName: usersTable.firstName,
+      })
+        .from(expenseIncomeSplitsTable)
+        .innerJoin(expensesTable, eq(expenseIncomeSplitsTable.expenseId, expensesTable.id))
+        .leftJoin(usersTable, eq(expenseIncomeSplitsTable.userId, usersTable.id))
+        .where(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`),
+      db.select({
+        id: expensesTable.id,
+        amount: expensesTable.amount,
+        description: expensesTable.description,
+        category: expensesTable.category,
+        date: expensesTable.date,
+        userName: usersTable.firstName,
+      })
+        .from(expensesTable)
+        .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
+        .where(sql`
+          ${expensesTable.paidFromBank} = false
+          AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month}
+          AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}
+          AND NOT EXISTS (
+            SELECT 1 FROM expense_income_splits split
+            WHERE split.expense_id = ${expensesTable.id}
+          )
+        `),
+      db.select({
+        id: jointAccountDepositSplitsTable.id,
+        transactionId: jointAccountTxTable.id,
+        amount: jointAccountDepositSplitsTable.amount,
+        description: jointAccountTxTable.description,
+        date: jointAccountTxTable.date,
+        userName: usersTable.firstName,
+      })
+        .from(jointAccountDepositSplitsTable)
+        .innerJoin(jointAccountTxTable, eq(jointAccountDepositSplitsTable.transactionId, jointAccountTxTable.id))
+        .leftJoin(usersTable, eq(jointAccountDepositSplitsTable.userId, usersTable.id))
+        .where(sql`
+          ${jointAccountTxTable.type} = 'deposit'
+          AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
+          AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}
+        `),
+      db.select({
+        id: jointAccountTxTable.id,
+        amount: jointAccountTxTable.amount,
+        description: jointAccountTxTable.description,
+        date: jointAccountTxTable.date,
+        madeById: jointAccountTxTable.madeById,
+        userName: usersTable.firstName,
+      })
+        .from(jointAccountTxTable)
+        .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
+        .where(sql`
+          ${jointAccountTxTable.type} = 'deposit'
+          AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
+          AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}
+          AND NOT EXISTS (
+            SELECT 1 FROM joint_account_deposit_splits split
+            WHERE split.transaction_id = ${jointAccountTxTable.id}
+          )
+        `),
+    ]);
+
+    monthlyContributionItems = [
+      ...expenseSplits.map((split) => ({
+        id: `expense-funding-${split.expenseId}-${split.id}`,
+        type: split.fromBank ? "household" : "contribution",
+        amount: Number(split.amount),
+        description: `Expense paid: ${split.description}`,
+        userName: split.fromBank ? "Joint bank" : (split.userName ?? split.label),
+        category: split.category,
+        date: String(split.date),
+      })),
+      ...legacyExpenseRows.map((expense) => ({
+        id: `expense-funding-${expense.id}`,
+        type: "contribution",
+        amount: Number(expense.amount),
+        description: `Expense paid: ${expense.description}`,
+        userName: expense.userName ?? "Unknown",
+        category: expense.category,
+        date: String(expense.date),
+      })),
+      ...depositSplits.map((split) => ({
+        id: `deposit-contributor-${split.transactionId}-${split.id}`,
+        type: "contribution",
+        amount: Number(split.amount),
+        description: `Bank deposit: ${split.description}`,
+        userName: split.userName ?? "Unknown",
+        category: null,
+        date: String(split.date),
+      })),
+      ...legacyDepositRows.map((deposit) => ({
+        id: `deposit-contributor-${deposit.id}`,
+        type: deposit.madeById === null ? "household" : "contribution",
+        amount: Number(deposit.amount),
+        description: `Bank deposit: ${deposit.description}`,
+        userName: deposit.madeById === null ? "Joint bank" : (deposit.userName ?? "Unknown"),
+        category: null,
+        date: String(deposit.date),
+      })),
+      ...savingsContribs.map((saving) => ({
+        id: `savings-${saving.id}`,
+        type: saving.createdByUserId === null ? "household" : "contribution",
+        amount: Number(saving.amount),
+        description: `${saving.goalName ?? "Savings"} contribution`,
+        userName: saving.createdByUserId === null ? "Joint bank" : (saving.contributorName ?? "Unknown"),
+        category: null,
+        date: saving.createdAt instanceof Date ? saving.createdAt.toISOString() : String(saving.createdAt),
+      })),
+    ];
+  }
+
+  const items = (isMonthlyReport ? monthlyContributionItems : [
     ...expenses.map((e) => ({
       id: `expense-${e.id}`,
       type: "expense",
@@ -269,7 +419,8 @@ router.get("/dashboard/activity", async (req, res) => {
       description: e.description,
       userName: e.paidByName ?? "Unknown",
       category: e.category,
-      date: e.createdAt instanceof Date ? e.createdAt.toISOString() : String(e.createdAt),
+      // The feed's visible date must match the month used to include the expense.
+      date: String(e.date),
     })),
     ...deposits.map((d) => ({
       id: `contribution-${d.id}`,
@@ -279,7 +430,8 @@ router.get("/dashboard/activity", async (req, res) => {
       // null madeById = Joint bank (shared deposit with no individual attribution)
       userName: d.madeById === null ? "Joint bank" : (d.madeByName ?? "Unknown"),
       category: null,
-      date: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+      // Deposits are reported in the month of their banking transaction, not entry time.
+      date: String(d.date),
     })),
     ...savingsContribs.map((s) => ({
       id: `savings-${s.id}`,
@@ -290,9 +442,9 @@ router.get("/dashboard/activity", async (req, res) => {
       category: null,
       date: s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
     })),
-  ]
+  ])
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 20);
+    .slice(0, isMonthlyReport ? 500 : 20);
 
   res.json(items);
 });

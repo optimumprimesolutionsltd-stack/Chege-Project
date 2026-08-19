@@ -34,6 +34,7 @@ export * from './expense';
 export * from './expenseFundingSplit';
 export * from './expenseInput';
 export * from './getContributionsParams';
+export * from './getDashboardActivityParams';
 export * from './getDashboardCategoryBreakdownParams';
 export * from './getDashboardSummaryParams';
 export * from './getDashboardTrendsParams';

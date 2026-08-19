@@ -48,14 +48,14 @@ export default function LoginScreen() {
           <Feather name="trending-up" size={36} color="#cf7217" />
         </View>
         <Text style={styles.appName}>Bajeti</Text>
-        <Text style={styles.tagline}>Family finances, together</Text>
+        <Text style={styles.tagline}>Shared finances, together</Text>
       </View>
 
       {/* Feature list */}
       <View style={styles.features}>
-        <FeatureRow icon="bar-chart-2" text="Track every shilling your household spends" />
+        <FeatureRow icon="bar-chart-2" text="Track every shilling your group spends" />
         <FeatureRow icon="refresh-cw" text="Log expenses anywhere, anytime" />
-        <FeatureRow icon="users" text="Everyone in your household stays in sync" />
+        <FeatureRow icon="users" text="Everyone in your group stays in sync" />
       </View>
 
       {/* Sign in button */}

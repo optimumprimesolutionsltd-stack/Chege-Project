@@ -565,6 +565,11 @@ month?: number;
 year?: number;
 };
 
+export type GetDashboardActivityParams = {
+month?: number;
+year?: number;
+};
+
 export type GetDashboardCategoryBreakdownParams = {
 month?: number;
 year?: number;

@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, PiggyBank, Activity, LogOut, Menu, X, Settings, Target, Landmark } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/expenses', label: 'Expenses', icon: Receipt },
     { href: '/budget', label: 'Budget', icon: PieChart },
-    { href: '/contributions', label: 'Contributions', icon: PiggyBank },
     { href: '/activity', label: 'Activity', icon: Activity },
     { href: '/savings-goals', label: 'Savings Goals', icon: Target },
     { href: '/bank', label: 'Bank Account', icon: Landmark },

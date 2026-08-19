@@ -25,6 +25,7 @@ import { useAuth } from '@/lib/auth';
 import {
   useGetExpenses,
   useGetDashboardActivity,
+  useGetDashboardSummary,
   useUpdateExpense,
   useDeleteExpense,
   useApplyRecurringExpenses,
@@ -91,7 +92,8 @@ type EditForm = {
   date: string;
 };
 
-type FeedTab = 'expenses' | 'activity';
+type FeedTab = 'expenses' | 'activity' | 'contributions';
+type ContributionMember = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
 
 export default function HistoryScreen() {
   const colors = useColors();
@@ -175,8 +177,31 @@ export default function HistoryScreen() {
     }
   };
 
-  // Activity feed (for the "Activity" tab)
-  const { data: activityFeed = [], isLoading: activityLoading, refetch: refetchActivity } = useGetDashboardActivity();
+  // Keep the general Activity feed recent; only Contributions is month-scoped.
+  const recentActivity = useGetDashboardActivity(
+    undefined,
+    { query: { queryKey: getGetDashboardActivityQueryKey(), retry: false, enabled: activeTab === 'activity' } },
+  );
+  const monthlyActivity = useGetDashboardActivity(
+    { month, year },
+    { query: { queryKey: getGetDashboardActivityQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+  );
+  const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: refetchSummary } = useGetDashboardSummary(
+    { month, year },
+    { query: { queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+  );
+  const contributionMembers = ((summary as { memberContributions?: ContributionMember[] } | undefined)?.memberContributions ?? []);
+  const activityFeed = activeTab === 'contributions' ? monthlyActivity.data ?? [] : recentActivity.data ?? [];
+  const activityLoading = activeTab === 'contributions' ? monthlyActivity.isLoading : recentActivity.isLoading;
+  const activityError = activeTab === 'contributions' ? monthlyActivity.isError : recentActivity.isError;
+  const contributionRows = useMemo(
+    () => activityFeed.filter((raw) => (raw as ActivityItem).type === ACTIVITY_TYPE.CONTRIBUTION) as ActivityItem[],
+    [activityFeed],
+  );
+  const sharedHouseholdRows = useMemo(
+    () => activityFeed.filter((raw) => (raw as ActivityItem).type === 'household') as ActivityItem[],
+    [activityFeed],
+  );
 
   // Grouped activity — collapsed by default, tap header to expand
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -277,12 +302,14 @@ export default function HistoryScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (activeTab === 'activity') {
-      await refetchActivity();
+      await recentActivity.refetch();
+    } else if (activeTab === 'contributions') {
+      await Promise.all([monthlyActivity.refetch(), refetchSummary()]);
     } else {
       await refetch();
     }
     setRefreshing(false);
-  }, [refetch, refetchActivity, activeTab]);
+  }, [refetch, recentActivity, monthlyActivity, refetchSummary, activeTab]);
 
   // Edit modal state
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -380,7 +407,7 @@ export default function HistoryScreen() {
       });
       queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
       queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
-      queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey({ month, year }) });
       closeEdit();
     } catch {
       Alert.alert('Error', 'Could not save changes.');
@@ -422,7 +449,7 @@ export default function HistoryScreen() {
         {/* Title row */}
         <View style={styles.headerTitleRow}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            {activeTab === 'expenses' ? 'Expenses' : 'Activity'}
+            {activeTab === 'expenses' ? 'Expenses' : activeTab === 'contributions' ? 'Contributions' : 'Activity'}
           </Text>
           {activeTab === 'expenses' && expenses.length > 0 && (
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
@@ -432,6 +459,11 @@ export default function HistoryScreen() {
           {activeTab === 'activity' && activityFeed.length > 0 && (
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
               Recent {activityFeed.length} items
+            </Text>
+          )}
+          {activeTab === 'contributions' && (
+            <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
+              {MONTHS_SHORT[month - 1]} {year} household report
             </Text>
           )}
         </View>
@@ -454,10 +486,17 @@ export default function HistoryScreen() {
               <Feather name="activity" size={13} color={activeTab === 'activity' ? colors.foreground : colors.mutedForeground} />
               <Text style={[styles.segmentText, { color: activeTab === 'activity' ? colors.foreground : colors.mutedForeground }]}>Activity</Text>
             </Pressable>
+            <Pressable
+              onPress={() => setActiveTab('contributions')}
+              style={[styles.segmentBtn, activeTab === 'contributions' && { backgroundColor: colors.card, borderRadius: 8 }]}
+            >
+              <Feather name="trending-up" size={13} color={activeTab === 'contributions' ? colors.foreground : colors.mutedForeground} />
+              <Text style={[styles.segmentText, { color: activeTab === 'contributions' ? colors.foreground : colors.mutedForeground }]}>Contributions</Text>
+            </Pressable>
           </View>
 
-          {/* Month nav — only in expenses tab */}
-          {activeTab === 'expenses' && (
+          {/* Month nav — expenses and contributions use the same monthly context */}
+          {(activeTab === 'expenses' || activeTab === 'contributions') && (
             <View style={styles.monthNav}>
               <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
                 <Feather name="chevron-left" size={20} color={colors.mutedForeground} />
@@ -589,9 +628,55 @@ export default function HistoryScreen() {
             }
           />
         )
+      ) : activeTab === 'contributions' ? (
+        summaryLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
+        ) : summaryError ? (
+          <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load contributions</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Check your household access, then pull down to try again.</Text></View>
+        ) : (
+          <FlatList
+            data={contributionRows}
+            keyExtractor={(item) => `contribution-${item.id}`}
+            ListHeaderComponent={
+              <View style={styles.contributionListHeader}>
+                <View style={[styles.contributionIntro, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '33' }]}>
+                  <Feather name="info" size={16} color={colors.primary} />
+                  <Text style={[styles.contributionIntroText, { color: colors.mutedForeground }]}>Personal expense portions, bank deposits, and savings contributions are counted once. Joint bank funding stays with the household.</Text>
+                </View>
+                <View style={[styles.householdTotal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.householdTotalLabel, { color: colors.mutedForeground }]}>Household contribution total</Text>
+                  <Text style={[styles.householdTotalAmount, { color: colors.foreground }]}>KES {formatKES(contributionMembers.reduce((sum, member) => sum + member.contributed, 0))}</Text>
+                </View>
+                {contributionMembers.map((member) => (
+                  <View key={member.userId} style={[styles.contributionMember, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <View style={styles.contributionMemberTop}>
+                      <View><Text style={[styles.contributionMemberName, { color: colors.foreground }]}>{member.name}</Text><Text style={[styles.contributionMemberTarget, { color: colors.mutedForeground }]}>{member.target == null ? 'No monthly target' : `Target KES ${formatKES(member.target)}`}</Text></View>
+                      <Text style={[styles.contributionMemberAmount, { color: colors.primary }]}>KES {formatKES(member.contributed)}</Text>
+                    </View>
+                    <View style={styles.contributionStats}><Text style={[styles.contributionStat, { color: colors.mutedForeground }]}>Spent <Text style={{ color: colors.foreground }}>KES {formatKES(member.spent)}</Text></Text><Text style={[styles.contributionStat, { color: colors.mutedForeground }]}>Net <Text style={{ color: member.net >= 0 ? colors.primary : colors.destructive }}>KES {formatKES(member.net)}</Text></Text></View>
+                  </View>
+                ))}
+                {sharedHouseholdRows.length > 0 && (
+                  <View style={[styles.sharedFunding, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                    <Text style={[styles.sharedFundingTitle, { color: colors.foreground }]}>Shared household funding</Text>
+                    <Text style={[styles.sharedFundingText, { color: colors.mutedForeground }]}>Joint bank portions are household money and are not included in member contribution totals.</Text>
+                    {sharedHouseholdRows.map((item) => <View key={item.id} style={styles.sharedFundingRow}><Text style={[styles.sharedFundingText, { color: colors.foreground }]} numberOfLines={1}>{item.description}</Text><Text style={[styles.sharedFundingAmount, { color: colors.foreground }]}>KES {formatKES(item.amount)}</Text></View>)}
+                  </View>
+                )}
+                <Text style={[styles.contributionRowsTitle, { color: colors.foreground }]}>Contribution activity</Text>
+              </View>
+            }
+            renderItem={({ item }) => <View style={styles.contributionRow}><ActivityCard item={item} colors={colors} /></View>}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+            contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
+            ListEmptyComponent={<View style={styles.empty}><Feather name="trending-up" size={36} color={colors.mutedForeground} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>No contributions this month</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Member totals are still shown above when available.</Text></View>}
+          />
+        )
       ) : (
         activityLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
+        ) : activityError ? (
+          <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load activity</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Pull down to try again.</Text></View>
         ) : (
           <FlatList
             data={activityRows}
@@ -1003,6 +1088,26 @@ const styles = StyleSheet.create({
   recurringBannerAction: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 
   list: { paddingHorizontal: 14, paddingTop: 14 },
+  contributionListHeader: { gap: 10, paddingBottom: 8 },
+  contributionIntro: { flexDirection: 'row', gap: 8, borderWidth: 1, borderRadius: 12, padding: 12 },
+  contributionIntroText: { flex: 1, fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },
+  householdTotal: { borderWidth: 1, borderRadius: 14, padding: 14 },
+  householdTotalLabel: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  householdTotalAmount: { marginTop: 4, fontSize: 23, fontFamily: 'Inter_700Bold' },
+  contributionMember: { borderWidth: 1, borderRadius: 14, padding: 13 },
+  contributionMemberTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  contributionMemberName: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  contributionMemberTarget: { marginTop: 2, fontSize: 11, fontFamily: 'Inter_400Regular' },
+  contributionMemberAmount: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  contributionStats: { flexDirection: 'row', gap: 16, marginTop: 10 },
+  contributionStat: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  contributionRowsTitle: { marginTop: 6, fontSize: 14, fontFamily: 'Inter_700Bold' },
+  contributionRow: { marginBottom: 10 },
+  sharedFunding: { borderWidth: 1, borderRadius: 14, padding: 13, gap: 5 },
+  sharedFundingTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  sharedFundingText: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular' },
+  sharedFundingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 5 },
+  sharedFundingAmount: { fontSize: 12, fontFamily: 'Inter_700Bold' },
 
   row: { flexDirection: 'row', alignItems: 'center', padding: 12, borderWidth: 1, borderRadius: 12, marginBottom: 10, gap: 10 },
   rowIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
