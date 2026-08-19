@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface BudgetCategoryInput {
-  name: string;
-  /** Monthly budget in KES; use 0 when creating a category from a withdrawal */
-  budgetAmount: number;
+/**
+ * Fields to update. A one-time budget requires both activeMonth and activeYear.
+ */
+export interface BudgetCategoryUpdateInput {
+  name?: string;
+  budgetAmount?: number;
   priority?: number;
   color?: string;
   isRecurring?: boolean;

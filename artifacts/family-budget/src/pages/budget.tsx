@@ -1,17 +1,33 @@
 import { useEffect, useState } from "react";
-import { getGetDashboardCategoryBreakdownQueryKey, useGetDashboardCategoryBreakdown } from "@workspace/api-client-react";
+import {
+  getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardSummaryQueryKey,
+  useGetDashboardCategoryBreakdown,
+} from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { formatKes, formatMonthYear } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-type BudgetCategory = { id: number; name: string; budgetAmount: number; priority: number; color: string };
+type BudgetCategory = {
+  id: number;
+  name: string;
+  budgetAmount: number;
+  priority: number;
+  color: string;
+  isRecurring: boolean;
+  activeMonth?: number | null;
+  activeYear?: number | null;
+};
+type IncomeSource = { id: number; userId: string; name: string; isMain: boolean };
+type Member = { userId: string; userName?: string | null };
 
 const priorityMap: Record<number, string> = {
   1: "Survival Essentials",
@@ -19,27 +35,36 @@ const priorityMap: Record<number, string> = {
   3: "Household",
   4: "Connectivity & Grooming",
   5: "Discretionary",
+  999: "Needs a budget",
 };
 
 function CategoryDialog({
-  open, onClose, initial, onSaved,
+  open, onClose, initial, onSaved, reportMonth, reportYear,
 }: {
   open: boolean;
   onClose: () => void;
   initial?: BudgetCategory | null;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
+  reportMonth: number;
+  reportYear: number;
 }) {
   const { toast } = useToast();
   const [name, setName] = useState(initial?.name ?? "");
   const [amount, setAmount] = useState(initial?.budgetAmount?.toString() ?? "");
   const [priority, setPriority] = useState(initial?.priority?.toString() ?? "1");
+  const [isRecurring, setIsRecurring] = useState(initial?.isRecurring ?? true);
+  const [activeMonth, setActiveMonth] = useState(initial?.activeMonth ?? reportMonth);
+  const [activeYear, setActiveYear] = useState(initial?.activeYear ?? reportYear);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setName(initial?.name ?? "");
     setAmount(initial?.budgetAmount?.toString() ?? "");
     setPriority(initial?.priority?.toString() ?? "1");
-  }, [initial, open]);
+    setIsRecurring(initial?.isRecurring ?? true);
+    setActiveMonth(initial?.activeMonth ?? reportMonth);
+    setActiveYear(initial?.activeYear ?? reportYear);
+  }, [initial, open, reportMonth, reportYear]);
 
   const handleSave = async () => {
     const amt = parseInt(amount, 10);
@@ -54,11 +79,18 @@ function CategoryDialog({
         method: initial ? "PUT" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), budgetAmount: amt, priority: parseInt(priority, 10) || 1 }),
+        body: JSON.stringify({
+          name: name.trim(),
+          budgetAmount: amt,
+          priority: parseInt(priority, 10) || 1,
+          isRecurring,
+          activeMonth: isRecurring ? null : activeMonth,
+          activeYear: isRecurring ? null : activeYear,
+        }),
       });
       if (!res.ok) throw new Error("Failed");
       toast({ title: initial ? "Category updated" : "Category added" });
-      onSaved();
+      await onSaved();
       onClose();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not save category." });
@@ -79,7 +111,7 @@ function CategoryDialog({
             <Input placeholder="e.g. Transport" value={name} onChange={e => setName(e.target.value)} autoFocus />
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">Monthly budget (KES)</label>
+            <label className="text-sm font-semibold">Budget amount (KES)</label>
             <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} />
           </div>
           <div className="space-y-1.5">
@@ -93,6 +125,27 @@ function CategoryDialog({
                 <option key={k} value={k}>Tier {k}: {v}</option>
               ))}
             </select>
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 p-3.5">
+            <div>
+              <p className="text-sm font-semibold">Recurring budget</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isRecurring
+                  ? "Repeats every month"
+                  : `Applies only to ${formatMonthYear(activeMonth, activeYear)}`}
+              </p>
+            </div>
+            <Switch
+              checked={isRecurring}
+              onCheckedChange={(checked) => {
+                setIsRecurring(checked);
+                if (!checked && initial?.isRecurring !== false) {
+                  setActiveMonth(reportMonth);
+                  setActiveYear(reportYear);
+                }
+              }}
+              aria-label="Recurring budget"
+            />
           </div>
         </div>
         <DialogFooter>
@@ -114,11 +167,37 @@ export default function Budget() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const { data: breakdown, isLoading } = useGetDashboardCategoryBreakdown({ month, year });
+  const {
+    data: breakdown,
+    isLoading,
+    isFetching,
+    refetch: refetchBreakdown,
+  } = useGetDashboardCategoryBreakdown(
+    { month, year },
+    { request: { cache: "no-store" } },
+  );
   const { data: allCategories = [], refetch: refetchCats } = useQuery<BudgetCategory[]>({
     queryKey: ["budget-categories-full"],
     queryFn: async () => {
       const res = await fetch("/api/budget-categories", { credentials: "include" });
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
+    queryKey: ["income-sources", "budget-report"],
+    queryFn: async () => {
+      const res = await fetch("/api/income-sources", { credentials: "include" });
+      if (!res.ok) throw new Error("Could not load income streams");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const { data: members = [], refetch: refetchMembers } = useQuery<Member[]>({
+    queryKey: ["members", "budget-report"],
+    queryFn: async () => {
+      const res = await fetch("/api/members", { credentials: "include" });
+      if (!res.ok) throw new Error("Could not load members");
       return res.json();
     },
     staleTime: 30_000,
@@ -130,10 +209,18 @@ export default function Budget() {
   const [deleteTarget, setDeleteTarget] = useState<BudgetCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const refreshAll = () => {
-    refetchCats();
-    qc.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() });
-    qc.invalidateQueries({ queryKey: ["dashboard"] });
+  const refreshAll = async () => {
+    qc.removeQueries({
+      queryKey: getGetDashboardCategoryBreakdownQueryKey(),
+      type: "inactive",
+    });
+    await Promise.all([
+      refetchCats(),
+      refetchIncomeSources(),
+      refetchMembers(),
+      refetchBreakdown(),
+    ]);
+    await qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
   };
 
   const handleDelete = async () => {
@@ -143,7 +230,7 @@ export default function Budget() {
       await fetch(`/api/budget-categories/${deleteTarget.id}`, { method: "DELETE", credentials: "include" });
       toast({ title: "Category removed" });
       setDeleteTarget(null);
-      refreshAll();
+      await refreshAll();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not remove category." });
     } finally {
@@ -162,7 +249,10 @@ export default function Budget() {
 
   // Categories that exist but have no spending this month (show budget-only row)
   const catNamesInBreakdown = new Set((breakdown ?? []).map(b => b.category));
-  const unusedCats = allCategories.filter(c => !catNamesInBreakdown.has(c.name));
+  const activeCategories = allCategories.filter(category =>
+    category.isRecurring || (category.activeMonth === month && category.activeYear === year)
+  );
+  const unusedCats = activeCategories.filter(c => !catNamesInBreakdown.has(c.name));
   const unusedByPriority = unusedCats.reduce((acc, c) => {
     if (!acc[c.priority]) acc[c.priority] = [];
     acc[c.priority].push(c);
@@ -171,6 +261,13 @@ export default function Budget() {
   const reportBudget = (breakdown ?? []).reduce((sum, item) => sum + item.budgetAmount, 0);
   const reportActual = (breakdown ?? []).reduce((sum, item) => sum + item.spentAmount, 0);
   const reportVariance = reportBudget - reportActual;
+  const memberNames = new Map(members.map(member => [member.userId, member.userName || "Member"]));
+  const groupedIncomeSources = incomeSources.reduce((groups, source) => {
+    const existing = groups.get(source.userId) ?? [];
+    existing.push(source);
+    groups.set(source.userId, existing);
+    return groups;
+  }, new Map<string, IncomeSource[]>());
 
   return (
     <div className="space-y-8 pb-12">
@@ -179,6 +276,8 @@ export default function Budget() {
         onClose={() => { setAddOpen(false); setEditTarget(null); }}
         initial={editTarget}
         onSaved={refreshAll}
+        reportMonth={month}
+        reportYear={year}
       />
       <Dialog open={manageOpen} onOpenChange={setManageOpen}>
         <DialogContent className="sm:max-w-md">
@@ -192,7 +291,11 @@ export default function Budget() {
               <div key={category.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <div className="min-w-0">
                   <p className="font-medium truncate">{category.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatKes(category.budgetAmount)} monthly</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatKes(category.budgetAmount)} · {category.isRecurring
+                      ? "Recurring monthly"
+                      : `One-time for ${formatMonthYear(category.activeMonth ?? month, category.activeYear ?? year)}`}
+                  </p>
                 </div>
                 <Button
                   variant="outline"
@@ -253,6 +356,42 @@ export default function Budget() {
         </div>
       </div>
 
+       <Card className="border-none shadow-sm bg-card">
+         <CardContent className="p-5">
+           <div className="flex items-start justify-between gap-4 mb-4">
+             <div>
+               <p className="text-sm font-semibold text-foreground">Income streams</p>
+               <p className="text-xs text-muted-foreground mt-0.5">Named sources available to household members</p>
+             </div>
+             <WalletCards className="w-5 h-5 text-secondary" />
+           </div>
+           {incomeSources.length === 0 ? (
+             <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center">
+               <p className="text-sm font-medium">No income streams set up yet</p>
+               <p className="text-xs text-muted-foreground mt-1">Add income sources from Settings on mobile.</p>
+             </div>
+           ) : (
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+               {Array.from(groupedIncomeSources.entries()).map(([userId, sources]) => (
+                 <div key={userId} className="rounded-xl border border-border/60 p-3.5">
+                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                     {memberNames.get(userId) ?? "Household member"}
+                   </p>
+                   <div className="flex flex-wrap gap-2">
+                     {sources.map(source => (
+                       <span key={source.id} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-medium text-primary">
+                         {source.name}
+                         {source.isMain ? <span className="text-[10px] uppercase tracking-wide opacity-70">Main</span> : null}
+                       </span>
+                     ))}
+                   </div>
+                 </div>
+               ))}
+             </div>
+           )}
+         </CardContent>
+       </Card>
+
        {!isLoading && (
          <Card className="border-none shadow-sm bg-card">
            <CardContent className="p-5">
@@ -281,11 +420,18 @@ export default function Budget() {
          </Card>
        )}
 
-      {isLoading ? (
+               {isLoading || isFetching ? (
         <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>
       ) : (
         <div className="space-y-8">
-          {[1, 2, 3, 4, 5].map(priority => {
+           {Array.from(new Set([
+             1,
+             2,
+             3,
+             4,
+             5,
+             ...Object.keys(groupedBreakdown).map(Number),
+           ])).sort((a, b) => a - b).map(priority => {
             const breakdownItems = groupedBreakdown[priority] ?? [];
             const unusedItems = unusedByPriority[priority] ?? [];
             if (breakdownItems.length === 0 && unusedItems.length === 0) return null;
@@ -317,7 +463,13 @@ export default function Budget() {
                           <div className="flex justify-between items-start">
                             <div className="flex-1 min-w-0">
                               <h3 className="font-semibold text-lg text-foreground">{cat.category}</h3>
-                              <p className="text-sm text-muted-foreground">Limit: {formatKes(cat.budgetAmount)}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {cat.isBudgeted
+                                  ? <>Limit: {formatKes(cat.budgetAmount)} · {cat.isRecurring
+                                    ? "Recurring"
+                                    : `One-time for ${formatMonthYear(cat.activeMonth ?? month, cat.activeYear ?? year)}`}</>
+                                  : "No active budget assigned"}
+                              </p>
                             </div>
                             <div className="flex items-start gap-1 ml-2">
                               <div className="text-right mr-2">

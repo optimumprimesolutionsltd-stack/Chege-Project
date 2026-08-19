@@ -18,10 +18,13 @@ import { z } from "zod/v4";
 // Budget categories (seeded, not user-managed)
 export const budgetCategoriesTable = pgTable("budget_categories", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   budgetAmount: integer("budget_amount").notNull(),
   priority: integer("priority").notNull().default(1),
   color: text("color").notNull().default("#6B7280"),
+  isRecurring: boolean("is_recurring").notNull().default(true),
+  activeMonth: integer("active_month"),
+  activeYear: integer("active_year"),
 });
 
 export const insertBudgetCategorySchema = createInsertSchema(budgetCategoriesTable).omit({ id: true });

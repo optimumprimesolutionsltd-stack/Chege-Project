@@ -95,6 +95,18 @@ export interface BudgetCategory {
   /** 1=survival essentials, 2=health/education, 3=household, 4=connectivity, 5=discretionary */
   priority: number;
   color: string;
+  /** Whether this budget applies every month */
+  isRecurring: boolean;
+  /**
+     * Month when a one-time budget applies
+     * @nullable
+     */
+  activeMonth?: number | null;
+  /**
+     * Year when a one-time budget applies
+     * @nullable
+     */
+  activeYear?: number | null;
 }
 
 export interface BudgetCategoryInput {
@@ -103,6 +115,42 @@ export interface BudgetCategoryInput {
   budgetAmount: number;
   priority?: number;
   color?: string;
+  isRecurring?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 12
+     * @nullable
+     */
+  activeMonth?: number | null;
+  /**
+     * @minimum 2000
+     * @maximum 2200
+     * @nullable
+     */
+  activeYear?: number | null;
+}
+
+/**
+ * Fields to update. A one-time budget requires both activeMonth and activeYear.
+ */
+export interface BudgetCategoryUpdateInput {
+  name?: string;
+  budgetAmount?: number;
+  priority?: number;
+  color?: string;
+  isRecurring?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 12
+     * @nullable
+     */
+  activeMonth?: number | null;
+  /**
+     * @minimum 2000
+     * @maximum 2200
+     * @nullable
+     */
+  activeYear?: number | null;
 }
 
 export interface Contribution {
@@ -165,6 +213,13 @@ export interface CategoryBreakdown {
   percentUsed: number;
   priority: number;
   color: string;
+  isRecurring: boolean;
+  /** @nullable */
+  activeMonth?: number | null;
+  /** @nullable */
+  activeYear?: number | null;
+  /** False for actual spending that has no active budget in the selected month */
+  isBudgeted: boolean;
 }
 
 export interface MonthTrend {

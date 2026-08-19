@@ -14,4 +14,11 @@ export interface CategoryBreakdown {
   percentUsed: number;
   priority: number;
   color: string;
+  isRecurring: boolean;
+  /** @nullable */
+  activeMonth?: number | null;
+  /** @nullable */
+  activeYear?: number | null;
+  /** False for actual spending that has no active budget in the selected month */
+  isBudgeted: boolean;
 }

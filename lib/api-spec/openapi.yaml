@@ -248,6 +248,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A category with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /budget-categories/{id}:
+    put:
+      operationId: updateBudgetCategory
+      tags: [budget-categories]
+      summary: Update a budget category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetCategoryUpdateInput"
+      responses:
+        "200":
+          description: Updated budget category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetCategory"
+        "400":
+          description: Invalid category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A category with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBudgetCategory
+      tags: [budget-categories]
+      summary: Delete a budget category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /contributions/{id}:
     delete:
@@ -945,12 +1017,22 @@ components:
           description: 1=survival essentials, 2=health/education, 3=household, 4=connectivity, 5=discretionary
         color:
           type: string
+        isRecurring:
+          type: boolean
+          description: Whether this budget applies every month
+        activeMonth:
+          type: ["number", "null"]
+          description: Month when a one-time budget applies
+        activeYear:
+          type: ["number", "null"]
+          description: Year when a one-time budget applies
       required:
         - id
         - name
         - budgetAmount
         - priority
         - color
+        - isRecurring
 
     BudgetCategoryInput:
       type: object
@@ -964,9 +1046,43 @@ components:
           type: number
         color:
           type: string
+        isRecurring:
+          type: boolean
+          default: true
+        activeMonth:
+          type: ["number", "null"]
+          minimum: 1
+          maximum: 12
+        activeYear:
+          type: ["number", "null"]
+          minimum: 2000
+          maximum: 2200
       required:
         - name
         - budgetAmount
+
+    BudgetCategoryUpdateInput:
+      type: object
+      description: Fields to update. A one-time budget requires both activeMonth and activeYear.
+      properties:
+        name:
+          type: string
+        budgetAmount:
+          type: number
+        priority:
+          type: number
+        color:
+          type: string
+        isRecurring:
+          type: boolean
+        activeMonth:
+          type: ["number", "null"]
+          minimum: 1
+          maximum: 12
+        activeYear:
+          type: ["number", "null"]
+          minimum: 2000
+          maximum: 2200
 
     Contribution:
       type: object
@@ -1111,6 +1227,15 @@ components:
           type: number
         color:
           type: string
+        isRecurring:
+          type: boolean
+        activeMonth:
+          type: ["number", "null"]
+        activeYear:
+          type: ["number", "null"]
+        isBudgeted:
+          type: boolean
+          description: False for actual spending that has no active budget in the selected month
       required:
         - category
         - budgetAmount
@@ -1119,6 +1244,8 @@ components:
         - percentUsed
         - priority
         - color
+        - isRecurring
+        - isBudgeted
 
     MonthTrend:
       type: object

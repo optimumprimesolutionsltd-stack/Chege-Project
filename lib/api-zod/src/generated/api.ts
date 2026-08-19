@@ -165,7 +165,10 @@ export const GetBudgetCategoriesResponseItem = zod.object({
   "name": zod.string(),
   "budgetAmount": zod.number().describe('Monthly budget in KES'),
   "priority": zod.number().describe('1=survival essentials, 2=health\/education, 3=household, 4=connectivity, 5=discretionary'),
-  "color": zod.string()
+  "color": zod.string(),
+  "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
+  "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
+  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies')
 })
 export const GetBudgetCategoriesResponse = zod.array(GetBudgetCategoriesResponseItem)
 
@@ -173,11 +176,22 @@ export const GetBudgetCategoriesResponse = zod.array(GetBudgetCategoriesResponse
 /**
  * @summary Create a budget category
  */
+export const createBudgetCategoryBodyIsRecurringDefault = true;
+export const createBudgetCategoryBodyActiveMonthMax = 12;
+
+export const createBudgetCategoryBodyActiveYearMin = 2000;
+export const createBudgetCategoryBodyActiveYearMax = 2200;
+
+
+
 export const CreateBudgetCategoryBody = zod.object({
   "name": zod.string(),
   "budgetAmount": zod.number().describe('Monthly budget in KES; use 0 when creating a category from a withdrawal'),
   "priority": zod.number().optional(),
-  "color": zod.string().optional()
+  "color": zod.string().optional(),
+  "isRecurring": zod.boolean().default(createBudgetCategoryBodyIsRecurringDefault),
+  "activeMonth": zod.number().min(1).max(createBudgetCategoryBodyActiveMonthMax).nullish(),
+  "activeYear": zod.number().min(createBudgetCategoryBodyActiveYearMin).max(createBudgetCategoryBodyActiveYearMax).nullish()
 })
 
 export const CreateBudgetCategoryResponse = zod.object({
@@ -185,7 +199,58 @@ export const CreateBudgetCategoryResponse = zod.object({
   "name": zod.string(),
   "budgetAmount": zod.number().describe('Monthly budget in KES'),
   "priority": zod.number().describe('1=survival essentials, 2=health\/education, 3=household, 4=connectivity, 5=discretionary'),
-  "color": zod.string()
+  "color": zod.string(),
+  "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
+  "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
+  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies')
+})
+
+
+/**
+ * @summary Update a budget category
+ */
+export const UpdateBudgetCategoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateBudgetCategoryBodyActiveMonthMax = 12;
+
+export const updateBudgetCategoryBodyActiveYearMin = 2000;
+export const updateBudgetCategoryBodyActiveYearMax = 2200;
+
+
+
+export const UpdateBudgetCategoryBody = zod.object({
+  "name": zod.string().optional(),
+  "budgetAmount": zod.number().optional(),
+  "priority": zod.number().optional(),
+  "color": zod.string().optional(),
+  "isRecurring": zod.boolean().optional(),
+  "activeMonth": zod.number().min(1).max(updateBudgetCategoryBodyActiveMonthMax).nullish(),
+  "activeYear": zod.number().min(updateBudgetCategoryBodyActiveYearMin).max(updateBudgetCategoryBodyActiveYearMax).nullish()
+}).describe('Fields to update. A one-time budget requires both activeMonth and activeYear.')
+
+export const UpdateBudgetCategoryResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "budgetAmount": zod.number().describe('Monthly budget in KES'),
+  "priority": zod.number().describe('1=survival essentials, 2=health\/education, 3=household, 4=connectivity, 5=discretionary'),
+  "color": zod.string(),
+  "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
+  "activeMonth": zod.number().nullish().describe('Month when a one-time budget applies'),
+  "activeYear": zod.number().nullish().describe('Year when a one-time budget applies')
+})
+
+
+/**
+ * @summary Delete a budget category
+ */
+export const DeleteBudgetCategoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteBudgetCategoryResponse = zod.object({
+  "success": zod.boolean()
 })
 
 
@@ -301,7 +366,11 @@ export const GetDashboardCategoryBreakdownResponseItem = zod.object({
   "remaining": zod.number(),
   "percentUsed": zod.number(),
   "priority": zod.number(),
-  "color": zod.string()
+  "color": zod.string(),
+  "isRecurring": zod.boolean(),
+  "activeMonth": zod.number().nullish(),
+  "activeYear": zod.number().nullish(),
+  "isBudgeted": zod.boolean().describe('False for actual spending that has no active budget in the selected month')
 })
 export const GetDashboardCategoryBreakdownResponse = zod.array(GetDashboardCategoryBreakdownResponseItem)
 

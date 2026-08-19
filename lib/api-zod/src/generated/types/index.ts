@@ -14,6 +14,7 @@ export * from './authUser';
 export * from './authUserEnvelope';
 export * from './budgetCategory';
 export * from './budgetCategoryInput';
+export * from './budgetCategoryUpdateInput';
 export * from './cascadeContributeAllocation';
 export * from './cascadeContributeInput';
 export * from './cascadeContributeResult';

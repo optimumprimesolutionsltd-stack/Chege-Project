@@ -14,4 +14,16 @@ export interface BudgetCategory {
   /** 1=survival essentials, 2=health/education, 3=household, 4=connectivity, 5=discretionary */
   priority: number;
   color: string;
+  /** Whether this budget applies every month */
+  isRecurring: boolean;
+  /**
+     * Month when a one-time budget applies
+     * @nullable
+     */
+  activeMonth?: number | null;
+  /**
+     * Year when a one-time budget applies
+     * @nullable
+     */
+  activeYear?: number | null;
 }

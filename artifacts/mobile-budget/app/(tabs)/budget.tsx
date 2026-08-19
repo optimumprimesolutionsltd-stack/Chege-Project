@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -19,11 +20,24 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
+  getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardSummaryQueryKey,
   useGetDashboardCategoryBreakdown,
   customFetch,
 } from '@workspace/api-client-react';
 
-type BudgetCategory = { id: number; name: string; budgetAmount: number; priority: number; color: string };
+type BudgetCategory = {
+  id: number;
+  name: string;
+  budgetAmount: number;
+  priority: number;
+  color: string;
+  isRecurring: boolean;
+  activeMonth?: number | null;
+  activeYear?: number | null;
+};
+type IncomeSource = { id: number; userId: string; name: string; isMain: boolean };
+type Member = { userId: string; userName?: string | null };
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -60,20 +74,35 @@ export default function BudgetScreen() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
-  const { data: breakdown = [], isLoading: breakdownLoading, refetch: refetchBreakdown } =
+  const {
+    data: breakdown = [],
+    isLoading: breakdownLoading,
+    isFetching: breakdownFetching,
+    refetch: refetchBreakdown,
+  } =
     useGetDashboardCategoryBreakdown({ month, year });
   const { data: allCategories = [], refetch: refetchCats } = useQuery<BudgetCategory[]>({
     queryKey: ['budget-categories-full'],
     queryFn: () => customFetch<BudgetCategory[]>('/api/budget-categories'),
     staleTime: 30_000,
   });
+  const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
+    queryKey: ['income-sources', 'budget-report'],
+    queryFn: () => customFetch<IncomeSource[]>('/api/income-sources'),
+    staleTime: 30_000,
+  });
+  const { data: members = [], refetch: refetchMembers } = useQuery<Member[]>({
+    queryKey: ['members', 'budget-report'],
+    queryFn: () => customFetch<Member[]>('/api/members'),
+    staleTime: 30_000,
+  });
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchBreakdown(), refetchCats()]);
+    await Promise.all([refetchBreakdown(), refetchCats(), refetchIncomeSources(), refetchMembers()]);
     setRefreshing(false);
-  }, [refetchBreakdown, refetchCats]);
+  }, [refetchBreakdown, refetchCats, refetchIncomeSources, refetchMembers]);
 
   // Add / Edit modal state
   const [editTarget, setEditTarget] = useState<BudgetCategory | null>(null);
@@ -82,11 +111,15 @@ export default function BudgetScreen() {
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
   const [formPriority, setFormPriority] = useState('1');
+  const [formIsRecurring, setFormIsRecurring] = useState(true);
+  const [formActiveMonth, setFormActiveMonth] = useState(month);
+  const [formActiveYear, setFormActiveYear] = useState(year);
   const [saving, setSaving] = useState(false);
 
   const openAdd = () => {
     setEditTarget(null);
     setFormName(''); setFormAmount(''); setFormPriority('1');
+    setFormIsRecurring(true); setFormActiveMonth(month); setFormActiveYear(year);
     setAddOpen(true);
   };
   const openEdit = (cat: BudgetCategory) => {
@@ -95,14 +128,25 @@ export default function BudgetScreen() {
     setFormName(cat.name);
     setFormAmount(cat.budgetAmount.toString());
     setFormPriority(cat.priority.toString());
+    setFormIsRecurring(cat.isRecurring);
+    setFormActiveMonth(cat.activeMonth ?? month);
+    setFormActiveYear(cat.activeYear ?? year);
     setAddOpen(true);
   };
   const closeModal = () => { setAddOpen(false); setEditTarget(null); };
 
-  const refreshAll = () => {
-    refetchCats();
-    refetchBreakdown();
-    qc.invalidateQueries({ queryKey: ['dashboard'] });
+  const refreshAll = async () => {
+    qc.removeQueries({
+      queryKey: getGetDashboardCategoryBreakdownQueryKey(),
+      type: 'inactive',
+    });
+    await Promise.all([
+      refetchCats(),
+      refetchBreakdown(),
+      refetchIncomeSources(),
+      refetchMembers(),
+    ]);
+    await qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
   };
 
   const handleSave = async () => {
@@ -117,10 +161,17 @@ export default function BudgetScreen() {
       await customFetch(url, {
         method: editTarget ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formName.trim(), budgetAmount: amt, priority: parseInt(formPriority, 10) || 1 }),
+        body: JSON.stringify({
+          name: formName.trim(),
+          budgetAmount: amt,
+          priority: parseInt(formPriority, 10) || 1,
+          isRecurring: formIsRecurring,
+          activeMonth: formIsRecurring ? null : formActiveMonth,
+          activeYear: formIsRecurring ? null : formActiveYear,
+        }),
       });
+      await refreshAll();
       closeModal();
-      refreshAll();
     } catch {
       Alert.alert('Error', 'Could not save category.');
     } finally {
@@ -139,7 +190,7 @@ export default function BudgetScreen() {
           onPress: async () => {
             try {
               await customFetch(`/api/budget-categories/${cat.id}`, { method: 'DELETE' });
-              refreshAll();
+              await refreshAll();
             } catch {
               Alert.alert('Error', 'Could not remove category.');
             }
@@ -149,7 +200,7 @@ export default function BudgetScreen() {
     );
   };
 
-  const isLoading = breakdownLoading;
+  const isLoading = breakdownLoading || breakdownFetching;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
   function prevMonth() { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); }
@@ -159,6 +210,13 @@ export default function BudgetScreen() {
   const reportActual = breakdown.reduce((sum, category) => sum + category.spentAmount, 0);
   const reportVariance = reportBudget - reportActual;
   const overallPct = reportBudget > 0 ? Math.min(reportActual / reportBudget, 1) : 0;
+  const memberNames = new Map(members.map(member => [member.userId, member.userName || 'Member']));
+  const groupedIncomeSources = incomeSources.reduce((groups, source) => {
+    const existing = groups.get(source.userId) ?? [];
+    existing.push(source);
+    groups.set(source.userId, existing);
+    return groups;
+  }, new Map<string, IncomeSource[]>());
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -186,7 +244,7 @@ export default function BudgetScreen() {
                   placeholderTextColor={colors.mutedForeground}
                   autoFocus
                 />
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>MONTHLY BUDGET (KES)</Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>BUDGET AMOUNT (KES)</Text>
                 <TextInput
                   style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
                   value={formAmount}
@@ -215,6 +273,28 @@ export default function BudgetScreen() {
                 <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
                   {PRIORITY_LABELS[parseInt(formPriority, 10)] ?? ''}
                 </Text>
+                <View style={[styles.recurrenceRow, { borderColor: colors.border, backgroundColor: colors.muted }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.recurrenceTitle, { color: colors.foreground }]}>Recurring budget</Text>
+                    <Text style={[styles.recurrenceHint, { color: colors.mutedForeground }]}>
+                      {formIsRecurring
+                        ? 'Repeats every month'
+                        : `Only for ${MONTHS_SHORT[formActiveMonth - 1]} ${formActiveYear}`}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={formIsRecurring}
+                    onValueChange={(value) => {
+                      setFormIsRecurring(value);
+                      if (!value && editTarget?.isRecurring !== false) {
+                        setFormActiveMonth(month);
+                        setFormActiveYear(year);
+                      }
+                    }}
+                    trackColor={{ false: colors.border, true: colors.primary + '88' }}
+                    thumbColor={formIsRecurring ? colors.primary : colors.mutedForeground}
+                  />
+                </View>
                 <Pressable
                   onPress={handleSave}
                   disabled={saving}
@@ -250,7 +330,11 @@ export default function BudgetScreen() {
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.manageName, { color: colors.foreground }]}>{category.name}</Text>
-                    <Text style={[styles.manageAmount, { color: colors.mutedForeground }]}>KES {formatKES(category.budgetAmount)} monthly</Text>
+                    <Text style={[styles.manageAmount, { color: colors.mutedForeground }]}>
+                      KES {formatKES(category.budgetAmount)} · {category.isRecurring
+                        ? 'Recurring monthly'
+                        : `One-time for ${MONTHS_SHORT[(category.activeMonth ?? month) - 1]} ${category.activeYear ?? year}`}
+                    </Text>
                   </View>
                   <Feather name="edit-2" size={16} color={colors.primary} />
                 </Pressable>
@@ -291,7 +375,7 @@ export default function BudgetScreen() {
             </View>
           </View>
 
-          {!breakdownLoading ? (
+          {!isLoading ? (
             <View style={styles.overallCard}>
               <View style={styles.overallRow}>
                 <Text style={styles.overallLabel}>BUDGET VS ACTUAL</Text>
@@ -317,6 +401,36 @@ export default function BudgetScreen() {
             </View>
           ) : <ActivityIndicator color="#4ade80" style={{ marginVertical: 16 }} />}
         </LinearGradient>
+
+        <View style={styles.incomeSection}>
+          <View style={styles.incomeHeader}>
+            <View>
+              <Text style={[styles.incomeTitle, { color: colors.foreground }]}>Income streams</Text>
+              <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Named sources available to the household</Text>
+            </View>
+            <Feather name="credit-card" size={19} color={colors.secondary} />
+          </View>
+          {incomeSources.length === 0 ? (
+            <View style={[styles.incomeEmpty, { borderColor: colors.border }]}>
+              <Text style={[styles.incomeEmptyTitle, { color: colors.foreground }]}>No income streams set up yet</Text>
+              <Text style={[styles.incomeEmptyText, { color: colors.mutedForeground }]}>Add income sources from Settings.</Text>
+            </View>
+          ) : (
+            Array.from(groupedIncomeSources.entries()).map(([userId, sources]) => (
+              <View key={userId} style={[styles.incomeGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.incomeMember, { color: colors.mutedForeground }]}>{memberNames.get(userId) ?? 'Household member'}</Text>
+                <View style={styles.incomeChips}>
+                  {sources.map(source => (
+                    <View key={source.id} style={[styles.incomeChip, { backgroundColor: colors.primary + '18' }]}>
+                      <Text style={[styles.incomeChipText, { color: colors.primary }]}>{source.name}</Text>
+                      {source.isMain ? <Text style={[styles.incomeMain, { color: colors.primary }]}>MAIN</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))
+          )}
+        </View>
 
         {/* Category list */}
         <View style={styles.list}>
@@ -356,6 +470,13 @@ export default function BudgetScreen() {
                       </View>
                       <View style={styles.catInfo}>
                         <Text style={[styles.catName, { color: colors.foreground }]}>{cat.category}</Text>
+                        <Text style={[styles.catFrequency, { color: colors.mutedForeground }]}>
+                          {!cat.isBudgeted
+                            ? 'No active budget assigned'
+                            : cat.isRecurring
+                            ? 'Recurring monthly'
+                            : `One-time · ${MONTHS_SHORT[(cat.activeMonth ?? month) - 1]} ${cat.activeYear ?? year}`}
+                        </Text>
                         <Text style={[styles.catRemaining, { color: isOver ? '#f87171' : colors.mutedForeground }]}>
                           {isOver ? `KES ${formatKES(cat.spentAmount - cat.budgetAmount)} over` : `KES ${formatKES(cat.remaining)} left`}
                         </Text>
@@ -409,6 +530,19 @@ const styles = StyleSheet.create({
   overallTarget: { fontSize: 14, color: '#7aaa8a', fontFamily: 'Inter_400Regular', alignSelf: 'flex-end' },
   barTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
+   incomeSection: { paddingHorizontal: 16, paddingTop: 18 },
+   incomeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 4, marginBottom: 10 },
+   incomeTitle: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
+   incomeSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+   incomeEmpty: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, padding: 16, alignItems: 'center' },
+   incomeEmptyTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+   incomeEmptyText: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 },
+   incomeGroup: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
+   incomeMember: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 8 },
+   incomeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+   incomeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
+   incomeChipText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+   incomeMain: { fontSize: 8, fontFamily: 'Inter_700Bold', letterSpacing: 0.5, opacity: 0.7 },
   list: { paddingHorizontal: 16, paddingTop: 20 },
   sectionLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginBottom: 12, marginLeft: 4 },
   catCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 10 },
@@ -416,6 +550,7 @@ const styles = StyleSheet.create({
   catIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   catInfo: { flex: 1 },
   catName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+   catFrequency: { fontSize: 10, fontFamily: 'Inter_500Medium', marginTop: 2 },
   catRemaining: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   catActions: { alignItems: 'flex-end', gap: 4 },
   catAmounts: { alignItems: 'flex-end' },
@@ -439,6 +574,9 @@ const styles = StyleSheet.create({
   priorityChip: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
   priorityChipText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   priorityHint: { fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 4 },
+   recurrenceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 14 },
+   recurrenceTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+   recurrenceHint: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   saveBtn: { padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 16 },
   saveBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Inter_600SemiBold' },
    manageRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 8 },

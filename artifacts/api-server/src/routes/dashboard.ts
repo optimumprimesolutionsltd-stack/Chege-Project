@@ -25,7 +25,8 @@ router.get("/dashboard/summary", async (req, res) => {
   // Sum budget_categories for the live total — never hardcoded
   const [budgetRow] = await db
     .select({ total: sql<number>`COALESCE(SUM(${budgetCategoriesTable.budgetAmount}), 0)` })
-    .from(budgetCategoriesTable);
+    .from(budgetCategoriesTable)
+    .where(sql`${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year})`);
   const totalBudget = Number(budgetRow.total);
 
   const [spentRow] = await db
@@ -298,7 +299,11 @@ router.get("/dashboard/category-breakdown", async (req, res) => {
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
 
-  const categories = await db.select().from(budgetCategoriesTable).orderBy(budgetCategoriesTable.priority);
+  const categories = await db
+    .select()
+    .from(budgetCategoriesTable)
+    .where(sql`${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year})`)
+    .orderBy(budgetCategoriesTable.priority);
   const spentByCategory = await db
     .select({ category: expensesTable.category, total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
     .from(expensesTable)
@@ -318,7 +323,7 @@ router.get("/dashboard/category-breakdown", async (req, res) => {
   const spentMap = new Map(spentByCategory.map((s) => [s.category, Number(s.total)]));
   const disbursementMap = new Map(disbursementsByCategory.map((d) => [d.category, Number(d.total)]));
 
-  res.json(categories.map((cat) => {
+  const breakdown = categories.map((cat) => {
     const spentAmount = (spentMap.get(cat.name) ?? 0) + (disbursementMap.get(cat.name) ?? 0);
     return {
       category: cat.name,
@@ -328,8 +333,36 @@ router.get("/dashboard/category-breakdown", async (req, res) => {
       percentUsed: Math.round(cat.budgetAmount > 0 ? (spentAmount / cat.budgetAmount) * 100 * 10 : 0) / 10,
       priority: cat.priority,
       color: cat.color,
+      isRecurring: cat.isRecurring,
+      activeMonth: cat.activeMonth,
+      activeYear: cat.activeYear,
+      isBudgeted: true,
     };
-  }));
+  });
+
+  const totalActual =
+    Array.from(spentMap.values()).reduce((sum, spent) => sum + spent, 0) +
+    Array.from(disbursementMap.values()).reduce((sum, spent) => sum + spent, 0);
+  const budgetedActual = breakdown.reduce((sum, category) => sum + category.spentAmount, 0);
+  const unbudgetedSpent = Math.max(0, totalActual - budgetedActual);
+
+  if (unbudgetedSpent > 0) {
+    breakdown.push({
+      category: "Unbudgeted spending",
+      budgetAmount: 0,
+      spentAmount: unbudgetedSpent,
+      remaining: -unbudgetedSpent,
+      percentUsed: 100,
+      priority: 999,
+      color: "#F59E0B",
+      isRecurring: true,
+      activeMonth: null,
+      activeYear: null,
+      isBudgeted: false,
+    });
+  }
+
+  res.json(breakdown);
 });
 
 router.get("/dashboard/trends", async (req, res) => {
