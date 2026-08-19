@@ -26,6 +26,7 @@ import * as Haptics from 'expo-haptics';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
 import { deriveContributorTotals, applyDateFilter, isCorrectionRow, MANUAL_ADJUSTMENT_NOTE } from '@/utils/contributorTotals';
+import { buildCascadePreview, parseWholeKesAmount } from '@/utils/cascadePreview';
 import {
   useGetSavingsGoals,
   useCreateSavingsGoal,
@@ -675,7 +676,7 @@ export default function GoalsScreen() {
   const { data: members = [] } = useGetMembers();
 
   const openCascade = () => {
-    setCascadeOrder(active.map((g) => g.id));
+    setCascadeOrder(fundableGoals.map((g) => g.id));
     setCascadeAmount('');
     setCascadeResult(null);
     setCascadePayerIds([]);
@@ -713,13 +714,13 @@ export default function GoalsScreen() {
   };
 
   const handleCascade = async () => {
-    const amount = parseFloat(cascadeAmount.replace(/,/g, ''));
-    if (!amount || amount <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
+    const amount = parseWholeKesAmount(cascadeAmount);
+    if (amount === null) {
+      Alert.alert('Whole shillings only', 'Enter a whole KES amount using digits, with commas only as thousands separators.');
       return;
     }
-    if (!Number.isInteger(amount)) {
-      Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
+    if (amount <= 0) {
+      Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
       return;
     }
 
@@ -871,6 +872,14 @@ export default function GoalsScreen() {
   // ── Derived data ────────────────────────────────────────────────────────────
   const active = (goals as SavingsGoal[]).filter((g) => !g.isCompleted);
   const done = (goals as SavingsGoal[]).filter((g) => g.isCompleted);
+  const fundableGoals = active.filter((goal) => goal.targetAmount > goal.currentAmount);
+  const cascadePreview = useMemo(() => {
+    const orderedGoals = cascadeOrder
+      .map((id) => active.find((goal) => goal.id === id))
+      .filter((goal): goal is SavingsGoal => Boolean(goal));
+    const amount = parseWholeKesAmount(cascadeAmount) ?? 0;
+    return buildCascadePreview(amount, orderedGoals);
+  }, [active, cascadeAmount, cascadeOrder]);
 
   // Unique contributors derived from loaded data (excluding all correction rows)
   const uniqueContributors = Array.from(
@@ -970,7 +979,7 @@ export default function GoalsScreen() {
               <>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginBottom: 0 }]}>ACTIVE</Text>
-                  {active.length > 1 && (
+                  {fundableGoals.length > 0 && (
                     <Pressable
                       onPress={openCascade}
                       style={({ pressed }) => ({
@@ -1462,7 +1471,7 @@ export default function GoalsScreen() {
                       /* Input view */
                       <>
                         <Text style={[{ color: colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_400Regular', marginBottom: 16, lineHeight: 18 }]}>
-                          Enter a total amount and drag goals into priority order. Funds fill the top goal first, then overflow to the next.
+                          Enter a total amount, then arrange the goal priority. Funds fill the top goal first, then overflow to the next.
                         </Text>
 
                         {/* Amount */}
@@ -1481,6 +1490,34 @@ export default function GoalsScreen() {
                             onSubmitEditing={Keyboard.dismiss}
                           />
                         </View>
+
+                        {cascadePreview.allocations.length > 0 && (
+                          <View style={[styles.cascadePreview, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                            <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginBottom: 8 }]}>PAYMENT PREVIEW</Text>
+                            {cascadePreview.allocations.map((allocation) => (
+                              <View key={allocation.goalId} style={styles.cascadePreviewRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.cascadeGoalName, { color: colors.foreground }]} numberOfLines={1}>
+                                    {allocation.goalName}
+                                  </Text>
+                                  <Text style={{ color: allocation.completed ? '#4ade80' : colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                                    {allocation.completed
+                                      ? `Goal completed · KES ${formatKES(allocation.newTotal)} saved`
+                                      : `KES ${formatKES(allocation.newTotal)} saved after payment`}
+                                  </Text>
+                                </View>
+                                <Text style={{ color: colors.primary, fontFamily: 'Inter_700Bold', fontSize: 14 }}>
+                                  +KES {formatKES(allocation.allocated)}
+                                </Text>
+                              </View>
+                            ))}
+                            {cascadePreview.leftover > 0 && (
+                              <Text style={{ color: '#f59e0b', fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 8 }}>
+                                KES {formatKES(cascadePreview.leftover)} remains after all selected goals are funded.
+                              </Text>
+                            )}
+                          </View>
+                        )}
 
                         {/* Who is paying (cascade payer) */}
                         {members.length > 0 && (
@@ -2409,6 +2446,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 8,
+  },
+  cascadePreview: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  cascadePreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
   },
   empty: { alignItems: 'center', paddingTop: 80, gap: 10 },
   emptyTitle: {
