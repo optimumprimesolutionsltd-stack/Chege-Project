@@ -366,7 +366,7 @@ export default function ReportsScreen() {
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Contributions</Text>
               <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-                What each member put into the household
+                What each member put into the group
               </Text>
               {memberContribs.map((m, idx) => {
                 const hue = MEMBER_COLORS[idx % MEMBER_COLORS.length];
@@ -386,7 +386,7 @@ export default function ReportsScreen() {
                       <View style={styles.contribHeaderInfo}>
                         <Text style={[styles.contribName, { color: colors.foreground }]}>{m.name}</Text>
                         <Text style={[styles.contribShare, { color: colors.mutedForeground }]}>
-                          {sharePct}% of household total
+                          {sharePct}% of group total
                         </Text>
                       </View>
                       <View style={styles.contribAmountBlock}>

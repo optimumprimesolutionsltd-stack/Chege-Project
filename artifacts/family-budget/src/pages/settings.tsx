@@ -64,7 +64,7 @@ export default function Settings() {
             <Shield className="w-5 h-5 text-primary" />
             <CardTitle>Your Account</CardTitle>
           </div>
-          <CardDescription>Copy your ID and share it with anyone you want to give access to this household.</CardDescription>
+          <CardDescription>Copy your ID and share it with anyone you want to give access to this group.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-3">
@@ -86,7 +86,7 @@ export default function Settings() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
-            <CardTitle>Household Members</CardTitle>
+            <CardTitle>Group Members</CardTitle>
           </div>
           <CardDescription>
             The people listed here have access to this budget. Works for individuals, couples, or small families.

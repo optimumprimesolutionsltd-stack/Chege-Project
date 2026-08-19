@@ -155,7 +155,7 @@ export default function DashboardScreen() {
   const setupSteps = [
     {
       label: 'Set a monthly budget',
-      detail: 'Plan what your household can spend this month.',
+      detail: 'Plan what your group can spend this month.',
       icon: 'bar-chart-2' as const,
       color: '#a78bfa',
       route: '/(tabs)/budget',
@@ -178,7 +178,7 @@ export default function DashboardScreen() {
       done: savingsGoals.length > 0,
     },
     {
-      label: 'Invite your household',
+      label: 'Invite your group',
       detail: 'Add the people who will use this budget.',
       icon: 'users' as const,
       color: '#4ade80',
@@ -210,9 +210,9 @@ export default function DashboardScreen() {
           <View style={[styles.accessIcon, { backgroundColor: `${colors.primary}18` }]}>
             <Feather name="home" size={25} color={colors.primary} />
           </View>
-          <Text style={[styles.accessTitle, { color: colors.foreground }]}>Join this household first</Text>
+          <Text style={[styles.accessTitle, { color: colors.foreground }]}>Join this group first</Text>
           <Text style={[styles.accessText, { color: colors.mutedForeground }]}>
-            Shared funds, budgets, and savings goals stay private. Ask someone already in this household to add you from Settings.
+            Shared funds, budgets, and savings goals stay private. Ask someone already in this group to add you from Settings.
           </Text>
           <Pressable
             onPress={() => router.push('/(tabs)/settings')}
@@ -299,7 +299,7 @@ export default function DashboardScreen() {
             <StatCell label="Left" value={isPrivate ? '••••' : shortKES(summary?.remaining)} valueColor={isOver ? '#f87171' : '#4ade80'} />
           </View>
 
-          {/* Contribution mini-bars — one per household member */}
+          {/* Contribution mini-bars — one per group member */}
           {summary && memberContribs.length > 0 && (
             <View style={styles.contribRow}>
               {memberContribs.map((m, idx) => (
@@ -339,7 +339,7 @@ export default function DashboardScreen() {
             <View style={styles.setupHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.setupEyebrow, { color: colors.secondary }]}>START HERE</Text>
-                <Text style={[styles.setupTitle, { color: colors.foreground }]}>Set up your household</Text>
+                <Text style={[styles.setupTitle, { color: colors.foreground }]}>Set up your group</Text>
                 <Text style={[styles.setupSubtitle, { color: colors.mutedForeground }]}>A few steps make your budget ready to use.</Text>
               </View>
               <Text style={[styles.setupProgress, { color: colors.mutedForeground }]}>{completeSetupSteps}/4</Text>

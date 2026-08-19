@@ -54,7 +54,7 @@ export default function Activity() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Activity</h1>
-          <p className="text-muted-foreground mt-1">Expenses, contributions, and shared household movements in one place.</p>
+          <p className="text-muted-foreground mt-1">Expenses, contributions, and shared group movements in one place.</p>
         </div>
         {tab === "contributions" && (
           <div className="flex items-center gap-2 rounded-xl border bg-card p-1 shadow-sm">
@@ -82,14 +82,14 @@ export default function Activity() {
         <>
           <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-            <div><p className="text-sm font-semibold">Contributions are tracked automatically</p><p className="mt-0.5 text-xs text-muted-foreground">Personal expense portions, bank deposits, and savings contributions count once for the member who funded them. Joint-bank portions remain household money.</p></div>
+            <div><p className="text-sm font-semibold">Contributions are tracked automatically</p><p className="mt-0.5 text-xs text-muted-foreground">Personal expense portions, bank deposits, and savings contributions count once for the member who funded them. Joint-bank portions remain shared group funds.</p></div>
           </div>
           {summaryLoading ? <div className="flex justify-center py-8"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : summaryError ? (
-            <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-6 text-center"><p className="font-semibold">We couldn’t load this month’s contribution report.</p><p className="mt-1 text-sm text-muted-foreground">Check your household access, then refresh and try again.</p></CardContent></Card>
+            <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-6 text-center"><p className="font-semibold">We couldn’t load this month’s contribution report.</p><p className="mt-1 text-sm text-muted-foreground">Check your group access, then refresh and try again.</p></CardContent></Card>
           ) : (
             <div className="space-y-4">
               <Card className="border-none shadow-md"><CardContent className="pt-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Household contribution total</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Group contribution total</p>
                 <div className="mt-2 flex items-end gap-2"><p className="text-3xl font-display font-bold">{formatKes(totalContributed)}</p><span className="mb-1 text-sm text-muted-foreground">of {formatKes(totalTarget)} target</span></div>
               </CardContent></Card>
               <div className="grid gap-4 md:grid-cols-2">
@@ -104,8 +104,8 @@ export default function Activity() {
           )}
           {sharedHouseholdActivity.length > 0 && (
             <Card className="border-amber-500/30 bg-amber-500/5"><CardContent className="pt-5">
-              <p className="font-semibold">Shared household funding</p>
-              <p className="mt-1 text-sm text-muted-foreground">These Joint bank portions are household money, not member contributions, so they are excluded from the totals above.</p>
+              <p className="font-semibold">Shared group funding</p>
+              <p className="mt-1 text-sm text-muted-foreground">These Joint bank portions are shared group funds, not member contributions, so they are excluded from the totals above.</p>
               <div className="mt-3 divide-y divide-border/60">
                 {sharedHouseholdActivity.map((item) => (
                   <div key={item.id} className="flex items-center justify-between gap-4 py-2 text-sm">

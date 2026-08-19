@@ -422,7 +422,7 @@ export default function Bank() {
               {mode === "deposit"
                 ? "Money going into the joint bank account."
                 : mode === "transfer"
-                  ? "Move household funds between the joint bank account and a savings goal."
+                  ? "Move shared group funds between the joint bank account and a savings goal."
                   : "Money going out of the joint bank account."}
             </CardDescription>
           </CardHeader>
@@ -509,7 +509,7 @@ export default function Bank() {
                   <Input
                     data-testid="input-description"
                     placeholder={mode === "deposit"
-                      ? depositSourceKind === "other" ? "e.g. Family gift from aunt" : "e.g. Salary deposit"
+                      ? depositSourceKind === "other" ? "e.g. Group gift from a friend" : "e.g. Salary deposit"
                       : withdrawalDestinationKind === "other" ? "e.g. Emergency cash support" : "e.g. Paid school fees for term two"}
                     value={description}
                     onChange={e => setDescription(e.target.value)}

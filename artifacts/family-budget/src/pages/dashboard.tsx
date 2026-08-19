@@ -379,9 +379,9 @@ export default function Dashboard() {
         <Card className="max-w-xl w-full border border-primary/20 shadow-lg overflow-hidden">
           <CardContent className="p-7 sm:p-9 text-center">
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl mx-auto">🏠</div>
-            <h1 className="font-display font-bold text-2xl text-foreground mt-5">Join this household first</h1>
+            <h1 className="font-display font-bold text-2xl text-foreground mt-5">Join this group first</h1>
             <p className="text-muted-foreground mt-2 leading-relaxed">
-              Bajeti keeps each household’s shared funds, budgets, and savings goals private. Ask someone already in this household to add you from Settings.
+              Bajeti keeps each group’s shared funds, budgets, and savings goals private. Ask someone already in this group to add you from Settings.
             </p>
             <Link href="/settings">
               <Button className="mt-6 rounded-xl">Open Settings</Button>
@@ -409,7 +409,7 @@ export default function Dashboard() {
   const setupSteps = [
     {
       label: "Set your monthly budget",
-      description: "Give your household spending a clear plan for this month.",
+      description: "Give your group’s spending a clear plan for this month.",
       href: "/budget",
       icon: "📊",
       done: summary.totalBudget > 0,
@@ -442,7 +442,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 pb-12">
       <div>
-        <h1 className="text-3xl font-display font-bold text-foreground">Family Overview</h1>
+        <h1 className="text-3xl font-display font-bold text-foreground">Group Overview</h1>
         <p className="text-muted-foreground mt-1">
           {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
         </p>
@@ -454,7 +454,7 @@ export default function Dashboard() {
             <div className="flex items-start justify-between gap-4 mb-5">
               <div>
                 <p className="text-xs uppercase tracking-[0.16em] text-primary font-bold">Start here</p>
-                <h2 className="text-xl sm:text-2xl font-display font-bold text-foreground mt-1">Build your household money hub</h2>
+                <h2 className="text-xl sm:text-2xl font-display font-bold text-foreground mt-1">Build your group money hub</h2>
                 <p className="text-sm text-muted-foreground mt-1">A few simple steps will make Bajeti useful from day one.</p>
               </div>
               <button

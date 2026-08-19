@@ -25,7 +25,7 @@ export default function ProfileSetupScreen() {
   const submit = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError('Enter the name you would like the household to use.');
+      setError('Enter the name you would like the group to use.');
       return;
     }
 
@@ -55,7 +55,7 @@ export default function ProfileSetupScreen() {
         </View>
         <Text style={styles.title}>What should we call you?</Text>
         <Text style={styles.subtitle}>
-          This is the name your household will see in Bajeti. Your email stays private and is only used to sign you in.
+          This is the name your group will see in Bajeti. Your email stays private and is only used to sign you in.
         </Text>
 
         <Text style={styles.label}>YOUR NAME</Text>

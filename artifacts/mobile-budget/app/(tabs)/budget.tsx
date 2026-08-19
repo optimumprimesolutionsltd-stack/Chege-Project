@@ -44,7 +44,7 @@ const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 const PRIORITY_LABELS: Record<number, string> = {
   1: 'Survival Essentials',
   2: 'Health & Education',
-  3: 'Household',
+  3: 'Essentials',
   4: 'Connectivity & Grooming',
   5: 'Discretionary',
 };
@@ -406,7 +406,7 @@ export default function BudgetScreen() {
           <View style={styles.incomeHeader}>
             <View>
               <Text style={[styles.incomeTitle, { color: colors.foreground }]}>Income streams</Text>
-              <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Named sources available to the household</Text>
+              <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Named sources available to the group</Text>
             </View>
             <Feather name="credit-card" size={19} color={colors.secondary} />
           </View>
@@ -418,7 +418,7 @@ export default function BudgetScreen() {
           ) : (
             Array.from(groupedIncomeSources.entries()).map(([userId, sources]) => (
               <View key={userId} style={[styles.incomeGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.incomeMember, { color: colors.mutedForeground }]}>{memberNames.get(userId) ?? 'Household member'}</Text>
+                <Text style={[styles.incomeMember, { color: colors.mutedForeground }]}>{memberNames.get(userId) ?? 'Group member'}</Text>
                 <View style={styles.incomeChips}>
                   {sources.map(source => (
                     <View key={source.id} style={[styles.incomeChip, { backgroundColor: colors.primary + '18' }]}>

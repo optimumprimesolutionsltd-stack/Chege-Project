@@ -463,7 +463,7 @@ export default function HistoryScreen() {
           )}
           {activeTab === 'contributions' && (
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-              {MONTHS_SHORT[month - 1]} {year} household report
+              {MONTHS_SHORT[month - 1]} {year} group report
             </Text>
           )}
         </View>
@@ -632,7 +632,7 @@ export default function HistoryScreen() {
         summaryLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
         ) : summaryError ? (
-          <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load contributions</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Check your household access, then pull down to try again.</Text></View>
+          <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load contributions</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Check your group access, then pull down to try again.</Text></View>
         ) : (
           <FlatList
             data={contributionRows}
@@ -641,10 +641,10 @@ export default function HistoryScreen() {
               <View style={styles.contributionListHeader}>
                 <View style={[styles.contributionIntro, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '33' }]}>
                   <Feather name="info" size={16} color={colors.primary} />
-                  <Text style={[styles.contributionIntroText, { color: colors.mutedForeground }]}>Personal expense portions, bank deposits, and savings contributions are counted once. Joint bank funding stays with the household.</Text>
+                  <Text style={[styles.contributionIntroText, { color: colors.mutedForeground }]}>Personal expense portions, bank deposits, and savings contributions are counted once. Joint bank funding stays with the group.</Text>
                 </View>
                 <View style={[styles.householdTotal, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.householdTotalLabel, { color: colors.mutedForeground }]}>Household contribution total</Text>
+                  <Text style={[styles.householdTotalLabel, { color: colors.mutedForeground }]}>Group contribution total</Text>
                   <Text style={[styles.householdTotalAmount, { color: colors.foreground }]}>KES {formatKES(contributionMembers.reduce((sum, member) => sum + member.contributed, 0))}</Text>
                 </View>
                 {contributionMembers.map((member) => (
@@ -658,8 +658,8 @@ export default function HistoryScreen() {
                 ))}
                 {sharedHouseholdRows.length > 0 && (
                   <View style={[styles.sharedFunding, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                    <Text style={[styles.sharedFundingTitle, { color: colors.foreground }]}>Shared household funding</Text>
-                    <Text style={[styles.sharedFundingText, { color: colors.mutedForeground }]}>Joint bank portions are household money and are not included in member contribution totals.</Text>
+                    <Text style={[styles.sharedFundingTitle, { color: colors.foreground }]}>Shared group funding</Text>
+                    <Text style={[styles.sharedFundingText, { color: colors.mutedForeground }]}>Joint bank portions are shared group funds and are not included in member contribution totals.</Text>
                     {sharedHouseholdRows.map((item) => <View key={item.id} style={styles.sharedFundingRow}><Text style={[styles.sharedFundingText, { color: colors.foreground }]} numberOfLines={1}>{item.description}</Text><Text style={[styles.sharedFundingAmount, { color: colors.foreground }]}>KES {formatKES(item.amount)}</Text></View>)}
                   </View>
                 )}

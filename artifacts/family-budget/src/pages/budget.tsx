@@ -32,7 +32,7 @@ type Member = { userId: string; userName?: string | null };
 const priorityMap: Record<number, string> = {
   1: "Survival Essentials",
   2: "Health & Education",
-  3: "Household",
+  3: "Essentials",
   4: "Connectivity & Grooming",
   5: "Discretionary",
   999: "Needs a budget",
@@ -361,7 +361,7 @@ export default function Budget() {
            <div className="flex items-start justify-between gap-4 mb-4">
              <div>
                <p className="text-sm font-semibold text-foreground">Income streams</p>
-               <p className="text-xs text-muted-foreground mt-0.5">Named sources available to household members</p>
+               <p className="text-xs text-muted-foreground mt-0.5">Named sources available to group members</p>
              </div>
              <WalletCards className="w-5 h-5 text-secondary" />
            </div>
@@ -375,7 +375,7 @@ export default function Budget() {
                {Array.from(groupedIncomeSources.entries()).map(([userId, sources]) => (
                  <div key={userId} className="rounded-xl border border-border/60 p-3.5">
                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                     {memberNames.get(userId) ?? "Household member"}
+                     {memberNames.get(userId) ?? "Group member"}
                    </p>
                    <div className="flex flex-wrap gap-2">
                      {sources.map(source => (

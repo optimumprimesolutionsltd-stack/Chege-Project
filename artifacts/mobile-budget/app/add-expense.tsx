@@ -510,7 +510,7 @@ export default function AddExpenseSheet() {
               PAID BY <Text style={{ color: '#ef4444' }}>*</Text>
             </Text>
             <View style={styles.paidByRow}>
-              {/* Joint bank can be combined with one or more household members. */}
+              {/* Joint bank can be combined with one or more group members. */}
               <Pressable
                 onPress={() => {
                   if (paidFromBank) {

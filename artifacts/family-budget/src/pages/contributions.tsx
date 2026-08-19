@@ -186,7 +186,7 @@ export default function Contributions() {
         <Card className="border-none shadow-md">
           <CardContent className="pt-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Household total</p>
+              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Group total</p>
               <p className="text-xs text-muted-foreground">{formatMonthYear(month, year)}</p>
             </div>
             <div className="flex items-end gap-3">
