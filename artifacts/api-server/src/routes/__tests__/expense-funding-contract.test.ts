@@ -75,6 +75,21 @@ describe("expense funding request contract", () => {
     expect(response.body.error).toContain("recognised household member");
   });
 
+  it("rejects an unrecognised legacy payer before creating an expense", async () => {
+    const response = await request(app()).post("/expenses").send({
+      amount: 1000,
+      category: "Food",
+      description: "Groceries",
+      paidById: "unknown-member",
+      isRecurring: false,
+      date: "2026-08-19",
+      paidFromBank: false,
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("recognised household member");
+  });
+
   it("rejects an unrecognised legacy payer on an expense update", async () => {
     const response = await request(app()).patch("/expenses/1").send({
       amount: 1000,
