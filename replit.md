@@ -51,6 +51,15 @@ A household budget tracker for families, couples, or individuals. Any number of 
 
 - **Public-friendly**: The app is for the masses — no hardcoded personal names, IDs, or targets anywhere in UI or API code. All member data must be dynamic (loaded from the members table / API). Contribution targets are optional per-member fields set in the DB, not constants in code.
 
+## ⚠️ Parity checklist — update on every feature change
+
+Whenever you add, change, or remove a feature on **either** platform, you **must** update both:
+
+1. **`PARITY.md`** (repo root) — update the relevant row's status symbol (✅ / ⏳ / ❌) and gap note. Append a new row if the feature isn't listed yet.
+2. **`artifacts/family-budget/src/pages/parity.tsx`** — update the matching entry in the `PARITY_ITEMS` constant (same status and note). The `/parity` web page is generated from this constant, so it must stay in sync with `PARITY.md`.
+
+Both files must be updated in the **same commit** as the feature work. Never leave them out of date.
+
 ## Gotchas
 
 - Run codegen after every OpenAPI spec change before touching backend or frontend code
