@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
 import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
+import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
 
 // Check for OTA updates and reload immediately when one is available.
@@ -49,9 +50,24 @@ setAuthTokenGetter(() => SecureStore.getItemAsync(AUTH_TOKEN_KEY));
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: async (error) => {
+      // When any query gets a 401, the session has expired.
+      // Clear the stored token and redirect to login so the user is never
+      // left staring at a form with missing fields (e.g. no PAID BY section).
+      if (error instanceof ApiError && error.status === 401) {
+        await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+        router.replace('/login');
+      }
+    },
+  }),
   defaultOptions: {
     queries: {
-      retry: 1,
+      retry: (failureCount, error) => {
+        // Never retry 401s — the session is gone, retrying won't help.
+        if (error instanceof ApiError && error.status === 401) return false;
+        return failureCount < 1;
+      },
       staleTime: 30_000,
     },
   },
