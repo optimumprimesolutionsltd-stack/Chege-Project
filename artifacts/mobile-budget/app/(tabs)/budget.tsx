@@ -311,6 +311,11 @@ export default function BudgetScreen() {
                   placeholderTextColor={colors.mutedForeground}
                   autoFocus
                 />
+                {editTarget ? (
+                  <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
+                    Renaming keeps existing expenses and tagged bank payments under the new name.
+                  </Text>
+                ) : null}
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>BUDGET AMOUNT (KES)</Text>
                 <TextInput
                   style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
