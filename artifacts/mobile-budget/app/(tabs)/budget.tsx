@@ -21,8 +21,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
   getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardCategoryLedgerQueryKey,
   getGetDashboardSummaryQueryKey,
   useGetDashboardCategoryBreakdown,
+  useGetDashboardCategoryLedger,
   customFetch,
 } from '@workspace/api-client-react';
 
@@ -38,6 +40,7 @@ type BudgetCategory = {
 };
 type IncomeSource = { id: number; userId: string; name: string; isMain: boolean };
 type Member = { userId: string; userName?: string | null };
+type LedgerTarget = { category: string; isBudgeted: boolean };
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -118,6 +121,7 @@ export default function BudgetScreen() {
   const [editTarget, setEditTarget] = useState<BudgetCategory | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
   const [formPriority, setFormPriority] = useState('1');
@@ -125,6 +129,30 @@ export default function BudgetScreen() {
   const [formActiveMonth, setFormActiveMonth] = useState(month);
   const [formActiveYear, setFormActiveYear] = useState(year);
   const [saving, setSaving] = useState(false);
+  const {
+    data: ledger,
+    isLoading: ledgerLoading,
+    isError: ledgerError,
+    refetch: refetchLedger,
+  } = useGetDashboardCategoryLedger(
+    {
+      month,
+      year,
+      category: ledgerCategory?.category ?? '',
+      isBudgeted: ledgerCategory?.isBudgeted ?? true,
+    },
+    {
+      query: {
+        queryKey: getGetDashboardCategoryLedgerQueryKey({
+          month,
+          year,
+          category: ledgerCategory?.category ?? '',
+          isBudgeted: ledgerCategory?.isBudgeted ?? true,
+        }),
+        enabled: !!ledgerCategory,
+      },
+    },
+  );
 
   const openAdd = () => {
     setEditTarget(null);
@@ -231,6 +259,7 @@ export default function BudgetScreen() {
     category.isRecurring || (category.activeMonth === month && category.activeYear === year),
   );
   const reportedCategoryNames = new Set(breakdown.map(category => category.category));
+  const unusedCategories = activeCategories.filter(category => !reportedCategoryNames.has(category.name));
   const tiersToShow = Array.from(new Set([
     1,
     2,
@@ -252,6 +281,9 @@ export default function BudgetScreen() {
       actual: reported.reduce((sum, category) => sum + category.spentAmount, 0),
     };
   }).filter(row => row.budget > 0 || row.actual > 0);
+  const ledgerEntries = ledger?.entries ?? [];
+  const ledgerTotal = ledger?.total ?? 0;
+  const ledgerCategoryTotal = breakdown.find(category => category.category === ledgerCategory?.category)?.spentAmount ?? 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -380,6 +412,80 @@ export default function BudgetScreen() {
                   <Feather name="edit-2" size={16} color={colors.primary} />
                 </Pressable>
               ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={!!ledgerCategory} animationType="slide" transparent onRequestClose={() => setLedgerCategory(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>{ledgerCategory?.category ?? 'Category'} spending</Text>
+                <Text style={[styles.ledgerMonth, { color: colors.mutedForeground }]}>
+                  {MONTHS_SHORT[month - 1]} {year}
+                </Text>
+              </View>
+              <Pressable onPress={() => setLedgerCategory(null)} hitSlop={8} accessibilityLabel="Close spending ledger">
+                <Feather name="x" size={22} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.ledgerBody} showsVerticalScrollIndicator={false}>
+              <View style={[styles.ledgerSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <Text style={[styles.ledgerSummaryValue, { color: colors.foreground }]}>
+                  {ledgerLoading ? 'Loading…' : `KES ${formatKES(ledgerCategoryTotal)}`}
+                </Text>
+                <Text style={[styles.ledgerSummaryLabel, { color: colors.mutedForeground }]}>
+                  {ledgerLoading
+                    ? 'Loading expenses for this category'
+                    : `${ledgerEntries.length} item${ledgerEntries.length === 1 ? '' : 's'} in this budget`}
+                </Text>
+              </View>
+              {ledgerLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: 34 }} />
+              ) : ledgerError ? (
+                <View style={[styles.ledgerState, { borderColor: colors.border }]}>
+                  <Feather name="alert-circle" size={24} color={colors.destructive} />
+                  <Text style={[styles.ledgerStateTitle, { color: colors.foreground }]}>Could not load spending</Text>
+                  <Text style={[styles.ledgerStateText, { color: colors.mutedForeground }]}>Try again to see this category's expenses.</Text>
+                  <Pressable onPress={() => refetchLedger()} style={[styles.ledgerRetry, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.ledgerRetryText}>Try again</Text>
+                  </Pressable>
+                </View>
+              ) : ledgerEntries.length === 0 ? (
+                <View style={[styles.ledgerState, { borderColor: colors.border }]}>
+                  <Feather name="inbox" size={25} color={colors.mutedForeground} />
+                  <Text style={[styles.ledgerStateTitle, { color: colors.foreground }]}>No spending recorded</Text>
+                  <Text style={[styles.ledgerStateText, { color: colors.mutedForeground }]}>
+                    No {ledgerCategory?.category} spending was recorded in {MONTHS_SHORT[month - 1]} {year}.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {ledgerEntries.map(entry => (
+                    <View key={entry.id} style={[styles.ledgerExpense, { borderColor: colors.border, backgroundColor: colors.muted }]}>
+                      <View style={{ flex: 1, paddingRight: 10 }}>
+                        <Text style={[styles.ledgerDescription, { color: colors.foreground }]} numberOfLines={2}>{entry.description}</Text>
+                        <Text style={[styles.ledgerMeta, { color: colors.mutedForeground }]}>
+                          {new Date(`${entry.date.slice(0, 10)}T12:00:00`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {' · '}{entry.payerName}
+                          {!ledgerCategory?.isBudgeted ? ` · ${entry.category}` : ''}
+                          {entry.source === 'bank_disbursement' ? ' · Joint bank disbursement' : ''}
+                        </Text>
+                      </View>
+                      <Text style={[styles.ledgerAmount, { color: colors.foreground }]}>KES {formatKES(entry.amount)}</Text>
+                    </View>
+                  ))}
+                  <View style={[styles.ledgerTotal, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.ledgerTotalLabel, { color: colors.mutedForeground }]}>Expense ledger total</Text>
+                    <Text style={[styles.ledgerTotalValue, { color: colors.foreground }]}>KES {formatKES(ledgerTotal)}</Text>
+                  </View>
+                </>
+              )}
+              <Pressable onPress={() => setLedgerCategory(null)} style={[styles.ledgerClose, { borderColor: colors.border }]}>
+                <Text style={[styles.ledgerCloseText, { color: colors.foreground }]}>Close</Text>
+              </Pressable>
             </ScrollView>
           </View>
         </View>
@@ -529,10 +635,15 @@ export default function BudgetScreen() {
         {/* Category list */}
         <View style={styles.list}>
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BY CATEGORY</Text>
+          {!isLoading && breakdown.length > 0 ? (
+            <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>
+              Tap a category to see the expenses behind its total. Hold to edit or remove it.
+            </Text>
+          ) : null}
 
           {isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} size="large" />
-           ) : breakdown.length === 0 ? (
+           ) : breakdown.length === 0 && unusedCategories.length === 0 ? (
             <View style={styles.empty}>
               <Feather name="bar-chart-2" size={40} color={colors.mutedForeground} />
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No categories yet</Text>
@@ -551,11 +662,15 @@ export default function BudgetScreen() {
                 return (
                   <Pressable
                     key={cat.category}
+                    onPress={() => setLedgerCategory({ category: cat.category, isBudgeted: cat.isBudgeted })}
                     onLongPress={() => fullCat && Alert.alert(cat.category, undefined, [
                       { text: 'Edit', onPress: () => fullCat && openEdit(fullCat) },
                       { text: 'Remove', style: 'destructive', onPress: () => fullCat && handleDelete(fullCat) },
                       { text: 'Cancel', style: 'cancel' },
                     ])}
+                    testID={`budget-ledger-${cat.category}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${cat.category} spending`}
                     style={[styles.catCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                   >
                     <View style={styles.catTop}>
@@ -590,6 +705,51 @@ export default function BudgetScreen() {
                     <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
                       <View style={[styles.barFill, { width: `${pct * 100}%`, backgroundColor: isOver ? '#f87171' : '#4ade80' }]} />
                     </View>
+                  </Pressable>
+                );
+              })}
+              {unusedCategories.map((cat) => {
+                const icon = CATEGORY_ICONS[cat.name] ?? 'more-horizontal';
+                return (
+                  <Pressable
+                    key={cat.id}
+                    onPress={() => setLedgerCategory({ category: cat.name, isBudgeted: true })}
+                    onLongPress={() => Alert.alert(cat.name, undefined, [
+                      { text: 'Edit', onPress: () => openEdit(cat) },
+                      { text: 'Remove', style: 'destructive', onPress: () => handleDelete(cat) },
+                      { text: 'Cancel', style: 'cancel' },
+                    ])}
+                    testID={`budget-ledger-${cat.name}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${cat.name} spending`}
+                    style={[styles.catCard, styles.catCardMuted, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  >
+                    <View style={styles.catTop}>
+                      <View style={[styles.catIcon, { backgroundColor: '#1a3320' }]}>
+                        <Feather name={icon} size={16} color="#4ade80" />
+                      </View>
+                      <View style={styles.catInfo}>
+                        <Text style={[styles.catName, { color: colors.foreground }]}>{cat.name}</Text>
+                        <Text style={[styles.catFrequency, { color: colors.mutedForeground }]}>
+                          {cat.isRecurring
+                            ? 'Recurring monthly'
+                            : `One-time · ${MONTHS_SHORT[(cat.activeMonth ?? month) - 1]} ${cat.activeYear ?? year}`}
+                        </Text>
+                        <Text style={[styles.catRemaining, { color: colors.mutedForeground }]}>
+                          No spending recorded
+                        </Text>
+                      </View>
+                      <View style={styles.catActions}>
+                        <View style={styles.catAmounts}>
+                          <Text style={[styles.catSpent, { color: colors.foreground }]}>0</Text>
+                          <Text style={[styles.catBudget, { color: colors.mutedForeground }]}>/ {formatKES(cat.budgetAmount)}</Text>
+                        </View>
+                        <Pressable onPress={() => openEdit(cat)} hitSlop={8} style={styles.editBtn} accessibilityLabel={`Edit ${cat.name} budget`}>
+                          <Feather name="edit-2" size={13} color={colors.mutedForeground} />
+                        </Pressable>
+                      </View>
+                    </View>
+                    <View style={[styles.barTrack, { backgroundColor: colors.border }]} />
                   </Pressable>
                 );
               })}
@@ -639,7 +799,9 @@ const styles = StyleSheet.create({
    incomeMain: { fontSize: 8, fontFamily: 'Inter_700Bold', letterSpacing: 0.5, opacity: 0.7 },
   list: { paddingHorizontal: 16, paddingTop: 20 },
   sectionLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginBottom: 12, marginLeft: 4 },
+  sectionHint: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginHorizontal: 4, marginTop: -6, marginBottom: 12 },
   catCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 10 },
+  catCardMuted: { opacity: 0.76 },
   catTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   catIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   catInfo: { flex: 1 },
@@ -679,6 +841,25 @@ const styles = StyleSheet.create({
    manageName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
    manageAmount: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
    manageEmpty: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingVertical: 28 },
+  ledgerMonth: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  ledgerBody: { paddingHorizontal: 20, paddingBottom: 26 },
+  ledgerSummary: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 12 },
+  ledgerSummaryValue: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  ledgerSummaryLabel: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  ledgerState: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 14, padding: 24, alignItems: 'center', marginVertical: 8 },
+  ledgerStateTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginTop: 10 },
+  ledgerStateText: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, textAlign: 'center', marginTop: 4 },
+  ledgerRetry: { borderRadius: 10, paddingHorizontal: 15, paddingVertical: 9, marginTop: 14 },
+  ledgerRetryText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  ledgerExpense: { flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderRadius: 12, padding: 13, marginBottom: 8 },
+  ledgerDescription: { fontSize: 14, fontFamily: 'Inter_600SemiBold', lineHeight: 19 },
+  ledgerMeta: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 4 },
+  ledgerAmount: { fontSize: 14, fontFamily: 'Inter_700Bold', textAlign: 'right' },
+  ledgerTotal: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, paddingTop: 14, marginTop: 8 },
+  ledgerTotalLabel: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  ledgerTotalValue: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  ledgerClose: { borderWidth: 1, borderRadius: 12, alignItems: 'center', paddingVertical: 13, marginTop: 18 },
+  ledgerCloseText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   tierSection: { paddingHorizontal: 16, paddingTop: 24 },
   tierHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
   tierTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },

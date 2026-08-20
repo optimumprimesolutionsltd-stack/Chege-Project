@@ -16,6 +16,7 @@ import { sql, eq, and } from "drizzle-orm";
 import {
   GetDashboardSummaryQueryParams,
   GetDashboardCategoryBreakdownQueryParams,
+  GetDashboardCategoryLedgerQueryParams,
   GetDashboardActivityQueryParams,
   GetDashboardIncomeStreamsQueryParams,
   GetDashboardIncomeStreamsResponse,
@@ -560,6 +561,91 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
   }
 
   res.json(breakdown);
+});
+
+router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const parsed = GetDashboardCategoryLedgerQueryParams.safeParse(req.query);
+  const rawIsBudgeted = req.query.isBudgeted;
+  if (!parsed.success || (rawIsBudgeted !== "true" && rawIsBudgeted !== "false")) {
+    res.status(400).json({ error: "A category and budget status are required." });
+    return;
+  }
+
+  const now = new Date();
+  const month = parsed.data.month ?? now.getMonth() + 1;
+  const year = parsed.data.year ?? now.getFullYear();
+  const { category } = parsed.data;
+  const isBudgeted = rawIsBudgeted === "true";
+
+  const [activeCategories, expenses, disbursements] = await Promise.all([
+    db
+      .select({ name: budgetCategoriesTable.name })
+      .from(budgetCategoriesTable)
+      .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`),
+    db
+      .select({
+        id: expensesTable.id,
+        category: expensesTable.category,
+        description: expensesTable.description,
+        amount: expensesTable.amount,
+        paidFromBank: expensesTable.paidFromBank,
+        payerName: usersTable.firstName,
+        date: expensesTable.date,
+      })
+      .from(expensesTable)
+      .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
+      .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`),
+    db
+      .select({
+        id: jointAccountTxTable.id,
+        category: jointAccountTxTable.expenseCategory,
+        description: jointAccountTxTable.description,
+        amount: jointAccountTxTable.amount,
+        payerName: usersTable.firstName,
+        date: jointAccountTxTable.date,
+      })
+      .from(jointAccountTxTable)
+      .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`),
+  ]);
+
+  const activeCategoryNames = new Set(activeCategories.map((item) => item.name));
+  const isIncluded = (entryCategory: string) => (
+    isBudgeted ? entryCategory === category : !activeCategoryNames.has(entryCategory)
+  );
+  const entries = [
+    ...expenses
+      .filter((expense) => isIncluded(expense.category))
+      .map((expense) => ({
+        id: `expense-${expense.id}`,
+        source: "expense" as const,
+        category: expense.category,
+        description: expense.description,
+        amount: expense.amount,
+        payerName: expense.payerName ?? (expense.paidFromBank ? "Joint bank" : "Payer not recorded"),
+        date: String(expense.date),
+      })),
+    ...disbursements
+      .filter((disbursement) => isIncluded(disbursement.category ?? ""))
+      .map((disbursement) => ({
+        id: `bank-disbursement-${disbursement.id}`,
+        source: "bank_disbursement" as const,
+        category: disbursement.category ?? "Uncategorized",
+        description: disbursement.description,
+        amount: disbursement.amount,
+        payerName: disbursement.payerName ?? "Joint bank",
+        date: String(disbursement.date),
+      })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+
+  res.json({
+    category,
+    total: entries.reduce((sum, entry) => sum + entry.amount, 0),
+    entries,
+  });
 });
 
 /**

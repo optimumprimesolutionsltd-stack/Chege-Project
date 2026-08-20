@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import {
   getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardCategoryLedgerQueryKey,
   getGetDashboardSummaryQueryKey,
   useGetDashboardCategoryBreakdown,
+  useGetDashboardCategoryLedger,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type BudgetCategory = {
@@ -28,6 +30,7 @@ type BudgetCategory = {
 };
 type IncomeSource = { id: number; userId: string; name: string; isMain: boolean };
 type Member = { userId: string; userName?: string | null };
+type LedgerTarget = { category: string; isBudgeted: boolean };
 
 const priorityMap: Record<number, string> = {
   1: "Survival Essentials",
@@ -195,7 +198,10 @@ export default function Budget() {
     queryKey: ["budget-categories-full"],
     queryFn: async () => {
       const res = await fetch("/api/budget-categories", { credentials: "include" });
-      return res.json();
+      if (!res.ok) throw new Error("Could not load budget categories");
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Could not load budget categories");
+      return data as BudgetCategory[];
     },
     staleTime: 30_000,
   });
@@ -223,6 +229,32 @@ export default function Budget() {
   const [manageOpen, setManageOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<BudgetCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
+  const {
+    data: ledger,
+    isLoading: isLedgerLoading,
+    isError: isLedgerError,
+    refetch: refetchLedger,
+  } = useGetDashboardCategoryLedger(
+    {
+      month,
+      year,
+      category: ledgerCategory?.category ?? "",
+      isBudgeted: ledgerCategory?.isBudgeted ?? true,
+    },
+    {
+      query: {
+        queryKey: getGetDashboardCategoryLedgerQueryKey({
+          month,
+          year,
+          category: ledgerCategory?.category ?? "",
+          isBudgeted: ledgerCategory?.isBudgeted ?? true,
+        }),
+        enabled: !!ledgerCategory,
+      },
+      request: { cache: "no-store" },
+    },
+  );
 
   const refreshAll = async () => {
     qc.removeQueries({
@@ -283,6 +315,10 @@ export default function Budget() {
     groups.set(source.userId, existing);
     return groups;
   }, new Map<string, IncomeSource[]>());
+  const ledgerEntries = ledger?.entries ?? [];
+  const ledgerTotal = ledger?.total ?? 0;
+  const ledgerBreakdown = breakdown?.find(category => category.category === ledgerCategory?.category);
+  const ledgerCategoryTotal = ledgerBreakdown?.spentAmount ?? 0;
 
   return (
     <div className="space-y-8 pb-12">
@@ -341,6 +377,73 @@ export default function Budget() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={!!ledgerCategory} onOpenChange={open => !open && setLedgerCategory(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{ledgerCategory?.category ?? "Category"} spending</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-xl bg-muted/60 px-4 py-3">
+              <p className="text-sm font-semibold">{formatMonthYear(month, year)}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {isLedgerLoading
+                  ? "Loading expenses for this category…"
+                  : `${ledgerEntries.length} item${ledgerEntries.length === 1 ? "" : "s"} · ${formatKes(ledgerCategoryTotal)} spent`}
+              </p>
+            </div>
+            {isLedgerLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-7 w-7 animate-spin text-primary" />
+              </div>
+            ) : isLedgerError ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                <p className="font-medium text-destructive">Could not load this category's expenses.</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => refetchLedger()}>
+                  Try again
+                </Button>
+              </div>
+            ) : ledgerEntries.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-6 text-center">
+                <ReceiptText className="mx-auto h-7 w-7 text-muted-foreground" />
+                <p className="mt-3 font-medium">No spending recorded</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  No {ledgerCategory?.category} spending was recorded in {formatMonthYear(month, year)}.
+                </p>
+              </div>
+            ) : (
+              <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+                {ledgerEntries.map(entry => (
+                  <div key={entry.id} className="flex items-start justify-between gap-4 rounded-xl border border-border/60 p-3.5">
+                    <div className="min-w-0">
+                      <p className="font-medium">{entry.description}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(`${entry.date.slice(0, 10)}T12:00:00`).toLocaleDateString("en-KE", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                        {" · "}{entry.payerName}
+                        {ledgerCategory?.isBudgeted ? null : <>{" · "}{entry.category}</>}
+                        {entry.source === "bank_disbursement" ? " · Joint bank disbursement" : null}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-semibold">{formatKes(entry.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!isLedgerLoading && !isLedgerError && ledgerEntries.length > 0 ? (
+              <div className="flex items-center justify-between border-t pt-3 text-sm">
+                <span className="text-muted-foreground">Expense ledger total</span>
+                <span className="font-semibold">{formatKes(ledgerTotal)}</span>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLedgerCategory(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -484,7 +587,7 @@ export default function Budget() {
                     const isNear = cat.percentUsed > 85 && !isOver;
                     const fullCat = allCategories.find(c => c.name === cat.category);
                     return (
-                      <Card key={cat.category} className="border-none shadow-sm bg-card hover:shadow-md transition-shadow">
+                       <Card key={cat.category} className="border-none shadow-sm bg-card hover:shadow-md transition-shadow">
                         <CardContent className="p-5 space-y-4">
                           <div className="flex justify-between items-start">
                             <div className="flex-1 min-w-0">
@@ -518,6 +621,15 @@ export default function Budget() {
                             <Progress value={Math.min(cat.percentUsed, 100)} indicatorColor={isOver ? "hsl(var(--destructive))" : isNear ? "hsl(var(--secondary))" : cat.color || "hsl(var(--primary))"} className="h-2" />
                             <div className="flex justify-end text-xs font-medium text-muted-foreground">{Math.round(cat.percentUsed)}%</div>
                           </div>
+                           <Button
+                             variant="outline"
+                             className="w-full justify-between"
+                             onClick={() => setLedgerCategory({ category: cat.category, isBudgeted: cat.isBudgeted })}
+                             data-testid={`budget-ledger-${cat.category}`}
+                           >
+                             <span className="flex items-center gap-2"><ReceiptText className="h-4 w-4" /> View spending</span>
+                             <ArrowRight className="h-4 w-4" />
+                           </Button>
                         </CardContent>
                       </Card>
                     );
@@ -540,6 +652,15 @@ export default function Budget() {
                           </div>
                         </div>
                         <Progress value={0} className="h-2" />
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between"
+                          onClick={() => setLedgerCategory({ category: cat.name, isBudgeted: true })}
+                          data-testid={`budget-ledger-${cat.name}`}
+                        >
+                          <span className="flex items-center gap-2"><ReceiptText className="h-4 w-4" /> View spending</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
                       </CardContent>
                     </Card>
                   ))}

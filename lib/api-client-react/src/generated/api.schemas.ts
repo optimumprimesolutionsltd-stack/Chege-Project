@@ -249,6 +249,31 @@ export interface CategoryBreakdown {
   isBudgeted: boolean;
 }
 
+export type CategoryLedgerEntrySource = typeof CategoryLedgerEntrySource[keyof typeof CategoryLedgerEntrySource];
+
+
+export const CategoryLedgerEntrySource = {
+  expense: 'expense',
+  bank_disbursement: 'bank_disbursement',
+} as const;
+
+export interface CategoryLedgerEntry {
+  id: string;
+  source: CategoryLedgerEntrySource;
+  /** The original category attached to this transaction */
+  category: string;
+  description: string;
+  amount: number;
+  payerName: string;
+  date: string;
+}
+
+export interface CategoryLedger {
+  category: string;
+  total: number;
+  entries: CategoryLedgerEntry[];
+}
+
 export interface IncomeStreamFunding {
   /** @nullable */
   incomeSourceId?: number | null;
@@ -595,6 +620,23 @@ year?: number;
 export type GetDashboardCategoryBreakdownParams = {
 month?: number;
 year?: number;
+};
+
+export type GetDashboardCategoryLedgerParams = {
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month?: number;
+year?: number;
+/**
+ * @minLength 1
+ */
+category: string;
+/**
+ * Whether this is an active budget category or the synthetic Unbudgeted spending row
+ */
+isBudgeted: boolean;
 };
 
 export type GetDashboardIncomeStreamsParams = {

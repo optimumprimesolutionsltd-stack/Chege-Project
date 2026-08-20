@@ -16,5 +16,6 @@
 - [paidFromBank flag](paid-from-bank.md) — expenses.paid_from_bank boolean (default false); when true, dashboard excludes from contributions. Set via "Joint bank" chip in expense form (mobile + web).
 - [Member-centered groups](member-centered-groups.md) — one account owner can invite flexible household, chama, club, or team members; never hardcode spouse roles.
 - [OpenAPI Zod request schemas](openapi-zod-request-schemas.md) — define request bodies as named components to avoid generated type/schema name collisions.
+- [Generated boolean query parsing](generated-boolean-query-parsing.md) — generated Zod boolean coercion treats URL "false" as truthy; validate boolean query strings explicitly at API boundaries.
 - [Drizzle Zod schema types](drizzle-zod-types.md) — derive DB insert types from Drizzle tables to avoid incompatible Zod type packages.
 - [Group workspace migration](group-workspace-migration.md) — legacy shared data is adopted atomically on the first authenticated protected request, not during server startup.

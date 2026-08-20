@@ -448,6 +448,36 @@ export const GetDashboardCategoryBreakdownResponse = zod.array(GetDashboardCateg
 
 
 /**
+ * @summary Expense and bank-disbursement entries behind a category breakdown row
+ */
+export const getDashboardCategoryLedgerQueryMonthMax = 12;
+
+
+
+
+export const GetDashboardCategoryLedgerQueryParams = zod.object({
+  "month": zod.coerce.number().min(1).max(getDashboardCategoryLedgerQueryMonthMax).optional(),
+  "year": zod.coerce.number().optional(),
+  "category": zod.coerce.string().min(1),
+  "isBudgeted": zod.coerce.boolean().describe('Whether this is an active budget category or the synthetic Unbudgeted spending row')
+})
+
+export const GetDashboardCategoryLedgerResponse = zod.object({
+  "category": zod.string(),
+  "total": zod.number(),
+  "entries": zod.array(zod.object({
+  "id": zod.string(),
+  "source": zod.enum(['expense', 'bank_disbursement']),
+  "category": zod.string().describe('The original category attached to this transaction'),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "payerName": zod.string(),
+  "date": zod.coerce.date()
+}))
+})
+
+
+/**
  * @summary Income-stream funding totals for the active group and selected month
  */
 export const getDashboardIncomeStreamsQueryMonthMax = 12;

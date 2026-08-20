@@ -457,6 +457,42 @@ paths:
                 items:
                   $ref: "#/components/schemas/CategoryBreakdown"
 
+  /dashboard/category-ledger:
+    get:
+      operationId: getDashboardCategoryLedger
+      tags: [dashboard]
+      summary: Expense and bank-disbursement entries behind a category breakdown row
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: number
+        - name: category
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: isBudgeted
+          in: query
+          required: true
+          description: Whether this is an active budget category or the synthetic Unbudgeted spending row
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Category ledger for the selected report row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryLedger"
+
   /dashboard/income-streams:
     get:
       operationId: getDashboardIncomeStreams
@@ -1382,6 +1418,51 @@ components:
         - color
         - isRecurring
         - isBudgeted
+
+    CategoryLedgerEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+          enum: [expense, bank_disbursement]
+        category:
+          type: string
+          description: The original category attached to this transaction
+        description:
+          type: string
+        amount:
+          type: number
+        payerName:
+          type: string
+        date:
+          type: string
+          format: date
+      required:
+        - id
+        - source
+        - category
+        - description
+        - amount
+        - payerName
+        - date
+
+    CategoryLedger:
+      type: object
+      properties:
+        category:
+          type: string
+        total:
+          type: number
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryLedgerEntry"
+      required:
+        - category
+        - total
+        - entries
 
     IncomeStreamReport:
       type: object

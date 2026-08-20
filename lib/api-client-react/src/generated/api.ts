@@ -31,6 +31,7 @@ import type {
   CascadeContributeInput,
   CascadeContributeResult,
   CategoryBreakdown,
+  CategoryLedger,
   Contribution,
   ContributionInput,
   DashboardSummary,
@@ -43,6 +44,7 @@ import type {
   GetContributionsParams,
   GetDashboardActivityParams,
   GetDashboardCategoryBreakdownParams,
+  GetDashboardCategoryLedgerParams,
   GetDashboardIncomeStreamsParams,
   GetDashboardMonthlyReportPdfParams,
   GetDashboardSummaryParams,
@@ -1444,6 +1446,90 @@ export function useGetDashboardCategoryBreakdown<TData = Awaited<ReturnType<type
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardCategoryBreakdownQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardCategoryLedgerUrl = (params: GetDashboardCategoryLedgerParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/category-ledger?${stringifiedParams}` : `/api/dashboard/category-ledger`
+}
+
+/**
+ * @summary Expense and bank-disbursement entries behind a category breakdown row
+ */
+export const getDashboardCategoryLedger = async (params: GetDashboardCategoryLedgerParams, options?: Parameters<typeof customFetch>[1]): Promise<CategoryLedger> => {
+
+  return customFetch<CategoryLedger>(getGetDashboardCategoryLedgerUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardCategoryLedgerQueryKey = (params?: GetDashboardCategoryLedgerParams,) => {
+    return [
+    `/api/dashboard/category-ledger`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardCategoryLedgerQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardCategoryLedger>>, TError = ErrorType<unknown>>(params: GetDashboardCategoryLedgerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardCategoryLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardCategoryLedgerQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardCategoryLedger>>> = ({ signal }) => getDashboardCategoryLedger(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardCategoryLedger>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardCategoryLedgerQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardCategoryLedger>>>
+export type GetDashboardCategoryLedgerQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Expense and bank-disbursement entries behind a category breakdown row
+ */
+
+export function useGetDashboardCategoryLedger<TData = Awaited<ReturnType<typeof getDashboardCategoryLedger>>, TError = ErrorType<unknown>>(
+ params: GetDashboardCategoryLedgerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardCategoryLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardCategoryLedgerQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
