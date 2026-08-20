@@ -19,3 +19,5 @@ Bajeti is chama-first. Its north star is helping chamas clearly understand what 
 Normal JavaScript and design changes should use OTA; native Android changes require an APK release. Do not prioritize payments or integrations over financial correctness and release reliability.
 
 The subscription/package belongs to the **group**, not only to the user account. One account may therefore manage groups with different types and packages.
+
+Near-term product focus is the free tier: **Individual** and **Family with up to two people**. Stabilize onboarding, budgets, expenses, goals, shared balances, and basic activity/reporting for these users before building paid family-with-children or detailed chama capabilities. Keep the package/entitlement structure extensible, but defer billing and paid feature work until the free experience is trusted.
