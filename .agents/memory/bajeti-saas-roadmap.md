@@ -13,7 +13,9 @@ Bajeti is chama-first. Its north star is helping chamas clearly understand what 
 2. **Chama financial trust:** strengthen member contribution cycles, treasurer accountability, balance reconciliation, mismatch visibility, correction reasons, transaction rollback/concurrency safety, and report consistency.
 3. **Daily chama collaboration:** complete activity feeds, income-source management, settings, goal history, completion states, member-facing explanations, contribution reminders, and clear records of group decisions or payouts.
 4. **Group administration:** support multiple chamas, flexible roles such as members, treasurers, and auditors, invitations, permissions, audit visibility, and strict group-data separation. General family, club, team, and friend groups should fit without hardcoded family roles.
-5. **Monetization:** offer a free group tier and paid group plans for advanced reports, exports, member capacity, reminders, and administration.
+5. **Type-based monetization:** assign each group a package at creation based on its chosen type, with the package determining price, member limits, and available features. The initial model includes an individual-free package, a family package for up to two people that is free, a paid family-with-kids package, and a paid chama package. Exact prices and entitlements remain to be defined.
 6. **Integrations and expansion:** add mobile money, bank, payment reminders, recurring contributions, scheduled reports, and messaging only after the core accounting and permissions model is trusted.
 
 Normal JavaScript and design changes should use OTA; native Android changes require an APK release. Do not prioritize payments or integrations over financial correctness and release reliability.
+
+The subscription/package belongs to the **group**, not only to the user account. One account may therefore manage groups with different types and packages.
