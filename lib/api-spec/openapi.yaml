@@ -1538,11 +1538,15 @@ components:
           type: string
         userName:
           type: ["string", "null"]
+        role:
+          type: string
+          enum: [owner, admin, member]
         addedAt:
           type: string
           format: date-time
       required:
         - userId
+        - role
         - addedAt
 
     AddMemberInput:

@@ -53,6 +53,7 @@ export * from './incomeStreamReport';
 export * from './jointAccountSummary';
 export * from './jointAccountTransaction';
 export * from './member';
+export * from './memberRole';
 export * from './monthTrend';
 export * from './savingsGoal';
 export * from './savingsGoalContributeInput';

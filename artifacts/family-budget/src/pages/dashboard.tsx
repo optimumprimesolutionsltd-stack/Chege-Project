@@ -26,7 +26,7 @@ import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
-  Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2,
+  Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ import { ACTIVITY_TYPE } from "@/lib/activityTypes";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@workspace/replit-auth-web";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
@@ -323,6 +324,7 @@ export default function Dashboard() {
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
   const [activeAction, setActiveAction] = useState<QuickAction>("none");
+  const { user } = useAuth();
 
   const { data: summary, isLoading: isSummaryLoading, isError: isSummaryError } = useGetDashboardSummary({ month, year });
   const { data: activity, isLoading: isActivityLoading } = useGetDashboardActivity();
@@ -331,6 +333,11 @@ export default function Dashboard() {
   const { data: goals } = useGetSavingsGoals();
   const { data: bankAccount } = useGetJointAccount();
   const { data: members = [] } = useGetMembers();
+  const canManageSetup = members.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === "owner" || member.role === "admin"),
+  );
 
   // Compute this-month totals from the transactions array
   const monthlyDeposited = bankAccount?.transactions
@@ -439,6 +446,7 @@ export default function Dashboard() {
   const pendingSetupSteps = setupSteps.filter(step => !step.done);
   const nextSetupStep = pendingSetupSteps[0];
   const laterSetupSteps = pendingSetupSteps.slice(1);
+  const isSetupComplete = completeSetupSteps === setupSteps.length;
 
   return (
     <div className="space-y-8 pb-12">
@@ -449,42 +457,77 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {nextSetupStep && (
-        <Card className="overflow-hidden border-0 bg-primary text-primary-foreground shadow-lg">
-          <CardContent className="p-5 sm:p-6">
+       {canManageSetup && (nextSetupStep || isSetupComplete) && (
+         <Card
+           className={`overflow-hidden shadow-sm ${
+             isSetupComplete
+               ? "border border-border/60 bg-muted/50 text-muted-foreground"
+               : "border border-primary/15 bg-primary/[0.04]"
+           }`}
+         >
+           <CardContent className="p-4 sm:p-5">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="max-w-xl">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-foreground/75">
+                 <p className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.16em] ${
+                   isSetupComplete ? "text-muted-foreground" : "text-primary"
+                 }`}>
+                   {!isSetupComplete && <Sparkles className="h-3.5 w-3.5" />}
                   Get started · {completeSetupSteps} of {setupSteps.length} complete
                 </p>
-                <h2 className="mt-1 font-display text-2xl font-bold">Finish setting up Bajeti</h2>
-                <p className="mt-1 text-sm leading-relaxed text-primary-foreground/80">
-                  Start with one quick step. You can come back to the rest whenever you are ready.
+                 <h2 className="mt-1 font-display text-xl font-bold text-foreground sm:text-2xl">
+                   {isSetupComplete ? "You're all set" : "Finish setting up Bajeti"}
+                 </h2>
+                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                   {isSetupComplete
+                     ? "Your core setup is complete. You can keep using Bajeti as normal."
+                     : "A few small wins and your group is ready to go."}
                 </p>
-                <div className="mt-4 h-2 w-full max-w-md overflow-hidden rounded-full bg-primary-foreground/20">
+                 <div className={`mt-4 h-2 w-full max-w-md overflow-hidden rounded-full ${
+                   isSetupComplete ? "bg-muted-foreground/20" : "bg-primary/10"
+                 }`}>
                   <div
-                    className="h-full rounded-full bg-secondary transition-all duration-500"
+                     className={`h-full rounded-full transition-all duration-500 ${
+                       isSetupComplete ? "bg-muted-foreground/60" : "bg-secondary"
+                     }`}
                     style={{ width: `${(completeSetupSteps / setupSteps.length) * 100}%` }}
                   />
                 </div>
               </div>
-              <Link
-                href={nextSetupStep.href}
-                data-testid="setup-primary-cta"
-                className="group flex min-h-16 w-full items-center gap-3 rounded-2xl bg-primary-foreground px-4 py-3 text-primary shadow-md transition-transform hover:-translate-y-0.5 sm:max-w-sm"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary/15 text-xl">
-                  {nextSetupStep.icon}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-semibold uppercase tracking-wide text-primary/70">Do this next</span>
-                  <span className="block truncate font-display text-base font-bold">{nextSetupStep.label}</span>
-                </span>
-                <ChevronRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1" />
-              </Link>
+               {nextSetupStep ? (
+                 <Link
+                   href={nextSetupStep.href}
+                   data-testid="setup-primary-cta"
+                   className="group flex min-h-14 w-full items-center gap-3 rounded-xl border border-primary/15 bg-card px-3.5 py-2.5 text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.03] sm:max-w-sm"
+                 >
+                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/15 text-xl">
+                     {nextSetupStep.icon}
+                   </span>
+                   <span className="min-w-0 flex-1">
+                     <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary/75">Next small win</span>
+                     <span className="block truncate font-display text-sm font-bold">{nextSetupStep.label}</span>
+                   </span>
+                   <ChevronRight className="h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-1" />
+                 </Link>
+               ) : (
+                 <button
+                   type="button"
+                   disabled
+                   data-testid="setup-primary-cta"
+                   className="flex min-h-16 w-full cursor-not-allowed items-center gap-3 rounded-2xl bg-muted-foreground/15 px-4 py-3 text-muted-foreground shadow-none sm:max-w-sm"
+                 >
+                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted-foreground/15">
+                     <CheckCircle2 className="h-5 w-5" />
+                   </span>
+                   <span className="min-w-0 flex-1 text-left">
+                     <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Setup complete</span>
+                     <span className="block truncate font-display text-base font-bold">All core steps done</span>
+                   </span>
+                   <CheckCircle2 className="h-5 w-5 shrink-0" />
+                 </button>
+               )}
             </div>
-            {laterSetupSteps.length > 0 && (
-              <p className="mt-5 text-xs text-primary-foreground/75">
+             {laterSetupSteps.length > 0 && (
+               <p className="mt-4 text-xs text-muted-foreground">
                 Then: {laterSetupSteps.map(step => step.label).join(" · ")}
               </p>
             )}

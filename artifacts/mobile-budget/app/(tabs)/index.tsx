@@ -108,6 +108,11 @@ export default function DashboardScreen() {
   } = useGetJointAccount();
   const { data: savingsGoals = [], refetch: refetchGoals } = useGetSavingsGoals();
   const { data: members = [], refetch: refetchMembers } = useGetMembers();
+  const canManageSetup = members.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === 'owner' || member.role === 'admin'),
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -190,6 +195,7 @@ export default function DashboardScreen() {
   const pendingSetupSteps = setupSteps.filter(step => !step.done);
   const nextSetupStep = pendingSetupSteps[0];
   const laterSetupSteps = pendingSetupSteps.slice(1);
+  const isSetupComplete = completeSetupSteps === setupSteps.length;
 
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear((y) => y - 1); }
@@ -336,37 +342,61 @@ export default function DashboardScreen() {
           ))}
         </View>
 
-        {nextSetupStep && (
-          <View style={[styles.setupCard, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+        {canManageSetup && (nextSetupStep || isSetupComplete) && (
+          <View
+            style={[
+              styles.setupCard,
+              {
+                backgroundColor: isSetupComplete ? colors.muted : colors.card,
+                borderColor: isSetupComplete ? colors.border : colors.primary,
+              },
+            ]}
+          >
             <View style={styles.setupHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.setupEyebrow, { color: 'rgba(255,255,255,0.76)' }]}>
-                  GET STARTED · {completeSetupSteps} OF {setupSteps.length} COMPLETE
+                <View style={styles.setupEyebrowRow}>
+                  {!isSetupComplete && <Feather name="zap" size={12} color={colors.primary} />}
+                  <Text style={[styles.setupEyebrow, { color: isSetupComplete ? colors.mutedForeground : colors.primary }]}>
+                    GET STARTED · {completeSetupSteps} OF {setupSteps.length} COMPLETE
+                  </Text>
+                </View>
+                <Text style={[styles.setupTitle, { color: isSetupComplete ? colors.foreground : colors.primaryForeground }]}>
+                  {isSetupComplete ? 'You’re all set' : 'Finish setting up Bajeti'}
                 </Text>
-                <Text style={[styles.setupTitle, { color: colors.primaryForeground }]}>Finish setting up Bajeti</Text>
-                <Text style={[styles.setupSubtitle, { color: 'rgba(255,255,255,0.78)' }]}>
-                  One quick step at a time.
+                <Text style={[styles.setupSubtitle, { color: isSetupComplete ? colors.mutedForeground : 'rgba(255,255,255,0.78)' }]}>
+                  {isSetupComplete ? 'Your core setup is complete.' : 'A few small wins and your group is ready to go.'}
                 </Text>
               </View>
             </View>
-            <View style={[styles.setupTrack, { backgroundColor: 'rgba(255,255,255,0.20)' }]}>
-              <View style={[styles.setupFill, { backgroundColor: colors.secondary, width: `${(completeSetupSteps / setupSteps.length) * 100}%` }]} />
+            <View style={[styles.setupTrack, { backgroundColor: isSetupComplete ? colors.border : `${colors.primary}18` }]}>
+              <View style={[styles.setupFill, { backgroundColor: isSetupComplete ? colors.mutedForeground : colors.secondary, width: `${(completeSetupSteps / setupSteps.length) * 100}%` }]} />
             </View>
             <Pressable
               testID="setup-primary-cta"
-              onPress={() => router.push(nextSetupStep.route as any)}
-              style={({ pressed }) => [styles.setupPrimaryCta, { backgroundColor: colors.primaryForeground, opacity: pressed ? 0.82 : 1 }]}
+              disabled={isSetupComplete}
+              onPress={nextSetupStep ? () => router.push(nextSetupStep.route as any) : undefined}
+              style={({ pressed }) => [
+                styles.setupPrimaryCta,
+                {
+                  backgroundColor: isSetupComplete ? colors.mutedForeground : colors.secondary,
+                  opacity: isSetupComplete ? 0.55 : pressed ? 0.82 : 1,
+                },
+              ]}
             >
-              <View style={[styles.setupPrimaryIcon, { backgroundColor: `${nextSetupStep.color}20` }]}>
-                <Feather name={nextSetupStep.icon} size={19} color={nextSetupStep.color} />
+              <View style={[styles.setupPrimaryIcon, { backgroundColor: isSetupComplete ? `${colors.foreground}16` : `${colors.background}24` }]}>
+                <Feather name={isSetupComplete ? 'check-circle' : nextSetupStep!.icon} size={19} color={isSetupComplete ? colors.foreground : colors.background} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.setupCtaLabel, { color: colors.primary }]}>DO THIS NEXT</Text>
-                <Text style={[styles.setupCtaTitle, { color: colors.primary }]}>{nextSetupStep.label}</Text>
+                <Text style={[styles.setupCtaLabel, { color: isSetupComplete ? colors.background : colors.background }]}>
+                  {isSetupComplete ? 'SETUP COMPLETE' : 'DO THIS NEXT'}
+                </Text>
+                <Text style={[styles.setupCtaTitle, { color: colors.background }]}>
+                  {isSetupComplete ? 'All core steps done' : nextSetupStep!.label}
+                </Text>
               </View>
-              <Feather name="arrow-right" size={20} color={colors.primary} />
+              <Feather name={isSetupComplete ? 'check' : 'arrow-right'} size={20} color={colors.background} />
             </Pressable>
-            {laterSetupSteps.length > 0 && (
+            {nextSetupStep && laterSetupSteps.length > 0 && (
               <Text style={[styles.setupLaterSteps, { color: 'rgba(255,255,255,0.74)' }]}>
                 Then: {laterSetupSteps.map(step => step.label).join(' · ')}
               </Text>
@@ -530,6 +560,7 @@ const styles = StyleSheet.create({
 
   setupCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 20, padding: 18 },
   setupHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  setupEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   setupEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   setupTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 5 },
   setupSubtitle: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 4 },

@@ -1009,6 +1009,7 @@ export const GetIncomeSourcesResponse = zod.array(GetIncomeSourcesResponseItem)
 export const GetMembersResponseItem = zod.object({
   "userId": zod.string(),
   "userName": zod.string().nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
   "addedAt": zod.coerce.date()
 })
 export const GetMembersResponse = zod.array(GetMembersResponseItem)
@@ -1024,6 +1025,7 @@ export const AddMemberBody = zod.object({
 export const AddMemberResponse = zod.object({
   "userId": zod.string(),
   "userName": zod.string().nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
   "addedAt": zod.coerce.date()
 })
 

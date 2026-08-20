@@ -305,10 +305,20 @@ export interface MonthTrend {
   expenseCount: number;
 }
 
+export type MemberRole = typeof MemberRole[keyof typeof MemberRole];
+
+
+export const MemberRole = {
+  owner: 'owner',
+  admin: 'admin',
+  member: 'member',
+} as const;
+
 export interface Member {
   userId: string;
   /** @nullable */
   userName?: string | null;
+  role: MemberRole;
   addedAt: string;
 }
 

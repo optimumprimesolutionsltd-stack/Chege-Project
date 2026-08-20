@@ -30,6 +30,7 @@ async function getGroupMembersWithNames(groupId: number) {
     return {
       userId: m.userId,
       userName: name,
+      role: m.role,
       addedAt: m.addedAt instanceof Date ? m.addedAt.toISOString() : m.addedAt,
     };
   });
