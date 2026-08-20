@@ -9,6 +9,7 @@
 - [Settings screen added](settings-screen.md) — artifacts/mobile-budget/app/(tabs)/settings.tsx exists; wired into both NativeTabLayout and ClassicTabLayout in _layout.tsx.
 - [OTA export for pnpm workspace](ota-export.md) — expo export and eas update need special setup; see topic file for the full recipe.
 - [OTA bundling fix for RN 0.81.5 + pnpm](ota-bundling-fix.md) — pnpm-safe transformIgnorePatterns pattern + hermes-v0 profile needed for hermesc to compile the bundle
+- [APK and Replit mobile releases](apk-vs-replit-mobile-releases.md) — installed APK OTA channels are separate from Replit’s static Expo artifact; workspace publishing does not update APKs.
 - [Activity type constants](activity-types.md) — ACTIVITY_TYPE = { EXPENSE, CONTRIBUTION } in lib/activityTypes.ts (mobile) and src/lib/activityTypes.ts (web); use instead of inline strings.
 - [Bank balance invalidation](bank-balance-invalidation.md) — after deposit/disbursement/delete on bank.tsx, call invalidateQueries({ queryKey: getGetJointAccountQueryKey() }) so home-screen card updates immediately.
 - [Mobile deployment build script entry point](deployment-build-script.md) — scripts/build.js bundle URL must match package.json "main"; update downloadBundle() entryPath whenever main changes.
