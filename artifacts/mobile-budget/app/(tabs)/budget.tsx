@@ -47,6 +47,16 @@ const PRIORITY_LABELS: Record<number, string> = {
   3: 'Essentials',
   4: 'Connectivity & Grooming',
   5: 'Discretionary',
+  999: 'Needs a budget',
+};
+
+const PRIORITY_GUIDE: Record<number, string> = {
+  1: 'Must-pay basics: food, housing, and core utilities.',
+  2: 'Protect health, learning, and costs that should not wait.',
+  3: 'Keep the household running: transport and everyday supplies.',
+  4: 'Stay connected and cared for: data, grooming, and similar costs.',
+  5: 'Flexible spending that can wait when money is tight.',
+  999: 'Spending recorded without a matching budget category yet.',
 };
 
 const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
@@ -217,6 +227,31 @@ export default function BudgetScreen() {
     groups.set(source.userId, existing);
     return groups;
   }, new Map<string, IncomeSource[]>());
+  const activeCategories = allCategories.filter(category =>
+    category.isRecurring || (category.activeMonth === month && category.activeYear === year),
+  );
+  const reportedCategoryNames = new Set(breakdown.map(category => category.category));
+  const tiersToShow = Array.from(new Set([
+    1,
+    2,
+    3,
+    4,
+    5,
+    ...breakdown.map(category => category.priority),
+    ...activeCategories.map(category => category.priority),
+  ])).sort((a, b) => a - b);
+  const tierReport = tiersToShow.map(tier => {
+    const reported = breakdown.filter(category => category.priority === tier);
+    const budgetOnly = activeCategories.filter(category =>
+      category.priority === tier && !reportedCategoryNames.has(category.name),
+    );
+    return {
+      tier,
+      budget: reported.reduce((sum, category) => sum + category.budgetAmount, 0)
+        + budgetOnly.reduce((sum, category) => sum + category.budgetAmount, 0),
+      actual: reported.reduce((sum, category) => sum + category.spentAmount, 0),
+    };
+  }).filter(row => row.budget > 0 || row.actual > 0);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -271,8 +306,14 @@ export default function BudgetScreen() {
                   ))}
                 </View>
                 <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
-                  {PRIORITY_LABELS[parseInt(formPriority, 10)] ?? ''}
+                  Tier {formPriority}: {PRIORITY_LABELS[parseInt(formPriority, 10)] ?? ''}
                 </Text>
+                <View style={[styles.priorityGuide, { backgroundColor: colors.accent }]}>
+                  <Feather name="info" size={15} color={colors.accentForeground} />
+                  <Text style={[styles.priorityGuideText, { color: colors.accentForeground }]}>
+                    Use Tier 1 for must-pay needs and Tier 5 for flexible spending. {PRIORITY_GUIDE[parseInt(formPriority, 10)] ?? ''}
+                  </Text>
+                </View>
                 <View style={[styles.recurrenceRow, { borderColor: colors.border, backgroundColor: colors.muted }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.recurrenceTitle, { color: colors.foreground }]}>Recurring budget</Text>
@@ -432,6 +473,59 @@ export default function BudgetScreen() {
           )}
         </View>
 
+        <View style={styles.tierSection}>
+          <View style={styles.tierHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.tierTitle, { color: colors.foreground }]}>Priority tier report</Text>
+              <Text style={[styles.tierSubtitle, { color: colors.mutedForeground }]}>
+                See whether must-pay needs are covered before flexible spending.
+              </Text>
+            </View>
+            <Feather name="layers" size={19} color={colors.secondary} />
+          </View>
+          {isLoading ? (
+            <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
+          ) : tierReport.length === 0 ? (
+            <View style={[styles.tierEmpty, { borderColor: colors.border }]}>
+              <Text style={[styles.tierEmptyText, { color: colors.mutedForeground }]}>
+                Add budget categories to see your tier report.
+              </Text>
+            </View>
+          ) : (
+            tierReport.map(row => {
+              const isOver = row.actual > row.budget && row.budget > 0;
+              const ratio = row.budget > 0 ? Math.min(row.actual / row.budget, 1) : 0;
+              return (
+                <View key={row.tier} style={[styles.tierCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.tierCardTop}>
+                    <View style={[styles.tierBadge, { backgroundColor: colors.primary + '18' }]}>
+                      <Text style={[styles.tierBadgeText, { color: colors.primary }]}>T{row.tier}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.tierName, { color: colors.foreground }]}>
+                        {PRIORITY_LABELS[row.tier] ?? `Priority ${row.tier}`}
+                      </Text>
+                      <Text style={[styles.tierDescription, { color: colors.mutedForeground }]}>
+                        {PRIORITY_GUIDE[row.tier] ?? 'Spending grouped at this level of urgency.'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.tierAmount, { color: isOver ? colors.destructive : colors.primary }]}>
+                      {formatKES(row.actual)}
+                    </Text>
+                  </View>
+                  <View style={[styles.tierTrack, { backgroundColor: colors.muted }]}>
+                    <View style={[styles.tierFill, { width: `${ratio * 100}%`, backgroundColor: isOver ? colors.destructive : colors.primary }]} />
+                  </View>
+                  <Text style={[styles.tierMeta, { color: colors.mutedForeground }]}>
+                    Actual KES {formatKES(row.actual)} · Budget KES {formatKES(row.budget)}
+                    {isOver ? ' · Over budget' : row.budget > 0 ? ` · KES ${formatKES(row.budget - row.actual)} left` : ''}
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </View>
+
         {/* Category list */}
         <View style={styles.list}>
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BY CATEGORY</Text>
@@ -574,6 +668,8 @@ const styles = StyleSheet.create({
   priorityChip: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
   priorityChipText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   priorityHint: { fontSize: 12, fontFamily: 'Inter_400Regular', textAlign: 'center', marginTop: 4 },
+  priorityGuide: { borderRadius: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 10, padding: 10 },
+  priorityGuideText: { flex: 1, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 },
    recurrenceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 14 },
    recurrenceTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
    recurrenceHint: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
@@ -583,4 +679,20 @@ const styles = StyleSheet.create({
    manageName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
    manageAmount: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
    manageEmpty: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingVertical: 28 },
+  tierSection: { paddingHorizontal: 16, paddingTop: 24 },
+  tierHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  tierTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  tierSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginTop: 3 },
+  tierEmpty: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 14, padding: 20, alignItems: 'center' },
+  tierEmptyText: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center' },
+  tierCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 10 },
+  tierCardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  tierBadge: { minWidth: 36, height: 28, paddingHorizontal: 7, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  tierBadgeText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  tierName: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  tierDescription: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 15, marginTop: 2 },
+  tierAmount: { fontSize: 13, fontFamily: 'Inter_700Bold', marginLeft: 6 },
+  tierTrack: { height: 6, borderRadius: 4, overflow: 'hidden', marginTop: 12 },
+  tierFill: { height: '100%', borderRadius: 4 },
+  tierMeta: { fontSize: 10, fontFamily: 'Inter_500Medium', marginTop: 7 },
 });

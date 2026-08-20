@@ -188,6 +188,8 @@ export default function DashboardScreen() {
   ];
   const completeSetupSteps = setupSteps.filter(step => step.done).length;
   const pendingSetupSteps = setupSteps.filter(step => !step.done);
+  const nextSetupStep = pendingSetupSteps[0];
+  const laterSetupSteps = pendingSetupSteps.slice(1);
 
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear((y) => y - 1); }
@@ -334,37 +336,41 @@ export default function DashboardScreen() {
           ))}
         </View>
 
-        {pendingSetupSteps.length > 0 && (
-          <View style={[styles.setupCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {nextSetupStep && (
+          <View style={[styles.setupCard, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
             <View style={styles.setupHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.setupEyebrow, { color: colors.secondary }]}>START HERE</Text>
-                <Text style={[styles.setupTitle, { color: colors.foreground }]}>Set up your group</Text>
-                <Text style={[styles.setupSubtitle, { color: colors.mutedForeground }]}>A few steps make your budget ready to use.</Text>
+                <Text style={[styles.setupEyebrow, { color: 'rgba(255,255,255,0.76)' }]}>
+                  GET STARTED · {completeSetupSteps} OF {setupSteps.length} COMPLETE
+                </Text>
+                <Text style={[styles.setupTitle, { color: colors.primaryForeground }]}>Finish setting up Bajeti</Text>
+                <Text style={[styles.setupSubtitle, { color: 'rgba(255,255,255,0.78)' }]}>
+                  One quick step at a time.
+                </Text>
               </View>
-              <Text style={[styles.setupProgress, { color: colors.mutedForeground }]}>{completeSetupSteps}/4</Text>
             </View>
-            <View style={[styles.setupTrack, { backgroundColor: colors.muted }]}>
-              <View style={[styles.setupFill, { backgroundColor: colors.secondary, width: `${completeSetupSteps * 25}%` }]} />
+            <View style={[styles.setupTrack, { backgroundColor: 'rgba(255,255,255,0.20)' }]}>
+              <View style={[styles.setupFill, { backgroundColor: colors.secondary, width: `${(completeSetupSteps / setupSteps.length) * 100}%` }]} />
             </View>
-            <View style={styles.setupList}>
-              {pendingSetupSteps.map(step => (
-                <Pressable
-                  key={step.label}
-                  onPress={() => router.push(step.route as any)}
-                  style={({ pressed }) => [styles.setupItem, { borderColor: colors.border, backgroundColor: colors.background, opacity: pressed ? 0.72 : 1 }]}
-                >
-                  <View style={[styles.setupIcon, { backgroundColor: `${step.color}22` }]}>
-                    <Feather name={step.icon} size={17} color={step.color} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.setupItemTitle, { color: colors.foreground }]}>{step.label}</Text>
-                    <Text style={[styles.setupItemDetail, { color: colors.mutedForeground }]}>{step.detail}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
-                </Pressable>
-              ))}
-            </View>
+            <Pressable
+              testID="setup-primary-cta"
+              onPress={() => router.push(nextSetupStep.route as any)}
+              style={({ pressed }) => [styles.setupPrimaryCta, { backgroundColor: colors.primaryForeground, opacity: pressed ? 0.82 : 1 }]}
+            >
+              <View style={[styles.setupPrimaryIcon, { backgroundColor: `${nextSetupStep.color}20` }]}>
+                <Feather name={nextSetupStep.icon} size={19} color={nextSetupStep.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.setupCtaLabel, { color: colors.primary }]}>DO THIS NEXT</Text>
+                <Text style={[styles.setupCtaTitle, { color: colors.primary }]}>{nextSetupStep.label}</Text>
+              </View>
+              <Feather name="arrow-right" size={20} color={colors.primary} />
+            </Pressable>
+            {laterSetupSteps.length > 0 && (
+              <Text style={[styles.setupLaterSteps, { color: 'rgba(255,255,255,0.74)' }]}>
+                Then: {laterSetupSteps.map(step => step.label).join(' · ')}
+              </Text>
+            )}
           </View>
         )}
 
@@ -522,19 +528,18 @@ const styles = StyleSheet.create({
   shortcutBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 14, gap: 5 },
   shortcutLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
 
-  setupCard: { marginHorizontal: 20, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
+  setupCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 20, padding: 18 },
   setupHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   setupEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
-  setupTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 3 },
-  setupSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 },
-  setupProgress: { fontSize: 13, fontFamily: 'Inter_700Bold', paddingTop: 4 },
-  setupTrack: { height: 6, borderRadius: 4, overflow: 'hidden', marginTop: 14 },
+  setupTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 5 },
+  setupSubtitle: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 4 },
+  setupTrack: { height: 7, borderRadius: 4, overflow: 'hidden', marginTop: 16 },
   setupFill: { height: '100%', borderRadius: 4 },
-  setupList: { gap: 8, marginTop: 14 },
-  setupItem: { borderWidth: 1, borderRadius: 13, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  setupIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  setupItemTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
-  setupItemDetail: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  setupPrimaryCta: { minHeight: 68, borderRadius: 16, marginTop: 16, paddingHorizontal: 14, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  setupPrimaryIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  setupCtaLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.8 },
+  setupCtaTitle: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 2 },
+  setupLaterSteps: { fontSize: 11, fontFamily: 'Inter_500Medium', lineHeight: 17, marginTop: 13 },
 
   section: { paddingHorizontal: 20, paddingTop: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

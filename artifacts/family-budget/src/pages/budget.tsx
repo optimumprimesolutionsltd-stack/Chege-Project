@@ -38,6 +38,15 @@ const priorityMap: Record<number, string> = {
   999: "Needs a budget",
 };
 
+const priorityGuide: Record<number, string> = {
+  1: "Must-pay basics that keep the group safe and stable, such as food, housing, and core utilities.",
+  2: "Protect health, learning, and other costs that should not be delayed.",
+  3: "Keep the household running, such as transport and everyday supplies.",
+  4: "Stay connected and cared for, including data, grooming, and similar regular costs.",
+  5: "Flexible spending that can wait when money is tight.",
+  999: "Spending recorded without a matching budget category yet.",
+};
+
 function CategoryDialog({
   open, onClose, initial, onSaved, reportMonth, reportYear,
 }: {
@@ -121,10 +130,16 @@ function CategoryDialog({
               value={priority}
               onChange={e => setPriority(e.target.value)}
             >
-              {Object.entries(priorityMap).map(([k, v]) => (
+              {Object.entries(priorityMap).filter(([k]) => k !== "999").map(([k, v]) => (
                 <option key={k} value={k}>Tier {k}: {v}</option>
               ))}
             </select>
+            <div className="rounded-xl bg-muted/60 px-3 py-2.5">
+              <p className="text-xs font-semibold text-foreground">How to use tiers</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                Start with Tier 1 for must-pay needs, then work down to Tier 5 for spending that can wait. {priorityGuide[Number(priority)]}
+              </p>
+            </div>
           </div>
           <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 p-3.5">
             <div>
@@ -420,10 +435,16 @@ export default function Budget() {
          </Card>
        )}
 
-               {isLoading || isFetching ? (
+                {isLoading || isFetching ? (
         <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>
       ) : (
         <div className="space-y-8">
+            <div>
+              <h2 className="font-display text-xl font-bold text-foreground">Priority tier report</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Compare your plan and actual spending from must-pay needs (Tier 1) to flexible spending (Tier 5).
+              </p>
+            </div>
            {Array.from(new Set([
              1,
              2,
@@ -441,16 +462,21 @@ export default function Budget() {
              const groupSpent = breakdownItems.reduce((s, i) => s + i.spentAmount, 0);
 
             return (
-              <div key={priority} className="space-y-4">
-                <div className="flex items-center justify-between border-b border-border/50 pb-2">
-                  <h2 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
-                    <Target className="w-5 h-5 text-secondary" />
-                    Tier {priority}: {priorityMap[priority] ?? `Priority ${priority}`}
-                  </h2>
-                  <div className="text-sm font-medium text-muted-foreground">
-                     Actual {formatKes(groupSpent)} / Budget {formatKes(groupTotal)}
-                  </div>
-                </div>
+                <div key={priority} className="space-y-4">
+                 <div className="border-b border-border/50 pb-3">
+                   <div className="flex items-center justify-between gap-3">
+                     <h3 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
+                       <Target className="w-5 h-5 text-secondary" />
+                       Tier {priority}: {priorityMap[priority] ?? `Priority ${priority}`}
+                     </h3>
+                     <div className="shrink-0 text-sm font-medium text-muted-foreground">
+                        Actual {formatKes(groupSpent)} / Budget {formatKes(groupTotal)}
+                     </div>
+                   </div>
+                   <p className="mt-1 text-sm text-muted-foreground">
+                     {priorityGuide[priority] ?? "Use this tier to group spending with the same level of urgency."}
+                   </p>
+                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {breakdownItems.map(cat => {

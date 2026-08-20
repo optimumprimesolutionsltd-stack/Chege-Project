@@ -331,7 +331,6 @@ export default function Dashboard() {
   const { data: goals } = useGetSavingsGoals();
   const { data: bankAccount } = useGetJointAccount();
   const { data: members = [] } = useGetMembers();
-  const [setupDismissed, setSetupDismissed] = useState(false);
 
   // Compute this-month totals from the transactions array
   const monthlyDeposited = bankAccount?.transactions
@@ -438,6 +437,8 @@ export default function Dashboard() {
   ];
   const completeSetupSteps = setupSteps.filter(step => step.done).length;
   const pendingSetupSteps = setupSteps.filter(step => !step.done);
+  const nextSetupStep = pendingSetupSteps[0];
+  const laterSetupSteps = pendingSetupSteps.slice(1);
 
   return (
     <div className="space-y-8 pb-12">
@@ -448,50 +449,43 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {!setupDismissed && pendingSetupSteps.length > 0 && (
-        <Card className="border border-primary/20 shadow-md overflow-hidden bg-gradient-to-br from-primary/10 via-card to-secondary/10">
+      {nextSetupStep && (
+        <Card className="overflow-hidden border-0 bg-primary text-primary-foreground shadow-lg">
           <CardContent className="p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4 mb-5">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-primary font-bold">Start here</p>
-                <h2 className="text-xl sm:text-2xl font-display font-bold text-foreground mt-1">Build your group money hub</h2>
-                <p className="text-sm text-muted-foreground mt-1">A few simple steps will make Bajeti useful from day one.</p>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="max-w-xl">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-foreground/75">
+                  Get started · {completeSetupSteps} of {setupSteps.length} complete
+                </p>
+                <h2 className="mt-1 font-display text-2xl font-bold">Finish setting up Bajeti</h2>
+                <p className="mt-1 text-sm leading-relaxed text-primary-foreground/80">
+                  Start with one quick step. You can come back to the rest whenever you are ready.
+                </p>
+                <div className="mt-4 h-2 w-full max-w-md overflow-hidden rounded-full bg-primary-foreground/20">
+                  <div
+                    className="h-full rounded-full bg-secondary transition-all duration-500"
+                    style={{ width: `${(completeSetupSteps / setupSteps.length) * 100}%` }}
+                  />
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setSetupDismissed(true)}
-                className="text-xs text-muted-foreground hover:text-foreground shrink-0 flex items-center gap-1"
-                aria-label="Hide setup suggestions"
+              <Link
+                href={nextSetupStep.href}
+                data-testid="setup-primary-cta"
+                className="group flex min-h-16 w-full items-center gap-3 rounded-2xl bg-primary-foreground px-4 py-3 text-primary shadow-md transition-transform hover:-translate-y-0.5 sm:max-w-sm"
               >
-                <X className="w-4 h-4" /> Hide
-              </button>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary/15 text-xl">
+                  {nextSetupStep.icon}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-primary/70">Do this next</span>
+                  <span className="block truncate font-display text-base font-bold">{nextSetupStep.label}</span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 transition-transform group-hover:translate-x-1" />
+              </Link>
             </div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-2 flex-1 rounded-full bg-primary/15 overflow-hidden">
-                <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${(completeSetupSteps / setupSteps.length) * 100}%` }} />
-              </div>
-              <span className="text-xs font-semibold text-muted-foreground">{completeSetupSteps}/{setupSteps.length} ready</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {pendingSetupSteps.map(step => (
-                <Link
-                  key={step.label}
-                  href={step.href}
-                  className="group flex items-center gap-3 rounded-xl border border-border/70 bg-card/80 p-3.5 hover:border-primary/50 hover:shadow-sm transition-all"
-                >
-                  <span className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl shrink-0">{step.icon}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 font-semibold text-foreground group-hover:text-primary">
-                      {step.label}<ChevronRight className="w-4 h-4" />
-                    </span>
-                    <span className="block text-xs text-muted-foreground mt-0.5">{step.description}</span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-            {completeSetupSteps > 0 && (
-              <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Great start—keep going when you are ready.
+            {laterSetupSteps.length > 0 && (
+              <p className="mt-5 text-xs text-primary-foreground/75">
+                Then: {laterSetupSteps.map(step => step.label).join(" · ")}
               </p>
             )}
           </CardContent>
