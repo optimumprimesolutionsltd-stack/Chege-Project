@@ -57,6 +57,10 @@ npx eas update --channel preview --platform android \
 **Critical**: `EXPO_PUBLIC_*` vars are baked into the JS bundle at export time. If omitted,
 `getApiBaseUrl()` returns `''` and all API calls (including sign-in) silently fail on device.
 
+`pnpm run check:ota` is a bundling check only. Its output defaults to `REPLIT_DEV_DOMAIN` when
+`EXPO_PUBLIC_DOMAIN` is not supplied, so never upload that output as a release artifact. Always run
+the explicit production export command above before `eas update`.
+
 **Why** `--no-bytecode`: the hermesc binary in RN 0.81.5 rejects ES2022 private class fields (`#x`, `#y`) in `react-native/src/private/webapis/geometry/DOMRectReadOnly.js`. OTA JS-only updates work fine without bytecode.
 
 ## babel-preset-expo version (critical)
