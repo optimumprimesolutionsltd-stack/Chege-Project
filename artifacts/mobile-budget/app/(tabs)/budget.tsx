@@ -705,6 +705,10 @@ export default function BudgetScreen() {
                     <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
                       <View style={[styles.barFill, { width: `${pct * 100}%`, backgroundColor: isOver ? '#f87171' : '#4ade80' }]} />
                     </View>
+                    <View style={styles.viewSpendingRow}>
+                      <Text style={[styles.viewSpendingText, { color: colors.primary }]}>View spending</Text>
+                      <Feather name="arrow-right" size={15} color={colors.primary} />
+                    </View>
                   </Pressable>
                 );
               })}
@@ -750,6 +754,10 @@ export default function BudgetScreen() {
                       </View>
                     </View>
                     <View style={[styles.barTrack, { backgroundColor: colors.border }]} />
+                    <View style={styles.viewSpendingRow}>
+                      <Text style={[styles.viewSpendingText, { color: colors.primary }]}>View spending</Text>
+                      <Feather name="arrow-right" size={15} color={colors.primary} />
+                    </View>
                   </Pressable>
                 );
               })}
@@ -813,6 +821,8 @@ const styles = StyleSheet.create({
   catSpent: { fontSize: 15, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
   catBudget: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 1 },
   editBtn: { padding: 2 },
+  viewSpendingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
+  viewSpendingText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingHorizontal: 40 },
