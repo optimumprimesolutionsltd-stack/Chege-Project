@@ -11,6 +11,7 @@ import {
   savingsGoalsTable,
   groupMembershipsTable,
   groupsTable,
+  incomeSourcesTable,
 } from "@workspace/db";
 import { sql, eq, and } from "drizzle-orm";
 import {
@@ -767,20 +768,72 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
     total: string | number;
     transactionCount: string | number;
   }>;
+  const sources = await db
+    .select({
+      id: incomeSourcesTable.id,
+      name: incomeSourcesTable.name,
+      userId: incomeSourcesTable.userId,
+      expectedMonthlyAmount: incomeSourcesTable.expectedMonthlyAmount,
+      ownerName: usersTable.firstName,
+    })
+    .from(incomeSourcesTable)
+    .leftJoin(usersTable, eq(usersTable.id, incomeSourcesTable.userId))
+    .where(eq(incomeSourcesTable.groupId, groupId));
+  const actualBySource = new Map(rawRows
+    .filter((row): row is typeof row & { incomeSourceId: number } => row.incomeSourceId !== null)
+    .map((row) => [row.incomeSourceId, row]));
   const totalFunding = rawRows.reduce((sum, row) => sum + Number(row.total), 0);
+  const totalExpected = sources.reduce((sum, source) => sum + source.expectedMonthlyAmount, 0);
+  const streams: Array<{
+    incomeSourceId: number | null;
+    sourceName: string;
+    ownerId: string | null;
+    ownerName: string;
+    total: number;
+    expectedMonthlyAmount: number;
+    remainingBalance: number;
+    variance: number;
+    sharePercent: number;
+    transactionCount: number;
+  }> = sources.map((source) => {
+    const actual = actualBySource.get(source.id);
+    const total = actual ? Number(actual.total) : 0;
+    return {
+      incomeSourceId: source.id,
+      sourceName: source.name,
+      ownerId: source.userId,
+      ownerName: source.ownerName ?? "Member",
+      total,
+      expectedMonthlyAmount: source.expectedMonthlyAmount,
+      remainingBalance: source.expectedMonthlyAmount - total,
+      variance: total - source.expectedMonthlyAmount,
+      sharePercent: totalFunding > 0 ? Math.round((total / totalFunding) * 1000) / 10 : 0,
+      transactionCount: actual ? Number(actual.transactionCount) : 0,
+    };
+  });
+  const unattributed = rawRows.find((row) => row.incomeSourceId === null);
+  if (unattributed) {
+    const total = Number(unattributed.total);
+    streams.push({
+      incomeSourceId: null,
+      sourceName: unattributed.sourceName,
+      ownerId: null,
+      ownerName: unattributed.ownerName,
+      total,
+      expectedMonthlyAmount: 0,
+      remainingBalance: -total,
+      variance: total,
+      sharePercent: totalFunding > 0 ? Math.round((total / totalFunding) * 1000) / 10 : 0,
+      transactionCount: Number(unattributed.transactionCount),
+    });
+  }
   const response = {
     month,
     year,
     totalFunding,
-    streams: rawRows.map((row) => ({
-      incomeSourceId: row.incomeSourceId,
-      sourceName: row.sourceName,
-      ownerId: row.ownerId,
-      ownerName: row.ownerName,
-      total: Number(row.total),
-      sharePercent: totalFunding > 0 ? Math.round((Number(row.total) / totalFunding) * 1000) / 10 : 0,
-      transactionCount: Number(row.transactionCount),
-    })),
+    totalExpected,
+    remainingBalance: totalExpected - totalFunding,
+    streams,
   };
 
   res.json(GetDashboardIncomeStreamsResponse.parse(response));

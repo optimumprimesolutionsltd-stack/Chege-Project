@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,13 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import { resolveAvatarProps, getDisplayName } from '@/utils/avatarHelper';
 
-type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
+type IncomeSource = { id: number; name: string; isMain: boolean; userId: string; expectedMonthlyAmount: number };
+type GroupMember = {
+  userId: string;
+  userName: string | null;
+  role: 'owner' | 'admin' | 'member';
+};
+type GroupInfo = { id: number; name: string };
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6'];
 
@@ -30,7 +36,13 @@ export default function SettingsScreen() {
   const { user, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   const [newSource, setNewSource] = useState('');
+  const [newSourceExpected, setNewSourceExpected] = useState('');
   const [addingSource, setAddingSource] = useState(false);
+  const [newMemberId, setNewMemberId] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<'admin' | 'member'>('member');
+  const [managingMembers, setManagingMembers] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [savingGroupName, setSavingGroupName] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -43,6 +55,96 @@ export default function SettingsScreen() {
     enabled: !!user?.id,
     staleTime: 30_000,
   });
+  const { data: members = [] } = useQuery<GroupMember[]>({
+    queryKey: ['members'],
+    queryFn: () => customFetch<GroupMember[]>('/api/members'),
+    enabled: !!user?.id,
+  });
+  const { data: group } = useQuery<GroupInfo>({
+    queryKey: ['group'],
+    queryFn: () => customFetch<GroupInfo>('/api/group'),
+    enabled: !!user?.id,
+  });
+  useEffect(() => {
+    if (group?.name) setGroupName(group.name);
+  }, [group?.name]);
+  const canManageShared = members.some(
+    (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
+  );
+  const handleSaveGroupName = async () => {
+    if (!groupName.trim()) return;
+    setSavingGroupName(true);
+    try {
+      await customFetch('/api/group', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: groupName.trim() }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['group'] });
+      Alert.alert('Group name updated');
+    } catch {
+      Alert.alert('Could not update group name', 'Use between 2 and 60 characters.');
+    } finally {
+      setSavingGroupName(false);
+    }
+  };
+
+  const refreshMembers = () => queryClient.invalidateQueries({ queryKey: ['members'] });
+  const handleInvite = async () => {
+    if (!newMemberId.trim()) return;
+    setManagingMembers(true);
+    try {
+      await customFetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: newMemberId.trim(), role: newMemberRole }),
+      });
+      setNewMemberId('');
+      setNewMemberRole('member');
+      refreshMembers();
+      Alert.alert('Access granted', `They were added as an ${newMemberRole}.`);
+    } catch {
+      Alert.alert('Could not add person', 'Check their User ID and try again.');
+    } finally {
+      setManagingMembers(false);
+    }
+  };
+  const handleRoleChange = async (member: GroupMember) => {
+    const role = member.role === 'admin' ? 'member' : 'admin';
+    setManagingMembers(true);
+    try {
+      await customFetch(`/api/members/${member.userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      });
+      refreshMembers();
+    } catch {
+      Alert.alert('Could not change role', 'Please try again.');
+    } finally {
+      setManagingMembers(false);
+    }
+  };
+  const handleRemoveMember = (member: GroupMember) => {
+    Alert.alert('Remove from group?', `${member.userName ?? 'This person'} will lose access to this group.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          setManagingMembers(true);
+          try {
+            await customFetch(`/api/members/${member.userId}`, { method: 'DELETE' });
+            refreshMembers();
+          } catch {
+            Alert.alert('Could not remove person', 'Please try again.');
+          } finally {
+            setManagingMembers(false);
+          }
+        },
+      },
+    ]);
+  };
 
   const handleAddSource = async () => {
     const name = newSource.trim();
@@ -52,9 +154,15 @@ export default function SettingsScreen() {
       await customFetch('/api/income-sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id, name, isMain: false }),
+        body: JSON.stringify({
+          userId: user?.id,
+          name,
+          isMain: false,
+          expectedMonthlyAmount: Math.max(0, Math.round(Number(newSourceExpected) || 0)),
+        }),
       });
       setNewSource('');
+      setNewSourceExpected('');
       queryClient.invalidateQueries({ queryKey: ['income-sources', user?.id] });
       // Invalidate all income-source caches so forms update immediately
       queryClient.invalidateQueries({ queryKey: ['income-sources'] });
@@ -62,6 +170,20 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Could not add income source.');
     } finally {
       setAddingSource(false);
+    }
+  };
+  const handleSaveExpectedIncome = async (source: IncomeSource, rawAmount: string) => {
+    const expectedMonthlyAmount = Math.max(0, Math.round(Number(rawAmount) || 0));
+    if (expectedMonthlyAmount === source.expectedMonthlyAmount) return;
+    try {
+      await customFetch(`/api/income-sources/${source.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: source.name, isMain: source.isMain, expectedMonthlyAmount }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+    } catch {
+      Alert.alert('Could not save expected income', 'Enter a whole amount in KES.');
     }
   };
 
@@ -149,6 +271,92 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>YOUR GROUP</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {canManageShared ? (
+            <View style={styles.addRow}>
+              <TextInput
+                style={[styles.addInput, { color: colors.foreground, flex: 1 }]}
+                placeholder="Name your group"
+                placeholderTextColor={colors.mutedForeground}
+                value={groupName}
+                onChangeText={setGroupName}
+                maxLength={60}
+              />
+              <Pressable disabled={savingGroupName || !groupName.trim()} onPress={handleSaveGroupName} style={[styles.saveGroupBtn, { backgroundColor: colors.primary, opacity: groupName.trim() ? 1 : 0.5 }]}>
+                {savingGroupName ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveGroupText}>Save</Text>}
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.row}>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>{group?.name ?? 'Your shared group'}</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>An admin can rename the group.</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Shared group access */}
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>GROUP ACCESS</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {members.map((member, index) => (
+            <View
+              key={member.userId}
+              style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: index < members.length - 1 ? StyleSheet.hairlineWidth : 0 }]}
+            >
+              <View style={styles.rowLeft}>
+                <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
+                  <Feather name={member.role === 'admin' || member.role === 'owner' ? 'shield' : 'user'} size={15} color={colors.primary} />
+                </View>
+                <View>
+                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>{member.userId === user?.id ? 'You' : member.userName ?? 'Member'}</Text>
+                  <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{member.role === 'owner' ? 'Owner' : member.role === 'admin' ? 'Admin' : 'Member'}</Text>
+                </View>
+              </View>
+              {canManageShared && member.role !== 'owner' && member.userId !== user?.id ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <Pressable disabled={managingMembers} onPress={() => handleRoleChange(member)}>
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                      {member.role === 'admin' ? 'Make member' : 'Make admin'}
+                    </Text>
+                  </Pressable>
+                  <Pressable disabled={managingMembers} onPress={() => handleRemoveMember(member)}>
+                    <Feather name="trash-2" size={16} color="#ef4444" />
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          ))}
+          {canManageShared ? (
+            <View style={[styles.addRow, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, flexWrap: 'wrap' }]}>
+              <TextInput
+                style={[styles.addInput, { color: colors.foreground, flex: 1, minWidth: 170 }]}
+                placeholder="Paste their User ID…"
+                placeholderTextColor={colors.mutedForeground}
+                value={newMemberId}
+                onChangeText={setNewMemberId}
+              />
+              <Pressable
+                onPress={() => setNewMemberRole((role) => role === 'member' ? 'admin' : 'member')}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7 }}
+              >
+                <Text style={{ color: colors.foreground, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                  {newMemberRole === 'admin' ? 'Admin' : 'Member'}
+                </Text>
+              </Pressable>
+              <Pressable disabled={managingMembers || !newMemberId.trim()} onPress={handleInvite} style={[styles.addBtn, { backgroundColor: colors.primary, opacity: newMemberId.trim() ? 1 : 0.5 }]}>
+                {managingMembers ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="plus" size={16} color="#fff" />}
+              </Pressable>
+              <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                Tap Member to invite them as an admin instead. Admins manage members, categories, budgets, and goals.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.row}>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Admins manage group access. You can still contribute in your own name.</Text>
+            </View>
+          )}
+        </View>
+
         {/* Income sources */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>INCOME SOURCES</Text>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -176,9 +384,19 @@ export default function SettingsScreen() {
                       )}
                     </View>
                   </View>
-                  <Pressable onPress={() => handleDeleteSource(src)} hitSlop={12}>
-                    <Feather name="trash-2" size={16} color="#ef4444" />
-                  </Pressable>
+                  <View style={{ alignItems: 'flex-end', gap: 5 }}>
+                    <TextInput
+                      defaultValue={String(src.expectedMonthlyAmount ?? 0)}
+                      keyboardType="numeric"
+                      onEndEditing={(event) => handleSaveExpectedIncome(src, event.nativeEvent.text)}
+                      placeholder="Expected KES"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={{ width: 96, paddingVertical: 3, paddingHorizontal: 6, borderRadius: 6, borderWidth: 1, borderColor: colors.border, color: colors.foreground, fontSize: 12, textAlign: 'right' }}
+                    />
+                    <Pressable onPress={() => handleDeleteSource(src)} hitSlop={12}>
+                      <Feather name="trash-2" size={16} color="#ef4444" />
+                    </Pressable>
+                  </View>
                 </View>
               );
             })
@@ -194,6 +412,14 @@ export default function SettingsScreen() {
               onChangeText={setNewSource}
               returnKeyType="done"
               onSubmitEditing={handleAddSource}
+            />
+            <TextInput
+              style={[styles.addInput, { color: colors.foreground, width: 96, textAlign: 'right' }]}
+              placeholder="Expected KES"
+              placeholderTextColor={colors.mutedForeground}
+              value={newSourceExpected}
+              onChangeText={setNewSourceExpected}
+              keyboardType="numeric"
             />
             {newSource.trim().length > 0 && (
               <Pressable
@@ -304,6 +530,8 @@ const styles = StyleSheet.create({
   addRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
   addInput: { fontSize: 14, fontFamily: 'Inter_400Regular', paddingVertical: 4 },
   addBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  saveGroupBtn: { borderRadius: 8, paddingHorizontal: 13, paddingVertical: 8, minWidth: 54, alignItems: 'center' },
+  saveGroupText: { color: '#fff', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
 
   signOutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

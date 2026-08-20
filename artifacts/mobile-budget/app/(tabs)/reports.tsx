@@ -491,7 +491,7 @@ export default function ReportsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Income Streams</Text>
                 <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-                  Which saved streams funded this month’s group activity
+                  Expected income, recorded funding, and what remains this month
                 </Text>
               </View>
               <Feather name="pie-chart" size={19} color={colors.primary} />
@@ -526,9 +526,9 @@ export default function ReportsScreen() {
             ) : (
               <>
                 <View style={[styles.incomeStreamTotal, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '28' }]}>
-                  <Text style={[styles.incomeStreamTotalLabel, { color: colors.mutedForeground }]}>RECORDED PERSONAL FUNDING</Text>
+                  <Text style={[styles.incomeStreamTotalLabel, { color: colors.mutedForeground }]}>EXPECTED · RECORDED · BALANCE</Text>
                   <Text style={[styles.incomeStreamTotalAmount, { color: colors.foreground }]}>
-                    {formatKES(incomeStreamReport?.totalFunding)}
+                    {formatKES(incomeStreamReport?.totalExpected)} · {formatKES(incomeStreamReport?.totalFunding)} · {formatKES(Math.abs(incomeStreamReport?.remainingBalance ?? 0))}
                   </Text>
                 </View>
                 {incomeStreamReport?.streams.map(stream => {
@@ -550,13 +550,16 @@ export default function ReportsScreen() {
                           <Text style={[styles.incomeStreamName, { color: colors.foreground }]} numberOfLines={1}>{stream.sourceName}</Text>
                           <Text style={[styles.incomeStreamOwner, { color: colors.mutedForeground }]} numberOfLines={1}>{stream.ownerName}</Text>
                         </View>
-                        <Text style={[styles.incomeStreamAmount, { color: colors.foreground }]}>{formatKES(stream.total)}</Text>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={[styles.incomeStreamAmount, { color: colors.foreground }]}>{formatKES(stream.total)}</Text>
+                          <Text style={[styles.variance, { color: colors.mutedForeground }]}>of {formatKES(stream.expectedMonthlyAmount)}</Text>
+                        </View>
                       </View>
                       <View style={[styles.barBg, { backgroundColor: colors.muted }]}>
                         <View style={[styles.barFill, { width: `${Math.min(stream.sharePercent, 100)}%` as any, backgroundColor: accent }]} />
                       </View>
                       <View style={styles.incomeStreamMeta}>
-                        <Text style={[styles.variance, { color: colors.mutedForeground }]}>{stream.sharePercent}% of recorded funding</Text>
+                        <Text style={[styles.variance, { color: stream.remainingBalance < 0 ? colors.primary : colors.mutedForeground }]}>{stream.remainingBalance < 0 ? `${formatKES(Math.abs(stream.remainingBalance))} above expected` : `${formatKES(stream.remainingBalance)} remaining`}</Text>
                         <Text style={[styles.variance, { color: colors.mutedForeground }]}>{stream.transactionCount} {stream.transactionCount === 1 ? 'record' : 'records'}</Text>
                       </View>
                     </View>

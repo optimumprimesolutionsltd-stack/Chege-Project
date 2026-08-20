@@ -60,3 +60,17 @@ After editing `api.schemas.ts`, run:
 pnpm --filter @workspace/api-client-react exec tsc --build
 ```
 Without this, consuming packages see stale dist/index.d.ts and miss new exports.
+
+## Expected monthly income
+
+Each income source has a non-negative monthly expected amount. The income-stream report compares that fixed source target with funding recorded in the selected month:
+
+- **Expected** = the source's monthly target
+- **Actual** = recorded personal funding for that source in the selected month
+- **Remaining balance** = expected − actual (negative means the source is above target)
+
+Sources with no activity still appear in the report so the group can see that their expected contribution has not yet been recorded. Unattributed funding is kept separate with an expected amount of zero.
+
+**Why:** A group needs to see both the plan and the funds actually recorded, rather than an activity-only breakdown that hides missed income.
+
+**How to apply:** Keep targets as recurring monthly source settings; do not treat them as a broader cash balance or a month-specific historical value without designing a separate target-history model.

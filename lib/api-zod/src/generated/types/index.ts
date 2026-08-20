@@ -8,6 +8,7 @@
 
 export * from './activityItem';
 export * from './addMemberInput';
+export * from './addMemberInputRole';
 export * from './applyRecurringInput';
 export * from './applyRecurringResult';
 export * from './authUser';
@@ -46,6 +47,7 @@ export * from './getDashboardSummaryParams';
 export * from './getDashboardTrendsParams';
 export * from './getExpensesParams';
 export * from './getIncomeSourcesParams';
+export * from './group';
 export * from './healthStatus';
 export * from './incomeSource';
 export * from './incomeStreamFunding';
@@ -62,6 +64,9 @@ export * from './savingsGoalInput';
 export * from './savingsGoalUpdateInput';
 export * from './savingsTransferInput';
 export * from './successResponse';
+export * from './updateGroupInput';
 export * from './updateJointAccountTransactionInput';
 export * from './updateJointAccountTransactionInputDestinationKind';
 export * from './updateJointAccountTransactionInputSourceKind';
+export * from './updateMemberRoleInput';
+export * from './updateMemberRoleInputRole';

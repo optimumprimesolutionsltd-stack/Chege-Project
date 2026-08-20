@@ -922,7 +922,7 @@ paths:
     post:
       operationId: addMember
       tags: [members]
-      summary: Add a new member by Replit user ID
+      summary: Invite a new member or admin by Replit user ID
       requestBody:
         required: true
         content:
@@ -943,7 +943,72 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /group:
+    get:
+      operationId: getGroup
+      tags: [group]
+      summary: Get the active group's details
+      responses:
+        "200":
+          description: Active group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+    patch:
+      operationId: updateGroup
+      tags: [group]
+      summary: Rename the active group
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupInput"
+      responses:
+        "200":
+          description: Updated group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "400":
+          description: Invalid group name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /members/{userId}:
+    patch:
+      operationId: updateMemberRole
+      tags: [members]
+      summary: Promote or demote a member
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberRoleInput"
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "403":
+          description: The owner role cannot be changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: removeMember
       tags: [members]
@@ -981,6 +1046,8 @@ components:
           type: string
         isMain:
           type: boolean
+        expectedMonthlyAmount:
+          type: number
         createdAt:
           type: string
           format: date-time
@@ -989,6 +1056,7 @@ components:
         - userId
         - name
         - isMain
+        - expectedMonthlyAmount
         - createdAt
 
     HealthStatus:
@@ -1474,6 +1542,10 @@ components:
         totalFunding:
           type: number
           description: Total personal funding recorded across streams and the Unattributed bucket
+        totalExpected:
+          type: number
+        remainingBalance:
+          type: number
         streams:
           type: array
           items:
@@ -1482,6 +1554,8 @@ components:
         - month
         - year
         - totalFunding
+        - totalExpected
+        - remainingBalance
         - streams
 
     IncomeStreamFunding:
@@ -1498,6 +1572,14 @@ components:
         total:
           type: number
           description: Funding amount in KES
+        expectedMonthlyAmount:
+          type: number
+        remainingBalance:
+          type: number
+          description: Expected monthly amount less recorded funding
+        variance:
+          type: number
+          description: Recorded funding less expected monthly amount
         sharePercent:
           type: number
           description: Share of the month's recorded personal funding
@@ -1507,6 +1589,9 @@ components:
         - sourceName
         - ownerName
         - total
+        - expectedMonthlyAmount
+        - remainingBalance
+        - variance
         - sharePercent
         - transactionCount
 
@@ -1554,8 +1639,39 @@ components:
       properties:
         userId:
           type: string
+        role:
+          type: string
+          enum: [admin, member]
+          default: member
       required:
         - userId
+
+    Group:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+      required: [id, name]
+
+    UpdateGroupInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 60
+      required: [name]
+
+    UpdateMemberRoleInput:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [admin, member]
+      required:
+        - role
 
     SavingsGoal:
       type: object

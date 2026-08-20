@@ -10,6 +10,7 @@ export interface IncomeSource {
   userId: string;
   name: string;
   isMain: boolean;
+  expectedMonthlyAmount: number;
   createdAt: string;
 }
 
@@ -283,6 +284,11 @@ export interface IncomeStreamFunding {
   ownerName: string;
   /** Funding amount in KES */
   total: number;
+  expectedMonthlyAmount: number;
+  /** Expected monthly amount less recorded funding */
+  remainingBalance: number;
+  /** Recorded funding less expected monthly amount */
+  variance: number;
   /** Share of the month's recorded personal funding */
   sharePercent: number;
   transactionCount: number;
@@ -293,6 +299,8 @@ export interface IncomeStreamReport {
   year: number;
   /** Total personal funding recorded across streams and the Unattributed bucket */
   totalFunding: number;
+  totalExpected: number;
+  remainingBalance: number;
   streams: IncomeStreamFunding[];
 }
 
@@ -322,8 +330,42 @@ export interface Member {
   addedAt: string;
 }
 
+export type AddMemberInputRole = typeof AddMemberInputRole[keyof typeof AddMemberInputRole];
+
+
+export const AddMemberInputRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
 export interface AddMemberInput {
   userId: string;
+  role?: AddMemberInputRole;
+}
+
+export interface Group {
+  id: number;
+  name: string;
+}
+
+export interface UpdateGroupInput {
+  /**
+     * @minLength 2
+     * @maxLength 60
+     */
+  name: string;
+}
+
+export type UpdateMemberRoleInputRole = typeof UpdateMemberRoleInputRole[keyof typeof UpdateMemberRoleInputRole];
+
+
+export const UpdateMemberRoleInputRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface UpdateMemberRoleInput {
+  role: UpdateMemberRoleInputRole;
 }
 
 export interface SavingsGoal {

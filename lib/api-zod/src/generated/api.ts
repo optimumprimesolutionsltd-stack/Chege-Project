@@ -496,12 +496,17 @@ export const GetDashboardIncomeStreamsResponse = zod.object({
   "month": zod.number(),
   "year": zod.number(),
   "totalFunding": zod.number().describe('Total personal funding recorded across streams and the Unattributed bucket'),
+  "totalExpected": zod.number(),
+  "remainingBalance": zod.number(),
   "streams": zod.array(zod.object({
   "incomeSourceId": zod.number().nullish(),
   "sourceName": zod.string(),
   "ownerId": zod.string().nullish(),
   "ownerName": zod.string(),
   "total": zod.number().describe('Funding amount in KES'),
+  "expectedMonthlyAmount": zod.number(),
+  "remainingBalance": zod.number().describe('Expected monthly amount less recorded funding'),
+  "variance": zod.number().describe('Recorded funding less expected monthly amount'),
   "sharePercent": zod.number().describe('Share of the month\'s recorded personal funding'),
   "transactionCount": zod.number()
 }))
@@ -998,6 +1003,7 @@ export const GetIncomeSourcesResponseItem = zod.object({
   "userId": zod.string(),
   "name": zod.string(),
   "isMain": zod.boolean(),
+  "expectedMonthlyAmount": zod.number(),
   "createdAt": zod.coerce.date()
 })
 export const GetIncomeSourcesResponse = zod.array(GetIncomeSourcesResponseItem)
@@ -1016,13 +1022,62 @@ export const GetMembersResponse = zod.array(GetMembersResponseItem)
 
 
 /**
- * @summary Add a new member by Replit user ID
+ * @summary Invite a new member or admin by Replit user ID
  */
+export const addMemberBodyRoleDefault = `member`;
+
 export const AddMemberBody = zod.object({
-  "userId": zod.string()
+  "userId": zod.string(),
+  "role": zod.enum(['admin', 'member']).default(addMemberBodyRoleDefault)
 })
 
 export const AddMemberResponse = zod.object({
+  "userId": zod.string(),
+  "userName": zod.string().nullish(),
+  "role": zod.enum(['owner', 'admin', 'member']),
+  "addedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get the active group's details
+ */
+export const GetGroupResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+})
+
+
+/**
+ * @summary Rename the active group
+ */
+export const updateGroupBodyNameMin = 2;
+export const updateGroupBodyNameMax = 60;
+
+
+
+export const UpdateGroupBody = zod.object({
+  "name": zod.string().min(updateGroupBodyNameMin).max(updateGroupBodyNameMax)
+})
+
+export const UpdateGroupResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+})
+
+
+/**
+ * @summary Promote or demote a member
+ */
+export const UpdateMemberRoleParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const UpdateMemberRoleBody = zod.object({
+  "role": zod.enum(['admin', 'member'])
+})
+
+export const UpdateMemberRoleResponse = zod.object({
   "userId": zod.string(),
   "userName": zod.string().nullish(),
   "role": zod.enum(['owner', 'admin', 'member']),

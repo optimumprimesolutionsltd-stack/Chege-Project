@@ -47,11 +47,14 @@ router.post("/members", async (req, res): Promise<void> => {
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
 
-  const schema = z.object({ userId: z.string().min(1) });
+  const schema = z.object({
+    userId: z.string().min(1),
+    role: z.enum(["admin", "member"]).default("member"),
+  });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "userId is required" }); return; }
 
-  const { userId } = parsed.data;
+  const { userId, role } = parsed.data;
 
   // Check if already a group member
   const [existing] = await db
@@ -73,7 +76,7 @@ router.post("/members", async (req, res): Promise<void> => {
   await db.insert(groupMembershipsTable).values({
     groupId,
     userId,
-    role: "member",
+    role,
     addedByUserId: req.user!.id,
   });
 
@@ -83,12 +86,56 @@ router.post("/members", async (req, res): Promise<void> => {
   res.status(201).json(member);
 });
 
+router.patch("/members/:userId", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const parsed = z.object({ role: z.enum(["admin", "member"]) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Choose Admin or Member." }); return; }
+
+  const [existing] = await db
+    .select({ role: groupMembershipsTable.role })
+    .from(groupMembershipsTable)
+    .where(and(
+      eq(groupMembershipsTable.groupId, groupId),
+      eq(groupMembershipsTable.userId, req.params.userId),
+    ))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Member not found" }); return; }
+  if (existing.role === "owner") {
+    res.status(403).json({ error: "The group owner role cannot be changed." });
+    return;
+  }
+
+  await db.update(groupMembershipsTable)
+    .set({ role: parsed.data.role })
+    .where(and(
+      eq(groupMembershipsTable.groupId, groupId),
+      eq(groupMembershipsTable.userId, req.params.userId),
+    ));
+  const members = await getGroupMembersWithNames(groupId);
+  const [member] = members.filter((x) => x.userId === req.params.userId);
+  res.json(member);
+});
+
 router.delete("/members/:userId", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
 
   const { userId } = req.params;
+
+  const [target] = await db
+    .select({ role: groupMembershipsTable.role })
+    .from(groupMembershipsTable)
+    .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, userId)))
+    .limit(1);
+  if (!target) { res.status(404).json({ error: "Member not found" }); return; }
+  if (target.role === "owner") {
+    res.status(403).json({ error: "The group owner cannot be removed." });
+    return;
+  }
 
   // Prevent removing yourself if you're the only member
   const [countRow] = await db

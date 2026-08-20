@@ -8,6 +8,7 @@ export const incomeSourcesTable = pgTable("income_sources", {
   userId: text("user_id").notNull(),
   name: text("name").notNull(),
   isMain: boolean("is_main").notNull().default(false),
+  expectedMonthlyAmount: integer("expected_monthly_amount").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("income_sources_group_user_id_idx").on(table.groupId, table.userId),

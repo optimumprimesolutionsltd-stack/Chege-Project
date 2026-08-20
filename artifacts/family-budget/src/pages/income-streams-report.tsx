@@ -65,7 +65,7 @@ export default function IncomeStreamsReport() {
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">Funding report</p>
           <h1 className="mt-1 text-3xl font-display font-bold text-foreground">Income streams</h1>
           <p className="mt-1 text-muted-foreground">
-            See which saved income streams supported your shared group this month.
+            Compare expected monthly income with the funding your group has recorded.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -135,16 +135,19 @@ export default function IncomeStreamsReport() {
         <>
           <Card className="overflow-hidden border-none shadow-md">
             <div className="h-1 bg-primary" />
-            <CardContent className="flex items-end justify-between gap-4 pt-5">
+              <CardContent className="grid grid-cols-1 gap-4 pt-5 sm:grid-cols-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recorded personal funding</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Expected income</p>
+                  <p className="mt-2 font-display text-3xl font-bold">{formatKes(report.totalExpected)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recorded funding</p>
                 <p className="mt-2 font-display text-3xl font-bold">{formatKes(report.totalFunding)}</p>
               </div>
-              <p className="max-w-44 text-right text-xs leading-5 text-muted-foreground">
-                {report.streams.length === 0
-                  ? "No recorded funding yet"
-                  : `${report.streams.length} ${report.streams.length === 1 ? "stream" : "streams"} represented`}
-              </p>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{report.remainingBalance < 0 ? "Above expected" : "Still expected"}</p>
+                  <p className={`mt-2 font-display text-3xl font-bold ${report.remainingBalance < 0 ? "text-primary" : "text-foreground"}`}>{formatKes(Math.abs(report.remainingBalance))}</p>
+                </div>
             </CardContent>
           </Card>
 
@@ -184,7 +187,7 @@ export default function IncomeStreamsReport() {
                         />
                       </div>
                       <div className="flex justify-between gap-4 text-xs text-muted-foreground">
-                        <span>{stream.sharePercent}% of recorded funding</span>
+                        <span>Expected {formatKes(stream.expectedMonthlyAmount)} · {stream.remainingBalance < 0 ? `${formatKes(Math.abs(stream.remainingBalance))} above` : `${formatKes(stream.remainingBalance)} remaining`}</span>
                         <span>{stream.transactionCount} {stream.transactionCount === 1 ? "record" : "records"}</span>
                       </div>
                     </CardContent>

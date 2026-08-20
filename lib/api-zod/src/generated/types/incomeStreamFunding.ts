@@ -15,6 +15,11 @@ export interface IncomeStreamFunding {
   ownerName: string;
   /** Funding amount in KES */
   total: number;
+  expectedMonthlyAmount: number;
+  /** Expected monthly amount less recorded funding */
+  remainingBalance: number;
+  /** Recorded funding less expected monthly amount */
+  variance: number;
   /** Share of the month's recorded personal funding */
   sharePercent: number;
   transactionCount: number;

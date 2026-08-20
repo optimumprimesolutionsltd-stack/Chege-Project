@@ -12,5 +12,7 @@ export interface IncomeStreamReport {
   year: number;
   /** Total personal funding recorded across streams and the Unattributed bucket */
   totalFunding: number;
+  totalExpected: number;
+  remainingBalance: number;
   streams: IncomeStreamFunding[];
 }

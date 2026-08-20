@@ -6,11 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface IncomeSource {
-  id: number;
-  userId: string;
+export interface UpdateGroupInput {
+  /**
+     * @minLength 2
+     * @maxLength 60
+     */
   name: string;
-  isMain: boolean;
-  expectedMonthlyAmount: number;
-  createdAt: Date;
 }

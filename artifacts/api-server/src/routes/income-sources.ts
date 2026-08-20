@@ -51,6 +51,7 @@ router.post("/income-sources", async (req, res) => {
     userId: z.string().min(1),
     name: z.string().min(1).max(80),
     isMain: z.boolean().optional().default(false),
+    expectedMonthlyAmount: z.number().int().min(0).optional().default(0),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
@@ -70,7 +71,11 @@ router.put("/income-sources/:id", async (req, res) => {
   if (groupId === null) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const schema = z.object({ name: z.string().min(1).max(80), isMain: z.boolean().optional() });
+  const schema = z.object({
+    name: z.string().min(1).max(80),
+    isMain: z.boolean().optional(),
+    expectedMonthlyAmount: z.number().int().min(0).optional(),
+  });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const [existing] = await db.select({ userId: incomeSourcesTable.userId }).from(incomeSourcesTable)

@@ -29,7 +29,7 @@ type BudgetCategory = {
   activeMonth?: number | null;
   activeYear?: number | null;
 };
-type IncomeSource = { id: number; userId: string; name: string; isMain: boolean };
+type IncomeSource = { id: number; userId: string; name: string; isMain: boolean; expectedMonthlyAmount: number };
 type Member = { userId: string; userName?: string | null; role?: "owner" | "admin" | "member" };
 type LedgerTarget = { category: string; isBudgeted: boolean };
 
@@ -122,6 +122,11 @@ function CategoryDialog({
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">Category name</label>
             <Input placeholder="e.g. Transport" value={name} onChange={e => setName(e.target.value)} autoFocus />
+            {initial ? (
+              <p className="text-xs text-muted-foreground">
+                Renaming keeps all existing expenses and tagged bank payments under the new name.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">Budget amount (KES)</label>
@@ -289,6 +294,22 @@ export default function Budget() {
 
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
+  const saveExpectedIncome = async (source: IncomeSource, rawAmount: string) => {
+    const expectedMonthlyAmount = Math.max(0, Math.round(Number(rawAmount) || 0));
+    if (expectedMonthlyAmount === source.expectedMonthlyAmount) return;
+    const response = await fetch(`/api/income-sources/${source.id}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: source.name, isMain: source.isMain, expectedMonthlyAmount }),
+    });
+    if (!response.ok) {
+      toast({ variant: "destructive", title: "Could not save expected income" });
+      return;
+    }
+    toast({ title: "Expected monthly income saved" });
+    refetchIncomeSources();
+  };
 
   const groupedBreakdown = breakdown ? breakdown.reduce((acc, item) => {
     if (!acc[item.priority]) acc[item.priority] = [];
@@ -492,7 +513,7 @@ export default function Budget() {
            <div className="flex items-start justify-between gap-4 mb-4">
              <div>
                <p className="text-sm font-semibold text-foreground">Income streams</p>
-               <p className="text-xs text-muted-foreground mt-0.5">Named sources available to group members</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Set each stream’s expected monthly income in KES</p>
              </div>
              <WalletCards className="w-5 h-5 text-secondary" />
            </div>
@@ -509,12 +530,26 @@ export default function Budget() {
                      {memberNames.get(userId) ?? "Group member"}
                    </p>
                    <div className="flex flex-wrap gap-2">
-                     {sources.map(source => (
-                       <span key={source.id} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-medium text-primary">
-                         {source.name}
-                         {source.isMain ? <span className="text-[10px] uppercase tracking-wide opacity-70">Main</span> : null}
-                       </span>
-                     ))}
+                      {sources.map(source => (
+                        <div key={source.id} className="rounded-lg bg-primary/10 px-2.5 py-2 text-sm font-medium text-primary">
+                          <div className="flex items-center gap-1.5">
+                            {source.name}
+                            {source.isMain ? <span className="text-[10px] uppercase tracking-wide opacity-70">Main</span> : null}
+                          </div>
+                          {canManageShared ? (
+                            <Input
+                              aria-label={`Expected monthly income for ${source.name}`}
+                              type="number"
+                              min="0"
+                              defaultValue={source.expectedMonthlyAmount}
+                              onBlur={(event) => saveExpectedIncome(source, event.target.value)}
+                              className="mt-2 h-8 w-32 border-primary/20 bg-background text-xs"
+                            />
+                          ) : (
+                            <p className="mt-1 text-xs font-normal text-primary/75">Expected {formatKes(source.expectedMonthlyAmount)}</p>
+                          )}
+                        </div>
+                      ))}
                    </div>
                  </div>
                ))}

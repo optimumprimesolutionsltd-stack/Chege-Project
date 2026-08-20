@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { budgetCategoriesTable } from "@workspace/db";
+import { budgetCategoriesTable, expensesTable, jointAccountTxTable } from "@workspace/db";
 import { and, asc, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
@@ -91,11 +91,24 @@ router.put("/budget-categories/:id", async (req, res) => {
   });
   if (duplicate) { res.status(409).json({ error: "A category with this name already exists" }); return; }
   try {
-    const [row] = await db.update(budgetCategoriesTable).set({
-      ...merged.data,
-      activeMonth: merged.data.isRecurring ? null : merged.data.activeMonth,
-      activeYear: merged.data.isRecurring ? null : merged.data.activeYear,
-    }).where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId))).returning();
+    const row = await db.transaction(async (tx) => {
+      const [updated] = await tx.update(budgetCategoriesTable).set({
+        ...merged.data,
+        activeMonth: merged.data.isRecurring ? null : merged.data.activeMonth,
+        activeYear: merged.data.isRecurring ? null : merged.data.activeYear,
+      }).where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId))).returning();
+      if (!updated) return undefined;
+
+      if (existing.name !== updated.name) {
+        await tx.update(expensesTable)
+          .set({ category: updated.name })
+          .where(and(eq(expensesTable.groupId, groupId), eq(expensesTable.category, existing.name)));
+        await tx.update(jointAccountTxTable)
+          .set({ expenseCategory: updated.name })
+          .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.expenseCategory, existing.name)));
+      }
+      return updated;
+    });
     if (!row) { res.status(404).json({ error: "Category not found" }); return; }
     res.json(row);
   } catch (error) {

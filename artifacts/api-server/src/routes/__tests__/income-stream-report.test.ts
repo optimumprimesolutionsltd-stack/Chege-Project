@@ -53,6 +53,21 @@ function buildApp(groupId = 1) {
   return app;
 }
 
+function mockIncomeSources(rows: Array<{
+  id: number;
+  name: string;
+  userId: string;
+  expectedMonthlyAmount: number;
+  ownerName: string | null;
+}>) {
+  const chain = {
+    from: () => chain,
+    leftJoin: () => chain,
+    where: () => Promise.resolve(rows),
+  };
+  mockedDb.select.mockReturnValue(chain as never);
+}
+
 describe("GET /dashboard/income-streams", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,6 +102,10 @@ describe("GET /dashboard/income-streams", () => {
         },
       ],
     });
+    mockIncomeSources([
+      { id: 7, name: "Salary", userId: "member-a", expectedMonthlyAmount: 2_000, ownerName: "Amina" },
+      { id: 9, name: "Side business", userId: "member-b", expectedMonthlyAmount: 500, ownerName: "Baraka" },
+    ]);
 
     const response = await request(buildApp()).get("/dashboard/income-streams?month=5&year=2026");
 
@@ -95,13 +114,17 @@ describe("GET /dashboard/income-streams", () => {
       month: 5,
       year: 2026,
       totalFunding: 2500,
+      totalExpected: 2500,
+      remainingBalance: 0,
       streams: [
-        expect.objectContaining({ sourceName: "Salary", total: 1800, sharePercent: 72, transactionCount: 2 }),
-        expect.objectContaining({ sourceName: "Side business", total: 200, sharePercent: 8, transactionCount: 1 }),
+        expect.objectContaining({ sourceName: "Salary", total: 1800, expectedMonthlyAmount: 2000, remainingBalance: 200, sharePercent: 72, transactionCount: 2 }),
+        expect.objectContaining({ sourceName: "Side business", total: 200, expectedMonthlyAmount: 500, remainingBalance: 300, sharePercent: 8, transactionCount: 1 }),
         expect.objectContaining({
           incomeSourceId: null,
           sourceName: "Unattributed",
           total: 500,
+          expectedMonthlyAmount: 0,
+          remainingBalance: -500,
           sharePercent: 20,
           transactionCount: 2,
         }),
@@ -111,6 +134,7 @@ describe("GET /dashboard/income-streams", () => {
 
   it("uses the authenticated group and month filters while excluding joint-bank expense portions", async () => {
     mockedDb.execute.mockResolvedValue({ rows: [] });
+    mockIncomeSources([]);
 
     const response = await request(buildApp(41)).get("/dashboard/income-streams?month=2&year=2025&groupId=999");
 
@@ -131,10 +155,18 @@ describe("GET /dashboard/income-streams", () => {
 
   it("returns a safe empty report when the selected month has no funding", async () => {
     mockedDb.execute.mockResolvedValue({ rows: [] });
+    mockIncomeSources([]);
 
     const response = await request(buildApp()).get("/dashboard/income-streams?month=1&year=2024");
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ month: 1, year: 2024, totalFunding: 0, streams: [] });
+    expect(response.body).toEqual({
+      month: 1,
+      year: 2024,
+      totalFunding: 0,
+      totalExpected: 0,
+      remainingBalance: 0,
+      streams: [],
+    });
   });
 });

@@ -5,7 +5,9 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { AddMemberInputRole } from './addMemberInputRole';
 
 export interface AddMemberInput {
   userId: string;
+  role?: AddMemberInputRole;
 }

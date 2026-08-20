@@ -4,11 +4,13 @@ import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useGetGroup } from '@workspace/api-client-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const { data: group } = useGetGroup();
 
   const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -31,7 +33,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
             </svg>
           </div>
-          <span className="font-display font-bold text-xl tracking-tight">Bajeti</span>
+          <div className="min-w-0">
+            <span className="block font-display font-bold text-xl tracking-tight">Bajeti</span>
+            <span className="block truncate text-xs text-sidebar-foreground/60">{group?.name ?? 'Shared budget'}</span>
+          </div>
         </div>
 
         <nav className="flex-1 px-4 space-y-1 mt-4">
@@ -82,7 +87,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
             </svg>
           </div>
-          <span className="font-display font-bold text-lg">Bajeti</span>
+          <div className="min-w-0">
+            <span className="block font-display font-bold text-lg leading-none">Bajeti</span>
+            <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group?.name ?? 'Shared budget'}</span>
+          </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-sidebar-foreground">
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}

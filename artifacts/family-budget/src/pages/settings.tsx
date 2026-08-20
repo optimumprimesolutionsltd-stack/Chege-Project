@@ -1,5 +1,12 @@
-import { useState } from "react";
-import { useGetMembers, useAddMember, useRemoveMember } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
+import {
+  useGetMembers,
+  useAddMember,
+  useRemoveMember,
+  useUpdateMemberRole,
+  useGetGroup,
+  useUpdateGroup,
+} from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,26 +21,59 @@ export default function Settings() {
   const { data: members, isLoading } = useGetMembers();
   const addMember = useAddMember();
   const removeMember = useRemoveMember();
+  const updateMemberRole = useUpdateMemberRole();
+  const { data: group } = useGetGroup();
+  const updateGroup = useUpdateGroup();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newUserId, setNewUserId] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState<"admin" | "member">("member");
+  const [groupName, setGroupName] = useState("");
   const [copied, setCopied] = useState(false);
   const canManageShared = members?.some(
     (member) =>
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) ?? false;
+  useEffect(() => {
+    if (group?.name) setGroupName(group.name);
+  }, [group?.name]);
+
+  const handleSaveGroupName = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!groupName.trim()) return;
+    try {
+      await updateGroup.mutateAsync({ data: { name: groupName.trim() } });
+      toast({ title: "Group name updated" });
+    } catch {
+      toast({ variant: "destructive", title: "Could not update group name" });
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserId.trim()) return;
     try {
-      await addMember.mutateAsync({ data: { userId: newUserId.trim() } });
-      toast({ title: "Member added", description: "They can now sign in to the app." });
+      await addMember.mutateAsync({ data: { userId: newUserId.trim(), role: newMemberRole } });
+      toast({
+        title: newMemberRole === "admin" ? "Admin added" : "Member added",
+        description: "They can now sign in to the app.",
+      });
       setNewUserId("");
+      setNewMemberRole("member");
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not add member. Check the User ID and try again." });
+    }
+  };
+
+  const handleRoleChange = async (userId: string, role: "admin" | "member") => {
+    try {
+      await updateMemberRole.mutateAsync({ userId, data: { role } });
+      toast({ title: role === "admin" ? "Made admin" : "Made member" });
+      queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
+    } catch {
+      toast({ variant: "destructive", title: "Could not change role" });
     }
   };
 
@@ -90,6 +130,25 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      <Card className="border-none shadow-md">
+        <CardHeader>
+          <CardTitle>Group name</CardTitle>
+          <CardDescription>This is the name your group sees across Bajeti.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {canManageShared ? (
+            <form onSubmit={handleSaveGroupName} className="flex gap-2">
+              <Input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" />
+              <Button type="submit" disabled={!groupName.trim() || updateGroup.isPending}>
+                {updateGroup.isPending ? "Saving…" : "Save"}
+              </Button>
+            </form>
+          ) : (
+            <p className="text-lg font-semibold text-foreground">{group?.name ?? "Your group"}</p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Members */}
       <Card className="border-none shadow-md">
         <CardHeader>
@@ -115,19 +174,33 @@ export default function Settings() {
                     <p className="font-semibold text-foreground">{m.userName ?? "Unknown"}</p>
                     <p className="text-xs font-mono text-muted-foreground mt-0.5">{m.userId}</p>
                   </div>
-                   {m.userId !== user?.id && canManageShared && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 w-9"
-                      onClick={() => handleRemove(m.userId)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                   <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-1 rounded-full">
-                     {m.userId === user?.id ? "You" : m.role === "member" ? "Member" : "Admin"}
-                   </span>
+                    <div className="flex items-center gap-2">
+                      {canManageShared && m.role !== "owner" && m.userId !== user?.id && (
+                        <select
+                          aria-label={`Role for ${m.userName ?? "member"}`}
+                          value={m.role}
+                          onChange={(event) => handleRoleChange(m.userId, event.target.value as "admin" | "member")}
+                          disabled={updateMemberRole.isPending}
+                          className="h-9 rounded-lg border border-border bg-background px-2 text-xs font-medium"
+                        >
+                          <option value="member">Member</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      )}
+                      {m.userId !== user?.id && canManageShared && m.role !== "owner" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 w-9"
+                          onClick={() => handleRemove(m.userId)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-1 rounded-full">
+                        {m.userId === user?.id ? `You · ${m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : "Member"}` : m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : "Member"}
+                      </span>
+                    </div>
                 </div>
               ))}
               {members?.length === 0 && (
@@ -156,6 +229,15 @@ export default function Settings() {
                   onChange={(e) => setNewUserId(e.target.value)}
                   className="font-mono text-sm h-11 bg-card"
                 />
+                <select
+                  aria-label="Invite role"
+                  value={newMemberRole}
+                  onChange={(event) => setNewMemberRole(event.target.value as "admin" | "member")}
+                  className="h-11 rounded-lg border border-input bg-background px-3 text-sm"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
                 <Button type="submit" disabled={!newUserId.trim() || addMember.isPending} className="h-11 px-5 shrink-0">
                   {addMember.isPending ? "Adding…" : "Add"}
                 </Button>

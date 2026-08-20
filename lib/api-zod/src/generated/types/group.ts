@@ -6,11 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface IncomeSource {
+export interface Group {
   id: number;
-  userId: string;
   name: string;
-  isMain: boolean;
-  expectedMonthlyAmount: number;
-  createdAt: Date;
 }
