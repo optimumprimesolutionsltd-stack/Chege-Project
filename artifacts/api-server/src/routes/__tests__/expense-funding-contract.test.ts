@@ -38,6 +38,18 @@ function app() {
 }
 
 describe("expense funding request contract", () => {
+  it("explains which malformed field prevented an expense from being saved", async () => {
+    const response = await request(app()).post("/expenses").send({
+      amount: "1000",
+      category: "Food",
+      description: "Groceries",
+      date: "2026-08-19",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("amount");
+  });
+
   it("rejects a legacy labeled income split before it can create an expense", async () => {
     const response = await request(app()).post("/expenses").send({
       amount: 1000,

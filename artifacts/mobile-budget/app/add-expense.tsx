@@ -28,6 +28,7 @@ import {
   getGetDashboardActivityQueryKey,
   getGetDashboardSummaryQueryKey,
   customFetch,
+  ApiError,
 } from '@workspace/api-client-react';
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
@@ -46,6 +47,24 @@ const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Communication: 'phone',
   Other: 'more-horizontal',
 };
+
+function getExpenseSaveError(error: unknown): string {
+  if (error instanceof ApiError) {
+    const responseError = error.data;
+    if (
+      responseError &&
+      typeof responseError === 'object' &&
+      'error' in responseError &&
+      typeof responseError.error === 'string'
+    ) {
+      return responseError.error;
+    }
+    if (error.status === 400) {
+      return 'The expense details were not accepted. Check the amount, payer, and funding source.';
+    }
+  }
+  return 'Failed to save expense. Please check your connection and try again.';
+}
 
 function todayIso(): string {
   const d = new Date();
@@ -213,9 +232,9 @@ export default function AddExpenseSheet() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       invalidateExpenses();
       router.dismiss();
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to save expense. Please try again.');
+      Alert.alert('Could not save expense', getExpenseSaveError(error));
     } finally {
       setIsPending(false);
     }

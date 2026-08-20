@@ -282,7 +282,12 @@ router.post("/expenses", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   const parsed = CreateExpenseBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = issue?.path.join(".") || "expense";
+    res.status(400).json({ error: `Invalid ${field}: ${issue?.message ?? "check the entered value"}` });
+    return;
+  }
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
