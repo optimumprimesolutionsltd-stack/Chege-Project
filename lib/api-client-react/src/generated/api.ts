@@ -43,12 +43,14 @@ import type {
   GetContributionsParams,
   GetDashboardActivityParams,
   GetDashboardCategoryBreakdownParams,
+  GetDashboardIncomeStreamsParams,
   GetDashboardSummaryParams,
   GetDashboardTrendsParams,
   GetExpensesParams,
   GetIncomeSourcesParams,
   HealthStatus,
   IncomeSource,
+  IncomeStreamReport,
   JointAccountSummary,
   JointAccountTransaction,
   Member,
@@ -1441,6 +1443,90 @@ export function useGetDashboardCategoryBreakdown<TData = Awaited<ReturnType<type
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardCategoryBreakdownQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardIncomeStreamsUrl = (params?: GetDashboardIncomeStreamsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/income-streams?${stringifiedParams}` : `/api/dashboard/income-streams`
+}
+
+/**
+ * @summary Income-stream funding totals for the active group and selected month
+ */
+export const getDashboardIncomeStreams = async (params?: GetDashboardIncomeStreamsParams, options?: Parameters<typeof customFetch>[1]): Promise<IncomeStreamReport> => {
+
+  return customFetch<IncomeStreamReport>(getGetDashboardIncomeStreamsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardIncomeStreamsQueryKey = (params?: GetDashboardIncomeStreamsParams,) => {
+    return [
+    `/api/dashboard/income-streams`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardIncomeStreamsQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardIncomeStreams>>, TError = ErrorType<unknown>>(params?: GetDashboardIncomeStreamsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeStreams>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardIncomeStreamsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardIncomeStreams>>> = ({ signal }) => getDashboardIncomeStreams(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeStreams>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardIncomeStreamsQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardIncomeStreams>>>
+export type GetDashboardIncomeStreamsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Income-stream funding totals for the active group and selected month
+ */
+
+export function useGetDashboardIncomeStreams<TData = Awaited<ReturnType<typeof getDashboardIncomeStreams>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardIncomeStreamsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardIncomeStreams>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardIncomeStreamsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

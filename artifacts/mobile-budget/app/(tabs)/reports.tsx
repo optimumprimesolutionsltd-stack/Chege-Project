@@ -16,6 +16,8 @@ import { useColors } from '@/hooks/useColors';
 import {
   useGetExpenses,
   useGetDashboardCategoryBreakdown,
+  getGetDashboardIncomeStreamsQueryKey,
+  useGetDashboardIncomeStreams,
   useGetDashboardSummary,
   useGetMembers,
   useGetSavingsGoals,
@@ -180,13 +182,21 @@ export default function ReportsScreen() {
   const { data: expenses    = [], isLoading: loadingExp,     refetch: refetchExp     } = useGetExpenses(queryParams);
   const { data: catBreakdown = [], isLoading: loadingCat,    refetch: refetchCat     } = useGetDashboardCategoryBreakdown(queryParams);
   const { data: summary,          isLoading: loadingSummary, refetch: refetchSummary } = useGetDashboardSummary(queryParams);
+  const {
+    data: incomeStreamReport,
+    isLoading: loadingIncomeStreams,
+    isError: incomeStreamsError,
+    refetch: refetchIncomeStreams,
+  } = useGetDashboardIncomeStreams(queryParams, {
+    query: { queryKey: getGetDashboardIncomeStreamsQueryKey(queryParams), retry: false },
+  });
   const { data: members = [] } = useGetMembers();
 
   const isLoading = loadingExp || loadingCat || loadingSummary;
 
   const onRefresh = useCallback(() => {
-    refetchExp(); refetchCat(); refetchSummary();
-  }, [refetchExp, refetchCat, refetchSummary]);
+    refetchExp(); refetchCat(); refetchSummary(); refetchIncomeStreams();
+  }, [refetchExp, refetchCat, refetchSummary, refetchIncomeStreams]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -434,6 +444,87 @@ export default function ReportsScreen() {
               })}
             </View>
           )}
+
+          {/* ── Income streams ── */}
+          <View style={styles.section}>
+            <View style={styles.incomeStreamHeading}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Income Streams</Text>
+                <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+                  Which saved streams funded this month’s group activity
+                </Text>
+              </View>
+              <Feather name="pie-chart" size={19} color={colors.primary} />
+            </View>
+
+            {loadingIncomeStreams ? (
+              <View style={[styles.incomeStreamStatus, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={[styles.incomeStreamStatusText, { color: colors.mutedForeground }]}>Loading income streams…</Text>
+              </View>
+            ) : incomeStreamsError ? (
+              <Pressable
+                onPress={() => refetchIncomeStreams()}
+                style={[styles.incomeStreamStatus, { backgroundColor: colors.card, borderColor: '#ef444455' }]}
+              >
+                <Feather name="alert-circle" size={20} color="#ef4444" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.incomeStreamStatusTitle, { color: colors.foreground }]}>Couldn’t load income streams</Text>
+                  <Text style={[styles.incomeStreamStatusText, { color: colors.mutedForeground }]}>Tap to try again.</Text>
+                </View>
+              </Pressable>
+            ) : (incomeStreamReport?.streams.length ?? 0) === 0 ? (
+              <View style={[styles.incomeStreamStatus, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Feather name="credit-card" size={20} color={colors.mutedForeground} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.incomeStreamStatusTitle, { color: colors.foreground }]}>No funding recorded yet</Text>
+                  <Text style={[styles.incomeStreamStatusText, { color: colors.mutedForeground }]}>
+                    Choose an income stream when recording an expense or bank deposit to see it here.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <>
+                <View style={[styles.incomeStreamTotal, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '28' }]}>
+                  <Text style={[styles.incomeStreamTotalLabel, { color: colors.mutedForeground }]}>RECORDED PERSONAL FUNDING</Text>
+                  <Text style={[styles.incomeStreamTotalAmount, { color: colors.foreground }]}>
+                    {formatKES(incomeStreamReport?.totalFunding)}
+                  </Text>
+                </View>
+                {incomeStreamReport?.streams.map(stream => {
+                  const unattributed = stream.incomeSourceId == null;
+                  const accent = unattributed ? '#f59e0b' : colors.primary;
+                  return (
+                    <View
+                      key={stream.incomeSourceId ?? 'unattributed'}
+                      style={[styles.incomeStreamCard, {
+                        backgroundColor: colors.card,
+                        borderColor: unattributed ? '#f59e0b55' : colors.border,
+                      }]}
+                    >
+                      <View style={styles.incomeStreamRow}>
+                        <View style={[styles.incomeStreamIcon, { backgroundColor: accent + '1C' }]}>
+                          <Feather name={unattributed ? 'help-circle' : 'credit-card'} size={16} color={accent} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.incomeStreamName, { color: colors.foreground }]} numberOfLines={1}>{stream.sourceName}</Text>
+                          <Text style={[styles.incomeStreamOwner, { color: colors.mutedForeground }]} numberOfLines={1}>{stream.ownerName}</Text>
+                        </View>
+                        <Text style={[styles.incomeStreamAmount, { color: colors.foreground }]}>{formatKES(stream.total)}</Text>
+                      </View>
+                      <View style={[styles.barBg, { backgroundColor: colors.muted }]}>
+                        <View style={[styles.barFill, { width: `${Math.min(stream.sharePercent, 100)}%` as any, backgroundColor: accent }]} />
+                      </View>
+                      <View style={styles.incomeStreamMeta}>
+                        <Text style={[styles.variance, { color: colors.mutedForeground }]}>{stream.sharePercent}% of recorded funding</Text>
+                        <Text style={[styles.variance, { color: colors.mutedForeground }]}>{stream.transactionCount} {stream.transactionCount === 1 ? 'record' : 'records'}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </>
+            )}
+          </View>
 
           {/* ── Savings goals ── */}
           {goals.length > 0 && (
@@ -760,6 +851,22 @@ const styles = StyleSheet.create({
   contribStatValue: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   contribNetChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   contribNetText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+
+  // Income streams
+  incomeStreamHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  incomeStreamStatus: { minHeight: 88, borderRadius: 12, borderWidth: 1, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  incomeStreamStatusTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  incomeStreamStatusText: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginTop: 2 },
+  incomeStreamTotal: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 },
+  incomeStreamTotalLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.7 },
+  incomeStreamTotalAmount: { fontSize: 21, fontFamily: 'Inter_700Bold', marginTop: 4 },
+  incomeStreamCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10, marginBottom: 9 },
+  incomeStreamRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  incomeStreamIcon: { height: 32, width: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  incomeStreamName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  incomeStreamOwner: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
+  incomeStreamAmount: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  incomeStreamMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
 
   // Savings goal cards
   savingsCard: { borderRadius: 12, borderWidth: 1, padding: 12, gap: 10 },

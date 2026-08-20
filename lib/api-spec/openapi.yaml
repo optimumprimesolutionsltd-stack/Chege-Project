@@ -457,6 +457,32 @@ paths:
                 items:
                   $ref: "#/components/schemas/CategoryBreakdown"
 
+  /dashboard/income-streams:
+    get:
+      operationId: getDashboardIncomeStreams
+      tags: [dashboard]
+      summary: Income-stream funding totals for the active group and selected month
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: number
+            minimum: 2000
+            maximum: 2200
+      responses:
+        "200":
+          description: Monthly income-stream funding report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStreamReport"
+
   /dashboard/trends:
     get:
       operationId: getDashboardTrends
@@ -1329,6 +1355,52 @@ components:
         - color
         - isRecurring
         - isBudgeted
+
+    IncomeStreamReport:
+      type: object
+      properties:
+        month:
+          type: number
+        year:
+          type: number
+        totalFunding:
+          type: number
+          description: Total personal funding recorded across streams and the Unattributed bucket
+        streams:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeStreamFunding"
+      required:
+        - month
+        - year
+        - totalFunding
+        - streams
+
+    IncomeStreamFunding:
+      type: object
+      properties:
+        incomeSourceId:
+          type: ["number", "null"]
+        sourceName:
+          type: string
+        ownerId:
+          type: ["string", "null"]
+        ownerName:
+          type: string
+        total:
+          type: number
+          description: Funding amount in KES
+        sharePercent:
+          type: number
+          description: Share of the month's recorded personal funding
+        transactionCount:
+          type: number
+      required:
+        - sourceName
+        - ownerName
+        - total
+        - sharePercent
+        - transactionCount
 
     MonthTrend:
       type: object

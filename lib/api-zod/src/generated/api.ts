@@ -448,6 +448,37 @@ export const GetDashboardCategoryBreakdownResponse = zod.array(GetDashboardCateg
 
 
 /**
+ * @summary Income-stream funding totals for the active group and selected month
+ */
+export const getDashboardIncomeStreamsQueryMonthMax = 12;
+
+export const getDashboardIncomeStreamsQueryYearMin = 2000;
+export const getDashboardIncomeStreamsQueryYearMax = 2200;
+
+
+
+export const GetDashboardIncomeStreamsQueryParams = zod.object({
+  "month": zod.coerce.number().min(1).max(getDashboardIncomeStreamsQueryMonthMax).optional(),
+  "year": zod.coerce.number().min(getDashboardIncomeStreamsQueryYearMin).max(getDashboardIncomeStreamsQueryYearMax).optional()
+})
+
+export const GetDashboardIncomeStreamsResponse = zod.object({
+  "month": zod.number(),
+  "year": zod.number(),
+  "totalFunding": zod.number().describe('Total personal funding recorded across streams and the Unattributed bucket'),
+  "streams": zod.array(zod.object({
+  "incomeSourceId": zod.number().nullish(),
+  "sourceName": zod.string(),
+  "ownerId": zod.string().nullish(),
+  "ownerName": zod.string(),
+  "total": zod.number().describe('Funding amount in KES'),
+  "sharePercent": zod.number().describe('Share of the month\'s recorded personal funding'),
+  "transactionCount": zod.number()
+}))
+})
+
+
+/**
  * @summary Month-over-month spending totals for the last N months
  */
 export const GetDashboardTrendsQueryParams = zod.object({

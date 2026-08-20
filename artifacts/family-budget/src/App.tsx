@@ -15,6 +15,7 @@ import Settings from '@/pages/settings';
 import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
 import Parity from '@/pages/parity';
+import IncomeStreamsReport from '@/pages/income-streams-report';
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ function AuthenticatedApp() {
         <Route path="/activity" component={Activity} />
         <Route path="/savings-goals" component={SavingsGoals} />
         <Route path="/bank" component={Bank} />
+        <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/settings" component={Settings} />
         <Route path="/parity" component={Parity} />
         <Route component={NotFound} />

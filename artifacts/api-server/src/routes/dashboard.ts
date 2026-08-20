@@ -12,7 +12,13 @@ import {
   groupMembershipsTable,
 } from "@workspace/db";
 import { sql, eq, and } from "drizzle-orm";
-import { GetDashboardSummaryQueryParams, GetDashboardCategoryBreakdownQueryParams, GetDashboardActivityQueryParams } from "@workspace/api-zod";
+import {
+  GetDashboardSummaryQueryParams,
+  GetDashboardCategoryBreakdownQueryParams,
+  GetDashboardActivityQueryParams,
+  GetDashboardIncomeStreamsQueryParams,
+  GetDashboardIncomeStreamsResponse,
+} from "@workspace/api-zod";
 import { getActiveGroupId } from "../lib/activeGroup";
 
 const router = Router();
@@ -551,6 +557,144 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
   }
 
   res.json(breakdown);
+});
+
+/**
+ * Funding is attributed at the same unit as the contribution summary:
+ * personal expense portions, bank deposits, and personal savings additions.
+ * Joint-bank expense portions are intentionally absent so a prior deposit is
+ * never reported a second time as another income contribution.
+ */
+router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const now = new Date();
+  const parsed = GetDashboardIncomeStreamsQueryParams.safeParse(req.query);
+  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
+  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+
+  const result = await db.execute(sql`
+    WITH funding AS (
+      -- Explicit personal portions of split-funded expenses.
+      SELECT split.income_source_id, split.amount, 'expense'::text AS record_type, expense.id AS record_id
+      FROM expense_income_splits split
+      INNER JOIN expenses expense ON expense.id = split.expense_id AND expense.group_id = ${groupId}
+      WHERE split.group_id = ${groupId}
+        AND split.from_bank = false
+        AND EXTRACT(MONTH FROM expense.date) = ${month}
+        AND EXTRACT(YEAR FROM expense.date) = ${year}
+
+      UNION ALL
+
+      -- Legacy/direct personal expenses, only when no explicit portions exist.
+      SELECT expense.income_source_id, expense.amount, 'expense'::text AS record_type, expense.id AS record_id
+      FROM expenses expense
+      WHERE expense.group_id = ${groupId}
+        AND expense.paid_from_bank = false
+        AND EXTRACT(MONTH FROM expense.date) = ${month}
+        AND EXTRACT(YEAR FROM expense.date) = ${year}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM expense_income_splits split
+          WHERE split.expense_id = expense.id
+            AND split.group_id = ${groupId}
+        )
+
+      UNION ALL
+
+      -- Explicit contributor portions of shared-bank deposits.
+      SELECT split.income_source_id, split.amount, 'deposit'::text AS record_type, deposit.id AS record_id
+      FROM joint_account_deposit_splits split
+      INNER JOIN joint_account_transactions deposit
+        ON deposit.id = split.transaction_id AND deposit.group_id = ${groupId}
+      WHERE split.group_id = ${groupId}
+        AND deposit.type = 'deposit'
+        AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
+        AND EXTRACT(MONTH FROM deposit.date) = ${month}
+        AND EXTRACT(YEAR FROM deposit.date) = ${year}
+
+      UNION ALL
+
+      -- Legacy/direct shared-bank deposits, only when no explicit portions exist.
+      SELECT deposit.income_source_id, deposit.amount, 'deposit'::text AS record_type, deposit.id AS record_id
+      FROM joint_account_transactions deposit
+      WHERE deposit.group_id = ${groupId}
+        AND deposit.type = 'deposit'
+        AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
+        AND EXTRACT(MONTH FROM deposit.date) = ${month}
+        AND EXTRACT(YEAR FROM deposit.date) = ${year}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM joint_account_deposit_splits split
+          WHERE split.transaction_id = deposit.id
+            AND split.group_id = ${groupId}
+        )
+
+      UNION ALL
+
+      -- Savings additions follow the existing personal-contribution rule.
+      -- Savings rows do not have an income-source field, so they remain
+      -- explicitly Unattributed instead of being guessed from the member.
+      SELECT NULL::integer AS income_source_id, contribution.amount,
+             'savings'::text AS record_type, contribution.id AS record_id
+      FROM savings_goal_contributions contribution
+      WHERE contribution.group_id = ${groupId}
+        AND contribution.created_by_user_id IS NOT NULL
+        AND EXTRACT(MONTH FROM contribution.created_at) = ${month}
+        AND EXTRACT(YEAR FROM contribution.created_at) = ${year}
+    )
+    SELECT
+      CASE WHEN source.id IS NULL THEN NULL ELSE funding.income_source_id END AS "incomeSourceId",
+      CASE WHEN source.id IS NULL THEN 'Unattributed' ELSE source.name END AS "sourceName",
+      CASE WHEN source.id IS NULL THEN NULL ELSE source.user_id END AS "ownerId",
+      CASE
+        WHEN source.id IS NULL THEN 'No income stream selected'
+        ELSE COALESCE(owner.preferred_name, owner.first_name, 'Member')
+      END AS "ownerName",
+      COALESCE(SUM(funding.amount), 0) AS total,
+      COUNT(DISTINCT funding.record_type || ':' || funding.record_id::text) AS "transactionCount"
+    FROM funding
+    LEFT JOIN income_sources source
+      ON source.id = funding.income_source_id
+      AND source.group_id = ${groupId}
+    LEFT JOIN users owner ON owner.id = source.user_id
+    GROUP BY
+      CASE WHEN source.id IS NULL THEN NULL ELSE funding.income_source_id END,
+      CASE WHEN source.id IS NULL THEN 'Unattributed' ELSE source.name END,
+      CASE WHEN source.id IS NULL THEN NULL ELSE source.user_id END,
+      CASE
+        WHEN source.id IS NULL THEN 'No income stream selected'
+        ELSE COALESCE(owner.preferred_name, owner.first_name, 'Member')
+      END
+    ORDER BY total DESC, "sourceName" ASC
+  `);
+
+  const rawRows = result.rows as Array<{
+    incomeSourceId: number | null;
+    sourceName: string;
+    ownerId: string | null;
+    ownerName: string;
+    total: string | number;
+    transactionCount: string | number;
+  }>;
+  const totalFunding = rawRows.reduce((sum, row) => sum + Number(row.total), 0);
+  const response = {
+    month,
+    year,
+    totalFunding,
+    streams: rawRows.map((row) => ({
+      incomeSourceId: row.incomeSourceId,
+      sourceName: row.sourceName,
+      ownerId: row.ownerId,
+      ownerName: row.ownerName,
+      total: Number(row.total),
+      sharePercent: totalFunding > 0 ? Math.round((Number(row.total) / totalFunding) * 1000) / 10 : 0,
+      transactionCount: Number(row.transactionCount),
+    })),
+  };
+
+  res.json(GetDashboardIncomeStreamsResponse.parse(response));
 });
 
 router.get("/dashboard/trends", async (req, res): Promise<void> => {

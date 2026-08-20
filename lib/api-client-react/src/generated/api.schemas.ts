@@ -249,6 +249,28 @@ export interface CategoryBreakdown {
   isBudgeted: boolean;
 }
 
+export interface IncomeStreamFunding {
+  /** @nullable */
+  incomeSourceId?: number | null;
+  sourceName: string;
+  /** @nullable */
+  ownerId?: string | null;
+  ownerName: string;
+  /** Funding amount in KES */
+  total: number;
+  /** Share of the month's recorded personal funding */
+  sharePercent: number;
+  transactionCount: number;
+}
+
+export interface IncomeStreamReport {
+  month: number;
+  year: number;
+  /** Total personal funding recorded across streams and the Unattributed bucket */
+  totalFunding: number;
+  streams: IncomeStreamFunding[];
+}
+
 export interface MonthTrend {
   month: number;
   year: number;
@@ -572,6 +594,19 @@ year?: number;
 
 export type GetDashboardCategoryBreakdownParams = {
 month?: number;
+year?: number;
+};
+
+export type GetDashboardIncomeStreamsParams = {
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month?: number;
+/**
+ * @minimum 2000
+ * @maximum 2200
+ */
 year?: number;
 };
 
