@@ -1,14 +1,20 @@
 import { useState } from "react";
-import { getGetDashboardIncomeStreamsQueryKey, useGetDashboardIncomeStreams } from "@workspace/api-client-react";
+import {
+  getDashboardMonthlyReportPdf,
+  getGetDashboardIncomeStreamsQueryKey,
+  useGetDashboardIncomeStreams,
+} from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatKes, formatMonthYear } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, Calendar, CircleHelp, Loader2, TrendingUp, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowRight, Calendar, CheckCircle2, CircleHelp, Download, Loader2, TrendingUp, WalletCards } from "lucide-react";
 
 export default function IncomeStreamsReport() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const { data: report, isLoading, isError, refetch } = useGetDashboardIncomeStreams(
     { month, year },
     { query: { queryKey: getGetDashboardIncomeStreamsQueryKey({ month, year }), retry: false }, request: { cache: "no-store" } },
@@ -31,6 +37,26 @@ export default function IncomeStreamsReport() {
     }
   };
   const currentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+  const downloadPdf = async () => {
+    setIsDownloading(true);
+    setDownloadMessage(null);
+    try {
+      const reportPdf = await getDashboardMonthlyReportPdf({ month, year }, { responseType: "blob", cache: "no-store" });
+      const href = URL.createObjectURL(reportPdf);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `bajeti-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+      setDownloadMessage("Your monthly PDF has downloaded.");
+    } catch {
+      setDownloadMessage("We couldn’t create the PDF. Check your group access and try again.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   return (
     <div className="space-y-7 pb-12">
@@ -42,26 +68,42 @@ export default function IncomeStreamsReport() {
             See which saved income streams supported your shared group this month.
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-xl border bg-card p-1 shadow-sm">
-          <Button variant="ghost" size="icon" onClick={previousMonth} className="h-10 w-10 rounded-lg hover:bg-muted" aria-label="Previous month">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-1.5 px-2 text-sm font-semibold">
-            <Calendar className="h-4 w-4 text-primary" />
-            {formatMonthYear(month, year)}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex items-center gap-1 rounded-xl border bg-card p-1 shadow-sm">
+            <Button variant="ghost" size="icon" onClick={previousMonth} className="h-10 w-10 rounded-lg hover:bg-muted" aria-label="Previous month">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-1.5 px-2 text-sm font-semibold">
+              <Calendar className="h-4 w-4 text-primary" />
+              {formatMonthYear(month, year)}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={nextMonth}
+              disabled={currentMonth}
+              className="h-10 w-10 rounded-lg hover:bg-muted"
+              aria-label="Next month"
+            >
+              <ArrowRight className="h-5 w-5" />
+            </Button>
           </div>
           <Button
-            variant="ghost"
-            size="icon"
-            onClick={nextMonth}
-            disabled={currentMonth}
-            className="h-10 w-10 rounded-lg hover:bg-muted"
-            aria-label="Next month"
+            onClick={downloadPdf}
+            disabled={isLoading || isDownloading}
+            className="h-10 gap-2 rounded-xl"
           >
-            <ArrowRight className="h-5 w-5" />
+            {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {isDownloading ? "Creating PDF" : "Download PDF"}
           </Button>
         </div>
       </div>
+      {downloadMessage && (
+        <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${downloadMessage.startsWith("Your") ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
+          {downloadMessage.startsWith("Your") ? <CheckCircle2 className="h-4 w-4" /> : <CircleHelp className="h-4 w-4" />}
+          {downloadMessage}
+        </div>
+      )}
 
       <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
         <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-primary" />

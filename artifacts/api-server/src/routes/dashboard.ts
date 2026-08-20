@@ -10,6 +10,7 @@ import {
   savingsGoalContributionsTable,
   savingsGoalsTable,
   groupMembershipsTable,
+  groupsTable,
 } from "@workspace/db";
 import { sql, eq, and } from "drizzle-orm";
 import {
@@ -18,8 +19,10 @@ import {
   GetDashboardActivityQueryParams,
   GetDashboardIncomeStreamsQueryParams,
   GetDashboardIncomeStreamsResponse,
+  GetDashboardMonthlyReportPdfQueryParams,
 } from "@workspace/api-zod";
 import { getActiveGroupId } from "../lib/activeGroup";
+import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 
 const router = Router();
 
@@ -695,6 +698,149 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   };
 
   res.json(GetDashboardIncomeStreamsResponse.parse(response));
+});
+
+router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const now = new Date();
+  const parsed = GetDashboardMonthlyReportPdfQueryParams.safeParse(req.query);
+  const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
+  const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+  const [group] = await db
+    .select({ name: groupsTable.name })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+
+  const [categories, spentByCategory, disbursementsByCategory, expenseTotal, incomeResult] = await Promise.all([
+    db
+      .select()
+      .from(budgetCategoriesTable)
+      .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`)
+      .orderBy(budgetCategoriesTable.priority),
+    db
+      .select({ category: expensesTable.category, total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
+      .from(expensesTable)
+      .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
+      .groupBy(expensesTable.category),
+    db
+      .select({ category: jointAccountTxTable.expenseCategory, total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
+      .from(jointAccountTxTable)
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
+      .groupBy(jointAccountTxTable.expenseCategory),
+    db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(expensesTable)
+      .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`),
+    db.execute(sql`
+      WITH funding AS (
+        SELECT split.income_source_id, split.amount, 'expense'::text AS record_type, expense.id AS record_id
+        FROM expense_income_splits split
+        INNER JOIN expenses expense ON expense.id = split.expense_id AND expense.group_id = ${groupId}
+        WHERE split.group_id = ${groupId} AND split.from_bank = false
+          AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+        UNION ALL
+        SELECT expense.income_source_id, expense.amount, 'expense'::text, expense.id
+        FROM expenses expense
+        WHERE expense.group_id = ${groupId} AND expense.paid_from_bank = false
+          AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND NOT EXISTS (SELECT 1 FROM expense_income_splits split WHERE split.expense_id = expense.id AND split.group_id = ${groupId})
+        UNION ALL
+        SELECT split.income_source_id, split.amount, 'deposit'::text, deposit.id
+        FROM joint_account_deposit_splits split
+        INNER JOIN joint_account_transactions deposit ON deposit.id = split.transaction_id AND deposit.group_id = ${groupId}
+        WHERE split.group_id = ${groupId} AND deposit.type = 'deposit'
+          AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
+          AND EXTRACT(MONTH FROM deposit.date) = ${month} AND EXTRACT(YEAR FROM deposit.date) = ${year}
+        UNION ALL
+        SELECT deposit.income_source_id, deposit.amount, 'deposit'::text, deposit.id
+        FROM joint_account_transactions deposit
+        WHERE deposit.group_id = ${groupId} AND deposit.type = 'deposit'
+          AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
+          AND EXTRACT(MONTH FROM deposit.date) = ${month} AND EXTRACT(YEAR FROM deposit.date) = ${year}
+          AND NOT EXISTS (SELECT 1 FROM joint_account_deposit_splits split WHERE split.transaction_id = deposit.id AND split.group_id = ${groupId})
+        UNION ALL
+        SELECT NULL::integer, contribution.amount, 'savings'::text, contribution.id
+        FROM savings_goal_contributions contribution
+        WHERE contribution.group_id = ${groupId} AND contribution.created_by_user_id IS NOT NULL
+          AND EXTRACT(MONTH FROM contribution.created_at) = ${month} AND EXTRACT(YEAR FROM contribution.created_at) = ${year}
+      )
+      SELECT
+        CASE WHEN source.id IS NULL THEN 'Unattributed' ELSE source.name END AS "sourceName",
+        CASE WHEN source.id IS NULL THEN 'No income stream selected' ELSE COALESCE(owner.preferred_name, owner.first_name, 'Member') END AS "ownerName",
+        COALESCE(SUM(funding.amount), 0) AS total,
+        COUNT(DISTINCT funding.record_type || ':' || funding.record_id::text) AS "transactionCount"
+      FROM funding
+      LEFT JOIN income_sources source ON source.id = funding.income_source_id AND source.group_id = ${groupId}
+      LEFT JOIN users owner ON owner.id = source.user_id
+      GROUP BY
+        CASE WHEN source.id IS NULL THEN 'Unattributed' ELSE source.name END,
+        CASE WHEN source.id IS NULL THEN 'No income stream selected' ELSE COALESCE(owner.preferred_name, owner.first_name, 'Member') END
+      ORDER BY total DESC, "sourceName" ASC
+    `),
+  ]);
+
+  const spentMap = new Map(spentByCategory.map((item) => [item.category, Number(item.total)]));
+  const disbursementMap = new Map(disbursementsByCategory.map((item) => [item.category, Number(item.total)]));
+  const categoryRows = categories.map((category) => {
+    const spentAmount = (spentMap.get(category.name) ?? 0) + (disbursementMap.get(category.name) ?? 0);
+    return {
+      category: category.name,
+      budgetAmount: category.budgetAmount,
+      spentAmount,
+      remaining: category.budgetAmount - spentAmount,
+      percentUsed: Math.round(category.budgetAmount > 0 ? (spentAmount / category.budgetAmount) * 1000 : 0) / 10,
+    };
+  });
+  const totalActual =
+    Array.from(spentMap.values()).reduce((sum, amount) => sum + amount, 0) +
+    Array.from(disbursementMap.values()).reduce((sum, amount) => sum + amount, 0);
+  const budgetedActual = categoryRows.reduce((sum, category) => sum + category.spentAmount, 0);
+  const unbudgetedSpent = Math.max(0, totalActual - budgetedActual);
+  if (unbudgetedSpent > 0) {
+    categoryRows.push({
+      category: "Unbudgeted spending",
+      budgetAmount: 0,
+      spentAmount: unbudgetedSpent,
+      remaining: -unbudgetedSpent,
+      percentUsed: 100,
+    });
+  }
+
+  const rawIncomeRows = incomeResult.rows as Array<{
+    sourceName: string;
+    ownerName: string;
+    total: string | number;
+    transactionCount: string | number;
+  }>;
+  const totalFunding = rawIncomeRows.reduce((sum, row) => sum + Number(row.total), 0);
+  const monthLabel = new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+  const totalBudget = categoryRows.reduce((sum, category) => sum + category.budgetAmount, 0);
+  const pdf = await createMonthlyReportPdf({
+    groupName: group?.name ?? "Shared group",
+    monthLabel,
+    totalBudget,
+    totalSpent: totalActual,
+    remaining: totalBudget - totalActual,
+    expenseCount: Number(expenseTotal[0]?.count ?? 0),
+    categories: categoryRows,
+    totalFunding,
+    incomeStreams: rawIncomeRows.map((row) => ({
+      sourceName: row.sourceName,
+      ownerName: row.ownerName,
+      total: Number(row.total),
+      sharePercent: totalFunding > 0 ? Math.round((Number(row.total) / totalFunding) * 1000) / 10 : 0,
+      transactionCount: Number(row.transactionCount),
+    })),
+  });
+
+  const filename = `bajeti-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(pdf);
 });
 
 router.get("/dashboard/trends", async (req, res): Promise<void> => {

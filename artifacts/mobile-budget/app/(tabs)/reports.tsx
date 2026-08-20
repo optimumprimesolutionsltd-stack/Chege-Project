@@ -12,8 +12,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useColors } from '@/hooks/useColors';
 import {
+  getDashboardMonthlyReportPdf,
   useGetExpenses,
   useGetDashboardCategoryBreakdown,
   getGetDashboardIncomeStreamsQueryKey,
@@ -172,6 +175,8 @@ export default function ReportsScreen() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const handleMonthChange = useCallback((m: number, y: number) => {
     setMonth(m); setYear(y);
@@ -197,6 +202,28 @@ export default function ReportsScreen() {
   const onRefresh = useCallback(() => {
     refetchExp(); refetchCat(); refetchSummary(); refetchIncomeStreams();
   }, [refetchExp, refetchCat, refetchSummary, refetchIncomeStreams]);
+
+  const exportPdf = useCallback(async () => {
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      const pdf = await getDashboardMonthlyReportPdf({ month, year }, { responseType: 'blob', cache: 'no-store' });
+      const file = new File(Paths.cache, `bajeti-monthly-report-${year}-${String(month).padStart(2, '0')}.pdf`);
+      file.write(new Uint8Array(await pdf.arrayBuffer()));
+      if (!(await Sharing.isAvailableAsync())) {
+        throw new Error('Sharing is not available on this device.');
+      }
+      await Sharing.shareAsync(file.uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'Save or share monthly report',
+        UTI: 'com.adobe.pdf',
+      });
+    } catch {
+      setExportError('Couldn’t create the PDF. Check your group access and try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [month, year]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -290,7 +317,20 @@ export default function ReportsScreen() {
         style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 12 : 8) }]}
       >
         <Text style={styles.headerTitle}>Reports</Text>
-        <MonthPicker month={month} year={year} onChange={handleMonthChange} colors={colors} />
+          <View style={styles.headerControls}>
+            <MonthPicker month={month} year={year} onChange={handleMonthChange} colors={colors} />
+            <Pressable
+              onPress={exportPdf}
+              disabled={isLoading || isExporting}
+              style={[styles.pdfButton, (isLoading || isExporting) && styles.pdfButtonDisabled]}
+              accessibilityRole="button"
+              accessibilityLabel={`Download ${MONTHS[month - 1]} ${year} report as PDF`}
+            >
+              {isExporting ? <ActivityIndicator color="#0a3d2e" size="small" /> : <Feather name="download" size={16} color="#0a3d2e" />}
+              <Text style={styles.pdfButtonText}>{isExporting ? 'Creating…' : 'PDF'}</Text>
+            </Pressable>
+          </View>
+          {exportError && <Text style={styles.pdfError}>{exportError}</Text>}
       </LinearGradient>
 
       {isLoading ? (
@@ -769,6 +809,11 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 20 },
   headerTitle: { fontSize: 28, fontFamily: 'Inter_700Bold', color: '#fff', marginBottom: 12 },
+  headerControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  pdfButton: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, backgroundColor: '#ffffff', paddingHorizontal: 11, paddingVertical: 9 },
+  pdfButtonDisabled: { opacity: 0.55 },
+  pdfButtonText: { color: '#0a3d2e', fontSize: 12, fontFamily: 'Inter_700Bold' },
+  pdfError: { color: '#fee2e2', fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17 },
 
   monthPicker: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   monthArrow: { padding: 4 },

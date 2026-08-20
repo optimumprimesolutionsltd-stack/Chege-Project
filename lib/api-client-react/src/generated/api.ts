@@ -44,6 +44,7 @@ import type {
   GetDashboardActivityParams,
   GetDashboardCategoryBreakdownParams,
   GetDashboardIncomeStreamsParams,
+  GetDashboardMonthlyReportPdfParams,
   GetDashboardSummaryParams,
   GetDashboardTrendsParams,
   GetExpensesParams,
@@ -1527,6 +1528,90 @@ export function useGetDashboardIncomeStreams<TData = Awaited<ReturnType<typeof g
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardIncomeStreamsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardMonthlyReportPdfUrl = (params?: GetDashboardMonthlyReportPdfParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/monthly-report.pdf?${stringifiedParams}` : `/api/dashboard/monthly-report.pdf`
+}
+
+/**
+ * @summary Download a monthly report PDF for the active group
+ */
+export const getDashboardMonthlyReportPdf = async (params?: GetDashboardMonthlyReportPdfParams, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetDashboardMonthlyReportPdfUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardMonthlyReportPdfQueryKey = (params?: GetDashboardMonthlyReportPdfParams,) => {
+    return [
+    `/api/dashboard/monthly-report.pdf`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardMonthlyReportPdfQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardMonthlyReportPdf>>, TError = ErrorType<unknown>>(params?: GetDashboardMonthlyReportPdfParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardMonthlyReportPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardMonthlyReportPdfQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardMonthlyReportPdf>>> = ({ signal }) => getDashboardMonthlyReportPdf(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardMonthlyReportPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardMonthlyReportPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardMonthlyReportPdf>>>
+export type GetDashboardMonthlyReportPdfQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download a monthly report PDF for the active group
+ */
+
+export function useGetDashboardMonthlyReportPdf<TData = Awaited<ReturnType<typeof getDashboardMonthlyReportPdf>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardMonthlyReportPdfParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardMonthlyReportPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardMonthlyReportPdfQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

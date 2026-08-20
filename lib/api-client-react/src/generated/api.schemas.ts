@@ -610,6 +610,19 @@ month?: number;
 year?: number;
 };
 
+export type GetDashboardMonthlyReportPdfParams = {
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month?: number;
+/**
+ * @minimum 2000
+ * @maximum 2200
+ */
+year?: number;
+};
+
 export type GetDashboardTrendsParams = {
 months?: number;
 };

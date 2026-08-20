@@ -37,6 +37,7 @@ export * from './getContributionsParams';
 export * from './getDashboardActivityParams';
 export * from './getDashboardCategoryBreakdownParams';
 export * from './getDashboardIncomeStreamsParams';
+export * from './getDashboardMonthlyReportPdfParams';
 export * from './getDashboardSummaryParams';
 export * from './getDashboardTrendsParams';
 export * from './getExpensesParams';

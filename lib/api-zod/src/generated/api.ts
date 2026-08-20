@@ -479,6 +479,24 @@ export const GetDashboardIncomeStreamsResponse = zod.object({
 
 
 /**
+ * @summary Download a monthly report PDF for the active group
+ */
+export const getDashboardMonthlyReportPdfQueryMonthMax = 12;
+
+export const getDashboardMonthlyReportPdfQueryYearMin = 2000;
+export const getDashboardMonthlyReportPdfQueryYearMax = 2200;
+
+
+
+export const GetDashboardMonthlyReportPdfQueryParams = zod.object({
+  "month": zod.coerce.number().min(1).max(getDashboardMonthlyReportPdfQueryMonthMax).optional(),
+  "year": zod.coerce.number().min(getDashboardMonthlyReportPdfQueryYearMin).max(getDashboardMonthlyReportPdfQueryYearMax).optional()
+})
+
+export const GetDashboardMonthlyReportPdfResponse = zod.unknown()
+
+
+/**
  * @summary Month-over-month spending totals for the last N months
  */
 export const GetDashboardTrendsQueryParams = zod.object({

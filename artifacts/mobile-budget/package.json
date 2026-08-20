@@ -63,7 +63,9 @@
     "@react-native-community/datetimepicker": "^8.4.4",
     "expo-auth-session": "~7.0.11",
     "expo-crypto": "~15.0.9",
+    "expo-file-system": "~19.0.24",
     "expo-secure-store": "~15.0.8",
+    "expo-sharing": "~14.0.8",
     "expo-updates": "^29.0.19"
   }
 }
