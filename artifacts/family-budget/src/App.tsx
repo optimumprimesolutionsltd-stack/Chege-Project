@@ -16,6 +16,7 @@ import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
 import Parity from '@/pages/parity';
 import IncomeStreamsReport from '@/pages/income-streams-report';
+import InvitePage from '@/pages/invite';
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ function AuthenticatedApp() {
         <Route path="/bank" component={Bank} />
         <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/settings" component={Settings} />
+        <Route path="/invite/:token" component={InvitePage} />
         <Route path="/parity" component={Parity} />
         <Route component={NotFound} />
       </Switch>
@@ -56,6 +58,10 @@ function MainRouter() {
   // Auth-done page must be reachable before auth state resolves (popup context).
   if (window.location.pathname.endsWith('/auth-done')) {
     return <AuthDone />;
+  }
+
+  if (/\/invite\/[^/]+$/.test(window.location.pathname)) {
+    return <InvitePage />;
   }
 
   if (!isAuthenticated) {

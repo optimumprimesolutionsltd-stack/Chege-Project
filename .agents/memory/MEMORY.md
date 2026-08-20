@@ -22,3 +22,4 @@
 - [Group workspace migration](group-workspace-migration.md) — legacy shared data is adopted atomically on the first authenticated protected request, not during server startup.
 - [Member participation permissions](member-participation-permissions.md) — members participate in their own name; only owners/admins change shared setup or move shared money.
 - [Bajeti SaaS roadmap](bajeti-saas-roadmap.md) — build chama-first financial trust before expanding to broader group types, monetization, or integrations.
+- [Email invitation public origin](email-invitation-public-origin.md) — email invite links must use the configured canonical HTTPS app URL, never request host headers.

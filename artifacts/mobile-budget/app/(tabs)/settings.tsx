@@ -26,6 +26,14 @@ type GroupMember = {
   role: 'owner' | 'admin' | 'member';
 };
 type GroupInfo = { id: number; name: string };
+type GroupInvitation = {
+  id: number;
+  email: string;
+  role: 'admin' | 'member';
+  expiresAt: string;
+  status: 'pending' | 'accepted' | 'cancelled' | 'expired';
+};
+type InviteContact = { id: number; name: string; email: string; role: 'admin' | 'member' };
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6'];
 
@@ -38,8 +46,10 @@ export default function SettingsScreen() {
   const [newSource, setNewSource] = useState('');
   const [newSourceExpected, setNewSourceExpected] = useState('');
   const [addingSource, setAddingSource] = useState(false);
-  const [newMemberId, setNewMemberId] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'admin' | 'member'>('member');
+  const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [managingMembers, setManagingMembers] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [savingGroupName, setSavingGroupName] = useState(false);
@@ -71,6 +81,17 @@ export default function SettingsScreen() {
   const canManageShared = members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
   );
+  const { data: invitations = [] } = useQuery<GroupInvitation[]>({
+    queryKey: ['group-invitations'],
+    queryFn: () => customFetch<GroupInvitation[]>('/api/group-invitations'),
+    enabled: !!user?.id && canManageShared,
+  });
+  const { data: inviteContacts = [] } = useQuery<InviteContact[]>({
+    queryKey: ['group-invitation-contacts'],
+    queryFn: () => customFetch<InviteContact[]>('/api/group-invitation-contacts'),
+    enabled: !!user?.id && canManageShared,
+  });
+  const hasInvitationCapacity = members.length + invitations.filter((invitation) => invitation.status === 'pending').length < 2;
   const handleSaveGroupName = async () => {
     if (!groupName.trim()) return;
     setSavingGroupName(true);
@@ -91,23 +112,72 @@ export default function SettingsScreen() {
 
   const refreshMembers = () => queryClient.invalidateQueries({ queryKey: ['members'] });
   const handleInvite = async () => {
-    if (!newMemberId.trim()) return;
+    if (!inviteEmail.trim()) return;
     setManagingMembers(true);
     try {
-      await customFetch('/api/members', {
+      await customFetch('/api/group-invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: newMemberId.trim(), role: newMemberRole }),
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: newMemberRole,
+          contactName: inviteName.trim() || undefined,
+          saveContact: saveInviteContact && Boolean(inviteName.trim()),
+        }),
       });
-      setNewMemberId('');
+      setInviteName('');
+      setInviteEmail('');
       setNewMemberRole('member');
-      refreshMembers();
-      Alert.alert('Access granted', `They were added as an ${newMemberRole}.`);
-    } catch {
-      Alert.alert('Could not add person', 'Check their User ID and try again.');
+      queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['group-invitation-contacts'] });
+      Alert.alert('Invitation sent', `${inviteEmail.trim()} can sign in and accept the invitation.`);
+    } catch (error) {
+      Alert.alert('Could not send invitation', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setManagingMembers(false);
     }
+  };
+  const handleQuickInvite = async (contact: InviteContact) => {
+    setManagingMembers(true);
+    try {
+      await customFetch('/api/group-invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: contact.email, role: contact.role, contactName: contact.name, saveContact: false }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
+      Alert.alert('Invitation sent', `${contact.name} can sign in and accept the invitation.`);
+    } catch (error) {
+      Alert.alert('Could not send invitation', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setManagingMembers(false);
+    }
+  };
+  const handleResendInvitation = async (invitation: GroupInvitation) => {
+    try {
+      await customFetch(`/api/group-invitations/${invitation.id}/resend`, { method: 'POST' });
+      queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
+      Alert.alert('Invitation resent');
+    } catch (error) {
+      Alert.alert('Could not resend invitation', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const handleCancelInvitation = (invitation: GroupInvitation) => {
+    Alert.alert('Cancel invitation?', `${invitation.email} will no longer be able to use this invitation link.`, [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Cancel invitation',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await customFetch(`/api/group-invitations/${invitation.id}`, { method: 'DELETE' });
+            queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
+          } catch (error) {
+            Alert.alert('Could not cancel invitation', error instanceof Error ? error.message : 'Please try again.');
+          }
+        },
+      },
+    ]);
   };
   const handleRoleChange = async (member: GroupMember) => {
     const role = member.role === 'admin' ? 'member' : 'admin';
@@ -260,14 +330,6 @@ export default function SettingsScreen() {
             {user?.email ? (
               <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>{user.email}</Text>
             ) : null}
-            {user?.id ? (
-              <Text
-                selectable
-                style={[styles.profileEmail, { color: colors.mutedForeground, fontSize: 10, marginTop: 2, fontFamily: 'Inter_400Regular' }]}
-              >
-                ID: {user.id}
-              </Text>
-            ) : null}
           </View>
         </View>
 
@@ -326,14 +388,27 @@ export default function SettingsScreen() {
               ) : null}
             </View>
           ))}
-          {canManageShared ? (
-            <View style={[styles.addRow, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, flexWrap: 'wrap' }]}>
+          {canManageShared && hasInvitationCapacity ? (
+            <View style={[styles.addRow, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, flexWrap: 'wrap', gap: 8 }]}>
+              <Text style={{ width: '100%', color: colors.foreground, fontSize: 14, fontFamily: 'Inter_600SemiBold', marginBottom: 2 }}>
+                Invite someone by email
+              </Text>
+              <TextInput
+                style={[styles.addInput, { color: colors.foreground, width: '100%' }]}
+                placeholder="Name for one-tap invite (optional)"
+                placeholderTextColor={colors.mutedForeground}
+                value={inviteName}
+                onChangeText={setInviteName}
+              />
               <TextInput
                 style={[styles.addInput, { color: colors.foreground, flex: 1, minWidth: 170 }]}
-                placeholder="Paste their User ID…"
+                placeholder="name@example.com"
                 placeholderTextColor={colors.mutedForeground}
-                value={newMemberId}
-                onChangeText={setNewMemberId}
+                value={inviteEmail}
+                onChangeText={setInviteEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
               />
               <Pressable
                 onPress={() => setNewMemberRole((role) => role === 'member' ? 'admin' : 'member')}
@@ -343,18 +418,76 @@ export default function SettingsScreen() {
                   {newMemberRole === 'admin' ? 'Admin' : 'Member'}
                 </Text>
               </Pressable>
-              <Pressable disabled={managingMembers || !newMemberId.trim()} onPress={handleInvite} style={[styles.addBtn, { backgroundColor: colors.primary, opacity: newMemberId.trim() ? 1 : 0.5 }]}>
-                {managingMembers ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="plus" size={16} color="#fff" />}
+              <Pressable disabled={managingMembers || !inviteEmail.trim()} onPress={handleInvite} style={[styles.addBtn, { backgroundColor: colors.primary, opacity: inviteEmail.trim() ? 1 : 0.5 }]}>
+                {managingMembers ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
+              </Pressable>
+              <Pressable
+                onPress={() => setSaveInviteContact((value) => !value)}
+                style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 2 }}
+              >
+                <Feather name={saveInviteContact ? 'check-square' : 'square'} size={16} color={saveInviteContact ? colors.primary : colors.mutedForeground} />
+                <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                  Save this person as a one-tap invite contact
+                </Text>
               </Pressable>
               <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
-                Tap Member to invite them as an admin instead. Admins manage members, categories, budgets, and goals.
+                Tap Member to choose Admin instead. They only join after signing in and accepting the email invitation.
               </Text>
             </View>
-          ) : (
+          ) : !canManageShared ? (
             <View style={styles.row}>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Admins manage group access. You can still contribute in your own name.</Text>
             </View>
+          ) : (
+            <View style={styles.row}>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>No invitation slot available</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This group supports two people. Remove a member or cancel a pending invitation before inviting someone else.</Text>
+            </View>
           )}
+          {canManageShared && inviteContacts.length > 0 ? (
+            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'stretch' }]}>
+              <Text style={[styles.rowLabel, { color: colors.foreground, marginBottom: 4 }]}>Quick invite</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground, marginBottom: 10 }]}>Saved people can be invited again without retyping their details.</Text>
+              {inviteContacts.map((contact) => {
+                const pending = invitations.some((invitation) => invitation.status === 'pending' && invitation.email === contact.email);
+                return (
+                  <View key={contact.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.rowLabel, { color: colors.foreground }]}>{contact.name}</Text>
+                      <Text style={[styles.rowSub, { color: colors.mutedForeground }]} numberOfLines={1}>{contact.email} · {contact.role}</Text>
+                    </View>
+                    <Pressable
+                      disabled={managingMembers || pending}
+                      onPress={() => handleQuickInvite(contact)}
+                      style={{ backgroundColor: pending ? colors.muted : colors.primary, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 7 }}
+                    >
+                      <Text style={{ color: pending ? colors.mutedForeground : '#fff', fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>{pending ? 'Pending' : 'Invite'}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+          {canManageShared && invitations.some((invitation) => invitation.status === 'pending') ? (
+            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'stretch' }]}>
+              <Text style={[styles.rowLabel, { color: colors.foreground, marginBottom: 4 }]}>Pending invitations</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground, marginBottom: 10 }]}>A person joins only after they accept their email invitation.</Text>
+              {invitations.filter((invitation) => invitation.status === 'pending').map((invitation) => (
+                <View key={invitation.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>{invitation.email}</Text>
+                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</Text>
+                  </View>
+                  <Pressable onPress={() => handleResendInvitation(invitation)} hitSlop={8}>
+                    <Feather name="rotate-ccw" size={17} color={colors.primary} />
+                  </Pressable>
+                  <Pressable onPress={() => handleCancelInvitation(invitation)} hitSlop={8}>
+                    <Feather name="x" size={19} color="#ef4444" />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         {/* Income sources */}

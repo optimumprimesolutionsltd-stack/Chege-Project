@@ -7,6 +7,7 @@ import {
   serial,
   text,
   timestamp,
+  unique,
 } from "drizzle-orm/pg-core";
 import { usersTable } from "./auth";
 
@@ -64,3 +65,53 @@ export const groupMembershipsTable = pgTable(
 );
 
 export type GroupMembership = typeof groupMembershipsTable.$inferSelect;
+
+export const groupInvitationsTable = pgTable(
+  "group_invitations",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groupsTable.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: text("role").notNull().default(GROUP_ROLE.MEMBER),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("group_invitations_group_id_idx").on(table.groupId),
+    index("group_invitations_email_idx").on(table.groupId, table.email),
+  ],
+);
+
+export type GroupInvitation = typeof groupInvitationsTable.$inferSelect;
+
+export const groupInviteContactsTable = pgTable(
+  "group_invite_contacts",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groupsTable.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    role: text("role").notNull().default(GROUP_ROLE.MEMBER),
+    createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique("group_invite_contacts_group_email_unique").on(table.groupId, table.email),
+    index("group_invite_contacts_group_id_idx").on(table.groupId),
+  ],
+);
+
+export type GroupInviteContact = typeof groupInviteContactsTable.$inferSelect;

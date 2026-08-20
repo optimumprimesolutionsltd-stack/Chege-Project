@@ -343,6 +343,92 @@ export interface AddMemberInput {
   role?: AddMemberInputRole;
 }
 
+export type CreateGroupInvitationInputRole = typeof CreateGroupInvitationInputRole[keyof typeof CreateGroupInvitationInputRole];
+
+
+export const CreateGroupInvitationInputRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface CreateGroupInvitationInput {
+  email: string;
+  role?: CreateGroupInvitationInputRole;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  contactName?: string;
+  saveContact?: boolean;
+}
+
+export type GroupInvitationRole = typeof GroupInvitationRole[keyof typeof GroupInvitationRole];
+
+
+export const GroupInvitationRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export type GroupInvitationStatus = typeof GroupInvitationStatus[keyof typeof GroupInvitationStatus];
+
+
+export const GroupInvitationStatus = {
+  pending: 'pending',
+  accepted: 'accepted',
+  cancelled: 'cancelled',
+  expired: 'expired',
+} as const;
+
+export interface GroupInvitation {
+  id: number;
+  email: string;
+  role: GroupInvitationRole;
+  createdAt: string;
+  expiresAt: string;
+  /** @nullable */
+  acceptedAt?: string | null;
+  /** @nullable */
+  cancelledAt?: string | null;
+  status: GroupInvitationStatus;
+}
+
+export type GroupInvitationPreviewRole = typeof GroupInvitationPreviewRole[keyof typeof GroupInvitationPreviewRole];
+
+
+export const GroupInvitationPreviewRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface GroupInvitationPreview {
+  groupName: string;
+  role: GroupInvitationPreviewRole;
+  expiresAt: string;
+}
+
+export type GroupInvitationContactInputRole = typeof GroupInvitationContactInputRole[keyof typeof GroupInvitationContactInputRole];
+
+
+export const GroupInvitationContactInputRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface GroupInvitationContactInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  email: string;
+  role?: GroupInvitationContactInputRole;
+}
+
+export type GroupInvitationContact = GroupInvitationContactInput & {
+  id: number;
+};
+
 export interface Group {
   id: number;
   name: string;

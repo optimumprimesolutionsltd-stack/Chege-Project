@@ -1040,6 +1040,164 @@ export const AddMemberResponse = zod.object({
 
 
 /**
+ * @summary List group invitations
+ */
+export const GetGroupInvitationsResponseItem = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "createdAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['pending', 'accepted', 'cancelled', 'expired'])
+})
+export const GetGroupInvitationsResponse = zod.array(GetGroupInvitationsResponseItem)
+
+
+/**
+ * @summary Email a group invitation
+ */
+export const createGroupInvitationBodyRoleDefault = `member`;
+export const createGroupInvitationBodyContactNameMax = 80;
+
+export const createGroupInvitationBodySaveContactDefault = false;
+
+export const CreateGroupInvitationBody = zod.object({
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']).default(createGroupInvitationBodyRoleDefault),
+  "contactName": zod.string().min(1).max(createGroupInvitationBodyContactNameMax).optional(),
+  "saveContact": zod.boolean().default(createGroupInvitationBodySaveContactDefault)
+})
+
+export const CreateGroupInvitationResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "createdAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['pending', 'accepted', 'cancelled', 'expired'])
+})
+
+
+/**
+ * @summary Cancel a pending group invitation
+ */
+export const CancelGroupInvitationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CancelGroupInvitationResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "createdAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['pending', 'accepted', 'cancelled', 'expired'])
+})
+
+
+/**
+ * @summary Send a fresh link for a pending invitation
+ */
+export const ResendGroupInvitationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResendGroupInvitationResponse = zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "createdAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['pending', 'accepted', 'cancelled', 'expired'])
+})
+
+
+/**
+ * @summary Preview a valid invitation before signing in
+ */
+export const GetGroupInvitationPreviewParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetGroupInvitationPreviewResponse = zod.object({
+  "groupName": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "expiresAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Accept an invitation with the matching signed-in email
+ */
+export const AcceptGroupInvitationParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const AcceptGroupInvitationResponse = zod.unknown()
+
+
+/**
+ * @summary List saved one-tap invitation contacts
+ */
+export const getGroupInvitationContactsResponseOneNameMax = 80;
+
+export const getGroupInvitationContactsResponseOneRoleDefault = `member`;
+
+export const GetGroupInvitationContactsResponseItem = zod.object({
+  "name": zod.string().min(1).max(getGroupInvitationContactsResponseOneNameMax),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']).default(getGroupInvitationContactsResponseOneRoleDefault)
+}).and(zod.object({
+  "id": zod.number()
+}))
+export const GetGroupInvitationContactsResponse = zod.array(GetGroupInvitationContactsResponseItem)
+
+
+/**
+ * @summary Save or update a one-tap invitation contact
+ */
+export const saveGroupInvitationContactBodyNameMax = 80;
+
+export const saveGroupInvitationContactBodyRoleDefault = `member`;
+
+export const SaveGroupInvitationContactBody = zod.object({
+  "name": zod.string().min(1).max(saveGroupInvitationContactBodyNameMax),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']).default(saveGroupInvitationContactBodyRoleDefault)
+})
+
+export const saveGroupInvitationContactResponseOneNameMax = 80;
+
+export const saveGroupInvitationContactResponseOneRoleDefault = `member`;
+
+export const SaveGroupInvitationContactResponse = zod.object({
+  "name": zod.string().min(1).max(saveGroupInvitationContactResponseOneNameMax),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']).default(saveGroupInvitationContactResponseOneRoleDefault)
+}).and(zod.object({
+  "id": zod.number()
+}))
+
+
+/**
+ * @summary Delete a saved invitation contact
+ */
+export const DeleteGroupInvitationContactParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteGroupInvitationContactResponse = zod.unknown()
+
+
+/**
  * @summary Get the active group's details
  */
 export const GetGroupResponse = zod.object({

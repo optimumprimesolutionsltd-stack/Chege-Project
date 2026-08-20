@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   useGetMembers,
-  useAddMember,
   useRemoveMember,
   useUpdateMemberRole,
   useGetGroup,
@@ -12,24 +11,41 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Trash2, UserPlus, Shield, Copy, Check } from "lucide-react";
+import { Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
+
+type GroupInvitation = {
+  id: number;
+  email: string;
+  role: "admin" | "member";
+  expiresAt: string;
+  status: "pending" | "accepted" | "cancelled" | "expired";
+};
+type InviteContact = { id: number; name: string; email: string; role: "admin" | "member" };
+
+async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, { credentials: "include", ...options });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error ?? "Something went wrong.");
+  return body as T;
+}
 
 export default function Settings() {
   const { user } = useAuth();
   const { data: members, isLoading } = useGetMembers();
-  const addMember = useAddMember();
   const removeMember = useRemoveMember();
   const updateMemberRole = useUpdateMemberRole();
   const { data: group } = useGetGroup();
   const updateGroup = useUpdateGroup();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [newUserId, setNewUserId] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
   const [newMemberRole, setNewMemberRole] = useState<"admin" | "member">("member");
+  const [saveInviteContact, setSaveInviteContact] = useState(true);
+  const [sendingInvite, setSendingInvite] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const [copied, setCopied] = useState(false);
   const canManageShared = members?.some(
     (member) =>
       member.userId === user?.id &&
@@ -38,6 +54,17 @@ export default function Settings() {
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
   }, [group?.name]);
+
+  const { data: invitations = [] } = useQuery<GroupInvitation[]>({
+    queryKey: ["group-invitations"],
+    queryFn: () => requestJson("/api/group-invitations"),
+    enabled: canManageShared,
+  });
+  const { data: inviteContacts = [] } = useQuery<InviteContact[]>({
+    queryKey: ["group-invitation-contacts"],
+    queryFn: () => requestJson("/api/group-invitation-contacts"),
+    enabled: canManageShared,
+  });
 
   const handleSaveGroupName = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -52,18 +79,69 @@ export default function Settings() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserId.trim()) return;
+    if (!inviteEmail.trim()) return;
+    setSendingInvite(true);
     try {
-      await addMember.mutateAsync({ data: { userId: newUserId.trim(), role: newMemberRole } });
-      toast({
-        title: newMemberRole === "admin" ? "Admin added" : "Member added",
-        description: "They can now sign in to the app.",
+      await requestJson("/api/group-invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: newMemberRole,
+          contactName: inviteName.trim() || undefined,
+          saveContact: saveInviteContact && Boolean(inviteName.trim()),
+        }),
       });
-      setNewUserId("");
+      toast({
+        title: "Invitation sent",
+        description: `${inviteEmail.trim()} can sign in and accept the invitation.`,
+      });
+      setInviteName("");
+      setInviteEmail("");
       setNewMemberRole("member");
-      queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not add member. Check the User ID and try again." });
+      queryClient.invalidateQueries({ queryKey: ["group-invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["group-invitation-contacts"] });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not send invitation", description: error instanceof Error ? error.message : undefined });
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  const inviteSavedContact = async (contact: InviteContact) => {
+    setSendingInvite(true);
+    try {
+      await requestJson("/api/group-invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: contact.email, role: contact.role, contactName: contact.name, saveContact: false }),
+      });
+      toast({ title: `Invitation sent to ${contact.name}` });
+      queryClient.invalidateQueries({ queryKey: ["group-invitations"] });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not send invitation", description: error instanceof Error ? error.message : undefined });
+    } finally {
+      setSendingInvite(false);
+    }
+  };
+
+  const resendInvitation = async (invitation: GroupInvitation) => {
+    try {
+      await requestJson(`/api/group-invitations/${invitation.id}/resend`, { method: "POST" });
+      toast({ title: "Invitation resent" });
+      queryClient.invalidateQueries({ queryKey: ["group-invitations"] });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not resend invitation", description: error instanceof Error ? error.message : undefined });
+    }
+  };
+
+  const cancelInvitation = async (invitation: GroupInvitation) => {
+    try {
+      await requestJson(`/api/group-invitations/${invitation.id}`, { method: "DELETE" });
+      toast({ title: "Invitation cancelled" });
+      queryClient.invalidateQueries({ queryKey: ["group-invitations"] });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not cancel invitation", description: error instanceof Error ? error.message : undefined });
     }
   };
 
@@ -88,12 +166,8 @@ export default function Settings() {
     }
   };
 
-  const handleCopyId = () => {
-    if (!user?.id) return;
-    navigator.clipboard.writeText(user.id);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const pendingEmails = new Set(invitations.filter((invitation) => invitation.status === "pending").map((invitation) => invitation.email));
+  const hasInvitationCapacity = (members?.length ?? 0) + pendingEmails.size < 2;
 
   return (
     <div className="space-y-8 pb-12 max-w-2xl">
@@ -113,19 +187,11 @@ export default function Settings() {
             <Shield className="w-5 h-5 text-primary" />
             <CardTitle>Your Account</CardTitle>
           </div>
-          <CardDescription>Copy your ID and share it with anyone you want to give access to this group.</CardDescription>
+          <CardDescription>Your sign-in email is used to confirm invitations sent to you.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 bg-muted rounded-lg px-4 py-3 font-mono text-sm text-foreground overflow-hidden text-ellipsis whitespace-nowrap">
-              {user?.id ?? "—"}
-            </div>
-            <Button variant="outline" size="icon" onClick={handleCopyId} className="shrink-0 h-11 w-11">
-              {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email}</strong>
+        <CardContent>
+          <p className="rounded-lg bg-muted px-4 py-3 text-sm text-foreground">
+            Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email}</strong>
           </p>
         </CardContent>
       </Card>
@@ -218,16 +284,26 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Add member form */}
-          {canManageShared && (members?.length ?? 0) < 5 && (
-            <form onSubmit={handleAdd} className="space-y-3 pt-2 border-t border-border/50">
-              <p className="text-sm font-medium text-foreground">Give someone access</p>
+          {/* Invite member form */}
+          {canManageShared && hasInvitationCapacity && (
+            <form onSubmit={handleAdd} className="space-y-3 border-t border-border/50 pt-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Invite someone by email</p>
+                <p className="mt-1 text-xs text-muted-foreground">They will sign in and accept the invitation before gaining access.</p>
+              </div>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Paste their User ID here..."
-                  value={newUserId}
-                  onChange={(e) => setNewUserId(e.target.value)}
-                  className="font-mono text-sm h-11 bg-card"
+                  placeholder="Name for your saved shortcut (optional)"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  className="h-11 bg-card"
+                />
+                <Input
+                  type="email"
+                  placeholder="name@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="h-11 bg-card"
                 />
                 <select
                   aria-label="Invite role"
@@ -238,14 +314,77 @@ export default function Settings() {
                   <option value="member">Member</option>
                   <option value="admin">Admin</option>
                 </select>
-                <Button type="submit" disabled={!newUserId.trim() || addMember.isPending} className="h-11 px-5 shrink-0">
-                  {addMember.isPending ? "Adding…" : "Add"}
+                <Button type="submit" disabled={!inviteEmail.trim() || sendingInvite} className="h-11 shrink-0 gap-2 px-5">
+                  <Send className="h-4 w-4" />
+                  {sendingInvite ? "Sending…" : "Invite"}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Ask the person to open Settings and copy their User ID, then paste it above.
-              </p>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={saveInviteContact}
+                  onChange={(event) => setSaveInviteContact(event.target.checked)}
+                  disabled={!inviteName.trim()}
+                />
+                Save this person as a one-tap invite contact
+              </label>
             </form>
+          )}
+          {canManageShared && !hasInvitationCapacity && (
+            <div className="border-t border-border/50 pt-4">
+              <p className="text-sm font-medium text-foreground">No invitation slot available</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                This group currently supports two people. Remove a member or cancel a pending invitation before inviting someone else.
+              </p>
+            </div>
+          )}
+          {canManageShared && inviteContacts.length > 0 && (
+            <div className="space-y-3 border-t border-border/50 pt-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Quick invite</p>
+                <p className="mt-1 text-xs text-muted-foreground">Saved people can be invited again without typing their details.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {inviteContacts.map((contact) => {
+                  const pending = pendingEmails.has(contact.email);
+                  return (
+                    <div key={contact.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">{contact.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{contact.email} · {contact.role}</p>
+                      </div>
+                      <Button size="sm" variant="outline" disabled={sendingInvite || pending} onClick={() => inviteSavedContact(contact)}>
+                        {pending ? "Pending" : "Invite"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {canManageShared && invitations.some((invitation) => invitation.status === "pending") && (
+            <div className="space-y-3 border-t border-border/50 pt-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Pending invitations</p>
+                <p className="mt-1 text-xs text-muted-foreground">A person joins only after they sign in and accept.</p>
+              </div>
+              {invitations.filter((invitation) => invitation.status === "pending").map((invitation) => (
+                <div key={invitation.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">{invitation.email}</p>
+                    <p className="text-xs text-muted-foreground">{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="ghost" size="icon" aria-label={`Resend invitation to ${invitation.email}`} onClick={() => resendInvitation(invitation)}>
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" aria-label={`Cancel invitation to ${invitation.email}`} onClick={() => cancelInvitation(invitation)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

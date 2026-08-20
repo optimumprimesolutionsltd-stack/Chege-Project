@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { groupMembershipsTable, usersTable } from "@workspace/db";
-import { and, eq, sql } from "drizzle-orm";
+import { groupInvitationsTable, groupMembershipsTable, groupsTable, usersTable } from "@workspace/db";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { MAX_MEMBERS } from "../middlewares/requireMember";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
@@ -56,29 +56,54 @@ router.post("/members", async (req, res): Promise<void> => {
 
   const { userId, role } = parsed.data;
 
-  // Check if already a group member
-  const [existing] = await db
-    .select({ userId: groupMembershipsTable.userId })
-    .from(groupMembershipsTable)
-    .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, userId)))
-    .limit(1);
-  if (existing) { res.status(400).json({ error: "Already a member" }); return; }
+  const outcome = await db.transaction(async (tx) => {
+    const [group] = await tx
+      .select({ id: groupsTable.id })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, groupId))
+      .for("update");
+    if (!group) return "missing-group" as const;
 
-  const [countRow] = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(groupMembershipsTable)
-    .where(eq(groupMembershipsTable.groupId, groupId));
-  if (Number(countRow.count) >= MAX_MEMBERS) {
+    const [existing] = await tx
+      .select({ userId: groupMembershipsTable.userId })
+      .from(groupMembershipsTable)
+      .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, userId)))
+      .limit(1);
+    if (existing) return "existing" as const;
+
+    const [countRow, pendingInvitationRow] = await Promise.all([
+      tx
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(groupMembershipsTable)
+        .where(eq(groupMembershipsTable.groupId, groupId)),
+      tx
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(groupInvitationsTable)
+        .where(and(
+          eq(groupInvitationsTable.groupId, groupId),
+          isNull(groupInvitationsTable.acceptedAt),
+          isNull(groupInvitationsTable.cancelledAt),
+          gt(groupInvitationsTable.expiresAt, new Date()),
+        )),
+    ]);
+    if (Number(countRow[0]?.count ?? 0) + Number(pendingInvitationRow[0]?.count ?? 0) >= MAX_MEMBERS) {
+      return "full" as const;
+    }
+
+    await tx.insert(groupMembershipsTable).values({
+      groupId,
+      userId,
+      role,
+      addedByUserId: req.user!.id,
+    });
+    return "added" as const;
+  });
+  if (outcome === "existing") { res.status(400).json({ error: "Already a member" }); return; }
+  if (outcome === "full") {
     res.status(400).json({ error: "This household already has the maximum number of members" });
     return;
   }
-
-  await db.insert(groupMembershipsTable).values({
-    groupId,
-    userId,
-    role,
-    addedByUserId: req.user!.id,
-  });
+  if (outcome === "missing-group") { res.status(404).json({ error: "Group not found" }); return; }
 
   const members = await getGroupMembersWithNames(groupId);
   const [member] = members.filter((x) => x.userId === userId);

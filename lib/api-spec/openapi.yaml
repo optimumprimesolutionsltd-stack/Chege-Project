@@ -943,6 +943,153 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /group-invitations:
+    get:
+      operationId: getGroupInvitations
+      tags: [members]
+      summary: List group invitations
+      responses:
+        "200":
+          description: Invitations for the active group
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GroupInvitation"
+    post:
+      operationId: createGroupInvitation
+      tags: [members]
+      summary: Email a group invitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupInvitationInput"
+      responses:
+        "201":
+          description: Invitation sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInvitation"
+        "400":
+          description: Invalid input or group limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Person is already a member or has a pending invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /group-invitations/{id}:
+    delete:
+      operationId: cancelGroupInvitation
+      tags: [members]
+      summary: Cancel a pending group invitation
+      parameters:
+        - $ref: "#/components/parameters/InvitationId"
+      responses:
+        "200":
+          description: Cancelled invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInvitation"
+
+  /group-invitations/{id}/resend:
+    post:
+      operationId: resendGroupInvitation
+      tags: [members]
+      summary: Send a fresh link for a pending invitation
+      parameters:
+        - $ref: "#/components/parameters/InvitationId"
+      responses:
+        "200":
+          description: Resent invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInvitation"
+
+  /group-invitations/accept/{token}:
+    get:
+      operationId: getGroupInvitationPreview
+      tags: [members]
+      summary: Preview a valid invitation before signing in
+      parameters:
+        - $ref: "#/components/parameters/InvitationToken"
+      responses:
+        "200":
+          description: Invitation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInvitationPreview"
+        "410":
+          description: Invitation is expired, cancelled, or already accepted
+    post:
+      operationId: acceptGroupInvitation
+      tags: [members]
+      summary: Accept an invitation with the matching signed-in email
+      parameters:
+        - $ref: "#/components/parameters/InvitationToken"
+      responses:
+        "200":
+          description: Membership created
+        "403":
+          description: Signed-in email does not match the invitation
+        "410":
+          description: Invitation is expired or cancelled
+
+  /group-invitation-contacts:
+    get:
+      operationId: getGroupInvitationContacts
+      tags: [members]
+      summary: List saved one-tap invitation contacts
+      responses:
+        "200":
+          description: Saved invitation contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GroupInvitationContact"
+    post:
+      operationId: saveGroupInvitationContact
+      tags: [members]
+      summary: Save or update a one-tap invitation contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupInvitationContactInput"
+      responses:
+        "201":
+          description: Saved contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInvitationContact"
+
+  /group-invitation-contacts/{id}:
+    delete:
+      operationId: deleteGroupInvitationContact
+      tags: [members]
+      summary: Delete a saved invitation contact
+      parameters:
+        - $ref: "#/components/parameters/InvitationContactId"
+      responses:
+        "200":
+          description: Saved contact deleted
+
   /group:
     get:
       operationId: getGroup
@@ -1034,6 +1181,25 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
 components:
+  parameters:
+    InvitationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: number
+    InvitationContactId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: number
+    InvitationToken:
+      name: token
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     IncomeSource:
       type: object
@@ -1645,6 +1811,88 @@ components:
           default: member
       required:
         - userId
+
+    CreateGroupInvitationInput:
+      type: object
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+          default: member
+        contactName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        saveContact:
+          type: boolean
+          default: false
+      required: [email]
+
+    GroupInvitation:
+      type: object
+      properties:
+        id:
+          type: number
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: ["string", "null"]
+          format: date-time
+        cancelledAt:
+          type: ["string", "null"]
+          format: date-time
+        status:
+          type: string
+          enum: [pending, accepted, cancelled, expired]
+      required: [id, email, role, createdAt, expiresAt, status]
+
+    GroupInvitationPreview:
+      type: object
+      properties:
+        groupName:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+        expiresAt:
+          type: string
+          format: date-time
+      required: [groupName, role, expiresAt]
+
+    GroupInvitationContactInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+          default: member
+      required: [name, email]
+
+    GroupInvitationContact:
+      allOf:
+        - $ref: "#/components/schemas/GroupInvitationContactInput"
+        - type: object
+          properties:
+            id:
+              type: number
+          required: [id]
 
     Group:
       type: object

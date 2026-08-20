@@ -34,6 +34,7 @@ import type {
   CategoryLedger,
   Contribution,
   ContributionInput,
+  CreateGroupInvitationInput,
   DashboardSummary,
   DepositInput,
   DisbursementInput,
@@ -52,6 +53,10 @@ import type {
   GetExpensesParams,
   GetIncomeSourcesParams,
   Group,
+  GroupInvitation,
+  GroupInvitationContact,
+  GroupInvitationContactInput,
+  GroupInvitationPreview,
   HealthStatus,
   IncomeSource,
   IncomeStreamReport,
@@ -3042,6 +3047,663 @@ export const useAddMember = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getAddMemberMutationOptions(options));
+    }
+
+export const getGetGroupInvitationsUrl = () => {
+
+
+
+
+  return `/api/group-invitations`
+}
+
+/**
+ * @summary List group invitations
+ */
+export const getGroupInvitations = async ( options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitation[]> => {
+
+  return customFetch<GroupInvitation[]>(getGetGroupInvitationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGroupInvitationsQueryKey = () => {
+    return [
+    `/api/group-invitations`
+    ] as const;
+    }
+
+
+export const getGetGroupInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof getGroupInvitations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGroupInvitationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGroupInvitations>>> = ({ signal }) => getGroupInvitations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGroupInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof getGroupInvitations>>>
+export type GetGroupInvitationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List group invitations
+ */
+
+export function useGetGroupInvitations<TData = Awaited<ReturnType<typeof getGroupInvitations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGroupInvitationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateGroupInvitationUrl = () => {
+
+
+
+
+  return `/api/group-invitations`
+}
+
+/**
+ * @summary Email a group invitation
+ */
+export const createGroupInvitation = async (createGroupInvitationInput: CreateGroupInvitationInput, options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitation> => {
+
+  return customFetch<GroupInvitation>(getCreateGroupInvitationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createGroupInvitationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateGroupInvitationMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGroupInvitation>>, TError,{data: BodyType<CreateGroupInvitationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGroupInvitation>>, TError,{data: BodyType<CreateGroupInvitationInput>}, TContext> => {
+
+const mutationKey = ['createGroupInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGroupInvitation>>, {data: BodyType<CreateGroupInvitationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGroupInvitation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGroupInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof createGroupInvitation>>>
+    export type CreateGroupInvitationMutationBody = BodyType<CreateGroupInvitationInput>
+    export type CreateGroupInvitationMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Email a group invitation
+ */
+export const useCreateGroupInvitation = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGroupInvitation>>, TError,{data: BodyType<CreateGroupInvitationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGroupInvitation>>,
+        TError,
+        {data: BodyType<CreateGroupInvitationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateGroupInvitationMutationOptions(options));
+    }
+
+export const getCancelGroupInvitationUrl = (id: number,) => {
+
+
+
+
+  return `/api/group-invitations/${id}`
+}
+
+/**
+ * @summary Cancel a pending group invitation
+ */
+export const cancelGroupInvitation = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitation> => {
+
+  return customFetch<GroupInvitation>(getCancelGroupInvitationUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelGroupInvitationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelGroupInvitation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelGroupInvitation>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['cancelGroupInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelGroupInvitation>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  cancelGroupInvitation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelGroupInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof cancelGroupInvitation>>>
+
+    export type CancelGroupInvitationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Cancel a pending group invitation
+ */
+export const useCancelGroupInvitation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelGroupInvitation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelGroupInvitation>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCancelGroupInvitationMutationOptions(options));
+    }
+
+export const getResendGroupInvitationUrl = (id: number,) => {
+
+
+
+
+  return `/api/group-invitations/${id}/resend`
+}
+
+/**
+ * @summary Send a fresh link for a pending invitation
+ */
+export const resendGroupInvitation = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitation> => {
+
+  return customFetch<GroupInvitation>(getResendGroupInvitationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResendGroupInvitationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendGroupInvitation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resendGroupInvitation>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['resendGroupInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resendGroupInvitation>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resendGroupInvitation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResendGroupInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof resendGroupInvitation>>>
+
+    export type ResendGroupInvitationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Send a fresh link for a pending invitation
+ */
+export const useResendGroupInvitation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendGroupInvitation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resendGroupInvitation>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getResendGroupInvitationMutationOptions(options));
+    }
+
+export const getGetGroupInvitationPreviewUrl = (token: string,) => {
+
+
+
+
+  return `/api/group-invitations/accept/${token}`
+}
+
+/**
+ * @summary Preview a valid invitation before signing in
+ */
+export const getGroupInvitationPreview = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitationPreview> => {
+
+  return customFetch<GroupInvitationPreview>(getGetGroupInvitationPreviewUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGroupInvitationPreviewQueryKey = (token: string,) => {
+    return [
+    `/api/group-invitations/accept/${token}`
+    ] as const;
+    }
+
+
+export const getGetGroupInvitationPreviewQueryOptions = <TData = Awaited<ReturnType<typeof getGroupInvitationPreview>>, TError = ErrorType<void>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitationPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGroupInvitationPreviewQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGroupInvitationPreview>>> = ({ signal }) => getGroupInvitationPreview(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitationPreview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGroupInvitationPreviewQueryResult = NonNullable<Awaited<ReturnType<typeof getGroupInvitationPreview>>>
+export type GetGroupInvitationPreviewQueryError = ErrorType<void>
+
+
+/**
+ * @summary Preview a valid invitation before signing in
+ */
+
+export function useGetGroupInvitationPreview<TData = Awaited<ReturnType<typeof getGroupInvitationPreview>>, TError = ErrorType<void>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitationPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGroupInvitationPreviewQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAcceptGroupInvitationUrl = (token: string,) => {
+
+
+
+
+  return `/api/group-invitations/accept/${token}`
+}
+
+/**
+ * @summary Accept an invitation with the matching signed-in email
+ */
+export const acceptGroupInvitation = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getAcceptGroupInvitationUrl(token),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAcceptGroupInvitationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptGroupInvitation>>, TError,{token: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptGroupInvitation>>, TError,{token: string}, TContext> => {
+
+const mutationKey = ['acceptGroupInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptGroupInvitation>>, {token: string}> = (props) => {
+          const {token} = props ?? {};
+
+          return  acceptGroupInvitation(token,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcceptGroupInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof acceptGroupInvitation>>>
+
+    export type AcceptGroupInvitationMutationError = ErrorType<void>
+
+    /**
+ * @summary Accept an invitation with the matching signed-in email
+ */
+export const useAcceptGroupInvitation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptGroupInvitation>>, TError,{token: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acceptGroupInvitation>>,
+        TError,
+        {token: string},
+        TContext
+      > => {
+      return useMutation(getAcceptGroupInvitationMutationOptions(options));
+    }
+
+export const getGetGroupInvitationContactsUrl = () => {
+
+
+
+
+  return `/api/group-invitation-contacts`
+}
+
+/**
+ * @summary List saved one-tap invitation contacts
+ */
+export const getGroupInvitationContacts = async ( options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitationContact[]> => {
+
+  return customFetch<GroupInvitationContact[]>(getGetGroupInvitationContactsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGroupInvitationContactsQueryKey = () => {
+    return [
+    `/api/group-invitation-contacts`
+    ] as const;
+    }
+
+
+export const getGetGroupInvitationContactsQueryOptions = <TData = Awaited<ReturnType<typeof getGroupInvitationContacts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitationContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGroupInvitationContactsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGroupInvitationContacts>>> = ({ signal }) => getGroupInvitationContacts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitationContacts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGroupInvitationContactsQueryResult = NonNullable<Awaited<ReturnType<typeof getGroupInvitationContacts>>>
+export type GetGroupInvitationContactsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List saved one-tap invitation contacts
+ */
+
+export function useGetGroupInvitationContacts<TData = Awaited<ReturnType<typeof getGroupInvitationContacts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInvitationContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGroupInvitationContactsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveGroupInvitationContactUrl = () => {
+
+
+
+
+  return `/api/group-invitation-contacts`
+}
+
+/**
+ * @summary Save or update a one-tap invitation contact
+ */
+export const saveGroupInvitationContact = async (groupInvitationContactInput: GroupInvitationContactInput, options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitationContact> => {
+
+  return customFetch<GroupInvitationContact>(getSaveGroupInvitationContactUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(groupInvitationContactInput)
+  }
+);}
+
+
+
+
+
+export const getSaveGroupInvitationContactMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveGroupInvitationContact>>, TError,{data: BodyType<GroupInvitationContactInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveGroupInvitationContact>>, TError,{data: BodyType<GroupInvitationContactInput>}, TContext> => {
+
+const mutationKey = ['saveGroupInvitationContact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveGroupInvitationContact>>, {data: BodyType<GroupInvitationContactInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveGroupInvitationContact(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveGroupInvitationContactMutationResult = NonNullable<Awaited<ReturnType<typeof saveGroupInvitationContact>>>
+    export type SaveGroupInvitationContactMutationBody = BodyType<GroupInvitationContactInput>
+    export type SaveGroupInvitationContactMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save or update a one-tap invitation contact
+ */
+export const useSaveGroupInvitationContact = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveGroupInvitationContact>>, TError,{data: BodyType<GroupInvitationContactInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveGroupInvitationContact>>,
+        TError,
+        {data: BodyType<GroupInvitationContactInput>},
+        TContext
+      > => {
+      return useMutation(getSaveGroupInvitationContactMutationOptions(options));
+    }
+
+export const getDeleteGroupInvitationContactUrl = (id: number,) => {
+
+
+
+
+  return `/api/group-invitation-contacts/${id}`
+}
+
+/**
+ * @summary Delete a saved invitation contact
+ */
+export const deleteGroupInvitationContact = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteGroupInvitationContactUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteGroupInvitationContactMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGroupInvitationContact>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGroupInvitationContact>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteGroupInvitationContact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGroupInvitationContact>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteGroupInvitationContact(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGroupInvitationContactMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGroupInvitationContact>>>
+
+    export type DeleteGroupInvitationContactMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a saved invitation contact
+ */
+export const useDeleteGroupInvitationContact = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGroupInvitationContact>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGroupInvitationContact>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteGroupInvitationContactMutationOptions(options));
     }
 
 export const getGetGroupUrl = () => {

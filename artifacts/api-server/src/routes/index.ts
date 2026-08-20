@@ -11,6 +11,7 @@ import digestRouter from "./digest";
 import savingsGoalsRouter from "./savings-goals";
 import jointAccountRouter from "./joint-account";
 import incomeSourcesRouter from "./income-sources";
+import { invitationsRouter, publicInvitationsRouter } from "./invitations";
 import { requireMember } from "../middlewares/requireMember";
 
 const router: IRouter = Router();
@@ -18,6 +19,7 @@ const router: IRouter = Router();
 // Auth routes bypass member check
 router.use(authRouter);
 router.use(healthRouter);
+router.use(publicInvitationsRouter);
 
 // Apply member check to everything else
 router.use(requireMember);
@@ -32,5 +34,6 @@ router.use(digestRouter);
 router.use(savingsGoalsRouter);
 router.use(jointAccountRouter);
 router.use(incomeSourcesRouter);
+router.use(invitationsRouter);
 
 export default router;
