@@ -44,6 +44,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+import { useAuth } from "@workspace/replit-auth-web";
 
 function GoalProgress({ current, target }: { current: number; target: number }) {
   const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
@@ -333,6 +334,7 @@ export default function SavingsGoals() {
   const deleteGoal = useDeleteSavingsGoal();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data: consistencyData } = useQuery<{ ok: boolean; inconsistentGoals: InconsistentGoal[] }>({
     queryKey: ["savings-goals-consistency"],
@@ -389,6 +391,11 @@ export default function SavingsGoals() {
   const [contributePayerAmounts, setContributePayerAmounts] = useState<Record<string, string>>({});
   const [contributeFromBank, setContributeFromBank] = useState(true);
   const { data: members } = useGetMembers();
+  const canManageShared = members?.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === "owner" || member.role === "admin"),
+  ) ?? false;
 
   // Cascade payment state
   const [showCascade, setShowCascade] = useState(false);
@@ -537,6 +544,20 @@ export default function SavingsGoals() {
     setMode({ type: "edit", goal });
   };
 
+  const openContribution = (goalId: number) => {
+    setContributeId(goalId);
+    setContributeAmount("");
+    if (canManageShared) {
+      setContributePayers([]);
+      setContributePayerAmounts({});
+      setContributeFromBank(true);
+      return;
+    }
+    setContributePayers(user?.id ? [user.id] : []);
+    setContributePayerAmounts({});
+    setContributeFromBank(false);
+  };
+
   // Derived: big-drop warning (only in edit mode when currentAmount changed)
   const editingGoal = typeof mode === "object" && mode.type === "edit" ? mode.goal : null;
   const parsedCurrentAmount = currentAmount !== "" ? Number(currentAmount) : NaN;
@@ -670,7 +691,7 @@ export default function SavingsGoals() {
         </div>
         {mode === "none" && (
           <div className="flex gap-2 flex-wrap">
-            {activeGoals.length > 1 && !showCascade && (
+            {canManageShared && activeGoals.length > 1 && !showCascade && (
               <Button
                 variant="outline"
                 onClick={openCascade}
@@ -680,16 +701,22 @@ export default function SavingsGoals() {
                 Distribute Payment
               </Button>
             )}
-            <Button
+            {canManageShared && <Button
               onClick={openCreate}
               className="rounded-xl h-12 px-6 shadow-md hover:-translate-y-0.5 transition-transform"
             >
               <Plus className="w-5 h-5 mr-2" />
               New Goal
-            </Button>
+            </Button>}
           </div>
         )}
       </div>
+
+      {!canManageShared && (
+        <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          An admin sets up and updates shared goals. You can add money to any active goal in your own name.
+        </div>
+      )}
 
       {/* Cascade Payment Panel */}
       {showCascade && activeGoals.length > 0 && (
@@ -1013,10 +1040,10 @@ export default function SavingsGoals() {
                   <Target className="w-8 h-8 text-muted-foreground/50" />
                 </div>
                 <p className="text-lg font-medium text-foreground">No goals yet</p>
-                <p className="text-sm mt-1">Create your first savings goal to start tracking.</p>
-                <Button onClick={openCreate} className="mt-6 rounded-xl">
+                <p className="text-sm mt-1">{canManageShared ? "Create your first savings goal to start tracking." : "Ask an admin to create the first shared savings goal."}</p>
+                {canManageShared && <Button onClick={openCreate} className="mt-6 rounded-xl">
                   <Plus className="w-4 h-4 mr-2" /> New Goal
-                </Button>
+                </Button>}
               </CardContent>
             </Card>
           )}
@@ -1049,15 +1076,15 @@ export default function SavingsGoals() {
                         <CardTitle className="text-lg leading-tight">{goal.name}</CardTitle>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEdit(goal)} title="Edit goal">
+                        {canManageShared && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEdit(goal)} title="Edit goal">
                           <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-emerald-600" onClick={() => handleMarkComplete(goal)} title="Mark complete">
+                        </Button>}
+                        {canManageShared && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-emerald-600" onClick={() => handleMarkComplete(goal)} title="Mark complete">
                           <CheckCircle2 className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(goal)} title="Delete goal">
+                        </Button>}
+                        {canManageShared && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(goal)} title="Delete goal">
                           <Trash2 className="w-4 h-4" />
-                        </Button>
+                        </Button>}
                       </div>
                     </div>
                     {goal.deadline && (
@@ -1103,7 +1130,7 @@ export default function SavingsGoals() {
                           </Button>
                         </div>
                         {/* Who is contributing — Joint bank (default) or named member(s) */}
-                        {(members ?? []).length > 0 && (
+                        {canManageShared && (members ?? []).length > 0 && (
                           <div className="space-y-2">
                             <p className="text-xs text-muted-foreground font-medium">
                               Who is contributing? <span className="font-normal">(select multiple to split)</span>
@@ -1184,7 +1211,7 @@ export default function SavingsGoals() {
                       <Button
                         variant="outline"
                         className="w-full h-10 rounded-xl font-semibold border-primary/20 text-primary hover:bg-primary/5"
-                        onClick={() => { setContributeId(goal.id); setContributeAmount(""); }}
+                        onClick={() => openContribution(goal.id)}
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         Add Contribution
@@ -1233,12 +1260,12 @@ export default function SavingsGoals() {
                           <p className="font-semibold text-foreground">{goal.name}</p>
                         </div>
                         <div className="flex gap-1 shrink-0">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleMarkComplete(goal)} title="Reopen goal">
+                          {canManageShared && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleMarkComplete(goal)} title="Reopen goal">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(goal)} title="Delete goal">
+                          </Button>}
+                          {canManageShared && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(goal)} title="Delete goal">
                             <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          </Button>}
                         </div>
                       </div>
                       <div className="flex justify-between text-sm text-muted-foreground">

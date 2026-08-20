@@ -8,12 +8,35 @@ import {
   savingsGoalsTable,
   savingsGoalContributionsTable,
   jointAccountDepositSplitsTable,
+  incomeSourcesTable,
 } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { getActiveGroupId } from "../lib/activeGroup";
+import {
+  getActiveGroupId,
+  requireGroupManager,
+  requireMemberSelfAttribution,
+} from "../lib/activeGroup";
 
 const router = Router();
+
+async function validateIncomeSourceOwner(
+  incomeSourceId: number,
+  userId: string | null | undefined,
+  groupId: number,
+): Promise<string | null> {
+  if (!userId) return "Choose a named depositor before selecting an income source.";
+  const source = await db.query.incomeSourcesTable.findFirst({
+    where: and(
+      eq(incomeSourcesTable.id, incomeSourceId),
+      eq(incomeSourcesTable.groupId, groupId),
+    ),
+  });
+  if (!source) return "Income source not found.";
+  return source.userId === userId
+    ? null
+    : "The selected income source belongs to a different member.";
+}
 
 const DepositInput = z.object({
   amount: z.number().int().positive(),
@@ -158,6 +181,19 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
 
   const parsed = DepositInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  if (!requireMemberSelfAttribution(req, res, [parsed.data.madeById])) return;
+  if (parsed.data.contributorSplits) {
+    for (const split of parsed.data.contributorSplits) {
+      if (!requireMemberSelfAttribution(req, res, [split.userId])) return;
+      if (split.incomeSourceId) {
+        const error = await validateIncomeSourceOwner(split.incomeSourceId, split.userId, groupId);
+        if (error) { res.status(400).json({ error }); return; }
+      }
+    }
+  } else if (parsed.data.incomeSourceId) {
+    const error = await validateIncomeSourceOwner(parsed.data.incomeSourceId, parsed.data.madeById, groupId);
+    if (error) { res.status(400).json({ error }); return; }
+  }
 
   const { amount, description, date, incomeSourceId, sourceKind, contributorSplits } = parsed.data;
   if (sourceKind === "other" && !description.trim()) {
@@ -217,6 +253,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
 router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const parsed = DisbursementInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
@@ -269,6 +306,7 @@ async function createSavingsTransfer(
 ): Promise<void> {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const parsed = SavingsTransferInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid transfer details" }); return; }
@@ -359,6 +397,7 @@ router.post("/joint-account/transfers/from-savings", async (req, res): Promise<v
 router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const params = IdParam.safeParse(req.params);
   const parsed = UpdateJointAccountInput.safeParse(req.body);
@@ -452,6 +491,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
 router.delete("/joint-account/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const parsed = IdParam.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }

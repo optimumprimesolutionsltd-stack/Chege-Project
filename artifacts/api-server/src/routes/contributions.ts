@@ -6,7 +6,11 @@ import {
   CreateContributionBody,
   GetContributionsQueryParams,
 } from "@workspace/api-zod";
-import { getActiveGroupId } from "../lib/activeGroup";
+import {
+  getActiveGroupId,
+  isGroupManager,
+  requireMemberSelfAttribution,
+} from "../lib/activeGroup";
 
 const router = Router();
 
@@ -85,6 +89,7 @@ router.post("/contributions", async (req, res): Promise<void> => {
     }
     targetUserId = forUserId;
   }
+  if (!requireMemberSelfAttribution(req, res, [targetUserId])) return;
 
   const [contribution] = await db
     .insert(contributionsTable)
@@ -130,9 +135,16 @@ router.delete("/contributions/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const deleteConditions = isGroupManager(req)
+    ? and(eq(contributionsTable.id, id), eq(contributionsTable.groupId, groupId))
+    : and(
+        eq(contributionsTable.id, id),
+        eq(contributionsTable.groupId, groupId),
+        eq(contributionsTable.userId, req.user!.id),
+      );
   const [deleted] = await db
     .delete(contributionsTable)
-    .where(and(eq(contributionsTable.id, id), eq(contributionsTable.groupId, groupId)))
+    .where(deleteConditions)
     .returning();
 
   if (!deleted) {

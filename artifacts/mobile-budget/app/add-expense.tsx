@@ -85,6 +85,14 @@ export default function AddExpenseSheet() {
 
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
+  const canManageShared = members.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === 'owner' || member.role === 'admin'),
+  );
+  const selectablePayers = canManageShared
+    ? members
+    : members.filter((member) => member.userId === user?.id);
   const now = new Date();
   const { data: breakdown } = useGetDashboardCategoryBreakdown({ month: now.getMonth() + 1, year: now.getFullYear() });
 
@@ -123,6 +131,14 @@ export default function AddExpenseSheet() {
     setOtherLabel('');
   }, [paidById]);
 
+  useEffect(() => {
+    if (!canManageShared && user?.id) {
+      setPayerIds([user.id]);
+      setPaidFromBank(false);
+      setIsRecurring(false);
+    }
+  }, [canManageShared, user?.id]);
+
   const { mutateAsync: createExpenseAsync } = useCreateExpense();
   const [isPending, setIsPending] = useState(false);
 
@@ -149,8 +165,11 @@ export default function AddExpenseSheet() {
       Alert.alert('Description required', 'Please add a description.');
       return;
     }
-    if (payerIds.length === 0 && !paidFromBank) {
-      Alert.alert('Paid by required', 'Please choose who paid, or select Joint bank.');
+    const effectivePayerIds = canManageShared ? payerIds : user?.id ? [user.id] : [];
+    const effectivePaidFromBank = canManageShared ? paidFromBank : false;
+    const effectiveIsRecurring = canManageShared ? isRecurring : false;
+    if (effectivePayerIds.length === 0 && !effectivePaidFromBank) {
+      Alert.alert('Paid by required', 'Please choose who paid.');
       return;
     }
     if (date > todayIso()) {
@@ -158,18 +177,18 @@ export default function AddExpenseSheet() {
       return;
     }
 
-    const sourceCount = payerIds.length + (paidFromBank ? 1 : 0);
+    const sourceCount = effectivePayerIds.length + (effectivePaidFromBank ? 1 : 0);
     const isSplitPayment = sourceCount > 1;
 
     if (isSplitPayment) {
-      const splitTotal = payerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)
-        + (paidFromBank ? parseFloat(payerAmounts.__joint_bank__ || '0') || 0 : 0);
+      const splitTotal = effectivePayerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)
+        + (effectivePaidFromBank ? parseFloat(payerAmounts.__joint_bank__ || '0') || 0 : 0);
       if (!Number.isInteger(parsed) || splitTotal !== parsed) {
         Alert.alert("Amounts don't add up", `Payer portions total KES ${splitTotal.toLocaleString()} but the expense is KES ${parsed.toLocaleString()}.`);
         return;
       }
     } else {
-      if (!paidFromBank && selectedSources.length === 0) {
+      if (!effectivePaidFromBank && selectedSources.length === 0) {
         Alert.alert('Source required', 'Please choose where this money came from.');
         return;
       }
@@ -192,10 +211,10 @@ export default function AddExpenseSheet() {
         await createExpenseAsync({
           data: {
             amount: parsed, category, description: description.trim(), notes: notes.trim() || undefined,
-            paidById: payerIds[0] ?? null, isRecurring, date, paidFromBank: false,
+            paidById: effectivePayerIds[0] ?? null, isRecurring: effectiveIsRecurring, date, paidFromBank: false,
             incomeSplits: [
-              ...(paidFromBank ? [{ userId: null, label: 'Joint bank', amount: parseFloat(payerAmounts.__joint_bank__ || '0') || 0, fromBank: true }] : []),
-              ...payerIds.map((userId) => ({
+              ...(effectivePaidFromBank ? [{ userId: null, label: 'Joint bank', amount: parseFloat(payerAmounts.__joint_bank__ || '0') || 0, fromBank: true }] : []),
+              ...effectivePayerIds.map((userId) => ({
                 userId, label: members.find((member) => member.userId === userId)?.userName ?? 'Member',
                 amount: parseFloat(payerAmounts[userId] || '0') || 0, fromBank: false,
               })),
@@ -221,10 +240,10 @@ export default function AddExpenseSheet() {
             category,
             description: description.trim(),
             notes: notes.trim() || undefined,
-            paidById: paidFromBank ? undefined : paidById,
-            isRecurring,
+            paidById: effectivePaidFromBank ? undefined : effectivePayerIds[0],
+            isRecurring: effectiveIsRecurring,
             date,
-            paidFromBank,
+            paidFromBank: effectivePaidFromBank,
             ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
           } as Parameters<typeof createExpenseAsync>[0]['data'],
         });
@@ -238,7 +257,7 @@ export default function AddExpenseSheet() {
     } finally {
       setIsPending(false);
     }
-  }, [amount, category, description, notes, payerIds, payerAmounts, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, members, createExpenseAsync, invalidateExpenses]);
+  }, [amount, category, description, notes, payerIds, payerAmounts, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, members, canManageShared, user?.id, createExpenseAsync, invalidateExpenses]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -529,8 +548,8 @@ export default function AddExpenseSheet() {
               PAID BY <Text style={{ color: '#ef4444' }}>*</Text>
             </Text>
             <View style={styles.paidByRow}>
-              {/* Joint bank can be combined with one or more group members. */}
-              <Pressable
+              {/* Joint-bank spending is restricted to group managers. */}
+              {canManageShared && <Pressable
                 onPress={() => {
                   if (paidFromBank) {
                     setPaidFromBank(false);
@@ -546,13 +565,14 @@ export default function AddExpenseSheet() {
                 <Text style={[styles.paidByText, { color: paidFromBank ? '#38bdf8' : colors.foreground }]}>
                   Joint bank
                 </Text>
-              </Pressable>
-              {members.map((m) => {
+              </Pressable>}
+              {selectablePayers.map((m) => {
                 const selected = payerIds.includes(m.userId);
                 return (
                   <Pressable
                     key={m.userId}
                     onPress={() => {
+                      if (!canManageShared) return;
                       setPayerIds(prev =>
                         prev.includes(m.userId)
                           ? prev.filter(id => id !== m.userId)
@@ -585,7 +605,12 @@ export default function AddExpenseSheet() {
                 );
               })}
             </View>
-            {payerIds.length === 0 && !paidFromBank && (
+              {!canManageShared && (
+                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                  This expense is recorded in your name.
+                </Text>
+              )}
+              {canManageShared && payerIds.length === 0 && !paidFromBank && (
               <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
                 Tap to select · select multiple to split the cost
               </Text>
@@ -746,8 +771,8 @@ export default function AddExpenseSheet() {
           />
         )}
 
-        {/* Recurring toggle */}
-        <View
+        {/* Recurring expenses affect shared planning and are manager-only. */}
+        {canManageShared && <View
           style={[
             styles.toggleRow,
             { borderColor: colors.border, borderRadius: colors.radius },
@@ -768,7 +793,7 @@ export default function AddExpenseSheet() {
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor="#fff"
           />
-        </View>
+        </View>}
       </ScrollView>
     </View>
   );

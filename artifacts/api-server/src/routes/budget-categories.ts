@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { budgetCategoriesTable } from "@workspace/db";
 import { and, asc, eq, ne } from "drizzle-orm";
 import { z } from "zod";
-import { getActiveGroupId } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 
 const router = Router();
 
@@ -41,6 +41,7 @@ const categorySchema = categoryFields.superRefine((data, ctx) => {
 router.post("/budget-categories", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
   const parsed = categorySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
   const duplicate = await db.query.budgetCategoriesTable.findFirst({
@@ -70,6 +71,7 @@ router.post("/budget-categories", async (req, res) => {
 router.put("/budget-categories/:id", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = categoryFields.partial().safeParse(req.body);
@@ -108,6 +110,7 @@ router.put("/budget-categories/:id", async (req, res) => {
 router.delete("/budget-categories/:id", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const [deleted] = await db.delete(budgetCategoriesTable)

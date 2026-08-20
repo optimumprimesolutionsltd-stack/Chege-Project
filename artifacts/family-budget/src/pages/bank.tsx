@@ -13,6 +13,7 @@ import { formatKes, formatDate } from "@/lib/utils";
 import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@workspace/replit-auth-web";
 
 // "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
@@ -49,6 +50,12 @@ export default function Bank() {
   const { data: savingsGoals = [] } = useGetSavingsGoals();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canManageShared = members?.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === "owner" || member.role === "admin"),
+  ) ?? false;
 
   const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | null>(null);
   const [amount, setAmount] = useState("");
@@ -94,6 +101,7 @@ export default function Bank() {
   };
 
   const handleCreateCategory = async () => {
+    if (!canManageShared) return;
     const name = newCategoryName.trim();
     if (!name) return;
 
@@ -145,11 +153,12 @@ export default function Bank() {
   };
 
   const openMode = (m: "deposit" | "disbursement" | "transfer") => {
+    if (!canManageShared && m !== "deposit") return;
     // Reset attribution to Joint bank every time a form opens
     setAmount("");
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
-    setDepositorIds([]);
+    setDepositorIds(!canManageShared && user?.id ? [user.id] : []);
     setDepositorAmounts({});
     setIncomeSourceId(null);
     setDepositSourceKind(null);
@@ -164,6 +173,7 @@ export default function Bank() {
   };
 
   const openEdit = (tx: EditableTransaction) => {
+    if (!canManageShared) return;
     if (tx.savingsGoalId) {
       toast({
         title: "Transfer cannot be edited",
@@ -330,6 +340,7 @@ export default function Bank() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canManageShared) return;
     if (!confirm("Delete this transaction?")) return;
     try {
       await deleteTx.mutateAsync({ id });
@@ -355,6 +366,12 @@ export default function Bank() {
         <h1 className="text-3xl font-display font-bold text-foreground">Joint Bank Account</h1>
         <p className="text-muted-foreground mt-1">Track money going in and out of your shared account.</p>
       </div>
+
+       {!canManageShared && (
+         <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+           You can add your own contribution to the shared bank. An admin handles withdrawals, transfers, and transaction changes.
+         </div>
+       )}
 
       {/* Balance card */}
       <Card className="border-none shadow-md bg-primary text-primary-foreground">
@@ -385,22 +402,22 @@ export default function Bank() {
 
       {/* Action buttons / form */}
       {!mode ? (
-        <div className="grid grid-cols-3 gap-3">
-          <Button
+        <div className={`grid gap-3 ${canManageShared ? "grid-cols-3" : "grid-cols-1"}`}>
+          {canManageShared && <Button
             data-testid="button-deposit"
             onClick={() => openMode("deposit")}
             className="h-12 px-6 rounded-xl flex-1"
           >
             <ArrowDownLeft className="w-5 h-5 mr-2" /> Deposit
-          </Button>
-          <Button
+          </Button>}
+          {canManageShared && <Button
             data-testid="button-withdraw"
             onClick={() => openMode("disbursement")}
             variant="outline"
             className="h-12 px-6 rounded-xl flex-1"
           >
             <ArrowUpRight className="w-5 h-5 mr-2" /> Withdraw
-          </Button>
+          </Button>}
           <Button
             data-testid="button-transfer"
             onClick={() => openMode("transfer")}
@@ -551,11 +568,11 @@ export default function Bank() {
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">
                         Who is depositing?
-                        <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>
+                        {canManageShared && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
                       </label>
                       <div className="grid grid-cols-3 gap-2" data-testid="deposit-attribution">
                         {/* Joint bank chip — mutually exclusive with named members */}
-                        <button
+                        {canManageShared && <button
                           key="joint-bank"
                           type="button"
                           data-testid="chip-joint-bank-deposit"
@@ -571,10 +588,10 @@ export default function Bank() {
                           }`}
                         >
                           Joint bank
-                        </button>
+                        </button>}
 
                         {/* Named member chips */}
-                        {(members ?? []).map(m => {
+                        {(canManageShared ? (members ?? []) : (members ?? []).filter((m) => m.userId === user?.id)).map(m => {
                           const name = m.userName?.split(' ')[0] ?? 'Member';
                           const selected = depositorIds.includes(m.userId);
                           return (

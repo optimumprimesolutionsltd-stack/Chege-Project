@@ -18,6 +18,11 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [newUserId, setNewUserId] = useState("");
   const [copied, setCopied] = useState(false);
+  const canManageShared = members?.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === "owner" || member.role === "admin"),
+  ) ?? false;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +59,11 @@ export default function Settings() {
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage who has access to this household's budget.</p>
+        <p className="text-muted-foreground mt-1">
+          {canManageShared
+            ? "Manage who has access to this group budget."
+            : "View your group and manage your own account details."}
+        </p>
       </div>
 
       {/* Your account */}
@@ -106,7 +115,7 @@ export default function Settings() {
                     <p className="font-semibold text-foreground">{m.userName ?? "Unknown"}</p>
                     <p className="text-xs font-mono text-muted-foreground mt-0.5">{m.userId}</p>
                   </div>
-                  {m.userId !== user?.id && (
+                   {m.userId !== user?.id && canManageShared && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -116,9 +125,9 @@ export default function Settings() {
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   )}
-                  {m.userId === user?.id && (
-                    <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-1 rounded-full">You</span>
-                  )}
+                   <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-1 rounded-full">
+                     {m.userId === user?.id ? "You" : m.role === "member" ? "Member" : "Admin"}
+                   </span>
                 </div>
               ))}
               {members?.length === 0 && (
@@ -127,8 +136,17 @@ export default function Settings() {
             </div>
           )}
 
+          {!canManageShared && (
+            <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
+              <p className="text-sm font-semibold text-foreground">Your group role</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                You can view shared finances, log your own expenses, and contribute to existing goals or shared funds. An admin manages members and group setup.
+              </p>
+            </div>
+          )}
+
           {/* Add member form */}
-          {(members?.length ?? 0) < 5 && (
+          {canManageShared && (members?.length ?? 0) < 5 && (
             <form onSubmit={handleAdd} className="space-y-3 pt-2 border-t border-border/50">
               <p className="text-sm font-medium text-foreground">Give someone access</p>
               <div className="flex gap-2">

@@ -39,6 +39,7 @@ import {
   customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -86,6 +87,7 @@ export default function BankScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data, isLoading, refetch } = useGetJointAccount();
 
@@ -144,6 +146,14 @@ export default function BankScreen() {
   const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
+  const canManageShared = members.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === 'owner' || member.role === 'admin'),
+  );
+  const selectableDepositors = canManageShared
+    ? members
+    : members.filter((member) => member.userId === user?.id);
 
   // Fetch income sources for selected depositor (single named only)
   const { data: depositSources = [] } = useQuery<MemberIncomeSource[]>({
@@ -174,6 +184,7 @@ export default function BankScreen() {
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
 
   const openModal = (type: TxType) => {
+    if (!canManageShared && type !== 'deposit') return;
     setEditingTransactionId(null);
     setTxType(type);
     setAmount('');
@@ -184,7 +195,7 @@ export default function BankScreen() {
     setDate(todayIso());
     setShowDatePicker(false);
     // Default to Joint bank for both deposits and withdrawals
-    setDepositorIds([]);
+    setDepositorIds(!canManageShared && user?.id ? [user.id] : []);
     setDepositorAmounts({});
     setIncomeSourceId(null);
     setDepositSourceKind(null);
@@ -214,6 +225,7 @@ export default function BankScreen() {
   };
 
   const handleDelete = (tx: Tx) => {
+    if (!canManageShared) return;
     Alert.alert(
       'Delete transaction',
       `Delete "${tx.description}"?`,
@@ -234,6 +246,7 @@ export default function BankScreen() {
   };
 
   const openEdit = (tx: Tx) => {
+    if (!canManageShared) return;
     if (tx.savingsGoalId) {
       Alert.alert('Transfer cannot be edited', 'Delete and recreate a savings transfer to keep both balances in sync.');
       return;
@@ -263,6 +276,7 @@ export default function BankScreen() {
   // Selecting a member deselects Joint bank (and vice versa).
   // Selecting all-off means Joint bank again.
   const toggleDepositor = (memberId: string) => {
+    if (!canManageShared) return;
     setDepositorIds(prev => {
       if (prev.includes(memberId)) {
         // Deselect this member
@@ -277,12 +291,14 @@ export default function BankScreen() {
 
   // Selecting Joint bank chip explicitly clears all named members
   const selectJointBank = () => {
+    if (!canManageShared) return;
     setDepositorIds([]);
     setDepositorAmounts({});
     setIncomeSourceId(null);
   };
 
   const handleCreateCategory = async () => {
+    if (!canManageShared) return;
     const name = newCategoryName.trim();
     if (!name) {
       Alert.alert('Enter a category name', 'Give the new category a short name first.');
@@ -546,22 +562,22 @@ export default function BankScreen() {
 
             {/* Action buttons inside header */}
             <View style={styles.actionRow}>
-              <TouchableOpacity
+              {canManageShared && <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => openModal('deposit')}
                 activeOpacity={0.8}
               >
                 <Feather name="arrow-down-left" size={16} color="#0a1a10" />
                 <Text style={styles.actionBtnText}>Deposit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </TouchableOpacity>}
+              {canManageShared && <TouchableOpacity
                 style={[styles.actionBtn, styles.actionBtnDisburse]}
                 onPress={() => openModal('disbursement')}
                 activeOpacity={0.8}
               >
                 <Feather name="arrow-up-right" size={16} color="#f87171" />
                 <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
-              </TouchableOpacity>
+              </TouchableOpacity>}
               <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: '#164e63' }]}
                 onPress={() => openModal('transfer')}
@@ -638,7 +654,7 @@ export default function BankScreen() {
                     : dep
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
-                  {formatDateTime(item.createdAt)} · {item.savingsGoalId ? 'Delete' : 'Edit or delete'}
+                  {formatDateTime(item.createdAt)}{canManageShared ? ` · ${item.savingsGoalId ? 'Delete' : 'Edit or delete'}` : ''}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
@@ -646,20 +662,20 @@ export default function BankScreen() {
                   {dep ? '+' : '-'}KES {formatKES(item.amount)}
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                  {!item.savingsGoalId && <TouchableOpacity
+                  {canManageShared && !item.savingsGoalId && <TouchableOpacity
                     onPress={() => openEdit(item)}
                     hitSlop={8}
                     testID={`bank-edit-transaction-${item.id}`}
                   >
                     <Feather name="edit-2" size={16} color={colors.mutedForeground} />
                   </TouchableOpacity>}
-                  <TouchableOpacity
+                  {canManageShared && <TouchableOpacity
                     onPress={() => handleDelete(item)}
                     hitSlop={8}
                     testID={`bank-delete-transaction-${item.id}`}
                   >
                     <Feather name="trash-2" size={16} color="#f87171" />
-                  </TouchableOpacity>
+                  </TouchableOpacity>}
                 </View>
               </View>
             </Pressable>
@@ -836,13 +852,13 @@ export default function BankScreen() {
             {/* ── Deposited by (deposits only) ── */}
             {isDeposit && members.length > 0 && (
               <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
                   Who is depositing?{' '}
-                  <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>
+                  {canManageShared && <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>}
                 </Text>
                 <View style={styles.memberRow}>
                   {/* Joint bank chip — selected when no named members chosen */}
-                  <TouchableOpacity
+                  {canManageShared && <TouchableOpacity
                     testID="bank-deposit-joint-chip"
                     style={[
                       styles.memberPill,
@@ -867,10 +883,10 @@ export default function BankScreen() {
                     >
                       Joint bank
                     </Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity>}
 
                   {/* Named member chips */}
-                  {members.map((m) => {
+                  {selectableDepositors.map((m) => {
                     const selected = depositorIds.includes(m.userId);
                     const name = m.userName?.split(' ')[0] ?? 'Member';
                     return (

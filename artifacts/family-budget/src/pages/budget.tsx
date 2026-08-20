@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@workspace/replit-auth-web";
 
 type BudgetCategory = {
   id: number;
@@ -29,7 +30,7 @@ type BudgetCategory = {
   activeYear?: number | null;
 };
 type IncomeSource = { id: number; userId: string; name: string; isMain: boolean };
-type Member = { userId: string; userName?: string | null };
+type Member = { userId: string; userName?: string | null; role?: "owner" | "admin" | "member" };
 type LedgerTarget = { category: string; isBudgeted: boolean };
 
 const priorityMap: Record<number, string> = {
@@ -183,6 +184,7 @@ export default function Budget() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
 
   const {
@@ -309,6 +311,11 @@ export default function Budget() {
   const reportActual = (breakdown ?? []).reduce((sum, item) => sum + item.spentAmount, 0);
   const reportVariance = reportBudget - reportActual;
   const memberNames = new Map(members.map(member => [member.userId, member.userName || "Member"]));
+  const canManageShared = members.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === "owner" || member.role === "admin"),
+  );
   const groupedIncomeSources = incomeSources.reduce((groups, source) => {
     const existing = groups.get(source.userId) ?? [];
     existing.push(source);
@@ -463,15 +470,21 @@ export default function Budget() {
               <ArrowRight className="h-5 w-5 text-foreground/70" />
             </Button>
           </div>
-           <div className="flex items-center gap-2">
+            {canManageShared && <div className="flex items-center gap-2">
              <Button variant="outline" onClick={() => setManageOpen(true)} className="gap-2">
                <SlidersHorizontal className="w-4 h-4" /> Edit existing
              </Button>
              <Button onClick={() => setAddOpen(true)} className="gap-2">
                <Plus className="w-4 h-4" /> Add category
              </Button>
-           </div>
+            </div>}
         </div>
+
+       {!canManageShared && (
+         <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+           Budget limits are managed by an admin. You can still review the plan and log your own spending.
+         </div>
+       )}
       </div>
 
        <Card className="border-none shadow-sm bg-card">
@@ -607,7 +620,7 @@ export default function Budget() {
                                   {isOver ? <span className="text-destructive">Over by {formatKes(Math.abs(cat.remaining))}</span> : <span>{formatKes(cat.remaining)} left</span>}
                                 </p>
                               </div>
-                              {fullCat && <>
+                              {canManageShared && fullCat && <>
                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(fullCat)}>
                                   <Pencil className="w-3.5 h-3.5" />
                                 </Button>

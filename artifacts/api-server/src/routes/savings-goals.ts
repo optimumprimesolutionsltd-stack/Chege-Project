@@ -9,7 +9,11 @@ import {
 } from "@workspace/db";
 import { and, eq, sql, desc } from "drizzle-orm";
 import { z } from "zod";
-import { getActiveGroupId } from "../lib/activeGroup";
+import {
+  getActiveGroupId,
+  requireGroupManager,
+  requireMemberSelfAttribution,
+} from "../lib/activeGroup";
 
 const router = Router();
 
@@ -126,6 +130,7 @@ router.get("/savings-goals", async (req, res): Promise<void> => {
 router.post("/savings-goals", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const parsed = CreateGoalBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
@@ -162,6 +167,19 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { amount: totalAmount, goalIds, contributorSplits } = parsed.data;
+  const effectiveContributorSplits =
+    req.group?.role === "member" && (!contributorSplits || contributorSplits.length === 0)
+      ? [{ userId: req.user!.id, amount: totalAmount }]
+      : contributorSplits;
+
+  if (
+    effectiveContributorSplits &&
+    !requireMemberSelfAttribution(
+      req,
+      res,
+      effectiveContributorSplits.map((split) => split.userId),
+    )
+  ) return;
 
   // Reject duplicate goalIds before opening any transaction. Duplicates would
   // cause the same goal row to be updated and funded twice (or more), silently
@@ -172,8 +190,8 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
   }
 
   // Validate contributor splits if provided
-  if (contributorSplits && contributorSplits.length > 0) {
-    const err = await validateContributorSplits(contributorSplits, totalAmount, groupId);
+  if (effectiveContributorSplits && effectiveContributorSplits.length > 0) {
+    const err = await validateContributorSplits(effectiveContributorSplits, totalAmount, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
@@ -224,10 +242,10 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
         .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)))
         .returning();
 
-      if (contributorSplits && contributorSplits.length > 0) {
+        if (effectiveContributorSplits && effectiveContributorSplits.length > 0) {
         // Distribute `allocated` across contributor splits with the largest-remainder
         // (Hamilton) method so per-split integers sum exactly to `allocated`.
-        for (const row of distributeSplits(contributorSplits, allocated)) {
+        for (const row of distributeSplits(effectiveContributorSplits, allocated)) {
           await tx.insert(savingsGoalContributionsTable).values({
             groupId,
             goalId: goal.id,
@@ -291,12 +309,19 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
 
   // Explicit null or omitted → Joint bank (null). Never fall back to req.user.
   const userId = bodyParsed.data.userId ?? null;
+  const effectiveUserId =
+    req.group?.role === "member" && bodyParsed.data.userId === undefined
+      ? req.user!.id
+      : userId;
 
   if (hasSplits) {
+    if (!requireMemberSelfAttribution(req, res, contributorSplits!.map((split) => split.userId))) return;
     const err = await validateContributorSplits(contributorSplits!, amount, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
-  } else if (userId !== null) {
-    const err = await validateMemberId(userId, groupId);
+  } else if (!requireMemberSelfAttribution(req, res, [effectiveUserId])) {
+    return;
+  } else if (effectiveUserId !== null) {
+    const err = await validateMemberId(effectiveUserId, groupId);
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
@@ -347,7 +372,7 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
         goalId: id,
         amount: actualAmount,
         // null = Joint bank; named userId = individual member
-        createdByUserId: userId,
+          createdByUserId: effectiveUserId,
         note: note ?? null,
       });
     }
@@ -445,6 +470,7 @@ router.get("/savings-goals/consistency-check", async (req, res): Promise<void> =
 router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const paramParsed = GoalIdParam.safeParse(req.params);
   if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -524,6 +550,7 @@ router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
 router.delete("/savings-goals/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
 
   const parsed = GoalIdParam.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }

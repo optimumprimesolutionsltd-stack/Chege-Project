@@ -39,12 +39,23 @@ import { useAuth } from "@workspace/replit-auth-web";
 type QuickAction = "none" | "income" | "expense" | "goal";
 
 // ── Quick Action: Bank Deposit ────────────────────────────────────────────────
-function IncomeForm({ onDone }: { onDone: () => void }) {
+function IncomeForm({
+  onDone,
+  currentUserId,
+  canManageShared,
+}: {
+  onDone: () => void;
+  currentUserId?: string;
+  canManageShared: boolean;
+}) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [madeById, setMadeById] = useState<string>("");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const { data: members = [] } = useGetMembers();
+  const selectableMembers = canManageShared
+    ? members
+    : members.filter((member) => member.userId === currentUserId);
   const createDeposit = useCreateDeposit();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -71,14 +82,14 @@ function IncomeForm({ onDone }: { onDone: () => void }) {
           amount: amt,
           description: description.trim() || "Deposit",
           date: now.toISOString().split("T")[0],
-          madeById,
+          madeById: canManageShared ? madeById : currentUserId,
           ...(incomeSourceId ? { incomeSourceId } : {}),
         } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
       qc.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
-      const who = members.find(m => m.userId === madeById)?.userName?.split(" ")[0] ?? "Member";
+       const who = members.find(m => m.userId === (canManageShared ? madeById : currentUserId))?.userName?.split(" ")[0] ?? "Member";
       toast({ title: "Deposit recorded", description: `${who} · ${formatKes(amt)} added to this month.` });
       onDone();
     } catch {
@@ -92,7 +103,7 @@ function IncomeForm({ onDone }: { onDone: () => void }) {
       <div className="space-y-1.5">
         <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
         <div className="grid grid-cols-2 gap-2">
-          {members.map((m) => {
+          {selectableMembers.map((m) => {
             const name = m.userName?.split(" ")[0] ?? "Member";
             return (
               <button key={m.userId} type="button" onClick={() => { setMadeById(m.userId); setIncomeSourceId(null); }}
@@ -140,13 +151,24 @@ function IncomeForm({ onDone }: { onDone: () => void }) {
 }
 
 // ── Quick Action: Log Expense ────────────────────────────────────────────────
-function ExpenseForm({ onDone }: { onDone: () => void }) {
+function ExpenseForm({
+  onDone,
+  currentUserId,
+  canManageShared,
+}: {
+  onDone: () => void;
+  currentUserId?: string;
+  canManageShared: boolean;
+}) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [paidBy, setPaidBy] = useState("");
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
+  const selectableMembers = canManageShared
+    ? members
+    : members.filter((member) => member.userId === currentUserId);
   const createExpense = useCreateExpense();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -157,7 +179,13 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
     if (!amt || !description || !paidBy) return;
     try {
       await createExpense.mutateAsync({
-        data: { amount: amt, description, category: category, paidById: paidBy, date: new Date().toISOString().split('T')[0] },
+        data: {
+          amount: amt,
+          description,
+          category: category,
+          paidById: canManageShared ? paidBy : currentUserId,
+          date: new Date().toISOString().split('T')[0],
+        },
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
@@ -192,7 +220,7 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
             Paid by <span className="text-destructive">*</span>
           </label>
           <div className="grid grid-cols-2 gap-2">
-            {members.map((m) => {
+             {selectableMembers.map((m) => {
               const name = m.userName?.split(" ")[0] ?? "Member";
               return (
                 <button key={m.userId} type="button" onClick={() => setPaidBy(m.userId)}
@@ -217,7 +245,15 @@ function ExpenseForm({ onDone }: { onDone: () => void }) {
 }
 
 // ── Quick Action: Save to Goal ───────────────────────────────────────────────
-function GoalForm({ goals, onDone }: { goals: SavingsGoal[] | undefined; onDone: () => void }) {
+function GoalForm({
+  goals,
+  onDone,
+  memberUserId,
+}: {
+  goals: SavingsGoal[] | undefined;
+  onDone: () => void;
+  memberUserId?: string;
+}) {
   const activeGoals = goals?.filter(g => !g.isCompleted) ?? [];
   const [amount, setAmount] = useState("");
   const [selectedGoalId, setSelectedGoalId] = useState<"cascade" | number>(
@@ -247,7 +283,10 @@ function GoalForm({ goals, onDone }: { goals: SavingsGoal[] | undefined; onDone:
         });
       } else {
         const goal = activeGoals.find(g => g.id === selectedGoalId);
-        await contributeToGoal.mutateAsync({ id: selectedGoalId, data: { amount: amt } });
+        await contributeToGoal.mutateAsync({
+          id: selectedGoalId,
+          data: { amount: amt, ...(memberUserId ? { userId: memberUserId } : {}) },
+        });
         toast({ title: "Saved!", description: `${formatKes(amt)} added to "${goal?.name}".` });
         onDone();
       }
@@ -560,9 +599,9 @@ export default function Dashboard() {
           {/* Expanded form */}
           {activeAction !== "none" && (
             <div className="border-t border-border/50 p-6 bg-muted/20">
-              {activeAction === "income"  && <IncomeForm  onDone={() => setActiveAction("none")} />}
-              {activeAction === "expense" && <ExpenseForm onDone={() => setActiveAction("none")} />}
-              {activeAction === "goal"    && <GoalForm goals={goals} onDone={() => setActiveAction("none")} />}
+              {activeAction === "income"  && <IncomeForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageSetup} />}
+              {activeAction === "expense" && <ExpenseForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageSetup} />}
+              {activeAction === "goal"    && <GoalForm goals={goals} onDone={() => setActiveAction("none")} memberUserId={canManageSetup ? undefined : user?.id} />}
             </div>
           )}
         </CardContent>

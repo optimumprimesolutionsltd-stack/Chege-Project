@@ -19,9 +19,38 @@ export function getActiveGroupId(req: Request, res: Response): number | null {
   return req.group.id;
 }
 
+export function isGroupManager(req: Request): boolean {
+  return req.group?.role === "owner" || req.group?.role === "admin";
+}
+
 export function requireGroupManager(req: Request, res: Response): boolean {
-  if (!req.group || req.group.role === "member") {
+  if (!isGroupManager(req)) {
     res.status(403).json({ error: "Forbidden" });
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * A participating member can only record money under their own membership.
+ * Managers may keep using the multi-person and Joint-bank attribution flows.
+ */
+export function requireMemberSelfAttribution(
+  req: Request,
+  res: Response,
+  userIds: Array<string | null | undefined>,
+): boolean {
+  if (isGroupManager(req)) return true;
+
+  if (
+    !req.user?.id ||
+    userIds.length === 0 ||
+    userIds.some((userId) => userId !== req.user!.id)
+  ) {
+    res.status(403).json({
+      error: "Members can only record money in their own name. Ask an admin to record shared-bank activity.",
+    });
     return false;
   }
 

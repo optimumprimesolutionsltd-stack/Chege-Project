@@ -16,7 +16,11 @@ import {
   DeleteExpenseParams,
   GetExpensesQueryParams,
 } from "@workspace/api-zod";
-import { getActiveGroupId } from "../lib/activeGroup";
+import {
+  getActiveGroupId,
+  requireGroupManager,
+  requireMemberSelfAttribution,
+} from "../lib/activeGroup";
 
 const router = Router();
 
@@ -71,11 +75,19 @@ async function validateMemberId(id: string, groupId: number): Promise<string | n
   return member ? null : "Each personal funding source must be a recognised household member.";
 }
 
-async function validateIncomeSource(id: number, groupId: number): Promise<string | null> {
+async function validateIncomeSource(
+  id: number,
+  groupId: number,
+  expectedUserId?: string | null,
+): Promise<string | null> {
   const source = await db.query.incomeSourcesTable.findFirst({
     where: and(eq(incomeSourcesTable.id, id), eq(incomeSourcesTable.groupId, groupId)),
   });
-  return source ? null : "incomeSourceId not found.";
+  if (!source) return "incomeSourceId not found.";
+  if (expectedUserId && source.userId !== expectedUserId) {
+    return "The selected income source belongs to a different member.";
+  }
+  return null;
 }
 
 /**
@@ -102,7 +114,7 @@ async function validateFundingSplits(raw: unknown, amount: number, groupId: numb
     const memberError = await validateMemberId(split.userId, groupId);
     if (memberError) return { error: memberError };
     if (split.incomeSourceId) {
-      const sourceError = await validateIncomeSource(split.incomeSourceId, groupId);
+      const sourceError = await validateIncomeSource(split.incomeSourceId, groupId, split.userId);
       if (sourceError) return { error: sourceError };
     }
   }
@@ -229,6 +241,7 @@ router.get("/expenses", async (req, res) => {
 router.post("/expenses/apply-recurring", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
   const parsed = z.object({ month: z.number(), year: z.number() }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const { month, year } = parsed.data;
@@ -291,6 +304,16 @@ router.post("/expenses", async (req, res) => {
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
+  if (req.group?.role === "member") {
+    if (paidFromBank || isRecurring) {
+      res.status(403).json({ error: "Members can record their own expenses, but shared-bank and recurring expenses are managed by admins." });
+      return;
+    }
+    const attributedUserIds = splitResult.splits
+      ? splitResult.splits.map((split) => split.fromBank ? null : split.userId)
+      : [paidById];
+    if (!requireMemberSelfAttribution(req, res, attributedUserIds)) return;
+  }
   if (!splitResult.splits && !paidById && !paidFromBank) {
     res.status(400).json({ error: "Choose who paid or select Joint bank." }); return;
   }
@@ -299,7 +322,7 @@ router.post("/expenses", async (req, res) => {
     if (error) { res.status(400).json({ error }); return; }
   }
   if (!splitResult.splits && incomeSourceId) {
-    const error = await validateIncomeSource(incomeSourceId, groupId);
+    const error = await validateIncomeSource(incomeSourceId, groupId, paidById);
     if (error) { res.status(400).json({ error }); return; }
   }
 
@@ -335,6 +358,17 @@ router.patch("/expenses/:id", async (req, res) => {
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
+  const isParticipatingMember = req.group?.role === "member";
+  if (isParticipatingMember) {
+    if (paidFromBank || isRecurring) {
+      res.status(403).json({ error: "Members can edit their own personal expenses only." });
+      return;
+    }
+    const attributedUserIds = splitResult.splits
+      ? splitResult.splits.map((split) => split.fromBank ? null : split.userId)
+      : [paidById];
+    if (!requireMemberSelfAttribution(req, res, attributedUserIds)) return;
+  }
   // Legacy (non-split) updates must retain the same attribution safeguards as
   // creation. Split portions validate themselves above.
   if (!splitResult.splits && paidById) {
@@ -342,7 +376,7 @@ router.patch("/expenses/:id", async (req, res) => {
     if (error) { res.status(400).json({ error }); return; }
   }
   if (!splitResult.splits && incomeSourceId) {
-    const error = await validateIncomeSource(incomeSourceId, groupId);
+    const error = await validateIncomeSource(incomeSourceId, groupId, paidById);
     if (error) { res.status(400).json({ error }); return; }
   }
 
@@ -356,6 +390,17 @@ router.patch("/expenses/:id", async (req, res) => {
         eq(expenseIncomeSplitsTable.expenseId, expenseId),
         eq(expenseIncomeSplitsTable.groupId, groupId),
       ));
+    if (
+      isParticipatingMember &&
+      (
+        existing.paidById !== req.user!.id ||
+        existing.paidFromBank ||
+        existing.isRecurring ||
+        previousSplits.some(
+          (split) => split.fromBank || split.userId !== req.user!.id,
+        )
+      )
+    ) return { forbidden: true };
     // Keeping a historic split unchanged is supported for description/date edits.
     // Changing its total requires an explicit replacement split so it cannot drift.
     if (!splitResult.splits && previousSplits.length > 0 && amount !== existing.amount) {
@@ -393,6 +438,10 @@ router.patch("/expenses/:id", async (req, res) => {
     return { updated };
   });
   if (!result) { res.status(404).json({ error: "Not found" }); return; }
+  if ("forbidden" in result) {
+    res.status(403).json({ error: "Members can edit only their own personal expenses." });
+    return;
+  }
   if ("error" in result) { res.status(400).json({ error: result.error }); return; }
   const payer = result.updated.paidById ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, result.updated.paidById) }) : null;
   const splits = await getExpenseSplits([expenseId], groupId);
@@ -405,6 +454,34 @@ router.delete("/expenses/:id", async (req, res) => {
   const parsed = DeleteExpenseParams.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
   const deleted = await db.transaction(async (tx) => {
+    const [existing] = await tx.select({
+      paidById: expensesTable.paidById,
+      paidFromBank: expensesTable.paidFromBank,
+      isRecurring: expensesTable.isRecurring,
+    })
+      .from(expensesTable)
+      .where(and(eq(expensesTable.id, parsed.data.id), eq(expensesTable.groupId, groupId)))
+      .for("update");
+    if (!existing) return null;
+    if (
+      req.group?.role === "member" &&
+      (
+        existing.paidById !== req.user!.id ||
+        existing.paidFromBank ||
+        existing.isRecurring
+      )
+    ) return { forbidden: true };
+    const existingSplits = await tx.select().from(expenseIncomeSplitsTable)
+      .where(and(
+        eq(expenseIncomeSplitsTable.expenseId, parsed.data.id),
+        eq(expenseIncomeSplitsTable.groupId, groupId),
+      ));
+    if (
+      req.group?.role === "member" &&
+      existingSplits.some(
+        (split) => split.fromBank || split.userId !== req.user!.id,
+      )
+    ) return { forbidden: true };
     // Only delete the joint-account disbursement that belongs to this group
     await tx.delete(jointAccountTxTable).where(and(
       eq(jointAccountTxTable.expenseId, parsed.data.id),
@@ -417,6 +494,10 @@ router.delete("/expenses/:id", async (req, res) => {
     return removed;
   });
   if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
+  if ("forbidden" in deleted) {
+    res.status(403).json({ error: "Members can delete only their own personal expenses." });
+    return;
+  }
   res.json({ success: true });
 });
 

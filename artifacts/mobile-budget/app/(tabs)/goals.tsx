@@ -25,6 +25,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@/lib/auth';
 import { deriveContributorTotals, applyDateFilter, isCorrectionRow, MANUAL_ADJUSTMENT_NOTE } from '@/utils/contributorTotals';
 import { buildCascadePreview, parseWholeKesAmount } from '@/utils/cascadePreview';
 import {
@@ -277,6 +278,7 @@ export default function GoalsScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const { data: goals = [], isLoading, refetch } = useGetSavingsGoals();
 
@@ -297,6 +299,7 @@ export default function GoalsScreen() {
   const { mutateAsync: createGoal } = useCreateSavingsGoal();
 
   const openNewGoal = () => {
+    if (!canManageShared) return;
     setGoalName('');
     setGoalTarget('');
     setGoalDeadlineDate(null);
@@ -354,6 +357,7 @@ export default function GoalsScreen() {
   const { mutateAsync: deleteGoal } = useDeleteSavingsGoal();
 
   const openEditGoal = (goal: SavingsGoal) => {
+    if (!canManageShared) return;
     setEditingGoal(goal);
     setEditName(goal.name);
     setEditTarget(String(goal.targetAmount));
@@ -420,6 +424,7 @@ export default function GoalsScreen() {
   };
 
   const confirmDeleteGoal = (goal: SavingsGoal) => {
+    if (!canManageShared) return;
     Alert.alert(
       'Delete Goal',
       `Are you sure you want to delete "${goal.name}"? This cannot be undone.`,
@@ -445,6 +450,13 @@ export default function GoalsScreen() {
 
   const openGoalActions = (goal: SavingsGoal) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!canManageShared) {
+      Alert.alert(goal.name, undefined, [
+        { text: 'History', onPress: () => openHistory(goal) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
     Alert.alert(goal.name, undefined, [
       { text: 'History', onPress: () => openHistory(goal) },
       { text: 'Edit', onPress: () => openEditGoal(goal) },
@@ -499,6 +511,13 @@ export default function GoalsScreen() {
 
   const openCompletedGoalActions = (goal: SavingsGoal) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!canManageShared) {
+      Alert.alert(goal.name, undefined, [
+        { text: 'History', onPress: () => openHistory(goal) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
     Alert.alert(goal.name, undefined, [
       { text: 'History', onPress: () => openHistory(goal) },
       { text: 'Rename', onPress: () => openRenameGoal(goal) },
@@ -674,8 +693,17 @@ export default function GoalsScreen() {
 
   const { mutateAsync: cascadeContribute } = useCascadeContribute();
   const { data: members = [] } = useGetMembers();
+  const canManageShared = members.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === 'owner' || member.role === 'admin'),
+  );
+  const selectableContributors = canManageShared
+    ? members
+    : members.filter((member) => member.userId === user?.id);
 
   const openCascade = () => {
+    if (!canManageShared) return;
     setCascadeOrder(fundableGoals.map((g) => g.id));
     setCascadeAmount('');
     setCascadeResult(null);
@@ -779,8 +807,7 @@ export default function GoalsScreen() {
   const openContribute = (goal: SavingsGoal) => {
     setSelectedGoal(goal);
     setContributeAmount('');
-    // Default to Joint bank (empty array = no named payer = null userId)
-    setContribPayerIds([]);
+    setContribPayerIds(!canManageShared && user?.id ? [user.id] : []);
     setContribPayerAmounts({});
     setContributeVisible(true);
   };
@@ -798,12 +825,14 @@ export default function GoalsScreen() {
   const validContribPayerIds = contribPayerIds.filter(id => knownMemberIds.has(id));
 
   const toggleContribPayer = (memberId: string) => {
+    if (!canManageShared) return;
     setContribPayerIds(prev =>
       prev.includes(memberId) ? prev.filter(id => id !== memberId) : [...prev, memberId]
     );
   };
 
   const selectContribJoint = () => {
+    if (!canManageShared) return;
     setContribPayerIds([]);
     setContribPayerAmounts({});
   };
@@ -820,10 +849,13 @@ export default function GoalsScreen() {
       return;
     }
 
-    const isJoint = validContribPayerIds.length === 0;
-    const isMultiPayer = validContribPayerIds.length > 1;
+    const effectivePayerIds = canManageShared
+      ? validContribPayerIds
+      : user?.id ? [user.id] : [];
+    const isJoint = effectivePayerIds.length === 0;
+    const isMultiPayer = effectivePayerIds.length > 1;
     const contributorSplits = isMultiPayer
-      ? validContribPayerIds.map(userId => ({
+      ? effectivePayerIds.map(userId => ({
           userId,
           amount: parseFloat(contribPayerAmounts[userId] || '0') || 0,
         }))
@@ -853,7 +885,7 @@ export default function GoalsScreen() {
         id: selectedGoal.id,
         data: contributorSplits
           ? { amount: total, contributorSplits }
-          : { amount: total, userId: isJoint ? null : validContribPayerIds[0] },
+          : { amount: total, userId: isJoint ? null : effectivePayerIds[0] },
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       invalidateGoalQueries();
@@ -940,10 +972,10 @@ export default function GoalsScreen() {
         >
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Savings Goals</Text>
-            <TouchableOpacity style={styles.newGoalBtn} onPress={openNewGoal} activeOpacity={0.8}>
+            {canManageShared && <TouchableOpacity style={styles.newGoalBtn} onPress={openNewGoal} activeOpacity={0.8}>
               <Feather name="plus" size={16} color="#0a1a10" />
               <Text style={styles.newGoalBtnText}>New Goal</Text>
-            </TouchableOpacity>
+            </TouchableOpacity>}
           </View>
           <View style={styles.headerStats}>
             <View style={styles.headerStat}>
@@ -970,7 +1002,7 @@ export default function GoalsScreen() {
             <Feather name="target" size={40} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No savings goals yet</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Tap "New Goal" to create your first goal
+              {canManageShared ? 'Tap "New Goal" to create your first goal' : 'An admin will create shared goals for the group'}
             </Text>
           </View>
         ) : (
@@ -979,7 +1011,7 @@ export default function GoalsScreen() {
               <>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginBottom: 0 }]}>ACTIVE</Text>
-                  {fundableGoals.length > 0 && (
+                  {canManageShared && fundableGoals.length > 0 && (
                     <Pressable
                       onPress={openCascade}
                       style={({ pressed }) => ({
@@ -1004,7 +1036,7 @@ export default function GoalsScreen() {
                   return (
                     <Pressable
                       key={goal.id}
-                      onLongPress={() => openGoalActions(goal)}
+                      onLongPress={canManageShared ? () => openGoalActions(goal) : undefined}
                       delayLongPress={400}
                       style={[styles.card, { backgroundColor: colors.card, borderColor: isFunded ? '#4ade80' : colors.border }]}
                     >
@@ -1022,13 +1054,13 @@ export default function GoalsScreen() {
                         </View>
                         <View style={styles.cardRight}>
                           <Text style={[styles.cardPct, { color: '#4ade80' }]}>{Math.round(pct * 100)}%</Text>
-                          <TouchableOpacity
+                          {canManageShared && <TouchableOpacity
                             onPress={() => openGoalActions(goal)}
                             hitSlop={8}
                             style={styles.kebabBtn}
                           >
                             <Feather name="more-vertical" size={18} color={colors.mutedForeground} />
-                          </TouchableOpacity>
+                          </TouchableOpacity>}
                         </View>
                       </View>
 
@@ -1040,7 +1072,7 @@ export default function GoalsScreen() {
                       {isFunded && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1a3320', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 4 }}>
                           <Feather name="check-circle" size={14} color="#4ade80" />
-                          <Text style={{ color: '#4ade80', fontSize: 13, fontWeight: '600' }}>Goal reached! Mark it complete.</Text>
+                          <Text style={{ color: '#4ade80', fontSize: 13, fontWeight: '600' }}>{canManageShared ? 'Goal reached! Mark it complete.' : 'Goal reached!'}</Text>
                         </View>
                       )}
                       <View style={styles.cardBottom}>
@@ -1077,7 +1109,7 @@ export default function GoalsScreen() {
                 {done.map((goal) => (
                   <Pressable
                     key={goal.id}
-                    onLongPress={() => openCompletedGoalActions(goal)}
+                    onLongPress={canManageShared ? () => openCompletedGoalActions(goal) : undefined}
                     delayLongPress={400}
                     style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: 0.7 }]}
                   >
@@ -1093,13 +1125,13 @@ export default function GoalsScreen() {
                         <Text style={[styles.cardPct, { color: '#86efac' }]}>
                           KES {formatKES(goal.currentAmount)}
                         </Text>
-                        <TouchableOpacity
+                        {canManageShared && <TouchableOpacity
                           onPress={() => openCompletedGoalActions(goal)}
                           hitSlop={8}
                           style={styles.kebabBtn}
                         >
                           <Feather name="more-vertical" size={18} color={colors.mutedForeground} />
-                        </TouchableOpacity>
+                        </TouchableOpacity>}
                       </View>
                     </View>
                   </Pressable>
@@ -1276,11 +1308,11 @@ export default function GoalsScreen() {
                       <>
                         <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 16 }]}>
                           WHO IS CONTRIBUTING?{' '}
-                          <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>
+                          {canManageShared && <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>}
                         </Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                           {/* Joint bank chip — default, selected when no named members */}
-                          <Pressable
+                          {canManageShared && <Pressable
                             testID="goals-contrib-joint-chip"
                             onPress={selectContribJoint}
                             style={{
@@ -1303,10 +1335,10 @@ export default function GoalsScreen() {
                             >
                               Joint bank
                             </Text>
-                          </Pressable>
+                          </Pressable>}
 
                           {/* Named member chips */}
-                          {members.map((m) => {
+                          {selectableContributors.map((m) => {
                             const sel = contribPayerIds.includes(m.userId);
                             const name = m.userName?.split(' ')[0] ?? 'Member';
                             return (
