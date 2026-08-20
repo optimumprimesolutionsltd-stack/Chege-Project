@@ -23,6 +23,9 @@ import {
   getGetDashboardCategoryBreakdownQueryKey,
   getGetDashboardCategoryLedgerQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetDashboardActivityQueryKey,
+  getGetExpensesQueryKey,
+  getGetBudgetCategoriesQueryKey,
   useGetDashboardCategoryBreakdown,
   useGetDashboardCategoryLedger,
   customFetch,
@@ -121,6 +124,7 @@ export default function BudgetScreen() {
   const [editTarget, setEditTarget] = useState<BudgetCategory | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [managePriority, setManagePriority] = useState<number | null>(null);
   const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
@@ -154,9 +158,9 @@ export default function BudgetScreen() {
     },
   );
 
-  const openAdd = () => {
+  const openAdd = (priority = 1) => {
     setEditTarget(null);
-    setFormName(''); setFormAmount(''); setFormPriority('1');
+    setFormName(''); setFormAmount(''); setFormPriority(priority.toString());
     setFormIsRecurring(true); setFormActiveMonth(month); setFormActiveYear(year);
     setAddOpen(true);
   };
@@ -171,6 +175,10 @@ export default function BudgetScreen() {
     setFormActiveYear(cat.activeYear ?? year);
     setAddOpen(true);
   };
+  const openManage = (priority: number | null = null) => {
+    setManagePriority(priority);
+    setManageOpen(true);
+  };
   const closeModal = () => { setAddOpen(false); setEditTarget(null); };
 
   const refreshAll = async () => {
@@ -183,6 +191,10 @@ export default function BudgetScreen() {
       refetchBreakdown(),
       refetchIncomeSources(),
       refetchMembers(),
+      qc.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
+      qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() }),
+      qc.invalidateQueries({ queryKey: getGetExpensesQueryKey() }),
+      qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
     ]);
     await qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
   };
@@ -284,6 +296,9 @@ export default function BudgetScreen() {
   const ledgerEntries = ledger?.entries ?? [];
   const ledgerTotal = ledger?.total ?? 0;
   const ledgerCategoryTotal = breakdown.find(category => category.category === ledgerCategory?.category)?.spentAmount ?? 0;
+  const managedCategories = managePriority == null
+    ? allCategories
+    : allCategories.filter(category => category.priority === managePriority);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -387,20 +402,22 @@ export default function BudgetScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-      <Modal visible={manageOpen} animationType="slide" transparent onRequestClose={() => setManageOpen(false)}>
+      <Modal visible={manageOpen} animationType="slide" transparent onRequestClose={() => { setManageOpen(false); setManagePriority(null); }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
             <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit existing budgets</Text>
-              <Pressable onPress={() => setManageOpen(false)} hitSlop={8}>
+               <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                 {managePriority == null ? 'Edit existing budgets' : `Edit Tier ${managePriority} budgets`}
+               </Text>
+               <Pressable onPress={() => { setManageOpen(false); setManagePriority(null); }} hitSlop={8}>
                 <Feather name="x" size={22} color={colors.mutedForeground} />
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {allCategories.length === 0 ? (
+               {managedCategories.length === 0 ? (
                 <Text style={[styles.manageEmpty, { color: colors.mutedForeground }]}>No budget categories yet.</Text>
-              ) : allCategories.map(category => (
+               ) : managedCategories.map(category => (
                 <Pressable
                   key={category.id}
                   onPress={() => openEdit(category)}
@@ -516,11 +533,11 @@ export default function BudgetScreen() {
                 </Pressable>
               </View>
               <View style={styles.reportActions}>
-                <Pressable onPress={() => setManageOpen(true)} style={styles.manageBtn} hitSlop={4}>
+                <Pressable onPress={() => openManage()} style={styles.manageBtn} hitSlop={4}>
                   <Feather name="edit-2" size={14} color="#d9fbe5" />
                   <Text style={styles.manageBtnText}>Edit</Text>
                 </Pressable>
-                <Pressable onPress={openAdd} style={styles.addBtn} hitSlop={4}>
+                <Pressable onPress={() => openAdd()} style={styles.addBtn} hitSlop={4}>
                   <Feather name="plus" size={18} color="#4ade80" />
                 </Pressable>
               </View>
@@ -608,7 +625,7 @@ export default function BudgetScreen() {
               const ratio = row.budget > 0 ? Math.min(row.actual / row.budget, 1) : 0;
               return (
                 <View key={row.tier} style={[styles.tierCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={styles.tierCardTop}>
+                   <View style={styles.tierCardTop}>
                     <View style={[styles.tierBadge, { backgroundColor: colors.primary + '18' }]}>
                       <Text style={[styles.tierBadgeText, { color: colors.primary }]}>T{row.tier}</Text>
                     </View>
@@ -620,9 +637,29 @@ export default function BudgetScreen() {
                         {PRIORITY_GUIDE[row.tier] ?? 'Spending grouped at this level of urgency.'}
                       </Text>
                     </View>
-                    <Text style={[styles.tierAmount, { color: isOver ? colors.destructive : colors.primary }]}>
-                      {formatKES(row.actual)}
-                    </Text>
+                     <View style={styles.tierGroupActions}>
+                       <Pressable
+                         onPress={() => openAdd(row.tier)}
+                         style={[styles.tierAction, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                         accessibilityRole="button"
+                         accessibilityLabel={`Create category in tier ${row.tier}`}
+                       >
+                         <Feather name="plus" size={13} color={colors.primary} />
+                         <Text style={[styles.tierActionText, { color: colors.primary }]}>Add</Text>
+                       </Pressable>
+                        <Pressable
+                          onPress={() => openManage(row.tier)}
+                          style={[styles.tierAction, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit categories in tier ${row.tier}`}
+                        >
+                          <Feather name="edit-2" size={12} color={colors.primary} />
+                          <Text style={[styles.tierActionText, { color: colors.primary }]}>Edit</Text>
+                        </Pressable>
+                       <Text style={[styles.tierAmount, { color: isOver ? colors.destructive : colors.primary }]}>
+                         {formatKES(row.actual)}
+                       </Text>
+                     </View>
                   </View>
                   <View style={[styles.tierTrack, { backgroundColor: colors.muted }]}>
                     <View style={[styles.tierFill, { width: `${ratio * 100}%`, backgroundColor: isOver ? colors.destructive : colors.primary }]} />
@@ -888,6 +925,9 @@ const styles = StyleSheet.create({
   tierName: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   tierDescription: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 15, marginTop: 2 },
   tierAmount: { fontSize: 13, fontFamily: 'Inter_700Bold', marginLeft: 6 },
+   tierGroupActions: { alignItems: 'flex-end', gap: 7, marginLeft: 6 },
+   tierAction: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 9, paddingHorizontal: 7, paddingVertical: 4 },
+   tierActionText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   tierTrack: { height: 6, borderRadius: 4, overflow: 'hidden', marginTop: 12 },
   tierFill: { height: '100%', borderRadius: 4 },
   tierMeta: { fontSize: 10, fontFamily: 'Inter_500Medium', marginTop: 7 },

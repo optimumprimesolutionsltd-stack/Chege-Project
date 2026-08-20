@@ -3,6 +3,8 @@ import {
   getGetDashboardCategoryBreakdownQueryKey,
   getGetDashboardCategoryLedgerQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetDashboardActivityQueryKey,
+  getGetExpensesQueryKey,
   useGetDashboardCategoryBreakdown,
   useGetDashboardCategoryLedger,
 } from "@workspace/api-client-react";
@@ -52,7 +54,7 @@ const priorityGuide: Record<number, string> = {
 };
 
 function CategoryDialog({
-  open, onClose, initial, onSaved, reportMonth, reportYear,
+  open, onClose, initial, onSaved, reportMonth, reportYear, defaultPriority = 1,
 }: {
   open: boolean;
   onClose: () => void;
@@ -60,11 +62,12 @@ function CategoryDialog({
   onSaved: () => void | Promise<void>;
   reportMonth: number;
   reportYear: number;
+  defaultPriority?: number;
 }) {
   const { toast } = useToast();
   const [name, setName] = useState(initial?.name ?? "");
   const [amount, setAmount] = useState(initial?.budgetAmount?.toString() ?? "");
-  const [priority, setPriority] = useState(initial?.priority?.toString() ?? "1");
+  const [priority, setPriority] = useState(initial?.priority?.toString() ?? defaultPriority.toString());
   const [isRecurring, setIsRecurring] = useState(initial?.isRecurring ?? true);
   const [activeMonth, setActiveMonth] = useState(initial?.activeMonth ?? reportMonth);
   const [activeYear, setActiveYear] = useState(initial?.activeYear ?? reportYear);
@@ -73,11 +76,11 @@ function CategoryDialog({
   useEffect(() => {
     setName(initial?.name ?? "");
     setAmount(initial?.budgetAmount?.toString() ?? "");
-    setPriority(initial?.priority?.toString() ?? "1");
+    setPriority(initial?.priority?.toString() ?? defaultPriority.toString());
     setIsRecurring(initial?.isRecurring ?? true);
     setActiveMonth(initial?.activeMonth ?? reportMonth);
     setActiveYear(initial?.activeYear ?? reportYear);
-  }, [initial, open, reportMonth, reportYear]);
+  }, [initial, open, reportMonth, reportYear, defaultPriority]);
 
   const handleSave = async () => {
     const amt = parseInt(amount, 10);
@@ -233,7 +236,9 @@ export default function Budget() {
 
   const [editTarget, setEditTarget] = useState<BudgetCategory | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [addPriority, setAddPriority] = useState(1);
   const [manageOpen, setManageOpen] = useState(false);
+  const [managePriority, setManagePriority] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BudgetCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
@@ -273,8 +278,23 @@ export default function Budget() {
       refetchIncomeSources(),
       refetchMembers(),
       refetchBreakdown(),
+      qc.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
+      qc.invalidateQueries({ queryKey: getGetExpensesQueryKey() }),
+      qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() }),
+      qc.invalidateQueries({ queryKey: ["budget-categories-full"] }),
     ]);
     await qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+  };
+
+  const openAddForPriority = (priority: number) => {
+    setEditTarget(null);
+    setAddPriority(priority);
+    setAddOpen(true);
+  };
+
+  const openManage = (priority: number | null = null) => {
+    setManagePriority(priority);
+    setManageOpen(true);
   };
 
   const handleDelete = async () => {
@@ -357,16 +377,17 @@ export default function Budget() {
         onSaved={refreshAll}
         reportMonth={month}
         reportYear={year}
+        defaultPriority={addPriority}
       />
-      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
+      <Dialog open={manageOpen} onOpenChange={(open) => { setManageOpen(open); if (!open) setManagePriority(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit existing budgets</DialogTitle>
+            <DialogTitle>{managePriority == null ? "Edit existing budgets" : `Edit Tier ${managePriority} budgets`}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {allCategories.length === 0 ? (
+            {(managePriority == null ? allCategories : allCategories.filter(category => category.priority === managePriority)).length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">No budget categories yet.</p>
-            ) : allCategories.map(category => (
+            ) : (managePriority == null ? allCategories : allCategories.filter(category => category.priority === managePriority)).map(category => (
               <div key={category.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <div className="min-w-0">
                   <p className="font-medium truncate">{category.name}</p>
@@ -380,7 +401,7 @@ export default function Budget() {
                   variant="outline"
                   size="sm"
                   className="gap-1.5 shrink-0"
-                  onClick={() => { setManageOpen(false); setEditTarget(category); }}
+                  onClick={() => { setManageOpen(false); setManagePriority(null); setEditTarget(category); }}
                 >
                   <Pencil className="w-3.5 h-3.5" /> Edit
                 </Button>
@@ -492,10 +513,10 @@ export default function Budget() {
             </Button>
           </div>
             {canManageShared && <div className="flex items-center gap-2">
-             <Button variant="outline" onClick={() => setManageOpen(true)} className="gap-2">
+             <Button variant="outline" onClick={() => openManage()} className="gap-2">
                <SlidersHorizontal className="w-4 h-4" /> Edit existing
              </Button>
-             <Button onClick={() => setAddOpen(true)} className="gap-2">
+              <Button onClick={() => openAddForPriority(1)} className="gap-2">
                <Plus className="w-4 h-4" /> Add category
              </Button>
             </div>}
@@ -616,10 +637,22 @@ export default function Budget() {
                 <div key={priority} className="space-y-4">
                  <div className="border-b border-border/50 pb-3">
                    <div className="flex items-center justify-between gap-3">
-                     <h3 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
-                       <Target className="w-5 h-5 text-secondary" />
-                       Tier {priority}: {priorityMap[priority] ?? `Priority ${priority}`}
-                     </h3>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
+                          <Target className="w-5 h-5 text-secondary" />
+                          Tier {priority}: {priorityMap[priority] ?? `Priority ${priority}`}
+                        </h3>
+                        {canManageShared && (
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openAddForPriority(priority)}>
+                              <Plus className="h-3.5 w-3.5" /> Add
+                            </Button>
+                            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openManage(priority)}>
+                              <Pencil className="h-3.5 w-3.5" /> Edit
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                      <div className="shrink-0 text-sm font-medium text-muted-foreground">
                         Actual {formatKes(groupSpent)} / Budget {formatKes(groupTotal)}
                      </div>
