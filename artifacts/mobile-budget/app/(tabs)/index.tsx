@@ -33,6 +33,8 @@ import {
   useGetSavingsGoals,
   useGetMembers,
   useGetGroup,
+  useGetIncomeSources,
+  getGetIncomeSourcesQueryKey,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
@@ -61,6 +63,21 @@ type Shortcut = {
   color: string;
   bg: string;
   route: string;
+};
+
+type SetupNudgeStep = {
+  label: string;
+  route: string;
+};
+
+type SetupStep = {
+  id: string;
+  label: string;
+  detail: string;
+  icon: keyof typeof Feather.glyphMap;
+  color: string;
+  route: string;
+  done: boolean;
 };
 
 const SHORTCUTS: Shortcut[] = [
@@ -126,12 +143,27 @@ export default function DashboardScreen() {
       (member.role === 'owner' || member.role === 'admin'),
   );
 
+  const { data: incomeSources = [], isLoading: incomeSourcesLoading, refetch: refetchIncomeSources } = useGetIncomeSources(
+    { userId: user?.id },
+    {
+      query: {
+        enabled: !!user?.id,
+        queryKey: getGetIncomeSourcesQueryKey({ userId: user?.id }),
+      },
+    }
+  );
+
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchSummary(), refetchActivity(), refetchBank(), refetchGoals(), refetchMembers()]);
+    await Promise.all([refetchSummary(), refetchActivity(), refetchBank(), refetchGoals(), refetchMembers(), refetchIncomeSources()]);
     setRefreshing(false);
-  }, [refetchSummary, refetchActivity, refetchBank]);
+  }, [refetchSummary, refetchActivity, refetchBank, refetchGoals, refetchMembers, refetchIncomeSources]);
+
+  const [showNudge, setShowNudge] = useState(false);
+  const [nudgeStep, setNudgeStep] = useState<SetupNudgeStep | null>(null);
+  const [isSetupExpanded, setIsSetupExpanded] = useState(false);
+  const [isSetupDeferred, setIsSetupDeferred] = useState(false);
 
   // Compute this-month bank totals from transactions
   const monthlyDeposited = useMemo(() => {
@@ -169,45 +201,101 @@ export default function DashboardScreen() {
   const displayName = user?.firstName?.trim() || '';
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
-  const setupSteps = [
-    {
-      label: 'Set a monthly budget',
-      detail: 'Plan what your group can spend this month.',
-      icon: 'bar-chart-2' as const,
-      color: '#a78bfa',
-      route: '/(tabs)/budget',
-      done: (summary?.totalBudget ?? 0) > 0,
-    },
-    {
-      label: 'Set up shared bank',
-      detail: 'Record the first deposit into your joint funds.',
-      icon: 'credit-card' as const,
-      color: '#38bdf8',
-      route: '/(tabs)/bank',
-      done: (bankAccount?.transactions?.length ?? 0) > 0,
-    },
-    {
-      label: 'Create a savings goal',
-      detail: 'Save together for something important.',
-      icon: 'target' as const,
-      color: '#f59e0b',
-      route: '/(tabs)/goals',
-      done: savingsGoals.length > 0,
-    },
-    {
-      label: 'Invite your group',
-      detail: 'Add the people who will use this budget.',
-      icon: 'users' as const,
-      color: '#4ade80',
-      route: '/(tabs)/settings',
-      done: members.length > 1,
-    },
-  ];
-  const completeSetupSteps = setupSteps.filter(step => step.done).length;
-  const pendingSetupSteps = setupSteps.filter(step => !step.done);
+
+  const allSetupSteps = useMemo(() => {
+    const steps: SetupStep[] = [
+      {
+        id: 'budget',
+        label: 'Set a monthly budget',
+        detail: 'Plan what you can spend this month.',
+        icon: 'bar-chart-2' as const,
+        color: '#a78bfa',
+        route: '/(tabs)/budget',
+        done: (summary?.totalBudget ?? 0) > 0,
+      },
+      {
+        id: 'income',
+        label: 'Add an income source',
+        detail: 'Name where your funds come from.',
+        icon: 'briefcase' as const,
+        color: '#f472b6',
+        route: '/(tabs)/settings',
+        done: incomeSources.length > 0,
+      },
+      {
+        id: 'bank',
+        label: 'Set up bank funding',
+        detail: 'Record your first deposit.',
+        icon: 'credit-card' as const,
+        color: '#38bdf8',
+        route: '/(tabs)/bank',
+        done: (bankAccount?.transactions?.length ?? 0) > 0,
+      },
+      {
+        id: 'savings',
+        label: 'Create a savings goal',
+        detail: 'Start saving for something important.',
+        icon: 'target' as const,
+        color: '#f59e0b',
+        route: '/(tabs)/goals',
+        done: savingsGoals.length > 0,
+      },
+    ];
+
+    if (isSharedWorkspace) {
+      steps.push({
+        id: 'invite',
+        label: 'Invite your group',
+        detail: 'Add people who will use this budget.',
+        icon: 'users' as const,
+        color: '#4ade80',
+        route: '/(tabs)/settings',
+        done: members.length > 1,
+      });
+    }
+    return steps;
+  }, [summary, incomeSources, bankAccount, savingsGoals, members, isSharedWorkspace]);
+
+  const completeSetupSteps = allSetupSteps.filter(step => step.done).length;
+  const pendingSetupSteps = allSetupSteps.filter(step => !step.done);
   const nextSetupStep = pendingSetupSteps[0];
-  const laterSetupSteps = pendingSetupSteps.slice(1);
-  const isSetupComplete = completeSetupSteps === setupSteps.length;
+  const isSetupComplete = completeSetupSteps === allSetupSteps.length;
+
+  useEffect(() => {
+    if (!group?.id || !canManageSetup || isSetupDeferred) return;
+    if (summaryLoading || bankAccountLoading || incomeSourcesLoading) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const checkNudge = async () => {
+      const next = allSetupSteps.find(s => !s.done);
+      if (!next) return;
+
+      const today = new Date().toISOString().split('T')[0];
+      const key = `bajeti_nudge_${group.id}_${today}`;
+
+      try {
+        const hasShown = await AsyncStorage.getItem(key);
+        if (!hasShown) {
+          setNudgeStep({ label: next.label, route: next.route });
+          setShowNudge(true);
+          await AsyncStorage.setItem(key, 'true');
+
+          timeoutId = setTimeout(() => {
+            setShowNudge(false);
+          }, 6000);
+        }
+      } catch (err) {
+        // ignore async storage errors
+      }
+    };
+
+    checkNudge();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [group?.id, canManageSetup, isSetupDeferred, summaryLoading, bankAccountLoading, incomeSourcesLoading, allSetupSteps]);
 
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear((y) => y - 1); }
@@ -247,6 +335,18 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SetupNudge
+        visible={showNudge}
+        step={nudgeStep}
+        onClose={() => setShowNudge(false)}
+        onStart={() => {
+          if (!nudgeStep) return;
+          setShowNudge(false);
+          router.push(nudgeStep.route as any);
+        }}
+        colors={colors}
+        topOffset={topPad}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -354,7 +454,22 @@ export default function DashboardScreen() {
           ))}
         </View>
 
-        {canManageSetup && (nextSetupStep || isSetupComplete) && (
+        {canManageSetup && nextSetupStep && isSetupDeferred && (
+          <Pressable
+            testID="setup-resume-cta"
+            onPress={() => setIsSetupDeferred(false)}
+            style={[styles.setupCard, { backgroundColor: colors.muted, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 12 }]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.setupListLabel, { color: colors.foreground }]}>Setup paused</Text>
+              <Text style={[styles.setupListDetail, { color: colors.mutedForeground }]}>
+                Resume with {nextSetupStep.label.toLowerCase()} when you are ready.
+              </Text>
+            </View>
+            <Feather name="play" size={18} color={colors.primary} />
+          </Pressable>
+        )}
+        {canManageSetup && nextSetupStep && !isSetupDeferred && (
           <View
             style={[
               styles.setupCard,
@@ -369,49 +484,95 @@ export default function DashboardScreen() {
                 <View style={styles.setupEyebrowRow}>
                   {!isSetupComplete && <Feather name="zap" size={12} color={colors.primary} />}
                   <Text style={[styles.setupEyebrow, { color: isSetupComplete ? colors.mutedForeground : colors.primary }]}>
-                    GET STARTED · {completeSetupSteps} OF {setupSteps.length} COMPLETE
+                    START HERE · STEP {Math.min(completeSetupSteps + 1, allSetupSteps.length)} OF {allSetupSteps.length}
                   </Text>
                 </View>
-                <Text style={[styles.setupTitle, { color: isSetupComplete ? colors.foreground : colors.primaryForeground }]}>
+                <Text style={[styles.setupTitle, { color: isSetupComplete ? colors.foreground : colors.foreground }]}>
                   {isSetupComplete ? 'You’re all set' : 'Finish setting up Bajeti'}
                 </Text>
-                <Text style={[styles.setupSubtitle, { color: isSetupComplete ? colors.mutedForeground : 'rgba(255,255,255,0.78)' }]}>
-                  {isSetupComplete ? 'Your core setup is complete.' : 'A few small wins and your group is ready to go.'}
+                <Text style={[styles.setupSubtitle, { color: colors.mutedForeground }]}>
+                  {isSetupComplete ? 'Your core setup is complete.' : 'A few small wins and you are ready to go.'}
                 </Text>
               </View>
+              {!isSetupComplete && (
+                <Pressable testID="setup-expand-btn" onPress={() => setIsSetupExpanded(!isSetupExpanded)} hitSlop={10} style={{ padding: 6, backgroundColor: colors.muted, borderRadius: 20 }}>
+                  <Feather name={isSetupExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.foreground} />
+                </Pressable>
+              )}
             </View>
             <View style={[styles.setupTrack, { backgroundColor: isSetupComplete ? colors.border : `${colors.primary}18` }]}>
-              <View style={[styles.setupFill, { backgroundColor: isSetupComplete ? colors.mutedForeground : colors.secondary, width: `${(completeSetupSteps / setupSteps.length) * 100}%` }]} />
+              <View style={[styles.setupFill, { backgroundColor: isSetupComplete ? colors.mutedForeground : colors.secondary, width: `${(completeSetupSteps / allSetupSteps.length) * 100}%` }]} />
             </View>
-            <Pressable
-              testID="setup-primary-cta"
-              disabled={isSetupComplete}
-              onPress={nextSetupStep ? () => router.push(nextSetupStep.route as any) : undefined}
-              style={({ pressed }) => [
-                styles.setupPrimaryCta,
-                {
-                  backgroundColor: isSetupComplete ? colors.mutedForeground : colors.secondary,
-                  opacity: isSetupComplete ? 0.55 : pressed ? 0.82 : 1,
-                },
-              ]}
-            >
-              <View style={[styles.setupPrimaryIcon, { backgroundColor: isSetupComplete ? `${colors.foreground}16` : `${colors.background}24` }]}>
-                <Feather name={isSetupComplete ? 'check-circle' : nextSetupStep!.icon} size={19} color={isSetupComplete ? colors.foreground : colors.background} />
+
+            {!isSetupExpanded && nextSetupStep && (
+              <Pressable
+                testID="setup-primary-cta"
+                onPress={() => router.push(nextSetupStep.route as any)}
+                style={({ pressed }) => [
+                  styles.setupPrimaryCta,
+                  {
+                    backgroundColor: colors.secondary,
+                    opacity: pressed ? 0.82 : 1,
+                  },
+                ]}
+              >
+                <View style={[styles.setupPrimaryIcon, { backgroundColor: `${colors.background}24` }]}>
+                  <Feather name={nextSetupStep.icon} size={19} color={colors.background} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.setupCtaLabel, { color: colors.background }]}>
+                    DO THIS NEXT
+                  </Text>
+                  <Text style={[styles.setupCtaTitle, { color: colors.background }]}>
+                    {nextSetupStep.label}
+                  </Text>
+                </View>
+                <Feather name="arrow-right" size={20} color={colors.background} />
+              </Pressable>
+            )}
+            {!isSetupExpanded && nextSetupStep && (
+              <Pressable
+                testID="setup-skip-cta"
+                onPress={() => setIsSetupDeferred(true)}
+                style={styles.setupSkipButton}
+              >
+                <Text style={[styles.setupSkipButtonText, { color: colors.mutedForeground }]}>Skip for now</Text>
+              </Pressable>
+            )}
+
+            {isSetupExpanded && !isSetupComplete && (
+              <View style={styles.setupList}>
+                {allSetupSteps.map((step, idx) => (
+                  <View key={step.id} style={[styles.setupListItem, { borderTopColor: colors.border, borderTopWidth: idx > 0 ? 1 : 0 }]}>
+                    <View style={[styles.setupListIcon, { backgroundColor: step.done ? colors.primary + '20' : colors.muted }]}>
+                      <Feather name={step.done ? 'check' : step.icon} size={14} color={step.done ? colors.primary : colors.mutedForeground} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.setupListLabel, { color: step.done ? colors.mutedForeground : colors.foreground, textDecorationLine: step.done ? 'line-through' : 'none' }]}>
+                        {step.label}
+                      </Text>
+                      <Text style={[styles.setupListDetail, { color: colors.mutedForeground }]}>{step.detail}</Text>
+                    </View>
+                    {!step.done && step.id === nextSetupStep.id && (
+                      <Pressable testID={`setup-step-${step.id}`} style={[styles.setupListBtn, { backgroundColor: colors.primary }]} onPress={() => router.push(step.route as any)}>
+                        <Text style={[styles.setupListBtnText, { color: colors.primaryForeground }]}>Go</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.setupCtaLabel, { color: isSetupComplete ? colors.background : colors.background }]}>
-                  {isSetupComplete ? 'SETUP COMPLETE' : 'DO THIS NEXT'}
-                </Text>
-                <Text style={[styles.setupCtaTitle, { color: colors.background }]}>
-                  {isSetupComplete ? 'All core steps done' : nextSetupStep!.label}
-                </Text>
+            )}
+
+            {isSetupComplete && (
+              <View style={[styles.setupPrimaryCta, { backgroundColor: colors.muted, marginTop: 16 }]}>
+                <View style={[styles.setupPrimaryIcon, { backgroundColor: `${colors.foreground}16` }]}>
+                  <Feather name="check-circle" size={19} color={colors.foreground} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.setupCtaLabel, { color: colors.foreground }]}>SETUP COMPLETE</Text>
+                  <Text style={[styles.setupCtaTitle, { color: colors.foreground }]}>All core steps done</Text>
+                </View>
               </View>
-              <Feather name={isSetupComplete ? 'check' : 'arrow-right'} size={20} color={colors.background} />
-            </Pressable>
-            {nextSetupStep && laterSetupSteps.length > 0 && (
-              <Text style={[styles.setupLaterSteps, { color: 'rgba(255,255,255,0.74)' }]}>
-                Then: {laterSetupSteps.map(step => step.label).join(' · ')}
-              </Text>
             )}
           </View>
         )}
@@ -493,6 +654,56 @@ export default function DashboardScreen() {
       </ScrollView>
 
     </View>
+  );
+}
+
+function SetupNudge({ visible, step, onClose, onStart, colors, topOffset }: {
+  visible: boolean;
+  step: SetupNudgeStep | null;
+  onClose: () => void;
+  onStart: () => void;
+  colors: any;
+  topOffset: number;
+}) {
+  const translateY = useSharedValue(-100);
+
+  useEffect(() => {
+    if (visible) {
+      translateY.value = withTiming(topOffset + 12, { duration: 400 });
+    } else {
+      translateY.value = withTiming(-100, { duration: 400 });
+    }
+  }, [visible, topOffset]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    opacity: translateY.value > -50 ? 1 : 0,
+  }));
+
+  return (
+    <Animated.View style={[
+      {
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        zIndex: 100,
+        pointerEvents: visible ? 'box-none' : 'none',
+      },
+      style
+    ]}>
+      <View style={{ backgroundColor: colors.primary, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: `${colors.primaryForeground}22` }}>
+        <Feather name="info" size={18} color={colors.primaryForeground} />
+        <Pressable testID="setup-nudge-cta" onPress={onStart} style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={{ color: colors.primaryForeground, fontSize: 13, fontFamily: 'Inter_700Bold' }}>Almost there</Text>
+          <Text style={{ color: colors.primaryForeground, fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 1 }}>
+            Start: {step?.label ?? 'your next setup step'}
+          </Text>
+        </Pressable>
+        <Pressable testID="setup-nudge-close" onPress={onClose} hitSlop={10} style={{ padding: 4 }}>
+          <Feather name="x" size={16} color={colors.primaryForeground} />
+        </Pressable>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -612,6 +823,16 @@ const styles = StyleSheet.create({
   setupCtaLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.8 },
   setupCtaTitle: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 2 },
   setupLaterSteps: { fontSize: 11, fontFamily: 'Inter_500Medium', lineHeight: 17, marginTop: 13 },
+
+  setupList: { marginTop: 16 },
+  setupListItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  setupListIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  setupListLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
+  setupListDetail: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  setupListBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  setupListBtnText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  setupSkipButton: { alignSelf: 'flex-start', paddingHorizontal: 4, paddingTop: 10, paddingBottom: 2 },
+  setupSkipButtonText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
 
   section: { paddingHorizontal: 20, paddingTop: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

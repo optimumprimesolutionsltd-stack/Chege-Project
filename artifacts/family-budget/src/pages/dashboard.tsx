@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useGetDashboardSummary,
   useGetDashboardActivity,
@@ -13,6 +13,7 @@ import {
   useCascadeContribute,
   useGetJointAccount,
   useGetGroup,
+   useGetIncomeSources,
    useGetWorkspaces,
    useSelectWorkspace,
   useCreateSharedGroup,
@@ -21,6 +22,7 @@ import {
   getGetSavingsGoalsQueryKey,
   getGetJointAccountQueryKey,
   getGetExpensesQueryKey,
+   getGetIncomeSourcesQueryKey,
   type SavingsGoal,
   type IncomeSource,
 } from "@workspace/api-client-react";
@@ -29,8 +31,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-  ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
-  Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2, Sparkles, Link2,
+   ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
+   Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2, Sparkles, Link2, BriefcaseBusiness, UsersRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -641,6 +643,15 @@ export default function Dashboard() {
   const { data: bankAccount } = useGetJointAccount();
   const { data: group } = useGetGroup();
   const { data: members = [] } = useGetMembers();
+  const { data: incomeSources = [], isLoading: isIncomeSourcesLoading } = useGetIncomeSources(
+    { userId: user?.id },
+    {
+      query: {
+        enabled: Boolean(user?.id),
+        queryKey: getGetIncomeSourcesQueryKey({ userId: user?.id }),
+      },
+    },
+  );
   const isSharedWorkspace = group?.isPrivate === false;
   // The group response may be cached across an invitation acceptance. A live
   // two-person member list is enough to enable the form; the API still checks
@@ -652,6 +663,95 @@ export default function Dashboard() {
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   );
+  const [isSetupPathOpen, setIsSetupPathOpen] = useState(false);
+  const [isSetupDeferred, setIsSetupDeferred] = useState(false);
+  const [showSetupNudge, setShowSetupNudge] = useState(false);
+
+  const setupSteps = [
+    {
+      id: "budget",
+      label: "Set your monthly budget",
+      description: "Give this month’s spending a clear plan.",
+      href: "/budget",
+      icon: Wallet,
+      done: (summary?.totalBudget ?? 0) > 0,
+    },
+    {
+      id: "income",
+      label: "Add an income source",
+      description: "Name where the money you budget comes from.",
+      href: "/settings",
+      icon: BriefcaseBusiness,
+      done: incomeSources.length > 0,
+    },
+    {
+      id: "bank",
+      label: isSharedWorkspace ? "Fund the shared bank" : "Record bank funding",
+      description: "Record the first deposit so your available funds are clear.",
+      href: "/bank",
+      icon: Building2,
+      done: (bankAccount?.transactions?.length ?? 0) > 0,
+    },
+    {
+      id: "goal",
+      label: "Create a savings goal",
+      description: "Start putting money aside for something important.",
+      href: "/savings-goals",
+      icon: Target,
+      done: (goals?.length ?? 0) > 0,
+    },
+    ...(isSharedWorkspace ? [{
+      id: "invite",
+      label: "Invite your group",
+      description: "Bring in the people who will manage this budget with you.",
+      href: "/settings",
+      icon: UsersRound,
+      done: members.length > 1,
+    }] : []),
+  ];
+  const completeSetupSteps = setupSteps.filter(step => step.done).length;
+  const pendingSetupSteps = setupSteps.filter(step => !step.done);
+  const nextSetupStep = pendingSetupSteps[0];
+  const isSetupComplete = completeSetupSteps === setupSteps.length;
+  const setupNudgeKey = group?.id && user?.id
+    ? `bajeti:onboarding-nudge:${group.id}:${user.id}`
+    : null;
+
+  useEffect(() => {
+    if (
+      !canManageSetup ||
+      isSetupDeferred ||
+      !setupNudgeKey ||
+      !nextSetupStep ||
+      isSummaryLoading ||
+      isIncomeSourcesLoading
+    ) {
+      setShowSetupNudge(false);
+      return;
+    }
+
+    const now = Date.now();
+    const lastShown = Number(window.localStorage.getItem(setupNudgeKey) ?? 0);
+    const sixHours = 6 * 60 * 60 * 1000;
+    if (now - lastShown < sixHours) return;
+
+    const showTimer = window.setTimeout(() => {
+      window.localStorage.setItem(setupNudgeKey, String(Date.now()));
+      setShowSetupNudge(true);
+    }, 1200);
+    const hideTimer = window.setTimeout(() => setShowSetupNudge(false), 13_200);
+    return () => {
+      window.clearTimeout(showTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [
+    canManageSetup,
+    isSetupDeferred,
+    isIncomeSourcesLoading,
+    isSummaryLoading,
+    nextSetupStep?.id,
+    setupNudgeKey,
+  ]);
 
   // Compute this-month totals from the transactions array
   const monthlyDeposited = bankAccount?.transactions
@@ -726,42 +826,6 @@ export default function Dashboard() {
   if (breakdown.filter(b => b.spentAmount > 0).length > 5) {
     chartData.push({ name: "Others", value: breakdown.filter(b => b.spentAmount > 0).sort((a,b) => b.spentAmount - a.spentAmount).slice(5).reduce((s,b) => s + b.spentAmount, 0), color: "hsl(var(--muted-foreground))" });
   }
-  const setupSteps = [
-    {
-      label: "Set your monthly budget",
-      description: "Give your group’s spending a clear plan for this month.",
-      href: "/budget",
-      icon: "📊",
-      done: summary.totalBudget > 0,
-    },
-    {
-      label: "Set up your shared bank",
-      description: "Record the first deposit so everyone can follow shared money.",
-      href: "/bank",
-      icon: "🏦",
-      done: (bankAccount?.transactions?.length ?? 0) > 0,
-    },
-    {
-      label: "Create a savings goal",
-      description: "Start saving together for something that matters.",
-      href: "/savings-goals",
-      icon: "🎯",
-      done: (goals?.length ?? 0) > 0,
-    },
-    {
-      label: "Invite your household",
-      description: "Add the people who will budget and track money with you.",
-      href: "/settings",
-      icon: "👥",
-      done: members.length > 1,
-    },
-  ];
-  const completeSetupSteps = setupSteps.filter(step => step.done).length;
-  const pendingSetupSteps = setupSteps.filter(step => !step.done);
-  const nextSetupStep = pendingSetupSteps[0];
-  const laterSetupSteps = pendingSetupSteps.slice(1);
-  const isSetupComplete = completeSetupSteps === setupSteps.length;
-
   return (
     <div className="space-y-8 pb-12">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -810,7 +874,28 @@ export default function Dashboard() {
         </section>
       </div>
 
-       {canManageSetup && (nextSetupStep || isSetupComplete) && (
+       {canManageSetup && nextSetupStep && isSetupDeferred && (
+         <Card className="border border-border/70 bg-muted/35 shadow-sm">
+           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+             <div>
+               <p className="text-sm font-bold text-foreground">Setup paused</p>
+               <p className="mt-0.5 text-sm text-muted-foreground">
+                 Pick up with {nextSetupStep.label.toLowerCase()} whenever you are ready.
+               </p>
+             </div>
+             <Button
+               type="button"
+               size="sm"
+               data-testid="setup-resume-cta"
+               className="rounded-lg"
+               onClick={() => setIsSetupDeferred(false)}
+             >
+               Resume setup
+             </Button>
+           </CardContent>
+         </Card>
+       )}
+       {canManageSetup && nextSetupStep && !isSetupDeferred && (
          <Card
            className={`overflow-hidden shadow-sm ${
              isSetupComplete
@@ -821,19 +906,19 @@ export default function Dashboard() {
            <CardContent className="p-4 sm:p-5">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="max-w-xl">
-                 <p className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.16em] ${
+                  <p className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.16em] ${
                    isSetupComplete ? "text-muted-foreground" : "text-primary"
                  }`}>
                    {!isSetupComplete && <Sparkles className="h-3.5 w-3.5" />}
-                  Get started · {completeSetupSteps} of {setupSteps.length} complete
+                   Start here · Step {Math.min(completeSetupSteps + 1, setupSteps.length)} of {setupSteps.length}
                 </p>
                  <h2 className="mt-1 font-display text-xl font-bold text-foreground sm:text-2xl">
-                   {isSetupComplete ? "You're all set" : "Finish setting up Bajeti"}
+                    {isSetupComplete ? "You’re all set" : completeSetupSteps > 0 ? "Almost there" : "Set up Bajeti"}
                  </h2>
                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                    {isSetupComplete
                      ? "Your core setup is complete. You can keep using Bajeti as normal."
-                     : "A few small wins and your group is ready to go."}
+                      : "One real action at a time. You can come back whenever you are ready."}
                 </p>
                  <div className={`mt-4 h-2 w-full max-w-md overflow-hidden rounded-full ${
                    isSetupComplete ? "bg-muted-foreground/20" : "bg-primary/10"
@@ -853,10 +938,13 @@ export default function Dashboard() {
                    className="group flex min-h-14 w-full items-center gap-3 rounded-xl border border-primary/15 bg-card px-3.5 py-2.5 text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.03] sm:max-w-sm"
                  >
                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/15 text-xl">
-                     {nextSetupStep.icon}
+                      {(() => {
+                        const NextStepIcon = nextSetupStep.icon;
+                        return <NextStepIcon className="h-5 w-5" />;
+                      })()}
                    </span>
                    <span className="min-w-0 flex-1">
-                     <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary/75">Next small win</span>
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary/75">Do this next</span>
                      <span className="block truncate font-display text-sm font-bold">{nextSetupStep.label}</span>
                    </span>
                    <ChevronRight className="h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-1" />
@@ -879,14 +967,100 @@ export default function Dashboard() {
                  </button>
                )}
             </div>
-             {laterSetupSteps.length > 0 && (
-               <p className="mt-4 text-xs text-muted-foreground">
-                Then: {laterSetupSteps.map(step => step.label).join(" · ")}
-              </p>
-            )}
+              {!isSetupComplete && (
+                <div className="mt-4">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      data-testid="setup-path-toggle"
+                      aria-expanded={isSetupPathOpen}
+                      className="h-8 px-2 text-xs text-muted-foreground"
+                      onClick={() => setIsSetupPathOpen((isOpen) => !isOpen)}
+                    >
+                      {isSetupPathOpen ? "Hide setup path" : "See all setup steps"}
+                      <ChevronRight className={`ml-1 h-3.5 w-3.5 transition-transform ${isSetupPathOpen ? "rotate-90" : ""}`} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      data-testid="setup-skip-cta"
+                      className="h-8 px-2 text-xs text-muted-foreground"
+                      onClick={() => setIsSetupDeferred(true)}
+                    >
+                      Skip for now
+                    </Button>
+                  </div>
+                  {isSetupPathOpen && (
+                    <ol className="mt-2 divide-y divide-border/60 rounded-xl border border-border/70 bg-card/70 px-3">
+                      {setupSteps.map((step, index) => {
+                        const StepIcon = step.done ? CheckCircle2 : step.icon;
+                        const isNext = step.id === nextSetupStep?.id;
+                        return (
+                          <li key={step.id} className="flex items-center gap-3 py-3">
+                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${step.done ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary"}`}>
+                              <StepIcon className="h-4 w-4" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className={`block text-sm font-semibold ${step.done ? "text-muted-foreground line-through" : "text-foreground"}`}>
+                                {index + 1}. {step.label}
+                              </span>
+                              <span className="block text-xs leading-relaxed text-muted-foreground">{step.description}</span>
+                            </span>
+                            {isNext && (
+                              <Link href={step.href} data-testid={`setup-step-${step.id}`} className="text-xs font-bold text-primary hover:underline">
+                                Start
+                              </Link>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                </div>
+              )}
           </CardContent>
         </Card>
       )}
+       {showSetupNudge && nextSetupStep && (
+         <aside
+           aria-live="polite"
+           className="fixed bottom-5 right-5 z-50 w-[calc(100%-2.5rem)] max-w-sm rounded-2xl border border-primary/25 bg-card p-4 shadow-2xl sm:bottom-8 sm:right-8"
+         >
+           <div className="flex items-start gap-3">
+             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+               <Sparkles className="h-4 w-4" />
+             </span>
+             <div className="min-w-0 flex-1">
+               <p className="text-sm font-bold text-foreground">Almost there</p>
+               <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                 Your next small step is {nextSetupStep.label.toLowerCase()}.
+               </p>
+               <Link
+                 href={nextSetupStep.href}
+                 data-testid="setup-nudge-cta"
+                 onClick={() => setShowSetupNudge(false)}
+                 className="mt-3 inline-flex text-sm font-bold text-primary hover:underline"
+               >
+                 Start now <ChevronRight className="ml-1 h-4 w-4" />
+               </Link>
+             </div>
+             <Button
+               type="button"
+               variant="ghost"
+               size="icon"
+               data-testid="setup-nudge-close"
+               aria-label="Dismiss setup reminder"
+               className="h-7 w-7 shrink-0"
+               onClick={() => setShowSetupNudge(false)}
+             >
+               <X className="h-4 w-4" />
+             </Button>
+           </div>
+         </aside>
+       )}
 
       {/* ── Quick Actions ── */}
       <Card className="border-none shadow-md overflow-hidden">
