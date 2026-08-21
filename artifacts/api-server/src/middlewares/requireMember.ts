@@ -57,9 +57,10 @@ async function adoptLegacyGroup(userId: string) {
       .select({ count: sql<number>`COUNT(*)` })
       .from(groupsTable);
 
-    // Preserve the existing first-user experience only when this truly is a
-    // fresh installation. Later users must be added through group membership.
-    if (!legacyMember && Number(groupCount.count) > 0) return undefined;
+    // Adoption is a one-time migration. Once any group exists, membership is
+    // the only source of authorization. In particular, an old legacy member
+    // who was removed must never be re-created from the legacy members table.
+    if (Number(groupCount.count) > 0) return undefined;
 
     await tx
       .insert(groupsTable)

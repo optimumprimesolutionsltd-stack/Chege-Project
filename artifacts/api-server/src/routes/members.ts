@@ -144,39 +144,117 @@ router.patch("/members/:userId", async (req, res): Promise<void> => {
   res.json(member);
 });
 
+router.delete("/members/me", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const outcome = await db.transaction(async (tx) => {
+    const [group] = await tx
+      .select({ id: groupsTable.id })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, groupId))
+      .for("update");
+    if (!group) return "missing-group" as const;
+
+    const [membership] = await tx
+      .select({ role: groupMembershipsTable.role })
+      .from(groupMembershipsTable)
+      .where(and(
+        eq(groupMembershipsTable.groupId, groupId),
+        eq(groupMembershipsTable.userId, req.user!.id),
+      ))
+      .for("update");
+    if (!membership) return "missing-member" as const;
+    if (membership.role === "owner") return "owner" as const;
+
+    const [deleted] = await tx
+      .delete(groupMembershipsTable)
+      .where(and(
+        eq(groupMembershipsTable.groupId, groupId),
+        eq(groupMembershipsTable.userId, req.user!.id),
+      ))
+      .returning();
+    return deleted ? "left" as const : "missing-member" as const;
+  });
+
+  if (outcome === "missing-group" || outcome === "missing-member") {
+    res.status(404).json({ error: "Group membership not found" });
+    return;
+  }
+  if (outcome === "owner") {
+    res.status(403).json({
+      error: "The group owner cannot leave. Transfer ownership before leaving the group.",
+    });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
 router.delete("/members/:userId", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
 
   const { userId } = req.params;
+  if (userId === req.user!.id) {
+    res.status(400).json({ error: "Use Leave group to remove yourself from this group." });
+    return;
+  }
 
-  const [target] = await db
-    .select({ role: groupMembershipsTable.role })
-    .from(groupMembershipsTable)
-    .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, userId)))
-    .limit(1);
-  if (!target) { res.status(404).json({ error: "Member not found" }); return; }
-  if (target.role === "owner") {
+  const outcome = await db.transaction(async (tx) => {
+    const [group] = await tx
+      .select({ id: groupsTable.id })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, groupId))
+      .for("update");
+    if (!group) return "missing-group" as const;
+
+    const [actor] = await tx
+      .select({ role: groupMembershipsTable.role })
+      .from(groupMembershipsTable)
+      .where(and(
+        eq(groupMembershipsTable.groupId, groupId),
+        eq(groupMembershipsTable.userId, req.user!.id),
+      ))
+      .for("update");
+    if (!actor || (actor.role !== "owner" && actor.role !== "admin")) {
+      return "forbidden" as const;
+    }
+
+    const [target] = await tx
+      .select({ role: groupMembershipsTable.role })
+      .from(groupMembershipsTable)
+      .where(and(
+        eq(groupMembershipsTable.groupId, groupId),
+        eq(groupMembershipsTable.userId, userId),
+      ))
+      .for("update");
+    if (!target) return "missing-member" as const;
+    if (target.role === "owner") return "owner" as const;
+
+    const [deleted] = await tx
+      .delete(groupMembershipsTable)
+      .where(and(
+        eq(groupMembershipsTable.groupId, groupId),
+        eq(groupMembershipsTable.userId, userId),
+      ))
+      .returning();
+    return deleted ? "removed" as const : "missing-member" as const;
+  });
+
+  if (outcome === "missing-group" || outcome === "missing-member") {
+    res.status(404).json({ error: "Member not found" });
+    return;
+  }
+  if (outcome === "forbidden") {
+    res.status(403).json({ error: "Only owners and admins can remove members." });
+    return;
+  }
+  if (outcome === "owner") {
     res.status(403).json({ error: "The group owner cannot be removed." });
     return;
   }
-
-  // Prevent removing yourself if you're the only member
-  const [countRow] = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(groupMembershipsTable)
-    .where(eq(groupMembershipsTable.groupId, groupId));
-  if (Number(countRow.count) <= 1 && userId === req.user!.id) {
-    res.status(400).json({ error: "Cannot remove the last member" });
-    return;
-  }
-
-  const [deleted] = await db
-    .delete(groupMembershipsTable)
-    .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, userId)))
-    .returning();
-  if (!deleted) { res.status(404).json({ error: "Member not found" }); return; }
 
   res.json({ success: true });
 });

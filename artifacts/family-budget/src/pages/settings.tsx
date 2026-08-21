@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   useGetMembers,
+  useLeaveGroup,
   useRemoveMember,
   useUpdateMemberRole,
   useGetGroup,
@@ -13,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
+import { LogOut, Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
 
 type GroupInvitation = {
   id: number;
@@ -35,6 +36,7 @@ export default function Settings() {
   const { user } = useAuth();
   const { data: members, isLoading } = useGetMembers();
   const removeMember = useRemoveMember();
+  const leaveGroup = useLeaveGroup();
   const updateMemberRole = useUpdateMemberRole();
   const { data: group } = useGetGroup();
   const updateGroup = useUpdateGroup();
@@ -51,6 +53,8 @@ export default function Settings() {
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) ?? false;
+  const myMembership = members?.find((member) => member.userId === user?.id);
+  const canLeaveGroup = Boolean(myMembership && myMembership.role !== "owner");
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
   }, [group?.name]);
@@ -156,13 +160,28 @@ export default function Settings() {
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm("Remove this person? They will lose access to the app.")) return;
+    if (!confirm("Remove this person from the group? They will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.")) return;
     try {
       await removeMember.mutateAsync({ userId });
-      toast({ title: "Member removed" });
+      toast({ title: "Member removed", description: "Shared records stay with the group." });
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
     } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not remove partner." });
+      toast({ variant: "destructive", title: "Error", description: "Could not remove this person." });
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!confirm("Leave this group? You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.")) return;
+    try {
+      await leaveGroup.mutateAsync();
+      queryClient.clear();
+      window.location.assign(`${import.meta.env.BASE_URL}?left=1`);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not leave group",
+        description: error instanceof Error ? error.message : undefined,
+      });
     }
   };
 
@@ -282,6 +301,32 @@ export default function Settings() {
                 You can view shared finances, log your own expenses, and contribute to existing goals or shared funds. An admin manages members and group setup.
               </p>
             </div>
+          )}
+          {canLeaveGroup && (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Leave this group</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    You will lose access immediately. The group’s shared finances and history stay in place.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={handleLeaveGroup}
+                  disabled={leaveGroup.isPending}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {leaveGroup.isPending ? "Leaving…" : "Leave group"}
+                </Button>
+              </div>
+            </div>
+          )}
+          {myMembership?.role === "owner" && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Owners stay in the group so it always has someone responsible for access. Ownership transfer is not available yet.
+            </p>
           )}
 
           {/* Invite member form */}

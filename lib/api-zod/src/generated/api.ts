@@ -1040,6 +1040,14 @@ export const AddMemberResponse = zod.object({
 
 
 /**
+ * @summary Leave the active group as the signed-in non-owner member
+ */
+export const LeaveGroupResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
  * @summary List group invitations
  */
 export const GetGroupInvitationsResponseItem = zod.object({

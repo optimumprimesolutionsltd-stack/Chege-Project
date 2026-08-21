@@ -188,6 +188,7 @@ describe("requireMember", () => {
 
   it("does not recreate a removed member after a group already exists", async () => {
     groupExists = true;
+    legacyMemberIds.add("removed-member");
     const res = response();
 
     await requireMember(authenticatedRequest("removed-member"), res, vi.fn());
@@ -196,15 +197,16 @@ describe("requireMember", () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ error: "You are not a member of this shared group." }),
     );
-    expect(legacyMemberIds.has("removed-member")).toBe(false);
+    expect(memberships.has("removed-member")).toBe(false);
   });
 
   it("returns 403 for a removed member's next protected request", async () => {
     groupExists = true;
+    legacyMemberIds.add("removed-member");
 
     const res = await request(protectedApp("removed-member")).get("/protected");
 
     expect(res.status).toBe(403);
-    expect(legacyMemberIds.has("removed-member")).toBe(false);
+    expect(memberships.has("removed-member")).toBe(false);
   });
 });

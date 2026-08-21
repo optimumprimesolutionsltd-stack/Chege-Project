@@ -1,5 +1,5 @@
 import { Route, Switch, Router as WouterRouter } from 'wouter';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useAuth } from '@workspace/replit-auth-web';
@@ -41,8 +41,45 @@ function AuthenticatedApp() {
   );
 }
 
+function NoGroupAccess({ voluntarilyLeft }: { voluntarilyLeft: boolean }) {
+  const { logout } = useAuth();
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background px-6">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 text-center shadow-lg">
+        <h1 className="font-display text-2xl font-bold text-foreground">
+          {voluntarilyLeft ? "You left this group" : "You no longer have access to this group"}
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          {voluntarilyLeft
+            ? "You have been removed from the group’s access list. Shared budgets, bank activity, goals, reports, and history remain with the group."
+            : "Your shared group access has changed. Ask a current owner or admin to send you a new invitation if you need to rejoin."}
+        </p>
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="mt-6 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MainRouter() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { data: hasGroupAccess, isLoading: isCheckingGroupAccess } = useQuery({
+    queryKey: ['group-access', isAuthenticated],
+    queryFn: async () => {
+      const response = await fetch('/api/members', { credentials: 'include' });
+      if (response.status === 403) return false;
+      if (!response.ok) throw new Error('Could not check group access.');
+      return true;
+    },
+    enabled: isAuthenticated,
+    retry: false,
+  });
 
   if (isLoading) {
     return (
@@ -66,6 +103,18 @@ function MainRouter() {
 
   if (!isAuthenticated) {
     return <LoginPage />;
+  }
+
+  if (isCheckingGroupAccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+      </div>
+    );
+  }
+
+  if (hasGroupAccess === false) {
+    return <NoGroupAccess voluntarilyLeft={new URLSearchParams(window.location.search).get('left') === '1'} />;
   }
 
   return <AuthenticatedApp />;

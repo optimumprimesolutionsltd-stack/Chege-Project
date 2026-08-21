@@ -3049,6 +3049,77 @@ export const useAddMember = <TError = ErrorType<ErrorResponse>,
       return useMutation(getAddMemberMutationOptions(options));
     }
 
+export const getLeaveGroupUrl = () => {
+
+
+
+
+  return `/api/members/me`
+}
+
+/**
+ * @summary Leave the active group as the signed-in non-owner member
+ */
+export const leaveGroup = async ( options?: Parameters<typeof customFetch>[1]): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getLeaveGroupUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getLeaveGroupMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof leaveGroup>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof leaveGroup>>, TError,void, TContext> => {
+
+const mutationKey = ['leaveGroup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof leaveGroup>>, void> = () => {
+
+
+          return  leaveGroup(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LeaveGroupMutationResult = NonNullable<Awaited<ReturnType<typeof leaveGroup>>>
+
+    export type LeaveGroupMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Leave the active group as the signed-in non-owner member
+ */
+export const useLeaveGroup = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof leaveGroup>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof leaveGroup>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getLeaveGroupMutationOptions(options));
+    }
+
 export const getGetGroupInvitationsUrl = () => {
 
 

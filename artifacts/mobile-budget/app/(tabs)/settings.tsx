@@ -81,6 +81,8 @@ export default function SettingsScreen() {
   const canManageShared = members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
   );
+  const myMembership = members.find((member) => member.userId === user?.id);
+  const canLeaveGroup = Boolean(myMembership && myMembership.role !== 'owner');
   const { data: invitations = [] } = useQuery<GroupInvitation[]>({
     queryKey: ['group-invitations'],
     queryFn: () => customFetch<GroupInvitation[]>('/api/group-invitations'),
@@ -196,7 +198,7 @@ export default function SettingsScreen() {
     }
   };
   const handleRemoveMember = (member: GroupMember) => {
-    Alert.alert('Remove from group?', `${member.userName ?? 'This person'} will lose access to this group.`, [
+    Alert.alert('Remove from group?', `${member.userName ?? 'This person'} will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -214,6 +216,31 @@ export default function SettingsScreen() {
         },
       },
     ]);
+  };
+  const handleLeaveGroup = () => {
+    Alert.alert(
+      'Leave this group?',
+      'You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.',
+      [
+        { text: 'Stay', style: 'cancel' },
+        {
+          text: 'Leave group',
+          style: 'destructive',
+          onPress: async () => {
+            setManagingMembers(true);
+            try {
+              await customFetch('/api/members/me', { method: 'DELETE' });
+              queryClient.clear();
+              await logout();
+            } catch (error) {
+              Alert.alert('Could not leave group', error instanceof Error ? error.message : 'Please try again.');
+            } finally {
+              setManagingMembers(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleAddSource = async () => {
@@ -388,6 +415,29 @@ export default function SettingsScreen() {
               ) : null}
             </View>
           ))}
+          {canLeaveGroup ? (
+            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, alignItems: 'stretch' }]}>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Leave this group</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4, marginBottom: 12 }]}>
+                You will lose access immediately. Shared finances and history stay with the group.
+              </Text>
+              <Pressable
+                disabled={managingMembers}
+                onPress={handleLeaveGroup}
+                style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: '#ef444466', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+              >
+                <Text style={{ color: '#ef4444', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                  {managingMembers ? 'Leaving…' : 'Leave group'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : myMembership?.role === 'owner' ? (
+            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0 }]}>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                Owners stay in the group so it always has someone responsible for access. Ownership transfer is not available yet.
+              </Text>
+            </View>
+          ) : null}
           {canManageShared && hasInvitationCapacity ? (
             <View style={[styles.addRow, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, flexWrap: 'wrap', gap: 8 }]}>
               <Text style={{ width: '100%', color: colors.foreground, fontSize: 14, fontFamily: 'Inter_600SemiBold', marginBottom: 2 }}>
