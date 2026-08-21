@@ -78,6 +78,7 @@ type Expense = {
   notes?: string | null;
   paidById: string | null;
   paidByName: string | null;
+  paidFromBank?: boolean;
   isRecurring: boolean;
   date: string;
   createdAt: string;
@@ -88,7 +89,7 @@ type EditForm = {
   category: string;
   description: string;
   notes: string;
-  paidById: string;
+  paidById: string | null;
   date: string;
 };
 
@@ -333,16 +334,17 @@ export default function HistoryScreen() {
   });
 
   const openEdit = (exp: Expense) => {
+    const paidFromBank = exp.paidFromBank ?? false;
     setEditForm({
       amount: String(exp.amount),
       category: exp.category,
       description: exp.description,
       notes: exp.notes ?? '',
       // Fall back to the logged-in user when paidById is missing on old expenses
-      paidById: exp.paidById ?? user?.id ?? '',
+      paidById: paidFromBank ? null : exp.paidById ?? user?.id ?? '',
       date: exp.date,
     });
-    setEditPaidFromBank(false);
+    setEditPaidFromBank(paidFromBank);
     setEditSelectedSources([]);
     setEditSplitAmounts({});
     setEditOtherLabel('');
@@ -359,7 +361,7 @@ export default function HistoryScreen() {
       Alert.alert('Missing fields', 'Please fill in amount, category, description and date.');
       return;
     }
-    if (!editForm.paidById) {
+    if (!editForm.paidById && !editPaidFromBank) {
       Alert.alert('Paid by required', 'Please choose who paid for this expense.');
       return;
     }
@@ -378,8 +380,11 @@ export default function HistoryScreen() {
         return;
       }
     }
+    const payerChanged =
+      (editingExpense.paidFromBank ?? false) !== editPaidFromBank ||
+      editingExpense.paidById !== editForm.paidById;
     const isSplit = editSelectedSources.length > 1;
-    const incomeSplits = editSelectedSources.map(name => {
+    const personalIncomeSplits = editForm.paidById ? editSelectedSources.map(name => {
       const source = editSources.find((item) => item.name === name);
       return {
         userId: editForm.paidById,
@@ -388,7 +393,14 @@ export default function HistoryScreen() {
         amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
         ...(source ? { incomeSourceId: source.id } : {}),
       };
-    }).filter(s => s.amount > 0);
+    }).filter(s => s.amount > 0) : [];
+    const incomeSplits = editPaidFromBank
+      ? [{ userId: null, label: 'Joint bank', amount: parsed, fromBank: true }]
+      : personalIncomeSplits.length > 0
+        ? personalIncomeSplits
+        : payerChanged && editForm.paidById
+          ? [{ userId: editForm.paidById, label: 'Personal funds', amount: parsed, fromBank: false }]
+          : [];
     setSaving(true);
     try {
       await updateExpense.mutateAsync({
@@ -804,13 +816,34 @@ export default function HistoryScreen() {
                   Paid by <Text style={{ color: '#ef4444' }}>*</Text>
                 </Text>
                 <View style={styles.memberRow}>
+                  <Pressable
+                    onPress={() => {
+                      setEditPaidFromBank(true);
+                      setEditForm(f => ({ ...f, paidById: null }));
+                      setEditSelectedSources([]);
+                      setEditSplitAmounts({});
+                      setEditOtherLabel('');
+                    }}
+                    style={[styles.memberPill, {
+                      backgroundColor: editPaidFromBank ? 'rgba(56,189,248,0.15)' : colors.muted,
+                      borderColor: editPaidFromBank ? '#38bdf8' : colors.border,
+                    }]}
+                  >
+                    <Feather name="credit-card" size={12} color={editPaidFromBank ? '#38bdf8' : colors.mutedForeground} />
+                    <Text style={[styles.memberPillText, { color: editPaidFromBank ? '#38bdf8' : colors.foreground }]}>
+                      Joint bank
+                    </Text>
+                  </Pressable>
                   {members.map(m => {
                     const sel = editForm.paidById === m.userId;
                     const name = m.userName?.split(' ')[0] ?? 'Member';
                     return (
                       <Pressable
                         key={m.userId}
-                        onPress={() => setEditForm(f => ({ ...f, paidById: m.userId }))}
+                        onPress={() => {
+                          setEditForm(f => ({ ...f, paidById: m.userId }));
+                          setEditPaidFromBank(false);
+                        }}
                         style={[styles.memberPill, { backgroundColor: sel ? '#4ade80' : colors.muted, borderColor: sel ? '#4ade80' : colors.border }]}
                       >
                         <Feather name="user" size={12} color={sel ? '#0a1a10' : colors.mutedForeground} />
@@ -819,7 +852,7 @@ export default function HistoryScreen() {
                     );
                   })}
                 </View>
-                {!editForm.paidById && (
+                {!editForm.paidById && !editPaidFromBank && (
                   <Text style={[styles.memberPillText, { color: colors.mutedForeground, marginTop: 4 }]}>
                     Tap to choose who paid
                   </Text>
@@ -832,20 +865,6 @@ export default function HistoryScreen() {
                     <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FUNDED FROM</Text>
                     <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>(optional)</Text>
                   </View>
-
-                  {/* Joint bank — standalone toggle */}
-                  <Pressable
-                    onPress={() => setEditPaidFromBank(b => !b)}
-                    style={[styles.sourceChip, {
-                      backgroundColor: editPaidFromBank ? 'rgba(56,189,248,0.15)' : colors.background,
-                      borderColor: editPaidFromBank ? '#38bdf8' : colors.border,
-                      alignSelf: 'flex-start', marginBottom: 8,
-                    }]}
-                  >
-                    <Feather name="credit-card" size={12} color={editPaidFromBank ? '#38bdf8' : colors.mutedForeground} />
-                    <Text style={[styles.sourceChipText, { color: editPaidFromBank ? '#38bdf8' : colors.foreground }]}>Joint bank</Text>
-                    {editPaidFromBank && <Feather name="check" size={10} color="#38bdf8" />}
-                  </Pressable>
 
                   {/* Personal income sources from DB */}
                   {editSourcesLoading ? (
