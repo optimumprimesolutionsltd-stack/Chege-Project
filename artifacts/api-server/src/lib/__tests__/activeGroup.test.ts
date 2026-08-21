@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Request, Response } from "express";
 import {
+  ACTIVE_WORKSPACE_COOKIE,
   isGroupManager,
   requireGroupManager,
   requireMemberSelfAttribution,
+  setActiveWorkspaceCookie,
 } from "../activeGroup";
 
 function request(role: "owner" | "admin" | "member", userId = "member-1") {
@@ -40,5 +42,26 @@ describe("shared group action permissions", () => {
     expect(requireMemberSelfAttribution(request("member"), res, ["member-1"])).toBe(true);
     expect(requireMemberSelfAttribution(request("member"), res, ["someone-else"])).toBe(false);
     expect(res.status).toHaveBeenCalledWith(403);
+  });
+});
+
+describe("web workspace preference", () => {
+  it("keeps a selected shared budget only for the current browser session", () => {
+    const cookie = vi.fn();
+    const res = { cookie } as unknown as Response;
+
+    setActiveWorkspaceCookie(res, 42);
+
+    expect(cookie).toHaveBeenCalledWith(
+      ACTIVE_WORKSPACE_COOKIE,
+      "42",
+      expect.objectContaining({
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+      }),
+    );
+    expect(cookie.mock.calls[0]?.[2]).not.toHaveProperty("maxAge");
   });
 });

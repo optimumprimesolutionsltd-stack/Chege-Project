@@ -25,12 +25,13 @@ vi.mock("drizzle-orm", () => ({ eq: vi.fn(), and: vi.fn(), sql: vi.fn() }));
 
 import expensesRouter from "../expenses.js";
 
-function app() {
+function app(role: "owner" | "admin" | "member" = "owner") {
   const server = express();
   server.use(express.json());
   server.use((_req: any, _res, next) => {
     _req.isAuthenticated = () => true;
-    _req.group = { id: 1, role: "owner" };
+    _req.user = { id: "member-1" };
+    _req.group = { id: 1, role };
     next();
   });
   server.use("/", expensesRouter);
@@ -115,5 +116,41 @@ describe("expense funding request contract", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toContain("recognised household member");
+  });
+
+  it("blocks members from recording an expense with a non-current date", async () => {
+    const response = await request(app("member")).post("/expenses").send({
+      amount: 1000,
+      category: "Food",
+      description: "Old groceries",
+      paidById: "member-1",
+      isRecurring: false,
+      paidFromBank: false,
+      date: "2000-01-01",
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toContain("today only");
+  });
+
+  it("blocks members from editing an expense with a non-current date", async () => {
+    const response = await request(app("member")).patch("/expenses/1").send({
+      amount: 1000,
+      category: "Food",
+      description: "Old groceries",
+      paidById: "member-1",
+      isRecurring: false,
+      paidFromBank: false,
+      date: "2000-01-01",
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toContain("today only");
+  });
+
+  it("blocks members from deleting expenses", async () => {
+    const response = await request(app("member")).delete("/expenses/1");
+
+    expect(response.status).toBe(403);
   });
 });

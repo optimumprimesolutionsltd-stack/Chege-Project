@@ -68,6 +68,23 @@ type Expense = {
   }[];
 };
 
+function localDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isSelfFundedPersonalExpense(expense: Expense, userId: string | undefined) {
+  if (!userId || expense.paidById !== userId || expense.paidFromBank || expense.isRecurring) {
+    return false;
+  }
+
+  return !expense.incomeSplits?.some(
+    (split) => split.fromBank || split.userId !== userId,
+  );
+}
+
 function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const today = now ?? new Date();
   const [amount, setAmount] = useState(defaults?.amount?.toString() ?? "");
@@ -82,7 +99,7 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [otherIncomeSourceLabel, setOtherIncomeSourceLabel] = useState<string | null>(null);
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [isRecurring, setIsRecurring] = useState(defaults?.isRecurring ?? false);
-  const [date, setDate] = useState(defaults?.date ?? today.toISOString().split("T")[0]);
+  const [date, setDate] = useState(defaults?.date ?? localDateInputValue(today));
   return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes,
            paidById, setPaidById, payerIds, setPayerIds, payerAmounts, setPayerAmounts,
            incomeSourceId, setIncomeSourceId, otherIncomeSourceLabel, setOtherIncomeSourceLabel,
@@ -123,6 +140,7 @@ function getExpenseDeepLink() {
 
 export default function Expenses() {
   const now = new Date();
+  const today = localDateInputValue(now);
   const { user } = useAuth();
   const expenseDeepLink = getExpenseDeepLink();
   const [month, setMonth] = useState(() => {
@@ -171,9 +189,34 @@ export default function Expenses() {
   const applyRecurring = useApplyRecurringExpenses();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const canManageCategories = members?.some(
-    (member) => member.userId === user?.id && (member.role === "owner" || member.role === "admin"),
-  ) ?? false;
+  const currentMembership = members?.find((member) => member.userId === user?.id);
+  const canManageExpenses =
+    currentMembership?.role === "owner" || currentMembership?.role === "admin";
+  const memberPayerId = canManageExpenses ? undefined : currentMembership?.userId;
+  const canManageCategories = canManageExpenses;
+  const canEditExpense = (expense: Expense) =>
+    canManageExpenses || (expense.date === today && isSelfFundedPersonalExpense(expense, user?.id));
+
+  useEffect(() => {
+    if (!isAdding || canManageExpenses || !memberPayerId) return;
+    if (
+      addForm.payerIds.length === 1 &&
+      addForm.payerIds[0] === memberPayerId &&
+      addForm.paidById === memberPayerId &&
+      !addForm.paidFromBank
+    ) return;
+
+    addForm.setPayerIds([memberPayerId]);
+    addForm.setPaidById(memberPayerId);
+    addForm.setPaidFromBank(false);
+  }, [
+    isAdding,
+    canManageExpenses,
+    memberPayerId,
+    addForm.payerIds,
+    addForm.paidById,
+    addForm.paidFromBank,
+  ]);
 
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
@@ -201,13 +244,21 @@ export default function Expenses() {
     addForm.setAmount(""); addForm.setCategory(""); addForm.setDescription(""); addForm.setNotes("");
     addForm.setPaidById(""); addForm.setPayerIds([]); addForm.setPayerAmounts({});
     addForm.setIncomeSourceId(null); addForm.setOtherIncomeSourceLabel(null); addForm.setIsRecurring(false);
-    addForm.setDate(now.toISOString().split("T")[0]);
+    addForm.setDate(today);
     setAddNewSource(false); setNewSourceName("");
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setIsAdding(false);
   };
 
   const startEdit = (expense: Expense) => {
+    if (!canEditExpense(expense)) {
+      toast({
+        variant: "destructive",
+        title: "You cannot edit this expense",
+        description: "Members can edit only their own personal expenses dated today.",
+      });
+      return;
+    }
     const personalSplit = expense.incomeSplits?.find((split) => !split.fromBank);
     const allFundingIsBank = expense.incomeSplits?.length
       ? expense.incomeSplits.every((split) => split.fromBank)
@@ -327,14 +378,31 @@ export default function Expenses() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const sourceCount = addForm.payerIds.length + (addForm.paidFromBank ? 1 : 0);
+    const payerIds = addForm.payerIds.length > 0
+      ? addForm.payerIds
+      : (memberPayerId ? [memberPayerId] : []);
+    const sourceCount = payerIds.length + (addForm.paidFromBank ? 1 : 0);
     const isSplitPayment = sourceCount > 1;
-    const effectivePaidById = addForm.payerIds[0] ?? addForm.paidById;
-    if (!addForm.amount || !addForm.category || !addForm.description || !addForm.date) return;
-    if (!effectivePaidById && !addForm.paidFromBank) return;
+    const effectivePaidById = payerIds[0] ?? addForm.paidById;
+    if (!addForm.amount || !addForm.category || !addForm.description || !addForm.date) {
+      toast({
+        variant: "destructive",
+        title: "Complete the expense details",
+        description: "Add an amount, category, description, and date before saving.",
+      });
+      return;
+    }
+    if (!effectivePaidById && !addForm.paidFromBank) {
+      toast({
+        variant: "destructive",
+        title: "Choose who paid",
+        description: "Select a payer before saving this expense.",
+      });
+      return;
+    }
     if (isSplitPayment) {
       const total = Number(addForm.amount);
-      const splitTotal = addForm.payerIds.reduce((s, id) => s + Number(addForm.payerAmounts[id] || 0), 0)
+      const splitTotal = payerIds.reduce((s, id) => s + Number(addForm.payerAmounts[id] || 0), 0)
         + (addForm.paidFromBank ? Number(addForm.payerAmounts.__joint_bank__ || 0) : 0);
       if (!Number.isInteger(total) || splitTotal !== total) {
         toast({ variant: "destructive", title: "Amounts don't add up", description: `Portions total ${splitTotal} but expense is ${total}.` });
@@ -345,7 +413,7 @@ export default function Expenses() {
       const incomeSplits = isSplitPayment
         ? [
           ...(addForm.paidFromBank ? [{ amount: Number(addForm.payerAmounts.__joint_bank__ || 0), fromBank: true, userId: null, label: "Joint bank" }] : []),
-          ...addForm.payerIds.map((userId) => ({
+          ...payerIds.map((userId) => ({
             userId, amount: Number(addForm.payerAmounts[userId] || 0), fromBank: false,
             label: (members ?? []).find((member) => member.userId === userId)?.userName?.split(" ")[0] ?? "Member",
           })),
@@ -419,6 +487,14 @@ export default function Expenses() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canManageExpenses) {
+      toast({
+        variant: "destructive",
+        title: "Only admins can delete expenses",
+        description: "Ask an admin or owner to remove this expense.",
+      });
+      return;
+    }
     if (!confirm("Delete this expense?")) return;
     try {
       await deleteExpense.mutateAsync({ id });
@@ -448,13 +524,13 @@ export default function Expenses() {
     submitLabel: string,
     mode: "add" | "edit",
   ) => (
-    <form onSubmit={onSubmit} className="space-y-6">
-      <div className="flex items-center justify-between border-b border-border/50 pb-4">
-        <h3 className="text-xl font-bold font-display text-foreground">{title}</h3>
+    <form onSubmit={onSubmit} className="space-y-5 sm:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-4">
+        <h3 className="text-lg sm:text-xl font-bold font-display text-foreground">{title}</h3>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
           <Input type="number" placeholder="e.g. 5000" value={form.amount} onChange={e => form.setAmount(e.target.value)}
@@ -473,7 +549,7 @@ export default function Expenses() {
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 shrink-0"
+                className="h-12 w-full sm:w-auto shrink-0"
                 onClick={() => setIsCreatingCategory((open) => !open)}
                 aria-expanded={isCreatingCategory}
               >
@@ -509,7 +585,7 @@ export default function Expenses() {
                 <Button
                   type="button"
                   size="sm"
-                  className="h-10"
+                  className="h-10 w-full sm:w-auto"
                   onClick={() => handleQuickCreateCategory(form)}
                   disabled={createCategory.isPending}
                 >
@@ -533,9 +609,9 @@ export default function Expenses() {
           {form.category && (() => {
             const cat = breakdown?.find(b => b.category === form.category);
             return cat ? (
-              <p className="text-xs text-muted-foreground pt-1">
+              <p className="flex flex-col gap-0.5 text-xs text-muted-foreground pt-1 sm:block">
                 Spent this month: <span className="font-semibold text-foreground">{formatKes(cat.spentAmount)}</span>
-                <span className="mx-1">·</span>
+                <span className="hidden mx-1 sm:inline">·</span>
                 <span className={cat.spentAmount >= cat.budgetAmount ? "text-destructive font-semibold" : ""}>
                   {formatKes(Math.max(0, cat.budgetAmount - cat.spentAmount))} remaining of {formatKes(cat.budgetAmount)}
                 </span>
@@ -558,16 +634,34 @@ export default function Expenses() {
 
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">Date</label>
-          <Input type="date" value={form.date} onChange={e => form.setDate(e.target.value)} required className="h-12 bg-card" />
+          <Input
+            type="date"
+            value={form.date}
+            onChange={e => form.setDate(e.target.value)}
+            required
+            disabled={!canManageExpenses}
+            min={canManageExpenses ? undefined : today}
+            max={canManageExpenses ? undefined : today}
+            aria-describedby={!canManageExpenses ? "member-expense-date-help" : undefined}
+            className="h-12 bg-card"
+          />
+          {!canManageExpenses && (
+            <p id="member-expense-date-help" className="text-xs text-muted-foreground">
+              Members can record and correct expenses for today only. Ask an admin to backdate.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">
             Paid by <span className="text-destructive">*</span>
-            {mode === "add" && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
+            {mode === "add" && canManageExpenses && (
+              <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>
+            )}
           </label>
           <div className="grid grid-cols-2 gap-2">
             {/* Joint bank — unattributed, no individual payer */}
+            {canManageExpenses && (
             <button type="button"
               onClick={() => {
                 const nextPaidFromBank = !form.paidFromBank;
@@ -580,7 +674,8 @@ export default function Expenses() {
             >
               🏦 Joint bank account
             </button>
-            {(members ?? []).map((m) => {
+            )}
+            {(canManageExpenses ? (members ?? []) : (members ?? []).filter((member) => member.userId === user?.id)).map((m) => {
               const name = m.userName?.split(" ")[0] ?? "Member";
               const isMultiEnabled = mode === "add";
               const selected = isMultiEnabled ? form.payerIds.includes(m.userId) : form.paidById === m.userId;
@@ -610,7 +705,9 @@ export default function Expenses() {
             })}
           </div>
           {mode === "add" && form.payerIds.length === 0 && !form.paidFromBank && (
-            <p className="text-xs text-muted-foreground">Choose who paid, or select Joint bank account.</p>
+            <p className="text-xs text-muted-foreground">
+              {canManageExpenses ? "Choose who paid, or select Joint bank account." : "Choose yourself to record this expense."}
+            </p>
           )}
           {mode === "edit" && !form.paidById && !form.paidFromBank && (
             <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>
@@ -723,6 +820,7 @@ export default function Expenses() {
           </div>
         )}
 
+        {canManageExpenses && (
         <div className="md:col-span-2 flex items-center gap-3 bg-card rounded-xl p-4 border border-border/50">
           <input type="checkbox" id={`isRecurring-${title}`} checked={form.isRecurring} onChange={e => form.setIsRecurring(e.target.checked)}
             className="w-5 h-5 accent-primary rounded" />
@@ -733,11 +831,12 @@ export default function Expenses() {
             <p className="text-xs text-muted-foreground mt-0.5">Mark to get a reminder to apply it next month (rent, fees, salaries…)</p>
           </div>
         </div>
+        )}
       </div>
 
-      <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel} className="h-12 px-6">Cancel</Button>
-        <Button type="submit" disabled={isPending} className="h-12 px-8">
+      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end sm:gap-3">
+        <Button type="button" variant="outline" onClick={onCancel} className="h-12 w-full px-6 sm:w-auto">Cancel</Button>
+        <Button type="submit" disabled={isPending} className="h-12 w-full px-8 sm:w-auto">
           {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           {submitLabel}
         </Button>
@@ -746,14 +845,14 @@ export default function Expenses() {
   );
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-5 pb-8 sm:space-y-8 sm:pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Expenses</h1>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Expenses</h1>
           <p className="text-muted-foreground mt-1">Track where the money is going.</p>
         </div>
-        <div className="flex items-center gap-1 bg-card rounded-xl p-1 border shadow-sm">
+        <div className="flex w-full items-center justify-between gap-1 bg-card rounded-xl p-1 border shadow-sm sm:w-auto sm:justify-start">
           <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg hover:bg-muted">
             <ArrowLeft className="h-5 w-5 text-foreground/70" />
           </Button>
@@ -790,12 +889,12 @@ export default function Expenses() {
       {/* Budget Status */}
       {summary && (
         <Card className="border-none shadow-md overflow-hidden">
-          <CardContent className="p-5 space-y-4">
+          <CardContent className="p-4 space-y-3 sm:p-5 sm:space-y-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Budget Status — {formatMonthYear(month, year)}</p>
 
             {/* Expenses vs Budget */}
             <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
+              <div className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                   <TrendingDown className="w-4 h-4 text-destructive" /> Expenses
                 </span>
@@ -826,7 +925,7 @@ export default function Expenses() {
               </span>
               {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(({ name, contributed, target }: {name: string; contributed: number; target: number | null}) => (
                 <div key={name} className="space-y-1">
-                  <div className="flex justify-between text-xs">
+                  <div className="flex flex-col gap-0.5 text-xs sm:flex-row sm:justify-between sm:gap-2">
                     <span className="font-medium text-foreground">{name}</span>
                     <span className="font-mono">
                       <span className={target != null && contributed >= target ? "text-green-600 font-bold" : "text-foreground"}>{formatKes(contributed)}</span>
@@ -853,7 +952,7 @@ export default function Expenses() {
                   const net = contributed - spent;
                   const overSpent = spent > contributed;
                   return (
-                    <div key={name} className="rounded-xl border border-border/50 bg-muted/30 p-4 space-y-2">
+                    <div key={name} className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-2 sm:p-4">
                       <p className="text-sm font-semibold text-foreground">{name}</p>
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
@@ -915,7 +1014,7 @@ export default function Expenses() {
                     const pct = Math.min(100, cat.percentUsed);
                     return (
                       <div key={cat.category} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs">
+                      <div className="flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                           <span className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{cat.category}</span>
                           <span className="font-mono text-muted-foreground">
                             <span className={over ? "text-destructive font-bold" : "text-foreground"}>{formatKes(cat.spentAmount)}</span>
@@ -989,8 +1088,8 @@ export default function Expenses() {
                   <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                     <div className={`h-full ${bar} rounded-full transition-all`} style={{ width: `${pct}%` }} />
                   </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{Math.round(pct)}% used · {categories.join(", ")}</span>
+                  <div className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                    <span className="min-w-0 break-words">{Math.round(pct)}% used · {categories.join(", ")}</span>
                     <span className={over ? "text-destructive font-semibold" : ""}>
                       {over ? `Over by ${formatKes(Math.abs(remaining))}` : `${formatKes(remaining)} left`}
                     </span>
@@ -1026,7 +1125,7 @@ export default function Expenses() {
       {/* Add expense form */}
       {isAdding ? (
         <Card className="border-none shadow-md bg-accent/20">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             {expenseFormFields(addForm, createExpense.isPending || sharedTransactionsLocked, handleCreate, resetAdd, "Record New Expense", "Save Expense", "add")}
           </CardContent>
         </Card>
@@ -1051,7 +1150,7 @@ export default function Expenses() {
             {expenses.map((expense) => (
               <div key={expense.id}>
                 {editingId === expense.id ? (
-                  <div className="p-5 bg-accent/20">
+                  <div className="p-4 bg-accent/20 sm:p-5">
                     {expenseFormFields(
                       editForm,
                       updateExpense.isPending,
@@ -1063,7 +1162,7 @@ export default function Expenses() {
                     )}
                   </div>
                 ) : (
-                  <div className="p-4 sm:p-5 flex items-start justify-between hover:bg-muted/20 transition-colors gap-4">
+                  <div className="p-4 hover:bg-muted/20 transition-colors sm:flex sm:items-start sm:justify-between sm:gap-4 sm:p-5">
                     <div className="flex items-start gap-4 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-accent/60 flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-xs font-bold text-primary">{expense.category.slice(0, 2).toUpperCase()}</span>
@@ -1096,23 +1195,39 @@ export default function Expenses() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <p className="font-display font-bold text-lg text-foreground mr-2">{formatKes(expense.amount)}</p>
-                      <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted"
-                        onClick={() => startEdit(expense as Expense)}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 w-9"
-                        onClick={() => handleDelete(expense.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/50 pt-3 sm:mt-0 sm:justify-end sm:border-t-0 sm:pt-0">
+                      <p className="font-display font-bold text-lg text-foreground">{formatKes(expense.amount)}</p>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {canEditExpense(expense as Expense) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted"
+                          onClick={() => startEdit(expense as Expense)}
+                          aria-label={`Edit ${expense.description}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        )}
+                        {canManageExpenses && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 w-9"
+                          onClick={() => handleDelete(expense.id)}
+                          aria-label={`Delete ${expense.description}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             ))}
           </div>
-          <div className="px-5 py-3 bg-muted/30 border-t border-border/50 flex justify-between items-center">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 bg-muted/30 px-4 py-3 sm:px-5">
             <span className="text-sm text-muted-foreground">{expenses.length} expense{expenses.length !== 1 ? "s" : ""}</span>
             <span className="font-display font-bold text-primary">{formatKes(expenses.reduce((s, e) => s + e.amount, 0))}</span>
           </div>

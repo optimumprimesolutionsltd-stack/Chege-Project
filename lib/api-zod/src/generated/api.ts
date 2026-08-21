@@ -917,6 +917,19 @@ export const GetSavingsGoalContributionsResponse = zod.array(GetSavingsGoalContr
 
 
 /**
+ * @summary Delete a manually recorded savings contribution and reverse its effect on the goal balance
+ */
+export const DeleteSavingsGoalContributionParams = zod.object({
+  "id": zod.coerce.number(),
+  "contributionId": zod.coerce.number()
+})
+
+export const DeleteSavingsGoalContributionResponse = zod.object({
+  "success": zod.boolean()
+})
+
+
+/**
  * @summary Atomically add an amount to a savings goal's current balance
  */
 export const ContributeToSavingsGoalParams = zod.object({

@@ -340,7 +340,14 @@ export default function Bank() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      toast({
+        variant: "destructive",
+        title: "Admin access required",
+        description: "Only an owner or admin can delete a shared bank transaction.",
+      });
+      return;
+    }
     if (!confirm("Delete this transaction?")) return;
     try {
       await deleteTx.mutateAsync({ id });
@@ -814,7 +821,7 @@ export default function Bank() {
                     <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
                       {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
                     </p>
-                    {!isTransfer && <Button
+                    {canManageShared && !isTransfer && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-edit-tx-${tx.id}`}
@@ -823,7 +830,7 @@ export default function Bank() {
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>}
-                    <Button
+                    {canManageShared && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-delete-tx-${tx.id}`}
@@ -831,7 +838,7 @@ export default function Bank() {
                       onClick={() => handleDelete(tx.id)}
                     >
                       <Trash2 className="w-4 h-4" />
-                    </Button>
+                    </Button>}
                   </div>
                 </div>
               );

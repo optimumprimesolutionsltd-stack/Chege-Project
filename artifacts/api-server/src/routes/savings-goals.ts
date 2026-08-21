@@ -7,6 +7,10 @@ import {
   usersTable,
   groupMembershipsTable,
 } from "@workspace/db";
+import {
+  DeleteSavingsGoalContributionParams,
+  DeleteSavingsGoalContributionResponse,
+} from "@workspace/api-zod";
 import { and, eq, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -432,6 +436,76 @@ router.get("/savings-goals/:id/contributions", async (req, res): Promise<void> =
     contributorName: c.createdByUserId === null ? "Joint bank" : (c.contributorName ?? "Unknown"),
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
   })));
+});
+
+// DELETE /savings-goals/:id/contributions/:contributionId — remove a manually
+// recorded contribution and reverse the exact amount from the goal balance.
+router.delete("/savings-goals/:id/contributions/:contributionId", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const parsed = DeleteSavingsGoalContributionParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid goal or contribution id" });
+    return;
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const [goal] = await tx
+      .select()
+      .from(savingsGoalsTable)
+      .where(and(eq(savingsGoalsTable.id, parsed.data.id), eq(savingsGoalsTable.groupId, groupId)))
+      .for("update");
+    if (!goal) return { kind: "goal-not-found" as const };
+
+    const [contribution] = await tx
+      .select()
+      .from(savingsGoalContributionsTable)
+      .where(and(
+        eq(savingsGoalContributionsTable.id, parsed.data.contributionId),
+        eq(savingsGoalContributionsTable.goalId, goal.id),
+        eq(savingsGoalContributionsTable.groupId, groupId),
+      ))
+      .for("update");
+    if (!contribution) return { kind: "contribution-not-found" as const };
+
+    if (contribution.bankTransactionId !== null) return { kind: "linked-bank-transfer" as const };
+
+    const nextAmount = goal.currentAmount - contribution.amount;
+    if (nextAmount < 0) return { kind: "balance-mismatch" as const };
+
+    await tx
+      .delete(savingsGoalContributionsTable)
+      .where(and(
+        eq(savingsGoalContributionsTable.id, contribution.id),
+        eq(savingsGoalContributionsTable.groupId, groupId),
+      ));
+    await tx
+      .update(savingsGoalsTable)
+      .set({
+        currentAmount: nextAmount,
+        isCompleted: nextAmount >= goal.targetAmount,
+      })
+      .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)));
+
+    return { kind: "deleted" as const };
+  });
+
+  if (result.kind === "goal-not-found" || result.kind === "contribution-not-found") {
+    res.status(404).json({ error: "Contribution not found" });
+    return;
+  }
+  if (result.kind === "linked-bank-transfer") {
+    res.status(400).json({ error: "This contribution came from a bank transfer. Delete the transfer from Joint Bank instead." });
+    return;
+  }
+  if (result.kind === "balance-mismatch") {
+    res.status(400).json({ error: "This goal balance no longer matches its history. Reconcile the goal before removing this contribution." });
+    return;
+  }
+
+  res.json(DeleteSavingsGoalContributionResponse.parse({ success: true }));
 });
 
 // GET /savings-goals/consistency-check — surface goals with balance/history mismatches.

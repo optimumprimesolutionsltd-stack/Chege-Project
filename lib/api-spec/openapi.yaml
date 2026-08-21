@@ -795,6 +795,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /savings-goals/{id}/contributions/{contributionId}:
+    delete:
+      operationId: deleteSavingsGoalContribution
+      tags: [savings-goals]
+      summary: Delete a manually recorded savings contribution and reverse its effect on the goal balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+        - name: contributionId
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: The contribution cannot be removed directly
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /savings-goals/{id}/contribute:
     post:
       operationId: contributeToSavingsGoal

@@ -133,6 +133,25 @@ function toDateString(value: string | Date) {
   return typeof value === "string" ? value : value.toISOString().split("T")[0];
 }
 
+function currentExpenseDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts();
+  const value = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function isCurrentExpenseDate(value: string | Date | null | undefined) {
+  return Boolean(value) && toDateString(value!) === currentExpenseDate();
+}
+
 async function getExpenseSplits(expenseIds: number[], groupId: number) {
   if (expenseIds.length === 0) return new Map<number, unknown[]>();
   const rows = await db
@@ -309,7 +328,12 @@ router.post("/expenses", async (req, res) => {
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
-  if (req.group?.role === "member") {
+  const isParticipatingMember = req.group?.role === "member";
+  if (isParticipatingMember) {
+    if (!isCurrentExpenseDate(date)) {
+      res.status(403).json({ error: "Members can record expenses for today only. Ask an admin to backdate an expense." });
+      return;
+    }
     if (paidFromBank || isRecurring) {
       res.status(403).json({ error: "Members can record their own expenses, but shared-bank and recurring expenses are managed by admins." });
       return;
@@ -364,6 +388,10 @@ router.patch("/expenses/:id", async (req, res) => {
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
   const isParticipatingMember = req.group?.role === "member";
   if (isParticipatingMember) {
+    if (!isCurrentExpenseDate(date)) {
+      res.status(403).json({ error: "Members can edit expenses for today only. Ask an admin to backdate an expense." });
+      return;
+    }
     if (paidFromBank || isRecurring) {
       res.status(403).json({ error: "Members can edit their own personal expenses only." });
       return;
@@ -394,6 +422,12 @@ router.patch("/expenses/:id", async (req, res) => {
         eq(expenseIncomeSplitsTable.expenseId, expenseId),
         eq(expenseIncomeSplitsTable.groupId, groupId),
       ));
+    if (
+      isParticipatingMember &&
+      (
+        !isCurrentExpenseDate(existing.date)
+      )
+    ) return { forbidden: "past-expense" as const };
     if (
       isParticipatingMember &&
       (
@@ -448,7 +482,11 @@ router.patch("/expenses/:id", async (req, res) => {
   });
   if (!result) { res.status(404).json({ error: "Not found" }); return; }
   if ("forbidden" in result) {
-    res.status(403).json({ error: "Members can edit only their own personal expenses." });
+    res.status(403).json({
+      error: result.forbidden === "past-expense"
+        ? "Members can edit expenses dated today only. Ask an admin to correct a past expense."
+        : "Members can edit only their own personal expenses.",
+    });
     return;
   }
   if ("error" in result) { res.status(400).json({ error: result.error }); return; }
@@ -460,6 +498,7 @@ router.patch("/expenses/:id", async (req, res) => {
 router.delete("/expenses/:id", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
   const parsed = DeleteExpenseParams.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid id" }); return; }
   const deleted = await db.transaction(async (tx) => {
@@ -472,25 +511,6 @@ router.delete("/expenses/:id", async (req, res) => {
       .where(and(eq(expensesTable.id, parsed.data.id), eq(expensesTable.groupId, groupId)))
       .for("update");
     if (!existing) return null;
-    if (
-      req.group?.role === "member" &&
-      (
-        existing.paidById !== req.user!.id ||
-        existing.paidFromBank ||
-        existing.isRecurring
-      )
-    ) return { forbidden: true };
-    const existingSplits = await tx.select().from(expenseIncomeSplitsTable)
-      .where(and(
-        eq(expenseIncomeSplitsTable.expenseId, parsed.data.id),
-        eq(expenseIncomeSplitsTable.groupId, groupId),
-      ));
-    if (
-      req.group?.role === "member" &&
-      existingSplits.some(
-        (split) => split.fromBank || split.userId !== req.user!.id,
-      )
-    ) return { forbidden: true };
     // Only delete the joint-account disbursement that belongs to this group
     await tx.delete(jointAccountTxTable).where(and(
       eq(jointAccountTxTable.expenseId, parsed.data.id),
@@ -503,10 +523,6 @@ router.delete("/expenses/:id", async (req, res) => {
     return removed;
   });
   if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
-  if ("forbidden" in deleted) {
-    res.status(403).json({ error: "Members can delete only their own personal expenses." });
-    return;
-  }
   res.json({ success: true });
 });
 

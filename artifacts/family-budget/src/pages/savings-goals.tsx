@@ -10,6 +10,7 @@ import {
   getGetSavingsGoalContributionsQueryKey,
   getGetDashboardSummaryQueryKey,
   useGetSavingsGoalContributions,
+  useDeleteSavingsGoalContribution,
   useGetMembers,
   useGetGroup,
 } from "@workspace/api-client-react";
@@ -107,10 +108,16 @@ function GoalContributionHistory({
   goalId,
   filter,
   onFilterChange,
+  canManageShared,
+  onDeleteContribution,
+  isDeletingContribution,
 }: {
   goalId: number;
   filter: GoalFilterState;
   onFilterChange: (f: GoalFilterState) => void;
+  canManageShared: boolean;
+  onDeleteContribution: (contribution: GoalContribution) => void;
+  isDeletingContribution: boolean;
 }) {
   const { data: contributions, isLoading } = useGetSavingsGoalContributions(goalId);
   const { fromDate, toDate, activeChip } = filter;
@@ -307,6 +314,22 @@ function GoalContributionHistory({
                 <span className="text-xs text-muted-foreground shrink-0">
                   {new Date(c.createdAt).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
                 </span>
+                {canManageShared && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => onDeleteContribution(c as GoalContribution)}
+                    disabled={isDeletingContribution}
+                    title="Delete contribution"
+                    aria-label={`Delete ${isAdjustment ? "balance correction" : "contribution"} from ${c.contributorName}`}
+                  >
+                    {isDeletingContribution
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Trash2 className="w-3.5 h-3.5" />}
+                  </Button>
+                )}
               </div>
             );
           })}
@@ -333,6 +356,7 @@ export default function SavingsGoals() {
   const contributeToGoal = useContributeToSavingsGoal();
   const cascadeContribute = useCascadeContribute();
   const deleteGoal = useDeleteSavingsGoal();
+  const deleteContribution = useDeleteSavingsGoalContribution();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -681,6 +705,28 @@ export default function SavingsGoals() {
       invalidate();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete goal." });
+    }
+  };
+
+  const handleDeleteContribution = async (goal: SavingsGoal, contribution: GoalContribution) => {
+    if (!canManageShared) {
+      toast({
+        variant: "destructive",
+        title: "Admin access required",
+        description: "Only an owner or admin can delete a shared contribution.",
+      });
+      return;
+    }
+    const entryLabel = contribution.note != null ? "this balance correction" : "this contribution";
+    if (!confirm(`Delete ${entryLabel} from "${goal.name}"? The goal balance will be updated.`)) return;
+
+    try {
+      await deleteContribution.mutateAsync({ id: goal.id, contributionId: contribution.id });
+      toast({ title: "Contribution deleted", description: `"${goal.name}" has been updated.` });
+      invalidate(goal.id);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Could not delete contribution.";
+      toast({ variant: "destructive", title: "Could not delete contribution", description: message });
     }
   };
 
@@ -1246,6 +1292,9 @@ export default function SavingsGoals() {
                           goalId={goal.id}
                           filter={getGoalFilter(goal.id)}
                           onFilterChange={(f) => setGoalFilter(goal.id, f)}
+                          canManageShared={canManageShared}
+                          onDeleteContribution={(contribution) => handleDeleteContribution(goal, contribution)}
+                          isDeletingContribution={deleteContribution.isPending}
                         />
                       </div>
                     )}
@@ -1303,6 +1352,9 @@ export default function SavingsGoals() {
                             goalId={goal.id}
                             filter={getGoalFilter(goal.id)}
                             onFilterChange={(f) => setGoalFilter(goal.id, f)}
+                            canManageShared={canManageShared}
+                            onDeleteContribution={(contribution) => handleDeleteContribution(goal, contribution)}
+                            isDeletingContribution={deleteContribution.isPending}
                           />
                         </div>
                       )}

@@ -26,3 +26,5 @@
 - [Email invitation public origin](email-invitation-public-origin.md) — email invite links must use the configured canonical HTTPS app URL, never request host headers.
 - [Schema push safety](schema-push-safety.md) — investigate unrelated Drizzle push prompts; never force a sync that would truncate live development data.
 - [Shared transaction member rule](shared-transaction-member-rule.md) — new shared groups need two members for money activity; private and legacy workspaces remain usable.
+- [Replit Auth consent prompt](replit-auth-consent.md) — omit forced OIDC consent so returning users can reuse provider authorization.
+- [Web workspace start](web-workspace-start.md) — new web browser sessions start in My Budget, not the last shared workspace.

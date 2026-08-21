@@ -20,6 +20,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import {
   ACTIVE_WORKSPACE_COOKIE,
   clearActiveWorkspaceCookie,
+  LEGACY_ACTIVE_WORKSPACE_COOKIE,
 } from "../lib/activeGroup";
 
 const LEGACY_GROUP_KEY = "initial-shared-budget";
@@ -233,6 +234,9 @@ export async function requireMember(
       ? req.get("x-bajeti-workspace")
       : undefined;
     const cookieWorkspaceId = req.cookies?.[ACTIVE_WORKSPACE_COOKIE];
+    if (typeof req.cookies?.[LEGACY_ACTIVE_WORKSPACE_COOKIE] === "string") {
+      res.clearCookie(LEGACY_ACTIVE_WORKSPACE_COOKIE, { path: "/" });
+    }
     const rawRequestedWorkspaceId = headerWorkspaceId ?? cookieWorkspaceId;
     const requestedWorkspaceId = typeof rawRequestedWorkspaceId === "string"
       ? Number(rawRequestedWorkspaceId)

@@ -2,17 +2,21 @@ import type { Request, Response } from "express";
 import { db, groupMembershipsTable, groupsTable } from "@workspace/db";
 import { count, eq } from "drizzle-orm";
 
-export const ACTIVE_WORKSPACE_COOKIE = "active_workspace";
+// Version this preference so existing seven-day cookies from before My Budget
+// became the web default cannot keep reopening a shared workspace.
+export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_v2";
+export const LEGACY_ACTIVE_WORKSPACE_COOKIE = "active_workspace";
 
 export function setActiveWorkspaceCookie(res: Response, groupId: number): void {
   // The cookie only remembers a preference. Every protected request verifies
-  // membership again before using it as the active workspace.
+  // membership again before using it as the active workspace. It deliberately
+  // lasts for this browser session only, so opening Bajeti in a later web
+  // session starts from the user's private My Budget workspace.
   res.cookie(ACTIVE_WORKSPACE_COOKIE, String(groupId), {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 

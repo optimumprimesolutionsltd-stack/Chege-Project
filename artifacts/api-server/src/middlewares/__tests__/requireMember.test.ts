@@ -182,6 +182,10 @@ vi.mock("drizzle-orm", () => ({
   sql: vi.fn(),
 }));
 
+const {
+  ACTIVE_WORKSPACE_COOKIE,
+  LEGACY_ACTIVE_WORKSPACE_COOKIE,
+} = await import("../../lib/activeGroup.js");
 const { requireMember } = await import("../requireMember.js");
 
 function authenticatedRequest(userId: string) {
@@ -274,6 +278,54 @@ describe("requireMember", () => {
       { groupId: 7, role: "member" },
     ]);
     const req = authenticatedRequest("member");
+    req.get = (header: string) => header === "x-bajeti-workspace" ? "7" : undefined;
+
+    await requireMember(req, response(), vi.fn());
+
+    expect(req.group).toEqual({ id: 7, role: "member", isPrivate: false });
+  });
+
+  it("keeps an explicit web workspace choice for the current browser session", async () => {
+    groupExists = true;
+    privateWorkspaceIds.set("member", 2);
+    memberships.set("member", [
+      { groupId: 2, role: "owner" },
+      { groupId: 7, role: "member" },
+    ]);
+    const req = authenticatedRequest("member");
+    req.cookies = { [ACTIVE_WORKSPACE_COOKIE]: "7" };
+
+    await requireMember(req, response(), vi.fn());
+
+    expect(req.group).toEqual({ id: 7, role: "member", isPrivate: false });
+  });
+
+  it("starts in My Budget instead of honoring the legacy persistent workspace cookie", async () => {
+    groupExists = true;
+    privateWorkspaceIds.set("member", 2);
+    memberships.set("member", [
+      { groupId: 2, role: "owner" },
+      { groupId: 7, role: "member" },
+    ]);
+    const req = authenticatedRequest("member");
+    req.cookies = { [LEGACY_ACTIVE_WORKSPACE_COOKIE]: "7" };
+    const res = response();
+
+    await requireMember(req, res, vi.fn());
+
+    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
+    expect(res.clearCookie).toHaveBeenCalledWith(LEGACY_ACTIVE_WORKSPACE_COOKIE, { path: "/" });
+  });
+
+  it("gives the verified mobile workspace header priority over a browser cookie", async () => {
+    groupExists = true;
+    privateWorkspaceIds.set("member", 2);
+    memberships.set("member", [
+      { groupId: 2, role: "owner" },
+      { groupId: 7, role: "member" },
+    ]);
+    const req = authenticatedRequest("member");
+    req.cookies = { [ACTIVE_WORKSPACE_COOKIE]: "2" };
     req.get = (header: string) => header === "x-bajeti-workspace" ? "7" : undefined;
 
     await requireMember(req, response(), vi.fn());

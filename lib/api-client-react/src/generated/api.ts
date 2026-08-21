@@ -2607,6 +2607,79 @@ export function useGetSavingsGoalContributions<TData = Awaited<ReturnType<typeof
 
 
 
+export const getDeleteSavingsGoalContributionUrl = (id: number,
+    contributionId: number,) => {
+
+
+
+
+  return `/api/savings-goals/${id}/contributions/${contributionId}`
+}
+
+/**
+ * @summary Delete a manually recorded savings contribution and reverse its effect on the goal balance
+ */
+export const deleteSavingsGoalContribution = async (id: number,
+    contributionId: number, options?: Parameters<typeof customFetch>[1]): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteSavingsGoalContributionUrl(id,contributionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteSavingsGoalContributionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSavingsGoalContribution>>, TError,{id: number;contributionId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSavingsGoalContribution>>, TError,{id: number;contributionId: number}, TContext> => {
+
+const mutationKey = ['deleteSavingsGoalContribution'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSavingsGoalContribution>>, {id: number;contributionId: number}> = (props) => {
+          const {id,contributionId} = props ?? {};
+
+          return  deleteSavingsGoalContribution(id,contributionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSavingsGoalContributionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSavingsGoalContribution>>>
+
+    export type DeleteSavingsGoalContributionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a manually recorded savings contribution and reverse its effect on the goal balance
+ */
+export const useDeleteSavingsGoalContribution = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSavingsGoalContribution>>, TError,{id: number;contributionId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSavingsGoalContribution>>,
+        TError,
+        {id: number;contributionId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteSavingsGoalContributionMutationOptions(options));
+    }
+
 export const getContributeToSavingsGoalUrl = (id: number,) => {
 
 

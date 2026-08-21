@@ -40,6 +40,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceSwitcher, workspaceLabel } from "@/components/workspace-switcher";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
@@ -695,11 +696,50 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 pb-12">
-      <div>
-        <h1 className="text-3xl font-display font-bold text-foreground">{group?.isPrivate ? "My Budget" : "Group Overview"}</h1>
-        <p className="text-muted-foreground mt-1">
-          {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
+            {isSharedWorkspace ? "Shared budget" : "Personal budget"}
+          </p>
+          <h1 className="mt-1 text-3xl font-display font-bold text-foreground">
+            {group?.isPrivate ? "My Budget" : "Group Overview"}
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
+          </p>
+        </div>
+
+        <section
+          aria-labelledby="dashboard-workspace-heading"
+          className="w-full rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:max-w-sm"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p id="dashboard-workspace-heading" className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
+                Viewing budget
+              </p>
+              <p className="mt-1 truncate font-display text-lg font-bold text-foreground">
+                {group ? workspaceLabel(group) : "My Budget"}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+              {isSharedWorkspace ? "Shared" : "Personal"}
+            </span>
+          </div>
+          <label htmlFor="dashboard-workspace-switcher" className="sr-only">
+            Choose a budget workspace
+          </label>
+          <WorkspaceSwitcher
+            id="dashboard-workspace-switcher"
+            activeWorkspaceId={group?.id}
+            variant="dashboard"
+            showPendingLabel
+            className="mt-3 w-full"
+          />
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Switching refreshes balances, goals, and activity for the selected budget.
+          </p>
+        </section>
       </div>
 
        {canManageSetup && (nextSetupStep || isSetupComplete) && (
