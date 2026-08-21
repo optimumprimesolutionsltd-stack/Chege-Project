@@ -87,9 +87,9 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
   }, [group?.name]);
-  const canManageShared = members.some(
+  const canManageShared = !group?.isPrivate && members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
-  ) && !group?.isPrivate;
+  );
   const myMembership = members.find((member) => member.userId === user?.id);
   const canLeaveGroup = Boolean(myMembership && myMembership.role !== 'owner');
   const { data: invitations = [] } = useQuery<GroupInvitation[]>({

@@ -23,7 +23,7 @@ vi.mock("@workspace/db", () => {
 });
 
 import { db } from "@workspace/db";
-import { publicInvitationsRouter } from "../invitations.js";
+import { invitationsRouter, publicInvitationsRouter } from "../invitations.js";
 
 type Mock = ReturnType<typeof vi.fn>;
 
@@ -33,6 +33,7 @@ function selectChain(rows: unknown[]) {
   chain.where = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockReturnValue(chain);
   chain.for = vi.fn().mockResolvedValue(rows);
+  chain.orderBy = vi.fn().mockResolvedValue(rows);
   chain.then = (resolve: (value: unknown[]) => unknown) => Promise.resolve(rows).then(resolve);
   return chain;
 }
@@ -66,6 +67,20 @@ function appFor(userId = "member-1") {
   return app;
 }
 
+function managerApp(group: { id: number; role: "owner" | "admin" | "member"; isPrivate: boolean }) {
+  const app = express();
+  app.use(express.json());
+  app.use((req: any, _res, next) => {
+    req.isAuthenticated = () => true;
+    req.user = { id: "manager-1" };
+    req.group = group;
+    req.log = { error: vi.fn() };
+    next();
+  });
+  app.use(invitationsRouter);
+  return app;
+}
+
 function configureAcceptance(invite: Record<string, unknown>, signedInEmail: string) {
   const txSelectResults = [
     [{ id: 7, name: "Test group" }],
@@ -94,7 +109,9 @@ describe("group invitation acceptance", () => {
   it("creates the invited role when the signed-in email matches, even after two members have joined", async () => {
     const { inserted, updated } = configureAcceptance(invitation(), "Member@Example.com");
 
-    const response = await request(appFor()).post(`/group-invitations/accept/${"a".repeat(64)}`);
+    const response = await request(appFor())
+      .post(`/group-invitations/accept/${"a".repeat(64)}`)
+      .send({ groupId: 999 });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ groupName: "Test group", role: "admin" });
@@ -128,5 +145,53 @@ describe("group invitation acceptance", () => {
     expect(response.status).toBe(410);
     expect(response.body.error).toMatch(/expired/i);
     expect(inserted).not.toHaveBeenCalled();
+  });
+
+  it("cannot replay an already accepted invitation", async () => {
+    const { inserted } = configureAcceptance(
+      invitation({ acceptedAt: new Date(Date.now() - 1_000) }),
+      "member@example.com",
+    );
+
+    const response = await request(appFor()).post(`/group-invitations/accept/${"d".repeat(64)}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toMatch(/already been accepted/i);
+    expect(inserted).not.toHaveBeenCalled();
+  });
+});
+
+describe("group invitation management", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("lets an administrator see invitations for their active shared group", async () => {
+    (db.select as Mock).mockReturnValue(selectChain([invitation()]));
+
+    const response = await request(managerApp({
+      id: 7,
+      role: "admin",
+      isPrivate: false,
+    })).get("/group-invitations");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      expect.objectContaining({ id: 41, email: "member@example.com", role: "admin", status: "pending" }),
+    ]);
+  });
+
+  it.each([
+    { role: "member" as const, isPrivate: false },
+    { role: "owner" as const, isPrivate: true },
+  ])("does not expose invitations outside a manager's shared group", async ({ role, isPrivate }) => {
+    const response = await request(managerApp({
+      id: 7,
+      role,
+      isPrivate,
+    })).get("/group-invitations");
+
+    expect(response.status).toBe(403);
+    expect(db.select).not.toHaveBeenCalled();
   });
 });
