@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { getGetDashboardActivityQueryKey, getGetDashboardSummaryQueryKey, useGetDashboardActivity, useGetDashboardSummary } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { ArrowUpRight, ArrowDownRight, Loader2, Activity as ActivityIcon, Calendar, TrendingUp } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Loader2, Activity as ActivityIcon, Calendar, Pencil, TrendingUp } from "lucide-react";
 import { ACTIVITY_TYPE } from "@/lib/activityTypes";
 
 type ActivityTab = "all" | "expenses" | "contributions";
@@ -35,6 +35,19 @@ export default function Activity() {
     if (tab === "contributions" && item.type !== ACTIVITY_TYPE.CONTRIBUTION) return false;
     return true;
   }), [activity, tab]);
+  const dailyActivityGroups = useMemo(() => {
+    const groups = new Map<string, { date: string; items: typeof filteredActivity }>();
+    for (const item of filteredActivity) {
+      // Expenses and deposits use a date-only business date; savings entries use
+      // an ISO timestamp. The first ten characters preserve the recorded day
+      // without shifting it because of the viewer's time zone.
+      const date = item.date.slice(0, 10);
+      const group = groups.get(date);
+      if (group) group.items.push(item);
+      else groups.set(date, { date, items: [item] });
+    }
+    return [...groups.values()];
+  }, [filteredActivity]);
   const sharedHouseholdActivity = useMemo(
     () => tab === "contributions" ? (activity ?? []).filter((item) => item.type === "household") : [],
     [activity, tab],
@@ -47,6 +60,16 @@ export default function Activity() {
   };
   const nextMonth = () => {
     if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1);
+  };
+  const expenseEditHref = (date: string, id: string) => {
+    const expenseId = Number(id.slice("expense-".length));
+    const expenseDate = new Date(date);
+    const params = new URLSearchParams({
+      edit: String(expenseId),
+      month: String(expenseDate.getMonth() + 1),
+      year: String(expenseDate.getFullYear()),
+    });
+    return `/expenses?${params.toString()}`;
   };
 
   return (
@@ -137,37 +160,54 @@ export default function Activity() {
             </div>
           ) : (
             <div className="divide-y divide-border/50">
-              {filteredActivity.map((item) => (
-                <div key={item.id} className="flex items-start gap-3 p-3 transition-colors hover:bg-muted/10 sm:items-center sm:gap-5 sm:p-6">
-                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
-                    item.type === ACTIVITY_TYPE.EXPENSE ? 'bg-accent/50 text-accent-foreground border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
-                  }`}>
-                    {item.type === ACTIVITY_TYPE.EXPENSE ? <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6" /> : <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6" />}
+              {dailyActivityGroups.map((group) => (
+                <section key={group.date} aria-label={`Activity for ${formatDate(group.date)}`}>
+                  <div className="flex items-center justify-between gap-3 bg-muted/50 px-3 py-2 sm:px-6">
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{formatDate(group.date)}</p>
+                    <span className="text-xs text-muted-foreground">{group.items.length} {group.items.length === 1 ? "entry" : "entries"}</span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
-                      <p className="break-words text-sm font-semibold leading-tight text-foreground sm:text-base">{item.description}</p>
-                      <span className={`shrink-0 whitespace-nowrap font-display text-base font-bold sm:text-lg ${
-                        item.type === ACTIVITY_TYPE.EXPENSE ? 'text-foreground' : 'text-primary'
-                      }`}>
-                        {item.type === ACTIVITY_TYPE.EXPENSE ? '-' : '+'}{formatKes(item.amount)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground sm:text-sm">
-                      <span className="font-medium text-foreground/70">{item.userName}</span>
-                      <span className="hidden h-1 w-1 rounded-full bg-border sm:inline-block"></span>
-                      <span>{formatDate(item.date)}</span>
-                      {item.category && (
-                        <>
-                          <span className="w-1 h-1 rounded-full bg-border hidden sm:inline-block"></span>
-                          <span className="px-1.5 py-0.5 bg-secondary/10 text-secondary-foreground rounded text-xs border border-secondary/20">
-                            {item.category}
-                          </span>
-                        </>
-                      )}
-                    </div>
+                  <div className="divide-y divide-border/50">
+                    {group.items.map((item) => {
+                      const canEdit = item.type === ACTIVITY_TYPE.EXPENSE && /^expense-\d+$/.test(item.id);
+                      return (
+                        <div key={item.id} className="flex items-start gap-3 p-3 transition-colors hover:bg-muted/10 sm:items-center sm:gap-5 sm:p-6">
+                          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+                            item.type === ACTIVITY_TYPE.EXPENSE ? 'bg-accent/50 text-accent-foreground border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
+                          }`}>
+                            {item.type === ACTIVITY_TYPE.EXPENSE ? <ArrowDownRight className="w-5 h-5 sm:w-6 sm:h-6" /> : <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
+                              <p className="break-words text-sm font-semibold leading-tight text-foreground sm:text-base">{item.description}</p>
+                              <span className={`shrink-0 whitespace-nowrap font-display text-base font-bold sm:text-lg ${
+                                item.type === ACTIVITY_TYPE.EXPENSE ? 'text-foreground' : 'text-primary'
+                              }`}>
+                                {item.type === ACTIVITY_TYPE.EXPENSE ? '-' : '+'}{formatKes(item.amount)}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground sm:text-sm">
+                              <span className="font-medium text-foreground/70">{item.userName}</span>
+                              {item.category && (
+                                <span className="px-1.5 py-0.5 bg-secondary/10 text-secondary-foreground rounded text-xs border border-secondary/20">
+                                  {item.category}
+                                </span>
+                              )}
+                            </div>
+                            {canEdit && (
+                              <a
+                                href={expenseEditHref(item.date, item.id)}
+                                className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit expense
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
+                </section>
               ))}
             </div>
           )}

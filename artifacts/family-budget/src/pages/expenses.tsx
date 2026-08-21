@@ -31,10 +31,10 @@ const EXPENSE_TIERS = [
 
 import {
   useGetExpenses, useGetBudgetCategories, useGetMembers,
-  useCreateExpense, useDeleteExpense, useUpdateExpense, useApplyRecurringExpenses,
+  useCreateExpense, useCreateBudgetCategory, useDeleteExpense, useUpdateExpense, useApplyRecurringExpenses,
   useGetDashboardSummary, useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
-  getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
+  getGetBudgetCategoriesQueryKey, getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
   type IncomeSource,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
@@ -57,8 +57,9 @@ type Expense = {
   paidByName: string;
   isRecurring: boolean;
   date: string;
-  incomeSplits?: { userId: string | null; label: string; amount: number; fromBank: boolean }[];
+  incomeSplits?: { userId?: string | null; label: string; amount: number; fromBank: boolean }[];
 };
+type EditableExpense = Omit<Expense, "incomeSplits">;
 
 function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const today = now ?? new Date();
@@ -99,10 +100,24 @@ function useIncomeSources(userId: string) {
 
 const EXPENSES_MONTH_KEY = "expenses-month-pref";
 
+function getExpenseDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const month = Number(params.get("month"));
+  const year = Number(params.get("year"));
+  const editId = Number(params.get("edit"));
+  return {
+    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : null,
+    year: Number.isInteger(year) && year >= 2000 && year <= 2200 ? year : null,
+    editId: Number.isInteger(editId) && editId > 0 ? editId : null,
+  };
+}
+
 export default function Expenses() {
   const now = new Date();
   const { user } = useAuth();
+  const expenseDeepLink = getExpenseDeepLink();
   const [month, setMonth] = useState(() => {
+    if (expenseDeepLink.month != null && expenseDeepLink.year != null) return expenseDeepLink.month;
     try {
       const raw = localStorage.getItem(EXPENSES_MONTH_KEY);
       if (raw) { const p = JSON.parse(raw); if (typeof p?.month === "number") return p.month; }
@@ -110,6 +125,7 @@ export default function Expenses() {
     return now.getMonth() + 1;
   });
   const [year, setYear] = useState(() => {
+    if (expenseDeepLink.month != null && expenseDeepLink.year != null) return expenseDeepLink.year;
     try {
       const raw = localStorage.getItem(EXPENSES_MONTH_KEY);
       if (raw) { const p = JSON.parse(raw); if (typeof p?.year === "number") return p.year; }
@@ -123,6 +139,9 @@ export default function Expenses() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryBudget, setNewCategoryBudget] = useState("");
 
   const addForm = useExpenseForm(undefined, now);
   const editForm = useExpenseForm();
@@ -133,11 +152,15 @@ export default function Expenses() {
   const { data: summary } = useGetDashboardSummary({ month, year });
   const { data: breakdown } = useGetDashboardCategoryBreakdown({ month, year });
   const createExpense = useCreateExpense();
+  const createCategory = useCreateBudgetCategory();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
   const applyRecurring = useApplyRecurringExpenses();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const canManageCategories = members?.some(
+    (member) => member.userId === user?.id && (member.role === "owner" || member.role === "admin"),
+  ) ?? false;
 
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
@@ -167,10 +190,11 @@ export default function Expenses() {
     addForm.setIncomeSourceId(null); addForm.setIsRecurring(false);
     addForm.setDate(now.toISOString().split("T")[0]);
     setAddNewSource(false); setNewSourceName("");
+    setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setIsAdding(false);
   };
 
-  const startEdit = (expense: Expense) => {
+  const startEdit = (expense: EditableExpense) => {
     editForm.setAmount(expense.amount.toString());
     editForm.setCategory(expense.category);
     editForm.setDescription(expense.description);
@@ -179,11 +203,62 @@ export default function Expenses() {
     editForm.setIncomeSourceId(null);
     editForm.setIsRecurring(expense.isRecurring);
     editForm.setDate(expense.date);
+    setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setEditingId(expense.id);
     setIsAdding(false);
   };
 
-  const cancelEdit = () => setEditingId(null);
+  useEffect(() => {
+    if (!expenseDeepLink.editId || !expenses || editingId === expenseDeepLink.editId) return;
+    const target = expenses.find((expense) => expense.id === expenseDeepLink.editId);
+    if (!target) return;
+
+    startEdit(target);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("edit");
+    const search = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+  }, [expenses, editingId, expenseDeepLink.editId]);
+
+  const cancelEdit = () => {
+    setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
+    setEditingId(null);
+  };
+
+  const handleQuickCreateCategory = async (form: ReturnType<typeof useExpenseForm>) => {
+    const budgetAmount = Number(newCategoryBudget);
+    if (!newCategoryName.trim() || !Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      toast({
+        variant: "destructive",
+        title: "Add the category name and monthly budget",
+        description: "The monthly budget must be a whole number of KES or zero.",
+      });
+      return;
+    }
+
+    try {
+      const category = await createCategory.mutateAsync({
+        data: {
+          name: newCategoryName.trim(),
+          budgetAmount,
+          priority: 1,
+          isRecurring: true,
+        },
+      });
+      form.setCategory(category.name);
+      setIsCreatingCategory(false);
+      setNewCategoryName("");
+      setNewCategoryBudget("");
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      toast({ title: "Category created", description: `${category.name} is ready to use.` });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Could not create category",
+        description: "Check the name and try again. Categories with the same name cannot be duplicated.",
+      });
+    }
+  };
 
   const handleAddNewSource = async (paidById: string) => {
     if (!newSourceName.trim()) return;
@@ -321,11 +396,73 @@ export default function Expenses() {
 
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">Category</label>
-          <select className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            value={form.category} onChange={e => form.setCategory(e.target.value)} required>
-            <option value="" disabled>Select category...</option>
-            {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-          </select>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select className="flex h-12 min-w-0 flex-1 rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              value={form.category} onChange={e => form.setCategory(e.target.value)} required>
+              <option value="" disabled>Select category...</option>
+              {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+            {canManageCategories && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 shrink-0"
+                onClick={() => setIsCreatingCategory((open) => !open)}
+                aria-expanded={isCreatingCategory}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create category
+              </Button>
+            )}
+          </div>
+          {isCreatingCategory && (
+            <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Create a category</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Add its name and monthly budget, then we’ll select it for this expense.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
+                <Input
+                  placeholder="e.g. Transport"
+                  value={newCategoryName}
+                  onChange={(event) => setNewCategoryName(event.target.value)}
+                  aria-label="New category name"
+                  className="h-10 bg-card"
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Monthly KES"
+                  value={newCategoryBudget}
+                  onChange={(event) => setNewCategoryBudget(event.target.value)}
+                  aria-label="New category monthly budget in KES"
+                  className="h-10 bg-card"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-10"
+                  onClick={() => handleQuickCreateCategory(form)}
+                  disabled={createCategory.isPending}
+                >
+                  {createCategory.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Add category
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCreatingCategory(false);
+                  setNewCategoryName("");
+                  setNewCategoryBudget("");
+                }}
+                className="text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
           {form.category && (() => {
             const cat = breakdown?.find(b => b.category === form.category);
             return cat ? (
