@@ -16,10 +16,12 @@ import {
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
-import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
+import { setBaseUrl, setAuthTokenGetter, setWorkspaceIdGetter } from '@workspace/api-client-react';
 import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
+import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 
 // Check for OTA updates and show an update prompt when one is available.
 // Skipped in development (Expo Go / dev-client) where Updates is not active.
@@ -59,6 +61,7 @@ const PRODUCTION_API_BASE = 'https://delete-project.replit.app';
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 setBaseUrl(domain ? `https://${domain}` : PRODUCTION_API_BASE);
 setAuthTokenGetter(() => SecureStore.getItemAsync(AUTH_TOKEN_KEY));
+setWorkspaceIdGetter(() => AsyncStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY));
 
 SplashScreen.preventAutoHideAsync();
 

@@ -12,6 +12,10 @@ import {
   useContributeToSavingsGoal,
   useCascadeContribute,
   useGetJointAccount,
+  useGetGroup,
+   useGetWorkspaces,
+   useSelectWorkspace,
+  useCreateSharedGroup,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
   getGetSavingsGoalsQueryKey,
@@ -35,8 +39,135 @@ import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
+
+function CreateSharedGroupCard() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [name, setName] = useState("");
+  const createSharedGroup = useCreateSharedGroup();
+  const { toast } = useToast();
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (name.trim().length < 2) return;
+    try {
+      await createSharedGroup.mutateAsync({ data: { name: name.trim() } });
+      window.location.assign("/");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not create group",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    }
+  };
+
+  return (
+    <>
+      <Card className="overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/[0.08] to-card shadow-sm">
+        <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="max-w-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">My Budget is private</p>
+            <h2 className="mt-1 font-display text-xl font-bold text-foreground">Need to budget with other people?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Create a private group for your family, chama, club, team, or any shared goal. It starts empty, stays separate from My Budget, and only people you invite can join.
+            </p>
+          </div>
+          <Button className="h-11 shrink-0 rounded-xl px-5" onClick={() => setIsOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create a private group
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create a private group</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={submit} className="space-y-5">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              You will be the owner. Your My Budget records will stay private and will not be copied into this group.
+            </p>
+            <div className="space-y-2">
+              <label htmlFor="shared-group-name" className="text-sm font-semibold text-foreground">Group name</label>
+              <Input
+                id="shared-group-name"
+                autoFocus
+                maxLength={60}
+                placeholder="e.g. Mwangaza Chama"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={name.trim().length < 2 || createSharedGroup.isPending}>
+              {createSharedGroup.isPending ? "Creating…" : "Create private group"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function SharedGroupsFooter() {
+  const { data: workspaces = [], isLoading } = useGetWorkspaces();
+  const selectWorkspace = useSelectWorkspace();
+  const { toast } = useToast();
+  const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
+
+  if (isLoading) return null;
+
+  const openGroupOverview = async (groupId: number) => {
+    try {
+      await selectWorkspace.mutateAsync({ data: { groupId } });
+      window.location.assign("/");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not open group overview",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    }
+  };
+
+  if (sharedWorkspaces.length === 0) {
+    return <CreateSharedGroupCard />;
+  }
+
+  return (
+    <Card className="border border-primary/15 bg-card shadow-sm">
+      <CardContent className="flex flex-col gap-5 p-5 sm:p-6">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Shared groups</p>
+          <h2 className="mt-1 font-display text-xl font-bold text-foreground">Group overview</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Keep My Budget focused on your personal finances. Open a shared group below when you want to see its pooled budget, members, goals, and activity.
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sharedWorkspaces.map((workspace) => (
+            <Button
+              key={workspace.id}
+              variant="outline"
+              className="h-12 justify-between rounded-xl px-4 text-left"
+              onClick={() => void openGroupOverview(workspace.id)}
+              disabled={selectWorkspace.isPending}
+            >
+              <span className="min-w-0 truncate">{workspace.name}</span>
+              <ArrowUpRight className="ml-3 h-4 w-4 shrink-0 text-primary" />
+            </Button>
+          ))}
+        </div>
+        <Link href="/settings" className="text-sm font-medium text-primary hover:underline">
+          Manage shared groups →
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
 
 // ── Quick Action: Bank Deposit ────────────────────────────────────────────────
 function IncomeForm({
@@ -371,6 +502,7 @@ export default function Dashboard() {
   const { data: trends, isLoading: isTrendsLoading } = useGetDashboardTrends({ months: 6 });
   const { data: goals } = useGetSavingsGoals();
   const { data: bankAccount } = useGetJointAccount();
+  const { data: group } = useGetGroup();
   const { data: members = [] } = useGetMembers();
   const canManageSetup = members.some(
     (member) =>
@@ -490,7 +622,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 pb-12">
       <div>
-        <h1 className="text-3xl font-display font-bold text-foreground">Group Overview</h1>
+        <h1 className="text-3xl font-display font-bold text-foreground">{group?.isPrivate ? "My Budget" : "Group Overview"}</h1>
         <p className="text-muted-foreground mt-1">
           {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
         </p>
@@ -707,7 +839,7 @@ export default function Dashboard() {
             {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(({ name, contributed, target }: {name: string; contributed: number; target: number | null}, idx: number) => {
               const color = idx === 0 ? "bg-primary" : "bg-secondary";
               return (
-                <div key={name} className="space-y-3">
+                <div key={`${name}-${idx}`} className="space-y-3">
                   <div className="flex justify-between items-end">
                     <div>
                       <p className="font-semibold text-foreground text-lg">{name}</p>
@@ -760,6 +892,7 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
       </div>
 
       {/* Savings Goals */}
@@ -844,6 +977,8 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      {group?.isPrivate && <SharedGroupsFooter />}
     </div>
   );
 }

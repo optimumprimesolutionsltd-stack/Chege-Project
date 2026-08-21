@@ -1,5 +1,23 @@
 import type { Request, Response } from "express";
 
+export const ACTIVE_WORKSPACE_COOKIE = "active_workspace";
+
+export function setActiveWorkspaceCookie(res: Response, groupId: number): void {
+  // The cookie only remembers a preference. Every protected request verifies
+  // membership again before using it as the active workspace.
+  res.cookie(ACTIVE_WORKSPACE_COOKIE, String(groupId), {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
+
+export function clearActiveWorkspaceCookie(res: Response): void {
+  res.clearCookie(ACTIVE_WORKSPACE_COOKIE, { path: "/" });
+}
+
 /**
  * Protected routes must derive ownership from middleware, never request input.
  * Returning a generic access error avoids revealing whether another group or

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { GroupInviteLinks } from "@/components/group-invite-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
 import { LogOut, Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
@@ -350,39 +351,57 @@ export default function Settings() {
           )}
 
           {/* Invite member form */}
+          {canManageShared && <GroupInviteLinks />}
           {canManageShared && (
             <form onSubmit={handleAdd} className="space-y-3 border-t border-border/50 pt-4">
               <div>
                 <p className="text-sm font-medium text-foreground">Invite someone by email</p>
-                <p className="mt-1 text-xs text-muted-foreground">They will sign in and accept the invitation before gaining access.</p>
+                <p className="mt-1 text-xs text-muted-foreground">They will sign in with this email and accept the invitation before gaining access.</p>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Name for your saved shortcut (optional)"
-                  value={inviteName}
-                  onChange={(e) => setInviteName(e.target.value)}
-                  className="h-11 bg-card"
-                />
-                <Input
-                  type="email"
-                  placeholder="name@example.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  className="h-11 bg-card"
-                />
-                <select
-                  aria-label="Invite role"
-                  value={newMemberRole}
-                  onChange={(event) => setNewMemberRole(event.target.value as "admin" | "member")}
-                  className="h-11 rounded-lg border border-input bg-background px-3 text-sm"
-                >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <Button type="submit" disabled={!inviteEmail.trim() || sendingInvite} className="h-11 shrink-0 gap-2 px-5">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_auto_auto] md:items-end">
+                <label className="grid gap-1.5 text-xs font-medium text-foreground">
+                  Name <span className="font-normal text-muted-foreground">(optional)</span>
+                  <Input
+                    aria-label="Invitee name"
+                    placeholder="For your saved shortcut"
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    className="h-11 bg-card text-foreground"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-xs font-medium text-foreground">
+                  Email address
+                  <Input
+                    aria-label="Invitee email address"
+                    type="email"
+                    placeholder="name@example.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="h-11 bg-card text-foreground"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-xs font-medium text-foreground">
+                  Access
+                  <select
+                    aria-label="Invite role"
+                    value={newMemberRole}
+                    onChange={(event) => setNewMemberRole(event.target.value as "admin" | "member")}
+                    className="h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground"
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+                <Button type="submit" disabled={!inviteEmail.trim() || sendingInvite} className="h-11 gap-2 px-5">
                   <Send className="h-4 w-4" />
                   {sendingInvite ? "Sending…" : "Invite"}
                 </Button>
+              </div>
+              <div className="rounded-lg border border-primary/20 bg-primary/[0.04] px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+                <span className="font-semibold text-foreground">There is no owner code to enter or share.</span>{" "}
+                Owner is the group role for the person who created the group and keeps responsibility for its access. Invite someone as a{" "}
+                <span className="font-semibold text-foreground">Member</span> to participate in shared finances, or an{" "}
+                <span className="font-semibold text-foreground">Admin</span> to also manage members and group setup.
               </div>
               <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                 <input

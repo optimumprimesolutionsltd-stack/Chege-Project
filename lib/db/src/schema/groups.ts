@@ -95,6 +95,34 @@ export const groupInvitationsTable = pgTable(
 
 export type GroupInvitation = typeof groupInvitationsTable.$inferSelect;
 
+/**
+ * A private, shareable join link. The raw token is never stored, and the link
+ * remains an access request rather than an authorization boundary: every
+ * acceptance creates a verified membership before the group can be selected.
+ */
+export const groupInviteLinksTable = pgTable(
+  "group_invite_links",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groupsTable.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("group_invite_links_group_id_idx").on(table.groupId),
+    index("group_invite_links_token_hash_idx").on(table.tokenHash),
+  ],
+);
+
+export type GroupInviteLink = typeof groupInviteLinksTable.$inferSelect;
+
 export const groupInviteContactsTable = pgTable(
   "group_invite_contacts",
   {

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useGetGroup } from '@workspace/api-client-react';
+import { WorkspaceSwitcher, workspaceLabel } from '@/components/workspace-switcher';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -35,8 +36,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0">
             <span className="block font-display font-bold text-xl tracking-tight">Bajeti</span>
-            <span className="block truncate text-xs text-sidebar-foreground/60">{group?.name ?? 'Shared budget'}</span>
+            <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My Budget'}</span>
           </div>
+        </div>
+        <div className="px-6">
+          <WorkspaceSwitcher activeWorkspaceId={group?.id} className="w-full" />
         </div>
 
         <nav className="flex-1 px-4 space-y-1 mt-4">
@@ -89,7 +93,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0">
             <span className="block font-display font-bold text-lg leading-none">Bajeti</span>
-            <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group?.name ?? 'Shared budget'}</span>
+            <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My Budget'}</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-sidebar-foreground">
@@ -101,6 +105,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {isMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-40 bg-sidebar pt-16 flex flex-col" onClick={(e) => { if (e.target === e.currentTarget) setIsMobileMenuOpen(false); }}>
           <nav className="flex-1 p-4 space-y-2">
+            <WorkspaceSwitcher activeWorkspaceId={group?.id} className="mb-3 w-full" />
             {navItems.map((item) => {
               const isActive = location === item.href;
               return (

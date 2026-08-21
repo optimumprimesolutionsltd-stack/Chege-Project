@@ -57,6 +57,8 @@ import type {
   GroupInvitationContact,
   GroupInvitationContactInput,
   GroupInvitationPreview,
+  GroupInviteLink,
+  GroupInviteLinkCreated,
   HealthStatus,
   IncomeSource,
   IncomeStreamReport,
@@ -70,10 +72,13 @@ import type {
   SavingsGoalInput,
   SavingsGoalUpdateInput,
   SavingsTransferInput,
+  SharedGroupInput,
   SuccessResponse,
   UpdateGroupInput,
   UpdateJointAccountTransactionInput,
-  UpdateMemberRoleInput
+  UpdateMemberRoleInput,
+  Workspace,
+  WorkspaceSelectionInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -3120,6 +3125,225 @@ export const useLeaveGroup = <TError = ErrorType<ErrorResponse>,
       return useMutation(getLeaveGroupMutationOptions(options));
     }
 
+export const getGetWorkspacesUrl = () => {
+
+
+
+
+  return `/api/workspaces`
+}
+
+/**
+ * @summary List the signed-in person's private and shared budget workspaces
+ */
+export const getWorkspaces = async ( options?: Parameters<typeof customFetch>[1]): Promise<Workspace[]> => {
+
+  return customFetch<Workspace[]>(getGetWorkspacesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkspacesQueryKey = () => {
+    return [
+    `/api/workspaces`
+    ] as const;
+    }
+
+
+export const getGetWorkspacesQueryOptions = <TData = Awaited<ReturnType<typeof getWorkspaces>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWorkspaces>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkspacesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkspaces>>> = ({ signal }) => getWorkspaces({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkspaces>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWorkspacesQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkspaces>>>
+export type GetWorkspacesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the signed-in person's private and shared budget workspaces
+ */
+
+export function useGetWorkspaces<TData = Awaited<ReturnType<typeof getWorkspaces>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWorkspaces>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWorkspacesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSelectWorkspaceUrl = () => {
+
+
+
+
+  return `/api/workspaces/select`
+}
+
+/**
+ * @summary Select an available workspace for the current session
+ */
+export const selectWorkspace = async (workspaceSelectionInput: WorkspaceSelectionInput, options?: Parameters<typeof customFetch>[1]): Promise<Workspace> => {
+
+  return customFetch<Workspace>(getSelectWorkspaceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(workspaceSelectionInput)
+  }
+);}
+
+
+
+
+
+export const getSelectWorkspaceMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof selectWorkspace>>, TError,{data: BodyType<WorkspaceSelectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof selectWorkspace>>, TError,{data: BodyType<WorkspaceSelectionInput>}, TContext> => {
+
+const mutationKey = ['selectWorkspace'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof selectWorkspace>>, {data: BodyType<WorkspaceSelectionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  selectWorkspace(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SelectWorkspaceMutationResult = NonNullable<Awaited<ReturnType<typeof selectWorkspace>>>
+    export type SelectWorkspaceMutationBody = BodyType<WorkspaceSelectionInput>
+    export type SelectWorkspaceMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Select an available workspace for the current session
+ */
+export const useSelectWorkspace = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof selectWorkspace>>, TError,{data: BodyType<WorkspaceSelectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof selectWorkspace>>,
+        TError,
+        {data: BodyType<WorkspaceSelectionInput>},
+        TContext
+      > => {
+      return useMutation(getSelectWorkspaceMutationOptions(options));
+    }
+
+export const getCreateSharedGroupUrl = () => {
+
+
+
+
+  return `/api/groups`
+}
+
+/**
+ * @summary Create a private shared group and become its owner
+ */
+export const createSharedGroup = async (sharedGroupInput: SharedGroupInput, options?: Parameters<typeof customFetch>[1]): Promise<Workspace> => {
+
+  return customFetch<Workspace>(getCreateSharedGroupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sharedGroupInput)
+  }
+);}
+
+
+
+
+
+export const getCreateSharedGroupMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedGroup>>, TError,{data: BodyType<SharedGroupInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSharedGroup>>, TError,{data: BodyType<SharedGroupInput>}, TContext> => {
+
+const mutationKey = ['createSharedGroup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSharedGroup>>, {data: BodyType<SharedGroupInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createSharedGroup(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSharedGroupMutationResult = NonNullable<Awaited<ReturnType<typeof createSharedGroup>>>
+    export type CreateSharedGroupMutationBody = BodyType<SharedGroupInput>
+    export type CreateSharedGroupMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a private shared group and become its owner
+ */
+export const useCreateSharedGroup = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSharedGroup>>, TError,{data: BodyType<SharedGroupInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSharedGroup>>,
+        TError,
+        {data: BodyType<SharedGroupInput>},
+        TContext
+      > => {
+      return useMutation(getCreateSharedGroupMutationOptions(options));
+    }
+
 export const getGetGroupInvitationsUrl = () => {
 
 
@@ -3266,6 +3490,373 @@ export const useCreateGroupInvitation = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateGroupInvitationMutationOptions(options));
+    }
+
+export const getGetGroupInviteLinksUrl = () => {
+
+
+
+
+  return `/api/group-invite-links`
+}
+
+/**
+ * @summary List private join links for the active shared group
+ */
+export const getGroupInviteLinks = async ( options?: Parameters<typeof customFetch>[1]): Promise<GroupInviteLink[]> => {
+
+  return customFetch<GroupInviteLink[]>(getGetGroupInviteLinksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGroupInviteLinksQueryKey = () => {
+    return [
+    `/api/group-invite-links`
+    ] as const;
+    }
+
+
+export const getGetGroupInviteLinksQueryOptions = <TData = Awaited<ReturnType<typeof getGroupInviteLinks>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInviteLinks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGroupInviteLinksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGroupInviteLinks>>> = ({ signal }) => getGroupInviteLinks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGroupInviteLinks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGroupInviteLinksQueryResult = NonNullable<Awaited<ReturnType<typeof getGroupInviteLinks>>>
+export type GetGroupInviteLinksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List private join links for the active shared group
+ */
+
+export function useGetGroupInviteLinks<TData = Awaited<ReturnType<typeof getGroupInviteLinks>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInviteLinks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGroupInviteLinksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateGroupInviteLinkUrl = () => {
+
+
+
+
+  return `/api/group-invite-links`
+}
+
+/**
+ * @summary Create an expiring private join link for the active shared group
+ */
+export const createGroupInviteLink = async ( options?: Parameters<typeof customFetch>[1]): Promise<GroupInviteLinkCreated> => {
+
+  return customFetch<GroupInviteLinkCreated>(getCreateGroupInviteLinkUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateGroupInviteLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGroupInviteLink>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGroupInviteLink>>, TError,void, TContext> => {
+
+const mutationKey = ['createGroupInviteLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGroupInviteLink>>, void> = () => {
+
+
+          return  createGroupInviteLink(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGroupInviteLinkMutationResult = NonNullable<Awaited<ReturnType<typeof createGroupInviteLink>>>
+
+    export type CreateGroupInviteLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create an expiring private join link for the active shared group
+ */
+export const useCreateGroupInviteLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGroupInviteLink>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGroupInviteLink>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateGroupInviteLinkMutationOptions(options));
+    }
+
+export const getRevokeGroupInviteLinkUrl = (id: number,) => {
+
+
+
+
+  return `/api/group-invite-links/${id}`
+}
+
+/**
+ * @summary Revoke a private group join link
+ */
+export const revokeGroupInviteLink = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<GroupInviteLink> => {
+
+  return customFetch<GroupInviteLink>(getRevokeGroupInviteLinkUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeGroupInviteLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeGroupInviteLink>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeGroupInviteLink>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['revokeGroupInviteLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeGroupInviteLink>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  revokeGroupInviteLink(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeGroupInviteLinkMutationResult = NonNullable<Awaited<ReturnType<typeof revokeGroupInviteLink>>>
+
+    export type RevokeGroupInviteLinkMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Revoke a private group join link
+ */
+export const useRevokeGroupInviteLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeGroupInviteLink>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeGroupInviteLink>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRevokeGroupInviteLinkMutationOptions(options));
+    }
+
+export const getGetGroupInviteLinkPreviewUrl = (token: string,) => {
+
+
+
+
+  return `/api/group-invite-links/accept/${token}`
+}
+
+/**
+ * @summary Preview a private group join link
+ */
+export const getGroupInviteLinkPreview = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitationPreview> => {
+
+  return customFetch<GroupInvitationPreview>(getGetGroupInviteLinkPreviewUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGroupInviteLinkPreviewQueryKey = (token: string,) => {
+    return [
+    `/api/group-invite-links/accept/${token}`
+    ] as const;
+    }
+
+
+export const getGetGroupInviteLinkPreviewQueryOptions = <TData = Awaited<ReturnType<typeof getGroupInviteLinkPreview>>, TError = ErrorType<ErrorResponse>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInviteLinkPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGroupInviteLinkPreviewQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGroupInviteLinkPreview>>> = ({ signal }) => getGroupInviteLinkPreview(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGroupInviteLinkPreview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGroupInviteLinkPreviewQueryResult = NonNullable<Awaited<ReturnType<typeof getGroupInviteLinkPreview>>>
+export type GetGroupInviteLinkPreviewQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Preview a private group join link
+ */
+
+export function useGetGroupInviteLinkPreview<TData = Awaited<ReturnType<typeof getGroupInviteLinkPreview>>, TError = ErrorType<ErrorResponse>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupInviteLinkPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGroupInviteLinkPreviewQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAcceptGroupInviteLinkUrl = (token: string,) => {
+
+
+
+
+  return `/api/group-invite-links/accept/${token}`
+}
+
+/**
+ * @summary Join a private group using a valid private link
+ */
+export const acceptGroupInviteLink = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitationPreview> => {
+
+  return customFetch<GroupInvitationPreview>(getAcceptGroupInviteLinkUrl(token),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAcceptGroupInviteLinkMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptGroupInviteLink>>, TError,{token: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptGroupInviteLink>>, TError,{token: string}, TContext> => {
+
+const mutationKey = ['acceptGroupInviteLink'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptGroupInviteLink>>, {token: string}> = (props) => {
+          const {token} = props ?? {};
+
+          return  acceptGroupInviteLink(token,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcceptGroupInviteLinkMutationResult = NonNullable<Awaited<ReturnType<typeof acceptGroupInviteLink>>>
+
+    export type AcceptGroupInviteLinkMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Join a private group using a valid private link
+ */
+export const useAcceptGroupInviteLink = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptGroupInviteLink>>, TError,{token: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acceptGroupInviteLink>>,
+        TError,
+        {token: string},
+        TContext
+      > => {
+      return useMutation(getAcceptGroupInviteLinkMutationOptions(options));
     }
 
 export const getCancelGroupInvitationUrl = (id: number,) => {

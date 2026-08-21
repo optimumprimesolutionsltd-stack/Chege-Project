@@ -429,6 +429,56 @@ export type GroupInvitationContact = GroupInvitationContactInput & {
   id: number;
 };
 
+export interface SharedGroupInput {
+  /**
+     * @minLength 2
+     * @maxLength 60
+     */
+  name: string;
+}
+
+export interface WorkspaceSelectionInput {
+  groupId: number;
+}
+
+export type WorkspaceRole = typeof WorkspaceRole[keyof typeof WorkspaceRole];
+
+
+export const WorkspaceRole = {
+  owner: 'owner',
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface Workspace {
+  id: number;
+  name: string;
+  isPrivate: boolean;
+  role: WorkspaceRole;
+}
+
+export type GroupInviteLinkStatus = typeof GroupInviteLinkStatus[keyof typeof GroupInviteLinkStatus];
+
+
+export const GroupInviteLinkStatus = {
+  active: 'active',
+  revoked: 'revoked',
+  expired: 'expired',
+} as const;
+
+export interface GroupInviteLink {
+  id: number;
+  expiresAt: string;
+  /** @nullable */
+  revokedAt?: string | null;
+  createdAt: string;
+  status: GroupInviteLinkStatus;
+}
+
+export type GroupInviteLinkCreated = GroupInviteLink & {
+  token: string;
+};
+
 export interface Group {
   id: number;
   name: string;

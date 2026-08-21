@@ -17,6 +17,10 @@ import {
   usersTable,
 } from "@workspace/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import {
+  ACTIVE_WORKSPACE_COOKIE,
+  clearActiveWorkspaceCookie,
+} from "../lib/activeGroup";
 
 const LEGACY_GROUP_KEY = "initial-shared-budget";
 const LEGACY_GROUP_NAME = "Shared budget";
@@ -192,18 +196,19 @@ async function ensurePrivateWorkspace(userId: string) {
   });
 }
 
-async function getSharedMembership(userId: string) {
+async function getWorkspaceMembership(userId: string, groupId: number) {
   const [membership] = await db
     .select({
       groupId: groupMembershipsTable.groupId,
       role: groupMembershipsTable.role,
+      isPrivate: groupsTable.privateOwnerUserId,
     })
     .from(groupMembershipsTable)
     .innerJoin(groupsTable, eq(groupsTable.id, groupMembershipsTable.groupId))
     .where(
       and(
         eq(groupMembershipsTable.userId, userId),
-        isNull(groupsTable.privateOwnerUserId),
+        eq(groupMembershipsTable.groupId, groupId),
       ),
     )
     .limit(1);
@@ -224,15 +229,28 @@ export async function requireMember(
     const userId = req.user.id;
     await adoptLegacyGroup(userId);
     const privateWorkspaceId = await ensurePrivateWorkspace(userId);
-    const sharedMembership = await getSharedMembership(userId);
+    const headerWorkspaceId = typeof req.get === "function"
+      ? req.get("x-bajeti-workspace")
+      : undefined;
+    const cookieWorkspaceId = req.cookies?.[ACTIVE_WORKSPACE_COOKIE];
+    const rawRequestedWorkspaceId = headerWorkspaceId ?? cookieWorkspaceId;
+    const requestedWorkspaceId = typeof rawRequestedWorkspaceId === "string"
+      ? Number(rawRequestedWorkspaceId)
+      : NaN;
+    const selectedMembership = Number.isSafeInteger(requestedWorkspaceId) && requestedWorkspaceId > 0
+      ? await getWorkspaceMembership(userId, requestedWorkspaceId)
+      : undefined;
 
-    if (sharedMembership) {
+    if (selectedMembership) {
       req.group = {
-        id: sharedMembership.groupId,
-        role: sharedMembership.role as "owner" | "admin" | "member",
-        isPrivate: false,
+        id: selectedMembership.groupId,
+        role: selectedMembership.role as "owner" | "admin" | "member",
+        isPrivate: Boolean(selectedMembership.isPrivate),
       };
     } else {
+      if (!headerWorkspaceId && typeof cookieWorkspaceId === "string") {
+        clearActiveWorkspaceCookie(res);
+      }
       req.group = {
         id: privateWorkspaceId,
         role: "owner",

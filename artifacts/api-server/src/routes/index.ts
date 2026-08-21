@@ -7,11 +7,13 @@ import budgetCategoriesRouter from "./budget-categories";
 import dashboardRouter from "./dashboard";
 import membersRouter from "./members";
 import groupRouter from "./group";
+import workspacesRouter from "./workspaces";
 import digestRouter from "./digest";
 import savingsGoalsRouter from "./savings-goals";
 import jointAccountRouter from "./joint-account";
 import incomeSourcesRouter from "./income-sources";
 import { invitationsRouter, publicInvitationsRouter } from "./invitations";
+import { inviteLinksRouter, publicInviteLinksRouter } from "./invite-links";
 import { requireMember } from "../middlewares/requireMember";
 
 const router: IRouter = Router();
@@ -20,6 +22,7 @@ const router: IRouter = Router();
 router.use(authRouter);
 router.use(healthRouter);
 router.use(publicInvitationsRouter);
+router.use(publicInviteLinksRouter);
 
 // Apply member check to everything else
 router.use(requireMember);
@@ -30,10 +33,12 @@ router.use(budgetCategoriesRouter);
 router.use(dashboardRouter);
 router.use(membersRouter);
 router.use(groupRouter);
+router.use(workspacesRouter);
 router.use(digestRouter);
 router.use(savingsGoalsRouter);
 router.use(jointAccountRouter);
 router.use(incomeSourcesRouter);
 router.use(invitationsRouter);
+router.use(inviteLinksRouter);
 
 export default router;

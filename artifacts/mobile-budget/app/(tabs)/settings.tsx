@@ -10,14 +10,23 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { customFetch } from '@workspace/api-client-react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  customFetch,
+  useCreateSharedGroup,
+  useGetGroup,
+  useGetWorkspaces,
+  useSelectWorkspace,
+} from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import { resolveAvatarProps, getDisplayName } from '@/utils/avatarHelper';
+import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 
 type IncomeSource = { id: number; name: string; isMain: boolean; userId: string; expectedMonthlyAmount: number };
 type GroupMember = {
@@ -25,7 +34,6 @@ type GroupMember = {
   userName: string | null;
   role: 'owner' | 'admin' | 'member';
 };
-type GroupInfo = { id: number; name: string };
 type GroupInvitation = {
   id: number;
   email: string;
@@ -53,6 +61,8 @@ export default function SettingsScreen() {
   const [managingMembers, setManagingMembers] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [savingGroupName, setSavingGroupName] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -70,17 +80,16 @@ export default function SettingsScreen() {
     queryFn: () => customFetch<GroupMember[]>('/api/members'),
     enabled: !!user?.id,
   });
-  const { data: group } = useQuery<GroupInfo>({
-    queryKey: ['group'],
-    queryFn: () => customFetch<GroupInfo>('/api/group'),
-    enabled: !!user?.id,
-  });
+  const { data: group } = useGetGroup();
+  const { data: workspaces = [] } = useGetWorkspaces();
+  const selectWorkspace = useSelectWorkspace();
+  const createSharedGroup = useCreateSharedGroup();
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
   }, [group?.name]);
   const canManageShared = members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
-  );
+  ) && !group?.isPrivate;
   const myMembership = members.find((member) => member.userId === user?.id);
   const canLeaveGroup = Boolean(myMembership && myMembership.role !== 'owner');
   const { data: invitations = [] } = useQuery<GroupInvitation[]>({
@@ -112,6 +121,30 @@ export default function SettingsScreen() {
   };
 
   const refreshMembers = () => queryClient.invalidateQueries({ queryKey: ['members'] });
+  const handleSelectWorkspace = async (groupId: number) => {
+    if (groupId === group?.id) return;
+    try {
+      await selectWorkspace.mutateAsync({ data: { groupId } });
+      await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(groupId));
+      await queryClient.invalidateQueries();
+    } catch (error) {
+      Alert.alert('Could not switch budget', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const handleCreateSharedGroup = async () => {
+    const name = newGroupName.trim();
+    if (name.length < 2) return;
+    try {
+      const workspace = await createSharedGroup.mutateAsync({ data: { name } });
+      await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(workspace.id));
+      setNewGroupName('');
+      setCreateGroupOpen(false);
+      await queryClient.invalidateQueries();
+      Alert.alert('Private group created', 'Your My Budget records stayed private and separate.');
+    } catch (error) {
+      Alert.alert('Could not create group', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
     setManagingMembers(true);
@@ -359,9 +392,56 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>YOUR GROUP</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGET SPACES</Text>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {canManageShared ? (
+          {workspaces.map((workspace, index) => {
+            const selected = workspace.id === group?.id;
+            const label = workspace.isPrivate ? 'My Budget' : workspace.name;
+            const detail = workspace.isPrivate
+              ? 'Private to you'
+              : workspace.role === 'owner' ? 'Shared group · Owner' : workspace.role === 'admin' ? 'Shared group · Admin' : 'Shared group · Member';
+            return (
+              <Pressable
+                key={workspace.id}
+                testID={`workspace-${workspace.id}`}
+                onPress={() => void handleSelectWorkspace(workspace.id)}
+                disabled={selectWorkspace.isPending || selected}
+                style={[
+                  styles.workspaceRow,
+                  { borderBottomColor: colors.border, borderBottomWidth: index < workspaces.length - 1 ? StyleSheet.hairlineWidth : 0 },
+                ]}
+              >
+                <View style={[styles.rowIcon, { backgroundColor: selected ? colors.primary + '20' : colors.muted }]}>
+                  <Feather name={workspace.isPrivate ? 'lock' : 'users'} size={15} color={selected ? colors.primary : colors.mutedForeground} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
+                  <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{detail}</Text>
+                </View>
+                {selected ? (
+                  <Feather name="check-circle" size={19} color={colors.primary} />
+                ) : (
+                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                )}
+              </Pressable>
+            );
+          })}
+          {group?.isPrivate ? (
+            <View style={[styles.workspaceInfo, { borderTopColor: colors.border, borderTopWidth: workspaces.length ? StyleSheet.hairlineWidth : 0 }]}>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Your primary budget</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
+                Expenses, goals, bank activity, and reports here belong only to you. A shared group has its own separate money and members.
+              </Text>
+              <Pressable
+                testID="create-private-group"
+                onPress={() => setCreateGroupOpen(true)}
+                style={[styles.createGroupButton, { borderColor: colors.primary }]}
+              >
+                <Feather name="plus" size={16} color={colors.primary} />
+                <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Create a private group</Text>
+              </Pressable>
+            </View>
+          ) : canManageShared ? (
             <View style={styles.addRow}>
               <TextInput
                 style={[styles.addInput, { color: colors.foreground, flex: 1 }]}
@@ -384,6 +464,8 @@ export default function SettingsScreen() {
         </View>
 
         {/* Shared group access */}
+        {!group?.isPrivate && (
+          <>
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>GROUP ACCESS</Text>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {members.map((member, index) => (
@@ -533,6 +615,8 @@ export default function SettingsScreen() {
             </View>
           ) : null}
         </View>
+          </>
+        )}
 
         {/* Income sources */}
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>INCOME SOURCES</Text>
@@ -666,6 +750,41 @@ export default function SettingsScreen() {
           <Text style={styles.signOutText}>{loggingOut ? 'Signing out…' : 'Sign out'}</Text>
         </Pressable>
       </ScrollView>
+      <Modal visible={createGroupOpen} transparent animationType="fade" onRequestClose={() => setCreateGroupOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a private group</Text>
+                <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 5 }]}>
+                  You will be the owner. Nothing from My Budget will be copied into this group.
+                </Text>
+              </View>
+              <Pressable onPress={() => setCreateGroupOpen(false)} hitSlop={10}>
+                <Feather name="x" size={20} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <TextInput
+              testID="new-shared-group-name"
+              autoFocus
+              maxLength={60}
+              value={newGroupName}
+              onChangeText={setNewGroupName}
+              placeholder="e.g. Mwangaza Chama"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.modalInput, { borderColor: colors.border, color: colors.foreground }]}
+            />
+            <Pressable
+              testID="confirm-create-private-group"
+              disabled={newGroupName.trim().length < 2 || createSharedGroup.isPending}
+              onPress={() => void handleCreateSharedGroup()}
+              style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: newGroupName.trim().length >= 2 ? 1 : 0.55 }]}
+            >
+              {createSharedGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalCreateText}>Create private group</Text>}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -681,6 +800,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 14,
     padding: 16, borderRadius: 14, borderWidth: 1, marginBottom: 20,
   },
+  workspaceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  workspaceInfo: { padding: 14 },
+  createGroupButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 13, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  createGroupButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalCard: { borderWidth: 1, borderRadius: 16, padding: 18 },
+  modalHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  modalTitle: { fontSize: 19, fontFamily: 'Inter_700Bold' },
+  modalInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, marginTop: 18, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  modalCreateButton: { minHeight: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  modalCreateText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   avatar: { width: 56, height: 56, borderRadius: 28 },
   avatarFallback: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   avatarInitials: { fontSize: 20, fontWeight: '700', fontFamily: 'Inter_700Bold' },

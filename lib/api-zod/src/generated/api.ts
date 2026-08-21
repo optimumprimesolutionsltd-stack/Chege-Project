@@ -1048,6 +1048,53 @@ export const LeaveGroupResponse = zod.object({
 
 
 /**
+ * @summary List the signed-in person's private and shared budget workspaces
+ */
+export const GetWorkspacesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "isPrivate": zod.boolean(),
+  "role": zod.enum(['owner', 'admin', 'member'])
+})
+export const GetWorkspacesResponse = zod.array(GetWorkspacesResponseItem)
+
+
+/**
+ * @summary Select an available workspace for the current session
+ */
+export const SelectWorkspaceBody = zod.object({
+  "groupId": zod.number()
+})
+
+export const SelectWorkspaceResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "isPrivate": zod.boolean(),
+  "role": zod.enum(['owner', 'admin', 'member'])
+})
+
+
+/**
+ * @summary Create a private shared group and become its owner
+ */
+export const createSharedGroupBodyNameMin = 2;
+export const createSharedGroupBodyNameMax = 60;
+
+
+
+export const CreateSharedGroupBody = zod.object({
+  "name": zod.string().min(createSharedGroupBodyNameMin).max(createSharedGroupBodyNameMax)
+})
+
+export const CreateSharedGroupResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "isPrivate": zod.boolean(),
+  "role": zod.enum(['owner', 'admin', 'member'])
+})
+
+
+/**
  * @summary List group invitations
  */
 export const GetGroupInvitationsResponseItem = zod.object({
@@ -1087,6 +1134,77 @@ export const CreateGroupInvitationResponse = zod.object({
   "acceptedAt": zod.coerce.date().nullish(),
   "cancelledAt": zod.coerce.date().nullish(),
   "status": zod.enum(['pending', 'accepted', 'cancelled', 'expired'])
+})
+
+
+/**
+ * @summary List private join links for the active shared group
+ */
+export const GetGroupInviteLinksResponseItem = zod.object({
+  "id": zod.number(),
+  "expiresAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "status": zod.enum(['active', 'revoked', 'expired'])
+})
+export const GetGroupInviteLinksResponse = zod.array(GetGroupInviteLinksResponseItem)
+
+
+/**
+ * @summary Create an expiring private join link for the active shared group
+ */
+export const CreateGroupInviteLinkResponse = zod.object({
+  "id": zod.number(),
+  "expiresAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "status": zod.enum(['active', 'revoked', 'expired'])
+}).and(zod.object({
+  "token": zod.string()
+}))
+
+
+/**
+ * @summary Revoke a private group join link
+ */
+export const RevokeGroupInviteLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RevokeGroupInviteLinkResponse = zod.object({
+  "id": zod.number(),
+  "expiresAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "status": zod.enum(['active', 'revoked', 'expired'])
+})
+
+
+/**
+ * @summary Preview a private group join link
+ */
+export const GetGroupInviteLinkPreviewParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetGroupInviteLinkPreviewResponse = zod.object({
+  "groupName": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "expiresAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Join a private group using a valid private link
+ */
+export const AcceptGroupInviteLinkParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const AcceptGroupInviteLinkResponse = zod.object({
+  "groupName": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "expiresAt": zod.coerce.date()
 })
 
 

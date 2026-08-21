@@ -17,6 +17,7 @@ import Bank from '@/pages/bank';
 import Parity from '@/pages/parity';
 import IncomeStreamsReport from '@/pages/income-streams-report';
 import InvitePage from '@/pages/invite';
+import JoinGroupPage from '@/pages/join-group';
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ function AuthenticatedApp() {
         <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/settings" component={Settings} />
         <Route path="/invite/:token" component={InvitePage} />
+        <Route path="/join/:token" component={JoinGroupPage} />
         <Route path="/parity" component={Parity} />
         <Route component={NotFound} />
       </Switch>
@@ -99,6 +101,10 @@ function MainRouter() {
 
   if (/\/invite\/[^/]+$/.test(window.location.pathname)) {
     return <InvitePage />;
+  }
+
+  if (/\/join\/[^/]+$/.test(window.location.pathname)) {
+    return <JoinGroupPage />;
   }
 
   if (!isAuthenticated) {

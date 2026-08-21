@@ -1,10 +1,61 @@
 import { Router } from "express";
-import { db, groupsTable } from "@workspace/db";
+import {
+  db,
+  groupMembershipsTable,
+  groupsTable,
+} from "@workspace/db";
+import {
+  CreateSharedGroupBody,
+  CreateSharedGroupResponse,
+} from "@workspace/api-zod";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
+import {
+  getActiveGroupId,
+  requireGroupManager,
+  setActiveWorkspaceCookie,
+} from "../lib/activeGroup";
 
 const router = Router();
+
+router.post("/groups", async (req, res): Promise<void> => {
+  const parsed = CreateSharedGroupBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Use a group name between 2 and 60 characters." });
+    return;
+  }
+
+  const name = parsed.data.name.trim();
+  if (name.length < 2 || name.length > 60) {
+    res.status(400).json({ error: "Use a group name between 2 and 60 characters." });
+    return;
+  }
+
+  const group = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(groupsTable)
+      .values({ name, createdByUserId: req.user!.id })
+      .returning({ id: groupsTable.id, name: groupsTable.name });
+    if (!created) throw new Error("Could not create group.");
+
+    await tx.insert(groupMembershipsTable).values({
+      groupId: created.id,
+      userId: req.user!.id,
+      role: "owner",
+      addedByUserId: req.user!.id,
+    });
+    return created;
+  });
+
+  const workspace = {
+    id: group.id,
+    name: group.name,
+    isPrivate: false,
+    role: "owner" as const,
+  };
+  setActiveWorkspaceCookie(res, group.id);
+  res.status(201).json(CreateSharedGroupResponse.parse(workspace));
+});
 
 router.get("/group", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);

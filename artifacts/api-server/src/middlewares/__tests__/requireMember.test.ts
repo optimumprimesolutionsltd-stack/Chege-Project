@@ -223,7 +223,7 @@ describe("requireMember", () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect(legacyMemberIds.has("first-member")).toBe(true);
-    expect(req.group).toEqual({ id: 1, role: "owner", isPrivate: false });
+    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
     expect(privateWorkspaceIds.has("first-member")).toBe(true);
   });
 
@@ -234,7 +234,7 @@ describe("requireMember", () => {
 
     await requireMember(req, response(), vi.fn());
 
-    expect(req.group).toEqual({ id: 1, role: "owner", isPrivate: false });
+    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
     expect(tx.update).not.toHaveBeenCalled();
   });
 

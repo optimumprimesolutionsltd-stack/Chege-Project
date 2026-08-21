@@ -22,6 +22,8 @@ tags:
     description: Dashboard summaries and activity
   - name: members
     description: App access members
+  - name: workspaces
+    description: Private and shared budget workspace selection
   - name: savings-goals
     description: Savings goals tracking
   - name: joint-account
@@ -968,6 +970,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /workspaces:
+    get:
+      operationId: getWorkspaces
+      tags: [workspaces]
+      summary: List the signed-in person's private and shared budget workspaces
+      responses:
+        "200":
+          description: Available workspaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workspace"
+
+  /workspaces/select:
+    post:
+      operationId: selectWorkspace
+      tags: [workspaces]
+      summary: Select an available workspace for the current session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceSelectionInput"
+      responses:
+        "200":
+          description: Selected workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "403":
+          description: Workspace is not available to this person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /groups:
+    post:
+      operationId: createSharedGroup
+      tags: [workspaces]
+      summary: Create a private shared group and become its owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SharedGroupInput"
+      responses:
+        "201":
+          description: Created private group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "400":
+          description: Invalid group details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /group-invitations:
     get:
       operationId: getGroupInvitations
@@ -1007,6 +1074,87 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Person is already a member or has a pending invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /group-invite-links:
+    get:
+      operationId: getGroupInviteLinks
+      tags: [members]
+      summary: List private join links for the active shared group
+      responses:
+        "200":
+          description: Private join links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GroupInviteLink"
+    post:
+      operationId: createGroupInviteLink
+      tags: [members]
+      summary: Create an expiring private join link for the active shared group
+      responses:
+        "201":
+          description: Created private join link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInviteLinkCreated"
+
+  /group-invite-links/{id}:
+    delete:
+      operationId: revokeGroupInviteLink
+      tags: [members]
+      summary: Revoke a private group join link
+      parameters:
+        - $ref: "#/components/parameters/InvitationId"
+      responses:
+        "200":
+          description: Revoked join link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInviteLink"
+
+  /group-invite-links/accept/{token}:
+    get:
+      operationId: getGroupInviteLinkPreview
+      tags: [members]
+      summary: Preview a private group join link
+      parameters:
+        - $ref: "#/components/parameters/InvitationToken"
+      responses:
+        "200":
+          description: Join-link details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInvitationPreview"
+        "410":
+          description: Join link is expired or revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: acceptGroupInviteLink
+      tags: [members]
+      summary: Join a private group using a valid private link
+      parameters:
+        - $ref: "#/components/parameters/InvitationToken"
+      responses:
+        "200":
+          description: Joined group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInvitationPreview"
+        "401":
+          description: Sign-in required
           content:
             application/json:
               schema:
@@ -1918,6 +2066,64 @@ components:
             id:
               type: number
           required: [id]
+
+    SharedGroupInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 60
+      required: [name]
+
+    WorkspaceSelectionInput:
+      type: object
+      properties:
+        groupId:
+          type: number
+      required: [groupId]
+
+    Workspace:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        isPrivate:
+          type: boolean
+        role:
+          type: string
+          enum: [owner, admin, member]
+      required: [id, name, isPrivate, role]
+
+    GroupInviteLink:
+      type: object
+      properties:
+        id:
+          type: number
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, revoked, expired]
+      required: [id, expiresAt, createdAt, status]
+
+    GroupInviteLinkCreated:
+      allOf:
+        - $ref: "#/components/schemas/GroupInviteLink"
+        - type: object
+          properties:
+            token:
+              type: string
+          required: [token]
 
     Group:
       type: object
