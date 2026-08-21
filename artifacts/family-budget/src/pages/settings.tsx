@@ -6,6 +6,8 @@ import {
   useUpdateMemberRole,
   useGetGroup,
   useUpdateGroup,
+  getGetIncomeSourcesQueryKey,
+  type IncomeSource,
 } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -49,6 +51,9 @@ export default function Settings() {
   const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [newSourceName, setNewSourceName] = useState("");
+  const [addingSource, setAddingSource] = useState(false);
+  const [deletingSourceId, setDeletingSourceId] = useState<number | null>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
   const canManageWorkspace = members?.some(
     (member) =>
@@ -75,6 +80,15 @@ export default function Settings() {
     queryKey: ["group-invitation-contacts"],
     queryFn: () => requestJson("/api/group-invitation-contacts"),
     enabled: canManageShared,
+  });
+  const { data: incomeSources = [], isLoading: incomeSourcesLoading } = useQuery<IncomeSource[]>({
+    queryKey: ["income-sources", user?.id],
+    queryFn: () => user?.id
+      ? requestJson<IncomeSource[]>(`/api/income-sources?userId=${encodeURIComponent(user.id)}`)
+      : Promise.resolve([]),
+    enabled: Boolean(user?.id),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const handleSaveGroupName = async (event: React.FormEvent) => {
@@ -192,6 +206,56 @@ export default function Settings() {
     }
   };
 
+  const invalidateIncomeSources = () => {
+    queryClient.invalidateQueries({ queryKey: ["income-sources"] });
+    queryClient.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey() });
+  };
+
+  const handleAddSource = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = newSourceName.trim();
+    if (!name || !user?.id) return;
+
+    setAddingSource(true);
+    try {
+      await requestJson<IncomeSource>("/api/income-sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, name, isMain: false }),
+      });
+      setNewSourceName("");
+      invalidateIncomeSources();
+      toast({ title: "Income source added", description: `${name} is now available when recording an expense.` });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add income source",
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setAddingSource(false);
+    }
+  };
+
+  const handleDeleteSource = async (source: IncomeSource) => {
+    if (!confirm(`Remove "${source.name}"? Existing expenses will not be changed.`)) return;
+
+    setDeletingSourceId(source.id);
+    try {
+      await requestJson(`/api/income-sources/${source.id}`, { method: "DELETE" });
+      invalidateIncomeSources();
+      toast({ title: "Income source removed" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not remove income source",
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setDeletingSourceId(null);
+    }
+  };
+
   const pendingEmails = new Set(invitations.filter((invitation) => invitation.status === "pending").map((invitation) => invitation.email));
 
   return (
@@ -220,6 +284,62 @@ export default function Settings() {
           <p className="rounded-lg bg-muted px-4 py-3 text-sm text-foreground">
             Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email}</strong>
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Income sources */}
+      <Card className="border-none shadow-md">
+        <CardHeader>
+          <CardTitle>Your income sources</CardTitle>
+          <CardDescription>
+            Add the places your personal expenses are funded from. They will appear in the Paid from choices when you record an expense.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={handleAddSource} className="flex gap-2">
+            <Input
+              value={newSourceName}
+              onChange={(event) => setNewSourceName(event.target.value)}
+              placeholder="e.g. Salary, business, side hustle"
+              maxLength={80}
+              className="h-11 bg-card"
+              aria-label="New income source name"
+            />
+            <Button type="submit" disabled={!newSourceName.trim() || addingSource} className="h-11 shrink-0">
+              {addingSource ? "Adding…" : "Add source"}
+            </Button>
+          </form>
+
+          {incomeSourcesLoading ? (
+            <div className="space-y-2 animate-pulse" aria-label="Loading income sources">
+              <div className="h-11 rounded-lg bg-muted" />
+              <div className="h-11 rounded-lg bg-muted" />
+            </div>
+          ) : incomeSources.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border px-4 py-5 text-center">
+              <p className="text-sm font-medium text-foreground">No income sources yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Add one above so it is ready for your next expense.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {incomeSources.map((source) => (
+                <div key={source.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-4 py-3">
+                  <p className="font-semibold text-foreground">{source.name}</p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Remove ${source.name}`}
+                    onClick={() => handleDeleteSource(source)}
+                    disabled={deletingSourceId === source.id}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
