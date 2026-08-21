@@ -71,7 +71,7 @@ export const GetExpensesResponseItem = zod.object({
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
   "paidById": zod.string().nullable(),
-  "paidByName": zod.string(),
+  "paidByName": zod.string().nullable(),
   "paidFromBank": zod.boolean().optional(),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
@@ -126,7 +126,7 @@ export const CreateExpenseResponse = zod.object({
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
   "paidById": zod.string().nullable(),
-  "paidByName": zod.string(),
+  "paidByName": zod.string().nullable(),
   "paidFromBank": zod.boolean().optional(),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
@@ -184,7 +184,7 @@ export const UpdateExpenseResponse = zod.object({
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
   "paidById": zod.string().nullable(),
-  "paidByName": zod.string(),
+  "paidByName": zod.string().nullable(),
   "paidFromBank": zod.boolean().optional(),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),

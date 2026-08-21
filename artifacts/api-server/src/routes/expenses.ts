@@ -54,7 +54,7 @@ function formatExpense(e: ExpenseRow, incomeSplits: unknown[] = []) {
     ...e,
     notes: e.notes ?? null,
     paidById: e.paidById ?? null,
-    paidByName: e.paidByName ?? (e.paidFromBank ? "Joint bank" : "Unknown"),
+    paidByName: e.paidByName ?? null,
     paidFromBank: e.paidFromBank ?? false,
     isRecurring: e.isRecurring ?? false,
     incomeSplits,

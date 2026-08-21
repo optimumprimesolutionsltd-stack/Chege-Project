@@ -54,7 +54,7 @@ type Expense = {
   description: string;
   notes?: string | null;
   paidById: string | null;
-  paidByName: string;
+  paidByName: string | null;
   isRecurring: boolean;
   date: string;
   incomeSplits?: { userId?: string | null; label: string; amount: number; fromBank: boolean }[];
@@ -991,7 +991,7 @@ export default function Expenses() {
                         <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
                           <span className="px-2 py-0.5 bg-muted rounded text-xs font-medium">{expense.category}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
-                          <span>{expense.paidByName}</span>
+                          <span>{expense.paidByName ?? "🏦 Joint bank"}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
                           <span>{formatDate(expense.date)}</span>
                         </p>

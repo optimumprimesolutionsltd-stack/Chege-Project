@@ -8,7 +8,7 @@ export interface ActivityItem {
   type: string;
   amount: number;
   description: string;
-  userName: string;
+  userName: string | null;
   category?: string | null;
   date: string;
 }
@@ -93,7 +93,7 @@ export default function ActivityCard({ item, colors }: Props) {
           {item.description}
         </Text>
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-          {item.userName} · {formatDate(item.date)}
+          {item.userName ?? (isExpense ? 'Joint bank' : 'Unknown')} · {formatDate(item.date)}
         </Text>
       </View>
 

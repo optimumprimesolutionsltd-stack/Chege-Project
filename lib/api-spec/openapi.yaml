@@ -1477,7 +1477,7 @@ components:
         paidById:
           type: ["string", "null"]
         paidByName:
-          type: string
+          type: ["string", "null"]
         paidFromBank:
           type: boolean
         incomeSplits:

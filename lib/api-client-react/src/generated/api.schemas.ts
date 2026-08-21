@@ -76,7 +76,8 @@ export interface Expense {
   notes?: string | null;
   /** @nullable */
   paidById: string | null;
-  paidByName: string;
+  /** @nullable */
+  paidByName: string | null;
   paidFromBank?: boolean;
   incomeSplits?: ExpenseFundingSplit[];
   isRecurring: boolean;

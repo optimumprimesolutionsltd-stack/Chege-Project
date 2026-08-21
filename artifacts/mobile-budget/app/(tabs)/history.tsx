@@ -77,7 +77,7 @@ type Expense = {
   description: string;
   notes?: string | null;
   paidById: string | null;
-  paidByName: string;
+  paidByName: string | null;
   isRecurring: boolean;
   date: string;
   createdAt: string;
@@ -1039,7 +1039,7 @@ function ExpenseRow({
       <View style={styles.rowInfo}>
         <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{expense.description}</Text>
         <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
-          {expense.paidByName} · {expense.category} · {formatDate(expense.date)}
+          {expense.paidByName ?? 'Joint bank'} · {expense.category} · {formatDate(expense.date)}
         </Text>
         {expense.notes ? <Text style={[styles.rowNotes, { color: colors.mutedForeground }]}>{expense.notes}</Text> : null}
       </View>

@@ -457,7 +457,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       type: "expense",
       amount: e.amount,
       description: e.description,
-      userName: e.paidByName ?? "Unknown",
+      userName: e.paidById === null ? "Joint bank" : (e.paidByName ?? "Unknown"),
       category: e.category,
       // The feed's visible date must match the month used to include the expense.
       date: String(e.date),
