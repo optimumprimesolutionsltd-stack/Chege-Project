@@ -494,29 +494,31 @@ export default function Budget() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
+       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+         <div className="min-w-0">
           <h1 className="text-3xl font-display font-bold text-foreground">Budget Breakdown</h1>
           <p className="text-muted-foreground mt-1">Manage category limits and track spending.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-card rounded-xl p-1 border shadow-sm">
+         <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
+           <div className="flex w-full items-center justify-between gap-2 rounded-xl border bg-card p-1 shadow-sm sm:w-auto">
             <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg hover:bg-muted">
               <ArrowLeft className="h-5 w-5 text-foreground/70" />
             </Button>
-            <div className="w-36 text-center font-semibold font-display flex items-center justify-center gap-2">
+             <div className="min-w-0 flex-1 text-center font-display font-semibold sm:w-36 sm:flex-none">
+               <span className="inline-flex items-center justify-center gap-2">
               <Calendar className="w-4 h-4 text-primary" />
               {formatMonthYear(month, year)}
+               </span>
             </div>
             <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg hover:bg-muted" disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
               <ArrowRight className="h-5 w-5 text-foreground/70" />
             </Button>
           </div>
-            {canManageShared && <div className="flex items-center gap-2">
-             <Button variant="outline" onClick={() => openManage()} className="gap-2">
+             {canManageShared && <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+              <Button variant="outline" onClick={() => openManage()} className="w-full gap-2 sm:w-auto">
                <SlidersHorizontal className="w-4 h-4" /> Edit existing
              </Button>
-              <Button onClick={() => openAddForPriority(1)} className="gap-2">
+               <Button onClick={() => openAddForPriority(1)} className="w-full gap-2 sm:w-auto">
                <Plus className="w-4 h-4" /> Add category
              </Button>
             </div>}
@@ -636,15 +638,15 @@ export default function Budget() {
             return (
                 <div key={priority} className="space-y-4">
                  <div className="border-b border-border/50 pb-3">
-                   <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-xl font-display font-bold text-foreground flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                       <div className="flex w-full min-w-0 flex-col items-start gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+                         <h3 className="flex min-w-0 items-center gap-2 text-xl font-display font-bold text-foreground">
                           <Target className="w-5 h-5 text-secondary" />
-                          Tier {priority}: {priorityMap[priority] ?? `Priority ${priority}`}
+                           <span className="break-words">Tier {priority}: {priorityMap[priority] ?? `Priority ${priority}`}</span>
                         </h3>
                         {canManageShared && (
-                          <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openAddForPriority(priority)}>
+                           <div className="flex shrink-0 items-center gap-2">
+                             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openAddForPriority(priority)}>
                               <Plus className="h-3.5 w-3.5" /> Add
                             </Button>
                             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openManage(priority)}>
@@ -653,7 +655,7 @@ export default function Budget() {
                           </div>
                         )}
                       </div>
-                     <div className="shrink-0 text-sm font-medium text-muted-foreground">
+                      <div className="w-full text-sm font-medium text-muted-foreground sm:w-auto sm:shrink-0 sm:text-right">
                         Actual {formatKes(groupSpent)} / Budget {formatKes(groupTotal)}
                      </div>
                    </div>

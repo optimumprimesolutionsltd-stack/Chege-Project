@@ -413,6 +413,7 @@ export const GetDashboardActivityQueryParams = zod.object({
 
 export const GetDashboardActivityResponseItem = zod.object({
   "id": zod.string(),
+  "editTarget": zod.enum(['expense', 'deposit']).optional().describe('The matching record can be opened in its existing editor.'),
   "type": zod.string().describe('expense or contribution'),
   "amount": zod.number(),
   "description": zod.string(),
@@ -508,7 +509,14 @@ export const GetDashboardIncomeStreamsResponse = zod.object({
   "remainingBalance": zod.number().describe('Expected monthly amount less recorded funding'),
   "variance": zod.number().describe('Recorded funding less expected monthly amount'),
   "sharePercent": zod.number().describe('Share of the month\'s recorded personal funding'),
-  "transactionCount": zod.number()
+  "transactionCount": zod.number(),
+  "entries": zod.array(zod.object({
+  "recordType": zod.enum(['expense', 'deposit', 'savings']),
+  "recordId": zod.number(),
+  "amount": zod.number().describe('Funding amount in KES'),
+  "description": zod.string(),
+  "date": zod.string()
+})).describe('Individual funding entries that make up this stream total.')
 }))
 })
 

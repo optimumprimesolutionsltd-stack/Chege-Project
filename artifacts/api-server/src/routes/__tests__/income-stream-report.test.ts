@@ -99,6 +99,22 @@ describe("GET /dashboard/income-streams", () => {
           ownerName: "No income stream selected",
           total: "500",
           transactionCount: "2",
+          entries: [
+            {
+              recordType: "expense",
+              recordId: 41,
+              amount: "300",
+              description: "Market shopping",
+              date: "2026-05-18",
+            },
+            {
+              recordType: "savings",
+              recordId: 8,
+              amount: "200",
+              description: "Savings: School fees",
+              date: "2026-05-10T08:30:00.000Z",
+            },
+          ],
         },
       ],
     });
@@ -127,6 +143,22 @@ describe("GET /dashboard/income-streams", () => {
           remainingBalance: -500,
           sharePercent: 20,
           transactionCount: 2,
+          entries: [
+            {
+              recordType: "expense",
+              recordId: 41,
+              amount: 300,
+              description: "Market shopping",
+              date: "2026-05-18",
+            },
+            {
+              recordType: "savings",
+              recordId: 8,
+              amount: 200,
+              description: "Savings: School fees",
+              date: "2026-05-10T08:30:00.000Z",
+            },
+          ],
         }),
       ],
     });

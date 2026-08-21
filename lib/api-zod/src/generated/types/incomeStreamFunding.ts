@@ -5,6 +5,7 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { IncomeStreamEntry } from './incomeStreamEntry';
 
 export interface IncomeStreamFunding {
   /** @nullable */
@@ -23,4 +24,6 @@ export interface IncomeStreamFunding {
   /** Share of the month's recorded personal funding */
   sharePercent: number;
   transactionCount: number;
+  /** Individual funding entries that make up this stream total. */
+  entries: IncomeStreamEntry[];
 }

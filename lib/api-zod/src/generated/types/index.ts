@@ -7,6 +7,7 @@
  */
 
 export * from './activityItem';
+export * from './activityItemEditTarget';
 export * from './addMemberInput';
 export * from './addMemberInputRole';
 export * from './applyRecurringInput';
@@ -63,6 +64,8 @@ export * from './groupInviteLinkCreated';
 export * from './groupInviteLinkStatus';
 export * from './healthStatus';
 export * from './incomeSource';
+export * from './incomeStreamEntry';
+export * from './incomeStreamEntryRecordType';
 export * from './incomeStreamFunding';
 export * from './incomeStreamReport';
 export * from './jointAccountSummary';

@@ -1800,6 +1800,10 @@ components:
       properties:
         id:
           type: string
+        editTarget:
+          type: string
+          enum: [expense, deposit]
+          description: The matching record can be opened in its existing editor.
         type:
           type: string
           description: "expense or contribution"
@@ -1960,6 +1964,11 @@ components:
           description: Share of the month's recorded personal funding
         transactionCount:
           type: number
+        entries:
+          type: array
+          description: Individual funding entries that make up this stream total.
+          items:
+            $ref: "#/components/schemas/IncomeStreamEntry"
       required:
         - sourceName
         - ownerName
@@ -1969,6 +1978,29 @@ components:
         - variance
         - sharePercent
         - transactionCount
+        - entries
+
+    IncomeStreamEntry:
+      type: object
+      properties:
+        recordType:
+          type: string
+          enum: [expense, deposit, savings]
+        recordId:
+          type: number
+        amount:
+          type: number
+          description: Funding amount in KES
+        description:
+          type: string
+        date:
+          type: string
+      required:
+        - recordType
+        - recordId
+        - amount
+        - description
+        - date
 
     MonthTrend:
       type: object

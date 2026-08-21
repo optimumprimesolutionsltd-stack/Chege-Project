@@ -287,6 +287,13 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       madeByName: usersTable.firstName,
       date: jointAccountTxTable.date,
       createdAt: jointAccountTxTable.createdAt,
+      savingsGoalId: jointAccountTxTable.savingsGoalId,
+      hasContributorSplits: sql<boolean>`EXISTS (
+        SELECT 1
+        FROM ${jointAccountDepositSplitsTable}
+        WHERE ${jointAccountDepositSplitsTable.transactionId} = ${jointAccountTxTable.id}
+          AND ${jointAccountDepositSplitsTable.groupId} = ${groupId}
+      )`,
     })
     .from(jointAccountTxTable)
     .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
@@ -458,6 +465,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
   const items = (isMonthlyReport ? monthlyContributionItems : [
     ...expenses.map((e) => ({
       id: `expense-${e.id}`,
+      editTarget: "expense" as const,
       type: "expense",
       amount: e.amount,
       description: e.description,
@@ -468,6 +476,11 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
     })),
     ...deposits.map((d) => ({
       id: `contribution-${d.id}`,
+      // A savings-linked or split deposit must be corrected through its source
+      // flow so individual funding history and goal balances stay consistent.
+      ...(d.savingsGoalId === null && !d.hasContributorSplits
+        ? { editTarget: "deposit" as const }
+        : {}),
       type: "contribution",
       amount: d.amount,
       description: `Bank deposit: ${d.description}`,
@@ -671,7 +684,8 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   const result = await db.execute(sql`
     WITH funding AS (
       -- Explicit personal portions of split-funded expenses.
-      SELECT split.income_source_id, split.amount, 'expense'::text AS record_type, expense.id AS record_id
+      SELECT split.income_source_id, split.amount, 'expense'::text AS record_type, expense.id AS record_id,
+             expense.description, expense.date::text AS date
       FROM expense_income_splits split
       INNER JOIN expenses expense ON expense.id = split.expense_id AND expense.group_id = ${groupId}
       WHERE split.group_id = ${groupId}
@@ -682,7 +696,8 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       UNION ALL
 
       -- Legacy/direct personal expenses, only when no explicit portions exist.
-      SELECT expense.income_source_id, expense.amount, 'expense'::text AS record_type, expense.id AS record_id
+      SELECT expense.income_source_id, expense.amount, 'expense'::text AS record_type, expense.id AS record_id,
+             expense.description, expense.date::text AS date
       FROM expenses expense
       WHERE expense.group_id = ${groupId}
         AND expense.paid_from_bank = false
@@ -698,7 +713,8 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       UNION ALL
 
       -- Explicit contributor portions of shared-bank deposits.
-      SELECT split.income_source_id, split.amount, 'deposit'::text AS record_type, deposit.id AS record_id
+      SELECT split.income_source_id, split.amount, 'deposit'::text AS record_type, deposit.id AS record_id,
+             deposit.description, deposit.date::text AS date
       FROM joint_account_deposit_splits split
       INNER JOIN joint_account_transactions deposit
         ON deposit.id = split.transaction_id AND deposit.group_id = ${groupId}
@@ -711,7 +727,8 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       UNION ALL
 
       -- Legacy/direct shared-bank deposits, only when no explicit portions exist.
-      SELECT deposit.income_source_id, deposit.amount, 'deposit'::text AS record_type, deposit.id AS record_id
+      SELECT deposit.income_source_id, deposit.amount, 'deposit'::text AS record_type, deposit.id AS record_id,
+             deposit.description, deposit.date::text AS date
       FROM joint_account_transactions deposit
       WHERE deposit.group_id = ${groupId}
         AND deposit.type = 'deposit'
@@ -731,8 +748,12 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       -- Savings rows do not have an income-source field, so they remain
       -- explicitly Unattributed instead of being guessed from the member.
       SELECT NULL::integer AS income_source_id, contribution.amount,
-             'savings'::text AS record_type, contribution.id AS record_id
+             'savings'::text AS record_type, contribution.id AS record_id,
+             CONCAT('Savings: ', COALESCE(goal.name, 'Savings goal')) AS description,
+             contribution.created_at::text AS date
       FROM savings_goal_contributions contribution
+      LEFT JOIN savings_goals goal
+        ON goal.id = contribution.goal_id AND goal.group_id = ${groupId}
       WHERE contribution.group_id = ${groupId}
         AND contribution.created_by_user_id IS NOT NULL
         AND EXTRACT(MONTH FROM contribution.created_at) = ${month}
@@ -747,7 +768,14 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
         ELSE COALESCE(owner.preferred_name, owner.first_name, 'Member')
       END AS "ownerName",
       COALESCE(SUM(funding.amount), 0) AS total,
-      COUNT(DISTINCT funding.record_type || ':' || funding.record_id::text) AS "transactionCount"
+      COUNT(DISTINCT funding.record_type || ':' || funding.record_id::text) AS "transactionCount",
+      JSON_AGG(JSON_BUILD_OBJECT(
+        'recordType', funding.record_type,
+        'recordId', funding.record_id,
+        'amount', funding.amount,
+        'description', funding.description,
+        'date', funding.date
+      ) ORDER BY funding.date DESC, funding.record_type ASC, funding.record_id DESC) AS entries
     FROM funding
     LEFT JOIN income_sources source
       ON source.id = funding.income_source_id
@@ -771,7 +799,51 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
     ownerName: string;
     total: string | number;
     transactionCount: string | number;
+    entries?: unknown;
   }>;
+  type FundingEntry = {
+    recordType: "expense" | "deposit" | "savings";
+    recordId: number;
+    amount: number;
+    description: string;
+    date: string;
+  };
+  const parseEntries = (rawEntries: unknown): FundingEntry[] => {
+    let entries: unknown[] = [];
+    if (Array.isArray(rawEntries)) {
+      entries = rawEntries;
+    } else if (typeof rawEntries === "string") {
+      try {
+        const parsedEntries: unknown = JSON.parse(rawEntries);
+        entries = Array.isArray(parsedEntries) ? parsedEntries : [];
+      } catch {
+        entries = [];
+      }
+    }
+    return entries.flatMap((entry): FundingEntry[] => {
+      if (entry === null || typeof entry !== "object") return [];
+      const value = entry as Record<string, unknown>;
+      const recordType = value.recordType;
+      const recordId = Number(value.recordId);
+      const amount = Number(value.amount);
+      if (
+        (recordType !== "expense" && recordType !== "deposit" && recordType !== "savings")
+        || !Number.isInteger(recordId)
+        || !Number.isFinite(amount)
+        || typeof value.description !== "string"
+        || typeof value.date !== "string"
+      ) {
+        return [];
+      }
+      return [{
+        recordType,
+        recordId,
+        amount,
+        description: value.description,
+        date: value.date,
+      }];
+    });
+  };
   const sources = await db
     .select({
       id: incomeSourcesTable.id,
@@ -799,6 +871,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
     variance: number;
     sharePercent: number;
     transactionCount: number;
+    entries: FundingEntry[];
   }> = sources.map((source) => {
     const actual = actualBySource.get(source.id);
     const total = actual ? Number(actual.total) : 0;
@@ -813,6 +886,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       variance: total - source.expectedMonthlyAmount,
       sharePercent: totalFunding > 0 ? Math.round((total / totalFunding) * 1000) / 10 : 0,
       transactionCount: actual ? Number(actual.transactionCount) : 0,
+      entries: actual ? parseEntries(actual.entries) : [],
     };
   });
   const unattributed = rawRows.find((row) => row.incomeSourceId === null);
@@ -829,6 +903,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       variance: total,
       sharePercent: totalFunding > 0 ? Math.round((total / totalFunding) * 1000) / 10 : 0,
       transactionCount: Number(unattributed.transactionCount),
+      entries: parseEntries(unattributed.entries),
     });
   }
   const response = {

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
   useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank,
-  getGetJointAccountQueryKey, getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey,
+  getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
+  getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,6 +18,11 @@ import { useAuth } from "@workspace/replit-auth-web";
 
 // "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
+
+function getBankEditDeepLink() {
+  const editId = Number(new URLSearchParams(window.location.search).get("edit"));
+  return Number.isInteger(editId) && editId > 0 ? editId : null;
+}
 
 type MemberIncomeSource = {
   id: number;
@@ -38,6 +44,7 @@ type EditableTransaction = {
 };
 
 export default function Bank() {
+  const bankEditId = getBankEditDeepLink();
   const { data: account, isLoading } = useGetJointAccount();
   const { data: members } = useGetMembers();
   const { data: categories } = useGetBudgetCategories();
@@ -79,6 +86,7 @@ export default function Bank() {
   const [editingTransaction, setEditingTransaction] = useState<EditableTransaction | null>(null);
   const [transferDirection, setTransferDirection] = useState<"to_savings" | "from_savings">("to_savings");
   const [transferGoalId, setTransferGoalId] = useState<number | null>(null);
+  const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
 
   // Income sources — only fetch when exactly one named depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
@@ -96,6 +104,8 @@ export default function Bank() {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
   };
@@ -224,6 +234,19 @@ export default function Bank() {
     setWithdrawalDestinationKind(tx.description !== tx.expenseCategory ? "other" : "category");
     setNewCategoryName("");
   };
+
+  useEffect(() => {
+    if (!bankEditId || openedDeepLinkId === bankEditId || !account || !canManageShared) return;
+    const target = account.transactions.find((transaction) => transaction.id === bankEditId);
+    if (!target) return;
+
+    openEdit(target);
+    setOpenedDeepLinkId(bankEditId);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("edit");
+    const search = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+  }, [account, bankEditId, canManageShared, openedDeepLinkId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

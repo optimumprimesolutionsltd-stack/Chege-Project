@@ -10,8 +10,9 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { ArrowUpRight, ArrowDownRight, Loader2, Activity as ActivityIcon, Calendar, Pencil, TrendingUp } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, ChevronDown, ChevronUp, Loader2, Activity as ActivityIcon, Calendar, Pencil, TrendingUp } from "lucide-react";
 import { ACTIVITY_TYPE } from "@/lib/activityTypes";
+import { getActivityEditLink } from "@/lib/activity-edit-utils";
 
 type ActivityTab = "all" | "expenses" | "contributions";
 type MemberContribution = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
@@ -24,6 +25,12 @@ type IncomeStream = {
   remainingBalance: number;
 };
 
+function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
+  if (recordType === "deposit") return "Joint Bank deposit";
+  if (recordType === "savings") return "Savings addition";
+  return "Personal expense";
+}
+
 export default function Activity() {
   const { data: group } = useGetGroup();
   const isSharedWorkspace = group?.isPrivate === false;
@@ -33,6 +40,7 @@ export default function Activity() {
   );
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [showUnattributedRecords, setShowUnattributedRecords] = useState(false);
   const recentActivity = useGetDashboardActivity(
     undefined,
     { query: { queryKey: getGetDashboardActivityQueryKey(), retry: false, enabled: tab !== "contributions" } },
@@ -96,22 +104,13 @@ export default function Activity() {
   const sourcePlanBalance = totalExpectedFromSources - recordedFromSources;
   const unattributedFunding = incomeStreamReport.data?.streams.find(stream => stream.incomeSourceId == null);
   const previousMonth = () => {
+    setShowUnattributedRecords(false);
     if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1);
   };
   const nextMonth = () => {
+    setShowUnattributedRecords(false);
     if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1);
   };
-  const expenseEditHref = (date: string, id: string) => {
-    const expenseId = Number(id.slice("expense-".length));
-    const expenseDate = new Date(date);
-    const params = new URLSearchParams({
-      edit: String(expenseId),
-      month: String(expenseDate.getMonth() + 1),
-      year: String(expenseDate.getFullYear()),
-    });
-    return `/expenses?${params.toString()}`;
-  };
-
   return (
     <div className="space-y-5 pb-12 sm:space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
@@ -186,7 +185,48 @@ export default function Activity() {
                   );
                 })}
               </div>
-              {unattributedFunding && <Card className="border-amber-500/30 bg-amber-500/5"><CardContent className="pt-5"><p className="font-semibold">Unattributed funding: {formatKes(unattributedFunding.total)}</p><p className="mt-1 text-sm text-muted-foreground">No income source was selected, so this funding is kept separate from each member’s income plan.</p></CardContent></Card>}
+              {unattributedFunding && (
+                <Card className="border-amber-500/30 bg-amber-500/5">
+                  <CardContent className="pt-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-semibold">Unattributed funding: {formatKes(unattributedFunding.total)}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">No income source was selected, so this funding is kept separate from each member’s income plan.</p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-expanded={showUnattributedRecords}
+                        aria-controls="unattributed-funding-records"
+                        onClick={() => setShowUnattributedRecords((isOpen) => !isOpen)}
+                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-amber-500/40 bg-card px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-amber-500/10"
+                      >
+                        {showUnattributedRecords ? "Hide records" : `See ${unattributedFunding.transactionCount} ${unattributedFunding.transactionCount === 1 ? "record" : "records"}`}
+                        {showUnattributedRecords ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {showUnattributedRecords && (
+                      <div id="unattributed-funding-records" className="mt-4 rounded-xl border border-amber-500/25 bg-card/70 p-3">
+                        <p className="mb-2 text-xs text-muted-foreground">These entries are the source of the unattributed total for {formatMonthYear(month, year)}.</p>
+                        {unattributedFunding.entries.length === 0 ? (
+                          <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">No record details are available yet. Refresh and try again.</p>
+                        ) : (
+                          <div className="divide-y divide-border/60">
+                            {unattributedFunding.entries.map((entry) => (
+                              <div key={`${entry.recordType}-${entry.recordId}-${entry.amount}`} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                                <div className="min-w-0">
+                                  <p className="break-words font-medium">{entry.description}</p>
+                                  <p className="mt-0.5 text-xs text-muted-foreground">{fundingEntryLabel(entry.recordType)} · {formatDate(entry.date)}</p>
+                                </div>
+                                <p className="shrink-0 font-semibold">{formatKes(entry.amount)}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
           {sharedHouseholdActivity.length > 0 && (
@@ -231,7 +271,7 @@ export default function Activity() {
                   </div>
                   <div className="divide-y divide-border/50">
                     {group.items.map((item) => {
-                      const canEdit = item.type === ACTIVITY_TYPE.EXPENSE && /^expense-\d+$/.test(item.id);
+                      const edit = getActivityEditLink(item);
                       return (
                         <div key={item.id} className="flex items-start gap-3 p-3 transition-colors hover:bg-muted/10 sm:items-center sm:gap-5 sm:p-6">
                           <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
@@ -256,13 +296,14 @@ export default function Activity() {
                                 </span>
                               )}
                             </div>
-                            {canEdit && (
+                            {edit && (
                               <a
-                                href={expenseEditHref(item.date, item.id)}
+                                href={edit.href}
                                 className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80"
+                                data-testid={`activity-${item.editTarget}-edit-${item.id}`}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
-                                Edit expense
+                                {edit.label}
                               </a>
                             )}
                           </div>

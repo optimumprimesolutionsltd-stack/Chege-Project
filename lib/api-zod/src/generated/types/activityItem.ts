@@ -5,9 +5,12 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { ActivityItemEditTarget } from './activityItemEditTarget';
 
 export interface ActivityItem {
   id: string;
+  /** The matching record can be opened in its existing editor. */
+  editTarget?: ActivityItemEditTarget;
   /** expense or contribution */
   type: string;
   amount: number;

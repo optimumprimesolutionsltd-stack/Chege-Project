@@ -221,8 +221,21 @@ export interface DashboardSummary {
   expenseCount: number;
 }
 
+/**
+ * The matching record can be opened in its existing editor.
+ */
+export type ActivityItemEditTarget = typeof ActivityItemEditTarget[keyof typeof ActivityItemEditTarget];
+
+
+export const ActivityItemEditTarget = {
+  expense: 'expense',
+  deposit: 'deposit',
+} as const;
+
 export interface ActivityItem {
   id: string;
+  /** The matching record can be opened in its existing editor. */
+  editTarget?: ActivityItemEditTarget;
   /** expense or contribution */
   type: string;
   amount: number;
@@ -276,6 +289,24 @@ export interface CategoryLedger {
   entries: CategoryLedgerEntry[];
 }
 
+export type IncomeStreamEntryRecordType = typeof IncomeStreamEntryRecordType[keyof typeof IncomeStreamEntryRecordType];
+
+
+export const IncomeStreamEntryRecordType = {
+  expense: 'expense',
+  deposit: 'deposit',
+  savings: 'savings',
+} as const;
+
+export interface IncomeStreamEntry {
+  recordType: IncomeStreamEntryRecordType;
+  recordId: number;
+  /** Funding amount in KES */
+  amount: number;
+  description: string;
+  date: string;
+}
+
 export interface IncomeStreamFunding {
   /** @nullable */
   incomeSourceId?: number | null;
@@ -293,6 +324,8 @@ export interface IncomeStreamFunding {
   /** Share of the month's recorded personal funding */
   sharePercent: number;
   transactionCount: number;
+  /** Individual funding entries that make up this stream total. */
+  entries: IncomeStreamEntry[];
 }
 
 export interface IncomeStreamReport {
