@@ -186,7 +186,6 @@ export default function Settings() {
   };
 
   const pendingEmails = new Set(invitations.filter((invitation) => invitation.status === "pending").map((invitation) => invitation.email));
-  const hasInvitationCapacity = (members?.length ?? 0) + pendingEmails.size < 2;
 
   return (
     <div className="space-y-8 pb-12 max-w-2xl">
@@ -242,7 +241,7 @@ export default function Settings() {
             <CardTitle>Group Members</CardTitle>
           </div>
           <CardDescription>
-            The people listed here have access to this budget. Works for individuals, couples, or small families.
+            The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -330,7 +329,7 @@ export default function Settings() {
           )}
 
           {/* Invite member form */}
-          {canManageShared && hasInvitationCapacity && (
+          {canManageShared && (
             <form onSubmit={handleAdd} className="space-y-3 border-t border-border/50 pt-4">
               <div>
                 <p className="text-sm font-medium text-foreground">Invite someone by email</p>
@@ -374,14 +373,6 @@ export default function Settings() {
                 Save this person as a one-tap invite contact
               </label>
             </form>
-          )}
-          {canManageShared && !hasInvitationCapacity && (
-            <div className="border-t border-border/50 pt-4">
-              <p className="text-sm font-medium text-foreground">No invitation slot available</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                This group currently supports two people. Remove a member or cancel a pending invitation before inviting someone else.
-              </p>
-            </div>
           )}
           {canManageShared && inviteContacts.length > 0 && (
             <div className="space-y-3 border-t border-border/50 pt-4">

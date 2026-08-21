@@ -12,7 +12,6 @@ import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { MAX_MEMBERS } from "../middlewares/requireMember";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const inviteSchema = z.object({
@@ -246,14 +245,6 @@ publicInvitationsRouter.post("/group-invitations/accept/:token", async (req, res
         .limit(1);
       if (existingMembership) throw new InvitationError("You are already a member of this group.", 409);
 
-      const [memberCount] = await tx
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(groupMembershipsTable)
-        .where(eq(groupMembershipsTable.groupId, invitation.groupId));
-      if (Number(memberCount.count) >= MAX_MEMBERS) {
-        throw new InvitationError("This group has reached its member limit.", 400);
-      }
-
       await tx.insert(groupMembershipsTable).values({
         groupId: invitation.groupId,
         userId: req.user!.id,
@@ -329,7 +320,7 @@ invitationsRouter.post("/group-invitations", async (req, res): Promise<void> => 
       }
 
       const now = new Date();
-      const [existingInvitationRows, memberCountRows, pendingInviteCountRows] = await Promise.all([
+      const [existingInvitationRows] = await Promise.all([
         tx
           .select({ id: groupInvitationsTable.id })
           .from(groupInvitationsTable)
@@ -341,24 +332,8 @@ invitationsRouter.post("/group-invitations", async (req, res): Promise<void> => 
             gt(groupInvitationsTable.expiresAt, now),
           ))
           .limit(1),
-        tx
-          .select({ count: sql<number>`COUNT(*)` })
-          .from(groupMembershipsTable)
-          .where(eq(groupMembershipsTable.groupId, groupId)),
-        tx
-          .select({ count: sql<number>`COUNT(*)` })
-          .from(groupInvitationsTable)
-          .where(and(
-            eq(groupInvitationsTable.groupId, groupId),
-            isNull(groupInvitationsTable.acceptedAt),
-            isNull(groupInvitationsTable.cancelledAt),
-            gt(groupInvitationsTable.expiresAt, now),
-          )),
       ]);
       if (existingInvitationRows[0]) throw new InvitationError("There is already a pending invitation for this email.", 409);
-      if (Number(memberCountRows[0]?.count ?? 0) + Number(pendingInviteCountRows[0]?.count ?? 0) >= MAX_MEMBERS) {
-        throw new InvitationError("This group has reached its member limit.", 400);
-      }
 
       const [invitation] = await tx
         .insert(groupInvitationsTable)

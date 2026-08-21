@@ -93,7 +93,6 @@ export default function SettingsScreen() {
     queryFn: () => customFetch<InviteContact[]>('/api/group-invitation-contacts'),
     enabled: !!user?.id && canManageShared,
   });
-  const hasInvitationCapacity = members.length + invitations.filter((invitation) => invitation.status === 'pending').length < 2;
   const handleSaveGroupName = async () => {
     if (!groupName.trim()) return;
     setSavingGroupName(true);
@@ -438,7 +437,7 @@ export default function SettingsScreen() {
               </Text>
             </View>
           ) : null}
-          {canManageShared && hasInvitationCapacity ? (
+          {canManageShared ? (
             <View style={[styles.addRow, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, flexWrap: 'wrap', gap: 8 }]}>
               <Text style={{ width: '100%', color: colors.foreground, fontSize: 14, fontFamily: 'Inter_600SemiBold', marginBottom: 2 }}>
                 Invite someone by email
@@ -484,14 +483,9 @@ export default function SettingsScreen() {
                 Tap Member to choose Admin instead. They only join after signing in and accepting the email invitation.
               </Text>
             </View>
-          ) : !canManageShared ? (
-            <View style={styles.row}>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Admins manage group access. You can still contribute in your own name.</Text>
-            </View>
           ) : (
             <View style={styles.row}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>No invitation slot available</Text>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This group supports two people. Remove a member or cancel a pending invitation before inviting someone else.</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Admins manage group access. You can still contribute in your own name.</Text>
             </View>
           )}
           {canManageShared && inviteContacts.length > 0 ? (

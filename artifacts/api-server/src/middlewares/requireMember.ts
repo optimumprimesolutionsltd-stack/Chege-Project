@@ -18,7 +18,6 @@ import {
 } from "@workspace/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
-export const MAX_MEMBERS = 2;
 const LEGACY_GROUP_KEY = "initial-shared-budget";
 const LEGACY_GROUP_NAME = "Shared budget";
 

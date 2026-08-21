@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { groupInvitationsTable, groupMembershipsTable, groupsTable, usersTable } from "@workspace/db";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { groupMembershipsTable, groupsTable, usersTable } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { MAX_MEMBERS } from "../middlewares/requireMember";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 
 const router = Router();
@@ -71,25 +70,6 @@ router.post("/members", async (req, res): Promise<void> => {
       .limit(1);
     if (existing) return "existing" as const;
 
-    const [countRow, pendingInvitationRow] = await Promise.all([
-      tx
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(groupMembershipsTable)
-        .where(eq(groupMembershipsTable.groupId, groupId)),
-      tx
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(groupInvitationsTable)
-        .where(and(
-          eq(groupInvitationsTable.groupId, groupId),
-          isNull(groupInvitationsTable.acceptedAt),
-          isNull(groupInvitationsTable.cancelledAt),
-          gt(groupInvitationsTable.expiresAt, new Date()),
-        )),
-    ]);
-    if (Number(countRow[0]?.count ?? 0) + Number(pendingInvitationRow[0]?.count ?? 0) >= MAX_MEMBERS) {
-      return "full" as const;
-    }
-
     await tx.insert(groupMembershipsTable).values({
       groupId,
       userId,
@@ -99,10 +79,6 @@ router.post("/members", async (req, res): Promise<void> => {
     return "added" as const;
   });
   if (outcome === "existing") { res.status(400).json({ error: "Already a member" }); return; }
-  if (outcome === "full") {
-    res.status(400).json({ error: "This household already has the maximum number of members" });
-    return;
-  }
   if (outcome === "missing-group") { res.status(404).json({ error: "Group not found" }); return; }
 
   const members = await getGroupMembersWithNames(groupId);

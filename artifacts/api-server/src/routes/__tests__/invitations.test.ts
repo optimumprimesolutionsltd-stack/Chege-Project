@@ -72,7 +72,7 @@ function configureAcceptance(invite: Record<string, unknown>, signedInEmail: str
     [invite],
     [{ email: signedInEmail }],
     [],
-    [{ count: 1 }],
+    [{ count: 2 }],
   ];
   const inserted = vi.fn().mockResolvedValue(undefined);
   const updated = vi.fn().mockResolvedValue(undefined);
@@ -91,7 +91,7 @@ describe("group invitation acceptance", () => {
     vi.clearAllMocks();
   });
 
-  it("creates the invited role when the signed-in email matches", async () => {
+  it("creates the invited role when the signed-in email matches, even after two members have joined", async () => {
     const { inserted, updated } = configureAcceptance(invitation(), "Member@Example.com");
 
     const response = await request(appFor()).post(`/group-invitations/accept/${"a".repeat(64)}`);
