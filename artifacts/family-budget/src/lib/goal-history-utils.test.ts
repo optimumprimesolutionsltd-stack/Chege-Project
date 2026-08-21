@@ -3,8 +3,8 @@ import {
   filterByDateRange,
   computeContributorTotals,
   getChipRange,
-} from "../lib/goal-history-utils";
-import type { GoalContribution } from "../lib/goal-history-utils";
+} from "./goal-history-utils";
+import type { GoalContribution } from "./goal-history-utils";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,7 +53,7 @@ describe("filterByDateRange", () => {
   it("filters out contributions after toDate (inclusive boundary)", () => {
     const contributions = [
       makeContribution({ createdAt: "2026-02-28T20:00:00Z" }), // included
-      makeContribution({ createdAt: "2026-02-28T23:59:59Z" }), // on boundary — included
+      makeContribution({ createdAt: "2026-02-28T23:59:59.999Z" }), // last representable instant — included
       makeContribution({ createdAt: "2026-03-01T00:00:00Z" }), // excluded
     ];
     const result = filterByDateRange(contributions, "", "2026-02-28");
