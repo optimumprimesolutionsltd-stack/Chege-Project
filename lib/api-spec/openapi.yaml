@@ -2134,7 +2134,10 @@ components:
           type: string
         isPrivate:
           type: boolean
-      required: [id, name, isPrivate]
+        canRecordSharedTransactions:
+          type: boolean
+          description: Whether this workspace may record expenses and contributions right now
+      required: [id, name, isPrivate, canRecordSharedTransactions]
 
     UpdateGroupInput:
       type: object

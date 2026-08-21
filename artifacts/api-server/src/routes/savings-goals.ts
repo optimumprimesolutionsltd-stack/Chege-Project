@@ -13,6 +13,7 @@ import {
   getActiveGroupId,
   requireGroupManager,
   requireMemberSelfAttribution,
+  requireSharedTransactionEligibility,
 } from "../lib/activeGroup";
 
 const router = Router();
@@ -157,6 +158,7 @@ router.post("/savings-goals", async (req, res): Promise<void> => {
 router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
 
   const bodySchema = z.object({
     amount: z.number().int().positive(),
@@ -283,6 +285,7 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
 router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
 
   const paramParsed = GoalIdParam.safeParse(req.params);
   if (!paramParsed.success) { res.status(400).json({ error: "Invalid id" }); return; }

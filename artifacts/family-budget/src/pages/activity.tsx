@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { getGetDashboardActivityQueryKey, getGetDashboardSummaryQueryKey, useGetDashboardActivity, useGetDashboardSummary } from "@workspace/api-client-react";
+import { getGetDashboardActivityQueryKey, getGetDashboardSummaryQueryKey, useGetDashboardActivity, useGetDashboardSummary, useGetGroup } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { ArrowUpRight, ArrowDownRight, Loader2, Activity as ActivityIcon, Calendar, Pencil, TrendingUp } from "lucide-react";
@@ -9,6 +9,8 @@ type ActivityTab = "all" | "expenses" | "contributions";
 type MemberContribution = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
 
 export default function Activity() {
+  const { data: group } = useGetGroup();
+  const isSharedWorkspace = group?.isPrivate === false;
   const now = new Date();
   const [tab, setTab] = useState<ActivityTab>(() =>
     window.location.pathname === "/contributions" || window.location.search.includes("tab=contributions") ? "contributions" : "all",
@@ -76,8 +78,12 @@ export default function Activity() {
     <div className="space-y-5 pb-12 sm:space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground sm:text-3xl">Activity</h1>
-          <p className="mt-1 max-w-xl text-sm text-muted-foreground sm:text-base">Expenses, contributions, and shared group movements in one place.</p>
+          <h1 className="text-2xl font-display font-bold text-foreground sm:text-3xl">{isSharedWorkspace ? "Group Activity" : "My Activity"}</h1>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground sm:text-base">
+            {isSharedWorkspace
+              ? "Group expenses, contributions, and joint-account movements in one place."
+              : "Your expenses, contributions, and account movements in one place."}
+          </p>
         </div>
         {tab === "contributions" && (
           <div className="flex w-full items-center justify-between gap-2 rounded-xl border bg-card p-1 shadow-sm sm:w-auto sm:justify-start">
@@ -92,7 +98,7 @@ export default function Activity() {
         {([
           ["all", "All activity"],
           ["expenses", "Expenses"],
-          ["contributions", "Contributions"],
+          ["contributions", isSharedWorkspace ? "Group Contributions" : "My Contributions"],
         ] as const).map(([value, label]) => (
           <button key={value} onClick={() => setTab(value)}
             className={`min-w-0 whitespace-nowrap rounded-lg px-1.5 py-2.5 transition-colors sm:px-3 ${tab === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>

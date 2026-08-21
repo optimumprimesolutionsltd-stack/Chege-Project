@@ -41,6 +41,7 @@ import {
   getGetJointAccountQueryKey,
   getGetDashboardSummaryQueryKey,
   useGetMembers,
+  useGetGroup,
   type SavingsGoalContribution,
 } from '@workspace/api-client-react';
 
@@ -693,6 +694,10 @@ export default function GoalsScreen() {
 
   const { mutateAsync: cascadeContribute } = useCascadeContribute();
   const { data: members = [] } = useGetMembers();
+  const { data: group } = useGetGroup();
+  const isSharedWorkspace = group?.isPrivate === false;
+  const sharedTransactionsLocked =
+    group?.canRecordSharedTransactions === false && members.length < 2;
   const canManageShared = members.some(
     (member) =>
       member.userId === user?.id &&
@@ -703,6 +708,13 @@ export default function GoalsScreen() {
     : members.filter((member) => member.userId === user?.id);
 
   const openCascade = () => {
+    if (sharedTransactionsLocked) {
+      Alert.alert(
+        'Invite one more member',
+        'This new shared group needs two members before recording goal contributions. You can still create goals and manage the group.',
+      );
+      return;
+    }
     if (!canManageShared) return;
     setCascadeOrder(fundableGoals.map((g) => g.id));
     setCascadeAmount('');
@@ -805,6 +817,13 @@ export default function GoalsScreen() {
   };
 
   const openContribute = (goal: SavingsGoal) => {
+    if (sharedTransactionsLocked) {
+      Alert.alert(
+        'Invite one more member',
+        'This new shared group needs two members before recording goal contributions. You can still create goals and manage the group.',
+      );
+      return;
+    }
     setSelectedGoal(goal);
     setContributeAmount('');
     setContribPayerIds(!canManageShared && user?.id ? [user.id] : []);
@@ -971,7 +990,7 @@ export default function GoalsScreen() {
           style={[styles.header, { paddingTop: topPad + 16 }]}
         >
           <View style={styles.headerTop}>
-            <Text style={styles.headerTitle}>Savings Goals</Text>
+            <Text style={styles.headerTitle}>{isSharedWorkspace ? 'Group Goals' : 'My Goals'}</Text>
             {canManageShared && <TouchableOpacity style={styles.newGoalBtn} onPress={openNewGoal} activeOpacity={0.8}>
               <Feather name="plus" size={16} color="#0a1a10" />
               <Text style={styles.newGoalBtnText}>New Goal</Text>

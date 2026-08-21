@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AuthUser } from '@workspace/api-client-react';
 
 export type { AuthUser };
@@ -7,35 +7,59 @@ interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  error: Error | null;
   login: () => void;
   logout: () => void;
+  retry: () => void;
 }
 
 function getBasePath() {
   return import.meta.env.BASE_URL.replace(/\/+$/, '') || '/';
 }
 
-export function useAuth(): AuthState {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+let authRequest: Promise<AuthUser | null> | null = null;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    fetch('/api/auth/user', { credentials: 'include' })
+function getCurrentUser(): Promise<AuthUser | null> {
+  if (!authRequest) {
+    authRequest = fetch('/api/auth/user', { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<{ user: AuthUser | null }>;
       })
-      .then((data) => {
+      .then((data) => data.user ?? null)
+      .catch((error) => {
+        authRequest = null;
+        throw error;
+      });
+  }
+  return authRequest;
+}
+
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setIsLoading(true);
+    setError(null);
+
+    getCurrentUser()
+      .then((nextUser) => {
         if (!cancelled) {
-          setUser(data.user ?? null);
+          setUser(nextUser);
           setIsLoading(false);
         }
       })
-      .catch(() => {
+      .catch((nextError: unknown) => {
         if (!cancelled) {
           setUser(null);
+          setError(nextError instanceof Error ? nextError : new Error('Could not check your account.'));
           setIsLoading(false);
         }
       });
@@ -43,7 +67,7 @@ export function useAuth(): AuthState {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryCount]);
 
   const login = useCallback(() => {
     const base = getBasePath();
@@ -89,11 +113,27 @@ export function useAuth(): AuthState {
     (window.top ?? window).location.href = url;
   }, []);
 
-  return {
+  const retry = useCallback(() => {
+    setRetryCount((count) => count + 1);
+  }, []);
+
+  const value = useMemo<AuthState>(() => ({
     user,
     isLoading,
     isAuthenticated: !!user,
+    error,
     login,
     logout,
-  };
+    retry,
+  }), [user, isLoading, error, login, logout, retry]);
+
+  return createElement(AuthContext.Provider, { value }, children);
+}
+
+export function useAuth(): AuthState {
+  const auth = useContext(AuthContext);
+  if (!auth) {
+    throw new Error('useAuth must be used inside AuthProvider');
+  }
+  return auth;
 }

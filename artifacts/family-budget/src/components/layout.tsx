@@ -12,15 +12,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { data: group } = useGetGroup();
+  const isSharedWorkspace = group?.isPrivate === false;
 
   const navItems = [
-    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/expenses', label: 'Expenses', icon: Receipt },
-    { href: '/budget', label: 'Budget', icon: PieChart },
-    { href: '/activity', label: 'Activity', icon: Activity },
-    { href: '/savings-goals', label: 'Savings Goals', icon: Target },
-    { href: '/bank', label: 'Bank Account', icon: Landmark },
-    { href: '/reports', label: 'Reports', icon: BarChart3 },
+    { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Budget', icon: LayoutDashboard },
+    { href: '/expenses', label: isSharedWorkspace ? 'Group Expenses' : 'My Expenses', icon: Receipt },
+    { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My Budget', icon: PieChart },
+    { href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity },
+    { href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target },
+    { href: '/bank', label: isSharedWorkspace ? 'Joint Account' : 'My Account', icon: Landmark },
+    { href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 

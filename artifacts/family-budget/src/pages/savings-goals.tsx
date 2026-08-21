@@ -11,6 +11,7 @@ import {
   getGetDashboardSummaryQueryKey,
   useGetSavingsGoalContributions,
   useGetMembers,
+  useGetGroup,
 } from "@workspace/api-client-react";
 import type { SavingsGoal, CascadeContributeAllocation } from "@workspace/api-client-react";
 
@@ -335,6 +336,10 @@ export default function SavingsGoals() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { data: group } = useGetGroup();
+  const { data: members = [] } = useGetMembers();
+  const sharedTransactionsLocked =
+    group?.canRecordSharedTransactions === false && members.length < 2;
 
   const { data: consistencyData } = useQuery<{ ok: boolean; inconsistentGoals: InconsistentGoal[] }>({
     queryKey: ["savings-goals-consistency"],
@@ -390,7 +395,6 @@ export default function SavingsGoals() {
   const [contributePayers, setContributePayers] = useState<string[]>([]);
   const [contributePayerAmounts, setContributePayerAmounts] = useState<Record<string, string>>({});
   const [contributeFromBank, setContributeFromBank] = useState(true);
-  const { data: members } = useGetMembers();
   const canManageShared = members?.some(
     (member) =>
       member.userId === user?.id &&
@@ -682,6 +686,11 @@ export default function SavingsGoals() {
 
   return (
     <div className="space-y-8 pb-12">
+      {sharedTransactionsLocked && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          Invite one more member before recording shared goal contributions. You can still create goals and manage your group.
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Savings Goals</h1>
@@ -695,6 +704,7 @@ export default function SavingsGoals() {
               <Button
                 variant="outline"
                 onClick={openCascade}
+                disabled={sharedTransactionsLocked}
                 className="rounded-xl h-12 px-6 border-primary/30 text-primary hover:bg-primary/5"
               >
                 <Sparkles className="w-4 h-4 mr-2" />
@@ -893,7 +903,7 @@ export default function SavingsGoals() {
                 required
                 className="h-12 bg-card text-lg flex-1"
               />
-              <Button type="submit" size="lg" className="h-12 px-6 rounded-xl shrink-0" disabled={cascadeContribute.isPending}>
+              <Button type="submit" size="lg" className="h-12 px-6 rounded-xl shrink-0" disabled={cascadeContribute.isPending || sharedTransactionsLocked}>
                 {cascadeContribute.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Distribute"}
               </Button>
             </form>
@@ -1121,7 +1131,7 @@ export default function SavingsGoals() {
                             className="h-10 bg-muted/40"
                             autoFocus
                           />
-                          <Button type="submit" size="sm" className="h-10 rounded-lg shrink-0" disabled={contributeToGoal.isPending}>
+                          <Button type="submit" size="sm" className="h-10 rounded-lg shrink-0" disabled={contributeToGoal.isPending || sharedTransactionsLocked}>
                             {contributeToGoal.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add"}
                           </Button>
                           <Button type="button" variant="ghost" size="sm" className="h-10 rounded-lg shrink-0"
@@ -1212,6 +1222,7 @@ export default function SavingsGoals() {
                         variant="outline"
                         className="w-full h-10 rounded-xl font-semibold border-primary/20 text-primary hover:bg-primary/5"
                         onClick={() => openContribution(goal.id)}
+                        disabled={sharedTransactionsLocked}
                       >
                         <Plus className="w-4 h-4 mr-2" />
                         Add Contribution

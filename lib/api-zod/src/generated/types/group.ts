@@ -10,4 +10,6 @@ export interface Group {
   id: number;
   name: string;
   isPrivate: boolean;
+  /** Whether this workspace may record expenses and contributions right now */
+  canRecordSharedTransactions: boolean;
 }

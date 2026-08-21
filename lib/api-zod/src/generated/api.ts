@@ -1329,7 +1329,8 @@ export const DeleteGroupInvitationContactResponse = zod.unknown()
 export const GetGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "isPrivate": zod.boolean()
+  "isPrivate": zod.boolean(),
+  "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })
 
 
@@ -1348,7 +1349,8 @@ export const UpdateGroupBody = zod.object({
 export const UpdateGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "isPrivate": zod.boolean()
+  "isPrivate": zod.boolean(),
+  "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })
 
 

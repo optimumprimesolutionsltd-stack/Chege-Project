@@ -25,3 +25,4 @@
 - [Bajeti SaaS roadmap](bajeti-saas-roadmap.md) — build chama-first financial trust before expanding to broader group types, monetization, or integrations.
 - [Email invitation public origin](email-invitation-public-origin.md) — email invite links must use the configured canonical HTTPS app URL, never request host headers.
 - [Schema push safety](schema-push-safety.md) — investigate unrelated Drizzle push prompts; never force a sync that would truncate live development data.
+- [Shared transaction member rule](shared-transaction-member-rule.md) — new shared groups need two members for money activity; private and legacy workspaces remain usable.

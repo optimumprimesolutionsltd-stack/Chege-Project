@@ -10,6 +10,7 @@ import {
   getActiveGroupId,
   isGroupManager,
   requireMemberSelfAttribution,
+  requireSharedTransactionEligibility,
 } from "../lib/activeGroup";
 
 const router = Router();
@@ -66,6 +67,7 @@ router.get("/contributions", async (req, res): Promise<void> => {
 router.post("/contributions", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
 
   const parsed = CreateContributionBody.safeParse(req.body);
   if (!parsed.success) {

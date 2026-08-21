@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
   useGetDashboardSummary,
+  useGetGroup,
   customFetch,
 } from '@workspace/api-client-react';
 
@@ -349,6 +350,8 @@ function Section({ title, total, accentColor, rows }: {
 // ── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ContributionsScreen() {
+  const { data: group } = useGetGroup();
+  const isSharedWorkspace = group?.isPrivate === false;
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -431,7 +434,7 @@ export default function ContributionsScreen() {
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
         <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>Contributions</Text>
+          <Text style={styles.headerTitle}>{isSharedWorkspace ? 'Group Contributions' : 'My Contributions'}</Text>
           <View style={styles.monthNav}>
             <Pressable onPress={prevMonth} hitSlop={10} style={styles.navBtn}>
               <Feather name="chevron-left" size={20} color="rgba(247,250,246,0.7)" />

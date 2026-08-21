@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { db, groupMembershipsTable, groupsTable } from "@workspace/db";
+import { count, eq } from "drizzle-orm";
 
 export const ACTIVE_WORKSPACE_COOKIE = "active_workspace";
 
@@ -59,6 +61,58 @@ export function requireSharedGroupManager(req: Request, res: Response): boolean 
   }
 
   return requireGroupManager(req, res);
+}
+
+export const SHARED_TRANSACTION_MEMBER_REQUIREMENT =
+  "Invite at least one more member before recording shared expenses or contributions.";
+
+/**
+ * Private budgets are intentionally usable by one owner. Legacy groups keep
+ * their existing financial workflow, while newly created shared groups need a
+ * second confirmed membership before they can record shared money activity.
+ */
+export async function canRecordSharedTransactions(
+  groupId: number,
+  isPrivate: boolean,
+): Promise<boolean> {
+  if (isPrivate) return true;
+
+  const [group] = await db
+    .select({
+      legacyKey: groupsTable.legacyKey,
+      membershipCount: count(groupMembershipsTable.userId),
+    })
+    .from(groupsTable)
+    .leftJoin(groupMembershipsTable, eq(groupMembershipsTable.groupId, groupsTable.id))
+    .where(eq(groupsTable.id, groupId))
+    .groupBy(groupsTable.id, groupsTable.legacyKey)
+    .limit(1);
+
+  return Boolean(group?.legacyKey) || Number(group?.membershipCount ?? 0) >= 2;
+}
+
+export async function requireSharedTransactionEligibility(
+  req: Request,
+  res: Response,
+): Promise<boolean> {
+  if (!req.group) {
+    res.status(403).json({ error: "Forbidden" });
+    return false;
+  }
+
+  // requireMember always supplies this field for real HTTP requests. Keeping
+  // older internal route callers compatible avoids treating an incomplete
+  // context object as a new one-member shared group.
+  if (typeof (req.group as { isPrivate?: boolean }).isPrivate !== "boolean") {
+    return true;
+  }
+
+  if (await canRecordSharedTransactions(req.group.id, req.group.isPrivate)) {
+    return true;
+  }
+
+  res.status(409).json({ error: SHARED_TRANSACTION_MEMBER_REQUIREMENT });
+  return false;
 }
 
 /**

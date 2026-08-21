@@ -572,6 +572,12 @@ export default function Dashboard() {
   const { data: bankAccount } = useGetJointAccount();
   const { data: group } = useGetGroup();
   const { data: members = [] } = useGetMembers();
+  const isSharedWorkspace = group?.isPrivate === false;
+  // The group response may be cached across an invitation acceptance. A live
+  // two-person member list is enough to enable the form; the API still checks
+  // eligibility again before it records any shared money.
+  const sharedTransactionsLocked =
+    group?.canRecordSharedTransactions === false && members.length < 2;
   const canManageSetup = members.some(
     (member) =>
       member.userId === user?.id &&
@@ -787,7 +793,8 @@ export default function Dashboard() {
               <button
                 key={key}
                 onClick={() => toggle(key)}
-                className={`flex flex-col items-center justify-center gap-1.5 py-5 px-3 transition-colors font-medium text-sm sm:text-base ${activeAction === key ? `${active} ${text}` : "hover:bg-muted/40 text-foreground"}`}
+                disabled={sharedTransactionsLocked && (key === "expense" || key === "goal")}
+                className={`flex flex-col items-center justify-center gap-1.5 py-5 px-3 transition-colors font-medium text-sm sm:text-base disabled:cursor-not-allowed disabled:opacity-45 ${activeAction === key ? `${active} ${text}` : "hover:bg-muted/40 text-foreground"}`}
               >
                 <span className="text-2xl">{icon}</span>
                 <span>{label}</span>
@@ -795,6 +802,11 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          {sharedTransactionsLocked && (
+            <p className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+              Invite one more member to this group before recording shared expenses or contributions. Bank activity and group setup are still available.
+            </p>
+          )}
 
           {/* Expanded form */}
           {activeAction !== "none" && (
@@ -864,8 +876,8 @@ export default function Dashboard() {
                   <Building2 className="w-5 h-5 text-sky-600 dark:text-sky-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">Bank Account</p>
-                  <p className="text-xs text-muted-foreground">Shared joint account</p>
+                  <p className="font-semibold text-foreground">{isSharedWorkspace ? "Joint Account" : "My Account"}</p>
+                  <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared group funds" : "Personal funds"}</p>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
@@ -900,7 +912,7 @@ export default function Dashboard() {
         {/* Contributions */}
         <Card className="border-none shadow-md overflow-hidden">
           <CardHeader className="bg-muted/30 border-b border-border/50 pb-4">
-            <div className="flex items-center gap-2"><Wallet className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">Contributions</CardTitle></div>
+            <div className="flex items-center gap-2"><Wallet className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">{isSharedWorkspace ? "Group Contributions" : "My Contributions"}</CardTitle></div>
             <CardDescription>Target vs Contributed for this month</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
@@ -968,7 +980,7 @@ export default function Dashboard() {
         <Card className="border-none shadow-md overflow-hidden">
           <CardHeader className="bg-muted/30 border-b border-border/50 pb-4 flex flex-row items-center justify-between">
             <div>
-              <div className="flex items-center gap-2"><Target className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">Savings Goals</CardTitle></div>
+              <div className="flex items-center gap-2"><Target className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">{isSharedWorkspace ? "Group Goals" : "My Goals"}</CardTitle></div>
               <CardDescription>{activeGoals.length} active goal{activeGoals.length !== 1 ? "s" : ""}</CardDescription>
             </div>
             <Link href="/savings-goals" className="text-sm font-medium text-primary hover:underline">View all →</Link>

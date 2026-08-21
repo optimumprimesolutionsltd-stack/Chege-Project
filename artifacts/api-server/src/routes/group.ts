@@ -11,6 +11,7 @@ import {
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
+  canRecordSharedTransactions,
   getActiveGroupId,
   requireGroupManager,
   setActiveWorkspaceCookie,
@@ -71,7 +72,12 @@ router.get("/group", async (req, res): Promise<void> => {
     .where(eq(groupsTable.id, groupId))
     .limit(1);
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }
-  res.json({ ...group, isPrivate: Boolean(group.isPrivate) });
+  const isPrivate = Boolean(group.isPrivate);
+  res.json({
+    ...group,
+    isPrivate,
+    canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),
+  });
 });
 
 router.patch("/group", async (req, res): Promise<void> => {
@@ -88,9 +94,18 @@ router.patch("/group", async (req, res): Promise<void> => {
   const [group] = await db.update(groupsTable)
     .set({ name: parsed.data.name })
     .where(eq(groupsTable.id, groupId))
-    .returning({ id: groupsTable.id, name: groupsTable.name });
+    .returning({
+      id: groupsTable.id,
+      name: groupsTable.name,
+      isPrivate: groupsTable.privateOwnerUserId,
+    });
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }
-  res.json(group);
+  const isPrivate = Boolean(group.isPrivate);
+  res.json({
+    ...group,
+    isPrivate,
+    canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),
+  });
 });
 
 export default router;

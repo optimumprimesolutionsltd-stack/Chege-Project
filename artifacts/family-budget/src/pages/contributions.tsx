@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   useGetDashboardSummary,
   useGetIncomeSources,
+  useGetGroup,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,8 @@ function MemberCard({
 }
 
 export default function Contributions() {
+  const { data: group } = useGetGroup();
+  const isSharedWorkspace = group?.isPrivate === false;
   const now = new Date();
   const [month, setMonth] = useState(() => {
     try {
@@ -132,8 +135,12 @@ export default function Contributions() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Contributions</h1>
-          <p className="text-muted-foreground mt-1">Automatic — expenses paid, deposits made, and savings added.</p>
+          <h1 className="text-3xl font-display font-bold text-foreground">{isSharedWorkspace ? "Group Contributions" : "My Contributions"}</h1>
+          <p className="text-muted-foreground mt-1">
+            {isSharedWorkspace
+              ? "Group contributions from expenses paid, joint-account deposits, and shared goals."
+              : "Your contributions from expenses paid, deposits made, and goals saved."}
+          </p>
         </div>
 
         {/* Month picker */}

@@ -30,7 +30,7 @@ const EXPENSE_TIERS = [
 ];
 
 import {
-  useGetExpenses, useGetBudgetCategories, useGetMembers,
+  useGetExpenses, useGetBudgetCategories, useGetMembers, useGetGroup,
   useCreateExpense, useCreateBudgetCategory, useDeleteExpense, useUpdateExpense, useApplyRecurringExpenses,
   useGetDashboardSummary, useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
@@ -159,6 +159,9 @@ export default function Expenses() {
   const { data: expenses, isLoading } = useGetExpenses({ month, year });
   const { data: categories } = useGetBudgetCategories();
   const { data: members } = useGetMembers();
+  const { data: group } = useGetGroup();
+  const sharedTransactionsLocked =
+    group?.canRecordSharedTransactions === false && (members?.length ?? 0) < 2;
   const { data: summary } = useGetDashboardSummary({ month, year });
   const { data: breakdown } = useGetDashboardCategoryBreakdown({ month, year });
   const createExpense = useCreateExpense();
@@ -999,6 +1002,11 @@ export default function Expenses() {
         </div>
       )}
 
+      {sharedTransactionsLocked && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          Invite one more member before recording shared expenses. You can still manage categories, invitations, and bank activity.
+        </div>
+      )}
       {/* Recurring banner */}
       {showRecurringBanner && (
         <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-center justify-between gap-4">
@@ -1008,7 +1016,7 @@ export default function Expenses() {
               {recurringFromPrev.length} recurring expense{recurringFromPrev.length > 1 ? "s" : ""} from last month not yet added this month.
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={handleApplyRecurring} disabled={applyRecurring.isPending} className="shrink-0">
+          <Button size="sm" variant="outline" onClick={handleApplyRecurring} disabled={applyRecurring.isPending || sharedTransactionsLocked} className="shrink-0">
             {applyRecurring.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1.5" />}
             Apply
           </Button>
@@ -1019,11 +1027,11 @@ export default function Expenses() {
       {isAdding ? (
         <Card className="border-none shadow-md bg-accent/20">
           <CardContent className="p-6">
-            {expenseFormFields(addForm, createExpense.isPending, handleCreate, resetAdd, "Record New Expense", "Save Expense", "add")}
+            {expenseFormFields(addForm, createExpense.isPending || sharedTransactionsLocked, handleCreate, resetAdd, "Record New Expense", "Save Expense", "add")}
           </CardContent>
         </Card>
       ) : (
-        <Button onClick={() => { setIsAdding(true); setEditingId(null); }} className="h-12 px-6 rounded-xl shadow-sm">
+        <Button disabled={sharedTransactionsLocked} onClick={() => { setIsAdding(true); setEditingId(null); }} className="h-12 px-6 rounded-xl shadow-sm">
           <Plus className="w-5 h-5 mr-2" /> Record Expense
         </Button>
       )}

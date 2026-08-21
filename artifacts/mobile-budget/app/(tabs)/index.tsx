@@ -32,6 +32,7 @@ import {
   useGetJointAccount,
   useGetSavingsGoals,
   useGetMembers,
+  useGetGroup,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
@@ -117,6 +118,8 @@ export default function DashboardScreen() {
   } = useGetJointAccount();
   const { data: savingsGoals = [], refetch: refetchGoals } = useGetSavingsGoals();
   const { data: members = [], refetch: refetchMembers } = useGetMembers();
+  const { data: group } = useGetGroup();
+  const isSharedWorkspace = group?.isPrivate === false;
   const canManageSetup = members.some(
     (member) =>
       member.userId === user?.id &&
@@ -423,8 +426,8 @@ export default function DashboardScreen() {
               <Feather name="credit-card" size={18} color="#38bdf8" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.bankCardTitle, { color: colors.foreground }]}>Bank Account</Text>
-              <Text style={[styles.bankCardSub, { color: colors.mutedForeground }]}>Shared joint account</Text>
+              <Text style={[styles.bankCardTitle, { color: colors.foreground }]}>{isSharedWorkspace ? 'Joint Account' : 'My Account'}</Text>
+              <Text style={[styles.bankCardSub, { color: colors.mutedForeground }]}>{isSharedWorkspace ? 'Shared group funds' : 'Personal funds'}</Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </View>

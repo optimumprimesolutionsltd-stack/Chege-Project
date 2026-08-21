@@ -23,6 +23,7 @@ import {
   useCreateExpense,
   useGetBudgetCategories,
   useGetMembers,
+  useGetGroup,
   useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey,
   getGetDashboardActivityQueryKey,
@@ -85,6 +86,9 @@ export default function AddExpenseSheet() {
 
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
+  const { data: group } = useGetGroup();
+  const sharedTransactionsLocked =
+    group?.canRecordSharedTransactions === false && members.length < 2;
   const canManageShared = members.some(
     (member) =>
       member.userId === user?.id &&
@@ -152,6 +156,13 @@ export default function AddExpenseSheet() {
   }, [queryClient]);
 
   const handleSubmit = useCallback(async () => {
+    if (sharedTransactionsLocked) {
+      Alert.alert(
+        'Invite one more member',
+        'This new shared group needs two members before recording expenses. Bank activity and setup are still available.',
+      );
+      return;
+    }
     const parsed = parseFloat(amount.replace(/,/g, ''));
     if (!parsed || parsed <= 0) {
       Alert.alert('Amount required', 'Please enter a valid amount.');
@@ -280,8 +291,8 @@ export default function AddExpenseSheet() {
         <Text style={[styles.title, { color: colors.foreground }]}>Log Expense</Text>
         <Pressable
           onPress={handleSubmit}
-          disabled={isPending}
-          style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isPending ? 0.7 : 1 }]}
+          disabled={isPending || sharedTransactionsLocked}
+          style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isPending || sharedTransactionsLocked ? 0.7 : 1 }]}
         >
           {isPending ? (
             <ActivityIndicator size="small" color="#fff" />
