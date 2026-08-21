@@ -355,7 +355,14 @@ export default function Expenses() {
   };
 
   const handleAddNewSource = async (paidById: string) => {
-    if (!newSourceName.trim()) return;
+    if (!newSourceName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Source name required",
+        description: "Enter a name before adding the income source.",
+      });
+      return;
+    }
     try {
       const res = await fetch("/api/income-sources", {
         method: "POST",
@@ -384,7 +391,32 @@ export default function Expenses() {
     const sourceCount = payerIds.length + (addForm.paidFromBank ? 1 : 0);
     const isSplitPayment = sourceCount > 1;
     const effectivePaidById = payerIds[0] ?? addForm.paidById;
-    if (!addForm.amount || !addForm.category || !addForm.description || !addForm.date) {
+    if (!addForm.amount) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Use an expense amount greater than zero before saving.",
+      });
+      return;
+    }
+    const amount = Number(addForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Use an expense amount greater than zero before saving.",
+      });
+      return;
+    }
+    if (!Number.isInteger(amount)) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Expenses are recorded in whole shillings.",
+      });
+      return;
+    }
+    if (!addForm.category || !addForm.description || !addForm.date) {
       toast({
         variant: "destructive",
         title: "Complete the expense details",
@@ -401,7 +433,7 @@ export default function Expenses() {
       return;
     }
     if (isSplitPayment) {
-      const total = Number(addForm.amount);
+      const total = amount;
       const splitTotal = payerIds.reduce((s, id) => s + Number(addForm.payerAmounts[id] || 0), 0)
         + (addForm.paidFromBank ? Number(addForm.payerAmounts.__joint_bank__ || 0) : 0);
       if (!Number.isInteger(total) || splitTotal !== total) {
@@ -421,7 +453,7 @@ export default function Expenses() {
         : undefined;
       await createExpense.mutateAsync({
         data: {
-          amount: Number(addForm.amount), category: addForm.category,
+          amount, category: addForm.category,
           description: addForm.description, notes: addForm.notes || undefined,
           paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
           isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
@@ -439,7 +471,47 @@ export default function Expenses() {
 
   const handleUpdate = async (e: React.FormEvent, id: number) => {
     e.preventDefault();
-    if (!editForm.amount || !editForm.category || !editForm.description || !editForm.date || (!editForm.paidById && !editForm.paidFromBank)) return;
+    if (!editForm.amount) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Use an expense amount greater than zero before saving.",
+      });
+      return;
+    }
+    const amount = Number(editForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Use an expense amount greater than zero before saving.",
+      });
+      return;
+    }
+    if (!Number.isInteger(amount)) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Expenses are recorded in whole shillings.",
+      });
+      return;
+    }
+    if (!editForm.category || !editForm.description || !editForm.date) {
+      toast({
+        variant: "destructive",
+        title: "Complete the expense details",
+        description: "Add an amount, category, description, and date before saving.",
+      });
+      return;
+    }
+    if (!editForm.paidById && !editForm.paidFromBank) {
+      toast({
+        variant: "destructive",
+        title: "Choose who paid",
+        description: "Select a payer or Joint bank before saving this expense.",
+      });
+      return;
+    }
     if (editForm.otherIncomeSourceLabel !== null && !editForm.otherIncomeSourceLabel.trim()) {
       toast({
         variant: "destructive",
@@ -450,12 +522,12 @@ export default function Expenses() {
     }
     const selectedSource = editFormSources?.find((source) => source.id === editForm.incomeSourceId);
     const fundingSplits = editForm.paidFromBank
-      ? [{ userId: null, label: "Joint bank", amount: Number(editForm.amount), fromBank: true }]
+      ? [{ userId: null, label: "Joint bank", amount, fromBank: true }]
       : !editHasMultipleFundingSplits && (editForm.incomeSourceId || editForm.otherIncomeSourceLabel !== null)
         ? [{
           userId: editForm.paidById,
           label: editForm.otherIncomeSourceLabel?.trim() || selectedSource?.name || "Household member",
-          amount: Number(editForm.amount),
+          amount,
           fromBank: false,
           ...(selectedSource ? { incomeSourceId: selectedSource.id } : {}),
         }]
@@ -464,7 +536,7 @@ export default function Expenses() {
       await updateExpense.mutateAsync({
         id,
         data: {
-          amount: Number(editForm.amount),
+          amount,
           category: editForm.category,
           description: editForm.description,
           notes: editForm.notes || undefined,
@@ -524,7 +596,7 @@ export default function Expenses() {
     submitLabel: string,
     mode: "add" | "edit",
   ) => (
-    <form onSubmit={onSubmit} className="space-y-5 sm:space-y-6">
+    <form onSubmit={onSubmit} noValidate className="space-y-5 sm:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-4">
         <h3 className="text-lg sm:text-xl font-bold font-display text-foreground">{title}</h3>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>

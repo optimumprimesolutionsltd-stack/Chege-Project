@@ -1168,14 +1168,14 @@ function ExpenseRow({
         <Feather name={icon} size={16} color={colors.accentForeground} />
       </View>
       <View style={styles.rowInfo}>
-        <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{expense.description}</Text>
-        <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
+        <Text selectable={false} style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{expense.description}</Text>
+        <Text selectable={false} style={[styles.rowMeta, { color: colors.mutedForeground }]}>
           {expense.paidByName ?? 'Joint bank'} · {expense.category} · {formatDate(expense.date)}
         </Text>
-        {expense.notes ? <Text style={[styles.rowNotes, { color: colors.mutedForeground }]}>{expense.notes}</Text> : null}
+        {expense.notes ? <Text selectable={false} style={[styles.rowNotes, { color: colors.mutedForeground }]}>{expense.notes}</Text> : null}
       </View>
       <View style={styles.rowRight}>
-        <Text style={[styles.rowAmount, { color: colors.foreground }]}>
+        <Text selectable={false} style={[styles.rowAmount, { color: colors.foreground }]}>
           −{expense.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
         </Text>
         <View style={styles.rowActions}>

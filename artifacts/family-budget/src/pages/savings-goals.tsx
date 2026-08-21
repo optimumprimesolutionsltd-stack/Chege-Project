@@ -599,7 +599,30 @@ export default function SavingsGoals() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !targetAmount) return;
+    if (!name.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Goal name required",
+        description: "Enter a name for this savings goal before saving.",
+      });
+      return;
+    }
+    if (!targetAmount || !Number.isFinite(Number(targetAmount)) || Number(targetAmount) <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid target",
+        description: "Set a target amount greater than zero before saving.",
+      });
+      return;
+    }
+    if (isBigDrop && !correctionReason.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Reason required",
+        description: "Explain why the balance is being reduced by more than 50% before saving.",
+      });
+      return;
+    }
     try {
       if (mode === "create") {
         await createGoal.mutateAsync({ data: { name, targetAmount: Number(targetAmount), deadline: deadline || undefined } });
@@ -938,7 +961,7 @@ export default function SavingsGoals() {
             )}
 
             {/* Amount + submit */}
-            <form onSubmit={handleCascade} className="flex gap-3 items-center">
+            <form onSubmit={handleCascade} noValidate className="flex gap-3 items-center">
               <Input
                 type="number"
                 placeholder="Total payment amount (KES)"
@@ -980,7 +1003,7 @@ export default function SavingsGoals() {
       {mode !== "none" && (
         <Card className="border-none shadow-md bg-accent/20">
           <CardContent className="p-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} noValidate className="space-y-6">
               <div className="flex items-center justify-between border-b border-border/50 pb-4">
                 <h3 className="text-xl font-bold font-display text-foreground">
                   {mode === "create" ? "New Savings Goal" : "Edit Goal"}
@@ -1070,7 +1093,7 @@ export default function SavingsGoals() {
                   type="submit"
                   size="lg"
                   className="rounded-xl h-12 px-8"
-                  disabled={isPending || (isBigDrop && !correctionReason.trim())}
+                  disabled={isPending}
                 >
                   {isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Plus className="w-5 h-5 mr-2" />}
                   {mode === "create" ? "Create Goal" : "Save Changes"}

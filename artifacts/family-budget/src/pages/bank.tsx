@@ -101,9 +101,23 @@ export default function Bank() {
   };
 
   const handleCreateCategory = async () => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      toast({
+        variant: "destructive",
+        title: "Admin access required",
+        description: "Ask a group owner or admin to add a shared category.",
+      });
+      return;
+    }
     const name = newCategoryName.trim();
-    if (!name) return;
+    if (!name) {
+      toast({
+        variant: "destructive",
+        title: "Category name required",
+        description: "Enter a category name before adding it.",
+      });
+      return;
+    }
 
     const existing = categories?.find((category) => category.name.toLowerCase() === name.toLowerCase());
     if (existing) {
@@ -153,7 +167,14 @@ export default function Bank() {
   };
 
   const openMode = (m: "deposit" | "disbursement" | "transfer") => {
-    if (!canManageShared && m !== "deposit") return;
+    if (!canManageShared && m !== "deposit") {
+      toast({
+        variant: "destructive",
+        title: "Admin access required",
+        description: "Ask a group owner or admin to record withdrawals and transfers.",
+      });
+      return;
+    }
     // Reset attribution to Joint bank every time a form opens
     setAmount("");
     setDescription("");
@@ -173,7 +194,14 @@ export default function Bank() {
   };
 
   const openEdit = (tx: EditableTransaction) => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      toast({
+        variant: "destructive",
+        title: "Admin access required",
+        description: "Only a group owner or admin can edit a shared bank transaction.",
+      });
+      return;
+    }
     if (tx.savingsGoalId) {
       toast({
         title: "Transfer cannot be edited",
@@ -199,7 +227,14 @@ export default function Bank() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer") && !description.trim())) return;
+    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer") && !description.trim())) {
+      toast({
+        variant: "destructive",
+        title: "Complete transaction details",
+        description: "Enter an amount and date; deposits and transfers also need a description.",
+      });
+      return;
+    }
     if (mode === "disbursement" && !expenseCategory) {
       toast({
         variant: "destructive",
@@ -451,7 +486,7 @@ export default function Bank() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
@@ -510,7 +545,7 @@ export default function Bank() {
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={!newCategoryName.trim() || addingCategory}
+                        disabled={addingCategory}
                         onClick={() => void handleCreateCategory()}
                         className="h-10 shrink-0"
                         data-testid="button-add-expense-category"

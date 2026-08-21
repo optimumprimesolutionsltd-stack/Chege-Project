@@ -300,7 +300,10 @@ export default function GoalsScreen() {
   const { mutateAsync: createGoal } = useCreateSavingsGoal();
 
   const openNewGoal = () => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to create a shared savings goal.');
+      return;
+    }
     setGoalName('');
     setGoalTarget('');
     setGoalDeadlineDate(null);
@@ -358,7 +361,10 @@ export default function GoalsScreen() {
   const { mutateAsync: deleteGoal } = useDeleteSavingsGoal();
 
   const openEditGoal = (goal: SavingsGoal) => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to change this shared savings goal.');
+      return;
+    }
     setEditingGoal(goal);
     setEditName(goal.name);
     setEditTarget(String(goal.targetAmount));
@@ -425,7 +431,10 @@ export default function GoalsScreen() {
   };
 
   const confirmDeleteGoal = (goal: SavingsGoal) => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to delete this shared savings goal.');
+      return;
+    }
     Alert.alert(
       'Delete Goal',
       `Are you sure you want to delete "${goal.name}"? This cannot be undone.`,
@@ -715,7 +724,10 @@ export default function GoalsScreen() {
       );
       return;
     }
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to distribute money across shared goals.');
+      return;
+    }
     setCascadeOrder(fundableGoals.map((g) => g.id));
     setCascadeAmount('');
     setCascadeResult(null);
@@ -844,14 +856,20 @@ export default function GoalsScreen() {
   const validContribPayerIds = contribPayerIds.filter(id => knownMemberIds.has(id));
 
   const toggleContribPayer = (memberId: string) => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Members can record contributions only in their own name. Ask an admin to change the payer.');
+      return;
+    }
     setContribPayerIds(prev =>
       prev.includes(memberId) ? prev.filter(id => id !== memberId) : [...prev, memberId]
     );
   };
 
   const selectContribJoint = () => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to record a contribution from Joint bank.');
+      return;
+    }
     setContribPayerIds([]);
     setContribPayerAmounts({});
   };
@@ -2161,8 +2179,8 @@ export default function GoalsScreen() {
                     <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit Goal</Text>
                     <TouchableOpacity
                       onPress={handleUpdateGoal}
-                      disabled={submittingEdit || (editIsBigDrop && !editCorrectionReason.trim())}
-                      style={[styles.modalSaveBtn, { backgroundColor: colors.primary, opacity: (submittingEdit || (editIsBigDrop && !editCorrectionReason.trim())) ? 0.4 : 1 }]}
+                      disabled={submittingEdit}
+                      style={[styles.modalSaveBtn, { backgroundColor: colors.primary, opacity: submittingEdit ? 0.4 : 1 }]}
                     >
                       {submittingEdit ? (
                         <ActivityIndicator size="small" color="#fff" />

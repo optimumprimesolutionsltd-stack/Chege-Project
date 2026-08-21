@@ -93,7 +93,14 @@ export default function Settings() {
 
   const handleSaveGroupName = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!groupName.trim()) return;
+    if (!groupName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Group name required",
+        description: "Enter a group name before saving.",
+      });
+      return;
+    }
     try {
       await updateGroup.mutateAsync({ data: { name: groupName.trim() } });
       toast({ title: "Group name updated" });
@@ -104,7 +111,14 @@ export default function Settings() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!inviteEmail.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Email required",
+        description: "Enter an email address before sending the invitation.",
+      });
+      return;
+    }
     setSendingInvite(true);
     try {
       await requestJson("/api/group-invitations", {
@@ -214,7 +228,22 @@ export default function Settings() {
   const handleAddSource = async (event: React.FormEvent) => {
     event.preventDefault();
     const name = newSourceName.trim();
-    if (!name || !user?.id) return;
+    if (!name) {
+      toast({
+        variant: "destructive",
+        title: "Source name required",
+        description: "Enter a name before adding the income source.",
+      });
+      return;
+    }
+    if (!user?.id) {
+      toast({
+        variant: "destructive",
+        title: "Sign in required",
+        description: "Sign in again before adding an income source.",
+      });
+      return;
+    }
 
     setAddingSource(true);
     try {
@@ -296,7 +325,7 @@ export default function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form onSubmit={handleAddSource} className="flex gap-2">
+          <form onSubmit={handleAddSource} noValidate className="flex gap-2">
             <Input
               value={newSourceName}
               onChange={(event) => setNewSourceName(event.target.value)}
@@ -305,7 +334,7 @@ export default function Settings() {
               className="h-11 bg-card"
               aria-label="New income source name"
             />
-            <Button type="submit" disabled={!newSourceName.trim() || addingSource} className="h-11 shrink-0">
+            <Button type="submit" disabled={addingSource} className="h-11 shrink-0">
               {addingSource ? "Adding…" : "Add source"}
             </Button>
           </form>
@@ -354,9 +383,9 @@ export default function Settings() {
         </CardHeader>
         <CardContent>
           {canManageWorkspace ? (
-            <form onSubmit={handleSaveGroupName} className="flex gap-2">
+            <form onSubmit={handleSaveGroupName} noValidate className="flex gap-2">
               <Input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" />
-              <Button type="submit" disabled={!groupName.trim() || updateGroup.isPending}>
+              <Button type="submit" disabled={updateGroup.isPending}>
                 {updateGroup.isPending ? "Saving…" : "Save"}
               </Button>
             </form>
@@ -473,7 +502,7 @@ export default function Settings() {
           {/* Invite member form */}
           {canManageShared && <GroupInviteLinks />}
           {canManageShared && (
-            <form onSubmit={handleAdd} className="space-y-3 border-t border-border/50 pt-4">
+            <form onSubmit={handleAdd} noValidate className="space-y-3 border-t border-border/50 pt-4">
               <div>
                 <p className="text-sm font-medium text-foreground">Invite someone by email</p>
                 <p className="mt-1 text-xs text-muted-foreground">They will sign in with this email and accept the invitation before gaining access.</p>
@@ -512,7 +541,7 @@ export default function Settings() {
                     <option value="admin">Admin</option>
                   </select>
                 </label>
-                <Button type="submit" disabled={!inviteEmail.trim() || sendingInvite} className="h-11 gap-2 px-5">
+                <Button type="submit" disabled={sendingInvite} className="h-11 gap-2 px-5">
                   <Send className="h-4 w-4" />
                   {sendingInvite ? "Sending…" : "Invite"}
                 </Button>

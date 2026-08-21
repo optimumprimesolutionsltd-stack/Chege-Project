@@ -184,7 +184,10 @@ export default function BankScreen() {
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
 
   const openModal = (type: TxType) => {
-    if (!canManageShared && type !== 'deposit') return;
+    if (!canManageShared && type !== 'deposit') {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to record a shared transfer or withdrawal.');
+      return;
+    }
     setEditingTransactionId(null);
     setTxType(type);
     setAmount('');
@@ -225,7 +228,10 @@ export default function BankScreen() {
   };
 
   const handleDelete = (tx: Tx) => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to delete a shared bank transaction.');
+      return;
+    }
     Alert.alert(
       'Delete transaction',
       `Delete "${tx.description}"?`,
@@ -246,7 +252,10 @@ export default function BankScreen() {
   };
 
   const openEdit = (tx: Tx) => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to edit a shared bank transaction.');
+      return;
+    }
     if (tx.savingsGoalId) {
       Alert.alert('Transfer cannot be edited', 'Delete and recreate a savings transfer to keep both balances in sync.');
       return;
@@ -276,7 +285,10 @@ export default function BankScreen() {
   // Selecting a member deselects Joint bank (and vice versa).
   // Selecting all-off means Joint bank again.
   const toggleDepositor = (memberId: string) => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to choose another person for this shared transaction.');
+      return;
+    }
     setDepositorIds(prev => {
       if (prev.includes(memberId)) {
         // Deselect this member
@@ -291,14 +303,20 @@ export default function BankScreen() {
 
   // Selecting Joint bank chip explicitly clears all named members
   const selectJointBank = () => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to use Joint bank for this shared transaction.');
+      return;
+    }
     setDepositorIds([]);
     setDepositorAmounts({});
     setIncomeSourceId(null);
   };
 
   const handleCreateCategory = async () => {
-    if (!canManageShared) return;
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to add a shared category.');
+      return;
+    }
     const name = newCategoryName.trim();
     if (!name) {
       Alert.alert('Enter a category name', 'Give the new category a short name first.');
@@ -1333,11 +1351,11 @@ export default function BankScreen() {
                           testID="bank-new-category-input"
                         />
                         <TouchableOpacity
-                          disabled={addingCategory || !newCategoryName.trim()}
+                          disabled={addingCategory}
                           onPress={handleCreateCategory}
                           style={{
                             minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-                            backgroundColor: colors.primary, opacity: addingCategory || !newCategoryName.trim() ? 0.55 : 1,
+                            backgroundColor: colors.primary, opacity: addingCategory ? 0.55 : 1,
                           }}
                           testID="bank-add-category"
                         >

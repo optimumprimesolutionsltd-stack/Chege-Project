@@ -96,7 +96,7 @@ function OpenInvitationLinkButton() {
               />
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <Button type="submit" className="w-full" disabled={!link.trim()}>
+            <Button type="submit" className="w-full">
               Open invitation
             </Button>
           </form>
@@ -114,7 +114,14 @@ function CreateSharedGroupCard() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (name.trim().length < 2) return;
+    if (name.trim().length < 2) {
+      toast({
+        variant: "destructive",
+        title: "Group name required",
+        description: "Enter at least two characters before creating a private group.",
+      });
+      return;
+    }
     try {
       await createSharedGroup.mutateAsync({ data: { name: name.trim() } });
       window.location.assign("/");
@@ -168,7 +175,7 @@ function CreateSharedGroupCard() {
                 onChange={(event) => setName(event.target.value)}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={name.trim().length < 2 || createSharedGroup.isPending}>
+            <Button type="submit" className="w-full" disabled={createSharedGroup.isPending}>
               {createSharedGroup.isPending ? "Creating…" : "Create private group"}
             </Button>
           </form>
@@ -275,7 +282,22 @@ function IncomeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
-    if (!amt || amt <= 0) return;
+    if (!amt || amt <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Add a deposit amount greater than zero before recording it.",
+      });
+      return;
+    }
+    if (!Number.isInteger(amt)) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Deposits are recorded in whole shillings.",
+      });
+      return;
+    }
     try {
       await createDeposit.mutateAsync({
         data: {
@@ -298,7 +320,7 @@ function IncomeForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
       {/* Person picker */}
       <div className="space-y-1.5">
         <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
@@ -376,7 +398,38 @@ function ExpenseForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
-    if (!amt || !description || !paidBy) return;
+    if (!amt || amt <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Add an expense amount greater than zero before logging it.",
+      });
+      return;
+    }
+    if (!Number.isInteger(amt)) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Expenses are recorded in whole shillings.",
+      });
+      return;
+    }
+    if (!description.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Description required",
+        description: "Explain what the expense was for before logging it.",
+      });
+      return;
+    }
+    if (!paidBy) {
+      toast({
+        variant: "destructive",
+        title: "Choose who paid",
+        description: "Select the person who paid before logging this expense.",
+      });
+      return;
+    }
     try {
       await createExpense.mutateAsync({
         data: {
@@ -398,7 +451,7 @@ function ExpenseForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
@@ -470,7 +523,22 @@ function GoalForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
-    if (!amt || amt <= 0) return;
+    if (!amt || amt <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Add a whole amount greater than zero before saving to a goal.",
+      });
+      return;
+    }
+    if (!Number.isInteger(amt)) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Savings contributions are recorded in whole shillings.",
+      });
+      return;
+    }
 
     try {
       if (selectedGoalId === "cascade") {
@@ -525,7 +593,7 @@ function GoalForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Goal</label>

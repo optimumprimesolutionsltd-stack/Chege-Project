@@ -108,7 +108,10 @@ export default function SettingsScreen() {
     enabled: !!user?.id && canManageShared,
   });
   const handleSaveGroupName = async () => {
-    if (!groupName.trim()) return;
+    if (!groupName.trim()) {
+      Alert.alert('Group name required', 'Enter a group name before saving.');
+      return;
+    }
     setSavingGroupName(true);
     try {
       await customFetch('/api/group', {
@@ -141,7 +144,10 @@ export default function SettingsScreen() {
   };
   const handleCreateSharedGroup = async () => {
     const name = newGroupName.trim();
-    if (name.length < 2) return;
+    if (name.length < 2) {
+      Alert.alert('Group name required', 'Enter at least two characters before creating a group.');
+      return;
+    }
     try {
       const workspace = await createSharedGroup.mutateAsync({ data: { name } });
       await activateMobileWorkspace({
@@ -157,7 +163,10 @@ export default function SettingsScreen() {
     }
   };
   const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
+    if (!inviteEmail.trim()) {
+      Alert.alert('Email required', 'Enter an email address before sending the invitation.');
+      return;
+    }
     setManagingMembers(true);
     try {
       await customFetch('/api/group-invitations', {
@@ -294,7 +303,10 @@ export default function SettingsScreen() {
 
   const handleAddSource = async () => {
     const name = newSource.trim();
-    if (!name) return;
+    if (!name) {
+      Alert.alert('Source name required', 'Enter a name before adding the income source.');
+      return;
+    }
     setAddingSource(true);
     try {
       await customFetch('/api/income-sources', {
@@ -468,7 +480,7 @@ export default function SettingsScreen() {
                 onChangeText={setGroupName}
                 maxLength={60}
               />
-              <Pressable disabled={savingGroupName || !groupName.trim()} onPress={handleSaveGroupName} style={[styles.saveGroupBtn, { backgroundColor: colors.primary, opacity: groupName.trim() ? 1 : 0.5 }]}>
+              <Pressable disabled={savingGroupName} onPress={handleSaveGroupName} style={[styles.saveGroupBtn, { backgroundColor: colors.primary, opacity: savingGroupName ? 0.5 : 1 }]}>
                 {savingGroupName ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveGroupText}>Save</Text>}
               </Pressable>
             </View>
@@ -566,7 +578,7 @@ export default function SettingsScreen() {
                   {newMemberRole === 'admin' ? 'Admin' : 'Member'}
                 </Text>
               </Pressable>
-              <Pressable disabled={managingMembers || !inviteEmail.trim()} onPress={handleInvite} style={[styles.addBtn, { backgroundColor: colors.primary, opacity: inviteEmail.trim() ? 1 : 0.5 }]}>
+              <Pressable disabled={managingMembers} onPress={handleInvite} style={[styles.addBtn, { backgroundColor: colors.primary, opacity: managingMembers ? 0.5 : 1 }]}>
                 {managingMembers ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
               </Pressable>
               <Pressable
@@ -793,9 +805,9 @@ export default function SettingsScreen() {
             />
             <Pressable
               testID="confirm-create-private-group"
-              disabled={newGroupName.trim().length < 2 || createSharedGroup.isPending}
+              disabled={createSharedGroup.isPending}
               onPress={() => void handleCreateSharedGroup()}
-              style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: newGroupName.trim().length >= 2 ? 1 : 0.55 }]}
+              style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: createSharedGroup.isPending ? 0.55 : 1 }]}
             >
               {createSharedGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalCreateText}>Create private group</Text>}
             </Pressable>
