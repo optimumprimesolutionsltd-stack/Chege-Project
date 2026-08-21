@@ -30,7 +30,7 @@ import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
-  Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2, Sparkles,
+  Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2, Sparkles, Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,68 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
+
+function OpenInvitationLinkButton() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [link, setLink] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const openInvitation = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    try {
+      const invitationUrl = new URL(link.trim(), window.location.origin);
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const appPath = base && invitationUrl.pathname.startsWith(`${base}/`)
+        ? invitationUrl.pathname.slice(base.length)
+        : invitationUrl.pathname;
+      if (
+        invitationUrl.origin !== window.location.origin ||
+        !/^\/(?:invite|join)\/[^/]+\/?$/.test(appPath)
+      ) {
+        throw new Error("Paste a Bajeti email invitation or private group link.");
+      }
+      window.location.assign(`${invitationUrl.pathname}${invitationUrl.search}${invitationUrl.hash}`);
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : "Could not open that invitation.");
+    }
+  };
+
+  return (
+    <>
+      <Button type="button" variant="outline" className="h-11 shrink-0 rounded-xl px-5" onClick={() => setIsOpen(true)}>
+        <Link2 className="mr-2 h-4 w-4" />
+        I have an invitation link
+      </Button>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Join a private group</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={openInvitation} className="space-y-5">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Paste the email invitation or private group link you received. It will add that group alongside My Budget after you accept.
+            </p>
+            <div className="space-y-2">
+              <label htmlFor="group-invitation-link" className="text-sm font-semibold text-foreground">Invitation link</label>
+              <Input
+                id="group-invitation-link"
+                autoFocus
+                placeholder="https://…/invite/…"
+                value={link}
+                onChange={(event) => setLink(event.target.value)}
+              />
+            </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            <Button type="submit" className="w-full" disabled={!link.trim()}>
+              Open invitation
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 function CreateSharedGroupCard() {
   const [isOpen, setIsOpen] = useState(false);
@@ -75,10 +137,13 @@ function CreateSharedGroupCard() {
               Create a private group for your family, chama, club, team, or any shared goal. It starts empty, stays separate from My Budget, and only people you invite can join.
             </p>
           </div>
-          <Button className="h-11 shrink-0 rounded-xl px-5" onClick={() => setIsOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create a private group
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <OpenInvitationLinkButton />
+            <Button className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create a private group
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -161,9 +226,12 @@ function SharedGroupsFooter() {
             </Button>
           ))}
         </div>
-        <Link href="/settings" className="text-sm font-medium text-primary hover:underline">
-          Manage shared groups →
-        </Link>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <Link href="/settings" className="text-sm font-medium text-primary hover:underline">
+            Manage shared groups →
+          </Link>
+          <OpenInvitationLinkButton />
+        </div>
       </CardContent>
     </Card>
   );

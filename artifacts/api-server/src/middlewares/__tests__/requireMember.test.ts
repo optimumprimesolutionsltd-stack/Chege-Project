@@ -58,10 +58,14 @@ function selectQuery(fields: Record<string, unknown>) {
     if (table === groupMembershipsTable) {
       const userId = equalValue(filter, groupMembershipsTable.userId);
       const userMemberships = typeof userId === "string" ? memberships.get(userId) ?? [] : [];
+      const requestedGroupId = equalValue(filter, groupMembershipsTable.groupId);
       const sharedOnly = hasNullCheck(filter, groupsTable.privateOwnerUserId);
-      return sharedOnly
-        ? userMemberships.filter((membership) => ![...privateWorkspaceIds.values()].includes(membership.groupId))
+      const matchingMemberships = typeof requestedGroupId === "number"
+        ? userMemberships.filter((membership) => membership.groupId === requestedGroupId)
         : userMemberships;
+      return sharedOnly
+        ? matchingMemberships.filter((membership) => ![...privateWorkspaceIds.values()].includes(membership.groupId))
+        : matchingMemberships;
     }
     if (table === groupsTable) {
       return "count" in fields
@@ -188,7 +192,7 @@ function authenticatedRequest(userId: string) {
 }
 
 function response() {
-  const res = { status: vi.fn(), json: vi.fn() };
+  const res = { status: vi.fn(), json: vi.fn(), clearCookie: vi.fn() };
   res.status.mockReturnValue(res);
   return res as any;
 }
@@ -260,5 +264,32 @@ describe("requireMember", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ groupId: 2 });
     expect(memberships.get("removed-member")).toEqual([{ groupId: 2, role: "owner" }]);
+  });
+
+  it("uses a selected shared workspace only when the signed-in person is still a member", async () => {
+    groupExists = true;
+    privateWorkspaceIds.set("member", 2);
+    memberships.set("member", [
+      { groupId: 2, role: "owner" },
+      { groupId: 7, role: "member" },
+    ]);
+    const req = authenticatedRequest("member");
+    req.get = (header: string) => header === "x-bajeti-workspace" ? "7" : undefined;
+
+    await requireMember(req, response(), vi.fn());
+
+    expect(req.group).toEqual({ id: 7, role: "member", isPrivate: false });
+  });
+
+  it("falls back to My Budget when a mobile client sends a stale workspace id", async () => {
+    groupExists = true;
+    privateWorkspaceIds.set("member", 2);
+    memberships.set("member", [{ groupId: 2, role: "owner" }]);
+    const req = authenticatedRequest("member");
+    req.get = (header: string) => header === "x-bajeti-workspace" ? "999" : undefined;
+
+    await requireMember(req, response(), vi.fn());
+
+    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
   });
 });

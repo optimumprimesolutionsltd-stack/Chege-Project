@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -26,7 +27,11 @@ import {
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import { resolveAvatarProps, getDisplayName } from '@/utils/avatarHelper';
-import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
+import {
+  activateMobileWorkspace,
+  leaveMobileSharedWorkspace,
+  switchMobileWorkspace,
+} from '@/lib/workspace';
 
 type IncomeSource = { id: number; name: string; isMain: boolean; userId: string; expectedMonthlyAmount: number };
 type GroupMember = {
@@ -124,9 +129,12 @@ export default function SettingsScreen() {
   const handleSelectWorkspace = async (groupId: number) => {
     if (groupId === group?.id) return;
     try {
-      await selectWorkspace.mutateAsync({ data: { groupId } });
-      await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(groupId));
-      await queryClient.invalidateQueries();
+      await switchMobileWorkspace({
+        groupId,
+        select: (selectedGroupId) => selectWorkspace.mutateAsync({ data: { groupId: selectedGroupId } }),
+        storage: AsyncStorage,
+        resetQueries: () => queryClient.resetQueries(),
+      });
     } catch (error) {
       Alert.alert('Could not switch budget', error instanceof Error ? error.message : 'Please try again.');
     }
@@ -136,10 +144,13 @@ export default function SettingsScreen() {
     if (name.length < 2) return;
     try {
       const workspace = await createSharedGroup.mutateAsync({ data: { name } });
-      await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(workspace.id));
+      await activateMobileWorkspace({
+        groupId: workspace.id,
+        storage: AsyncStorage,
+        resetQueries: () => queryClient.resetQueries(),
+      });
       setNewGroupName('');
       setCreateGroupOpen(false);
-      await queryClient.invalidateQueries();
       Alert.alert('Private group created', 'Your My Budget records stayed private and separate.');
     } catch (error) {
       Alert.alert('Could not create group', error instanceof Error ? error.message : 'Please try again.');
@@ -261,9 +272,15 @@ export default function SettingsScreen() {
           onPress: async () => {
             setManagingMembers(true);
             try {
-              await customFetch('/api/members/me', { method: 'DELETE' });
-              queryClient.clear();
-              await logout();
+              // A person always keeps My Budget, so leaving a shared group
+              // returns them there instead of ending their Bajeti session.
+              await leaveMobileSharedWorkspace({
+                leave: () => customFetch('/api/members/me', { method: 'DELETE' }),
+                storage: AsyncStorage,
+                resetQueries: () => queryClient.resetQueries(),
+              });
+              router.replace('/(tabs)');
+              Alert.alert('You left the group', 'You are now back in your private My Budget.');
             } catch (error) {
               Alert.alert('Could not leave group', error instanceof Error ? error.message : 'Please try again.');
             } finally {
