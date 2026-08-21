@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
   useGetDashboardSummary,
+  useGetDashboardIncomeStreams,
   useGetGroup,
   customFetch,
 } from '@workspace/api-client-react';
@@ -26,6 +27,18 @@ const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
+
+type IncomeStreamFunding = {
+  incomeSourceId?: number | null;
+  sourceName: string;
+  ownerId?: string | null;
+  ownerName: string;
+  total: number;
+  expectedMonthlyAmount: number;
+  remainingBalance: number;
+  variance: number;
+  transactionCount: number;
+};
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -58,6 +71,9 @@ function MemberCard({
   spent,
   net,
   target,
+  incomeStreams,
+  isIncomeStreamsLoading,
+  incomeStreamsError,
   accentColor,
   gradientColors,
   onPress,
@@ -69,12 +85,18 @@ function MemberCard({
   spent: number;
   net: number;
   target: number;
+  incomeStreams: IncomeStreamFunding[];
+  isIncomeStreamsLoading: boolean;
+  incomeStreamsError: boolean;
   accentColor: string;
   gradientColors: [string, string];
   onPress: () => void;
 }) {
   const pct = target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
   const netPositive = net >= 0;
+  const expectedFromSources = incomeStreams.reduce((sum, stream) => sum + stream.expectedMonthlyAmount, 0);
+  const recordedFromSources = incomeStreams.reduce((sum, stream) => sum + stream.total, 0);
+  const sourceBalance = expectedFromSources - recordedFromSources;
 
   return (
     <Pressable onPress={onPress} android_ripple={{ color: 'rgba(255,255,255,0.08)' }}>
@@ -118,6 +140,50 @@ function MemberCard({
           <Text style={[styles.memberRemaining, { color: netPositive ? 'rgba(247,250,246,0.55)' : '#f87171' }]}>
             {netPositive ? `KES ${formatKES(Math.max(target - contributed, 0))} to go` : `Deficit KES ${formatKES(Math.abs(net))}`}
           </Text>
+        </View>
+
+        <View style={styles.incomePlan}>
+          <Text style={styles.incomePlanTitle}>INCOME SOURCE PLAN</Text>
+          {isIncomeStreamsLoading ? (
+            <Text style={styles.incomePlanEmpty}>Loading income plan…</Text>
+          ) : incomeStreamsError ? (
+            <Text style={styles.incomePlanError}>Couldn’t load income-source details. Pull to refresh and try again.</Text>
+          ) : incomeStreams.length === 0 ? (
+            <Text style={styles.incomePlanEmpty}>No income source is set for this member yet.</Text>
+          ) : (
+            <>
+              <View style={styles.incomePlanTotals}>
+                <View style={styles.incomePlanTotal}>
+                  <Text style={styles.incomePlanLabel}>Expected</Text>
+                  <Text style={styles.incomePlanAmount}>KES {formatKES(expectedFromSources)}</Text>
+                </View>
+                <View style={styles.incomePlanTotal}>
+                  <Text style={styles.incomePlanLabel}>Recorded</Text>
+                  <Text style={[styles.incomePlanAmount, { color: accentColor }]}>KES {formatKES(recordedFromSources)}</Text>
+                </View>
+                <View style={styles.incomePlanTotal}>
+                  <Text style={styles.incomePlanLabel}>{sourceBalance < 0 ? 'Above' : 'Remaining'}</Text>
+                  <Text style={styles.incomePlanAmount}>KES {formatKES(Math.abs(sourceBalance))}</Text>
+                </View>
+              </View>
+              {incomeStreams.map((stream) => {
+                const aboveExpected = stream.remainingBalance < 0;
+                return (
+                  <View key={stream.incomeSourceId ?? stream.sourceName} style={styles.incomeSourceRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.incomeSourceName}>{stream.sourceName}</Text>
+                      <Text style={styles.incomeSourceSub}>
+                        Expected KES {formatKES(stream.expectedMonthlyAmount)} · Recorded KES {formatKES(stream.total)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.incomeSourceVariance, { color: aboveExpected ? accentColor : 'rgba(247,250,246,0.65)' }]}>
+                      {aboveExpected ? `KES ${formatKES(Math.abs(stream.remainingBalance))} above` : `KES ${formatKES(stream.remainingBalance)} left`}
+                    </Text>
+                  </View>
+                );
+              })}
+            </>
+          )}
         </View>
       </LinearGradient>
     </Pressable>
@@ -392,9 +458,26 @@ export default function ContributionsScreen() {
   function jumpToMonth(m: number, y: number) { setMonth(m); setYear(y); setPickerVisible(false); }
 
   const { data: summary, isLoading, refetch } = useGetDashboardSummary({ month, year });
+  const {
+    data: incomeStreamReport,
+    isLoading: isIncomeStreamsLoading,
+    isError: incomeStreamsError,
+    refetch: refetchIncomeStreams,
+  } = useGetDashboardIncomeStreams({ month, year });
 
   type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
   const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
+  const streamsByMember = useMemo(() => {
+    const streams = new Map<string, IncomeStreamFunding[]>();
+    for (const stream of incomeStreamReport?.streams ?? []) {
+      if (!stream.ownerId || stream.incomeSourceId == null) continue;
+      const rows = streams.get(stream.ownerId) ?? [];
+      rows.push(stream);
+      streams.set(stream.ownerId, rows);
+    }
+    return streams;
+  }, [incomeStreamReport]);
+  const unattributedFunding = incomeStreamReport?.streams.find(stream => stream.incomeSourceId == null);
 
   const MEMBER_PALETTE = [
     { accent: '#4ade80', gradient: ['#132a1c', '#0f2217'] as [string, string] },
@@ -407,9 +490,9 @@ export default function ContributionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), refetchIncomeStreams()]);
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, refetchIncomeStreams]);
 
   function openBreakdown(userId: string, name: string, accentColor: string) {
     setBMonth(month);
@@ -516,12 +599,26 @@ export default function ContributionsScreen() {
                   spent={m.spent}
                   net={m.net}
                   target={m.target ?? 0}
+                  incomeStreams={streamsByMember.get(m.userId) ?? []}
+                  isIncomeStreamsLoading={isIncomeStreamsLoading}
+                  incomeStreamsError={incomeStreamsError}
                   accentColor={palette.accent}
                   gradientColors={palette.gradient}
                   onPress={() => openBreakdown(m.userId, m.name, palette.accent)}
                 />
               );
             })}
+            {unattributedFunding && (
+              <View style={styles.unattributedCard}>
+                <View style={styles.unattributedIcon}>
+                  <Feather name="help-circle" size={16} color="#fbbf24" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.unattributedTitle}>Unattributed funding · KES {formatKES(unattributedFunding.total)}</Text>
+                  <Text style={styles.unattributedText}>No income source was selected, so this amount is not assigned to a member’s income plan.</Text>
+                </View>
+              </View>
+            )}
           </View>
         ) : null}
       </ScrollView>
@@ -572,6 +669,22 @@ const styles = StyleSheet.create({
   memberFooter: { flexDirection: 'row', justifyContent: 'space-between' },
   memberPct: { fontSize: 12, color: 'rgba(247,250,246,0.55)', fontFamily: 'Inter_400Regular' },
   memberRemaining: { fontSize: 12, color: 'rgba(247,250,246,0.55)', fontFamily: 'Inter_400Regular' },
+  incomePlan: { marginTop: 16, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.12)' },
+  incomePlanTitle: { fontSize: 10, color: 'rgba(122,170,138,0.9)', fontFamily: 'Inter_600SemiBold', letterSpacing: 0.7 },
+  incomePlanEmpty: { marginTop: 7, fontSize: 12, color: 'rgba(247,250,246,0.5)', fontFamily: 'Inter_400Regular' },
+  incomePlanError: { marginTop: 7, fontSize: 12, color: '#fca5a5', fontFamily: 'Inter_400Regular' },
+  incomePlanTotals: { flexDirection: 'row', marginTop: 10, marginBottom: 4, backgroundColor: 'rgba(0,0,0,0.14)', borderRadius: 10, paddingVertical: 8 },
+  incomePlanTotal: { flex: 1, paddingHorizontal: 8, alignItems: 'center' },
+  incomePlanLabel: { fontSize: 9, color: 'rgba(247,250,246,0.5)', fontFamily: 'Inter_400Regular', textTransform: 'uppercase' as const, letterSpacing: 0.35 },
+  incomePlanAmount: { marginTop: 2, fontSize: 11, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+  incomeSourceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  incomeSourceName: { fontSize: 13, color: '#f7faf6', fontFamily: 'Inter_600SemiBold' },
+  incomeSourceSub: { marginTop: 2, fontSize: 10, color: 'rgba(247,250,246,0.48)', fontFamily: 'Inter_400Regular' },
+  incomeSourceVariance: { maxWidth: 84, textAlign: 'right', fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+  unattributedCard: { flexDirection: 'row', gap: 10, borderRadius: 14, padding: 14, backgroundColor: 'rgba(245,158,11,0.1)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.28)' },
+  unattributedIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(245,158,11,0.14)' },
+  unattributedTitle: { fontSize: 13, color: '#fcd34d', fontFamily: 'Inter_600SemiBold' },
+  unattributedText: { marginTop: 3, fontSize: 11, lineHeight: 16, color: 'rgba(247,250,246,0.6)', fontFamily: 'Inter_400Regular' },
 });
 
 const bStyles = StyleSheet.create({

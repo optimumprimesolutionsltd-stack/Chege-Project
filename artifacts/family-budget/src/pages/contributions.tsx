@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   useGetDashboardSummary,
-  useGetIncomeSources,
+  useGetDashboardIncomeStreams,
   useGetGroup,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,17 @@ import { formatKes, formatMonthYear } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, Calendar, TrendingUp } from "lucide-react";
 
 type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
+type IncomeStream = {
+  incomeSourceId?: number | null;
+  sourceName: string;
+  ownerId?: string | null;
+  ownerName: string;
+  total: number;
+  expectedMonthlyAmount: number;
+  remainingBalance: number;
+  variance: number;
+  transactionCount: number;
+};
 const MEMBER_ACCENT_COLORS = ["#4ade80", "#f97316", "#38bdf8", "#f472b6", "#a78bfa"];
 
 const CONTRIBUTIONS_MONTH_KEY = "contributions-month-pref";
@@ -24,12 +35,19 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 }
 
 function MemberCard({
-  member, accentColor,
-}: { member: MemberContrib; accentColor: string }) {
+  member, accentColor, incomeStreams, isIncomeStreamsLoading, incomeStreamsError,
+}: {
+  member: MemberContrib;
+  accentColor: string;
+  incomeStreams: IncomeStream[];
+  isIncomeStreamsLoading: boolean;
+  incomeStreamsError: boolean;
+}) {
   const { userId, name, contributed, spent, net, target } = member;
   const pct = target && target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
-  const { data: allSources } = useGetIncomeSources();
-  const sources = allSources?.filter((source) => source.userId === userId) ?? [];
+  const expectedFromSources = incomeStreams.reduce((sum, stream) => sum + stream.expectedMonthlyAmount, 0);
+  const trackedFunding = incomeStreams.reduce((sum, stream) => sum + stream.total, 0);
+  const sourceBalance = expectedFromSources - trackedFunding;
 
   return (
     <Card className="border-none shadow-md overflow-hidden">
@@ -78,21 +96,72 @@ function MemberCard({
           </div>
         </div>
 
-        {/* Income sources */}
-        {sources.length > 0 && (
-          <div className="space-y-1.5 pt-1">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Income streams</p>
-            <div className="flex flex-wrap gap-1.5">
-              {sources.map(src => (
-                <span key={src.id}
-                  className="px-2.5 py-1 rounded-full text-xs border font-medium"
-                  style={{ borderColor: accentColor + "60", color: accentColor, backgroundColor: accentColor + "12" }}>
-                  {src.name}
-                </span>
-              ))}
+        {/* Income source plan */}
+        <div className="space-y-2.5 pt-1">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Income source plan</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Expected funding compared with what this member has contributed.</p>
             </div>
+            {!isIncomeStreamsLoading && !incomeStreamsError && incomeStreams.length > 0 && (
+              <span className="shrink-0 text-xs font-semibold" style={{ color: accentColor }}>
+                {formatKes(trackedFunding)} recorded
+              </span>
+            )}
           </div>
-        )}
+
+          {isIncomeStreamsLoading ? (
+            <div className="h-16 animate-pulse rounded-xl bg-muted/60" />
+          ) : incomeStreamsError ? (
+            <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              We couldn’t load this income-source plan. Try refreshing the page.
+            </p>
+          ) : incomeStreams.length === 0 ? (
+            <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              No income source has been set for {name} yet.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-xl bg-muted/50 p-2.5">
+                  <p className="text-[11px] text-muted-foreground">Expected</p>
+                  <p className="mt-0.5 text-sm font-display font-bold">{formatKes(expectedFromSources)}</p>
+                </div>
+                <div className="rounded-xl bg-muted/50 p-2.5">
+                  <p className="text-[11px] text-muted-foreground">Recorded</p>
+                  <p className="mt-0.5 text-sm font-display font-bold" style={{ color: accentColor }}>{formatKes(trackedFunding)}</p>
+                </div>
+                <div className="rounded-xl bg-muted/50 p-2.5">
+                  <p className="text-[11px] text-muted-foreground">{sourceBalance < 0 ? "Above" : "Remaining"}</p>
+                  <p className={`mt-0.5 text-sm font-display font-bold ${sourceBalance < 0 ? "text-primary" : ""}`}>
+                    {formatKes(Math.abs(sourceBalance))}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {incomeStreams.map((stream) => {
+                  const aboveExpected = stream.remainingBalance < 0;
+                  return (
+                    <div key={stream.incomeSourceId ?? stream.sourceName} className="rounded-xl border border-border/70 px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{stream.sourceName}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Expected {formatKes(stream.expectedMonthlyAmount)} · Recorded {formatKes(stream.total)}
+                          </p>
+                        </div>
+                        <p className={`shrink-0 text-xs font-semibold ${aboveExpected ? "text-primary" : "text-muted-foreground"}`}>
+                          {aboveExpected ? `${formatKes(Math.abs(stream.remainingBalance))} above` : `${formatKes(stream.remainingBalance)} left`}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -122,6 +191,11 @@ export default function Contributions() {
   }, [month, year]);
 
   const { data: summary, isLoading } = useGetDashboardSummary({ month, year });
+  const {
+    data: incomeStreamReport,
+    isLoading: isIncomeStreamsLoading,
+    isError: incomeStreamsError,
+  } = useGetDashboardIncomeStreams({ month, year });
 
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
@@ -129,6 +203,24 @@ export default function Contributions() {
   const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
   const totalContrib = memberContribs.reduce((s, m) => s + m.contributed, 0);
   const totalTarget = memberContribs.reduce((s, m) => s + (m.target ?? 0), 0);
+  const streamsByMember = useMemo(() => {
+    const streams = new Map<string, IncomeStream[]>();
+    for (const stream of incomeStreamReport?.streams ?? []) {
+      if (!stream.ownerId || stream.incomeSourceId == null) continue;
+      const rows = streams.get(stream.ownerId) ?? [];
+      rows.push(stream);
+      streams.set(stream.ownerId, rows);
+    }
+    return streams;
+  }, [incomeStreamReport]);
+  const totalExpectedFromSources = (incomeStreamReport?.streams ?? [])
+    .filter(stream => stream.incomeSourceId != null)
+    .reduce((sum, stream) => sum + stream.expectedMonthlyAmount, 0);
+  const trackedFundingFromSources = (incomeStreamReport?.streams ?? [])
+    .filter(stream => stream.incomeSourceId != null)
+    .reduce((sum, stream) => sum + stream.total, 0);
+  const sourcePlanBalance = totalExpectedFromSources - trackedFundingFromSources;
+  const unattributedFunding = incomeStreamReport?.streams.find(stream => stream.incomeSourceId == null);
 
   return (
     <div className="space-y-8 pb-12">
@@ -206,8 +298,37 @@ export default function Contributions() {
                 {Math.round(totalTarget > 0 ? (totalContrib / totalTarget) * 100 : 0)}% of combined target
               </p>
             </div>
+            <div className="mt-5 grid grid-cols-1 gap-3 border-t pt-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Income-source expected</p>
+                <p className="mt-1 font-display text-lg font-bold">
+                  {isIncomeStreamsLoading ? "Loading…" : incomeStreamsError ? "Unavailable" : formatKes(totalExpectedFromSources)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Recorded from sources</p>
+                <p className="mt-1 font-display text-lg font-bold text-primary">
+                  {isIncomeStreamsLoading ? "Loading…" : incomeStreamsError ? "Unavailable" : formatKes(trackedFundingFromSources)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{sourcePlanBalance < 0 ? "Above income plan" : "Still expected"}</p>
+                <p className="mt-1 font-display text-lg font-bold">
+                  {isIncomeStreamsLoading ? "Loading…" : incomeStreamsError ? "Unavailable" : formatKes(Math.abs(sourcePlanBalance))}
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
+      )}
+
+      {unattributedFunding && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-foreground">
+          <p className="font-semibold">Unattributed funding: {formatKes(unattributedFunding.total)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            This funding has no selected income source, so it is kept separate from each member’s income plan.
+          </p>
+        </div>
       )}
 
       {/* Per-person cards */}
@@ -222,6 +343,9 @@ export default function Contributions() {
               key={m.userId}
               member={m}
               accentColor={MEMBER_ACCENT_COLORS[idx % MEMBER_ACCENT_COLORS.length]}
+              incomeStreams={streamsByMember.get(m.userId) ?? []}
+              isIncomeStreamsLoading={isIncomeStreamsLoading}
+              incomeStreamsError={incomeStreamsError}
             />
           ))}
         </div>

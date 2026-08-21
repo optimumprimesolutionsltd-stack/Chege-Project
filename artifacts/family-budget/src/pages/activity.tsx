@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { getGetDashboardActivityQueryKey, getGetDashboardSummaryQueryKey, useGetDashboardActivity, useGetDashboardSummary, useGetGroup } from "@workspace/api-client-react";
+import {
+  getGetDashboardActivityQueryKey,
+  getGetDashboardIncomeStreamsQueryKey,
+  getGetDashboardSummaryQueryKey,
+  useGetDashboardActivity,
+  useGetDashboardIncomeStreams,
+  useGetDashboardSummary,
+  useGetGroup,
+} from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { ArrowUpRight, ArrowDownRight, Loader2, Activity as ActivityIcon, Calendar, Pencil, TrendingUp } from "lucide-react";
@@ -7,6 +15,14 @@ import { ACTIVITY_TYPE } from "@/lib/activityTypes";
 
 type ActivityTab = "all" | "expenses" | "contributions";
 type MemberContribution = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
+type IncomeStream = {
+  incomeSourceId?: number | null;
+  sourceName: string;
+  ownerId?: string | null;
+  total: number;
+  expectedMonthlyAmount: number;
+  remainingBalance: number;
+};
 
 export default function Activity() {
   const { data: group } = useGetGroup();
@@ -28,6 +44,10 @@ export default function Activity() {
   const { data: summary, isLoading: summaryLoading, isError: summaryError } = useGetDashboardSummary(
     { month, year },
     { query: { queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false, enabled: tab === "contributions" } },
+  );
+  const incomeStreamReport = useGetDashboardIncomeStreams(
+    { month, year },
+    { query: { queryKey: getGetDashboardIncomeStreamsQueryKey({ month, year }), retry: false, enabled: tab === "contributions" } },
   );
   const activity = tab === "contributions" ? monthlyActivity.data : recentActivity.data;
   const isLoading = tab === "contributions" ? monthlyActivity.isLoading : recentActivity.isLoading;
@@ -57,6 +77,24 @@ export default function Activity() {
   const members = ((summary as { memberContributions?: MemberContribution[] } | undefined)?.memberContributions ?? []);
   const totalContributed = members.reduce((total, member) => total + member.contributed, 0);
   const totalTarget = members.reduce((total, member) => total + (member.target ?? 0), 0);
+  const streamsByMember = useMemo(() => {
+    const streams = new Map<string, IncomeStream[]>();
+    for (const stream of incomeStreamReport.data?.streams ?? []) {
+      if (!stream.ownerId || stream.incomeSourceId == null) continue;
+      const rows = streams.get(stream.ownerId) ?? [];
+      rows.push(stream);
+      streams.set(stream.ownerId, rows);
+    }
+    return streams;
+  }, [incomeStreamReport.data]);
+  const totalExpectedFromSources = (incomeStreamReport.data?.streams ?? [])
+    .filter(stream => stream.incomeSourceId != null)
+    .reduce((sum, stream) => sum + stream.expectedMonthlyAmount, 0);
+  const recordedFromSources = (incomeStreamReport.data?.streams ?? [])
+    .filter(stream => stream.incomeSourceId != null)
+    .reduce((sum, stream) => sum + stream.total, 0);
+  const sourcePlanBalance = totalExpectedFromSources - recordedFromSources;
+  const unattributedFunding = incomeStreamReport.data?.streams.find(stream => stream.incomeSourceId == null);
   const previousMonth = () => {
     if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1);
   };
@@ -121,15 +159,34 @@ export default function Activity() {
               <Card className="border-none shadow-md"><CardContent className="pt-5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Group contribution total</p>
                 <div className="mt-2 flex flex-col gap-0.5 sm:flex-row sm:items-end sm:gap-2"><p className="font-display text-3xl font-bold">{formatKes(totalContributed)}</p><span className="text-sm text-muted-foreground sm:mb-1">of {formatKes(totalTarget)} target</span></div>
+                <div className="mt-5 grid grid-cols-1 gap-3 border-t pt-4 sm:grid-cols-3">
+                  <div><p className="text-xs text-muted-foreground">Income-source expected</p><p className="mt-1 font-display text-lg font-bold">{incomeStreamReport.isLoading ? "Loading…" : incomeStreamReport.isError ? "Unavailable" : formatKes(totalExpectedFromSources)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Recorded from sources</p><p className="mt-1 font-display text-lg font-bold text-primary">{incomeStreamReport.isLoading ? "Loading…" : incomeStreamReport.isError ? "Unavailable" : formatKes(recordedFromSources)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{sourcePlanBalance < 0 ? "Above income plan" : "Still expected"}</p><p className="mt-1 font-display text-lg font-bold">{incomeStreamReport.isLoading ? "Loading…" : incomeStreamReport.isError ? "Unavailable" : formatKes(Math.abs(sourcePlanBalance))}</p></div>
+                </div>
               </CardContent></Card>
               <div className="grid gap-4 md:grid-cols-2">
-                {members.map((member) => (
-                <Card key={member.userId} className="border-none shadow-md"><CardContent className="space-y-3 pt-5">
+                {members.map((member) => {
+                  const memberStreams = streamsByMember.get(member.userId) ?? [];
+                  const expectedFromSources = memberStreams.reduce((sum, stream) => sum + stream.expectedMonthlyAmount, 0);
+                  const recordedForMember = memberStreams.reduce((sum, stream) => sum + stream.total, 0);
+                  const remainingForMember = expectedFromSources - recordedForMember;
+                  return (
+                  <Card key={member.userId} className="border-none shadow-md"><CardContent className="space-y-3 pt-5">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="break-words font-display text-lg font-bold">{member.name}</p><p className="text-xs text-muted-foreground">{member.target == null ? "No monthly target" : `${formatKes(member.target)} monthly target`}</p></div><p className="font-display text-xl font-bold text-primary">{formatKes(member.contributed)}</p></div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Contributed</p><p className="mt-1 font-bold">{formatKes(member.contributed)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Spent</p><p className="mt-1 font-bold">{formatKes(member.spent)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Net</p><p className={`mt-1 font-bold ${member.net >= 0 ? "text-primary" : "text-destructive"}`}>{member.net >= 0 ? "+" : ""}{formatKes(member.net)}</p></div></div>
+                    <div className="space-y-2 border-t pt-3">
+                      <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Income source plan</p><p className="mt-0.5 text-xs text-muted-foreground">Expected funding compared with what this member recorded.</p></div>{!incomeStreamReport.isLoading && !incomeStreamReport.isError && memberStreams.length > 0 && <p className="shrink-0 text-xs font-semibold text-primary">{formatKes(recordedForMember)} recorded</p>}</div>
+                      {incomeStreamReport.isLoading ? <div className="h-16 animate-pulse rounded-xl bg-muted/60" /> : incomeStreamReport.isError ? <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">We couldn’t load this income-source plan. Refresh to try again.</p> : memberStreams.length === 0 ? <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">No income source has been set for {member.name} yet.</p> : <>
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Expected</p><p className="mt-1 font-bold">{formatKes(expectedFromSources)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Recorded</p><p className="mt-1 font-bold text-primary">{formatKes(recordedForMember)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">{remainingForMember < 0 ? "Above" : "Remaining"}</p><p className="mt-1 font-bold">{formatKes(Math.abs(remainingForMember))}</p></div></div>
+                        <div className="divide-y divide-border/60 rounded-xl border border-border/70 px-3">{memberStreams.map((stream) => { const aboveExpected = stream.remainingBalance < 0; return <div key={stream.incomeSourceId ?? stream.sourceName} className="flex items-start justify-between gap-3 py-2.5"><div className="min-w-0"><p className="truncate text-sm font-semibold">{stream.sourceName}</p><p className="mt-0.5 text-xs text-muted-foreground">Expected {formatKes(stream.expectedMonthlyAmount)} · Recorded {formatKes(stream.total)}</p></div><p className={`shrink-0 text-xs font-semibold ${aboveExpected ? "text-primary" : "text-muted-foreground"}`}>{aboveExpected ? `${formatKes(Math.abs(stream.remainingBalance))} above` : `${formatKes(stream.remainingBalance)} left`}</p></div>; })}</div>
+                      </>}
+                    </div>
                   </CardContent></Card>
-                ))}
+                  );
+                })}
               </div>
+              {unattributedFunding && <Card className="border-amber-500/30 bg-amber-500/5"><CardContent className="pt-5"><p className="font-semibold">Unattributed funding: {formatKes(unattributedFunding.total)}</p><p className="mt-1 text-sm text-muted-foreground">No income source was selected, so this funding is kept separate from each member’s income plan.</p></CardContent></Card>}
             </div>
           )}
           {sharedHouseholdActivity.length > 0 && (

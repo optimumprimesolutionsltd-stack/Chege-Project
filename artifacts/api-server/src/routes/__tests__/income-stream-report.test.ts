@@ -153,6 +153,53 @@ describe("GET /dashboard/income-streams", () => {
     expect(statementText).toContain("NOT EXISTS");
   });
 
+  it("keeps configured streams with no recorded funding in the member comparison", async () => {
+    mockedDb.execute.mockResolvedValue({
+      rows: [{
+        incomeSourceId: 7,
+        sourceName: "Ujenzi",
+        ownerId: "member-a",
+        ownerName: "Amina",
+        total: "12500",
+        transactionCount: "1",
+      }],
+    });
+    mockIncomeSources([
+      { id: 7, name: "Ujenzi", userId: "member-a", expectedMonthlyAmount: 50_000, ownerName: "Amina" },
+      { id: 8, name: "Side work", userId: "member-a", expectedMonthlyAmount: 5_000, ownerName: "Amina" },
+    ]);
+
+    const response = await request(buildApp()).get("/dashboard/income-streams?month=5&year=2026");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      totalFunding: 12_500,
+      totalExpected: 55_000,
+      remainingBalance: 42_500,
+      streams: expect.arrayContaining([
+        expect.objectContaining({
+          incomeSourceId: 7,
+          sourceName: "Ujenzi",
+          ownerId: "member-a",
+          total: 12_500,
+          expectedMonthlyAmount: 50_000,
+          remainingBalance: 37_500,
+          variance: -37_500,
+        }),
+        expect.objectContaining({
+          incomeSourceId: 8,
+          sourceName: "Side work",
+          ownerId: "member-a",
+          total: 0,
+          expectedMonthlyAmount: 5_000,
+          remainingBalance: 5_000,
+          variance: -5_000,
+          transactionCount: 0,
+        }),
+      ]),
+    });
+  });
+
   it("returns a safe empty report when the selected month has no funding", async () => {
     mockedDb.execute.mockResolvedValue({ rows: [] });
     mockIncomeSources([]);
