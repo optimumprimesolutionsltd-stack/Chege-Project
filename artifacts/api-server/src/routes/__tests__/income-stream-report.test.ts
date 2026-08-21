@@ -170,3 +170,86 @@ describe("GET /dashboard/income-streams", () => {
     });
   });
 });
+
+describe("GET /dashboard/summary — joint-bank expense attribution", () => {
+  it("excludes a paid_from_bank expense with no payer from individual contribution totals", async () => {
+    const selectRows = [
+      [{ total: "1000" }], // budget
+      [{ total: "800" }], // spending
+      [{ count: "2" }], // expense count
+      [{ total: "0" }], // categorized bank disbursements
+      [], // savings-goal contributions
+      [{ userId: "member-a", firstName: "Amina", monthlyTarget: 1000 }], // members
+    ];
+    let selectCall = 0;
+    mockedDb.select.mockImplementation(() => {
+      const rows = selectRows[selectCall++] ?? [];
+      if (selectCall === 5) {
+        return {
+          from: () => ({
+            where: () => ({
+              groupBy: () => Promise.resolve(rows),
+            }),
+          }),
+        };
+      }
+      if (selectCall === 6) {
+        return {
+          from: () => ({
+            leftJoin: () => ({
+              where: () => Promise.resolve(rows),
+            }),
+          }),
+        };
+      }
+      return {
+        from: () => ({
+          where: () => Promise.resolve(rows),
+        }),
+      };
+    });
+
+    let executeCall = 0;
+    mockedDb.execute.mockImplementation(() => {
+      executeCall++;
+      if (executeCall === 1) {
+        return Promise.resolve({
+          rows: [
+            { userId: "member-a", total: "500" },
+            // This is the joint-bank expense under test. It must not be
+            // assigned to any member even if a future query returns this row.
+            { userId: null, total: "300" },
+          ],
+        });
+      }
+      if (executeCall === 2) {
+        return Promise.resolve({ rows: [] });
+      }
+      return Promise.resolve({
+        rows: [
+          { userId: "member-a", total: "500" },
+          { userId: null, total: "0" },
+        ],
+      });
+    });
+
+    const response = await request(buildApp()).get("/dashboard/summary?month=5&year=2026");
+
+    expect(response.status).toBe(200);
+    expect(response.body.memberContributions).toEqual([
+      {
+        userId: "member-a",
+        name: "Amina",
+        contributed: 500,
+        spent: 500,
+        net: 0,
+        target: 1000,
+      },
+    ]);
+
+    const summaryStatement = sqlMock.mock.results
+      .map((result) => result.value as { strings: TemplateStringsArray } | undefined)
+      .find((statement) => statement?.strings.join("").includes("e.paid_from_bank = true"));
+    expect(summaryStatement?.strings.join("")).toContain("e.paid_by_id IS NULL");
+  });
+});

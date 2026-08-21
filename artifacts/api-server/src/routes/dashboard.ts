@@ -65,6 +65,8 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   // Expense contribution logic (split-aware):
   //   • If the expense has income splits → only the non-bank split amounts count
   //   • If no splits → full amount counts when paidFromBank = false
+  //   • A joint-bank expense (paid_from_bank = true, paid_by_id IS NULL) has no
+  //     individual contributor and must never enter a member's contribution total
   const [expenseContribs, depositContribs, savingsContribs] = await Promise.all([
     db.execute(sql`
       SELECT COALESCE(s.user_id, e.paid_by_id) AS "userId",
@@ -78,6 +80,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       WHERE e.group_id = ${groupId}
         AND EXTRACT(MONTH FROM e.date) = ${month}
         AND EXTRACT(YEAR FROM e.date) = ${year}
+        AND NOT (e.paid_from_bank = true AND e.paid_by_id IS NULL)
       GROUP BY COALESCE(s.user_id, e.paid_by_id)
     `).then(r => (r.rows as { userId: string | null; total: string }[]).map(x => ({ userId: x.userId, total: Number(x.total) }))),
 
@@ -122,6 +125,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     WHERE e.group_id = ${groupId}
       AND EXTRACT(MONTH FROM e.date) = ${month}
       AND EXTRACT(YEAR FROM e.date) = ${year}
+        AND NOT (e.paid_from_bank = true AND e.paid_by_id IS NULL)
     GROUP BY COALESCE(s.user_id, e.paid_by_id)
   `).then(result => (result.rows as { userId: string | null; total: string }[]).map(row => ({
     userId: row.userId,
