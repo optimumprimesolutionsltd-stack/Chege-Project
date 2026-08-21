@@ -9,6 +9,14 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -104,6 +112,7 @@ export default function DashboardScreen() {
 
   const {
     data: bankAccount,
+    isLoading: bankAccountLoading,
     refetch: refetchBank,
   } = useGetJointAccount();
   const { data: savingsGoals = [], refetch: refetchGoals } = useGetSavingsGoals();
@@ -422,9 +431,13 @@ export default function DashboardScreen() {
           <View style={styles.bankStatsRow}>
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>BALANCE</Text>
-              <Text style={[styles.bankBalance, { color: '#38bdf8' }]}>
-                {bankAccount ? (isPrivate ? '••••' : `KES ${shortKES(bankAccount.balance)}`) : '—'}
-              </Text>
+              {bankAccountLoading ? (
+                <BankBalanceSkeleton />
+              ) : (
+                <Text style={[styles.bankBalance, { color: '#38bdf8' }]}>
+                  {bankAccount ? (isPrivate ? '••••' : `KES ${shortKES(bankAccount.balance)}`) : '—'}
+                </Text>
+              )}
             </View>
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
@@ -486,6 +499,31 @@ function StatCell({ label, value, valueColor = '#f7faf6' }: { label: string; val
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={[styles.statValue, { color: valueColor }]}>{value}</Text>
     </View>
+  );
+}
+
+function BankBalanceSkeleton() {
+  const opacity = useSharedValue(0.45);
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.8, { duration: 650 }),
+        withTiming(0.45, { duration: 650 }),
+      ),
+      -1,
+    );
+
+    return () => cancelAnimation(opacity);
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      accessible
+      accessibilityLabel="Loading bank balance"
+      style={[styles.bankBalanceSkeleton, animatedStyle]}
+    />
   );
 }
 
@@ -591,6 +629,7 @@ const styles = StyleSheet.create({
   bankStat: { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4 },
   bankStatLabel: { fontSize: 9, fontFamily: 'Inter_400Regular', letterSpacing: 0.4, marginBottom: 3 },
   bankBalance: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  bankBalanceSkeleton: { width: 62, height: 16, borderRadius: 4, backgroundColor: 'rgba(56,189,248,0.25)' },
   bankStatValue: { fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
   bankStatDivider: { width: 1, marginVertical: 10 },
 
