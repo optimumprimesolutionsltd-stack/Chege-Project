@@ -28,3 +28,4 @@
 - [Shared transaction member rule](shared-transaction-member-rule.md) — new shared groups need two members for money activity; private and legacy workspaces remain usable.
 - [Replit Auth consent prompt](replit-auth-consent.md) — omit forced OIDC consent so returning users can reuse provider authorization.
 - [Web workspace start](web-workspace-start.md) — new web browser sessions start in My Budget, not the last shared workspace.
+- [All-round onboarding](all-round-onboarding.md) — setup guidance should cover the complete workspace journey, not only budgets or goals.
