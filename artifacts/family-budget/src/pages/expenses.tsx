@@ -55,11 +55,18 @@ type Expense = {
   notes?: string | null;
   paidById: string | null;
   paidByName: string | null;
+  incomeSourceId?: number | null;
+  paidFromBank?: boolean;
   isRecurring: boolean;
   date: string;
-  incomeSplits?: { userId?: string | null; label: string; amount: number; fromBank: boolean }[];
+  incomeSplits?: {
+    userId?: string | null;
+    label?: string;
+    amount: number;
+    incomeSourceId?: number;
+    fromBank: boolean;
+  }[];
 };
-type EditableExpense = Omit<Expense, "incomeSplits">;
 
 function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const today = now ?? new Date();
@@ -72,12 +79,14 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [payerIds, setPayerIds] = useState<string[]>(defaults?.paidById ? [defaults.paidById] : []);
   const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [otherIncomeSourceLabel, setOtherIncomeSourceLabel] = useState<string | null>(null);
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [isRecurring, setIsRecurring] = useState(defaults?.isRecurring ?? false);
   const [date, setDate] = useState(defaults?.date ?? today.toISOString().split("T")[0]);
   return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes,
            paidById, setPaidById, payerIds, setPayerIds, payerAmounts, setPayerAmounts,
-           incomeSourceId, setIncomeSourceId, paidFromBank, setPaidFromBank, isRecurring, setIsRecurring, date, setDate };
+           incomeSourceId, setIncomeSourceId, otherIncomeSourceLabel, setOtherIncomeSourceLabel,
+           paidFromBank, setPaidFromBank, isRecurring, setIsRecurring, date, setDate };
 }
 
 function useIncomeSources(userId: string) {
@@ -139,6 +148,7 @@ export default function Expenses() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editHasMultipleFundingSplits, setEditHasMultipleFundingSplits] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBudget, setNewCategoryBudget] = useState("");
@@ -187,26 +197,56 @@ export default function Expenses() {
   const resetAdd = () => {
     addForm.setAmount(""); addForm.setCategory(""); addForm.setDescription(""); addForm.setNotes("");
     addForm.setPaidById(""); addForm.setPayerIds([]); addForm.setPayerAmounts({});
-    addForm.setIncomeSourceId(null); addForm.setIsRecurring(false);
+    addForm.setIncomeSourceId(null); addForm.setOtherIncomeSourceLabel(null); addForm.setIsRecurring(false);
     addForm.setDate(now.toISOString().split("T")[0]);
     setAddNewSource(false); setNewSourceName("");
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setIsAdding(false);
   };
 
-  const startEdit = (expense: EditableExpense) => {
+  const startEdit = (expense: Expense) => {
+    const personalSplit = expense.incomeSplits?.find((split) => !split.fromBank);
+    const allFundingIsBank = expense.incomeSplits?.length
+      ? expense.incomeSplits.every((split) => split.fromBank)
+      : false;
+    const paidFromBank = expense.paidFromBank === true || allFundingIsBank;
+
     editForm.setAmount(expense.amount.toString());
     editForm.setCategory(expense.category);
     editForm.setDescription(expense.description);
     editForm.setNotes(expense.notes ?? "");
-    editForm.setPaidById(expense.paidById ?? "");
-    editForm.setIncomeSourceId(null);
+    editForm.setPaidById(paidFromBank ? "" : (expense.paidById ?? personalSplit?.userId ?? ""));
+    editForm.setIncomeSourceId(
+      paidFromBank ? null : (personalSplit?.incomeSourceId ?? expense.incomeSourceId ?? null),
+    );
+    editForm.setOtherIncomeSourceLabel(
+      !paidFromBank && personalSplit?.label ? personalSplit.label : null,
+    );
+    editForm.setPaidFromBank(paidFromBank);
+    setEditHasMultipleFundingSplits((expense.incomeSplits?.length ?? 0) > 1);
     editForm.setIsRecurring(expense.isRecurring);
     editForm.setDate(expense.date);
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setEditingId(expense.id);
     setIsAdding(false);
   };
+
+  useEffect(() => {
+    if (editingId === null || !editForm.otherIncomeSourceLabel || !editFormSources) return;
+
+    const matchingSource = editFormSources.find(
+      (source) => source.id === editForm.incomeSourceId,
+    ) ?? editFormSources.find(
+      (source) => source.name === editForm.otherIncomeSourceLabel,
+    );
+    if (!matchingSource) {
+      editForm.setIncomeSourceId(null);
+      return;
+    }
+
+    editForm.setIncomeSourceId(matchingSource.id);
+    editForm.setOtherIncomeSourceLabel(null);
+  }, [editingId, editForm.incomeSourceId, editForm.otherIncomeSourceLabel, editFormSources]);
 
   useEffect(() => {
     if (!expenseDeepLink.editId || !expenses || editingId === expenseDeepLink.editId) return;
@@ -329,6 +369,26 @@ export default function Expenses() {
   const handleUpdate = async (e: React.FormEvent, id: number) => {
     e.preventDefault();
     if (!editForm.amount || !editForm.category || !editForm.description || !editForm.date || (!editForm.paidById && !editForm.paidFromBank)) return;
+    if (editForm.otherIncomeSourceLabel !== null && !editForm.otherIncomeSourceLabel.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Source label required",
+        description: "Describe the Other source before saving.",
+      });
+      return;
+    }
+    const selectedSource = editFormSources?.find((source) => source.id === editForm.incomeSourceId);
+    const fundingSplits = editForm.paidFromBank
+      ? [{ userId: null, label: "Joint bank", amount: Number(editForm.amount), fromBank: true }]
+      : !editHasMultipleFundingSplits && (editForm.incomeSourceId || editForm.otherIncomeSourceLabel !== null)
+        ? [{
+          userId: editForm.paidById,
+          label: editForm.otherIncomeSourceLabel?.trim() || selectedSource?.name || "Household member",
+          amount: Number(editForm.amount),
+          fromBank: false,
+          ...(selectedSource ? { incomeSourceId: selectedSource.id } : {}),
+        }]
+        : undefined;
     try {
       await updateExpense.mutateAsync({
         id,
@@ -341,7 +401,10 @@ export default function Expenses() {
           isRecurring: editForm.isRecurring,
           date: editForm.date,
           paidFromBank: editForm.paidFromBank,
-          ...(editForm.incomeSourceId ? { incomeSourceId: editForm.incomeSourceId } : {}),
+          ...(!editHasMultipleFundingSplits && editForm.incomeSourceId
+            ? { incomeSourceId: editForm.incomeSourceId }
+            : {}),
+          ...(fundingSplits ? { incomeSplits: fundingSplits } : {}),
         } as Parameters<typeof updateExpense.mutateAsync>[0]["data"]
       });
       toast({ title: "Expense updated" });
@@ -380,6 +443,7 @@ export default function Expenses() {
     onCancel: () => void,
     title: string,
     submitLabel: string,
+    mode: "add" | "edit",
   ) => (
     <form onSubmit={onSubmit} className="space-y-6">
       <div className="flex items-center justify-between border-b border-border/50 pb-4">
@@ -497,27 +561,32 @@ export default function Expenses() {
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">
             Paid by <span className="text-destructive">*</span>
-            {title === "Add expense" && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
+            {mode === "add" && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
           </label>
           <div className="grid grid-cols-2 gap-2">
             {/* Joint bank — unattributed, no individual payer */}
-            {title === "Add expense" && (
-              <button type="button"
-                onClick={() => { form.setPaidFromBank(!form.paidFromBank); form.setIncomeSourceId(null); }}
-                className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
-              >
-                🏦 Joint bank account
-              </button>
-            )}
+            <button type="button"
+              onClick={() => {
+                const nextPaidFromBank = !form.paidFromBank;
+                form.setPaidFromBank(nextPaidFromBank);
+                form.setIncomeSourceId(null);
+                form.setOtherIncomeSourceLabel(null);
+                if (mode === "edit" && nextPaidFromBank) form.setPaidById("");
+              }}
+              className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
+            >
+              🏦 Joint bank account
+            </button>
             {(members ?? []).map((m) => {
               const name = m.userName?.split(" ")[0] ?? "Member";
-              const isMultiEnabled = title === "Add expense";
+              const isMultiEnabled = mode === "add";
               const selected = isMultiEnabled ? form.payerIds.includes(m.userId) : form.paidById === m.userId;
               return (
                 <button
                   key={m.userId} type="button"
                   onClick={() => {
-                      form.setIncomeSourceId(null);
+                    form.setIncomeSourceId(null);
+                    form.setOtherIncomeSourceLabel(null);
                     if (isMultiEnabled) {
                       const next = form.payerIds.includes(m.userId)
                         ? form.payerIds.filter(id => id !== m.userId)
@@ -527,6 +596,7 @@ export default function Expenses() {
                       form.setPaidById(next.length === 1 ? next[0] : "");
                     } else {
                       form.setPaidById(m.userId);
+                      form.setPaidFromBank(false);
                     }
                   }}
                   className={`h-12 rounded-xl border text-base font-semibold transition-colors ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
@@ -536,15 +606,15 @@ export default function Expenses() {
               );
             })}
           </div>
-          {title === "Add expense" && form.payerIds.length === 0 && !form.paidFromBank && (
+          {mode === "add" && form.payerIds.length === 0 && !form.paidFromBank && (
             <p className="text-xs text-muted-foreground">Choose who paid, or select Joint bank account.</p>
           )}
-          {title !== "Add expense" && !form.paidById && (
+          {mode === "edit" && !form.paidById && !form.paidFromBank && (
             <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>
           )}
 
            {/* Per-source split rows. Joint bank can be combined with members. */}
-           {title === "Add expense" && form.payerIds.length + (form.paidFromBank ? 1 : 0) > 1 && (() => {
+           {mode === "add" && form.payerIds.length + (form.paidFromBank ? 1 : 0) > 1 && (() => {
             const total = Number(form.amount) || 0;
              const splitTotal = form.payerIds.reduce((s, id) => s + Number(form.payerAmounts[id] || 0), 0)
                + (form.paidFromBank ? Number(form.payerAmounts.__joint_bank__ || 0) : 0);
@@ -591,33 +661,46 @@ export default function Expenses() {
         </div>
 
         {/* Income source picker — shown when a single named payer is chosen */}
-         {(title === "Add expense" ? (!form.paidFromBank && form.payerIds.length === 1) : form.paidById) && (
+         {!form.paidFromBank && (mode === "add" ? form.payerIds.length === 1 : !!form.paidById) && (
           <div className="md:col-span-2 space-y-2">
             <label className="text-sm font-semibold text-foreground">
               Paid from <span className="font-normal text-muted-foreground">(counts as contribution if personal)</span>
             </label>
             <select
+              disabled={mode === "edit" && editHasMultipleFundingSplits}
               className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              value={form.paidFromBank ? "bank" : (form.incomeSourceId?.toString() ?? "")}
+              value={form.otherIncomeSourceLabel !== null ? "other" : (form.incomeSourceId?.toString() ?? "")}
               onChange={e => {
                 const value = e.target.value;
-                if (value === "bank") {
+                if (value === "other") {
                   form.setIncomeSourceId(null);
-                  form.setPaidFromBank(true);
-                  if (title === "Edit expense") form.setPaidById("");
+                  form.setOtherIncomeSourceLabel("");
                   return;
                 }
                 form.setIncomeSourceId(value ? Number(value) : null);
-                form.setPaidFromBank(false);
+                form.setOtherIncomeSourceLabel(null);
               }}
             >
               <option value="">Select an income source...</option>
-              {title === "Edit expense" && <option value="bank">🏦 Joint bank account</option>}
-              {(title === "Add expense" ? addFormSources : editFormSources)?.map(src => (
+              {mode === "edit" && <option value="other">Other source...</option>}
+              {(mode === "add" ? addFormSources : editFormSources)?.map(src => (
                 <option key={src.id} value={src.id}>{src.name}</option>
               ))}
             </select>
-            {title === "Add expense" && (
+            {mode === "edit" && editHasMultipleFundingSplits && (
+              <p className="text-xs text-muted-foreground">
+                This expense has multiple funding portions. They’ll be preserved while you edit the expense details here.
+              </p>
+            )}
+            {mode === "edit" && form.otherIncomeSourceLabel !== null && (
+              <Input
+                placeholder="Describe the source (e.g. Consultancy, Parents)"
+                value={form.otherIncomeSourceLabel ?? ""}
+                onChange={(event) => form.setOtherIncomeSourceLabel(event.target.value)}
+                className="h-12 bg-card"
+              />
+            )}
+            {mode === "add" && (
               <div className="flex flex-wrap gap-2">
                 {addNewSource ? (
                   <div className="flex items-center gap-1">
@@ -936,7 +1019,7 @@ export default function Expenses() {
       {isAdding ? (
         <Card className="border-none shadow-md bg-accent/20">
           <CardContent className="p-6">
-            {expenseFormFields(addForm, createExpense.isPending, handleCreate, resetAdd, "Record New Expense", "Save Expense")}
+            {expenseFormFields(addForm, createExpense.isPending, handleCreate, resetAdd, "Record New Expense", "Save Expense", "add")}
           </CardContent>
         </Card>
       ) : (
@@ -968,6 +1051,7 @@ export default function Expenses() {
                       cancelEdit,
                       "Edit Expense",
                       "Save Changes",
+                      "edit",
                     )}
                   </div>
                 ) : (

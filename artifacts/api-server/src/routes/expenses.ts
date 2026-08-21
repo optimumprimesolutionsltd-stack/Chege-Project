@@ -212,7 +212,7 @@ async function syncJointBankDisbursement(
 router.get("/expenses", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  const parsed = GetExpensesQueryParams.safeParse(req.query);
+  const parsed = DeleteExpenseParams.safeParse(req.params);
   const { month, year, category } = parsed.success ? parsed.data : {};
   const conditions: ReturnType<typeof eq>[] = [eq(expensesTable.groupId, groupId)];
   if (month !== undefined && year !== undefined) {
@@ -241,8 +241,7 @@ router.get("/expenses", async (req, res) => {
 router.post("/expenses/apply-recurring", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
-  const parsed = z.object({ month: z.number(), year: z.number() }).safeParse(req.body);
+  const parsed = DeleteExpenseParams.safeParse(req.params);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const { month, year } = parsed.data;
   const prevMonth = month === 1 ? 12 : month - 1;
@@ -294,7 +293,7 @@ router.post("/expenses/apply-recurring", async (req, res) => {
 router.post("/expenses", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  const parsed = CreateExpenseBody.safeParse(req.body);
+  const parsed = DeleteExpenseParams.safeParse(req.params);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const field = issue?.path.join(".") || "expense";
@@ -314,11 +313,10 @@ router.post("/expenses", async (req, res) => {
       : [paidById];
     if (!requireMemberSelfAttribution(req, res, attributedUserIds)) return;
   }
-  if (!splitResult.splits && !paidById && !paidFromBank) {
-    res.status(400).json({ error: "Choose who paid or select Joint bank." }); return;
-  }
+  // Legacy (non-split) updates must retain the same attribution safeguards as
+  // creation. Split portions validate themselves above.
   if (!splitResult.splits && paidById) {
-    const error = await validateMemberId(paidById, groupId);
+    const error = await validateIncomeSource(incomeSourceId, groupId, paidById);
     if (error) { res.status(400).json({ error }); return; }
   }
   if (!splitResult.splits && incomeSourceId) {
@@ -343,16 +341,16 @@ router.post("/expenses", async (req, res) => {
     await syncJointBankDisbursement(tx, created, bankAmount, groupId);
     return created;
   });
-  const payer = expense.paidById ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, expense.paidById) }) : null;
-  const splits = await getExpenseSplits([expense.id], groupId);
-  res.status(201).json(formatExpense({ ...expense, paidByName: payer?.firstName ?? null }, splits.get(expense.id) ?? []));
+  const payer = result.updated.paidById ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, result.updated.paidById) }) : null;
+  const splits = await getExpenseSplits([expenseId], groupId);
+  res.json(formatExpense({ ...result.updated, paidByName: payer?.firstName ?? null }, splits.get(expenseId) ?? []));
 });
 
-router.patch("/expenses/:id", async (req, res) => {
+router.delete("/expenses/:id", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   const idParsed = DeleteExpenseParams.safeParse(req.params);
-  const parsed = UpdateExpenseBody.safeParse(req.body);
+  const parsed = DeleteExpenseParams.safeParse(req.params);
   if (!idParsed.success || !parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const expenseId = idParsed.data.id;
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
@@ -372,7 +370,7 @@ router.patch("/expenses/:id", async (req, res) => {
   // Legacy (non-split) updates must retain the same attribution safeguards as
   // creation. Split portions validate themselves above.
   if (!splitResult.splits && paidById) {
-    const error = await validateMemberId(paidById, groupId);
+    const error = await validateIncomeSource(incomeSourceId, groupId, paidById);
     if (error) { res.status(400).json({ error }); return; }
   }
   if (!splitResult.splits && incomeSourceId) {
@@ -417,7 +415,12 @@ router.patch("/expenses/:id", async (req, res) => {
       : (allBank ? null : paidById ?? existing.paidById);
     const [updated] = await tx.update(expensesTable).set({
       amount, category, description, notes: notes ?? null, paidById: namedPayer,
-      incomeSourceId: allBank ? null : incomeSourceId ?? existing.incomeSourceId, paidFromBank: allBank,
+      incomeSourceId: allBank
+        ? null
+        : splits
+          ? splits.find((split) => !split.fromBank)?.incomeSourceId ?? null
+          : incomeSourceId ?? existing.incomeSourceId,
+      paidFromBank: allBank,
       isRecurring: isRecurring ?? false, date: toDateString(date),
     }).where(and(eq(expensesTable.id, expenseId), eq(expensesTable.groupId, groupId))).returning();
     if (splits) {

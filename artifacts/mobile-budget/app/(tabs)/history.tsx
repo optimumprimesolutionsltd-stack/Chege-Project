@@ -55,6 +55,7 @@ const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
 };
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
+const JOINT_BANK_SOURCE = '__joint_bank__';
 type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
 
 function todayIso(): string {
@@ -78,7 +79,15 @@ type Expense = {
   notes?: string | null;
   paidById: string | null;
   paidByName: string | null;
+  incomeSourceId?: number | null;
   paidFromBank?: boolean;
+  incomeSplits?: {
+    userId?: string | null;
+    label?: string;
+    amount: number;
+    incomeSourceId?: number;
+    fromBank: boolean;
+  }[];
   isRecurring: boolean;
   date: string;
   createdAt: string;
@@ -321,6 +330,7 @@ export default function HistoryScreen() {
   const [editSplitAmounts, setEditSplitAmounts] = useState<Record<string, string>>({});
   const [editOtherLabel, setEditOtherLabel] = useState('');
   const [editShowDatePicker, setEditShowDatePicker] = useState(false);
+  const [editFundingHydratedForId, setEditFundingHydratedForId] = useState<number | null>(null);
 
   // Load income sources for whoever paid the expense being edited
   const { data: editSources = [], isLoading: editSourcesLoading } = useQuery<IncomeSource[]>({
@@ -334,14 +344,15 @@ export default function HistoryScreen() {
   });
 
   const openEdit = (exp: Expense) => {
-    const paidFromBank = exp.paidFromBank ?? false;
+    const paidFromBank = exp.paidFromBank === true || (exp.incomeSplits ?? []).some((split) => split.fromBank);
+    const hasPersonalFunding = (exp.incomeSplits ?? []).some((split) => !split.fromBank) || !paidFromBank;
     setEditForm({
       amount: String(exp.amount),
       category: exp.category,
       description: exp.description,
       notes: exp.notes ?? '',
       // Fall back to the logged-in user when paidById is missing on old expenses
-      paidById: paidFromBank ? null : exp.paidById ?? user?.id ?? '',
+      paidById: hasPersonalFunding ? exp.paidById ?? user?.id ?? '' : null,
       date: exp.date,
     });
     setEditPaidFromBank(paidFromBank);
@@ -349,10 +360,70 @@ export default function HistoryScreen() {
     setEditSplitAmounts({});
     setEditOtherLabel('');
     setEditShowDatePicker(false);
+    setEditFundingHydratedForId(null);
     setEditingExpense(exp);
   };
 
   const closeEdit = () => { setEditingExpense(null); setSaving(false); };
+
+  // The source list is requested after the modal opens. Match IDs first so
+  // renamed sources restore correctly, then labels for older stored splits.
+  useEffect(() => {
+    if (!editingExpense || editSourcesLoading || editFundingHydratedForId === editingExpense.id) return;
+
+    const sourcesById = new Map(editSources.map((source) => [source.id, source]));
+    const sourcesByName = new Map(editSources.map((source) => [source.name, source]));
+    const selectedSources: string[] = [];
+    const splitAmounts: Record<string, string> = {};
+    let otherLabel = '';
+
+    let hasBankFunding = editingExpense.paidFromBank === true;
+    const storedSplits = editingExpense.incomeSplits ?? [];
+    if (storedSplits.length === 0) {
+      if (editingExpense.paidFromBank) {
+        selectedSources.push(JOINT_BANK_SOURCE);
+        splitAmounts[JOINT_BANK_SOURCE] = String(editingExpense.amount);
+      } else if (editingExpense.incomeSourceId) {
+        const matchingSource = sourcesById.get(editingExpense.incomeSourceId);
+        if (matchingSource) {
+          selectedSources.push(matchingSource.name);
+          splitAmounts[matchingSource.name] = String(editingExpense.amount);
+        }
+      }
+    }
+
+    for (const split of storedSplits) {
+      if (split.fromBank) {
+        hasBankFunding = true;
+        if (!selectedSources.includes(JOINT_BANK_SOURCE)) selectedSources.push(JOINT_BANK_SOURCE);
+        splitAmounts[JOINT_BANK_SOURCE] = String(
+          (Number(splitAmounts[JOINT_BANK_SOURCE]) || 0) + split.amount,
+        );
+        continue;
+      }
+
+      const label = split.label?.trim();
+      const matchingSource = split.incomeSourceId
+        ? sourcesById.get(split.incomeSourceId)
+        : label ? sourcesByName.get(label) : undefined;
+      const sourceKey = matchingSource?.name ?? 'Other';
+
+      if (!selectedSources.includes(sourceKey)) {
+        selectedSources.push(sourceKey);
+        splitAmounts[sourceKey] = String(split.amount);
+      } else {
+        splitAmounts[sourceKey] = String((Number(splitAmounts[sourceKey]) || 0) + split.amount);
+      }
+
+      if (!matchingSource && label && !otherLabel) otherLabel = label;
+    }
+
+    setEditSelectedSources(selectedSources);
+    setEditSplitAmounts(splitAmounts);
+    setEditOtherLabel(otherLabel);
+    setEditPaidFromBank(hasBankFunding);
+    setEditFundingHydratedForId(editingExpense.id);
+  }, [editingExpense, editSources, editSourcesLoading, editFundingHydratedForId]);
 
   const handleSave = async () => {
     if (!editingExpense) return;
@@ -385,6 +456,14 @@ export default function HistoryScreen() {
       editingExpense.paidById !== editForm.paidById;
     const isSplit = editSelectedSources.length > 1;
     const personalIncomeSplits = editForm.paidById ? editSelectedSources.map(name => {
+      if (name === JOINT_BANK_SOURCE) {
+        return {
+          userId: null,
+          fromBank: true,
+          label: 'Joint bank',
+          amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
+        };
+      }
       const source = editSources.find((item) => item.name === name);
       return {
         userId: editForm.paidById,
@@ -394,10 +473,10 @@ export default function HistoryScreen() {
         ...(source ? { incomeSourceId: source.id } : {}),
       };
     }).filter(s => s.amount > 0) : [];
-    const incomeSplits = editPaidFromBank
-      ? [{ userId: null, label: 'Joint bank', amount: parsed, fromBank: true }]
-      : personalIncomeSplits.length > 0
+    const incomeSplits = personalIncomeSplits.length > 0
         ? personalIncomeSplits
+        : editPaidFromBank
+          ? [{ userId: null, label: 'Joint bank', amount: parsed, fromBank: true }]
         : payerChanged && editForm.paidById
           ? [{ userId: editForm.paidById, label: 'Personal funds', amount: parsed, fromBank: false }]
           : [];
@@ -842,7 +921,11 @@ export default function HistoryScreen() {
                         key={m.userId}
                         onPress={() => {
                           setEditForm(f => ({ ...f, paidById: m.userId }));
-                          setEditPaidFromBank(false);
+                          if (editSelectedSources.length === 1 && editSelectedSources[0] === JOINT_BANK_SOURCE) {
+                            setEditPaidFromBank(false);
+                            setEditSelectedSources([]);
+                            setEditSplitAmounts({});
+                          }
                         }}
                         style={[styles.memberPill, { backgroundColor: sel ? '#4ade80' : colors.muted, borderColor: sel ? '#4ade80' : colors.border }]}
                       >
@@ -866,15 +949,39 @@ export default function HistoryScreen() {
                     <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>(optional)</Text>
                   </View>
 
+                  {/* Joint bank can fund a portion alongside personal sources. */}
+                  <Pressable
+                    onPress={() => {
+                      setEditPaidFromBank((current) => {
+                        const next = !current;
+                        setEditSelectedSources((selected) => next
+                          ? (selected.includes(JOINT_BANK_SOURCE) ? selected : [JOINT_BANK_SOURCE, ...selected])
+                          : selected.filter((name) => name !== JOINT_BANK_SOURCE));
+                        return next;
+                      });
+                    }}
+                    style={[styles.sourceChip, {
+                      backgroundColor: editPaidFromBank ? 'rgba(56,189,248,0.15)' : colors.background,
+                      borderColor: editPaidFromBank ? '#38bdf8' : colors.border,
+                      alignSelf: 'flex-start', marginBottom: 8,
+                    }]}
+                  >
+                    <Feather name="credit-card" size={12} color={editPaidFromBank ? '#38bdf8' : colors.mutedForeground} />
+                    <Text style={[styles.sourceChipText, { color: editPaidFromBank ? '#38bdf8' : colors.foreground }]}>Joint bank</Text>
+                    {editPaidFromBank && <Feather name="check" size={10} color="#38bdf8" />}
+                  </Pressable>
+
                   {/* Personal income sources from DB */}
                   {editSourcesLoading ? (
                     <ActivityIndicator size="small" color={colors.primary} style={{ alignSelf: 'flex-start' }} />
-                  ) : editSources.length === 0 ? (
-                    <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>
-                      No income sources — add them in Settings
-                    </Text>
                   ) : (
-                    <View style={styles.sourceChipsGrid}>
+                    <>
+                      {editSources.length === 0 && (
+                        <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>
+                          No income sources — add them in Settings, or choose Other.
+                        </Text>
+                      )}
+                      <View style={styles.sourceChipsGrid}>
                       {editSources.map((src, idx) => {
                         const color = PALETTE[idx % PALETTE.length];
                         const selected = editSelectedSources.includes(src.name);
@@ -916,7 +1023,8 @@ export default function HistoryScreen() {
                           </Pressable>
                         );
                       })()}
-                    </View>
+                      </View>
+                    </>
                   )}
                   {editSelectedSources.includes('Other') && (
                     <TextInput
@@ -937,9 +1045,13 @@ export default function HistoryScreen() {
                         const color = PALETTE[idx % PALETTE.length];
                         return (
                           <View key={name} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: color + '44' }]}>
-                            <Feather name={name === 'Other' ? 'more-horizontal' : 'briefcase'} size={13} color={color} />
+                            <Feather
+                              name={name === JOINT_BANK_SOURCE ? 'credit-card' : name === 'Other' ? 'more-horizontal' : 'briefcase'}
+                              size={13}
+                              color={color}
+                            />
                             <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
-                              {name === 'Other' ? (editOtherLabel || 'Other') : name}
+                              {name === JOINT_BANK_SOURCE ? 'Joint bank' : name === 'Other' ? (editOtherLabel || 'Other') : name}
                             </Text>
                             <View style={styles.splitAmountInputBox}>
                               <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
