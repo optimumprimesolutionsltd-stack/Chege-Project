@@ -1926,7 +1926,9 @@ components:
           type: number
         name:
           type: string
-      required: [id, name]
+        isPrivate:
+          type: boolean
+      required: [id, name, isPrivate]
 
     UpdateGroupInput:
       type: object

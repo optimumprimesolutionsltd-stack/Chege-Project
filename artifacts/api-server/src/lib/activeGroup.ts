@@ -32,6 +32,17 @@ export function requireGroupManager(req: Request, res: Response): boolean {
   return true;
 }
 
+export function requireSharedGroupManager(req: Request, res: Response): boolean {
+  if (req.group?.isPrivate) {
+    res.status(403).json({
+      error: "A private budget is only for its owner. Switch to a shared group to manage members.",
+    });
+    return false;
+  }
+
+  return requireGroupManager(req, res);
+}
+
 /**
  * A participating member can only record money under their own membership.
  * Managers may keep using the multi-person and Joint-bank attribution flows.

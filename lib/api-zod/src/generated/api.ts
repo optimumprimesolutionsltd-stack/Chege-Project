@@ -1210,7 +1210,8 @@ export const DeleteGroupInvitationContactResponse = zod.unknown()
  */
 export const GetGroupResponse = zod.object({
   "id": zod.number(),
-  "name": zod.string()
+  "name": zod.string(),
+  "isPrivate": zod.boolean()
 })
 
 
@@ -1228,7 +1229,8 @@ export const UpdateGroupBody = zod.object({
 
 export const UpdateGroupResponse = zod.object({
   "id": zod.number(),
-  "name": zod.string()
+  "name": zod.string(),
+  "isPrivate": zod.boolean()
 })
 
 

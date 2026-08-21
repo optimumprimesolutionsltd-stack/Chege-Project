@@ -27,6 +27,9 @@ export const groupsTable = pgTable(
     // Used exactly once to adopt the existing shared ledger without relying on
     // a personal name or a client-provided group identifier.
     legacyKey: text("legacy_key").unique(),
+    // A personal workspace belongs to exactly one person. Shared workspaces
+    // leave this unset, so their owner can still create more than one group.
+    privateOwnerUserId: text("private_owner_user_id").unique(),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),

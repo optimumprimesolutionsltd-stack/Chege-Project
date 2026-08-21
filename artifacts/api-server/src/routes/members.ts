@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { groupMembershipsTable, groupsTable, usersTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
+import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
 
 const router = Router();
 
@@ -44,7 +44,7 @@ router.get("/members", async (req, res): Promise<void> => {
 router.post("/members", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const schema = z.object({
     userId: z.string().min(1),
@@ -90,7 +90,7 @@ router.post("/members", async (req, res): Promise<void> => {
 router.patch("/members/:userId", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const parsed = z.object({ role: z.enum(["admin", "member"]) }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Choose Admin or Member." }); return; }
@@ -170,7 +170,7 @@ router.delete("/members/me", async (req, res): Promise<void> => {
 router.delete("/members/:userId", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const { userId } = req.params;
   if (userId === req.user!.id) {

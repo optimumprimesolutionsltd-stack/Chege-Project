@@ -432,6 +432,7 @@ export type GroupInvitationContact = GroupInvitationContactInput & {
 export interface Group {
   id: number;
   name: string;
+  isPrivate: boolean;
 }
 
 export interface UpdateGroupInput {

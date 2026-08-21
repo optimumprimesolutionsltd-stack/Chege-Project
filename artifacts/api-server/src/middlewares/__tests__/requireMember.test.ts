@@ -3,10 +3,16 @@ import express from "express";
 import request from "supertest";
 
 const legacyMemberIds = new Set<string>();
-const memberships = new Map<string, { groupId: number; role: string }>();
+const memberships = new Map<string, Array<{ groupId: number; role: string }>>();
+const privateWorkspaceIds = new Map<string, number>();
 let groupExists = false;
+let nextGroupId = 2;
 
-const groupsTable = { id: "groups.id", legacyKey: "groups.legacy_key" };
+const groupsTable = {
+  id: "groups.id",
+  legacyKey: "groups.legacy_key",
+  privateOwnerUserId: "groups.private_owner_user_id",
+};
 const membersTable = {
   userId: "members.user_id",
   groupId: "members.group_id",
@@ -21,24 +27,58 @@ const groupMembershipsTable = {
 };
 const simpleTable = {};
 
+type Condition =
+  | { kind: "eq"; column: unknown; value: unknown }
+  | { kind: "isNull"; column: unknown }
+  | { kind: "and"; conditions: Condition[] };
+
+function conditionsOf(condition: unknown): Condition[] {
+  if (!condition || typeof condition !== "object") return [];
+  const value = condition as Condition;
+  return value.kind === "and" ? value.conditions.flatMap(conditionsOf) : [value];
+}
+
+function equalValue(condition: unknown, column: unknown) {
+  return conditionsOf(condition).find(
+    (item): item is Extract<Condition, { kind: "eq" }> =>
+      item.kind === "eq" && item.column === column,
+  )?.value;
+}
+
+function hasNullCheck(condition: unknown, column: unknown) {
+  return conditionsOf(condition).some(
+    (item) => item.kind === "isNull" && item.column === column,
+  );
+}
+
 function selectQuery(fields: Record<string, unknown>) {
   let table: object;
   let filter: unknown;
   const rows = () => {
     if (table === groupMembershipsTable) {
-      const membership = typeof filter === "string" ? memberships.get(filter) : undefined;
-      return membership ? [membership] : [];
+      const userId = equalValue(filter, groupMembershipsTable.userId);
+      const userMemberships = typeof userId === "string" ? memberships.get(userId) ?? [] : [];
+      const sharedOnly = hasNullCheck(filter, groupsTable.privateOwnerUserId);
+      return sharedOnly
+        ? userMemberships.filter((membership) => ![...privateWorkspaceIds.values()].includes(membership.groupId))
+        : userMemberships;
     }
     if (table === groupsTable) {
       return "count" in fields
         ? [{ count: groupExists ? 1 : 0 }]
-        : groupExists
-          ? [{ id: 1 }]
-          : [];
+        : (() => {
+            const privateOwnerId = equalValue(filter, groupsTable.privateOwnerUserId);
+            if (typeof privateOwnerId === "string") {
+              const id = privateWorkspaceIds.get(privateOwnerId);
+              return id ? [{ id }] : [];
+            }
+            return groupExists ? [{ id: 1 }] : [];
+          })();
     }
     if (table === membersTable) {
-      if (typeof filter === "string") {
-        return legacyMemberIds.has(filter) ? [{ userId: filter }] : [];
+      const userId = equalValue(filter, membersTable.userId);
+      if (typeof userId === "string") {
+        return legacyMemberIds.has(userId) ? [{ userId }] : [];
       }
       return [...legacyMemberIds].map((userId) => ({
         userId,
@@ -73,16 +113,24 @@ function selectQuery(fields: Record<string, unknown>) {
 function insertQuery(table: object) {
   return {
     values: (value: Record<string, unknown> | Record<string, unknown>[]) => {
-      if (table === groupsTable) groupExists = true;
+      if (table === groupsTable && !Array.isArray(value)) {
+        groupExists = true;
+        if (typeof value.privateOwnerUserId === "string" && !privateWorkspaceIds.has(value.privateOwnerUserId)) {
+          privateWorkspaceIds.set(value.privateOwnerUserId, nextGroupId++);
+        }
+      }
       if (table === membersTable && !Array.isArray(value)) {
         legacyMemberIds.add(value.userId as string);
       }
       if (table === groupMembershipsTable) {
         for (const member of Array.isArray(value) ? value : [value]) {
-          memberships.set(member.userId as string, {
+          const userId = member.userId as string;
+          const existing = memberships.get(userId) ?? [];
+          existing.push({
             groupId: member.groupId as number,
             role: member.role as string,
           });
+          memberships.set(userId, existing);
         }
       }
       return { onConflictDoNothing: vi.fn(async () => undefined) };
@@ -100,6 +148,7 @@ const tx = {
 };
 
 const db = {
+  select: vi.fn(selectQuery),
   transaction: vi.fn(async (callback: (transaction: typeof tx) => unknown) => callback(tx)),
 };
 
@@ -122,10 +171,10 @@ vi.mock("@workspace/db", () => ({
 }));
 
 vi.mock("drizzle-orm", () => ({
-  and: vi.fn((...conditions) => conditions.at(-1)),
+  and: vi.fn((...conditions) => ({ kind: "and", conditions })),
   asc: vi.fn(),
-  eq: vi.fn((_column, value: unknown) => value),
-  isNull: vi.fn(),
+  eq: vi.fn((column, value: unknown) => ({ kind: "eq", column, value })),
+  isNull: vi.fn((column) => ({ kind: "isNull", column })),
   sql: vi.fn(),
 }));
 
@@ -160,7 +209,9 @@ describe("requireMember", () => {
   beforeEach(() => {
     legacyMemberIds.clear();
     memberships.clear();
+    privateWorkspaceIds.clear();
     groupExists = false;
+    nextGroupId = 2;
     vi.clearAllMocks();
   });
 
@@ -172,41 +223,42 @@ describe("requireMember", () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect(legacyMemberIds.has("first-member")).toBe(true);
-    expect(req.group).toEqual({ id: 1, role: "owner" });
+    expect(req.group).toEqual({ id: 1, role: "owner", isPrivate: false });
+    expect(privateWorkspaceIds.has("first-member")).toBe(true);
   });
 
   it("reuses an existing group membership without re-adopting the ledger", async () => {
     groupExists = true;
-    memberships.set("owner", { groupId: 1, role: "owner" });
+    memberships.set("owner", [{ groupId: 1, role: "owner" }]);
     const req = authenticatedRequest("owner");
 
     await requireMember(req, response(), vi.fn());
 
-    expect(req.group).toEqual({ id: 1, role: "owner" });
+    expect(req.group).toEqual({ id: 1, role: "owner", isPrivate: false });
     expect(tx.update).not.toHaveBeenCalled();
   });
 
-  it("does not recreate a removed member after a group already exists", async () => {
+  it("gives a removed member a private workspace without restoring shared membership", async () => {
     groupExists = true;
     legacyMemberIds.add("removed-member");
-    const res = response();
+    const req = authenticatedRequest("removed-member");
+    const next = vi.fn();
 
-    await requireMember(authenticatedRequest("removed-member"), res, vi.fn());
+    await requireMember(req, response(), next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: "You are not a member of this shared group." }),
-    );
-    expect(memberships.has("removed-member")).toBe(false);
+    expect(next).toHaveBeenCalledOnce();
+    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
+    expect(memberships.get("removed-member")).toEqual([{ groupId: 2, role: "owner" }]);
   });
 
-  it("returns 403 for a removed member's next protected request", async () => {
+  it("allows a removed member into their private budget on the next protected request", async () => {
     groupExists = true;
     legacyMemberIds.add("removed-member");
 
     const res = await request(protectedApp("removed-member")).get("/protected");
 
-    expect(res.status).toBe(403);
-    expect(memberships.has("removed-member")).toBe(false);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ groupId: 2 });
+    expect(memberships.get("removed-member")).toEqual([{ groupId: 2, role: "owner" }]);
   });
 });

@@ -11,12 +11,16 @@ router.get("/group", async (req, res): Promise<void> => {
   if (groupId === null) return;
 
   const [group] = await db
-    .select({ id: groupsTable.id, name: groupsTable.name })
+    .select({
+      id: groupsTable.id,
+      name: groupsTable.name,
+      isPrivate: groupsTable.privateOwnerUserId,
+    })
     .from(groupsTable)
     .where(eq(groupsTable.id, groupId))
     .limit(1);
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }
-  res.json(group);
+  res.json({ ...group, isPrivate: Boolean(group.isPrivate) });
 });
 
 router.patch("/group", async (req, res): Promise<void> => {

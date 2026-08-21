@@ -11,7 +11,7 @@ import {
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
+import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const inviteSchema = z.object({
@@ -272,7 +272,7 @@ publicInvitationsRouter.post("/group-invitations/accept/:token", async (req, res
 invitationsRouter.get("/group-invitations", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const invitations = await db
     .select()
@@ -285,7 +285,7 @@ invitationsRouter.get("/group-invitations", async (req, res): Promise<void> => {
 invitationsRouter.post("/group-invitations", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const parsed = inviteSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -377,7 +377,7 @@ invitationsRouter.post("/group-invitations", async (req, res): Promise<void> => 
 invitationsRouter.post("/group-invitations/:id/resend", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
@@ -458,7 +458,7 @@ invitationsRouter.post("/group-invitations/:id/resend", async (req, res): Promis
 invitationsRouter.delete("/group-invitations/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
@@ -503,7 +503,7 @@ invitationsRouter.delete("/group-invitations/:id", async (req, res): Promise<voi
 invitationsRouter.get("/group-invitation-contacts", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const contacts = await db
     .select()
@@ -521,7 +521,7 @@ invitationsRouter.get("/group-invitation-contacts", async (req, res): Promise<vo
 invitationsRouter.post("/group-invitation-contacts", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const parsed = contactSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -543,7 +543,7 @@ invitationsRouter.post("/group-invitation-contacts", async (req, res): Promise<v
 invitationsRouter.delete("/group-invitation-contacts/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
+  if (!requireSharedGroupManager(req, res)) return;
 
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {

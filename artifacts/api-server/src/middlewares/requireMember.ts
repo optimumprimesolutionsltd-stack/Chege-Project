@@ -148,6 +148,68 @@ async function adoptLegacyGroup(userId: string) {
   });
 }
 
+/**
+ * Every signed-in person has one owner-only primary budget. This uses a unique
+ * owner marker instead of a name so a renamed private budget cannot be
+ * confused with a shared group.
+ */
+async function ensurePrivateWorkspace(userId: string) {
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ id: groupsTable.id })
+      .from(groupsTable)
+      .where(eq(groupsTable.privateOwnerUserId, userId))
+      .limit(1);
+    if (existing) return existing.id;
+
+    await tx
+      .insert(groupsTable)
+      .values({
+        name: "My Budget",
+        createdByUserId: userId,
+        privateOwnerUserId: userId,
+      })
+      .onConflictDoNothing();
+
+    const [created] = await tx
+      .select({ id: groupsTable.id })
+      .from(groupsTable)
+      .where(eq(groupsTable.privateOwnerUserId, userId))
+      .limit(1);
+    if (!created) throw new Error("Unable to establish the private budget workspace.");
+
+    await tx
+      .insert(groupMembershipsTable)
+      .values({
+        groupId: created.id,
+        userId,
+        role: "owner",
+        addedByUserId: userId,
+      })
+      .onConflictDoNothing();
+
+    return created.id;
+  });
+}
+
+async function getSharedMembership(userId: string) {
+  const [membership] = await db
+    .select({
+      groupId: groupMembershipsTable.groupId,
+      role: groupMembershipsTable.role,
+    })
+    .from(groupMembershipsTable)
+    .innerJoin(groupsTable, eq(groupsTable.id, groupMembershipsTable.groupId))
+    .where(
+      and(
+        eq(groupMembershipsTable.userId, userId),
+        isNull(groupsTable.privateOwnerUserId),
+      ),
+    )
+    .limit(1);
+  return membership;
+}
+
 export async function requireMember(
   req: Request,
   res: Response,
@@ -160,20 +222,25 @@ export async function requireMember(
 
   try {
     const userId = req.user.id;
-    const membership = await adoptLegacyGroup(userId);
-    if (membership) {
+    await adoptLegacyGroup(userId);
+    const privateWorkspaceId = await ensurePrivateWorkspace(userId);
+    const sharedMembership = await getSharedMembership(userId);
+
+    if (sharedMembership) {
       req.group = {
-        id: membership.groupId,
-        role: membership.role as "owner" | "admin" | "member",
+        id: sharedMembership.groupId,
+        role: sharedMembership.role as "owner" | "admin" | "member",
+        isPrivate: false,
       };
-      next();
-      return;
+    } else {
+      req.group = {
+        id: privateWorkspaceId,
+        role: "owner",
+        isPrivate: true,
+      };
     }
 
-    res.status(403).json({
-      error: "You are not a member of this shared group.",
-      hint: "Ask a current group member to add you.",
-    });
+    next();
   } catch (error) {
     next(error);
   }

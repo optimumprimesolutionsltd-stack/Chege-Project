@@ -22,6 +22,7 @@ declare global {
       group?: {
         id: number;
         role: "owner" | "admin" | "member";
+        isPrivate: boolean;
       };
     }
 

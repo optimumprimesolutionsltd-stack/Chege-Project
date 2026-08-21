@@ -48,11 +48,17 @@ export default function Settings() {
   const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const canManageShared = members?.some(
+  const isPrivateWorkspace = group?.isPrivate ?? false;
+  const canManageWorkspace = members?.some(
     (member) =>
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) ?? false;
+  const canManageShared = (members?.some(
+    (member) =>
+      member.userId === user?.id &&
+      (member.role === "owner" || member.role === "admin"),
+  ) ?? false) && !isPrivateWorkspace;
   const myMembership = members?.find((member) => member.userId === user?.id);
   const canLeaveGroup = Boolean(myMembership && myMembership.role !== "owner");
   useEffect(() => {
@@ -194,6 +200,8 @@ export default function Settings() {
         <p className="text-muted-foreground mt-1">
           {canManageShared
             ? "Manage who has access to this group budget."
+            : isPrivateWorkspace
+              ? "This is your private budget. Only you can see it."
             : "View your group and manage your own account details."}
         </p>
       </div>
@@ -216,11 +224,15 @@ export default function Settings() {
 
       <Card className="border-none shadow-md">
         <CardHeader>
-          <CardTitle>Group name</CardTitle>
-          <CardDescription>This is the name your group sees across Bajeti.</CardDescription>
+          <CardTitle>Budget name</CardTitle>
+          <CardDescription>
+            {isPrivateWorkspace
+              ? "This is the name for your private Bajeti space."
+              : "This is the name your group sees across Bajeti."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {canManageShared ? (
+          {canManageWorkspace ? (
             <form onSubmit={handleSaveGroupName} className="flex gap-2">
               <Input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" />
               <Button type="submit" disabled={!groupName.trim() || updateGroup.isPending}>
@@ -228,7 +240,7 @@ export default function Settings() {
               </Button>
             </form>
           ) : (
-            <p className="text-lg font-semibold text-foreground">{group?.name ?? "Your group"}</p>
+            <p className="text-lg font-semibold text-foreground">{group?.name ?? "Your budget"}</p>
           )}
         </CardContent>
       </Card>
@@ -238,10 +250,12 @@ export default function Settings() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
-            <CardTitle>Group Members</CardTitle>
+            <CardTitle>{isPrivateWorkspace ? "Private budget" : "Group Members"}</CardTitle>
           </div>
           <CardDescription>
-            The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups.
+            {isPrivateWorkspace
+              ? "Only you have access to this budget. Shared groups remain separate."
+              : "The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -293,7 +307,14 @@ export default function Settings() {
             </div>
           )}
 
-          {!canManageShared && (
+          {isPrivateWorkspace ? (
+            <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
+              <p className="text-sm font-semibold text-foreground">Your primary budget</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Expenses, goals, bank activity, and reports here belong only to you. A shared group has its own separate budget and members.
+              </p>
+            </div>
+          ) : !canManageShared && (
             <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
               <p className="text-sm font-semibold text-foreground">Your group role</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
@@ -322,7 +343,7 @@ export default function Settings() {
               </div>
             </div>
           )}
-          {myMembership?.role === "owner" && (
+          {myMembership?.role === "owner" && !isPrivateWorkspace && (
             <p className="text-xs leading-relaxed text-muted-foreground">
               Owners stay in the group so it always has someone responsible for access. Ownership transfer is not available yet.
             </p>
