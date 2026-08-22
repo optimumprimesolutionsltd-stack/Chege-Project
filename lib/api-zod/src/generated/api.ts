@@ -1351,6 +1351,7 @@ export const GetGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "isPrivate": zod.boolean(),
+  "role": zod.enum(['owner', 'admin', 'member']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })
 
@@ -1371,6 +1372,7 @@ export const UpdateGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "isPrivate": zod.boolean(),
+  "role": zod.enum(['owner', 'admin', 'member']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })
 

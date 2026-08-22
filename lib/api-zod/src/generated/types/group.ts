@@ -5,11 +5,13 @@
  * Family Budget API for Chege & Lydiah
  * OpenAPI spec version: 0.1.0
  */
+import type { GroupRole } from './groupRole';
 
 export interface Group {
   id: number;
   name: string;
   isPrivate: boolean;
+  role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */
   canRecordSharedTransactions: boolean;
 }

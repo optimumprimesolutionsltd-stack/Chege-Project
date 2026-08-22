@@ -2202,10 +2202,13 @@ components:
           type: string
         isPrivate:
           type: boolean
+        role:
+          type: string
+          enum: [owner, admin, member]
         canRecordSharedTransactions:
           type: boolean
           description: Whether this workspace may record expenses and contributions right now
-      required: [id, name, isPrivate, canRecordSharedTransactions]
+      required: [id, name, isPrivate, role, canRecordSharedTransactions]
 
     UpdateGroupInput:
       type: object

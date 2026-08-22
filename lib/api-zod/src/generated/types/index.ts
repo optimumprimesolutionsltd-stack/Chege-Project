@@ -62,6 +62,7 @@ export * from './groupInvitationStatus';
 export * from './groupInviteLink';
 export * from './groupInviteLinkCreated';
 export * from './groupInviteLinkStatus';
+export * from './groupRole';
 export * from './healthStatus';
 export * from './incomeSource';
 export * from './incomeStreamEntry';

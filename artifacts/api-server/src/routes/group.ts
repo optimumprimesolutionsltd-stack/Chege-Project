@@ -7,6 +7,8 @@ import {
 import {
   CreateSharedGroupBody,
   CreateSharedGroupResponse,
+  GetGroupResponse,
+  UpdateGroupResponse,
 } from "@workspace/api-zod";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -73,11 +75,12 @@ router.get("/group", async (req, res): Promise<void> => {
     .limit(1);
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }
   const isPrivate = Boolean(group.isPrivate);
-  res.json({
+  res.json(GetGroupResponse.parse({
     ...group,
     isPrivate,
+    role: req.group!.role,
     canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),
-  });
+  }));
 });
 
 router.patch("/group", async (req, res): Promise<void> => {
@@ -101,11 +104,12 @@ router.patch("/group", async (req, res): Promise<void> => {
     });
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }
   const isPrivate = Boolean(group.isPrivate);
-  res.json({
+  res.json(UpdateGroupResponse.parse({
     ...group,
     isPrivate,
+    role: req.group!.role,
     canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),
-  });
+  }));
 });
 
 export default router;

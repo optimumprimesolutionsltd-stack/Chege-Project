@@ -513,10 +513,20 @@ export type GroupInviteLinkCreated = GroupInviteLink & {
   token: string;
 };
 
+export type GroupRole = typeof GroupRole[keyof typeof GroupRole];
+
+
+export const GroupRole = {
+  owner: 'owner',
+  admin: 'admin',
+  member: 'member',
+} as const;
+
 export interface Group {
   id: number;
   name: string;
   isPrivate: boolean;
+  role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */
   canRecordSharedTransactions: boolean;
 }

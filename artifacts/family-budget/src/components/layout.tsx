@@ -13,6 +13,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { data: group } = useGetGroup();
   const isSharedWorkspace = group?.isPrivate === false;
+  const activeWorkspaceRole = group?.role ?? (group?.isPrivate ? 'owner' : 'member');
+  const activeWorkspaceRoleLabel = activeWorkspaceRole === 'owner'
+    ? 'Owner'
+    : activeWorkspaceRole === 'admin'
+      ? 'Admin'
+      : 'Member';
 
   const navItems = [
     { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Budget', icon: LayoutDashboard },
@@ -74,7 +80,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate">{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User'}</p>
-              <p className="text-xs text-sidebar-foreground/60 capitalize truncate">Member</p>
+              <p className="text-xs text-sidebar-foreground/60 capitalize truncate">{activeWorkspaceRoleLabel}</p>
             </div>
           </div>
           <Button variant="ghost" className="w-full justify-start text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent" onClick={logout}>
