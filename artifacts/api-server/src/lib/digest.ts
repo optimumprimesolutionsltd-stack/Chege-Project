@@ -123,7 +123,7 @@ function buildEmailHtml(opts: {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Family Budget — ${label} Summary</title>
+  <title>Jamvi — ${label} Summary</title>
 </head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#111827">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:24px 0">
@@ -134,7 +134,7 @@ function buildEmailHtml(opts: {
         <tr><td style="background:#1d4ed8;padding:28px 32px">
           <p style="margin:0;font-size:12px;color:#93c5fd;letter-spacing:.08em;text-transform:uppercase">Monthly Digest</p>
           <h1 style="margin:6px 0 0;font-size:24px;color:#ffffff;font-weight:700">${label}</h1>
-          <p style="margin:4px 0 0;font-size:14px;color:#bfdbfe">Family Budget Summary</p>
+          <p style="margin:4px 0 0;font-size:14px;color:#bfdbfe">Jamvi Summary</p>
         </td></tr>
 
         <!-- Budget Overview -->
@@ -209,8 +209,9 @@ function buildEmailHtml(opts: {
         <!-- Footer -->
         <tr><td style="padding:28px 32px">
           <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center">
-            This digest was sent automatically on the 1st of each month.<br/>
-            Open the <a href="${process.env.APP_URL ?? "https://family-budget.repl.co"}" style="color:#1d4ed8">Family Budget app</a> to see full details.
+            This digest was sent automatically on the 1st of each month.${process.env.APP_URL?.trim()
+              ? `<br/>Open <a href="${process.env.APP_URL.trim()}" style="color:#1d4ed8">Jamvi</a> to see full details.`
+              : ""}
           </p>
         </td></tr>
 
@@ -386,7 +387,7 @@ export async function sendMonthlyDigest(
     throw new Error("RESEND_API_KEY must be set to send the monthly digest.");
   }
 
-  const from = process.env.DIGEST_FROM_EMAIL ?? "Family Budget <onboarding@resend.dev>";
+  const from = process.env.DIGEST_FROM_EMAIL ?? "Jamvi <onboarding@resend.dev>";
 
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -397,7 +398,7 @@ export async function sendMonthlyDigest(
     body: JSON.stringify({
       from,
       to,
-      subject: `Family Budget — ${label} Summary`,
+      subject: `Jamvi — ${label} Summary`,
       html,
     }),
   });
