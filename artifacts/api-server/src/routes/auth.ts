@@ -37,6 +37,8 @@ import { Router, type IRouter, type Request, type Response } from 'express';
 import * as oidc from 'openid-client';
 
 import {
+  authorizationParams,
+  buildProviderLogoutUrl,
   clearSession,
   createSession,
   deleteSession,
@@ -53,6 +55,14 @@ const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 const router: IRouter = Router();
 
 function getOrigin(req: Request): string {
+  // When the browser talks to a separate frontend host that proxies /api here,
+  // request headers describe this server, not the address the user is on. The
+  // OAuth callback and the session cookie must both belong to the origin the
+  // user actually loaded, because Google redirects the browser straight to the
+  // callback without passing back through the proxy. APP_ORIGIN pins it.
+  const configured = process.env.APP_ORIGIN;
+  if (configured) return configured.replace(/\/+$/, '');
+
   const proto = req.headers['x-forwarded-proto'] || 'https';
   const host =
     req.headers['x-forwarded-host'] || req.headers['host'] || 'localhost';
@@ -126,9 +136,9 @@ function getSafeErrorMetadata(error: unknown) {
 }
 
 export async function upsertUser(claims: Record<string, unknown>) {
-  const userData = {
-    id: claims.sub as string,
-    email: (claims.email as string) || null,
+  const email = (claims.email as string) || null;
+  const profile = {
+    email,
     // Google OIDC uses given_name / family_name; fall back to first_name /
     // last_name in case a different provider uses those keys.
     firstName:
@@ -139,18 +149,39 @@ export async function upsertUser(claims: Record<string, unknown>) {
       ((claims.picture || claims.profile_image_url) as string) || null,
   };
 
+  // Identity details can refresh on sign-in, but a person's chosen household
+  // name must remain theirs, so re-login never overwrites first/last name.
+  const refreshable = {
+    email: profile.email,
+    profileImageUrl: profile.profileImageUrl,
+    updatedAt: new Date(),
+  };
+
+  // Identity is matched on email rather than the provider's `sub`. Expenses,
+  // contributions, members and savings goals all store bare user id strings
+  // with no foreign keys, so an account that keeps its original id keeps its
+  // history — switching identity provider must not orphan those rows.
+  if (email) {
+    const existing = await db.query.usersTable.findFirst({
+      where: eq(usersTable.email, email),
+    });
+
+    if (existing) {
+      const [updated] = await db
+        .update(usersTable)
+        .set(refreshable)
+        .where(eq(usersTable.id, existing.id))
+        .returning();
+      return updated;
+    }
+  }
+
   const [user] = await db
     .insert(usersTable)
-    .values(userData)
+    .values({ id: claims.sub as string, ...profile })
     .onConflictDoUpdate({
       target: usersTable.id,
-      set: {
-        // Identity details can refresh on sign-in, but a person's chosen
-        // household name must remain theirs.
-        email: userData.email,
-        profileImageUrl: userData.profileImageUrl,
-        updatedAt: new Date(),
-      },
+      set: refreshable,
     })
     .returning();
   return user;
@@ -243,9 +274,10 @@ router.get('/login', async (req: Request, res: Response) => {
 
   const redirectTo = oidc.buildAuthorizationUrl(config, {
     redirect_uri: callbackUrl,
-    scope: 'openid email profile offline_access',
+    scope: 'openid email profile',
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
+    ...authorizationParams(),
     state,
     nonce,
   });
@@ -337,9 +369,10 @@ router.get('/mobile-login', async (req: Request, res: Response) => {
 
   const redirectTo = oidc.buildAuthorizationUrl(config, {
     redirect_uri: callbackUrl,
-    scope: 'openid email profile offline_access',
+    scope: 'openid email profile',
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
+    ...authorizationParams(),
     state,
     nonce,
   });
@@ -363,7 +396,6 @@ router.get('/mobile-auth/complete', (req: Request, res: Response) => {
 });
 
 router.get('/logout', async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
   const origin = getOrigin(req);
   const returnTo = getSafeReturnTo(req.query.returnTo);
   const postLogoutRedirectUrl = new URL(returnTo, `${origin}/`).href;
@@ -371,12 +403,10 @@ router.get('/logout', async (req: Request, res: Response) => {
   const sid = getSessionId(req);
   await clearSession(res, sid);
 
-  const endSessionUrl = oidc.buildEndSessionUrl(config, {
-    client_id: process.env.REPL_ID!,
-    post_logout_redirect_uri: postLogoutRedirectUrl,
-  });
+  const config = await getOidcConfig();
+  const providerLogout = buildProviderLogoutUrl(config, postLogoutRedirectUrl);
 
-  res.redirect(endSessionUrl.href);
+  res.redirect(providerLogout ? providerLogout.href : postLogoutRedirectUrl);
 });
 
 router.post(

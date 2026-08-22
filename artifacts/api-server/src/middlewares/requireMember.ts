@@ -6,6 +6,7 @@ import {
   digestSendsTable,
   expenseIncomeSplitsTable,
   expensesTable,
+  GROUP_KIND,
   groupMembershipsTable,
   groupsTable,
   incomeSourcesTable,
@@ -173,6 +174,7 @@ async function ensurePrivateWorkspace(userId: string) {
         name: "My Budget",
         createdByUserId: userId,
         privateOwnerUserId: userId,
+        kind: GROUP_KIND.PERSONAL,
       })
       .onConflictDoNothing();
 
@@ -231,7 +233,7 @@ export async function requireMember(
     await adoptLegacyGroup(userId);
     const privateWorkspaceId = await ensurePrivateWorkspace(userId);
     const headerWorkspaceId = typeof req.get === "function"
-      ? req.get("x-bajeti-workspace")
+      ? req.get("x-jamvi-workspace")
       : undefined;
     const cookieWorkspaceId = req.cookies?.[ACTIVE_WORKSPACE_COOKIE];
     if (typeof req.cookies?.[LEGACY_ACTIVE_WORKSPACE_COOKIE] === "string") {

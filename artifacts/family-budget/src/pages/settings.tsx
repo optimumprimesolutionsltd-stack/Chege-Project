@@ -603,7 +603,7 @@ export default function Settings() {
           <CardDescription>
             {isPrivateWorkspace
               ? "This is the name for your Personal budget."
-              : "This is the name your Shared budget sees across Bajeti."}
+              : "This is the name your Shared budget sees across Jamvi."}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">

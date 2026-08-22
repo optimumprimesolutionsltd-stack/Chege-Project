@@ -4,7 +4,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
-const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bajeti-ota-'));
+const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'jamvi-ota-'));
 const domain = process.env.EXPO_PUBLIC_DOMAIN || process.env.REPLIT_DEV_DOMAIN;
 
 if (!domain) {

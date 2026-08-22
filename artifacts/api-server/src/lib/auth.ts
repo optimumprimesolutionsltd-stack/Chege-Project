@@ -7,7 +7,28 @@ import { type AuthUser } from '@workspace/api-zod';
 
 export { type AuthUser };
 
-export const ISSUER_URL = process.env.ISSUER_URL ?? 'https://replit.com/oidc';
+export type AuthProvider = 'replit' | 'google';
+
+const DEFAULT_ISSUER: Record<AuthProvider, string> = {
+  replit: 'https://replit.com/oidc',
+  google: 'https://accounts.google.com',
+};
+
+// Replit Auth only works inside a Repl, and Google only works once an OAuth
+// client exists. Selecting per environment lets the Repl stay a working
+// development environment while production runs on Google, both against the
+// same users table.
+function resolveProvider(): AuthProvider {
+  const explicit = process.env.AUTH_PROVIDER?.trim().toLowerCase();
+  if (explicit === 'replit' || explicit === 'google') return explicit;
+  // Every Repl has REPL_ID set, so an unconfigured Repl keeps its current
+  // behaviour and anywhere else defaults to Google.
+  return process.env.REPL_ID ? 'replit' : 'google';
+}
+
+export const AUTH_PROVIDER: AuthProvider = resolveProvider();
+export const ISSUER_URL =
+  process.env.ISSUER_URL ?? DEFAULT_ISSUER[AUTH_PROVIDER];
 export const SESSION_COOKIE = 'sid';
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
@@ -21,13 +42,63 @@ export interface SessionData {
 let oidcConfig: client.Configuration | null = null;
 
 export async function getOidcConfig(): Promise<client.Configuration> {
-  if (!oidcConfig) {
-    oidcConfig = await client.discovery(
-      new URL(ISSUER_URL),
-      process.env.REPL_ID!,
+  if (oidcConfig) return oidcConfig;
+
+  if (AUTH_PROVIDER === 'replit') {
+    const replId = process.env.REPL_ID;
+    if (!replId) {
+      throw new Error(
+        'REPL_ID must be set to use Replit Auth. Set AUTH_PROVIDER=google to ' +
+          'sign in with Google instead.',
+      );
+    }
+    // Replit Auth is a public client: the Repl id is the client id and there
+    // is no secret, so PKCE alone secures the code exchange.
+    oidcConfig = await client.discovery(new URL(ISSUER_URL), replId);
+    return oidcConfig;
+  }
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set to sign in with ' +
+        'Google.',
     );
   }
+  oidcConfig = await client.discovery(
+    new URL(ISSUER_URL),
+    clientId,
+    clientSecret,
+  );
   return oidcConfig;
+}
+
+// Google only returns a refresh token when offline access is requested and
+// consent is forced, and authMiddleware signs a user out when a session has no
+// refresh token - so without these, Google logins would drop roughly hourly.
+// Replit must not be sent a prompt value at all; forcing one there re-prompts
+// for consent on every sign-in.
+export function authorizationParams(): Record<string, string> {
+  if (AUTH_PROVIDER === 'google') {
+    return { access_type: 'offline', prompt: 'select_account consent' };
+  }
+  return {};
+}
+
+// Replit publishes an end_session_endpoint and expects a round trip through it.
+// Google publishes none, so there is nowhere to send the browser: dropping the
+// session row and cookie is the whole logout, and the person's Google session
+// is deliberately left alone.
+export function buildProviderLogoutUrl(
+  config: client.Configuration,
+  postLogoutRedirectUrl: string,
+): URL | null {
+  if (AUTH_PROVIDER !== 'replit') return null;
+  return client.buildEndSessionUrl(config, {
+    client_id: process.env.REPL_ID!,
+    post_logout_redirect_uri: postLogoutRedirectUrl,
+  });
 }
 
 export async function createSession(data: SessionData): Promise<string> {

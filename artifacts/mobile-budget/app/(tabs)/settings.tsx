@@ -332,7 +332,7 @@ export default function SettingsScreen() {
             setManagingMembers(true);
             try {
                // A person always keeps their Personal budget, so leaving a shared group
-              // returns them there instead of ending their Bajeti session.
+              // returns them there instead of ending their Jamvi session.
               await leaveMobileSharedWorkspace({
                 leave: () => customFetch('/api/members/me', { method: 'DELETE' }),
                 storage: AsyncStorage,

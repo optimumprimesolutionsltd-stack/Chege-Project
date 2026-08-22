@@ -1,6 +1,6 @@
 ---
 name: All-round onboarding
-description: Product rule for keeping Bajeti setup guidance complete across the workspace journey
+description: Product rule for keeping Jamvi setup guidance complete across the workspace journey
 ---
 
 Setup guidance should be all-round: help users establish the complete active workspace, including its budget, income, funding, goals, and relevant group participation.

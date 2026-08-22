@@ -43,7 +43,7 @@ function useUpdatePrompt() {
         const message =
           typeof raw === 'string' && raw.trim()
             ? raw.trim()
-            : 'A new version of Bajeti is ready with the latest improvements and fixes.';
+            : 'A new version of Jamvi is ready with the latest improvements and fixes.';
         setUpdateMessage(message);
       } catch {
         // Network unavailable or server error — silently ignore.

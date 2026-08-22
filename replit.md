@@ -1,4 +1,4 @@
-# Bajeti
+# Jamvi
 
 A household budget tracker for families, couples, or individuals. Any number of household members can sign in, track expenses, record contributions, set savings goals, and monitor spending — all together in one place.
 

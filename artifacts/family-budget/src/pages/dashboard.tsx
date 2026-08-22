@@ -73,7 +73,7 @@ function OpenInvitationLinkButton() {
         invitationUrl.origin !== window.location.origin ||
         !/^\/(?:invite|join)\/[^/]+\/?$/.test(appPath)
       ) {
-        throw new Error("Paste a Bajeti email invitation or private group link.");
+        throw new Error("Paste a Jamvi email invitation or private group link.");
       }
       window.location.assign(`${invitationUrl.pathname}${invitationUrl.search}${invitationUrl.hash}`);
     } catch (inviteError) {
@@ -673,7 +673,7 @@ export default function Dashboard() {
   const nextSetupStep = pendingSetupSteps[0];
   const isSetupComplete = completeSetupSteps === setupSteps.length;
   const setupNudgeKey = group?.id && user?.id
-    ? `bajeti:onboarding-nudge:${group.id}:${user.id}`
+    ? `jamvi:onboarding-nudge:${group.id}:${user.id}`
     : null;
 
   useEffect(() => {
@@ -760,7 +760,7 @@ export default function Dashboard() {
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl mx-auto">🏠</div>
             <h1 className="font-display font-bold text-2xl text-foreground mt-5">Join this group first</h1>
             <p className="text-muted-foreground mt-2 leading-relaxed">
-              Bajeti keeps each group’s shared funds, budgets, and savings goals private. Ask someone already in this group to add you from Settings.
+              Jamvi keeps each group’s shared funds, budgets, and savings goals private. Ask someone already in this group to add you from Settings.
             </p>
             <Link href="/settings">
               <Button className="mt-6 rounded-xl">Open Settings</Button>
@@ -908,11 +908,11 @@ export default function Dashboard() {
                    Start here · Step {Math.min(completeSetupSteps + 1, setupSteps.length)} of {setupSteps.length}
                 </p>
                  <h2 className="mt-1 font-display text-xl font-bold text-foreground sm:text-2xl">
-                    {isSetupComplete ? "You’re all set" : completeSetupSteps > 0 ? "Almost there" : "Set up Bajeti"}
+                    {isSetupComplete ? "You’re all set" : completeSetupSteps > 0 ? "Almost there" : "Set up Jamvi"}
                  </h2>
                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                    {isSetupComplete
-                     ? "Your core setup is complete. You can keep using Bajeti as normal."
+                     ? "Your core setup is complete. You can keep using Jamvi as normal."
                       : "One real action at a time. You can come back whenever you are ready."}
                 </p>
                  <div className={`mt-4 h-2 w-full max-w-md overflow-hidden rounded-full ${

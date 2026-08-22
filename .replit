@@ -28,4 +28,4 @@ channel = "stable-25_05"
 APP_URL = "https://delete-project.replit.app"
 
 [userenv.production]
-INVITATION_FROM_EMAIL = "Bajeti <info@optimumprimesolutions.co.ke>"
+INVITATION_FROM_EMAIL = "Jamvi <info@optimumprimesolutions.co.ke>"

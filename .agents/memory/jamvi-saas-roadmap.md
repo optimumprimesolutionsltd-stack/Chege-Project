@@ -1,9 +1,9 @@
 ---
-name: Bajeti SaaS roadmap
-description: Durable product direction and sequencing for Bajeti as a shared-money SaaS.
+name: Jamvi SaaS roadmap
+description: Durable product direction and sequencing for Jamvi as a shared-money SaaS.
 ---
 
-Bajeti is chama-first. Its north star is helping chamas clearly understand what members contributed, where money went, what is available now, and whether shared goals or payouts are on track. Families, clubs, teams, and friends can use the same shared-money foundation, but chamas are the primary market and should guide prioritization.
+Jamvi is chama-first. Its north star is helping chamas clearly understand what members contributed, where money went, what is available now, and whether shared goals or payouts are on track. Families, clubs, teams, and friends can use the same shared-money foundation, but chamas are the primary market and should guide prioritization.
 
 **Why:** Shared financial products lose trust quickly when balances, reports, history, or releases are unreliable. The product should earn trust in the core money workflow before expanding its surface area.
 

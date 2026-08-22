@@ -369,10 +369,10 @@ export async function customFetch<T = unknown>(
     }
   }
 
-  if (_workspaceIdGetter && !headers.has("x-bajeti-workspace")) {
+  if (_workspaceIdGetter && !headers.has("x-jamvi-workspace")) {
     const workspaceId = await _workspaceIdGetter();
     if (workspaceId) {
-      headers.set("x-bajeti-workspace", workspaceId);
+      headers.set("x-jamvi-workspace", workspaceId);
     }
   }
 

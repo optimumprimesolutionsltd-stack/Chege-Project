@@ -338,7 +338,7 @@ describe("GET /dashboard/monthly-report.pdf", () => {
 
   it("excludes marked balance corrections from the PDF funding query", async () => {
     mockedDb.select
-      .mockReturnValueOnce(mockSelectRows([{ name: "Bajeti group" }]) as never)
+      .mockReturnValueOnce(mockSelectRows([{ name: "Jamvi group" }]) as never)
       .mockReturnValueOnce(mockSelectRows([]) as never)
       .mockReturnValueOnce(mockSelectRows([]) as never)
       .mockReturnValueOnce(mockSelectRows([]) as never)

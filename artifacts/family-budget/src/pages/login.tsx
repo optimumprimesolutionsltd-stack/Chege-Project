@@ -29,7 +29,7 @@ export default function LoginPage() {
               <TrendingUp className="h-5 w-5 text-white" />
             </div>
             <div>
-              <p className="font-display text-xl font-bold tracking-tight text-[#f7faf6]">Bajeti</p>
+              <p className="font-display text-xl font-bold tracking-tight text-[#f7faf6]">Jamvi</p>
               <p className="text-xs font-medium text-[#7aaa8a]">Shared finances, together</p>
             </div>
           </div>
@@ -57,7 +57,7 @@ export default function LoginPage() {
                   <TrendingUp className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="font-display text-xl font-bold tracking-tight text-[#183b26]">Bajeti</p>
+                  <p className="font-display text-xl font-bold tracking-tight text-[#183b26]">Jamvi</p>
                   <p className="text-xs font-medium text-[#5f8d6d]">Shared finances, together</p>
                 </div>
               </div>
@@ -106,7 +106,7 @@ export default function LoginPage() {
               {isSigningIn ? 'Opening secure sign-in…' : 'Continue with Google'}
             </button>
             <p className="mt-4 text-center text-xs leading-5 text-[#6b8972]">
-              You’ll continue through Google’s secure sign-in. Your Bajeti account works on web and mobile.
+              You’ll continue through Google’s secure sign-in. Your Jamvi account works on web and mobile.
             </p>
           </div>
         </main>
