@@ -21,12 +21,23 @@ import {
   GetDashboardActivityQueryParams,
   GetDashboardIncomeStreamsQueryParams,
   GetDashboardIncomeStreamsResponse,
+  GetDashboardPeriodTotalsQueryParams,
+  GetDashboardPeriodTotalsResponse,
   GetDashboardMonthlyReportPdfQueryParams,
 } from "@workspace/api-zod";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 
 const router = Router();
+
+function parseDateOnlyQuery(value: unknown): { raw: string; date: Date } | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return null;
+
+  return { raw: value, date };
+}
 
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
@@ -756,6 +767,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
         ON goal.id = contribution.goal_id AND goal.group_id = ${groupId}
       WHERE contribution.group_id = ${groupId}
         AND contribution.created_by_user_id IS NOT NULL
+        AND contribution.is_balance_correction = false
         AND EXTRACT(MONTH FROM contribution.created_at) = ${month}
         AND EXTRACT(YEAR FROM contribution.created_at) = ${year}
     )
@@ -918,6 +930,141 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
   res.json(GetDashboardIncomeStreamsResponse.parse(response));
 });
 
+router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const start = parseDateOnlyQuery(req.query.startDate);
+  const end = parseDateOnlyQuery(req.query.endDate);
+  const parsed = GetDashboardPeriodTotalsQueryParams.safeParse({
+    startDate: start?.date,
+    endDate: end?.date,
+  });
+
+  if (!start || !end || !parsed.success) {
+    res.status(400).json({ error: "Choose a valid start and end date." });
+    return;
+  }
+
+  if (start.raw > end.raw) {
+    res.status(400).json({ error: "The start date must be on or before the end date." });
+    return;
+  }
+
+  const result = await db.execute(sql`
+    WITH expense_rows AS (
+      SELECT
+        expense.id,
+        expense.amount,
+        expense.paid_from_bank,
+        COUNT(split.id) AS split_count,
+        COALESCE(SUM(CASE WHEN split.from_bank = false THEN split.amount ELSE 0 END), 0) AS personal_funding
+      FROM expenses expense
+      LEFT JOIN expense_income_splits split
+        ON split.expense_id = expense.id
+        AND split.group_id = ${groupId}
+      WHERE expense.group_id = ${groupId}
+        AND expense.date >= ${start.raw}::date
+        AND expense.date <= ${end.raw}::date
+      GROUP BY expense.id, expense.amount, expense.paid_from_bank
+    ),
+    expense_totals AS (
+      SELECT
+        COALESCE(SUM(amount), 0) AS expense_total,
+        COUNT(*) AS expense_count,
+        COALESCE(SUM(CASE
+          WHEN split_count > 0 THEN personal_funding
+          WHEN paid_from_bank = false THEN amount
+          ELSE 0
+        END), 0) AS personal_funding_total
+      FROM expense_rows
+    ),
+    bank_totals AS (
+      SELECT
+        COALESCE(SUM(CASE
+          WHEN bank_tx.type = 'deposit'
+            AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
+          THEN bank_tx.amount
+          ELSE 0
+        END), 0) AS bank_deposit_total,
+        COUNT(*) FILTER (
+          WHERE bank_tx.type = 'deposit'
+            AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
+        ) AS bank_deposit_count,
+        COALESCE(SUM(CASE
+          WHEN bank_tx.type = 'disbursement' THEN bank_tx.amount
+          ELSE 0
+        END), 0) AS bank_disbursement_total,
+        COUNT(*) FILTER (WHERE bank_tx.type = 'disbursement') AS bank_disbursement_count,
+        COALESCE(SUM(CASE
+          WHEN bank_tx.type = 'disbursement'
+            AND bank_tx.expense_id IS NULL
+            AND bank_tx.expense_category IS NOT NULL
+          THEN bank_tx.amount
+          ELSE 0
+        END), 0) AS standalone_disbursement_total
+      FROM joint_account_transactions bank_tx
+      WHERE bank_tx.group_id = ${groupId}
+        AND bank_tx.date >= ${start.raw}::date
+        AND bank_tx.date <= ${end.raw}::date
+    ),
+    savings_totals AS (
+      SELECT
+        COALESCE(SUM(contribution.amount), 0) AS savings_total,
+        COUNT(*) AS savings_count
+      FROM savings_goal_contributions contribution
+      WHERE contribution.group_id = ${groupId}
+        AND contribution.created_by_user_id IS NOT NULL
+        AND contribution.is_balance_correction = false
+        AND contribution.created_at >= ${start.raw}::date
+        AND contribution.created_at < (${end.raw}::date + INTERVAL '1 day')
+    )
+    SELECT
+      expense_totals.expense_total AS "expenseTotal",
+      expense_totals.expense_count AS "expenseCount",
+      bank_totals.bank_deposit_total AS "bankDepositTotal",
+      bank_totals.bank_deposit_count AS "bankDepositCount",
+      bank_totals.bank_disbursement_total AS "bankDisbursementTotal",
+      bank_totals.bank_disbursement_count AS "bankDisbursementCount",
+      savings_totals.savings_total AS "savingsTotal",
+      savings_totals.savings_count AS "savingsCount",
+      expense_totals.expense_total + bank_totals.standalone_disbursement_total AS "spendingTotal",
+      expense_totals.personal_funding_total
+        + bank_totals.bank_deposit_total
+        + savings_totals.savings_total AS "contributionTotal"
+    FROM expense_totals
+    CROSS JOIN bank_totals
+    CROSS JOIN savings_totals
+  `);
+
+  const row = (result.rows[0] ?? {}) as Record<string, string | number | null>;
+  const numberValue = (key: string) => Number(row[key] ?? 0);
+  const spendingTotal = numberValue("spendingTotal");
+  const contributionTotal = numberValue("contributionTotal");
+  const response = {
+    startDate: start.raw,
+    endDate: end.raw,
+    expenseTotal: numberValue("expenseTotal"),
+    spendingTotal,
+    contributionTotal,
+    bankDepositTotal: numberValue("bankDepositTotal"),
+    bankDisbursementTotal: numberValue("bankDisbursementTotal"),
+    savingsTotal: numberValue("savingsTotal"),
+    netMovement: contributionTotal - spendingTotal,
+    expenseCount: numberValue("expenseCount"),
+    bankDepositCount: numberValue("bankDepositCount"),
+    bankDisbursementCount: numberValue("bankDisbursementCount"),
+    savingsCount: numberValue("savingsCount"),
+  };
+
+  GetDashboardPeriodTotalsResponse.parse({
+    ...response,
+    startDate: parsed.data.startDate,
+    endDate: parsed.data.endDate,
+  });
+  res.json(response);
+});
+
 router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
@@ -983,6 +1130,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         SELECT NULL::integer, contribution.amount, 'savings'::text, contribution.id
         FROM savings_goal_contributions contribution
         WHERE contribution.group_id = ${groupId} AND contribution.created_by_user_id IS NOT NULL
+          AND contribution.is_balance_correction = false
           AND EXTRACT(MONTH FROM contribution.created_at) = ${month} AND EXTRACT(YEAR FROM contribution.created_at) = ${year}
       )
       SELECT

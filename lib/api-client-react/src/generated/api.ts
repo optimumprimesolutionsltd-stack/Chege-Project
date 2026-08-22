@@ -48,6 +48,7 @@ import type {
   GetDashboardCategoryLedgerParams,
   GetDashboardIncomeStreamsParams,
   GetDashboardMonthlyReportPdfParams,
+  GetDashboardPeriodTotalsParams,
   GetDashboardSummaryParams,
   GetDashboardTrendsParams,
   GetExpensesParams,
@@ -68,6 +69,7 @@ import type {
   MonthTrend,
   OpeningBalance,
   OpeningBalanceInput,
+  PeriodTotalsReport,
   SavingsGoal,
   SavingsGoalContributeInput,
   SavingsGoalContribution,
@@ -1629,6 +1631,90 @@ export function useGetDashboardIncomeStreams<TData = Awaited<ReturnType<typeof g
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardIncomeStreamsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardPeriodTotalsUrl = (params: GetDashboardPeriodTotalsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/period-totals?${stringifiedParams}` : `/api/dashboard/period-totals`
+}
+
+/**
+ * @summary Workspace totals across an inclusive date range
+ */
+export const getDashboardPeriodTotals = async (params: GetDashboardPeriodTotalsParams, options?: Parameters<typeof customFetch>[1]): Promise<PeriodTotalsReport> => {
+
+  return customFetch<PeriodTotalsReport>(getGetDashboardPeriodTotalsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardPeriodTotalsQueryKey = (params?: GetDashboardPeriodTotalsParams,) => {
+    return [
+    `/api/dashboard/period-totals`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardPeriodTotalsQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardPeriodTotals>>, TError = ErrorType<ErrorResponse>>(params: GetDashboardPeriodTotalsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardPeriodTotals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardPeriodTotalsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardPeriodTotals>>> = ({ signal }) => getDashboardPeriodTotals(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardPeriodTotals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardPeriodTotalsQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardPeriodTotals>>>
+export type GetDashboardPeriodTotalsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Workspace totals across an inclusive date range
+ */
+
+export function useGetDashboardPeriodTotals<TData = Awaited<ReturnType<typeof getDashboardPeriodTotals>>, TError = ErrorType<ErrorResponse>>(
+ params: GetDashboardPeriodTotalsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardPeriodTotals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardPeriodTotalsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

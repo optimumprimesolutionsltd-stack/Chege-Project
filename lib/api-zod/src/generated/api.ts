@@ -522,6 +522,31 @@ export const GetDashboardIncomeStreamsResponse = zod.object({
 
 
 /**
+ * @summary Workspace totals across an inclusive date range
+ */
+export const GetDashboardPeriodTotalsQueryParams = zod.object({
+  "startDate": zod.date(),
+  "endDate": zod.date()
+})
+
+export const GetDashboardPeriodTotalsResponse = zod.object({
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "expenseTotal": zod.number().describe('All recorded expenses in the period'),
+  "spendingTotal": zod.number().describe('Expenses plus standalone categorised bank disbursements, counted once'),
+  "contributionTotal": zod.number().describe('Personal expense funding, qualifying bank deposits, and personal savings additions'),
+  "bankDepositTotal": zod.number().describe('External deposits into the joint account, excluding transfers from savings'),
+  "bankDisbursementTotal": zod.number().describe('All bank disbursements recorded in the period'),
+  "savingsTotal": zod.number().describe('Personal additions to savings goals'),
+  "netMovement": zod.number().describe('Contributions or funding less spending'),
+  "expenseCount": zod.number(),
+  "bankDepositCount": zod.number(),
+  "bankDisbursementCount": zod.number(),
+  "savingsCount": zod.number()
+})
+
+
+/**
  * @summary Download a monthly report PDF for the active group
  */
 export const getDashboardMonthlyReportPdfQueryMonthMax = 12;

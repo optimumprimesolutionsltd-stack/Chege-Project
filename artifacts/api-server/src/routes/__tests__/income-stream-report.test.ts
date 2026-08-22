@@ -22,6 +22,7 @@ vi.mock("@workspace/db", () => {
     savingsGoalContributionsTable: table,
     savingsGoalsTable: table,
     groupMembershipsTable: table,
+    groupsTable: table,
     incomeSourcesTable: table,
   };
 });
@@ -66,6 +67,21 @@ function mockIncomeSources(rows: Array<{
     where: () => Promise.resolve(rows),
   };
   mockedDb.select.mockReturnValue(chain as never);
+}
+
+function mockSelectRows(rows: unknown[]) {
+  const chain = {
+    from: () => chain,
+    where: () => chain,
+    limit: () => Promise.resolve(rows),
+    orderBy: () => Promise.resolve(rows),
+    groupBy: () => Promise.resolve(rows),
+    then: <TResult1 = unknown[], TResult2 = never>(
+      onfulfilled?: ((value: unknown[]) => TResult1 | PromiseLike<TResult1>) | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ) => Promise.resolve(rows).then(onfulfilled, onrejected),
+  };
+  return chain;
 }
 
 describe("GET /dashboard/income-streams", () => {
@@ -247,6 +263,95 @@ describe("GET /dashboard/income-streams", () => {
       remainingBalance: 0,
       streams: [],
     });
+  });
+});
+
+describe("GET /dashboard/period-totals", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns workspace-scoped totals and counts linked bank expenses only once in spending", async () => {
+    mockedDb.execute.mockResolvedValue({
+      rows: [{
+        expenseTotal: "1000",
+        expenseCount: "3",
+        bankDepositTotal: "1500",
+        bankDepositCount: "2",
+        bankDisbursementTotal: "400",
+        bankDisbursementCount: "2",
+        savingsTotal: "300",
+        savingsCount: "1",
+        spendingTotal: "1100",
+        contributionTotal: "2200",
+      }],
+    });
+
+    const response = await request(buildApp(41))
+      .get("/dashboard/period-totals?startDate=2026-05-10&endDate=2026-05-16&groupId=999");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      startDate: "2026-05-10",
+      endDate: "2026-05-16",
+      expenseTotal: 1000,
+      spendingTotal: 1100,
+      contributionTotal: 2200,
+      bankDepositTotal: 1500,
+      bankDisbursementTotal: 400,
+      savingsTotal: 300,
+      netMovement: 1100,
+      expenseCount: 3,
+      bankDepositCount: 2,
+      bankDisbursementCount: 2,
+      savingsCount: 1,
+    });
+
+    const statement = sqlMock.mock.results.at(-1)?.value as { strings: TemplateStringsArray; values: unknown[] };
+    const statementText = statement.strings.join("");
+    expect(statement.values).toContain(41);
+    expect(statement.values).toContain("2026-05-10");
+    expect(statement.values).toContain("2026-05-16");
+    expect(statement.values).not.toContain(999);
+    expect(statementText).toContain("split.from_bank = false");
+    expect(statementText).toContain("bank_tx.expense_id IS NULL");
+    expect(statementText).toContain("transfer_direction IS DISTINCT FROM 'from_savings'");
+    expect(statementText).toContain("contribution.is_balance_correction = false");
+  });
+
+  it("rejects malformed and backwards ranges without querying the database", async () => {
+    const backwards = await request(buildApp()).get("/dashboard/period-totals?startDate=2026-05-16&endDate=2026-05-10");
+    const malformed = await request(buildApp()).get("/dashboard/period-totals?startDate=2026-05-40&endDate=2026-05-16");
+
+    expect(backwards.status).toBe(400);
+    expect(backwards.body.error).toMatch(/start date/i);
+    expect(malformed.status).toBe(400);
+    expect(mockedDb.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /dashboard/monthly-report.pdf", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("excludes marked balance corrections from the PDF funding query", async () => {
+    mockedDb.select
+      .mockReturnValueOnce(mockSelectRows([{ name: "Bajeti group" }]) as never)
+      .mockReturnValueOnce(mockSelectRows([]) as never)
+      .mockReturnValueOnce(mockSelectRows([]) as never)
+      .mockReturnValueOnce(mockSelectRows([]) as never)
+      .mockReturnValueOnce(mockSelectRows([{ count: 0 }]) as never);
+    mockedDb.execute.mockResolvedValue({ rows: [] });
+
+    const response = await request(buildApp()).get("/dashboard/monthly-report.pdf?month=5&year=2026");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/pdf");
+    const fundingStatement = sqlMock.mock.results
+      .map((result) => result.value as { strings: TemplateStringsArray })
+      .find((statement) => statement.strings.join("").includes("WITH funding AS"));
+    expect(fundingStatement?.strings.join("")).toContain("contribution.is_balance_correction = false");
   });
 });
 

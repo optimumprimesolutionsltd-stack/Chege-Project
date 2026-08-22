@@ -338,6 +338,29 @@ export interface IncomeStreamReport {
   streams: IncomeStreamFunding[];
 }
 
+export interface PeriodTotalsReport {
+  startDate: string;
+  endDate: string;
+  /** All recorded expenses in the period */
+  expenseTotal: number;
+  /** Expenses plus standalone categorised bank disbursements, counted once */
+  spendingTotal: number;
+  /** Personal expense funding, qualifying bank deposits, and personal savings additions */
+  contributionTotal: number;
+  /** External deposits into the joint account, excluding transfers from savings */
+  bankDepositTotal: number;
+  /** All bank disbursements recorded in the period */
+  bankDisbursementTotal: number;
+  /** Personal additions to savings goals */
+  savingsTotal: number;
+  /** Contributions or funding less spending */
+  netMovement: number;
+  expenseCount: number;
+  bankDepositCount: number;
+  bankDisbursementCount: number;
+  savingsCount: number;
+}
+
 export interface MonthTrend {
   month: number;
   year: number;
@@ -901,6 +924,11 @@ month?: number;
  * @maximum 2200
  */
 year?: number;
+};
+
+export type GetDashboardPeriodTotalsParams = {
+startDate: string;
+endDate: string;
 };
 
 export type GetDashboardMonthlyReportPdfParams = {

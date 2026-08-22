@@ -200,6 +200,7 @@ export const savingsGoalContributionsTable = pgTable("savings_goal_contributions
   goalId: integer("goal_id").notNull().references(() => savingsGoalsTable.id, { onDelete: "cascade" }),
   amount: integer("amount").notNull(), // in KES; negative values indicate manual downward adjustments
   note: text("note"),                 // null for regular contributions; set for manual adjustments
+  isBalanceCorrection: boolean("is_balance_correction").notNull().default(false),
   createdByUserId: text("created_by_user_id"),  // null = Joint bank (shared household); named = individual member
   bankTransactionId: integer("bank_transaction_id"), // links a bank <-> savings transfer for safe reversal
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -521,6 +521,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/IncomeStreamReport"
 
+  /dashboard/period-totals:
+    get:
+      operationId: getDashboardPeriodTotals
+      tags: [dashboard]
+      summary: Workspace totals across an inclusive date range
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Spending, funding, bank, and savings totals for the selected period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodTotalsReport"
+        "400":
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /dashboard/monthly-report.pdf:
     get:
       operationId: getDashboardMonthlyReportPdf
@@ -2032,6 +2064,59 @@ components:
         - amount
         - description
         - date
+
+    PeriodTotalsReport:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        expenseTotal:
+          type: number
+          description: All recorded expenses in the period
+        spendingTotal:
+          type: number
+          description: Expenses plus standalone categorised bank disbursements, counted once
+        contributionTotal:
+          type: number
+          description: Personal expense funding, qualifying bank deposits, and personal savings additions
+        bankDepositTotal:
+          type: number
+          description: External deposits into the joint account, excluding transfers from savings
+        bankDisbursementTotal:
+          type: number
+          description: All bank disbursements recorded in the period
+        savingsTotal:
+          type: number
+          description: Personal additions to savings goals
+        netMovement:
+          type: number
+          description: Contributions or funding less spending
+        expenseCount:
+          type: number
+        bankDepositCount:
+          type: number
+        bankDisbursementCount:
+          type: number
+        savingsCount:
+          type: number
+      required:
+        - startDate
+        - endDate
+        - expenseTotal
+        - spendingTotal
+        - contributionTotal
+        - bankDepositTotal
+        - bankDisbursementTotal
+        - savingsTotal
+        - netMovement
+        - expenseCount
+        - bankDepositCount
+        - bankDisbursementCount
+        - savingsCount
 
     MonthTrend:
       type: object

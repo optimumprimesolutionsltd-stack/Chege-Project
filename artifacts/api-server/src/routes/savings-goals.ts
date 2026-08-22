@@ -607,6 +607,7 @@ router.patch("/savings-goals/:id", async (req, res): Promise<void> => {
         goalId: id,
         amount: delta,
         note: reason ?? "Manual adjustment",
+        isBalanceCorrection: true,
         createdByUserId: req.user!.id,
       });
     }
