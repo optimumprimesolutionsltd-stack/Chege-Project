@@ -161,7 +161,7 @@ function CreateSharedGroupCard() {
             <OpenInvitationLinkButton />
             <Button className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-               Create a Shared budget
+               Start a group budget
             </Button>
           </div>
         </CardContent>
