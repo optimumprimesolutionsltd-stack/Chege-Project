@@ -159,7 +159,7 @@ export default function AddExpenseSheet() {
     if (sharedTransactionsLocked) {
       Alert.alert(
         'Invite one more member',
-        'This new shared group needs two members before recording expenses. Bank activity and setup are still available.',
+        'This new Shared budget needs two members before recording expenses. Bank activity and setup are still available.',
       );
       return;
     }

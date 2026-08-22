@@ -749,8 +749,8 @@ export default function HistoryScreen() {
                 ))}
                 {sharedHouseholdRows.length > 0 && (
                   <View style={[styles.sharedFunding, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                    <Text style={[styles.sharedFundingTitle, { color: colors.foreground }]}>Shared group funding</Text>
-                    <Text style={[styles.sharedFundingText, { color: colors.mutedForeground }]}>Joint bank portions are shared group funds and are not included in member contribution totals.</Text>
+                    <Text style={[styles.sharedFundingTitle, { color: colors.foreground }]}>Shared budget funding</Text>
+                    <Text style={[styles.sharedFundingText, { color: colors.mutedForeground }]}>Joint bank portions are Shared budget funds and are not included in member contribution totals.</Text>
                     {sharedHouseholdRows.map((item) => <View key={item.id} style={styles.sharedFundingRow}><Text style={[styles.sharedFundingText, { color: colors.foreground }]} numberOfLines={1}>{item.description}</Text><Text style={[styles.sharedFundingAmount, { color: colors.foreground }]}>KES {formatKES(item.amount)}</Text></View>)}
                   </View>
                 )}

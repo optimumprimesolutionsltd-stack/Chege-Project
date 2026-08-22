@@ -1,5 +1,5 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { AuthUser } from '@workspace/api-client-react';
+import { updateDisplayName, type AuthUser } from '@workspace/api-client-react';
 
 export type { AuthUser };
 
@@ -11,6 +11,7 @@ interface AuthState {
   login: () => void;
   logout: () => void;
   retry: () => void;
+  saveDisplayName: (name: string) => Promise<void>;
 }
 
 function getBasePath() {
@@ -117,6 +118,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRetryCount((count) => count + 1);
   }, []);
 
+  const saveDisplayName = useCallback(async (name: string) => {
+    const response = await updateDisplayName({ name });
+    if (!response.user) {
+      throw new Error('Could not save your name.');
+    }
+    setUser(response.user);
+    authRequest = Promise.resolve(response.user);
+  }, []);
+
   const value = useMemo<AuthState>(() => ({
     user,
     isLoading,
@@ -125,7 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     retry,
-  }), [user, isLoading, error, login, logout, retry]);
+    saveDisplayName,
+  }), [user, isLoading, error, login, logout, retry, saveDisplayName]);
 
   return createElement(AuthContext.Provider, { value }, children);
 }

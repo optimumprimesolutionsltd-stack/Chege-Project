@@ -429,7 +429,7 @@ export default function Bank() {
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">Joint Bank Account</h1>
-        <p className="text-muted-foreground mt-1">Track money going in and out of your shared account.</p>
+        <p className="text-muted-foreground mt-1">Track money going in and out of your Shared budget.</p>
       </div>
 
        {!canManageShared && (
@@ -504,7 +504,7 @@ export default function Bank() {
               {mode === "deposit"
                 ? "Money going into the joint bank account."
                 : mode === "transfer"
-                  ? "Move shared group funds between the joint bank account and a savings goal."
+                  ? "Move Shared budget funds between the joint bank account and a savings goal."
                   : "Money going out of the joint bank account."}
             </CardDescription>
           </CardHeader>

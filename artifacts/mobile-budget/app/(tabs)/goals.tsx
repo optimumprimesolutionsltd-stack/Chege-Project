@@ -720,7 +720,7 @@ export default function GoalsScreen() {
     if (sharedTransactionsLocked) {
       Alert.alert(
         'Invite one more member',
-        'This new shared group needs two members before recording goal contributions. You can still create goals and manage the group.',
+        'This new Shared budget needs two members before recording goal contributions. You can still create goals and manage the group.',
       );
       return;
     }
@@ -832,7 +832,7 @@ export default function GoalsScreen() {
     if (sharedTransactionsLocked) {
       Alert.alert(
         'Invite one more member',
-        'This new shared group needs two members before recording goal contributions. You can still create goals and manage the group.',
+        'This new Shared budget needs two members before recording goal contributions. You can still create goals and manage the group.',
       );
       return;
     }

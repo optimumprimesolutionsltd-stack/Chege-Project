@@ -81,11 +81,11 @@ function OpenInvitationLinkButton() {
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Join a private group</DialogTitle>
+         <DialogTitle>Join a Shared budget</DialogTitle>
           </DialogHeader>
           <form onSubmit={openInvitation} className="space-y-5">
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Paste the email invitation or private group link you received. It will add that group alongside My Budget after you accept.
+               Paste the email invitation or private group link you received. It will add that Shared budget alongside your Personal budget after you accept.
             </p>
             <div className="space-y-2">
               <label htmlFor="group-invitation-link" className="text-sm font-semibold text-foreground">Invitation link</label>
@@ -120,7 +120,7 @@ function CreateSharedGroupCard() {
       toast({
         variant: "destructive",
         title: "Group name required",
-        description: "Enter at least two characters before creating a private group.",
+               description: "Enter at least two characters before creating a Shared budget.",
       });
       return;
     }
@@ -141,17 +141,17 @@ function CreateSharedGroupCard() {
       <Card className="overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/[0.08] to-card shadow-sm">
         <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">My Budget is private</p>
+             <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Your Personal budget is private</p>
             <h2 className="mt-1 font-display text-xl font-bold text-foreground">Need to budget with other people?</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Create a private group for your family, chama, club, team, or any shared goal. It starts empty, stays separate from My Budget, and only people you invite can join.
+               Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <OpenInvitationLinkButton />
             <Button className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Create a private group
+               Create a Shared budget
             </Button>
           </div>
         </CardContent>
@@ -160,11 +160,11 @@ function CreateSharedGroupCard() {
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create a private group</DialogTitle>
+             <DialogTitle>Create a Shared budget</DialogTitle>
           </DialogHeader>
           <form onSubmit={submit} className="space-y-5">
             <p className="text-sm leading-relaxed text-muted-foreground">
-              You will be the owner. Your My Budget records will stay private and will not be copied into this group.
+               You will be the owner. Your Personal budget records will stay private and will not be copied into this Shared budget.
             </p>
             <div className="space-y-2">
               <label htmlFor="shared-group-name" className="text-sm font-semibold text-foreground">Group name</label>
@@ -178,7 +178,7 @@ function CreateSharedGroupCard() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={createSharedGroup.isPending}>
-              {createSharedGroup.isPending ? "Creating…" : "Create private group"}
+               {createSharedGroup.isPending ? "Creating…" : "Create Shared budget"}
             </Button>
           </form>
         </DialogContent>
@@ -216,10 +216,10 @@ function SharedGroupsFooter() {
     <Card className="border border-primary/15 bg-card shadow-sm">
       <CardContent className="flex flex-col gap-5 p-5 sm:p-6">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Shared groups</p>
+          <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Shared budgets</p>
           <h2 className="mt-1 font-display text-xl font-bold text-foreground">Group overview</h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Keep My Budget focused on your personal finances. Open a shared group below when you want to see its pooled budget, members, goals, and activity.
+            Keep your Personal budget focused on your personal finances. Open a Shared budget below when you want to see its pooled budget, members, goals, and activity.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -238,7 +238,7 @@ function SharedGroupsFooter() {
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <Link href="/settings" className="text-sm font-medium text-primary hover:underline">
-            Manage shared groups →
+            Manage Shared budgets →
           </Link>
           <OpenInvitationLinkButton />
         </div>
@@ -834,7 +834,7 @@ export default function Dashboard() {
             {isSharedWorkspace ? "Shared budget" : "Personal budget"}
           </p>
           <h1 className="mt-1 text-3xl font-display font-bold text-foreground">
-            {group?.isPrivate ? "My Budget" : "Group Overview"}
+            {group?.isPrivate ? "Personal budget" : "Shared budget overview"}
           </h1>
           <p className="mt-1 text-muted-foreground">
             {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
@@ -851,7 +851,7 @@ export default function Dashboard() {
                 Viewing budget
               </p>
               <p className="mt-1 truncate font-display text-lg font-bold text-foreground">
-                {group ? workspaceLabel(group) : "My Budget"}
+                {group ? workspaceLabel(group) : "Personal budget"}
               </p>
             </div>
             <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
@@ -859,7 +859,7 @@ export default function Dashboard() {
             </span>
           </div>
           <label htmlFor="dashboard-workspace-switcher" className="sr-only">
-            Choose a budget workspace
+             Choose a budget
           </label>
           <WorkspaceSwitcher
             id="dashboard-workspace-switcher"
@@ -1159,7 +1159,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">{isSharedWorkspace ? "Joint Account" : "My Account"}</p>
-                  <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared group funds" : "Personal funds"}</p>
+                  <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared budget funds" : "Personal budget funds"}</p>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />

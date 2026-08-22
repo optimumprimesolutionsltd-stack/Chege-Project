@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { GroupInviteLinks } from "@/components/group-invite-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { LogOut, Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
+import { Check, LogOut, Pencil, Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
 
 type GroupInvitation = {
   id: number;
@@ -36,7 +36,7 @@ async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, saveDisplayName } = useAuth();
   const { data: members, isLoading } = useGetMembers();
   const removeMember = useRemoveMember();
   const leaveGroup = useLeaveGroup();
@@ -51,9 +51,14 @@ export default function Settings() {
   const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
   const [addingSource, setAddingSource] = useState(false);
   const [deletingSourceId, setDeletingSourceId] = useState<number | null>(null);
+  const [editingSourceId, setEditingSourceId] = useState<number | null>(null);
+  const [editingSourceName, setEditingSourceName] = useState("");
+  const [savingSourceId, setSavingSourceId] = useState<number | null>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
   const canManageWorkspace = members?.some(
     (member) =>
@@ -70,6 +75,9 @@ export default function Settings() {
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
   }, [group?.name]);
+  useEffect(() => {
+    setDisplayName([user?.firstName, user?.lastName].filter(Boolean).join(" "));
+  }, [user?.firstName, user?.lastName]);
 
   const { data: invitations = [] } = useQuery<GroupInvitation[]>({
     queryKey: ["group-invitations"],
@@ -82,10 +90,12 @@ export default function Settings() {
     enabled: canManageShared,
   });
   const { data: incomeSources = [], isLoading: incomeSourcesLoading } = useQuery<IncomeSource[]>({
-    queryKey: ["income-sources", user?.id],
-    queryFn: () => user?.id
-      ? requestJson<IncomeSource[]>(`/api/income-sources?userId=${encodeURIComponent(user.id)}`)
-      : Promise.resolve([]),
+    queryKey: ["income-sources", canManageShared ? "all" : user?.id],
+    queryFn: () => canManageShared
+      ? requestJson<IncomeSource[]>("/api/income-sources")
+      : user?.id
+        ? requestJson<IncomeSource[]>(`/api/income-sources?userId=${encodeURIComponent(user.id)}`)
+        : Promise.resolve([]),
     enabled: Boolean(user?.id),
     staleTime: 0,
     refetchOnMount: "always",
@@ -106,6 +116,34 @@ export default function Settings() {
       toast({ title: "Group name updated" });
     } catch {
       toast({ variant: "destructive", title: "Could not update group name" });
+    }
+  };
+
+  const handleSaveDisplayName = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = displayName.trim();
+    if (!name) {
+      toast({
+        variant: "destructive",
+        title: "Name required",
+        description: "Enter the name you would like people to see.",
+      });
+      return;
+    }
+
+    setSavingDisplayName(true);
+    try {
+      await saveDisplayName(name);
+      await queryClient.invalidateQueries();
+      toast({ title: "Name updated" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not update your name",
+        description: error instanceof Error ? error.message : "Use letters, spaces, apostrophes, or hyphens.",
+      });
+    } finally {
+      setSavingDisplayName(false);
     }
   };
 
@@ -189,8 +227,12 @@ export default function Settings() {
       await updateMemberRole.mutateAsync({ userId, data: { role } });
       toast({ title: role === "admin" ? "Made admin" : "Made member" });
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
-    } catch {
-      toast({ variant: "destructive", title: "Could not change role" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not change role",
+        description: error instanceof Error ? error.message : "Only owners and admins can change member roles.",
+      });
     }
   };
 
@@ -200,8 +242,12 @@ export default function Settings() {
       await removeMember.mutateAsync({ userId });
       toast({ title: "Member removed", description: "Shared records stay with the group." });
       queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not remove this person." });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not remove this person",
+        description: error instanceof Error ? error.message : "Only owners and admins can remove members.",
+      });
     }
   };
 
@@ -285,6 +331,52 @@ export default function Settings() {
     }
   };
 
+  const handleStartEditSource = (source: IncomeSource) => {
+    setEditingSourceId(source.id);
+    setEditingSourceName(source.name);
+  };
+
+  const handleCancelEditSource = () => {
+    setEditingSourceId(null);
+    setEditingSourceName("");
+  };
+
+  const handleSaveSource = async (source: IncomeSource) => {
+    const name = editingSourceName.trim();
+    if (!name) {
+      toast({
+        variant: "destructive",
+        title: "Source name required",
+        description: "Enter a name before saving the income source.",
+      });
+      return;
+    }
+
+    setSavingSourceId(source.id);
+    try {
+      await requestJson<IncomeSource>(`/api/income-sources/${source.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          isMain: source.isMain,
+          expectedMonthlyAmount: source.expectedMonthlyAmount,
+        }),
+      });
+      handleCancelEditSource();
+      invalidateIncomeSources();
+      toast({ title: "Income source updated" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not update income source",
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setSavingSourceId(null);
+    }
+  };
+
   const pendingEmails = new Set(invitations.filter((invitation) => invitation.status === "pending").map((invitation) => invitation.email));
 
   return (
@@ -295,7 +387,7 @@ export default function Settings() {
           {canManageShared
             ? "Manage who has access to this group budget."
             : isPrivateWorkspace
-              ? "This is your private budget. Only you can see it."
+              ? "This is your Personal budget. Only you can see it."
             : "View your group and manage your own account details."}
         </p>
       </div>
@@ -309,19 +401,42 @@ export default function Settings() {
           </div>
           <CardDescription>Your sign-in email is used to confirm invitations sent to you.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <p className="rounded-lg bg-muted px-4 py-3 text-sm text-foreground">
             Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email}</strong>
           </p>
+          <form onSubmit={handleSaveDisplayName} noValidate className="space-y-2">
+            <label htmlFor="display-name" className="text-sm font-semibold text-foreground">Your name</label>
+            <div className="flex gap-2">
+              <Input
+                id="display-name"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="e.g. Chege"
+                maxLength={40}
+                autoComplete="name"
+                aria-describedby="display-name-help"
+                disabled={savingDisplayName}
+              />
+              <Button type="submit" disabled={savingDisplayName || !displayName.trim()} className="shrink-0">
+                {savingDisplayName ? "Saving…" : "Save"}
+              </Button>
+            </div>
+            <p id="display-name-help" className="text-xs leading-relaxed text-muted-foreground">
+              This is the name other members see in shared budgets and activity.
+            </p>
+          </form>
         </CardContent>
       </Card>
 
       {/* Income sources */}
       <Card className="border-none shadow-md">
         <CardHeader>
-          <CardTitle>Your income sources</CardTitle>
+          <CardTitle>{canManageShared ? "Shared budget income sources" : "Your income sources"}</CardTitle>
           <CardDescription>
-            Add the places your personal expenses are funded from. They will appear in the Paid from choices when you record an expense.
+            {canManageShared
+              ? "Admins and owners can edit or remove any member’s income source. Members can manage their own sources."
+              : "Add the places your personal expenses are funded from. They will appear in the Paid from choices when you record an expense."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -351,22 +466,82 @@ export default function Settings() {
             </div>
           ) : (
             <div className="space-y-2">
-              {incomeSources.map((source) => (
-                <div key={source.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-4 py-3">
-                  <p className="font-semibold text-foreground">{source.name}</p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    aria-label={`Remove ${source.name}`}
-                    onClick={() => handleDeleteSource(source)}
-                    disabled={deletingSourceId === source.id}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+              {incomeSources.map((source) => {
+                const sourceOwner = members?.find((member) => member.userId === source.userId)?.userName
+                  ?? (source.userId === user?.id ? "You" : "Member");
+                const isEditing = editingSourceId === source.id;
+                const isSaving = savingSourceId === source.id;
+                return (
+                  <div key={source.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-4 py-3">
+                    {isEditing ? (
+                      <Input
+                        autoFocus
+                        value={editingSourceName}
+                        onChange={(event) => setEditingSourceName(event.target.value)}
+                        maxLength={80}
+                        aria-label={`Edit ${source.name}`}
+                        disabled={isSaving}
+                        className="h-9 bg-card"
+                      />
+                    ) : (
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground">{source.name}</p>
+                        {canManageShared && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">For {sourceOwner}</p>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      {isEditing ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Save ${source.name}`}
+                            onClick={() => void handleSaveSource(source)}
+                            disabled={isSaving || !editingSourceName.trim()}
+                          >
+                            <Check className="h-4 w-4 text-emerald-600" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Cancel editing ${source.name}`}
+                            onClick={handleCancelEditSource}
+                            disabled={isSaving}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Edit ${source.name}`}
+                          onClick={() => handleStartEditSource(source)}
+                          disabled={deletingSourceId === source.id}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        aria-label={`Remove ${source.name}`}
+                        onClick={() => handleDeleteSource(source)}
+                        disabled={isEditing || deletingSourceId === source.id || isSaving}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -377,8 +552,8 @@ export default function Settings() {
           <CardTitle>Budget name</CardTitle>
           <CardDescription>
             {isPrivateWorkspace
-              ? "This is the name for your private Bajeti space."
-              : "This is the name your group sees across Bajeti."}
+              ? "This is the name for your Personal budget."
+              : "This is the name your Shared budget sees across Bajeti."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -400,11 +575,13 @@ export default function Settings() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
-            <CardTitle>{isPrivateWorkspace ? "Private budget" : "Group Members"}</CardTitle>
+            <CardTitle>{isPrivateWorkspace ? "Personal budget" : "Group Members"}</CardTitle>
           </div>
           <CardDescription>
             {isPrivateWorkspace
-              ? "Only you have access to this budget. Shared groups remain separate."
+              ? "Only you have access to this Personal budget. Shared budgets remain separate."
+              : canManageShared
+                ? "You can change any non-owner between Admin and Member or remove their access. The group owner is protected."
               : "The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups."}
           </CardDescription>
         </CardHeader>
@@ -417,38 +594,45 @@ export default function Settings() {
           ) : (
             <div className="space-y-2">
               {members?.map((m) => (
-                <div key={m.userId} className="flex items-center justify-between bg-muted/50 rounded-xl px-4 py-3">
-                  <div>
+                <div key={m.userId} className="flex flex-col gap-3 rounded-xl bg-muted/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <p className="font-semibold text-foreground">{m.userName ?? "Unknown"}</p>
                     <p className="text-xs font-mono text-muted-foreground mt-0.5">{m.userId}</p>
                   </div>
-                    <div className="flex items-center gap-2">
-                      {canManageShared && m.role !== "owner" && m.userId !== user?.id && (
-                        <select
-                          aria-label={`Role for ${m.userName ?? "member"}`}
-                          value={m.role}
-                          onChange={(event) => handleRoleChange(m.userId, event.target.value as "admin" | "member")}
-                          disabled={updateMemberRole.isPending}
-                          className="h-9 rounded-lg border border-border bg-background px-2 text-xs font-medium"
-                        >
-                          <option value="member">Member</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      )}
-                      {m.userId !== user?.id && canManageShared && m.role !== "owner" && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canManageShared && m.role !== "owner" && m.userId !== user?.id ? (
+                      <>
+                        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                          <span>Role</span>
+                          <select
+                            aria-label={`Change role for ${m.userName ?? "member"}`}
+                            value={m.role}
+                            onChange={(event) => handleRoleChange(m.userId, event.target.value as "admin" | "member")}
+                            disabled={updateMemberRole.isPending || removeMember.isPending}
+                            className="h-9 rounded-lg border border-border bg-background px-2 text-xs font-medium text-foreground"
+                          >
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </label>
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 w-9"
+                          variant="outline"
+                          size="sm"
+                          className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           onClick={() => handleRemove(m.userId)}
+                          disabled={removeMember.isPending || updateMemberRole.isPending}
+                          aria-label={`Remove ${m.userName ?? "member"} from group`}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="mr-1.5 h-4 w-4" />
+                          Remove
                         </Button>
-                      )}
+                      </>
+                    ) : (
                       <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-1 rounded-full">
-                        {m.userId === user?.id ? `You · ${m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : "Member"}` : m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : "Member"}
+                        {m.userId === user?.id ? `You · ${m.role === "owner" ? "Owner" : m.role === "admin" ? "Admin" : "Member"}` : m.role === "owner" ? "Owner · Protected" : m.role === "admin" ? "Admin" : "Member"}
                       </span>
-                    </div>
+                    )}
+                  </div>
                 </div>
               ))}
               {members?.length === 0 && (
@@ -459,9 +643,9 @@ export default function Settings() {
 
           {isPrivateWorkspace ? (
             <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
-              <p className="text-sm font-semibold text-foreground">Your primary budget</p>
+                <p className="text-sm font-semibold text-foreground">Your Personal budget</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Expenses, goals, bank activity, and reports here belong only to you. A shared group has its own separate budget and members.
+                  Expenses, goals, bank activity, and reports here belong only to you. A Shared budget has its own separate budget and members.
               </p>
             </div>
           ) : !canManageShared && (

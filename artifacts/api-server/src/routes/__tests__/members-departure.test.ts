@@ -44,6 +44,7 @@ type Mock = ReturnType<typeof vi.fn>;
 function selectChain(rows: unknown[]) {
   const chain: Record<string, unknown> = {};
   chain.from = vi.fn().mockReturnValue(chain);
+  chain.leftJoin = vi.fn().mockReturnValue(chain);
   chain.where = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockResolvedValue(rows);
   chain.for = vi.fn().mockResolvedValue(rows);
@@ -148,5 +149,59 @@ describe("member departures", () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toMatch(/leave group/i);
     expect(db.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("member role management", () => {
+  it("lets an admin promote a non-owner member", async () => {
+    const selectResults = [
+      [{ role: "member" }],
+      [{
+        userId: "member-1",
+        role: "admin",
+        addedAt: new Date("2026-01-01T00:00:00.000Z"),
+        firstName: "Amina",
+        lastName: "Member",
+        email: "amina@example.com",
+      }],
+    ];
+    (db.select as Mock).mockImplementation(() => selectChain(selectResults.shift() ?? []));
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const set = vi.fn().mockReturnValue({ where: updateWhere });
+    (db.update as Mock).mockReturnValue({ set });
+
+    const response = await request(appFor("admin"))
+      .patch("/members/member-1")
+      .send({ role: "admin" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      userId: "member-1",
+      userName: "Amina Member",
+      role: "admin",
+    });
+    expect(set).toHaveBeenCalledWith({ role: "admin" });
+  });
+
+  it("allows owners and admins to change non-owner roles but not the owner", async () => {
+    (db.select as Mock).mockReturnValue(selectChain([{ role: "owner" }]));
+
+    const response = await request(appFor("owner"))
+      .patch("/members/member-1")
+      .send({ role: "admin" });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/owner role cannot be changed/i);
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("does not let a regular member change someone else's role", async () => {
+    const response = await request(appFor("member"))
+      .patch("/members/member-1")
+      .send({ role: "admin" });
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/forbidden/i);
+    expect(db.update).not.toHaveBeenCalled();
   });
 });

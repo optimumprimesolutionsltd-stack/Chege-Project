@@ -21,9 +21,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       : 'Member';
 
   const navItems = [
-    { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Budget', icon: LayoutDashboard },
+    { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'Personal budget', icon: LayoutDashboard },
     { href: '/expenses', label: isSharedWorkspace ? 'Group Expenses' : 'My Expenses', icon: Receipt },
-    { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My Budget', icon: PieChart },
+    { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'Personal budget', icon: PieChart },
     { href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity },
     { href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target },
     { href: '/bank', label: isSharedWorkspace ? 'Joint Account' : 'My Account', icon: Landmark },
@@ -43,7 +43,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0">
             <span className="block font-display font-bold text-xl tracking-tight">Bajeti</span>
-            <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My Budget'}</span>
+            <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'Personal budget'}</span>
           </div>
         </div>
         <div className="px-6">
@@ -100,7 +100,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0">
             <span className="block font-display font-bold text-lg leading-none">Bajeti</span>
-            <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My Budget'}</span>
+            <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'Personal budget'}</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-sidebar-foreground">

@@ -92,10 +92,10 @@ export default function InvitePage() {
             <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary">
               <UsersRound className="h-6 w-6" />
             </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Bajeti group invitation</p>
+             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Bajeti Shared budget invitation</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-foreground">Join {data.groupName}</h1>
             <p className="mt-3 leading-relaxed text-muted-foreground">
-              You have been invited to join this shared budget as a <strong className="text-foreground">{data.role}</strong>.
+               You have been invited to join this Shared budget as a <strong className="text-foreground">{data.role}</strong>.
             </p>
             <div className="mt-6 rounded-xl border border-border/70 bg-muted/40 p-4">
               <div className="flex gap-3">

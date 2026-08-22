@@ -130,8 +130,8 @@ function NoGroupAccess({ voluntarilyLeft }: { voluntarilyLeft: boolean }) {
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           {voluntarilyLeft
-            ? "You have been removed from the group’s access list. Shared budgets, bank activity, goals, reports, and history remain with the group."
-            : "Your shared group access has changed. Ask a current owner or admin to send you a new invitation if you need to rejoin."}
+            ? "You have been removed from the group’s access list. Shared budget funds, bank activity, goals, reports, and history remain with the group."
+            : "Your Shared budget access has changed. Ask a current owner or admin to send you a new invitation if you need to rejoin."}
         </p>
         <button
           type="button"

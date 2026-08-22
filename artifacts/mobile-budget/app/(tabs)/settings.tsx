@@ -54,7 +54,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { user, logout } = useAuth();
+  const { user, logout, saveDisplayName } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   const [newSource, setNewSource] = useState('');
   const [newSourceExpected, setNewSourceExpected] = useState('');
@@ -68,18 +68,14 @@ export default function SettingsScreen() {
   const [savingGroupName, setSavingGroupName] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [savingDisplayName, setSavingDisplayName] = useState(false);
+  const [editingSourceId, setEditingSourceId] = useState<number | null>(null);
+  const [editingSourceName, setEditingSourceName] = useState('');
+  const [savingSourceId, setSavingSourceId] = useState<number | null>(null);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
-  const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${user.id}`);
-    },
-    enabled: !!user?.id,
-    staleTime: 30_000,
-  });
   const { data: members = [] } = useQuery<GroupMember[]>({
     queryKey: ['members'],
     queryFn: () => customFetch<GroupMember[]>('/api/members'),
@@ -92,11 +88,24 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
   }, [group?.name]);
+  useEffect(() => {
+    setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
+  }, [user?.firstName, user?.lastName]);
   const canManageShared = !group?.isPrivate && members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
   );
   const myMembership = members.find((member) => member.userId === user?.id);
   const canLeaveGroup = Boolean(myMembership && myMembership.role !== 'owner');
+  const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
+    queryKey: ['income-sources', canManageShared ? 'all' : user?.id],
+    queryFn: async () => {
+      if (canManageShared) return customFetch<IncomeSource[]>('/api/income-sources');
+      if (!user?.id) return [];
+      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${user.id}`);
+    },
+    enabled: !!user?.id,
+    staleTime: 30_000,
+  });
   const { data: invitations = [] } = useQuery<GroupInvitation[]>({
     queryKey: ['group-invitations'],
     queryFn: () => customFetch<GroupInvitation[]>('/api/group-invitations'),
@@ -125,6 +134,27 @@ export default function SettingsScreen() {
       Alert.alert('Could not update group name', 'Use between 2 and 60 characters.');
     } finally {
       setSavingGroupName(false);
+    }
+  };
+
+  const handleSaveDisplayName = async () => {
+    const name = displayNameInput.trim();
+    if (!name) {
+      Alert.alert('Name required', 'Enter the name you would like people to see.');
+      return;
+    }
+    setSavingDisplayName(true);
+    try {
+      await saveDisplayName(name);
+      await queryClient.invalidateQueries();
+      Alert.alert('Name updated');
+    } catch (error) {
+      Alert.alert(
+        'Could not update your name',
+        error instanceof Error ? error.message : 'Use letters, spaces, apostrophes, or hyphens.',
+      );
+    } finally {
+      setSavingDisplayName(false);
     }
   };
 
@@ -157,7 +187,7 @@ export default function SettingsScreen() {
       });
       setNewGroupName('');
       setCreateGroupOpen(false);
-      Alert.alert('Private group created', 'Your My Budget records stayed private and separate.');
+       Alert.alert('Shared budget created', 'Your Personal budget records stayed private and separate.');
     } catch (error) {
       Alert.alert('Could not create group', error instanceof Error ? error.message : 'Please try again.');
     }
@@ -243,8 +273,8 @@ export default function SettingsScreen() {
         body: JSON.stringify({ role }),
       });
       refreshMembers();
-    } catch {
-      Alert.alert('Could not change role', 'Please try again.');
+    } catch (error) {
+      Alert.alert('Could not change role', error instanceof Error ? error.message : 'Only owners and admins can change member roles.');
     } finally {
       setManagingMembers(false);
     }
@@ -260,8 +290,8 @@ export default function SettingsScreen() {
           try {
             await customFetch(`/api/members/${member.userId}`, { method: 'DELETE' });
             refreshMembers();
-          } catch {
-            Alert.alert('Could not remove person', 'Please try again.');
+            } catch (error) {
+              Alert.alert('Could not remove person', error instanceof Error ? error.message : 'Only owners and admins can remove members.');
           } finally {
             setManagingMembers(false);
           }
@@ -281,7 +311,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             setManagingMembers(true);
             try {
-              // A person always keeps My Budget, so leaving a shared group
+               // A person always keeps their Personal budget, so leaving a shared group
               // returns them there instead of ending their Bajeti session.
               await leaveMobileSharedWorkspace({
                 leave: () => customFetch('/api/members/me', { method: 'DELETE' }),
@@ -289,7 +319,7 @@ export default function SettingsScreen() {
                 resetQueries: () => queryClient.resetQueries(),
               });
               router.replace('/(tabs)');
-              Alert.alert('You left the group', 'You are now back in your private My Budget.');
+               Alert.alert('You left the group', 'You are now back in your Personal budget.');
             } catch (error) {
               Alert.alert('Could not leave group', error instanceof Error ? error.message : 'Please try again.');
             } finally {
@@ -367,6 +397,46 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleStartEditSource = (src: IncomeSource) => {
+    setEditingSourceId(src.id);
+    setEditingSourceName(src.name);
+  };
+
+  const handleCancelEditSource = () => {
+    setEditingSourceId(null);
+    setEditingSourceName('');
+  };
+
+  const handleSaveSource = async (src: IncomeSource) => {
+    const name = editingSourceName.trim();
+    if (!name) {
+      Alert.alert('Source name required', 'Enter a name before saving the income source.');
+      return;
+    }
+    setSavingSourceId(src.id);
+    try {
+      await customFetch(`/api/income-sources/${src.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          isMain: src.isMain,
+          expectedMonthlyAmount: src.expectedMonthlyAmount,
+        }),
+      });
+      handleCancelEditSource();
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] });
+      Alert.alert('Income source updated');
+    } catch (error) {
+      Alert.alert(
+        'Could not update income source',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setSavingSourceId(null);
+    }
+  };
+
   const handleLogout = () => {
     Alert.alert(
       'Sign out',
@@ -421,14 +491,43 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGET SPACES</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 8 }]}>
+          <View style={{ padding: 14 }}>
+            <Text style={[styles.rowLabel, { color: colors.foreground }]}>Your name</Text>
+            <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
+              This is the name other members see in shared budgets and activity.
+            </Text>
+            <TextInput
+              testID="settings-display-name-input"
+              value={displayNameInput}
+              onChangeText={setDisplayNameInput}
+              placeholder="e.g. Chege"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="words"
+              autoCorrect={false}
+              maxLength={40}
+              editable={!savingDisplayName}
+              style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground }]}
+            />
+            <Pressable
+              testID="settings-save-display-name"
+              disabled={savingDisplayName || !displayNameInput.trim()}
+              onPress={() => void handleSaveDisplayName()}
+              style={[styles.saveNameButton, { backgroundColor: colors.primary, opacity: savingDisplayName || !displayNameInput.trim() ? 0.55 : 1 }]}
+            >
+              {savingDisplayName ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveNameButtonText}>Save name</Text>}
+            </Pressable>
+          </View>
+        </View>
+
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGETS</Text>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {workspaces.map((workspace, index) => {
             const selected = workspace.id === group?.id;
-            const label = workspace.isPrivate ? 'My Budget' : workspace.name;
+            const label = workspace.isPrivate ? 'Personal budget' : 'Shared budget';
             const detail = workspace.isPrivate
-              ? 'Private to you'
-              : workspace.role === 'owner' ? 'Shared group · Owner' : workspace.role === 'admin' ? 'Shared group · Admin' : 'Shared group · Member';
+              ? 'Only you can access this budget'
+              : `${workspace.name} · ${workspace.role === 'owner' ? 'Owner' : workspace.role === 'admin' ? 'Admin' : 'Member'}`;
             return (
               <Pressable
                 key={workspace.id}
@@ -457,9 +556,9 @@ export default function SettingsScreen() {
           })}
           {group?.isPrivate ? (
             <View style={[styles.workspaceInfo, { borderTopColor: colors.border, borderTopWidth: workspaces.length ? StyleSheet.hairlineWidth : 0 }]}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Your primary budget</Text>
+               <Text style={[styles.rowLabel, { color: colors.foreground }]}>Your Personal budget</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
-                Expenses, goals, bank activity, and reports here belong only to you. A shared group has its own separate money and members.
+                 Expenses, goals, bank activity, and reports here belong only to you. A Shared budget has its own separate money and members.
               </Text>
               <Pressable
                 testID="create-private-group"
@@ -467,7 +566,7 @@ export default function SettingsScreen() {
                 style={[styles.createGroupButton, { borderColor: colors.primary }]}
               >
                 <Feather name="plus" size={16} color={colors.primary} />
-                <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Create a private group</Text>
+                 <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Create a Shared budget</Text>
               </Pressable>
             </View>
           ) : canManageShared ? (
@@ -486,8 +585,8 @@ export default function SettingsScreen() {
             </View>
           ) : (
             <View style={styles.row}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>{group?.name ?? 'Your shared group'}</Text>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>An admin can rename the group.</Text>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>{group?.name ?? 'Shared budget'}</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>An admin can rename the Shared budget.</Text>
             </View>
           )}
         </View>
@@ -495,7 +594,12 @@ export default function SettingsScreen() {
         {/* Shared group access */}
         {!group?.isPrivate && (
           <>
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>GROUP ACCESS</Text>
+         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>GROUP ACCESS</Text>
+         {canManageShared ? (
+           <Text style={[styles.accessHint, { color: colors.mutedForeground }]}>
+             You can change any non-owner between Admin and Member or remove their access. The group owner is protected.
+           </Text>
+         ) : null}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {members.map((member, index) => (
             <View
@@ -513,13 +617,25 @@ export default function SettingsScreen() {
               </View>
               {canManageShared && member.role !== 'owner' && member.userId !== user?.id ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <Pressable disabled={managingMembers} onPress={() => handleRoleChange(member)}>
+                   <Pressable
+                     disabled={managingMembers}
+                     onPress={() => handleRoleChange(member)}
+                     accessibilityRole="button"
+                     accessibilityLabel={`Change ${member.userName ?? 'member'} role to ${member.role === 'admin' ? 'member' : 'admin'}`}
+                   >
                     <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
-                      {member.role === 'admin' ? 'Make member' : 'Make admin'}
+                       {member.role === 'admin' ? 'Change to member' : 'Change to admin'}
                     </Text>
                   </Pressable>
-                  <Pressable disabled={managingMembers} onPress={() => handleRemoveMember(member)}>
+                   <Pressable
+                     disabled={managingMembers}
+                     onPress={() => handleRemoveMember(member)}
+                     accessibilityRole="button"
+                     accessibilityLabel={`Remove ${member.userName ?? 'member'} from group`}
+                     style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                   >
                     <Feather name="trash-2" size={16} color="#ef4444" />
+                     <Text style={{ color: '#ef4444', fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>Remove</Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -648,7 +764,14 @@ export default function SettingsScreen() {
         )}
 
         {/* Income sources */}
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>INCOME SOURCES</Text>
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+          {canManageShared ? 'SHARED BUDGET INCOME SOURCES' : 'INCOME SOURCES'}
+        </Text>
+        {canManageShared && (
+          <Text style={[styles.accessHint, { color: colors.mutedForeground }]}>
+            As an admin or owner, you can edit or remove any member’s income source.
+          </Text>
+        )}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {sourcesLoading ? (
             <View style={[styles.row, { justifyContent: 'center', borderBottomWidth: 0 }]}>
@@ -661,16 +784,37 @@ export default function SettingsScreen() {
           ) : (
             incomeSources.map((src, idx) => {
               const color = PALETTE[idx % PALETTE.length];
+              const sourceOwner = members.find((member) => member.userId === src.userId)?.userName
+                ?? (src.userId === user?.id ? 'You' : 'Member');
+              const isEditing = editingSourceId === src.id;
+              const isSaving = savingSourceId === src.id;
               return (
                 <View key={src.id} style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: idx < incomeSources.length - 1 ? StyleSheet.hairlineWidth : 0 }]}>
                   <View style={styles.rowLeft}>
                     <View style={[styles.rowIcon, { backgroundColor: color + '22' }]}>
                       <Feather name="briefcase" size={15} color={color} />
                     </View>
-                    <View>
-                      <Text style={[styles.rowLabel, { color: colors.foreground }]}>{src.name}</Text>
-                      {src.isMain && (
+                    <View style={{ flex: 1 }}>
+                      {isEditing ? (
+                        <TextInput
+                          autoFocus
+                          value={editingSourceName}
+                          onChangeText={setEditingSourceName}
+                          maxLength={80}
+                          editable={!isSaving}
+                          accessibilityLabel={`Edit ${src.name}`}
+                          style={[styles.sourceEditInput, { borderColor: colors.border, color: colors.foreground }]}
+                        />
+                      ) : (
+                        <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>{src.name}</Text>
+                      )}
+                      {src.isMain && !isEditing && (
                         <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Primary</Text>
+                      )}
+                      {canManageShared && (
+                        <Text style={[styles.rowSub, { color: colors.mutedForeground }]} numberOfLines={1}>
+                          For {sourceOwner}
+                        </Text>
                       )}
                     </View>
                   </View>
@@ -683,9 +827,43 @@ export default function SettingsScreen() {
                       placeholderTextColor={colors.mutedForeground}
                       style={{ width: 96, paddingVertical: 3, paddingHorizontal: 6, borderRadius: 6, borderWidth: 1, borderColor: colors.border, color: colors.foreground, fontSize: 12, textAlign: 'right' }}
                     />
-                    <Pressable onPress={() => handleDeleteSource(src)} hitSlop={12}>
-                      <Feather name="trash-2" size={16} color="#ef4444" />
-                    </Pressable>
+                    {isEditing ? (
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <Pressable
+                          onPress={() => void handleSaveSource(src)}
+                          disabled={isSaving || !editingSourceName.trim()}
+                          style={[styles.sourceAction, { backgroundColor: colors.primary, opacity: isSaving || !editingSourceName.trim() ? 0.55 : 1 }]}
+                        >
+                          {isSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.sourceActionText}>Save</Text>}
+                        </Pressable>
+                        <Pressable
+                          onPress={handleCancelEditSource}
+                          disabled={isSaving}
+                          style={[styles.sourceAction, { borderColor: colors.border, borderWidth: 1 }]}
+                        >
+                          <Text style={[styles.sourceActionText, { color: colors.foreground }]}>Cancel</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <Pressable
+                          onPress={() => handleStartEditSource(src)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit ${src.name}`}
+                          hitSlop={10}
+                        >
+                          <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleDeleteSource(src)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${src.name}`}
+                          hitSlop={10}
+                        >
+                          <Feather name="trash-2" size={16} color="#ef4444" />
+                        </Pressable>
+                      </View>
+                    )}
                   </View>
                 </View>
               );
@@ -784,9 +962,9 @@ export default function SettingsScreen() {
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a private group</Text>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 5 }]}>
-                  You will be the owner. Nothing from My Budget will be copied into this group.
+                  You will be the owner. Nothing from your Personal budget will be copied into this Shared budget.
                 </Text>
               </View>
               <Pressable onPress={() => setCreateGroupOpen(false)} hitSlop={10}>
@@ -809,7 +987,7 @@ export default function SettingsScreen() {
               onPress={() => void handleCreateSharedGroup()}
               style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: createSharedGroup.isPending ? 0.55 : 1 }]}
             >
-              {createSharedGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalCreateText}>Create private group</Text>}
+              {createSharedGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalCreateText}>Create Shared budget</Text>}
             </Pressable>
           </View>
         </View>
@@ -846,11 +1024,15 @@ const styles = StyleSheet.create({
   profileInfo: { flex: 1 },
   profileName: { fontSize: 17, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
   profileEmail: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  profileNameInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginTop: 12, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  saveNameButton: { alignSelf: 'flex-start', minHeight: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, marginTop: 10 },
+  saveNameButtonText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 
   sectionLabel: {
     fontSize: 11, fontFamily: 'Inter_500Medium', letterSpacing: 0.8,
     marginTop: 16, marginBottom: 6, marginLeft: 4,
   },
+  accessHint: { fontSize: 12, lineHeight: 17, marginHorizontal: 4, marginBottom: 8 },
   section: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
 
   row: {
@@ -862,6 +1044,9 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 15, fontFamily: 'Inter_400Regular' },
   rowSub: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
   rowValue: { fontSize: 14, fontFamily: 'Inter_400Regular', maxWidth: 180 },
+  sourceEditInput: { borderWidth: 1, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, fontFamily: 'Inter_400Regular', fontSize: 14 },
+  sourceAction: { minHeight: 30, borderRadius: 7, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9 },
+  sourceActionText: { color: '#fff', fontSize: 11, fontFamily: 'Inter_600SemiBold' },
 
   addRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 10 },
   addInput: { fontSize: 14, fontFamily: 'Inter_400Regular', paddingVertical: 4 },

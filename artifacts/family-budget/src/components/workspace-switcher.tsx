@@ -5,7 +5,7 @@ import {
 } from "@workspace/api-client-react";
 
 export function workspaceLabel(workspace: Pick<Workspace, "isPrivate" | "name">) {
-  return workspace.isPrivate ? "My Budget" : workspace.name;
+  return workspace.isPrivate ? "Personal budget" : `Shared budget · ${workspace.name}`;
 }
 
 export function WorkspaceSwitcher({
@@ -37,7 +37,7 @@ export function WorkspaceSwitcher({
     <>
       <select
         id={id}
-        aria-label="Choose budget workspace"
+        aria-label="Choose a budget"
         aria-busy={selectWorkspace.isPending}
         value={activeWorkspaceId ?? ""}
         disabled={!activeWorkspaceId || selectWorkspace.isPending}
@@ -64,7 +64,7 @@ export function WorkspaceSwitcher({
       </select>
       {showPendingLabel && selectWorkspace.isPending ? (
         <p className="mt-2 text-xs font-medium text-muted-foreground" role="status" aria-live="polite">
-          Switching budget…
+            Switching budget…
         </p>
       ) : null}
     </>

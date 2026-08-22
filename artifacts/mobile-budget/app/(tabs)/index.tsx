@@ -588,7 +588,7 @@ export default function DashboardScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.bankCardTitle, { color: colors.foreground }]}>{isSharedWorkspace ? 'Joint Account' : 'My Account'}</Text>
-              <Text style={[styles.bankCardSub, { color: colors.mutedForeground }]}>{isSharedWorkspace ? 'Shared group funds' : 'Personal funds'}</Text>
+              <Text style={[styles.bankCardSub, { color: colors.mutedForeground }]}>{isSharedWorkspace ? 'Shared budget funds' : 'Personal budget funds'}</Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </View>

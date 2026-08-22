@@ -75,10 +75,10 @@ export default function JoinGroupPage() {
             <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary">
               <UsersRound className="h-6 w-6" />
             </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Private Bajeti group</p>
+             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Shared budget invitation</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-foreground">Join {data.groupName}</h1>
             <p className="mt-3 leading-relaxed text-muted-foreground">
-              This private link adds you as a member of the shared budget.
+               This private link adds you as a member of the Shared budget.
             </p>
             <div className="mt-6 rounded-xl border border-border/70 bg-muted/40 p-4">
               <div className="flex gap-3">
@@ -86,14 +86,14 @@ export default function JoinGroupPage() {
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   {isAuthenticated
                     ? <>Signed in as <strong className="text-foreground">{user?.email ?? "your account"}</strong>. Join only if you know and trust this group.</>
-                    : "Sign in to join. Your My Budget stays private and separate from this group."}
+                     : "Sign in to join. Your Personal budget stays private and separate from this Shared budget."}
                 </p>
               </div>
             </div>
             {actionError ? <p className="mt-4 text-sm text-destructive">{actionError}</p> : null}
             {isAuthenticated ? (
               <Button className="mt-7 w-full" onClick={accept} disabled={acceptInvite.isPending}>
-                {acceptInvite.isPending ? "Joining…" : "Join private group"}
+                 {acceptInvite.isPending ? "Joining…" : "Join Shared budget"}
               </Button>
             ) : (
               <Button className="mt-7 w-full" onClick={signIn}>Sign in to join</Button>
