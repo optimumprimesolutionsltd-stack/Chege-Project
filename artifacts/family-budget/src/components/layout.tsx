@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
 import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useGetGroup } from '@workspace/api-client-react';
@@ -12,6 +12,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { data: group } = useGetGroup();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location]);
+
   const isSharedWorkspace = group?.isPrivate === false;
   const activeWorkspaceRole = group?.role ?? (group?.isPrivate ? 'owner' : 'member');
   const activeWorkspaceRoleLabel = activeWorkspaceRole === 'owner'
