@@ -30,3 +30,4 @@
 - [Web workspace start](web-workspace-start.md) — new web browser sessions start in My Budget, not the last shared workspace.
 - [All-round onboarding](all-round-onboarding.md) — setup guidance should cover the complete workspace journey, not only budgets or goals.
 - [Manual bank opening balance](manual-bank-opening-balance.md) — bank balances start from an explicit workspace-level amount, not inferred from transaction history.
+- [GitHub history sync](github-history-sync.md) — GitHub OAuth connects through the API proxy, not the shell Git credential helper.
