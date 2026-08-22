@@ -407,7 +407,7 @@ export default function Settings() {
           </p>
           <form onSubmit={handleSaveDisplayName} noValidate className="space-y-2">
             <label htmlFor="display-name" className="text-sm font-semibold text-foreground">Your name</label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="display-name"
                 value={displayName}
@@ -418,7 +418,7 @@ export default function Settings() {
                 aria-describedby="display-name-help"
                 disabled={savingDisplayName}
               />
-              <Button type="submit" disabled={savingDisplayName || !displayName.trim()} className="shrink-0">
+              <Button type="submit" disabled={savingDisplayName || !displayName.trim()} className="w-full sm:w-auto sm:shrink-0">
                 {savingDisplayName ? "Saving…" : "Save"}
               </Button>
             </div>
@@ -440,16 +440,16 @@ export default function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form onSubmit={handleAddSource} noValidate className="flex gap-2">
+          <form onSubmit={handleAddSource} noValidate className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={newSourceName}
               onChange={(event) => setNewSourceName(event.target.value)}
-              placeholder="e.g. Salary, business, side hustle"
+              placeholder="e.g. Salary or business"
               maxLength={80}
               className="h-11 bg-card"
               aria-label="New income source name"
             />
-            <Button type="submit" disabled={addingSource} className="h-11 shrink-0">
+            <Button type="submit" disabled={addingSource} className="h-11 w-full sm:w-auto sm:shrink-0">
               {addingSource ? "Adding…" : "Add source"}
             </Button>
           </form>
@@ -558,9 +558,9 @@ export default function Settings() {
         </CardHeader>
         <CardContent>
           {canManageWorkspace ? (
-            <form onSubmit={handleSaveGroupName} noValidate className="flex gap-2">
+            <form onSubmit={handleSaveGroupName} noValidate className="flex flex-col gap-2 sm:flex-row">
               <Input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" />
-              <Button type="submit" disabled={updateGroup.isPending}>
+              <Button type="submit" disabled={updateGroup.isPending} className="w-full sm:w-auto">
                 {updateGroup.isPending ? "Saving…" : "Save"}
               </Button>
             </form>

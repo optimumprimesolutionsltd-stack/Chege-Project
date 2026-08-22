@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { useAuth } from '@workspace/replit-auth-web';
-import { TrendingUp } from 'lucide-react';
+import { ArrowUpRight, ShieldCheck, Sparkles, TrendingUp, Users, WalletCards } from 'lucide-react';
 
 function FeatureRow({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
-    <div className="flex items-center gap-4 p-4 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(207,114,23,0.18)' }}>
+    <div className="flex items-center gap-3 rounded-2xl border px-4 py-3.5 backdrop-blur-sm" style={{ backgroundColor: 'rgba(255,255,255,0.055)', borderColor: 'rgba(255,255,255,0.08)' }}>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: 'rgba(207,114,23,0.18)', color: '#e5a052' }}>
         {icon}
       </div>
       <span className="text-sm font-medium" style={{ color: 'rgba(247,250,246,0.85)' }}>{text}</span>
@@ -14,52 +15,101 @@ function FeatureRow({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(160deg, #0a1a10 0%, #0f2217 50%, #163020 100%)' }}>
-      <div className="w-full max-w-sm px-6 flex flex-col items-center gap-10">
+    <div className="relative min-h-screen overflow-hidden px-4 py-6 sm:px-6 sm:py-8 lg:px-10" style={{ background: 'linear-gradient(135deg, #08130c 0%, #0d2115 52%, #173524 100%)' }}>
+      <div className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -right-20 h-[28rem] w-[28rem] rounded-full bg-emerald-400/10 blur-3xl" />
 
-        {/* Brand mark */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-20 h-20 rounded-3xl flex items-center justify-center shadow-2xl" style={{ backgroundColor: 'rgba(207,114,23,0.25)', border: '1px solid rgba(207,114,23,0.3)' }}>
-            <TrendingUp className="w-10 h-10" style={{ color: '#cf7217' }} />
+      <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl items-center justify-center gap-12 lg:min-h-[calc(100vh-4rem)] lg:justify-between">
+        <section className="hidden max-w-xl flex-1 lg:block">
+          <div className="mb-8 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl shadow-lg" style={{ backgroundColor: '#cf7217' }}>
+              <TrendingUp className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="font-display text-xl font-bold tracking-tight text-[#f7faf6]">Bajeti</p>
+              <p className="text-xs font-medium text-[#7aaa8a]">Shared finances, together</p>
+            </div>
           </div>
-          <div className="text-center">
-            <h1 className="text-4xl font-display font-bold tracking-tight" style={{ color: '#f7faf6' }}>Bajeti</h1>
-            <p className="text-sm mt-1 font-medium" style={{ color: '#7aaa8a' }}>Shared finances, together</p>
-          </div>
-        </div>
 
-        {/* Feature list */}
-        <div className="w-full space-y-3">
-          <FeatureRow
-            icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
-            text="Track every shilling your group spends"
-          />
-          <FeatureRow
-            icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>}
-            text="Log expenses anywhere, anytime"
-          />
-          <FeatureRow
-            icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#cf7217" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
-            text="Everyone in your group stays in sync"
-          />
-        </div>
-
-        {/* Sign in */}
-        <div className="w-full space-y-4">
-          <button
-            onClick={login}
-            className="w-full h-14 rounded-2xl text-base font-bold transition-opacity hover:opacity-90 active:opacity-80 flex items-center justify-center gap-2"
-            style={{ backgroundColor: '#2d6a4f', color: '#f7faf6', boxShadow: '0 4px 20px rgba(74,222,128,0.2)' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-            Sign in to continue
-          </button>
-          <p className="text-center text-xs" style={{ color: 'rgba(122,170,138,0.7)' }}>
-            Your account works on web and mobile
+          <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-[#e5a052]">A calmer way to budget</p>
+          <h1 className="max-w-lg font-display text-5xl font-bold leading-[1.05] tracking-tight text-[#f7faf6] xl:text-6xl">
+            Make every shilling count — together.
+          </h1>
+          <p className="mt-6 max-w-lg text-lg leading-8 text-[#b9d2bf]">
+            One clear place for group spending, shared goals, and the decisions that keep everyone moving forward.
           </p>
-        </div>
+
+          <div className="mt-9 space-y-3">
+            <FeatureRow icon={<WalletCards className="h-5 w-5" />} text="See where your group money is going" />
+            <FeatureRow icon={<Users className="h-5 w-5" />} text="Keep every member on the same page" />
+            <FeatureRow icon={<ShieldCheck className="h-5 w-5" />} text="Build a record everyone can trust" />
+          </div>
+        </section>
+
+        <main className="w-full max-w-md">
+          <div className="rounded-[2rem] border p-6 shadow-2xl backdrop-blur-xl sm:p-8" style={{ backgroundColor: 'rgba(247,250,246,0.97)', borderColor: 'rgba(255,255,255,0.55)' }}>
+            <div className="mb-8 flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3 lg:hidden">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: '#cf7217' }}>
+                  <TrendingUp className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-display text-xl font-bold tracking-tight text-[#183b26]">Bajeti</p>
+                  <p className="text-xs font-medium text-[#5f8d6d]">Shared finances, together</p>
+                </div>
+              </div>
+              <div className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3eb] text-[#2d6a4f]">
+                <Sparkles className="h-5 w-5" />
+              </div>
+            </div>
+
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#cf7217]">Welcome back</p>
+            <h2 className="mt-3 font-display text-3xl font-bold leading-tight tracking-tight text-[#183b26] sm:text-4xl">
+              Your money, in focus.
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-[#5d7663]">
+              Sign in to pick up where your group left off.
+            </p>
+
+            <div className="my-7 rounded-2xl border border-[#dce9df] bg-[#f4f8f4] p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6b8972]">Your shared view</p>
+                  <p className="mt-1 font-display text-lg font-bold text-[#183b26]">Clearer decisions</p>
+                </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dceee1] text-[#2d6a4f]">
+                  <ArrowUpRight className="h-5 w-5" />
+                </div>
+              </div>
+              <div className="mt-4 flex h-10 items-end gap-1.5" aria-hidden="true">
+                {[28, 40, 34, 52, 46, 66, 60, 78, 72, 88].map((height, index) => (
+                  <div key={index} className="flex-1 rounded-t-md bg-[#2d6a4f]/80" style={{ height: `${height}%`, opacity: 0.45 + index * 0.05 }} />
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setIsSigningIn(true);
+                login();
+              }}
+              disabled={isSigningIn}
+              aria-busy={isSigningIn}
+              className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-[#2d6a4f] text-base font-bold text-[#f7faf6] shadow-lg shadow-[#2d6a4f]/20 transition-all hover:-translate-y-0.5 hover:bg-[#245840] hover:shadow-xl active:translate-y-0 disabled:cursor-wait disabled:opacity-80"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold" aria-hidden="true">
+                <span className="bg-gradient-to-br from-[#4285f4] via-[#34a853] to-[#ea4335] bg-clip-text text-transparent">G</span>
+              </span>
+              {isSigningIn ? 'Opening secure sign-in…' : 'Continue with Google'}
+            </button>
+            <p className="mt-4 text-center text-xs leading-5 text-[#6b8972]">
+              You’ll continue through Google’s secure sign-in. Your Bajeti account works on web and mobile.
+            </p>
+          </div>
+        </main>
       </div>
     </div>
   );

@@ -39,15 +39,20 @@ type LedgerTarget = { category: string; isBudgeted: boolean };
 function IncomeSourceEditor({
   source,
   canEdit,
+  canDelete,
   onSave,
+  onDelete,
 }: {
   source: IncomeSource;
   canEdit: boolean;
+  canDelete: boolean;
   onSave: (source: IncomeSource, name: string, expectedAmount: string) => Promise<void>;
+  onDelete: (source: IncomeSource) => Promise<void>;
 }) {
   const [name, setName] = useState(source.name);
   const [expectedAmount, setExpectedAmount] = useState(String(source.expectedMonthlyAmount));
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     setName(source.name);
@@ -69,6 +74,19 @@ function IncomeSourceEditor({
     }
   };
 
+  const handleDelete = async () => {
+    if (!confirm(`Remove "${source.name}" from future income choices? Existing records will stay, but this source will no longer be available when adding a new expense or deposit.`)) {
+      return;
+    }
+
+    setRemoving(true);
+    try {
+      await onDelete(source);
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   if (!canEdit) {
     return (
       <div className="rounded-lg bg-primary/10 px-3 py-2.5 text-sm text-primary">
@@ -83,7 +101,7 @@ function IncomeSourceEditor({
 
   return (
     <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto_auto] sm:items-end">
         <div className="min-w-0 space-y-1">
           <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-name-${source.id}`}>Income source</label>
           <div className="flex items-center gap-1.5">
@@ -110,9 +128,21 @@ function IncomeSourceEditor({
             aria-label={`Expected monthly income for ${source.name}`}
           />
         </div>
-        <Button type="button" size="sm" className="w-full sm:w-auto" onClick={handleSave} disabled={!hasChanges || saving}>
+        <Button type="button" size="sm" className="w-full sm:w-auto" onClick={handleSave} disabled={!hasChanges || saving || removing}>
           {saving ? "Saving…" : "Save"}
         </Button>
+        {canDelete ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
+            onClick={() => void handleDelete()}
+            disabled={saving || removing}
+          >
+            {removing ? "Removing…" : "Remove"}
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -424,6 +454,26 @@ export default function Budget() {
       qc.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() }),
     ]);
   };
+  const deleteIncomeSource = async (source: IncomeSource) => {
+    const response = await fetch(`/api/income-sources/${source.id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const message = typeof body.error === "string" ? body.error : "Could not remove this income source.";
+      toast({ variant: "destructive", title: "Could not remove income source", description: message });
+      throw new Error(message);
+    }
+
+    toast({ title: "Income source removed", description: `${source.name} is no longer available for new entries.` });
+    await Promise.all([
+      refetchIncomeSources(),
+      qc.invalidateQueries({ queryKey: ["income-sources"] }),
+      qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() }),
+      qc.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() }),
+    ]);
+  };
 
   const groupedBreakdown = breakdown ? breakdown.reduce((acc, item) => {
     if (!acc[item.priority]) acc[item.priority] = [];
@@ -653,7 +703,9 @@ export default function Budget() {
                           key={source.id}
                           source={source}
                           canEdit={canManageShared || source.userId === user?.id}
+                          canDelete={canManageShared || source.userId === user?.id}
                           onSave={saveIncomeSource}
+                          onDelete={deleteIncomeSource}
                         />
                       ))}
                    </div>

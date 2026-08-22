@@ -6,13 +6,20 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatKes, formatMonthYear } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, Calendar, CheckCircle2, CircleHelp, Download, Loader2, TrendingUp, WalletCards } from "lucide-react";
+import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
+import { ArrowLeft, ArrowRight, Calendar, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Download, Loader2, TrendingUp, WalletCards } from "lucide-react";
+
+function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
+  if (recordType === "deposit") return "Joint bank deposit";
+  if (recordType === "savings") return "Savings addition";
+  return "Personal expense";
+}
 
 export default function IncomeStreamsReport() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [expandedStreamId, setExpandedStreamId] = useState<number | "unattributed" | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState<string | null>(null);
   const { data: report, isLoading, isError, refetch } = useGetDashboardIncomeStreams(
@@ -65,7 +72,7 @@ export default function IncomeStreamsReport() {
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">Funding report</p>
           <h1 className="mt-1 text-3xl font-display font-bold text-foreground">Income streams</h1>
           <p className="mt-1 text-muted-foreground">
-            Compare expected monthly income with the funding your group has recorded.
+            Compare expected monthly income with the funding your group has recorded. Click a stream to see its activity.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -165,31 +172,71 @@ export default function IncomeStreamsReport() {
             <div className="space-y-3">
               {report.streams.map((stream) => {
                 const unattributed = stream.incomeSourceId == null;
+                const streamId = stream.incomeSourceId ?? "unattributed";
+                const isExpanded = expandedStreamId === streamId;
                 return (
-                  <Card key={stream.incomeSourceId ?? "unattributed"} className={unattributed ? "border-amber-500/30 bg-amber-500/5" : "border-none shadow-sm"}>
+                  <Card key={streamId} className={`overflow-hidden transition-shadow ${unattributed ? "border-amber-500/30 bg-amber-500/5" : "border-none shadow-sm"} ${isExpanded ? "shadow-md" : "hover:shadow-md"}`}>
                     <CardContent className="space-y-4 pt-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div className={`mt-0.5 rounded-xl p-2.5 ${unattributed ? "bg-amber-500/15 text-amber-700" : "bg-primary/10 text-primary"}`}>
-                            {unattributed ? <CircleHelp className="h-5 w-5" /> : <WalletCards className="h-5 w-5" />}
+                      <button
+                        type="button"
+                        className="w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        onClick={() => setExpandedStreamId(isExpanded ? null : streamId)}
+                        aria-expanded={isExpanded}
+                        aria-controls={`income-stream-${streamId}-activity`}
+                        data-testid={`income-stream-${streamId}-toggle`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className={`mt-0.5 rounded-xl p-2.5 ${unattributed ? "bg-amber-500/15 text-amber-700" : "bg-primary/10 text-primary"}`}>
+                              {unattributed ? <CircleHelp className="h-5 w-5" /> : <WalletCards className="h-5 w-5" />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-display text-lg font-bold">{stream.sourceName}</p>
+                              <p className="mt-0.5 text-sm text-muted-foreground">{stream.ownerName}</p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="truncate font-display text-lg font-bold">{stream.sourceName}</p>
-                            <p className="mt-0.5 text-sm text-muted-foreground">{stream.ownerName}</p>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <p className="font-display text-xl font-bold">{formatKes(stream.total)}</p>
+                            {isExpanded ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
                           </div>
                         </div>
-                        <p className="shrink-0 font-display text-xl font-bold">{formatKes(stream.total)}</p>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={unattributed ? "h-full rounded-full bg-amber-500" : "h-full rounded-full bg-primary"}
-                          style={{ width: `${Math.min(stream.sharePercent, 100)}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between gap-4 text-xs text-muted-foreground">
-                        <span>Expected {formatKes(stream.expectedMonthlyAmount)} · {stream.remainingBalance < 0 ? `${formatKes(Math.abs(stream.remainingBalance))} above` : `${formatKes(stream.remainingBalance)} remaining`}</span>
-                        <span>{stream.transactionCount} {stream.transactionCount === 1 ? "record" : "records"}</span>
-                      </div>
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={unattributed ? "h-full rounded-full bg-amber-500" : "h-full rounded-full bg-primary"}
+                            style={{ width: `${Math.min(stream.sharePercent, 100)}%` }}
+                          />
+                        </div>
+                        <div className="mt-2 flex justify-between gap-4 text-xs text-muted-foreground">
+                          <span>Expected {formatKes(stream.expectedMonthlyAmount)} · {stream.remainingBalance < 0 ? `${formatKes(Math.abs(stream.remainingBalance))} above` : `${formatKes(stream.remainingBalance)} remaining`}</span>
+                          <span>{stream.transactionCount} {stream.transactionCount === 1 ? "record" : "records"}</span>
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div id={`income-stream-${streamId}-activity`} className="border-t border-border/60 pt-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold">Activity in this stream</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">{formatMonthYear(month, year)} funding records</p>
+                            </div>
+                            <span className="shrink-0 text-xs font-semibold text-muted-foreground">{stream.transactionCount} {stream.transactionCount === 1 ? "record" : "records"}</span>
+                          </div>
+                          {stream.entries.length === 0 ? (
+                            <p className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">No activity was recorded for this stream in this month.</p>
+                          ) : (
+                            <div className="mt-3 divide-y divide-border/60 rounded-xl border border-border/70 px-3">
+                              {stream.entries.map((entry) => (
+                                <div key={`${entry.recordType}-${entry.recordId}`} className="flex items-start justify-between gap-3 py-3 text-sm">
+                                  <div className="min-w-0">
+                                    <p className="break-words font-medium">{entry.description}</p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">{fundingEntryLabel(entry.recordType)} · {formatDate(entry.date)}</p>
+                                  </div>
+                                  <p className="shrink-0 font-semibold">{formatKes(entry.amount)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
