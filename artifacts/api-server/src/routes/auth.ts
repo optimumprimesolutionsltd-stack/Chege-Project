@@ -37,6 +37,8 @@ import { Router, type IRouter, type Request, type Response } from 'express';
 import * as oidc from 'openid-client';
 
 import {
+  authorizationParams,
+  buildProviderLogoutUrl,
   clearSession,
   createSession,
   deleteSession,
@@ -275,11 +277,7 @@ router.get('/login', async (req: Request, res: Response) => {
     scope: 'openid email profile',
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
-    // Google only returns a refresh token when offline access is requested
-    // and consent is forced. select_account lets a user with several Google
-    // logins pick the right one instead of silently reusing the last.
-    access_type: 'offline',
-    prompt: 'select_account consent',
+    ...authorizationParams(),
     state,
     nonce,
   });
@@ -374,11 +372,7 @@ router.get('/mobile-login', async (req: Request, res: Response) => {
     scope: 'openid email profile',
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
-    // Google only returns a refresh token when offline access is requested
-    // and consent is forced. select_account lets a user with several Google
-    // logins pick the right one instead of silently reusing the last.
-    access_type: 'offline',
-    prompt: 'select_account consent',
+    ...authorizationParams(),
     state,
     nonce,
   });
@@ -404,14 +398,15 @@ router.get('/mobile-auth/complete', (req: Request, res: Response) => {
 router.get('/logout', async (req: Request, res: Response) => {
   const origin = getOrigin(req);
   const returnTo = getSafeReturnTo(req.query.returnTo);
+  const postLogoutRedirectUrl = new URL(returnTo, `${origin}/`).href;
 
   const sid = getSessionId(req);
   await clearSession(res, sid);
 
-  // Google publishes no end_session_endpoint, so there is no provider round
-  // trip to make here. Dropping the session row and its cookie signs the user
-  // out of this app; their Google session is deliberately left alone.
-  res.redirect(new URL(returnTo, `${origin}/`).href);
+  const config = await getOidcConfig();
+  const providerLogout = buildProviderLogoutUrl(config, postLogoutRedirectUrl);
+
+  res.redirect(providerLogout ? providerLogout.href : postLogoutRedirectUrl);
 });
 
 router.post(
