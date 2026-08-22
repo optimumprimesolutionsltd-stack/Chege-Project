@@ -19,6 +19,18 @@ export const GROUP_ROLE = {
 
 export type GroupRole = (typeof GROUP_ROLE)[keyof typeof GROUP_ROLE];
 
+// What kind of workspace this is. Personal and family workspaces are free;
+// chamas and clubs are the chargeable tier. Recorded at creation so the
+// distinction never has to be reconstructed for existing workspaces later.
+export const GROUP_KIND = {
+  PERSONAL: "personal",
+  FAMILY: "family",
+  CHAMA: "chama",
+  CLUB: "club",
+} as const;
+
+export type GroupKind = (typeof GROUP_KIND)[keyof typeof GROUP_KIND];
+
 export const groupsTable = pgTable(
   "groups",
   {
@@ -33,6 +45,9 @@ export const groupsTable = pgTable(
     // Manually entered bank balance carried into the first recorded transaction.
     // This belongs to the workspace because the bank account is shared.
     bankOpeningBalance: integer("bank_opening_balance").notNull().default(0),
+    // Defaults to family so existing rows keep the free tier on migration.
+    // ensurePrivateWorkspace overrides this to "personal".
+    kind: text("kind").notNull().default(GROUP_KIND.FAMILY),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),

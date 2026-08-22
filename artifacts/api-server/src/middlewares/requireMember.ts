@@ -6,6 +6,7 @@ import {
   digestSendsTable,
   expenseIncomeSplitsTable,
   expensesTable,
+  GROUP_KIND,
   groupMembershipsTable,
   groupsTable,
   incomeSourcesTable,
@@ -173,6 +174,7 @@ async function ensurePrivateWorkspace(userId: string) {
         name: "My Budget",
         createdByUserId: userId,
         privateOwnerUserId: userId,
+        kind: GROUP_KIND.PERSONAL,
       })
       .onConflictDoNothing();
 
