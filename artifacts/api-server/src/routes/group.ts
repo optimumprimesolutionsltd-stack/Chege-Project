@@ -21,6 +21,33 @@ import {
 
 const router = Router();
 
+function normalizedSharedBudgetName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
+}
+
+async function hasAccessibleSharedBudgetWithName(
+  userId: string,
+  name: string,
+  excludedGroupId?: number,
+): Promise<boolean> {
+  const workspaces = await db
+    .select({
+      id: groupsTable.id,
+      name: groupsTable.name,
+      privateOwnerUserId: groupsTable.privateOwnerUserId,
+    })
+    .from(groupMembershipsTable)
+    .innerJoin(groupsTable, eq(groupsTable.id, groupMembershipsTable.groupId))
+    .where(eq(groupMembershipsTable.userId, userId));
+
+  const normalizedName = normalizedSharedBudgetName(name);
+  return workspaces.some((workspace) =>
+    workspace.id !== excludedGroupId
+    && !workspace.privateOwnerUserId
+    && normalizedSharedBudgetName(workspace.name) === normalizedName,
+  );
+}
+
 router.post("/groups", async (req, res): Promise<void> => {
   const parsed = CreateSharedGroupBody.safeParse(req.body);
   if (!parsed.success) {
@@ -31,6 +58,10 @@ router.post("/groups", async (req, res): Promise<void> => {
   const name = parsed.data.name.trim();
   if (name.length < 2 || name.length > 60) {
     res.status(400).json({ error: "Use a group name between 2 and 60 characters." });
+    return;
+  }
+  if (await hasAccessibleSharedBudgetWithName(req.user!.id, name)) {
+    res.status(409).json({ error: "You already have a Shared budget with that name. Choose a different name." });
     return;
   }
 
@@ -91,6 +122,10 @@ router.patch("/group", async (req, res): Promise<void> => {
   const parsed = z.object({ name: z.string().trim().min(2).max(60) }).safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Use a group name between 2 and 60 characters." });
+    return;
+  }
+  if (await hasAccessibleSharedBudgetWithName(req.user!.id, parsed.data.name, groupId)) {
+    res.status(409).json({ error: "You already have a Shared budget with that name. Choose a different name." });
     return;
   }
 

@@ -15,7 +15,6 @@ import {
   useGetGroup,
    useGetIncomeSources,
    useGetWorkspaces,
-   useSelectWorkspace,
   useCreateSharedGroup,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
@@ -31,7 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-    ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
+    ArrowDownRight, Wallet, Activity as ActivityIcon,
    Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2, Sparkles, Link2, BriefcaseBusiness, UsersRound,
     Receipt, BarChart3, Landmark,
 } from "lucide-react";
@@ -199,62 +198,12 @@ function CreateSharedGroupCard() {
 
 function SharedGroupsFooter() {
   const { data: workspaces = [], isLoading } = useGetWorkspaces();
-  const selectWorkspace = useSelectWorkspace();
-  const { toast } = useToast();
   const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
 
   if (isLoading) return null;
-
-  const openGroupOverview = async (groupId: number) => {
-    try {
-      await selectWorkspace.mutateAsync({ data: { groupId } });
-      window.location.assign("/");
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not open group overview",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
-    }
-  };
-
-  if (sharedWorkspaces.length === 0) {
-    return <CreateSharedGroupCard />;
-  }
-
-  return (
-    <Card className="border border-primary/15 bg-card shadow-sm">
-      <CardContent className="flex flex-col gap-5 p-5 sm:p-6">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Shared budgets</p>
-          <h2 className="mt-1 font-display text-xl font-bold text-foreground">Group overview</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Keep your Personal budget focused on your personal finances. Open a Shared budget below when you want to see its pooled budget, members, goals, and activity.
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {sharedWorkspaces.map((workspace) => (
-            <Button
-              key={workspace.id}
-              variant="outline"
-              className="h-12 justify-between rounded-xl px-4 text-left"
-              onClick={() => void openGroupOverview(workspace.id)}
-              disabled={selectWorkspace.isPending}
-            >
-              <span className="min-w-0 truncate">{workspace.name}</span>
-              <ArrowUpRight className="ml-3 h-4 w-4 shrink-0 text-primary" />
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Link href="/settings" className="text-sm font-medium text-primary hover:underline">
-            Manage Shared budgets →
-          </Link>
-          <OpenInvitationLinkButton />
-        </div>
-      </CardContent>
-    </Card>
-  );
+  // The dashboard switcher already lists every available Shared budget.
+  // Avoid rendering a second copy of those names in a separate card.
+  return sharedWorkspaces.length === 0 ? <CreateSharedGroupCard /> : null;
 }
 
 // ── Quick Action: Bank Deposit ────────────────────────────────────────────────
@@ -837,13 +786,13 @@ export default function Dashboard() {
     chartData.push({ name: "Others", value: breakdown.filter(b => b.spentAmount > 0).sort((a,b) => b.spentAmount - a.spentAmount).slice(5).reduce((s,b) => s + b.spentAmount, 0), color: "hsl(var(--muted-foreground))" });
   }
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 pb-12 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
             {isSharedWorkspace ? "Shared budget" : "Personal budget"}
           </p>
-          <h1 className="mt-1 text-3xl font-display font-bold text-foreground">
+          <h1 className="mt-1 text-2xl font-display font-bold text-foreground sm:text-3xl">
             {group?.isPrivate ? "Personal overview" : "Group overview"}
           </h1>
           <p className="mt-1 text-muted-foreground">
@@ -1109,7 +1058,7 @@ export default function Dashboard() {
        )}
 
       {/* ── Quick Actions ── */}
-      <Card className="border-none shadow-md overflow-hidden">
+       <Card className="overflow-hidden border-none shadow-md">
         <CardContent className="p-0">
           {/* Action buttons row */}
           <div className="grid grid-cols-3 divide-x divide-border/50">
@@ -1122,10 +1071,10 @@ export default function Dashboard() {
                 key={key}
                 onClick={() => toggle(key)}
                 disabled={sharedTransactionsLocked && (key === "expense" || key === "goal")}
-                className={`flex flex-col items-center justify-center gap-1.5 py-5 px-3 transition-colors font-medium text-sm sm:text-base disabled:cursor-not-allowed disabled:opacity-45 ${activeAction === key ? `${active} ${text}` : "hover:bg-muted/40 text-foreground"}`}
+                 className={`flex min-w-0 flex-col items-center justify-center gap-1.5 px-1.5 py-5 text-center text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 sm:px-3 sm:text-base ${activeAction === key ? `${active} ${text}` : "hover:bg-muted/40 text-foreground"}`}
               >
                 <span className="text-2xl">{icon}</span>
-                <span>{label}</span>
+                 <span className="max-w-full break-words">{label}</span>
                 {activeAction === key && <X className="w-3.5 h-3.5 mt-0.5 opacity-60" />}
               </button>
             ))}
@@ -1165,7 +1114,7 @@ export default function Dashboard() {
       {/* Hero Card */}
       <Card className="bg-primary text-primary-foreground border-none shadow-lg overflow-hidden relative">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl" />
-        <CardContent className="p-8 md:p-10">
+          <CardContent className="p-5 sm:p-8 md:p-10">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-4 relative z-10">
             <div className="space-y-2">
               <p className="text-primary-foreground/80 font-medium">Total Budget</p>
@@ -1197,7 +1146,7 @@ export default function Dashboard() {
       {/* Bank Account Balance Card */}
       <Link href="/bank">
         <Card className="border-none shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow group">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-900/40 flex items-center justify-center">
@@ -1210,7 +1159,7 @@ export default function Dashboard() {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-3 sm:gap-4">
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Balance</p>
                 <p className="text-lg sm:text-2xl font-display font-bold text-sky-600 dark:text-sky-400 break-all">
@@ -1306,7 +1255,7 @@ export default function Dashboard() {
       {/* Savings Goals */}
       {nearestGoal && (
         <Card className="border-none shadow-md overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border/50 pb-4 flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 border-b border-border/50 bg-muted/30 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2"><Target className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">{isSharedWorkspace ? "Group Goals" : "My Goals"}</CardTitle></div>
               <CardDescription>{activeGoals.length} active goal{activeGoals.length !== 1 ? "s" : ""}</CardDescription>

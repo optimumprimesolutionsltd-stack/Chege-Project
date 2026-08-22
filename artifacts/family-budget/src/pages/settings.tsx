@@ -114,8 +114,12 @@ export default function Settings() {
     try {
       await updateGroup.mutateAsync({ data: { name: groupName.trim() } });
       toast({ title: "Group name updated" });
-    } catch {
-      toast({ variant: "destructive", title: "Could not update group name" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not update group name",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     }
   };
 

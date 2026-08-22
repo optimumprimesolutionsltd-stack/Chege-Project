@@ -102,16 +102,16 @@ export default function IncomeStreamsReport() {
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 pb-12 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">Reports</p>
-          <h1 className="mt-1 text-3xl font-display font-bold text-foreground">Activity totals</h1>
+          <h1 className="mt-1 text-2xl font-display font-bold text-foreground sm:text-3xl">Activity totals</h1>
           <p className="mt-1 max-w-2xl text-muted-foreground">
             Review your money by day, week, month, or a custom range. Monthly income-stream detail remains below.
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
           <div className="flex w-full items-center justify-between gap-1 rounded-xl border bg-card p-1 shadow-sm sm:w-auto">
             <Button variant="ghost" size="icon" onClick={previousMonth} className="h-10 w-10 rounded-lg hover:bg-muted" aria-label="Previous month">
               <ArrowLeft className="h-5 w-5" />
@@ -158,7 +158,7 @@ export default function IncomeStreamsReport() {
                 {hasInvalidRange ? "Choose an end date on or after the start date." : displayPeriodRange(periodRange.startDate, periodRange.endDate)}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1 text-sm font-semibold sm:flex">
+            <div className="grid w-full grid-cols-2 gap-1 rounded-xl bg-muted p-1 text-sm font-semibold sm:flex sm:w-auto">
               {([
                 ["day", "Day"],
                 ["week", "Week"],
@@ -171,7 +171,7 @@ export default function IncomeStreamsReport() {
                   aria-pressed={periodView === value}
                   data-testid={`period-mode-${value}`}
                   onClick={() => setPeriodView(value)}
-                  className={`rounded-lg px-3 py-2 transition-colors ${periodView === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                 className={`min-w-0 rounded-lg px-2 py-2 transition-colors sm:px-3 ${periodView === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   {label}
                 </button>
@@ -253,7 +253,7 @@ export default function IncomeStreamsReport() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+               <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
                 <div className="rounded-xl bg-muted/50 p-3">
                   <Landmark className="h-4 w-4 text-primary" />
                   <p className="mt-2 text-xs text-muted-foreground">Bank deposits</p>

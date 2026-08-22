@@ -51,9 +51,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'Personal budget'}</span>
           </div>
         </div>
-        <div className="px-6">
-          <WorkspaceSwitcher activeWorkspaceId={group?.id} className="w-full" />
-        </div>
+        {location !== '/' && (
+          <div className="px-6">
+            <WorkspaceSwitcher activeWorkspaceId={group?.id} className="w-full" />
+          </div>
+        )}
 
         <nav className="flex-1 px-4 space-y-1 mt-4">
           {navItems.map((item) => {
