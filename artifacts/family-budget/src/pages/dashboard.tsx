@@ -844,7 +844,7 @@ export default function Dashboard() {
             {isSharedWorkspace ? "Shared budget" : "Personal budget"}
           </p>
           <h1 className="mt-1 text-3xl font-display font-bold text-foreground">
-            {group?.isPrivate ? "Personal budget" : "Shared budget overview"}
+            {group?.isPrivate ? "Personal overview" : "Group overview"}
           </h1>
           <p className="mt-1 text-muted-foreground">
             {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
