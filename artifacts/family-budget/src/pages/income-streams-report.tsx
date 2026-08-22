@@ -233,7 +233,7 @@ export default function IncomeStreamsReport() {
             </div>
           ) : periodTotals.data ? (
             <>
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-border/60 bg-card p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total spending</p>
                   <p className="mt-2 font-display text-2xl font-bold">{formatKes(periodTotals.data.spendingTotal)}</p>
