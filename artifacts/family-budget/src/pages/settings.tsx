@@ -18,6 +18,7 @@ import { GroupInviteLinks } from "@/components/group-invite-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
 import { Check, LogOut, Pencil, Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type GroupInvitation = {
   id: number;
@@ -59,6 +60,7 @@ export default function Settings() {
   const [editingSourceId, setEditingSourceId] = useState<number | null>(null);
   const [editingSourceName, setEditingSourceName] = useState("");
   const [savingSourceId, setSavingSourceId] = useState<number | null>(null);
+  const [confirmingSource, setConfirmingSource] = useState<IncomeSource | null>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
   const canManageWorkspace = members?.some(
     (member) =>
@@ -347,7 +349,7 @@ export default function Settings() {
     setEditingSourceName("");
   };
 
-  const handleSaveSource = async (source: IncomeSource) => {
+  const requestSaveSource = (source: IncomeSource) => {
     const name = editingSourceName.trim();
     if (!name) {
       toast({
@@ -357,6 +359,11 @@ export default function Settings() {
       });
       return;
     }
+    setConfirmingSource(source);
+  };
+
+  const handleSaveSource = async (source: IncomeSource) => {
+    const name = editingSourceName.trim();
 
     setSavingSourceId(source.id);
     try {
@@ -370,6 +377,7 @@ export default function Settings() {
         }),
       });
       handleCancelEditSource();
+      setConfirmingSource(null);
       await invalidateIncomeSources();
       toast({ title: "Income source updated" });
     } catch (error) {
@@ -387,6 +395,33 @@ export default function Settings() {
 
   return (
     <div className="w-full max-w-2xl space-y-8 pb-12">
+      <AlertDialog
+        open={!!confirmingSource}
+        onOpenChange={(open) => {
+          if (!open && savingSourceId === null) setConfirmingSource(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply income source changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will rename <strong>{confirmingSource?.name}</strong> to <strong>{editingSourceName.trim()}</strong>. Existing expenses and contributions will keep their recorded income source details.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingSourceId !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                if (confirmingSource) void handleSaveSource(confirmingSource);
+              }}
+              disabled={savingSourceId !== null}
+            >
+              {savingSourceId !== null ? "Applying…" : "Confirm and apply"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-1">

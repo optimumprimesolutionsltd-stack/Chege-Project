@@ -35,6 +35,14 @@ type BudgetCategory = {
 type IncomeSource = { id: number; userId: string; name: string; isMain: boolean; expectedMonthlyAmount: number };
 type Member = { userId: string; userName?: string | null; role?: "owner" | "admin" | "member" };
 type LedgerTarget = { category: string; isBudgeted: boolean };
+type PendingCategoryChange = {
+  name: string;
+  budgetAmount: number;
+  priority: number;
+  isRecurring: boolean;
+  activeMonth: number;
+  activeYear: number;
+};
 
 function IncomeSourceEditor({
   source,
@@ -53,6 +61,7 @@ function IncomeSourceEditor({
   const [expectedAmount, setExpectedAmount] = useState(String(source.expectedMonthlyAmount));
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     setName(source.name);
@@ -62,11 +71,16 @@ function IncomeSourceEditor({
   const hasChanges = name.trim() !== source.name
     || Math.max(0, Math.round(Number(expectedAmount) || 0)) !== source.expectedMonthlyAmount;
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!hasChanges) return;
+    setConfirmOpen(true);
+  };
+
+  const confirmSave = async () => {
     setSaving(true);
     try {
       await onSave(source, name, expectedAmount);
+      setConfirmOpen(false);
     } catch {
       // The parent already shows a clear server or validation message.
     } finally {
@@ -100,51 +114,77 @@ function IncomeSourceEditor({
   }
 
   return (
-    <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto_auto] sm:items-end">
-        <div className="min-w-0 space-y-1">
-          <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-name-${source.id}`}>Income source</label>
-          <div className="flex items-center gap-1.5">
-            <Input
-              id={`income-source-name-${source.id}`}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={80}
-              className="h-9 bg-card text-sm"
-              aria-label={`Income source name for ${source.name}`}
-            />
-            {source.isMain ? <span className="shrink-0 text-[10px] uppercase tracking-wide text-primary">Main</span> : null}
+    <>
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto_auto] sm:items-end">
+          <div className="min-w-0 space-y-1">
+            <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-name-${source.id}`}>Income source</label>
+            <div className="flex items-center gap-1.5">
+              <Input
+                id={`income-source-name-${source.id}`}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={80}
+                className="h-9 bg-card text-sm"
+                aria-label={`Income source name for ${source.name}`}
+                disabled={saving || removing}
+              />
+              {source.isMain ? <span className="shrink-0 text-[10px] uppercase tracking-wide text-primary">Main</span> : null}
+            </div>
           </div>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-amount-${source.id}`}>Expected monthly KES</label>
-          <Input
-            id={`income-source-amount-${source.id}`}
-            type="number"
-            min="0"
-            value={expectedAmount}
-            onChange={(event) => setExpectedAmount(event.target.value)}
-            className="h-9 bg-card text-sm"
-            aria-label={`Expected monthly income for ${source.name}`}
-          />
-        </div>
-        <Button type="button" size="sm" className="w-full sm:w-auto" onClick={handleSave} disabled={!hasChanges || saving || removing}>
-          {saving ? "Saving…" : "Save"}
-        </Button>
-        {canDelete ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
-            onClick={() => void handleDelete()}
-            disabled={saving || removing}
-          >
-            {removing ? "Removing…" : "Remove"}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-amount-${source.id}`}>Expected monthly KES</label>
+            <Input
+              id={`income-source-amount-${source.id}`}
+              type="number"
+              min="0"
+              value={expectedAmount}
+              onChange={(event) => setExpectedAmount(event.target.value)}
+              className="h-9 bg-card text-sm"
+              aria-label={`Expected monthly income for ${source.name}`}
+              disabled={saving || removing}
+            />
+          </div>
+          <Button type="button" size="sm" className="w-full sm:w-auto" onClick={handleSave} disabled={!hasChanges || saving || removing}>
+            {saving ? "Saving…" : "Save"}
           </Button>
-        ) : null}
+          {canDelete ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
+              onClick={() => void handleDelete()}
+              disabled={saving || removing}
+            >
+              {removing ? "Removing…" : "Remove"}
+            </Button>
+          ) : null}
+        </div>
       </div>
-    </div>
+      <AlertDialog open={confirmOpen} onOpenChange={(open) => !saving && setConfirmOpen(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply income source changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will change <strong>{source.name}</strong> from {formatKes(source.expectedMonthlyAmount)} expected per month to {formatKes(Math.max(0, Math.round(Number(expectedAmount) || 0)))}. Future budget comparisons and contribution reports will use the new figure; existing records will stay unchanged.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmSave();
+              }}
+              disabled={saving}
+            >
+              {saving ? "Applying…" : "Confirm and apply"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -185,6 +225,7 @@ function CategoryDialog({
   const [activeMonth, setActiveMonth] = useState(initial?.activeMonth ?? reportMonth);
   const [activeYear, setActiveYear] = useState(initial?.activeYear ?? reportYear);
   const [saving, setSaving] = useState(false);
+  const [pendingChange, setPendingChange] = useState<PendingCategoryChange | null>(null);
 
   useEffect(() => {
     setName(initial?.name ?? "");
@@ -195,12 +236,26 @@ function CategoryDialog({
     setActiveYear(initial?.activeYear ?? reportYear);
   }, [initial, open, reportMonth, reportYear, defaultPriority]);
 
-  const handleSave = async () => {
-    const amt = parseInt(amount, 10);
-    if (!name.trim() || isNaN(amt) || amt < 0) {
+  const parsedAmount = parseInt(amount, 10);
+
+  const handleSave = () => {
+    if (!name.trim() || isNaN(parsedAmount) || parsedAmount < 0) {
       toast({ variant: "destructive", title: "Missing fields", description: "Name and a valid amount are required." });
       return;
     }
+    setPendingChange({
+      name: name.trim(),
+      budgetAmount: parsedAmount,
+      priority: parseInt(priority, 10) || 1,
+      isRecurring,
+      activeMonth,
+      activeYear,
+    });
+  };
+
+  const confirmSave = async () => {
+    if (!pendingChange) return;
+    const change = pendingChange;
     setSaving(true);
     try {
       const url = initial ? `/api/budget-categories/${initial.id}` : "/api/budget-categories";
@@ -209,17 +264,18 @@ function CategoryDialog({
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim(),
-          budgetAmount: amt,
-          priority: parseInt(priority, 10) || 1,
-          isRecurring,
-          activeMonth: isRecurring ? null : activeMonth,
-          activeYear: isRecurring ? null : activeYear,
+          name: change.name,
+          budgetAmount: change.budgetAmount,
+          priority: change.priority,
+          isRecurring: change.isRecurring,
+          activeMonth: change.isRecurring ? null : change.activeMonth,
+          activeYear: change.isRecurring ? null : change.activeYear,
         }),
       });
       if (!res.ok) throw new Error("Failed");
       toast({ title: initial ? "Category updated" : "Category added" });
       await onSaved();
+      setPendingChange(null);
       onClose();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not save category." });
@@ -229,74 +285,107 @@ function CategoryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{initial ? "Edit category" : "Add category"}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">Category name</label>
-            <Input placeholder="e.g. Transport" value={name} onChange={e => setName(e.target.value)} autoFocus />
-            {initial ? (
-              <p className="text-xs text-muted-foreground">
-                Renaming keeps all existing expenses and tagged bank payments under the new name.
-              </p>
-            ) : null}
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">Budget amount (KES)</label>
-            <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">Priority tier</label>
-            <select
-              className="w-full h-10 rounded-md border border-input bg-card px-3 text-sm"
-              value={priority}
-              onChange={e => setPriority(e.target.value)}
-            >
-              {Object.entries(priorityMap).filter(([k]) => k !== "999").map(([k, v]) => (
-                <option key={k} value={k}>Tier {k}: {v}</option>
-              ))}
-            </select>
-            <div className="rounded-xl bg-muted/60 px-3 py-2.5">
-              <p className="text-xs font-semibold text-foreground">How to use tiers</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                Start with Tier 1 for must-pay needs, then work down to Tier 5 for spending that can wait. {priorityGuide[Number(priority)]}
-              </p>
+    <>
+      <Dialog open={open} onOpenChange={v => !v && onClose()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{initial ? "Edit category" : "Add category"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">Category name</label>
+              <Input placeholder="e.g. Transport" value={name} onChange={e => setName(e.target.value)} autoFocus disabled={saving} />
+              {initial ? (
+                <p className="text-xs text-muted-foreground">
+                  Renaming keeps all existing expenses and tagged bank payments under the new name.
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">Budget amount (KES)</label>
+              <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} disabled={saving} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">Priority tier</label>
+              <select
+                className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+                value={priority}
+                onChange={e => setPriority(e.target.value)}
+                disabled={saving}
+              >
+                {Object.entries(priorityMap).filter(([k]) => k !== "999").map(([k, v]) => (
+                  <option key={k} value={k}>Tier {k}: {v}</option>
+                ))}
+              </select>
+              <div className="rounded-xl bg-muted/60 px-3 py-2.5">
+                <p className="text-xs font-semibold text-foreground">How to use tiers</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                  Start with Tier 1 for must-pay needs, then work down to Tier 5 for spending that can wait. {priorityGuide[Number(priority)]}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 p-3.5">
+              <div>
+                <p className="text-sm font-semibold">Recurring budget</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {isRecurring
+                    ? "Repeats every month"
+                    : `Applies only to ${formatMonthYear(activeMonth, activeYear)}`}
+                </p>
+              </div>
+              <Switch
+                checked={isRecurring}
+                onCheckedChange={(checked) => {
+                  setIsRecurring(checked);
+                  if (!checked && initial?.isRecurring !== false) {
+                    setActiveMonth(reportMonth);
+                    setActiveYear(reportYear);
+                  }
+                }}
+                aria-label="Recurring budget"
+                disabled={saving}
+              />
             </div>
           </div>
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 p-3.5">
-            <div>
-              <p className="text-sm font-semibold">Recurring budget</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {isRecurring
-                  ? "Repeats every month"
-                  : `Applies only to ${formatMonthYear(activeMonth, activeYear)}`}
-              </p>
-            </div>
-            <Switch
-              checked={isRecurring}
-              onCheckedChange={(checked) => {
-                setIsRecurring(checked);
-                if (!checked && initial?.isRecurring !== false) {
-                  setActiveMonth(reportMonth);
-                  setActiveYear(reportYear);
-                }
+          <DialogFooter>
+            <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {initial ? "Save changes" : "Add category"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={!!pendingChange}
+        onOpenChange={(open) => {
+          if (!open && !saving) setPendingChange(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{initial ? "Apply budget changes?" : "Add this budget?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {initial
+                ? `This will apply the changes to ${pendingChange?.name ?? "this category"}: ${formatKes(pendingChange?.budgetAmount ?? 0)} ${pendingChange?.isRecurring ? "every month" : `for ${formatMonthYear(pendingChange?.activeMonth ?? reportMonth, pendingChange?.activeYear ?? reportYear)}`}. Existing expenses will not be changed.`
+                : `This will add ${pendingChange?.name ?? "this category"} with a budget of ${formatKes(pendingChange?.budgetAmount ?? 0)} ${pendingChange?.isRecurring ? "every month" : `for ${formatMonthYear(pendingChange?.activeMonth ?? reportMonth, pendingChange?.activeYear ?? reportYear)}`}.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmSave();
               }}
-              aria-label="Recurring budget"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            {initial ? "Save changes" : "Add category"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              disabled={saving}
+            >
+              {saving ? "Applying…" : "Confirm and apply"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
