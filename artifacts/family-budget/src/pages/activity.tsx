@@ -123,7 +123,7 @@ export default function Activity() {
           </p>
         </div>
         {tab === "contributions" && (
-          <div className="flex w-full items-center justify-between gap-2 rounded-xl border bg-card p-1 shadow-sm sm:w-auto sm:justify-start">
+          <div className="flex w-full max-w-full items-center justify-between gap-2 rounded-xl border bg-card p-1 shadow-sm sm:w-auto sm:justify-start">
             <button aria-label="Previous month" onClick={previousMonth} className="h-9 w-9 rounded-lg hover:bg-muted">←</button>
             <span className="flex min-w-0 items-center justify-center gap-1.5 px-1 text-sm font-semibold sm:px-2"><Calendar className="h-4 w-4 shrink-0 text-primary" />{formatMonthYear(month, year)}</span>
             <button aria-label="Next month" onClick={nextMonth} disabled={month === now.getMonth() + 1 && year === now.getFullYear()} className="h-9 w-9 rounded-lg hover:bg-muted disabled:opacity-40">→</button>
@@ -131,7 +131,7 @@ export default function Activity() {
         )}
       </div>
 
-      <div className="grid grid-cols-3 rounded-xl bg-muted p-1 text-xs font-semibold sm:text-sm">
+      <div className="grid grid-cols-3 rounded-xl bg-muted p-1 text-[11px] font-semibold sm:text-sm">
         {([
           ["all", "All activity"],
           ["expenses", "Expenses"],
@@ -149,15 +149,15 @@ export default function Activity() {
         <>
           <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-            <div><p className="text-sm font-semibold">Contributions are tracked automatically</p><p className="mt-0.5 text-xs text-muted-foreground">Personal expense portions, bank deposits, and savings contributions count once for the member who funded them. Joint-bank portions remain Shared budget funds.</p></div>
+            <div className="min-w-0"><p className="text-sm font-semibold">Contributions are tracked automatically</p><p className="mt-0.5 text-xs text-muted-foreground">Personal expense portions, bank deposits, and savings contributions count once for the member who funded them. Joint-bank portions remain Shared budget funds.</p></div>
           </div>
           {summaryLoading ? <div className="flex justify-center py-8"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : summaryError ? (
             <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-6 text-center"><p className="font-semibold">We couldn’t load this month’s contribution report.</p><p className="mt-1 text-sm text-muted-foreground">Check your group access, then refresh and try again.</p></CardContent></Card>
           ) : (
             <div className="space-y-4">
-              <Card className="border-none shadow-md"><CardContent className="pt-5">
+              <Card className="border-none shadow-md"><CardContent className="p-4 pt-5 sm:p-6 sm:pt-5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Group contribution total</p>
-                <div className="mt-2 flex flex-col gap-0.5 sm:flex-row sm:items-end sm:gap-2"><p className="font-display text-3xl font-bold">{formatKes(totalContributed)}</p><span className="text-sm text-muted-foreground sm:mb-1">of {formatKes(totalTarget)} target</span></div>
+                 <div className="mt-2 flex flex-col gap-0.5 sm:flex-row sm:items-end sm:gap-2"><p className="font-display text-2xl font-bold sm:text-3xl">{formatKes(totalContributed)}</p><span className="text-sm text-muted-foreground sm:mb-1">of {formatKes(totalTarget)} target</span></div>
                 <div className="mt-5 grid grid-cols-1 gap-3 border-t pt-4 sm:grid-cols-3">
                   <div><p className="text-xs text-muted-foreground">Income-source expected</p><p className="mt-1 font-display text-lg font-bold">{incomeStreamReport.isLoading ? "Loading…" : incomeStreamReport.isError ? "Unavailable" : formatKes(totalExpectedFromSources)}</p></div>
                   <div><p className="text-xs text-muted-foreground">Recorded from sources</p><p className="mt-1 font-display text-lg font-bold text-primary">{incomeStreamReport.isLoading ? "Loading…" : incomeStreamReport.isError ? "Unavailable" : formatKes(recordedFromSources)}</p></div>
@@ -171,13 +171,13 @@ export default function Activity() {
                   const recordedForMember = memberStreams.reduce((sum, stream) => sum + stream.total, 0);
                   const remainingForMember = expectedFromSources - recordedForMember;
                   return (
-                  <Card key={member.userId} className="border-none shadow-md"><CardContent className="space-y-3 pt-5">
+                  <Card key={member.userId} className="border-none shadow-md"><CardContent className="space-y-3 p-4 pt-5 sm:p-6 sm:pt-5">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="break-words font-display text-lg font-bold">{member.name}</p><p className="text-xs text-muted-foreground">{member.target == null ? "No monthly target" : `${formatKes(member.target)} monthly target`}</p></div><p className="font-display text-xl font-bold text-primary">{formatKes(member.contributed)}</p></div>
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Contributed</p><p className="mt-1 font-bold">{formatKes(member.contributed)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Spent</p><p className="mt-1 font-bold">{formatKes(member.spent)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Net</p><p className={`mt-1 font-bold ${member.net >= 0 ? "text-primary" : "text-destructive"}`}>{member.net >= 0 ? "+" : ""}{formatKes(member.net)}</p></div></div>
+                     <div className="grid grid-cols-1 gap-2 text-center text-xs min-[380px]:grid-cols-3"><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Contributed</p><p className="mt-1 font-bold">{formatKes(member.contributed)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Spent</p><p className="mt-1 font-bold">{formatKes(member.spent)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Net</p><p className={`mt-1 font-bold ${member.net >= 0 ? "text-primary" : "text-destructive"}`}>{member.net >= 0 ? "+" : ""}{formatKes(member.net)}</p></div></div>
                     <div className="space-y-2 border-t pt-3">
                       <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Income source plan</p><p className="mt-0.5 text-xs text-muted-foreground">Expected funding compared with what this member recorded.</p></div>{!incomeStreamReport.isLoading && !incomeStreamReport.isError && memberStreams.length > 0 && <p className="shrink-0 text-xs font-semibold text-primary">{formatKes(recordedForMember)} recorded</p>}</div>
                       {incomeStreamReport.isLoading ? <div className="h-16 animate-pulse rounded-xl bg-muted/60" /> : incomeStreamReport.isError ? <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">We couldn’t load this income-source plan. Refresh to try again.</p> : memberStreams.length === 0 ? <p className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">No income source has been set for {member.name} yet.</p> : <>
-                        <div className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Expected</p><p className="mt-1 font-bold">{formatKes(expectedFromSources)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Recorded</p><p className="mt-1 font-bold text-primary">{formatKes(recordedForMember)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">{remainingForMember < 0 ? "Above" : "Remaining"}</p><p className="mt-1 font-bold">{formatKes(Math.abs(remainingForMember))}</p></div></div>
+                         <div className="grid grid-cols-1 gap-2 text-center text-xs min-[380px]:grid-cols-3"><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Expected</p><p className="mt-1 font-bold">{formatKes(expectedFromSources)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">Recorded</p><p className="mt-1 font-bold text-primary">{formatKes(recordedForMember)}</p></div><div className="rounded-lg bg-muted p-2"><p className="text-muted-foreground">{remainingForMember < 0 ? "Above" : "Remaining"}</p><p className="mt-1 font-bold">{formatKes(Math.abs(remainingForMember))}</p></div></div>
                         <div className="divide-y divide-border/60 rounded-xl border border-border/70 px-3">{memberStreams.map((stream) => { const aboveExpected = stream.remainingBalance < 0; return <div key={stream.incomeSourceId ?? stream.sourceName} className="flex items-start justify-between gap-3 py-2.5"><div className="min-w-0"><p className="truncate text-sm font-semibold">{stream.sourceName}</p><p className="mt-0.5 text-xs text-muted-foreground">Expected {formatKes(stream.expectedMonthlyAmount)} · Recorded {formatKes(stream.total)}</p></div><p className={`shrink-0 text-xs font-semibold ${aboveExpected ? "text-primary" : "text-muted-foreground"}`}>{aboveExpected ? `${formatKes(Math.abs(stream.remainingBalance))} above` : `${formatKes(stream.remainingBalance)} left`}</p></div>; })}</div>
                       </>}
                     </div>
