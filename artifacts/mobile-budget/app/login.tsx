@@ -47,7 +47,7 @@ export default function LoginScreen() {
         <View style={styles.iconCircle}>
           <Feather name="trending-up" size={36} color="#cf7217" />
         </View>
-        <Text style={styles.appName}>Bajeti</Text>
+        <Text style={styles.appName}>Jamvi</Text>
         <Text style={styles.tagline}>Shared finances, together</Text>
       </View>
 

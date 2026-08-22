@@ -1054,7 +1054,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     })),
   });
 
-  const filename = `bajeti-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
+  const filename = `jamvi-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.setHeader("Cache-Control", "private, no-store");

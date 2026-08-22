@@ -25,7 +25,7 @@ export default function LoginPage() {
             <TrendingUp className="w-10 h-10" style={{ color: '#cf7217' }} />
           </div>
           <div className="text-center">
-            <h1 className="text-4xl font-display font-bold tracking-tight" style={{ color: '#f7faf6' }}>Bajeti</h1>
+            <h1 className="text-4xl font-display font-bold tracking-tight" style={{ color: '#f7faf6' }}>Jamvi</h1>
             <p className="text-sm mt-1 font-medium" style={{ color: '#7aaa8a' }}>Shared finances, together</p>
           </div>
         </div>

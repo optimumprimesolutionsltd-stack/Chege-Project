@@ -1,9 +1,9 @@
 ---
 name: Replit Auth consent prompt
-description: Consent behavior for Bajeti's managed Replit OIDC login.
+description: Consent behavior for Jamvi's managed Replit OIDC login.
 ---
 
-Do not force an OIDC `prompt` value on Bajeti's web or mobile authorization requests.
+Do not force an OIDC `prompt` value on Jamvi's web or mobile authorization requests.
 
 **Why:** Requiring `login consent` makes returning users repeat the provider's authorization step. Omitting it lets the provider reuse an existing trusted session and grant while retaining its own first-time authorization policy.
 

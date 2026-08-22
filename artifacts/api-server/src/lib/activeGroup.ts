@@ -10,7 +10,7 @@ export const LEGACY_ACTIVE_WORKSPACE_COOKIE = "active_workspace";
 export function setActiveWorkspaceCookie(res: Response, groupId: number): void {
   // The cookie only remembers a preference. Every protected request verifies
   // membership again before using it as the active workspace. It deliberately
-  // lasts for this browser session only, so opening Bajeti in a later web
+  // lasts for this browser session only, so opening Jamvi in a later web
   // session starts from the user's private My Budget workspace.
   res.cookie(ACTIVE_WORKSPACE_COOKIE, String(groupId), {
     httpOnly: true,

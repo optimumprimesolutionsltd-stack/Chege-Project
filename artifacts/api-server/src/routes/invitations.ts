@@ -57,7 +57,7 @@ function invitationStatus(invitation: {
 function appUrl() {
   const configured = process.env.APP_URL?.trim();
   if (!configured) {
-    throw new InvitationError("Email invitations are not configured. Set APP_URL to the public Bajeti URL.", 503);
+    throw new InvitationError("Email invitations are not configured. Set APP_URL to the public Jamvi URL.", 503);
   }
   try {
     const parsed = new URL(configured);
@@ -93,11 +93,11 @@ async function sendInvitationEmail(params: {
       <tr><td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden">
           <tr><td style="padding:32px;background:#183d28;color:#ffffff">
-            <p style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#a6e8bd">Bajeti group invitation</p>
+            <p style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#a6e8bd">Jamvi group invitation</p>
             <h1 style="margin:8px 0 0;font-size:26px">You are invited</h1>
           </td></tr>
           <tr><td style="padding:32px">
-            <p style="margin:0 0 16px;font-size:16px;line-height:1.5">You have been invited to join <strong>${groupName}</strong> on Bajeti as a <strong>${roleLabel}</strong>.</p>
+            <p style="margin:0 0 16px;font-size:16px;line-height:1.5">You have been invited to join <strong>${groupName}</strong> on Jamvi as a <strong>${roleLabel}</strong>.</p>
             <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#52645a">Sign in using this email address, then accept the invitation to join the shared budget.</p>
             <a href="${inviteLink}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:#2f8f4e;color:#ffffff;text-decoration:none;font-weight:700">Accept invitation</a>
             <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#718077">This invitation expires in 7 days. If you were not expecting it, you can ignore this email.</p>
@@ -113,9 +113,9 @@ async function sendInvitationEmail(params: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: process.env.INVITATION_FROM_EMAIL ?? process.env.DIGEST_FROM_EMAIL ?? "Bajeti <onboarding@resend.dev>",
+      from: process.env.INVITATION_FROM_EMAIL ?? process.env.DIGEST_FROM_EMAIL ?? "Jamvi <onboarding@resend.dev>",
       to: [params.email],
-      subject: `Join ${params.groupName} on Bajeti`,
+      subject: `Join ${params.groupName} on Jamvi`,
       html,
     }),
   });

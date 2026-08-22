@@ -525,7 +525,7 @@ export default function DashboardScreen() {
                   </Text>
                 </View>
                 <Text style={[styles.setupTitle, { color: isSetupComplete ? colors.foreground : colors.foreground }]}>
-                  {isSetupComplete ? 'You’re all set' : 'Finish setting up Bajeti'}
+                  {isSetupComplete ? 'You’re all set' : 'Finish setting up Jamvi'}
                 </Text>
                 <Text style={[styles.setupSubtitle, { color: colors.mutedForeground }]}>
                   {isSetupComplete ? 'Your core setup is complete.' : 'A few small wins and you are ready to go.'}

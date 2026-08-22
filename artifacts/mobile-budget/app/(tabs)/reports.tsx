@@ -208,7 +208,7 @@ export default function ReportsScreen() {
     setExportError(null);
     try {
       const pdf = await getDashboardMonthlyReportPdf({ month, year }, { responseType: 'blob', cache: 'no-store' });
-      const file = new File(Paths.cache, `bajeti-monthly-report-${year}-${String(month).padStart(2, '0')}.pdf`);
+      const file = new File(Paths.cache, `jamvi-monthly-report-${year}-${String(month).padStart(2, '0')}.pdf`);
       file.write(new Uint8Array(await pdf.arrayBuffer()));
       if (!(await Sharing.isAvailableAsync())) {
         throw new Error('Sharing is not available on this device.');

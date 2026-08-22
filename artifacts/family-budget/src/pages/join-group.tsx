@@ -66,9 +66,9 @@ export default function JoinGroupPage() {
             </div>
             <h1 className="font-display text-2xl font-bold text-foreground">You are in</h1>
             <p className="mt-3 leading-relaxed text-muted-foreground">
-              You joined <strong className="text-foreground">{data.groupName}</strong>. The group is now selected in Bajeti.
+              You joined <strong className="text-foreground">{data.groupName}</strong>. The group is now selected in Jamvi.
             </p>
-            <Button className="mt-7 w-full" onClick={() => window.location.assign(base || "/")}>Open Bajeti</Button>
+            <Button className="mt-7 w-full" onClick={() => window.location.assign(base || "/")}>Open Jamvi</Button>
           </>
         ) : (
           <>

@@ -22,7 +22,7 @@ import JoinGroupPage from '@/pages/join-group';
 
 const queryClient = new QueryClient();
 
-function AppLoading({ message = 'Loading Bajeti…' }: { message?: string }) {
+function AppLoading({ message = 'Loading Jamvi…' }: { message?: string }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
       <div className="flex flex-col items-center gap-4 text-center" role="status" aria-live="polite">
@@ -42,16 +42,16 @@ function AppErrorFallback() {
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-2xl">
           !
         </div>
-        <h1 className="mt-5 font-display text-2xl font-bold text-foreground">Bajeti could not load</h1>
+        <h1 className="mt-5 font-display text-2xl font-bold text-foreground">Jamvi could not load</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Something interrupted the page. Your saved data is safe. Reload Bajeti and try again.
+          Something interrupted the page. Your saved data is safe. Reload Jamvi and try again.
         </p>
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="mt-6 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
         >
-          Reload Bajeti
+          Reload Jamvi
         </button>
       </div>
     </div>
@@ -62,7 +62,7 @@ function AuthConnectionFallback({ retry }: { retry: () => void }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 text-center shadow-lg">
-        <h1 className="font-display text-2xl font-bold text-foreground">Bajeti is taking too long to connect</h1>
+        <h1 className="font-display text-2xl font-bold text-foreground">Jamvi is taking too long to connect</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           We could not check your account yet. This is usually a temporary connection problem, not a sign-in problem.
         </p>
@@ -89,7 +89,7 @@ class AppErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Bajeti failed to render', error, errorInfo);
+    console.error('Jamvi failed to render', error, errorInfo);
   }
 
   render() {

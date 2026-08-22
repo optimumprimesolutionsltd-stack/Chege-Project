@@ -42,7 +42,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </svg>
           </div>
           <div className="min-w-0">
-            <span className="block font-display font-bold text-xl tracking-tight">Bajeti</span>
+            <span className="block font-display font-bold text-xl tracking-tight">Jamvi</span>
             <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'Personal budget'}</span>
           </div>
         </div>
@@ -99,7 +99,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </svg>
           </div>
           <div className="min-w-0">
-            <span className="block font-display font-bold text-lg leading-none">Bajeti</span>
+            <span className="block font-display font-bold text-lg leading-none">Jamvi</span>
             <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'Personal budget'}</span>
           </div>
         </div>

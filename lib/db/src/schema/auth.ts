@@ -18,7 +18,7 @@ export const usersTable = pgTable('users', {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   email: varchar('email').unique(),
-  // A name explicitly chosen in Bajeti. Unlike OIDC claims, it is never
+  // A name explicitly chosen in Jamvi. Unlike OIDC claims, it is never
   // overwritten when the person signs in again with Google.
   preferredName: varchar('preferred_name'),
   firstName: varchar('first_name'),

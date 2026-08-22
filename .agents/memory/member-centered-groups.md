@@ -4,7 +4,7 @@ description: The product model for account ownership, invitations, and flexible 
 ---
 
 ## Rule
-Bajeti starts with one account owner per login identity. The owner may optionally invite or expose another household member profile, and the signed-in user may record entries on that member’s behalf. The group can represent spouses, a household, a chama, a club, or another team; “wife” and “husband” are examples, not special roles.
+Jamvi starts with one account owner per login identity. The owner may optionally invite or expose another household member profile, and the signed-in user may record entries on that member’s behalf. The group can represent spouses, a household, a chama, a club, or another team; “wife” and “husband” are examples, not special roles.
 
 Personal records belong to and are visible only to their member. Shared records belong to the group and are visible to its members. Group membership and permissions should be modeled independently from relationship labels.
 
