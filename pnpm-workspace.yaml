@@ -36,6 +36,13 @@ minimumReleaseAgeExclude:
   - '@replit/*'
   - stripe-replit-sync
 
+# pnpm 11 fails an install outright when any dependency's build script is
+# skipped. esbuild is listed below yet is still reported as ignored on Linux,
+# which killed the first two Render builds. This restores warn-instead-of-fail;
+# esbuild still resolves its binary from @esbuild/linux-x64, which the
+# overrides below deliberately keep.
+strictDepBuilds: false
+
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
