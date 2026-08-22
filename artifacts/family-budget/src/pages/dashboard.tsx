@@ -895,7 +895,7 @@ export default function Dashboard() {
               Open the shared budget, contributions, expenses, goals, bank, or reports without hunting through the menu.
             </p>
           </div>
-          <nav aria-label="Group overview shortcuts" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <nav aria-label="Group overview shortcuts" className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {OVERVIEW_SHORTCUTS.map((shortcut) => {
               const ShortcutIcon = shortcut.icon;
               return (
