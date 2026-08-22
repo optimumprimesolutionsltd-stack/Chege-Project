@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useLocalSearchParams } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import {
   useGetJointAccount,
@@ -89,6 +90,8 @@ export default function BankScreen() {
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { shortcut } = useLocalSearchParams<{ shortcut?: string }>();
+  const handledShortcut = useRef<string | null>(null);
 
   const { data, isLoading, refetch } = useGetJointAccount();
 
@@ -216,6 +219,12 @@ export default function BankScreen() {
     setTransferDirection('to_savings');
     setModalVisible(true);
   };
+
+  useEffect(() => {
+    if (shortcut !== 'deposit' || handledShortcut.current === shortcut) return;
+    handledShortcut.current = shortcut;
+    openModal('deposit');
+  }, [shortcut]);
 
   const closeModal = () => {
     if (submitting) return;

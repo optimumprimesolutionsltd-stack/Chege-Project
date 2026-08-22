@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
@@ -21,6 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -280,6 +281,8 @@ export default function GoalsScreen() {
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { shortcut } = useLocalSearchParams<{ shortcut?: string }>();
+  const handledShortcut = useRef<string | null>(null);
 
   const { data: goals = [], isLoading, refetch } = useGetSavingsGoals();
 
@@ -942,6 +945,7 @@ export default function GoalsScreen() {
   const active = (goals as SavingsGoal[]).filter((g) => !g.isCompleted);
   const done = (goals as SavingsGoal[]).filter((g) => g.isCompleted);
   const fundableGoals = active.filter((goal) => goal.targetAmount > goal.currentAmount);
+  const shortcutGoal = fundableGoals[0];
   const cascadePreview = useMemo(() => {
     const orderedGoals = cascadeOrder
       .map((id) => active.find((goal) => goal.id === id))
@@ -949,6 +953,19 @@ export default function GoalsScreen() {
     const amount = parseWholeKesAmount(cascadeAmount) ?? 0;
     return buildCascadePreview(amount, orderedGoals);
   }, [active, cascadeAmount, cascadeOrder]);
+
+  useEffect(() => {
+    if (shortcut !== 'contribute' || handledShortcut.current === shortcut || isLoading) return;
+    handledShortcut.current = shortcut;
+    if (shortcutGoal) {
+      openContribute(shortcutGoal);
+    } else {
+      Alert.alert(
+        'No active savings goal',
+        'Create a savings goal first, then use Save to Goal for a quick contribution.',
+      );
+    }
+  }, [shortcut, isLoading, shortcutGoal]);
 
   // Unique contributors derived from loaded data (excluding all correction rows)
   const uniqueContributors = Array.from(

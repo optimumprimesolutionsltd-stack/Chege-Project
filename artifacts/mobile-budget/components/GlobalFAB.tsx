@@ -7,8 +7,8 @@ import { useColors } from '@/hooks/useColors';
 
 const FAB_ACTIONS = [
   { icon: 'plus-circle' as const, label: 'Expense',  color: '#4ade80', bg: '#1a3320', route: '/add-expense'         },
-  { icon: 'credit-card' as const, label: 'Deposit',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank'         },
-  { icon: 'target'      as const, label: 'Savings',  color: '#f472b6', bg: '#2a0a1a', route: '/(tabs)/goals'        },
+  { icon: 'credit-card' as const, label: 'Deposit',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank?shortcut=deposit' },
+  { icon: 'target'      as const, label: 'Save to Goal', color: '#f472b6', bg: '#2a0a1a', route: '/(tabs)/goals?shortcut=contribute' },
 ];
 
 /** Persistent floating action button — rendered at the tab-layout level so it appears on every screen. */
@@ -34,6 +34,9 @@ export function GlobalFAB() {
           {FAB_ACTIONS.map((action) => (
             <Pressable
               key={action.label}
+              testID={`global-shortcut-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${action.label}`}
               style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => { setOpen(false); router.push(action.route as any); }}
             >
@@ -48,6 +51,9 @@ export function GlobalFAB() {
 
       {/* FAB button */}
       <Pressable
+        testID="global-quick-actions"
+        accessibilityRole="button"
+        accessibilityLabel={open ? 'Close quick actions' : 'Open quick actions'}
         style={[styles.fab, { bottom: fabBottom, backgroundColor: open ? colors.foreground : colors.secondary }]}
         onPress={() => setOpen((o) => !o)}
         hitSlop={8}

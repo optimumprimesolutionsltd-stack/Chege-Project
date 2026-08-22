@@ -82,7 +82,7 @@ type SetupStep = {
 
 const SHORTCUTS: Shortcut[] = [
   { icon: 'plus-circle', label: 'Expense',  color: '#4ade80', bg: '#1a3320', route: '/add-expense'            },
-  { icon: 'credit-card', label: 'Deposit',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank'            },
+  { icon: 'credit-card', label: 'Deposit',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank?shortcut=deposit' },
   { icon: 'pie-chart',   label: 'Reports',  color: '#60a5fa', bg: '#0a1a2a', route: '/(tabs)/reports'         },
   { icon: 'bar-chart-2', label: 'Budget',   color: '#a78bfa', bg: '#1a0a2a', route: '/(tabs)/budget'          },
   { icon: 'settings',    label: 'Settings', color: '#94a3b8', bg: '#1a1a28', route: '/(tabs)/settings'        },
@@ -453,6 +453,9 @@ export default function DashboardScreen() {
           {SHORTCUTS.map(s => (
             <Pressable
               key={s.label}
+              testID={`home-shortcut-${s.label.toLowerCase()}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${s.label}`}
               style={[styles.shortcutBtn, { backgroundColor: s.bg }]}
               onPress={() => router.push(s.route as any)}
               hitSlop={4}
@@ -474,6 +477,7 @@ export default function DashboardScreen() {
               {OVERVIEW_SHORTCUTS.map((shortcut) => (
                 <Pressable
                   key={shortcut.label}
+                  testID={`overview-shortcut-${shortcut.label.toLowerCase()}`}
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${shortcut.label}`}
                   style={({ pressed }) => [
