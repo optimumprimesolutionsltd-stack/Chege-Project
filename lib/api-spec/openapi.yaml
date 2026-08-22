@@ -2765,9 +2765,6 @@ components:
             reduced when the goal cap limits the applied amount). Omit to record
             the whole contribution against userId (or Joint bank when userId is
             also omitted).
-        note:
-          type: string
-          description: Optional note for this contribution
       required:
         - amount
 

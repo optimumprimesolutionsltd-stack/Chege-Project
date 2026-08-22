@@ -1004,8 +1004,7 @@ export const ContributeToSavingsGoalBody = zod.object({
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().nullable().describe('Household member ID, or null for Joint bank. Must be a valid member ID when non-null.\n'),
   "amount": zod.number().min(1).multipleOf(contributeToSavingsGoalBodyContributorSplitsItemAmountMultipleOf).describe('Amount attributed to this contributor (whole KES only; positive integer)')
-}).describe('Attribution of a portion of a cascade contribution to one member or the Joint bank')).optional().describe('Optional attribution splits. When provided the sum of all split amounts must equal amount exactly, and userId must be omitted. Each split is recorded as a separate contribution row (proportionally reduced when the goal cap limits the applied amount). Omit to record the whole contribution against userId (or Joint bank when userId is also omitted).\n'),
-  "note": zod.string().optional().describe('Optional note for this contribution')
+}).describe('Attribution of a portion of a cascade contribution to one member or the Joint bank')).optional().describe('Optional attribution splits. When provided the sum of all split amounts must equal amount exactly, and userId must be omitted. Each split is recorded as a separate contribution row (proportionally reduced when the goal cap limits the applied amount). Omit to record the whole contribution against userId (or Joint bank when userId is also omitted).\n')
 })
 
 export const ContributeToSavingsGoalResponse = zod.object({

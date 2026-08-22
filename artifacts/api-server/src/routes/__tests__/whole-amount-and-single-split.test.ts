@@ -228,6 +228,15 @@ describe("whole-KES enforcement — decimal amounts rejected", () => {
 // 2. Single-goal contributorSplits
 // ===========================================================================
 describe("POST /savings-goals/:id/contribute — contributorSplits", () => {
+  it("rejects a note on an ordinary contribution because notes identify balance corrections", async () => {
+    const res = await request(app)
+      .post("/savings-goals/1/contribute")
+      .send({ amount: 100, note: "Household top-up" });
+
+    expect(res.status).toBe(400);
+    expect(mockedDb.transaction).not.toHaveBeenCalled();
+  });
+
   it("records one row per split, summing exactly to amount (no capping)", async () => {
     const goal = makeGoal(1, { target: 100_000, current: 0 });
     const inserted: InsertedRow[] = [];
@@ -238,7 +247,6 @@ describe("POST /savings-goals/:id/contribute — contributorSplits", () => {
       .post("/savings-goals/1/contribute")
       .send({
         amount: 100,
-        note: "rent",
         contributorSplits: [
           { userId: "alice", amount: 60 },
           { userId: "bob", amount: 40 },
@@ -249,8 +257,6 @@ describe("POST /savings-goals/:id/contribute — contributorSplits", () => {
     const total = inserted.reduce((s, r) => s + r.amount, 0);
     expect(total).toBe(100);
     expect(inserted.length).toBe(2);
-    // Note carried to every split row.
-    for (const row of inserted) expect(row.note).toBe("rent");
     const byUser = Object.fromEntries(inserted.map((r) => [r.createdByUserId, r.amount]));
     expect(byUser["alice"]).toBe(60);
     expect(byUser["bob"]).toBe(40);

@@ -317,6 +317,7 @@ describe("GET /dashboard/period-totals", () => {
     expect(statementText).toContain("bank_tx.expense_id IS NULL");
     expect(statementText).toContain("transfer_direction IS DISTINCT FROM 'from_savings'");
     expect(statementText).toContain("contribution.is_balance_correction = false");
+    expect(statementText).toContain("contribution.note IS NULL");
   });
 
   it("rejects malformed and backwards ranges without querying the database", async () => {
@@ -352,6 +353,7 @@ describe("GET /dashboard/monthly-report.pdf", () => {
       .map((result) => result.value as { strings: TemplateStringsArray })
       .find((statement) => statement.strings.join("").includes("WITH funding AS"));
     expect(fundingStatement?.strings.join("")).toContain("contribution.is_balance_correction = false");
+    expect(fundingStatement?.strings.join("")).toContain("contribution.note IS NULL");
   });
 });
 

@@ -855,8 +855,6 @@ export interface SavingsGoalContributeInput {
   userId?: string | null;
   /** Optional attribution splits. When provided the sum of all split amounts must equal amount exactly, and userId must be omitted. Each split is recorded as a separate contribution row (proportionally reduced when the goal cap limits the applied amount). Omit to record the whole contribution against userId (or Joint bank when userId is also omitted). */
   contributorSplits?: ContributorSplit[];
-  /** Optional note for this contribution */
-  note?: string;
 }
 
 export interface SavingsGoalUpdateInput {

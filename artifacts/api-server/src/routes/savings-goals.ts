@@ -298,13 +298,12 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
     amount: z.number().int().positive(),
     userId: z.string().nullable().optional(),
     contributorSplits: z.array(ContributorSplitSchema).optional(),
-    note: z.string().optional(),
-  });
+  }).strict();
   const bodyParsed = bodySchema.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
   const { id } = paramParsed.data;
-  const { amount, note, contributorSplits } = bodyParsed.data;
+  const { amount, contributorSplits } = bodyParsed.data;
   const hasSplits = !!(contributorSplits && contributorSplits.length > 0);
 
   // Reject ambiguous payloads: a single userId attribution and per-contributor
@@ -360,6 +359,9 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
 
     if (!updated) return null;
 
+    // Notes have always been the legacy signal for a balance correction.
+    // Keep ordinary contribution rows note-free so existing correction history
+    // remains distinguishable while newer rows also carry the explicit marker.
     if (hasSplits) {
       // Distribute the (possibly capped) actualAmount across splits with the
       // largest-remainder method so inserted rows sum exactly to actualAmount.
@@ -370,7 +372,6 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
           amount: row.amount,
           // null = Joint bank; named ID = individual member
           createdByUserId: row.userId,
-          note: note ?? null,
         });
       }
     } else {
@@ -380,7 +381,6 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
         amount: actualAmount,
         // null = Joint bank; named userId = individual member
           createdByUserId: effectiveUserId,
-        note: note ?? null,
       });
     }
 

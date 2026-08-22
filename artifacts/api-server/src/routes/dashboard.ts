@@ -768,6 +768,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       WHERE contribution.group_id = ${groupId}
         AND contribution.created_by_user_id IS NOT NULL
         AND contribution.is_balance_correction = false
+        AND contribution.note IS NULL
         AND EXTRACT(MONTH FROM contribution.created_at) = ${month}
         AND EXTRACT(YEAR FROM contribution.created_at) = ${year}
     )
@@ -1016,6 +1017,7 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
       WHERE contribution.group_id = ${groupId}
         AND contribution.created_by_user_id IS NOT NULL
         AND contribution.is_balance_correction = false
+        AND contribution.note IS NULL
         AND contribution.created_at >= ${start.raw}::date
         AND contribution.created_at < (${end.raw}::date + INTERVAL '1 day')
     )
@@ -1131,6 +1133,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         FROM savings_goal_contributions contribution
         WHERE contribution.group_id = ${groupId} AND contribution.created_by_user_id IS NOT NULL
           AND contribution.is_balance_correction = false
+          AND contribution.note IS NULL
           AND EXTRACT(MONTH FROM contribution.created_at) = ${month} AND EXTRACT(YEAR FROM contribution.created_at) = ${year}
       )
       SELECT
