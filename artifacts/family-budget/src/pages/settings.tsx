@@ -266,9 +266,11 @@ export default function Settings() {
     }
   };
 
-  const invalidateIncomeSources = () => {
-    queryClient.invalidateQueries({ queryKey: ["income-sources"] });
-    queryClient.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey() });
+  const invalidateIncomeSources = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["income-sources"] }),
+      queryClient.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey() }),
+    ]);
   };
 
   const handleAddSource = async (event: React.FormEvent) => {
@@ -299,7 +301,7 @@ export default function Settings() {
         body: JSON.stringify({ userId: user.id, name, isMain: false }),
       });
       setNewSourceName("");
-      invalidateIncomeSources();
+      await invalidateIncomeSources();
       toast({ title: "Income source added", description: `${name} is now available when recording an expense.` });
     } catch (error) {
       toast({
@@ -318,7 +320,7 @@ export default function Settings() {
     setDeletingSourceId(source.id);
     try {
       await requestJson(`/api/income-sources/${source.id}`, { method: "DELETE" });
-      invalidateIncomeSources();
+      await invalidateIncomeSources();
       toast({ title: "Income source removed" });
     } catch (error) {
       toast({
@@ -364,7 +366,7 @@ export default function Settings() {
         }),
       });
       handleCancelEditSource();
-      invalidateIncomeSources();
+      await invalidateIncomeSources();
       toast({ title: "Income source updated" });
     } catch (error) {
       toast({
@@ -380,7 +382,7 @@ export default function Settings() {
   const pendingEmails = new Set(invitations.filter((invitation) => invitation.status === "pending").map((invitation) => invitation.email));
 
   return (
-    <div className="space-y-8 pb-12 max-w-2xl">
+    <div className="w-full max-w-2xl space-y-8 pb-12">
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-1">
@@ -394,14 +396,14 @@ export default function Settings() {
 
       {/* Your account */}
       <Card className="border-none shadow-md">
-        <CardHeader>
+        <CardHeader className="p-4 sm:p-6">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
             <CardTitle>Your Account</CardTitle>
           </div>
           <CardDescription>Your sign-in email is used to confirm invitations sent to you.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
           <p className="rounded-lg bg-muted px-4 py-3 text-sm text-foreground">
             Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email}</strong>
           </p>
@@ -431,7 +433,7 @@ export default function Settings() {
 
       {/* Income sources */}
       <Card className="border-none shadow-md">
-        <CardHeader>
+        <CardHeader className="p-4 sm:p-6">
           <CardTitle>{canManageShared ? "Shared budget income sources" : "Your income sources"}</CardTitle>
           <CardDescription>
             {canManageShared
@@ -439,7 +441,7 @@ export default function Settings() {
               : "Add the places your personal expenses are funded from. They will appear in the Paid from choices when you record an expense."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
           <form onSubmit={handleAddSource} noValidate className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={newSourceName}
@@ -472,7 +474,7 @@ export default function Settings() {
                 const isEditing = editingSourceId === source.id;
                 const isSaving = savingSourceId === source.id;
                 return (
-                  <div key={source.id} className="flex items-center justify-between gap-3 rounded-xl bg-muted/50 px-4 py-3">
+                  <div key={source.id} className="flex flex-col gap-3 rounded-xl bg-muted/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     {isEditing ? (
                       <Input
                         autoFocus
@@ -481,7 +483,7 @@ export default function Settings() {
                         maxLength={80}
                         aria-label={`Edit ${source.name}`}
                         disabled={isSaving}
-                        className="h-9 bg-card"
+                        className="h-10 min-w-0 flex-1 bg-card"
                       />
                     ) : (
                       <div className="min-w-0">
@@ -491,52 +493,61 @@ export default function Settings() {
                         )}
                       </div>
                     )}
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
                       {isEditing ? (
                         <>
-                          <Button
+                            <Button
                             type="button"
                             variant="ghost"
-                            size="icon"
+                              size="sm"
+                              className="min-h-10 flex-1 gap-1.5 px-3 sm:flex-none"
                             aria-label={`Save ${source.name}`}
                             onClick={() => void handleSaveSource(source)}
                             disabled={isSaving || !editingSourceName.trim()}
                           >
                             <Check className="h-4 w-4 text-emerald-600" />
+                              <span>Save</span>
                           </Button>
                           <Button
                             type="button"
                             variant="ghost"
-                            size="icon"
+                              size="sm"
+                              className="min-h-10 flex-1 gap-1.5 px-3 sm:flex-none"
                             aria-label={`Cancel editing ${source.name}`}
                             onClick={handleCancelEditSource}
                             disabled={isSaving}
                           >
                             <X className="h-4 w-4" />
+                              <span>Cancel</span>
                           </Button>
                         </>
                       ) : (
-                        <Button
+                          <Button
                           type="button"
                           variant="ghost"
-                          size="icon"
+                            size="sm"
+                            className="min-h-10 flex-1 gap-1.5 px-3 sm:flex-none"
                           aria-label={`Edit ${source.name}`}
+                            title={`Edit ${source.name}`}
                           onClick={() => handleStartEditSource(source)}
                           disabled={deletingSourceId === source.id}
                         >
                           <Pencil className="h-4 w-4" />
+                            <span>Edit</span>
                         </Button>
                       )}
                       <Button
                         type="button"
                         variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        size="sm"
+                        title={`Remove ${source.name}`}
+                        className="min-h-10 flex-1 gap-1.5 px-3 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-none"
                         aria-label={`Remove ${source.name}`}
                         onClick={() => handleDeleteSource(source)}
                         disabled={isEditing || deletingSourceId === source.id || isSaving}
                       >
                         <Trash2 className="h-4 w-4" />
+                        <span>Remove</span>
                       </Button>
                     </div>
                   </div>
@@ -548,7 +559,7 @@ export default function Settings() {
       </Card>
 
       <Card className="border-none shadow-md">
-        <CardHeader>
+        <CardHeader className="p-4 sm:p-6">
           <CardTitle>Budget name</CardTitle>
           <CardDescription>
             {isPrivateWorkspace
@@ -556,7 +567,7 @@ export default function Settings() {
               : "This is the name your Shared budget sees across Bajeti."}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
           {canManageWorkspace ? (
             <form onSubmit={handleSaveGroupName} noValidate className="flex flex-col gap-2 sm:flex-row">
               <Input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" />
@@ -572,7 +583,7 @@ export default function Settings() {
 
       {/* Members */}
       <Card className="border-none shadow-md">
-        <CardHeader>
+        <CardHeader className="p-4 sm:p-6">
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
             <CardTitle>{isPrivateWorkspace ? "Personal budget" : "Group Members"}</CardTitle>
@@ -585,7 +596,7 @@ export default function Settings() {
               : "The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 px-4 pb-4 sm:px-6 sm:pb-6">
           {isLoading ? (
             <div className="space-y-2 animate-pulse">
               <div className="h-12 bg-muted rounded-lg" />
@@ -658,7 +669,7 @@ export default function Settings() {
           )}
           {canLeaveGroup && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-foreground">Leave this group</p>
                   <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
@@ -667,7 +678,7 @@ export default function Settings() {
                 </div>
                 <Button
                   variant="outline"
-                  className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto sm:shrink-0"
                   onClick={handleLeaveGroup}
                   disabled={leaveGroup.isPending}
                 >
@@ -778,12 +789,12 @@ export default function Settings() {
                 <p className="mt-1 text-xs text-muted-foreground">A person joins only after they sign in and accept.</p>
               </div>
               {invitations.filter((invitation) => invitation.status === "pending").map((invitation) => (
-                <div key={invitation.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-3 py-2.5">
+                <div key={invitation.id} className="flex flex-col gap-3 rounded-xl border border-border/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{invitation.email}</p>
                     <p className="text-xs text-muted-foreground">{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="flex items-center justify-end gap-1 sm:shrink-0">
                     <Button variant="ghost" size="icon" aria-label={`Resend invitation to ${invitation.email}`} onClick={() => resendInvitation(invitation)}>
                       <RotateCcw className="h-4 w-4" />
                     </Button>
