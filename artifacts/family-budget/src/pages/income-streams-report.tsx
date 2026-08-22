@@ -88,7 +88,7 @@ export default function IncomeStreamsReport() {
       const href = URL.createObjectURL(reportPdf);
       const anchor = document.createElement("a");
       anchor.href = href;
-      anchor.download = `jamvi-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
+      anchor.download = `bajeti-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -102,7 +102,7 @@ export default function IncomeStreamsReport() {
   };
 
   return (
-    <div className="space-y-6 pb-12 sm:space-y-8">
+    <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-primary">Reports</p>
@@ -233,7 +233,7 @@ export default function IncomeStreamsReport() {
             </div>
           ) : periodTotals.data ? (
             <>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 <div className="rounded-xl border border-border/60 bg-card p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total spending</p>
                   <p className="mt-2 font-display text-2xl font-bold">{formatKes(periodTotals.data.spendingTotal)}</p>

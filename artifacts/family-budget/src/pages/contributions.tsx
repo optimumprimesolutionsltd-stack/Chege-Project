@@ -223,7 +223,7 @@ export default function Contributions() {
   const unattributedFunding = incomeStreamReport?.streams.find(stream => stream.incomeSourceId == null);
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="min-w-0 overflow-x-hidden space-y-8 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -298,7 +298,7 @@ export default function Contributions() {
                 {Math.round(totalTarget > 0 ? (totalContrib / totalTarget) * 100 : 0)}% of combined target
               </p>
             </div>
-            <div className="mt-5 grid grid-cols-1 gap-3 border-t pt-4 sm:grid-cols-3">
+            <div className="mt-5 grid grid-cols-3 gap-3 border-t pt-4">
               <div>
                 <p className="text-xs text-muted-foreground">Income-source expected</p>
                 <p className="mt-1 font-display text-lg font-bold">
