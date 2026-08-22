@@ -1,5 +1,4 @@
 import { createHash, randomBytes } from "node:crypto";
-import { ReplitConnectors } from "@replit/connectors-sdk";
 import {
   db,
   groupInviteContactsTable,
@@ -12,6 +11,7 @@ import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
+import { EmailNotConfiguredError, sendEmail } from "../lib/email";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const inviteSchema = z.object({
@@ -108,21 +108,23 @@ async function sendInvitationEmail(params: {
   </body>
 </html>`;
 
-  const connectors = new ReplitConnectors();
-  const response = await connectors.proxy("resend", "/emails", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  try {
+    await sendEmail({
       from: process.env.INVITATION_FROM_EMAIL ?? process.env.DIGEST_FROM_EMAIL ?? "Jamvi <onboarding@resend.dev>",
       to: [params.email],
       subject: `Join ${params.groupName} on Jamvi`,
       html,
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Could not send invitation email (${response.status}): ${body}`);
+    });
+  } catch (error) {
+    if (error instanceof EmailNotConfiguredError) {
+      // A missing key is a deployment problem, not a bad request, and the
+      // caller surfaces 503s as "invitations are not configured".
+      throw new InvitationError(
+        "Email invitations are not configured. Set RESEND_API_KEY.",
+        503,
+      );
+    }
+    throw error;
   }
 }
 

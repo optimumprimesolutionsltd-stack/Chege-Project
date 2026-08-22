@@ -2,12 +2,6 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@replit/connectors-sdk", () => ({
-  ReplitConnectors: class {
-    proxy = vi.fn();
-  },
-}));
-
 vi.mock("@workspace/db", () => {
   const table = (name: string) => new Proxy({}, {
     get: (_, property) => ({ _table: name, _column: String(property) }),
