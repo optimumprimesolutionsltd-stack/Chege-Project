@@ -88,7 +88,7 @@ export default function IncomeStreamsReport() {
       const href = URL.createObjectURL(reportPdf);
       const anchor = document.createElement("a");
       anchor.href = href;
-      anchor.download = `jamvi-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
+      anchor.download = `bajeti-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -321,7 +321,7 @@ export default function IncomeStreamsReport() {
         <>
           <Card className="overflow-hidden border-none shadow-md">
             <div className="h-1 bg-primary" />
-              <CardContent className="grid grid-cols-1 gap-4 pt-5 sm:grid-cols-3">
+              <CardContent className="grid grid-cols-3 gap-3 pt-5">
               <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Expected income</p>
                   <p className="mt-2 font-display text-3xl font-bold">{formatKes(report.totalExpected)}</p>

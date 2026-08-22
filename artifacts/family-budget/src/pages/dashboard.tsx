@@ -73,7 +73,7 @@ function OpenInvitationLinkButton() {
         invitationUrl.origin !== window.location.origin ||
         !/^\/(?:invite|join)\/[^/]+\/?$/.test(appPath)
       ) {
-        throw new Error("Paste a Jamvi email invitation or private group link.");
+        throw new Error("Paste a Bajeti email invitation or private group link.");
       }
       window.location.assign(`${invitationUrl.pathname}${invitationUrl.search}${invitationUrl.hash}`);
     } catch (inviteError) {
@@ -673,7 +673,7 @@ export default function Dashboard() {
   const nextSetupStep = pendingSetupSteps[0];
   const isSetupComplete = completeSetupSteps === setupSteps.length;
   const setupNudgeKey = group?.id && user?.id
-    ? `jamvi:onboarding-nudge:${group.id}:${user.id}`
+    ? `bajeti:onboarding-nudge:${group.id}:${user.id}`
     : null;
 
   useEffect(() => {
@@ -760,7 +760,7 @@ export default function Dashboard() {
             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl mx-auto">🏠</div>
             <h1 className="font-display font-bold text-2xl text-foreground mt-5">Join this group first</h1>
             <p className="text-muted-foreground mt-2 leading-relaxed">
-              Jamvi keeps each group’s shared funds, budgets, and savings goals private. Ask someone already in this group to add you from Settings.
+              Bajeti keeps each group’s shared funds, budgets, and savings goals private. Ask someone already in this group to add you from Settings.
             </p>
             <Link href="/settings">
               <Button className="mt-6 rounded-xl">Open Settings</Button>
@@ -786,7 +786,7 @@ export default function Dashboard() {
     chartData.push({ name: "Others", value: breakdown.filter(b => b.spentAmount > 0).sort((a,b) => b.spentAmount - a.spentAmount).slice(5).reduce((s,b) => s + b.spentAmount, 0), color: "hsl(var(--muted-foreground))" });
   }
   return (
-    <div className="space-y-6 pb-12 sm:space-y-8">
+    <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
@@ -813,7 +813,7 @@ export default function Dashboard() {
                 {group ? workspaceLabel(group) : "Personal budget"}
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+            <span className="hidden shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary sm:inline-flex">
               {isSharedWorkspace ? "Shared" : "Personal"}
             </span>
           </div>
@@ -844,7 +844,7 @@ export default function Dashboard() {
               Open the shared budget, contributions, expenses, goals, bank, or reports without hunting through the menu.
             </p>
           </div>
-          <nav aria-label="Group overview shortcuts" className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <nav aria-label="Group overview shortcuts" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {OVERVIEW_SHORTCUTS.map((shortcut) => {
               const ShortcutIcon = shortcut.icon;
               return (
@@ -908,11 +908,11 @@ export default function Dashboard() {
                    Start here · Step {Math.min(completeSetupSteps + 1, setupSteps.length)} of {setupSteps.length}
                 </p>
                  <h2 className="mt-1 font-display text-xl font-bold text-foreground sm:text-2xl">
-                    {isSetupComplete ? "You’re all set" : completeSetupSteps > 0 ? "Almost there" : "Set up Jamvi"}
+                    {isSetupComplete ? "You’re all set" : completeSetupSteps > 0 ? "Almost there" : "Set up Bajeti"}
                  </h2>
                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                    {isSetupComplete
-                     ? "Your core setup is complete. You can keep using Jamvi as normal."
+                     ? "Your core setup is complete. You can keep using Bajeti as normal."
                       : "One real action at a time. You can come back whenever you are ready."}
                 </p>
                  <div className={`mt-4 h-2 w-full max-w-md overflow-hidden rounded-full ${
@@ -1063,18 +1063,19 @@ export default function Dashboard() {
           {/* Action buttons row */}
           <div className="grid grid-cols-3 divide-x divide-border/50">
             {[
-              { key: "income" as const, label: "Bank Deposit", icon: "💰", active: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-400" },
-              { key: "expense" as const, label: "Log Expense",   icon: "📋", active: "bg-amber-50 dark:bg-amber-950/40",   text: "text-amber-700 dark:text-amber-400" },
-              { key: "goal" as const,   label: "Save to Goal",  icon: "🎯", active: "bg-blue-50 dark:bg-blue-950/40",     text: "text-blue-700 dark:text-blue-400" },
-            ].map(({ key, label, icon, active, text }) => (
+              { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: "💰", active: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-400" },
+              { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: "📋", active: "bg-amber-50 dark:bg-amber-950/40",   text: "text-amber-700 dark:text-amber-400" },
+              { key: "goal" as const,   label: "Save to Goal", shortLabel: "Save",     icon: "🎯", active: "bg-blue-50 dark:bg-blue-950/40",     text: "text-blue-700 dark:text-blue-400" },
+            ].map(({ key, label, shortLabel, icon, active, text }) => (
               <button
                 key={key}
                 onClick={() => toggle(key)}
                 disabled={sharedTransactionsLocked && (key === "expense" || key === "goal")}
-                 className={`flex min-w-0 flex-col items-center justify-center gap-1.5 px-1.5 py-5 text-center text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 sm:px-3 sm:text-base ${activeAction === key ? `${active} ${text}` : "hover:bg-muted/40 text-foreground"}`}
+                className={`flex min-w-0 flex-col items-center justify-center gap-1.5 px-1 py-5 text-center text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 sm:px-3 sm:text-sm ${activeAction === key ? `${active} ${text}` : "hover:bg-muted/40 text-foreground"}`}
               >
-                <span className="text-2xl">{icon}</span>
-                 <span className="max-w-full break-words">{label}</span>
+                <span className="text-2xl leading-none">{icon}</span>
+                <span className="block sm:hidden">{shortLabel}</span>
+                <span className="hidden sm:block max-w-full break-words">{label}</span>
                 {activeAction === key && <X className="w-3.5 h-3.5 mt-0.5 opacity-60" />}
               </button>
             ))}
@@ -1293,7 +1294,7 @@ export default function Dashboard() {
         <CardContent className="p-6 h-[280px]">
           {isTrendsLoading ? <div className="h-full bg-muted/30 rounded-xl animate-pulse" /> : trends && trends.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trends} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+              <BarChart data={trends} margin={{ top: 5, right: 30, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                 <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={40} />
