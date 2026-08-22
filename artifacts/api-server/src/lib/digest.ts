@@ -1,4 +1,3 @@
-import { ReplitConnectors } from "@replit/connectors-sdk";
 import { db } from "@workspace/db";
 import {
   expensesTable,
@@ -378,12 +377,23 @@ export async function sendMonthlyDigest(
   });
 
   // ── Send via Resend ───────────────────────────────────────────────────────
-  const connectors = new ReplitConnectors();
+  // Calls Resend directly with our own key. This previously went through the
+  // Replit connector proxy, which held the credential on our behalf and is
+  // not available off Replit.
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    await db.delete(digestSendsTable).where(sql`${digestSendsTable.id} = ${claimId}`);
+    throw new Error("RESEND_API_KEY must be set to send the monthly digest.");
+  }
+
   const from = process.env.DIGEST_FROM_EMAIL ?? "Family Budget <onboarding@resend.dev>";
 
-  const response = await connectors.proxy("resend", "/emails", {
+  const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
       from,
       to,
