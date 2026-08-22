@@ -1,6 +1,7 @@
 {
   "name": "workspace",
   "version": "0.0.0",
+  "packageManager": "pnpm@11.20.0",
   "license": "MIT",
   "scripts": {
     "preinstall": "node -e \"['package-lock.json','yarn.lock'].forEach(f=>{try{require('fs').unlinkSync(f)}catch(_){}});const ua=process.env.npm_config_user_agent||'';if(ua&&!ua.startsWith('pnpm')&&!process.env.EAS_BUILD&&!process.env.CI){process.stderr.write('Use pnpm instead\\n');process.exit(1)}\"",
