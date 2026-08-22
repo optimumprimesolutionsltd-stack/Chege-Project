@@ -88,7 +88,7 @@ export default function IncomeStreamsReport() {
       const href = URL.createObjectURL(reportPdf);
       const anchor = document.createElement("a");
       anchor.href = href;
-      anchor.download = `bajeti-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
+      anchor.download = `jamvi-monthly-report-${year}-${String(month).padStart(2, "0")}.pdf`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
