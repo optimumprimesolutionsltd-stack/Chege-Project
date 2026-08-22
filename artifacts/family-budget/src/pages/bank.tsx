@@ -4,7 +4,7 @@ import {
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
   useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank,
   getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
-  getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey,
+  getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey, useUpdateJointAccountOpeningBalance,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -54,6 +54,7 @@ export default function Bank() {
   const deleteTx = useDeleteJointAccountTransaction();
   const transferToSavings = useTransferBankToSavings();
   const transferFromSavings = useTransferSavingsToBank();
+  const updateOpeningBalance = useUpdateJointAccountOpeningBalance();
   const { data: savingsGoals = [] } = useGetSavingsGoals();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -87,6 +88,8 @@ export default function Bank() {
   const [transferDirection, setTransferDirection] = useState<"to_savings" | "from_savings">("to_savings");
   const [transferGoalId, setTransferGoalId] = useState<number | null>(null);
   const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
+  const [openingBalanceDraft, setOpeningBalanceDraft] = useState("");
+  const [editingOpeningBalance, setEditingOpeningBalance] = useState(false);
 
   // Income sources — only fetch when exactly one named depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
@@ -108,6 +111,39 @@ export default function Bank() {
     queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+  };
+
+  const openOpeningBalanceEditor = () => {
+    setOpeningBalanceDraft(String(account?.openingBalance ?? 0));
+    setEditingOpeningBalance(true);
+  };
+
+  const handleOpeningBalanceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = Number(openingBalanceDraft);
+    if (!Number.isInteger(value) || value < 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "The opening balance must be zero or more whole shillings.",
+      });
+      return;
+    }
+    try {
+      await updateOpeningBalance.mutateAsync({ data: { openingBalance: value } });
+      setEditingOpeningBalance(false);
+      toast({
+        title: "Opening balance saved",
+        description: "The current balance now includes this starting amount.",
+      });
+      invalidate();
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Could not save opening balance",
+        description: "Please try again.",
+      });
+    }
   };
 
   const handleCreateCategory = async () => {
@@ -449,7 +485,23 @@ export default function Bank() {
                 <Landmark className="w-6 h-6 opacity-80" />
                 <p className="text-sm font-medium opacity-80">Running Balance</p>
               </div>
-              <p className="text-4xl font-display font-bold" data-testid="bank-balance">{formatKes(account?.balance ?? 0)}</p>
+                <p className="text-4xl font-display font-bold" data-testid="bank-balance">{formatKes(account?.balance ?? 0)}</p>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="opacity-75">
+                    Opening balance: <span className="font-semibold">{formatKes(account?.openingBalance ?? 0)}</span>
+                  </span>
+                  {canManageShared && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-9 rounded-lg bg-primary-foreground/15 px-3 text-primary-foreground hover:bg-primary-foreground/25"
+                      onClick={openOpeningBalanceEditor}
+                      data-testid="button-edit-opening-balance"
+                    >
+                      Edit starting balance
+                    </Button>
+                  )}
+                </div>
               <div className="flex gap-6 pt-2 border-t border-primary-foreground/20">
                 <div>
                   <p className="text-xs opacity-70 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Total In</p>
@@ -464,6 +516,50 @@ export default function Bank() {
           )}
         </CardContent>
       </Card>
+
+      {editingOpeningBalance && (
+        <Card className="border-none shadow-md bg-accent/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xl font-display">Set starting balance</CardTitle>
+            <CardDescription>
+              Enter the money already in this Shared budget’s bank account before the transactions shown below.
+              This is a workspace-level value and does not create a transaction.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleOpeningBalanceSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-foreground" htmlFor="bank-opening-balance">
+                  Opening balance (KES)
+                </label>
+                <Input
+                  id="bank-opening-balance"
+                  data-testid="input-opening-balance"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={openingBalanceDraft}
+                  onChange={(e) => setOpeningBalanceDraft(e.target.value)}
+                  className="h-12 text-lg bg-card"
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">
+                  Current balance = opening balance + deposits − withdrawals.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setEditingOpeningBalance(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateOpeningBalance.isPending} data-testid="button-save-opening-balance">
+                  {updateOpeningBalance.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                  Save starting balance
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Action buttons / form */}
       {!mode ? (

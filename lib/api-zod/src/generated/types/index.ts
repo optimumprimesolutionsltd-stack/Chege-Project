@@ -74,6 +74,8 @@ export * from './jointAccountTransaction';
 export * from './member';
 export * from './memberRole';
 export * from './monthTrend';
+export * from './openingBalance';
+export * from './openingBalanceInput';
 export * from './savingsGoal';
 export * from './savingsGoalContributeInput';
 export * from './savingsGoalContribution';

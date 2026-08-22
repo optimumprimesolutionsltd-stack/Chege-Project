@@ -613,6 +613,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/JointAccountSummary"
 
+  /joint-account/opening-balance:
+    patch:
+      operationId: updateJointAccountOpeningBalance
+      tags: [joint-account]
+      summary: Set the manual opening balance for the joint account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpeningBalanceInput"
+      responses:
+        "200":
+          description: Updated opening balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpeningBalance"
+        "400":
+          description: Invalid opening balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only a group owner or admin can change the opening balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /joint-account/deposit:
     post:
       operationId: createDeposit
@@ -2314,8 +2345,12 @@ components:
     JointAccountSummary:
       type: object
       properties:
+        openingBalance:
+          type: number
+          description: Manually entered balance carried into the first recorded transaction
         balance:
           type: number
+          description: Current balance after applying the opening balance and all transactions
         totalDeposits:
           type: number
         totalDisbursements:
@@ -2325,10 +2360,32 @@ components:
           items:
             $ref: "#/components/schemas/JointAccountTransaction"
       required:
+        - openingBalance
         - balance
         - totalDeposits
         - totalDisbursements
         - transactions
+
+    OpeningBalance:
+      type: object
+      properties:
+        openingBalance:
+          type: number
+          minimum: 0
+          multipleOf: 1
+      required:
+        - openingBalance
+
+    OpeningBalanceInput:
+      type: object
+      properties:
+        openingBalance:
+          type: number
+          minimum: 0
+          multipleOf: 1
+          description: Manual starting balance in whole KES
+      required:
+        - openingBalance
 
     DepositInput:
       type: object

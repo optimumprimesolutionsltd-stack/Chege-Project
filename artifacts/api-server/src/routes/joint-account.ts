@@ -9,6 +9,7 @@ import {
   savingsGoalContributionsTable,
   jointAccountDepositSplitsTable,
   incomeSourcesTable,
+  groupsTable,
 } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -73,6 +74,9 @@ const UpdateJointAccountInput = z.object({
 });
 
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
+const OpeningBalanceInput = z.object({
+  openingBalance: z.number().int().nonnegative(),
+});
 const SavingsTransferInput = z.object({
   amount: z.number().int().positive(),
   goalId: z.number().int().positive(),
@@ -154,24 +158,58 @@ async function validateMemberId(id: string, groupId: number): Promise<string | n
   return null;
 }
 
-// GET /joint-account — returns balance + all transactions ordered newest first
+// GET /joint-account — returns the running balance plus all transactions ordered newest first.
+// The running balance starts at the workspace's manually entered opening balance.
 router.get("/joint-account", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
 
-  const txs = await db
-    .select()
-    .from(jointAccountTxTable)
-    .where(eq(jointAccountTxTable.groupId, groupId))
-    .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.createdAt} DESC`);
+  const [[group], txs] = await Promise.all([
+    db
+      .select({ openingBalance: groupsTable.bankOpeningBalance })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, groupId))
+      .limit(1),
+    db
+      .select()
+      .from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.groupId, groupId))
+      .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.createdAt} DESC`),
+  ]);
 
   const enriched = await Promise.all(txs.map((tx) => enrichTx(tx, groupId)));
 
   const totalDeposits = txs.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
   const totalDisbursements = txs.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
-  const balance = totalDeposits - totalDisbursements;
+  const openingBalance = group?.openingBalance ?? 0;
+  const balance = openingBalance + totalDeposits - totalDisbursements;
 
-  res.json({ balance, totalDeposits, totalDisbursements, transactions: enriched });
+  res.json({ openingBalance, balance, totalDeposits, totalDisbursements, transactions: enriched });
+});
+
+// PATCH /joint-account/opening-balance — set the manual starting balance for this workspace.
+router.patch("/joint-account/opening-balance", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const parsed = OpeningBalanceInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Opening balance must be a whole KES amount of zero or more." });
+    return;
+  }
+
+  const [group] = await db
+    .update(groupsTable)
+    .set({ bankOpeningBalance: parsed.data.openingBalance })
+    .where(eq(groupsTable.id, groupId))
+    .returning({ openingBalance: groupsTable.bankOpeningBalance });
+
+  if (!group) {
+    res.status(404).json({ error: "Group not found" });
+    return;
+  }
+  res.json(group);
 });
 
 // POST /joint-account/deposit

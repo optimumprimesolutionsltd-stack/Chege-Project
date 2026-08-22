@@ -602,7 +602,8 @@ export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountM
 
 
 export const GetJointAccountResponse = zod.object({
-  "balance": zod.number(),
+  "openingBalance": zod.number().describe('Manually entered balance carried into the first recorded transaction'),
+  "balance": zod.number().describe('Current balance after applying the opening balance and all transactions'),
   "totalDeposits": zod.number(),
   "totalDisbursements": zod.number(),
   "transactions": zod.array(zod.object({
@@ -625,6 +626,28 @@ export const GetJointAccountResponse = zod.object({
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 }))
+})
+
+
+/**
+ * @summary Set the manual opening balance for the joint account
+ */
+export const updateJointAccountOpeningBalanceBodyOpeningBalanceMin = 0;
+export const updateJointAccountOpeningBalanceBodyOpeningBalanceMultipleOf = 1;
+
+
+
+export const UpdateJointAccountOpeningBalanceBody = zod.object({
+  "openingBalance": zod.number().min(updateJointAccountOpeningBalanceBodyOpeningBalanceMin).multipleOf(updateJointAccountOpeningBalanceBodyOpeningBalanceMultipleOf).describe('Manual starting balance in whole KES')
+})
+
+export const updateJointAccountOpeningBalanceResponseOpeningBalanceMin = 0;
+export const updateJointAccountOpeningBalanceResponseOpeningBalanceMultipleOf = 1;
+
+
+
+export const UpdateJointAccountOpeningBalanceResponse = zod.object({
+  "openingBalance": zod.number().min(updateJointAccountOpeningBalanceResponseOpeningBalanceMin).multipleOf(updateJointAccountOpeningBalanceResponseOpeningBalanceMultipleOf)
 })
 
 

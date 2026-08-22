@@ -66,6 +66,8 @@ import type {
   JointAccountTransaction,
   Member,
   MonthTrend,
+  OpeningBalance,
+  OpeningBalanceInput,
   SavingsGoal,
   SavingsGoalContributeInput,
   SavingsGoalContribution,
@@ -2031,6 +2033,77 @@ export function useGetJointAccount<TData = Awaited<ReturnType<typeof getJointAcc
 
 
 
+
+export const getUpdateJointAccountOpeningBalanceUrl = () => {
+
+
+
+
+  return `/api/joint-account/opening-balance`
+}
+
+/**
+ * @summary Set the manual opening balance for the joint account
+ */
+export const updateJointAccountOpeningBalance = async (openingBalanceInput: OpeningBalanceInput, options?: Parameters<typeof customFetch>[1]): Promise<OpeningBalance> => {
+
+  return customFetch<OpeningBalance>(getUpdateJointAccountOpeningBalanceUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(openingBalanceInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateJointAccountOpeningBalanceMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateJointAccountOpeningBalance>>, TError,{data: BodyType<OpeningBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateJointAccountOpeningBalance>>, TError,{data: BodyType<OpeningBalanceInput>}, TContext> => {
+
+const mutationKey = ['updateJointAccountOpeningBalance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateJointAccountOpeningBalance>>, {data: BodyType<OpeningBalanceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateJointAccountOpeningBalance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateJointAccountOpeningBalanceMutationResult = NonNullable<Awaited<ReturnType<typeof updateJointAccountOpeningBalance>>>
+    export type UpdateJointAccountOpeningBalanceMutationBody = BodyType<OpeningBalanceInput>
+    export type UpdateJointAccountOpeningBalanceMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Set the manual opening balance for the joint account
+ */
+export const useUpdateJointAccountOpeningBalance = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateJointAccountOpeningBalance>>, TError,{data: BodyType<OpeningBalanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateJointAccountOpeningBalance>>,
+        TError,
+        {data: BodyType<OpeningBalanceInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateJointAccountOpeningBalanceMutationOptions(options));
+    }
 
 export const getCreateDepositUrl = () => {
 

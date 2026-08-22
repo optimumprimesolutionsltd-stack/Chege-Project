@@ -8,6 +8,9 @@
 import type { JointAccountTransaction } from './jointAccountTransaction';
 
 export interface JointAccountSummary {
+  /** Manually entered balance carried into the first recorded transaction */
+  openingBalance: number;
+  /** Current balance after applying the opening balance and all transactions */
   balance: number;
   totalDeposits: number;
   totalDisbursements: number;

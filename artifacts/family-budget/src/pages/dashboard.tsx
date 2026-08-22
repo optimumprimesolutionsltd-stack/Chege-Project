@@ -31,8 +31,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-   ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
+    ArrowUpRight, ArrowDownRight, Wallet, Activity as ActivityIcon,
    Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2, Sparkles, Link2, BriefcaseBusiness, UsersRound,
+    Receipt, BarChart3, Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { WorkspaceSwitcher, workspaceLabel } from "@/components/workspace-switcher";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
+
+const OVERVIEW_SHORTCUTS = [
+  { href: "/budget", label: "Budget", description: "Plan spending", icon: Wallet },
+  { href: "/contributions", label: "Contributions", description: "See money in", icon: TrendingUp },
+  { href: "/expenses", label: "Expenses", description: "Review spending", icon: Receipt },
+  { href: "/savings-goals", label: "Goals", description: "Track targets", icon: Target },
+  { href: "/bank", label: "Bank", description: "Manage funds", icon: Landmark },
+  { href: "/reports", label: "Reports", description: "Understand trends", icon: BarChart3 },
+];
 
 function OpenInvitationLinkButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -873,6 +883,42 @@ export default function Dashboard() {
           </p>
         </section>
       </div>
+
+      {isSharedWorkspace && (
+        <section aria-labelledby="group-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
+          <div className="mb-4">
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Group overview</p>
+            <h2 id="group-overview-shortcuts-heading" className="mt-1 font-display text-xl font-bold text-foreground">
+              Go straight to a budget area
+            </h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              Open the shared budget, contributions, expenses, goals, bank, or reports without hunting through the menu.
+            </p>
+          </div>
+          <nav aria-label="Group overview shortcuts" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {OVERVIEW_SHORTCUTS.map((shortcut) => {
+              const ShortcutIcon = shortcut.icon;
+              return (
+                <Link
+                  key={shortcut.href}
+                  href={shortcut.href}
+                  data-testid={`overview-shortcut-${shortcut.label.toLowerCase()}`}
+                  className="group flex min-h-20 items-center gap-3 rounded-xl border border-border/80 bg-background px-3 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <ShortcutIcon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold text-foreground">{shortcut.label}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{shortcut.description}</span>
+                  </span>
+                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </Link>
+              );
+            })}
+          </nav>
+        </section>
+      )}
 
        {canManageSetup && nextSetupStep && isSetupDeferred && (
          <Card className="border border-border/70 bg-muted/35 shadow-sm">

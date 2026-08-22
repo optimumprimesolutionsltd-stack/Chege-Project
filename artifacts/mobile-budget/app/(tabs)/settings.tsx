@@ -50,6 +50,10 @@ type InviteContact = { id: number; name: string; email: string; role: 'admin' | 
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6'];
 
+function workspaceLabel(workspace: { isPrivate: boolean; name: string }): string {
+  return workspace.isPrivate ? 'Personal budget' : `Shared budget · ${workspace.name}`;
+}
+
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -159,8 +163,7 @@ export default function SettingsScreen() {
   };
 
   const refreshMembers = () => queryClient.invalidateQueries({ queryKey: ['members'] });
-  const handleSelectWorkspace = async (groupId: number) => {
-    if (groupId === group?.id) return;
+  const performWorkspaceSwitch = async (groupId: number) => {
     try {
       await switchMobileWorkspace({
         groupId,
@@ -171,6 +174,23 @@ export default function SettingsScreen() {
     } catch (error) {
       Alert.alert('Could not switch budget', error instanceof Error ? error.message : 'Please try again.');
     }
+  };
+  const handleSelectWorkspace = (groupId: number) => {
+    if (groupId === group?.id || selectWorkspace.isPending) return;
+    const destination = workspaces.find((workspace) => workspace.id === groupId);
+    if (!destination) return;
+
+    Alert.alert(
+      'Switch budget?',
+      `You are about to open ${workspaceLabel(destination)}. Your balances, expenses, goals, bank activity, and reports will refresh for that budget.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch budget',
+          onPress: () => void performWorkspaceSwitch(destination.id),
+        },
+      ],
+    );
   };
   const handleCreateSharedGroup = async () => {
     const name = newGroupName.trim();

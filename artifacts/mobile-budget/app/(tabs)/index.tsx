@@ -88,6 +88,15 @@ const SHORTCUTS: Shortcut[] = [
   { icon: 'settings',    label: 'Settings', color: '#94a3b8', bg: '#1a1a28', route: '/(tabs)/settings'        },
 ];
 
+const OVERVIEW_SHORTCUTS: Shortcut[] = [
+  { icon: 'bar-chart-2', label: 'Budget',        color: '#a78bfa', bg: '#1a0a2a', route: '/(tabs)/budget'        },
+  { icon: 'trending-up', label: 'Contributions', color: '#4ade80', bg: '#102a1a', route: '/(tabs)/contributions' },
+  { icon: 'file-text',   label: 'Expenses',      color: '#fb923c', bg: '#2a1c0a', route: '/(tabs)/history'       },
+  { icon: 'target',      label: 'Goals',         color: '#fbbf24', bg: '#2a220a', route: '/(tabs)/goals'         },
+  { icon: 'credit-card', label: 'Bank',          color: '#38bdf8', bg: '#0a1a2a', route: '/(tabs)/bank'          },
+  { icon: 'pie-chart',   label: 'Reports',       color: '#60a5fa', bg: '#0a1a2a', route: '/(tabs)/reports'       },
+];
+
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -454,6 +463,34 @@ export default function DashboardScreen() {
           ))}
         </View>
 
+        {isSharedWorkspace && (
+          <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
+            <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>Go straight to a budget area</Text>
+            <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
+              Open the shared budget, contributions, expenses, goals, bank, or reports without hunting through the menu.
+            </Text>
+            <View style={styles.overviewNavGrid}>
+              {OVERVIEW_SHORTCUTS.map((shortcut) => (
+                <Pressable
+                  key={shortcut.label}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${shortcut.label}`}
+                  style={({ pressed }) => [
+                    styles.overviewNavButton,
+                    { backgroundColor: shortcut.bg, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
+                  ]}
+                  onPress={() => router.push(shortcut.route as any)}
+                >
+                  <Feather name={shortcut.icon} size={18} color={shortcut.color} />
+                  <Text style={[styles.overviewNavButtonText, { color: shortcut.color }]}>{shortcut.label}</Text>
+                  <Feather name="chevron-right" size={14} color={shortcut.color} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
         {canManageSetup && nextSetupStep && isSetupDeferred && (
           <Pressable
             testID="setup-resume-cta"
@@ -809,6 +846,13 @@ const styles = StyleSheet.create({
   shortcutRow: { flexDirection: 'row', paddingHorizontal: 12, paddingTop: 16, paddingBottom: 4, gap: 8 },
   shortcutBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 14, gap: 5 },
   shortcutLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+  overviewNavCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
+  overviewNavEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  overviewNavTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 4 },
+  overviewNavSubtitle: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 5 },
+  overviewNavGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  overviewNavButton: { width: '48%', minHeight: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  overviewNavButtonText: { flex: 1, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
 
   setupCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 20, padding: 18 },
   setupHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },

@@ -30,6 +30,9 @@ export const groupsTable = pgTable(
     // A personal workspace belongs to exactly one person. Shared workspaces
     // leave this unset, so their owner can still create more than one group.
     privateOwnerUserId: text("private_owner_user_id").unique(),
+    // Manually entered bank balance carried into the first recorded transaction.
+    // This belongs to the workspace because the bank account is shared.
+    bankOpeningBalance: integer("bank_opening_balance").notNull().default(0),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),

@@ -613,10 +613,26 @@ export interface JointAccountTransaction {
 }
 
 export interface JointAccountSummary {
+  /** Manually entered balance carried into the first recorded transaction */
+  openingBalance: number;
+  /** Current balance after applying the opening balance and all transactions */
   balance: number;
   totalDeposits: number;
   totalDisbursements: number;
   transactions: JointAccountTransaction[];
+}
+
+export interface OpeningBalance {
+  /** @minimum 0 */
+  openingBalance: number;
+}
+
+export interface OpeningBalanceInput {
+  /**
+     * Manual starting balance in whole KES
+     * @minimum 0
+     */
+  openingBalance: number;
 }
 
 /**

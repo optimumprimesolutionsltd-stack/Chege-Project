@@ -36,6 +36,7 @@ import {
   getGetJointAccountQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetSavingsGoalsQueryKey,
+  useUpdateJointAccountOpeningBalance,
   customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -111,6 +112,9 @@ export default function BankScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [openingBalanceModalVisible, setOpeningBalanceModalVisible] = useState(false);
+  const [openingBalanceDraft, setOpeningBalanceDraft] = useState('');
+  const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
 
   // ── Deposit payer state ────────────────────────────────────────────────────
   // depositorIds: [] = Joint bank (null madeById)
@@ -144,6 +148,7 @@ export default function BankScreen() {
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
   const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
   const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
+  const { mutateAsync: updateOpeningBalance } = useUpdateJointAccountOpeningBalance();
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const canManageShared = members.some(
@@ -225,6 +230,35 @@ export default function BankScreen() {
     queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+  };
+
+  const openOpeningBalanceEditor = () => {
+    setOpeningBalanceDraft(String(data?.openingBalance ?? 0));
+    setOpeningBalanceModalVisible(true);
+  };
+
+  const closeOpeningBalanceEditor = () => {
+    if (!savingOpeningBalance) setOpeningBalanceModalVisible(false);
+  };
+
+  const handleOpeningBalanceSubmit = async () => {
+    const value = Number(openingBalanceDraft);
+    if (!Number.isInteger(value) || value < 0) {
+      Alert.alert('Enter a whole KES amount', 'The opening balance must be zero or more whole shillings.');
+      return;
+    }
+
+    setSavingOpeningBalance(true);
+    try {
+      await updateOpeningBalance({ data: { openingBalance: value } });
+      setOpeningBalanceModalVisible(false);
+      await invalidateBalance();
+      Alert.alert('Opening balance saved', 'The current balance now includes this starting amount.');
+    } catch (err: unknown) {
+      Alert.alert('Could not save opening balance', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setSavingOpeningBalance(false);
+    }
   };
 
   const handleDelete = (tx: Tx) => {
@@ -576,6 +610,23 @@ export default function BankScreen() {
                 <Text style={styles.statLabel}>Withdrawn</Text>
                 <Text style={styles.statValue}>KES {formatKES(data?.totalDisbursements)}</Text>
               </View>
+            </View>
+            <View style={styles.openingBalanceRow}>
+              <View>
+                <Text style={styles.openingBalanceLabel}>Opening balance</Text>
+                <Text style={styles.openingBalanceValue}>KES {formatKES(data?.openingBalance)}</Text>
+              </View>
+              {canManageShared && (
+                <TouchableOpacity
+                  style={styles.editOpeningBalanceBtn}
+                  onPress={openOpeningBalanceEditor}
+                  activeOpacity={0.8}
+                  testID="bank-edit-opening-balance"
+                >
+                  <Feather name="edit-2" size={14} color="#d1fae5" />
+                  <Text style={styles.editOpeningBalanceText}>Edit starting balance</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Action buttons inside header */}
@@ -1444,6 +1495,71 @@ export default function BankScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Manual opening balance modal */}
+      <Modal
+        visible={openingBalanceModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={closeOpeningBalanceEditor}
+      >
+        <TouchableWithoutFeedback onPress={closeOpeningBalanceEditor}>
+          <View style={styles.modalOverlay} />
+        </TouchableWithoutFeedback>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalWrapper}
+          pointerEvents="box-none"
+        >
+          <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 24 }]}>
+            <View style={[styles.handle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Set starting balance</Text>
+            <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
+              Enter the money already in this Shared budget’s bank account before the transactions shown below.
+              This does not create a transaction.
+            </Text>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>Opening balance (KES)</Text>
+            <TextInput
+              value={openingBalanceDraft}
+              onChangeText={setOpeningBalanceDraft}
+              keyboardType="number-pad"
+              editable={!savingOpeningBalance}
+              style={[
+                styles.input,
+                { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted },
+              ]}
+              placeholder="e.g. 25000"
+              placeholderTextColor={colors.mutedForeground}
+              autoFocus
+              testID="bank-opening-balance-input"
+            />
+            <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
+              Current balance = opening balance + deposits − withdrawals.
+            </Text>
+            <View style={styles.openingBalanceActions}>
+              <TouchableOpacity
+                style={[styles.cancelOpeningBalanceBtn, { borderColor: colors.border }]}
+                onPress={closeOpeningBalanceEditor}
+                disabled={savingOpeningBalance}
+              >
+                <Text style={[styles.cancelOpeningBalanceText, { color: colors.foreground }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveOpeningBalanceBtn, savingOpeningBalance && { opacity: 0.6 }]}
+                onPress={handleOpeningBalanceSubmit}
+                disabled={savingOpeningBalance}
+                testID="bank-save-opening-balance"
+              >
+                {savingOpeningBalance ? (
+                  <ActivityIndicator color="#0a1a10" />
+                ) : (
+                  <Text style={styles.saveOpeningBalanceText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1496,6 +1612,46 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
+  openingBalanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  openingBalanceLabel: {
+    fontSize: 11,
+    color: '#7aaa8a',
+    fontFamily: 'Inter_400Regular',
+    letterSpacing: 0.5,
+  },
+  openingBalanceValue: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#f7faf6',
+    fontFamily: 'Inter_700Bold',
+    marginTop: 2,
+  },
+  editOpeningBalanceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(209,250,229,0.35)',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  editOpeningBalanceText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#d1fae5',
+    fontFamily: 'Inter_600SemiBold',
+  },
   actionRow: {
     flexDirection: 'row',
     gap: 12,
@@ -1625,6 +1781,44 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     fontFamily: 'Inter_700Bold',
     marginBottom: 20,
+  },
+  openingBalanceHelp: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 16,
+  },
+  openingBalanceActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  cancelOpeningBalanceBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  cancelOpeningBalanceText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  saveOpeningBalanceBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    paddingVertical: 14,
+    backgroundColor: '#4ade80',
+  },
+  saveOpeningBalanceText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    fontFamily: 'Inter_700Bold',
+    color: '#0a1a10',
   },
   label: {
     fontSize: 12,
