@@ -278,7 +278,7 @@ describe("requireMember", () => {
       { groupId: 7, role: "member" },
     ]);
     const req = authenticatedRequest("member");
-    req.get = (header: string) => header === "x-bajeti-workspace" ? "7" : undefined;
+    req.get = (header: string) => header === "x-jamvi-workspace" ? "7" : undefined;
 
     await requireMember(req, response(), vi.fn());
 
@@ -326,7 +326,7 @@ describe("requireMember", () => {
     ]);
     const req = authenticatedRequest("member");
     req.cookies = { [ACTIVE_WORKSPACE_COOKIE]: "2" };
-    req.get = (header: string) => header === "x-bajeti-workspace" ? "7" : undefined;
+    req.get = (header: string) => header === "x-jamvi-workspace" ? "7" : undefined;
 
     await requireMember(req, response(), vi.fn());
 
@@ -338,7 +338,7 @@ describe("requireMember", () => {
     privateWorkspaceIds.set("member", 2);
     memberships.set("member", [{ groupId: 2, role: "owner" }]);
     const req = authenticatedRequest("member");
-    req.get = (header: string) => header === "x-bajeti-workspace" ? "999" : undefined;
+    req.get = (header: string) => header === "x-jamvi-workspace" ? "999" : undefined;
 
     await requireMember(req, response(), vi.fn());
 

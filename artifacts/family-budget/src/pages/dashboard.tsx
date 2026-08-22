@@ -724,7 +724,7 @@ export default function Dashboard() {
   const nextSetupStep = pendingSetupSteps[0];
   const isSetupComplete = completeSetupSteps === setupSteps.length;
   const setupNudgeKey = group?.id && user?.id
-    ? `bajeti:onboarding-nudge:${group.id}:${user.id}`
+    ? `jamvi:onboarding-nudge:${group.id}:${user.id}`
     : null;
 
   useEffect(() => {

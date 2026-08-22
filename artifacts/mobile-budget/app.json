@@ -15,10 +15,11 @@
       "backgroundColor": "#0f2217"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "ke.co.optimumprimesolutions.jamvi"
     },
     "android": {
-      "package": "com.chege.familybudget",
+      "package": "ke.co.optimumprimesolutions.jamvi",
       "versionCode": 1
     },
     "web": {

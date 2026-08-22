@@ -281,7 +281,7 @@ export default function DashboardScreen() {
       if (!next) return;
 
       const today = new Date().toISOString().split('T')[0];
-      const key = `bajeti_nudge_${group.id}_${today}`;
+      const key = `jamvi_nudge_${group.id}_${today}`;
 
       try {
         const hasShown = await AsyncStorage.getItem(key);
