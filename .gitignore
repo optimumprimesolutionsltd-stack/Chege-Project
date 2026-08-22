@@ -44,6 +44,12 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
+# secrets - .env was not ignored before, so a locally created one would have
+# been committed by `git add -A` along with whatever it held
+.env
+.env.*
+!.env.example
+
 # Replit
 .cache/
 .local/
