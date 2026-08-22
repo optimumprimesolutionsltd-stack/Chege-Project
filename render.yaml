@@ -1,0 +1,94 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Creating the services from this file keeps the configuration in version
+# control instead of in dashboard settings nobody can review.
+#
+# Secrets are never listed here. Anything marked `sync: false` has no value in
+# the repository; Render prompts for it when the Blueprint is first applied and
+# stores it as an environment variable on the service.
+
+services:
+  # ── API ────────────────────────────────────────────────────────────────────
+  # A persistent web service, not a serverless function: the monthly digest is
+  # scheduled with node-cron, which needs a process that stays alive. The free
+  # instance type spins down after roughly 15 minutes idle, so the digest would
+  # silently never fire and the first user each morning would wait out a cold
+  # start. Hence `starter`.
+  - type: web
+    name: jamvi-api
+    runtime: node
+    region: frankfurt # closest Render region to Kenya; note that private
+      # networking only works within a region, so anything
+      # meant to talk privately to this service belongs here too
+    plan: starter
+    autoDeploy: true
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+
+      # Replit Auth cannot run off Replit, so production is explicit about
+      # using Google rather than relying on REPL_ID being absent.
+      - key: AUTH_PROVIDER
+        value: google
+      - key: ISSUER_URL
+        value: https://accounts.google.com
+
+      # Sender identities. The domain is already verified in Resend.
+      - key: INVITATION_FROM_EMAIL
+        value: Jamvi <info@optimumprimesolutions.co.ke>
+      - key: DIGEST_FROM_EMAIL
+        value: Jamvi <info@optimumprimesolutions.co.ke>
+
+      # Set in the dashboard, never here.
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+
+      # The origin people load in a browser — the static site's URL, not this
+      # service's. Invitation links are built from APP_URL, and APP_ORIGIN pins
+      # the OAuth callback and its cookie, because the identity provider
+      # redirects the browser straight to the callback rather than back through
+      # the rewrite that fronts /api.
+      - key: APP_URL
+        sync: false
+      - key: APP_ORIGIN
+        sync: false
+
+  # ── Web app ────────────────────────────────────────────────────────────────
+  # Static hosting is free on Render and includes managed TLS and custom
+  # domains on the Hobby workspace.
+  - type: web
+    name: jamvi-web
+    runtime: static
+    autoDeploy: true
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @workspace/family-budget run build
+    staticPublishPath: artifacts/family-budget/dist/public
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+    routes:
+      # The browser must see the API on the same origin as the app, or the
+      # session cookie (sameSite: lax) is never sent. This rewrite is what makes
+      # that true — verify it forwards cookies before relying on it. If it does
+      # not, the fallback is to point the client at the API's own hostname and
+      # switch the session cookie to sameSite: none; secure, at which point the
+      # CORS allowlist in app.ts stops being belt-and-braces and starts being
+      # the only thing preventing credentialed cross-origin calls.
+      - type: rewrite
+        source: /api/*
+        destination: https://jamvi-api.onrender.com/api/*
+
+      # Client-side routing: every unmatched path serves the SPA shell.
+      - type: rewrite
+        source: /*
+        destination: /index.html
