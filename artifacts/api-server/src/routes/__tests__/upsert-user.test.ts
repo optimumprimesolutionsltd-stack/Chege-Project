@@ -27,11 +27,25 @@ vi.mock('@workspace/db', () => {
   const mockValues = vi.fn().mockReturnValue({ onConflictDoUpdate: mockOnConflictDoUpdate });
   const mockInsert = vi.fn().mockReturnValue({ values: mockValues });
 
+  // upsertUser looks a person up by email before inserting, so that someone
+  // keeps their existing row - and therefore their history - when the identity
+  // provider changes. findFirst resolves undefined by default, which is the
+  // "no existing user" path these tests exercise.
+  const mockFindFirst = vi.fn().mockResolvedValue(undefined);
+  const mockUpdateReturning = vi.fn().mockResolvedValue([]);
+  const mockUpdateWhere = vi.fn().mockReturnValue({ returning: mockUpdateReturning });
+  const mockUpdateSet = vi.fn().mockReturnValue({ where: mockUpdateWhere });
+  const mockUpdate = vi.fn().mockReturnValue({ set: mockUpdateSet });
+
   return {
-    db: { insert: mockInsert },
+    db: {
+      insert: mockInsert,
+      update: mockUpdate,
+      query: { usersTable: { findFirst: mockFindFirst } },
+    },
     usersTable: makeTable('users'),
     // expose internals so tests can inspect / reset them
-    __mocks: { mockInsert, mockValues, mockOnConflictDoUpdate, mockReturning, insertValuesCapture },
+    __mocks: { mockInsert, mockValues, mockOnConflictDoUpdate, mockReturning, insertValuesCapture, mockFindFirst, mockUpdate, mockUpdateSet },
   };
 });
 

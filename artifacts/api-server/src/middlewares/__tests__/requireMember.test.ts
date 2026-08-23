@@ -158,6 +158,14 @@ const db = {
 
 vi.mock("@workspace/db", () => ({
   db,
+  // requireMember stamps kind on the private workspace it creates. Without
+  // this the constant is undefined and every adoption test throws a 500.
+  GROUP_KIND: {
+    PERSONAL: "personal",
+    FAMILY: "family",
+    CHAMA: "chama",
+    CLUB: "club",
+  },
   groupsTable,
   membersTable,
   groupMembershipsTable,
