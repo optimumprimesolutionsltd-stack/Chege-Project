@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { sql, eq, desc, and } from "drizzle-orm";
 import { logger } from "./logger";
+import { sendEmail } from "./email";
 
 function fmt(kes: number): string {
   return `KES ${Math.round(kes).toLocaleString()}`;
@@ -378,51 +379,41 @@ export async function sendMonthlyDigest(
   });
 
   // ── Send via Resend ───────────────────────────────────────────────────────
-  // Calls Resend directly with our own key. This previously went through the
-  // Replit connector proxy, which held the credential on our behalf and is
-  // not available off Replit.
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    await db.delete(digestSendsTable).where(sql`${digestSendsTable.id} = ${claimId}`);
-    throw new Error("RESEND_API_KEY must be set to send the monthly digest.");
-  }
-
-  const from = process.env.DIGEST_FROM_EMAIL ?? "Jamvi <onboarding@resend.dev>";
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      from,
-      to,
-      subject: `Jamvi — ${label} Summary`,
-      html,
-    }),
-  });
-
-  const result = (await response.json()) as { id?: string; message?: string; name?: string };
-  if (!response.ok) {
-    // Release the claim so the next cron tick can retry.
-    await db.delete(digestSendsTable).where(and(
+  // Shares lib/email with invitations rather than calling Resend inline, so
+  // there is one place where an API key is read and one shape of failure.
+  //
+  // A claimed row must not survive a failed send: the claim is what stops the
+  // digest going out twice, so leaving it behind would mean this group is
+  // silently skipped forever.
+  const releaseClaim = () =>
+    db.delete(digestSendsTable).where(and(
       eq(digestSendsTable.id, claimId),
       eq(digestSendsTable.groupId, groupId),
     ));
-    throw new Error(`Resend API error (${response.status}): ${JSON.stringify(result)}`);
+
+  let sent;
+  try {
+    sent = await sendEmail({
+      from: process.env.DIGEST_FROM_EMAIL ?? "Jamvi <onboarding@resend.dev>",
+      to,
+      subject: `Jamvi — ${label} Summary`,
+      html,
+    });
+  } catch (error) {
+    await releaseClaim();
+    throw error;
   }
 
   // Persist the Resend email ID and recipients for the audit log.
   await db
     .update(digestSendsTable)
-    .set({ emailId: result.id, recipients: to })
+    .set({ emailId: sent.id, recipients: to })
     .where(and(
       eq(digestSendsTable.id, claimId),
       eq(digestSendsTable.groupId, groupId),
     ));
 
-  logger.info({ emailId: result.id, to, month, year, groupId }, "Monthly digest sent");
+  logger.info({ emailId: sent.id, to, month, year, groupId }, "Monthly digest sent");
   return { id: result.id ?? "unknown", to };
 }
 
