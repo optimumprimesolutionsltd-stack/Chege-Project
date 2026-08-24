@@ -1,7 +1,7 @@
 kind = "web"
 previewPath = "/"
 title = "Family Budget"
-description = "A shared kids' budget tracker for Chege and Lydiah. Both parents log in to view the monthly joint budget, add and categorize expenses, track income contributions, and see real-time balance against the KES 317,094/month budget covering rent, food, school fees, and other kids' expenses."
+description = "Jamvi web app — personal and group money management. Members sign in to track budgets, expenses, contributions, savings goals and a shared joint account, with each workspace keeping its own financial data."
 version = "1.0.0"
 id = "artifacts/family-budget"
 router = "path"

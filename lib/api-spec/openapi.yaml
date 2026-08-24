@@ -3,7 +3,7 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: Family Budget API for Chege & Lydiah
+  description: Jamvi API — personal and group money management
 servers:
   - url: /api
     description: Base API path
