@@ -44,7 +44,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 cd artifacts/mobile-budget
 # Export — MUST set EXPO_PUBLIC_* env vars to production values so the OTA bundle
 # hits the production API, not a blank/dev domain.
-EXPO_PUBLIC_DOMAIN=delete-project.replit.app \
+EXPO_PUBLIC_DOMAIN=jamvi-api.onrender.com \
 EXPO_PUBLIC_REPL_ID=fe31a091-a4ed-426d-b193-7f5e5c036bb9 \
 node_modules/.bin/expo export --platform android --output-dir /tmp/ota-dist --no-bytecode --dump-assetmap --clear
 

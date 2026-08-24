@@ -55,9 +55,15 @@ function useUpdatePrompt() {
 }
 
 // Configure API client at module level — must be before any component renders.
-// Fall back to the production domain so API calls never silently fail if
+// Fall back to the production API so calls never silently fail if
 // EXPO_PUBLIC_DOMAIN is absent from an OTA bundle (it is baked in at export time).
-const PRODUCTION_API_BASE = 'https://delete-project.replit.app';
+//
+// This value is compiled into the binary: an installed app keeps calling
+// whatever host was baked in at build time, whatever the server does later. It
+// pointed at the Replit deployment, which is being retired — an APK built from
+// that would have broken the day it was deleted, with no fix but a store
+// update. Check it before every store release.
+const PRODUCTION_API_BASE = 'https://jamvi-api.onrender.com';
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 setBaseUrl(domain ? `https://${domain}` : PRODUCTION_API_BASE);
 setAuthTokenGetter(() => SecureStore.getItemAsync(AUTH_TOKEN_KEY));

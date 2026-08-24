@@ -33,7 +33,12 @@ const AuthContext = createContext<AuthContextValue>({
   saveDisplayName: async () => {},
 });
 
-const PRODUCTION_API = 'https://delete-project.replit.app';
+// Compiled into the binary: an installed app calls whatever host was baked in
+// at build time, regardless of what the server does afterwards. This pointed at
+// the Replit deployment, which is being retired - an APK carrying it would have
+// stopped signing anyone in the day that deployment was deleted, recoverable
+// only by a store update. Verify before every release.
+const PRODUCTION_API = 'https://jamvi-api.onrender.com';
 
 function getApiBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_DOMAIN) {
