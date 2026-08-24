@@ -414,7 +414,7 @@ export async function sendMonthlyDigest(
     ));
 
   logger.info({ emailId: sent.id, to, month, year, groupId }, "Monthly digest sent");
-  return { id: result.id ?? "unknown", to };
+  return { id: sent.id ?? "unknown", to };
 }
 
 /**
