@@ -28,8 +28,10 @@ import {
   getGetBudgetCategoriesQueryKey,
   useGetDashboardCategoryBreakdown,
   useGetDashboardCategoryLedger,
+  useGetGroup,
   customFetch,
 } from '@workspace/api-client-react';
+import { useAuth } from '@/lib/auth';
 
 type BudgetCategory = {
   id: number;
@@ -41,8 +43,8 @@ type BudgetCategory = {
   activeMonth?: number | null;
   activeYear?: number | null;
 };
-type IncomeSource = { id: number; userId: string; name: string; isMain: boolean };
-type Member = { userId: string; userName?: string | null };
+type IncomeSource = { id: number; userId: string; name: string; isMain: boolean; expectedMonthlyAmount: number };
+type Member = { userId: string; userName?: string | null; role?: 'owner' | 'admin' | 'member' };
 type LedgerTarget = { category: string; isBudgeted: boolean };
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -82,6 +84,7 @@ function formatKES(n?: number | null): string {
 
 export default function BudgetScreen() {
   const colors = useColors();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -112,6 +115,7 @@ export default function BudgetScreen() {
     queryFn: () => customFetch<Member[]>('/api/members'),
     staleTime: 30_000,
   });
+  const { data: group } = useGetGroup();
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -133,6 +137,12 @@ export default function BudgetScreen() {
   const [formActiveMonth, setFormActiveMonth] = useState(month);
   const [formActiveYear, setFormActiveYear] = useState(year);
   const [saving, setSaving] = useState(false);
+  const [newIncomeSource, setNewIncomeSource] = useState('');
+  const [newIncomeExpected, setNewIncomeExpected] = useState('');
+  const [addingIncomeSource, setAddingIncomeSource] = useState(false);
+  const [editingIncomeSourceId, setEditingIncomeSourceId] = useState<number | null>(null);
+  const [editingIncomeSourceName, setEditingIncomeSourceName] = useState('');
+  const [savingIncomeSourceId, setSavingIncomeSourceId] = useState<number | null>(null);
   const {
     data: ledger,
     isLoading: ledgerLoading,
@@ -197,6 +207,118 @@ export default function BudgetScreen() {
       qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
     ]);
     await qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+  };
+
+  const canManageSharedIncome = group?.isPrivate === false && members.some(
+    member => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
+  );
+  const refreshIncomeSources = async () => {
+    await Promise.all([
+      refetchIncomeSources(),
+      qc.invalidateQueries({ queryKey: ['income-sources'] }),
+    ]);
+  };
+  const handleAddIncomeSource = async () => {
+    const name = newIncomeSource.trim();
+    if (!name) {
+      Alert.alert('Source name required', 'Enter a name before adding the income source.');
+      return;
+    }
+    if (!user?.id) {
+      Alert.alert('Sign in required', 'Sign in again before adding an income source.');
+      return;
+    }
+
+    setAddingIncomeSource(true);
+    try {
+      await customFetch('/api/income-sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          name,
+          isMain: false,
+          expectedMonthlyAmount: Math.max(0, Math.round(Number(newIncomeExpected) || 0)),
+        }),
+      });
+      setNewIncomeSource('');
+      setNewIncomeExpected('');
+      await refreshIncomeSources();
+      Alert.alert('Income source added', `${name} is now available for expenses and deposits.`);
+    } catch (error) {
+      Alert.alert('Could not add income source', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setAddingIncomeSource(false);
+    }
+  };
+  const handleSaveExpectedIncome = async (source: IncomeSource, rawAmount: string) => {
+    const expectedMonthlyAmount = Math.max(0, Math.round(Number(rawAmount) || 0));
+    if (expectedMonthlyAmount === source.expectedMonthlyAmount) return;
+    try {
+      await customFetch(`/api/income-sources/${source.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: source.name, isMain: source.isMain, expectedMonthlyAmount }),
+      });
+      await refreshIncomeSources();
+    } catch {
+      Alert.alert('Could not save expected income', 'Enter a whole amount in KES.');
+    }
+  };
+  const handleDeleteIncomeSource = (source: IncomeSource) => {
+    Alert.alert(
+      'Remove income source',
+      `Remove "${source.name}"? Existing expenses will not be changed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await customFetch(`/api/income-sources/${source.id}`, { method: 'DELETE' });
+              await refreshIncomeSources();
+            } catch {
+              Alert.alert('Could not remove income source', 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+  const handleStartEditIncomeSource = (source: IncomeSource) => {
+    setEditingIncomeSourceId(source.id);
+    setEditingIncomeSourceName(source.name);
+  };
+  const handleCancelEditIncomeSource = () => {
+    setEditingIncomeSourceId(null);
+    setEditingIncomeSourceName('');
+  };
+  const handleSaveIncomeSource = async (source: IncomeSource) => {
+    const name = editingIncomeSourceName.trim();
+    if (!name) {
+      Alert.alert('Source name required', 'Enter a name before saving the income source.');
+      return;
+    }
+    setSavingIncomeSourceId(source.id);
+    try {
+      await customFetch(`/api/income-sources/${source.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          isMain: source.isMain,
+          expectedMonthlyAmount: source.expectedMonthlyAmount,
+        }),
+      });
+      handleCancelEditIncomeSource();
+      await refreshIncomeSources();
+      Alert.alert('Income source updated');
+    } catch (error) {
+      Alert.alert('Could not update income source', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSavingIncomeSourceId(null);
+    }
   };
 
   const handleSave = async () => {
@@ -575,14 +697,45 @@ export default function BudgetScreen() {
           <View style={styles.incomeHeader}>
             <View>
               <Text style={[styles.incomeTitle, { color: colors.foreground }]}>Income streams</Text>
-              <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Named sources available to the group</Text>
+              <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>Add and manage the sources that fund your budget</Text>
             </View>
             <Feather name="credit-card" size={19} color={colors.secondary} />
+          </View>
+          <View style={[styles.incomeAddRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <TextInput
+              style={[styles.incomeAddInput, { color: colors.foreground }]}
+              placeholder="Income source"
+              placeholderTextColor={colors.mutedForeground}
+              value={newIncomeSource}
+              onChangeText={setNewIncomeSource}
+              editable={!addingIncomeSource}
+              returnKeyType="done"
+              onSubmitEditing={() => void handleAddIncomeSource()}
+            />
+            <TextInput
+              style={[styles.incomeExpectedInput, { color: colors.foreground, borderColor: colors.border }]}
+              placeholder="Expected KES"
+              placeholderTextColor={colors.mutedForeground}
+              value={newIncomeExpected}
+              onChangeText={setNewIncomeExpected}
+              editable={!addingIncomeSource}
+              keyboardType="numeric"
+              returnKeyType="done"
+            />
+            <Pressable
+              onPress={() => void handleAddIncomeSource()}
+              disabled={addingIncomeSource || !newIncomeSource.trim()}
+              style={[styles.incomeAddButton, { backgroundColor: colors.primary, opacity: addingIncomeSource || !newIncomeSource.trim() ? 0.45 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Add income source"
+            >
+              {addingIncomeSource ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="plus" size={17} color="#fff" />}
+            </Pressable>
           </View>
           {incomeSources.length === 0 ? (
             <View style={[styles.incomeEmpty, { borderColor: colors.border }]}>
               <Text style={[styles.incomeEmptyTitle, { color: colors.foreground }]}>No income streams set up yet</Text>
-              <Text style={[styles.incomeEmptyText, { color: colors.mutedForeground }]}>Add income sources from Settings.</Text>
+              <Text style={[styles.incomeEmptyText, { color: colors.mutedForeground }]}>Add your first source above so it is ready for expenses and deposits.</Text>
             </View>
           ) : (
             Array.from(groupedIncomeSources.entries()).map(([userId, sources]) => (
@@ -590,9 +743,88 @@ export default function BudgetScreen() {
                 <Text style={[styles.incomeMember, { color: colors.mutedForeground }]}>{memberNames.get(userId) ?? 'Group member'}</Text>
                 <View style={styles.incomeChips}>
                   {sources.map(source => (
-                    <View key={source.id} style={[styles.incomeChip, { backgroundColor: colors.primary + '18' }]}>
-                      <Text style={[styles.incomeChipText, { color: colors.primary }]}>{source.name}</Text>
-                      {source.isMain ? <Text style={[styles.incomeMain, { color: colors.primary }]}>MAIN</Text> : null}
+                    <View key={source.id} style={[styles.incomeManagedRow, { borderColor: colors.border }]}>
+                      <View style={styles.incomeManagedName}>
+                        {editingIncomeSourceId === source.id ? (
+                          <TextInput
+                            autoFocus
+                            value={editingIncomeSourceName}
+                            onChangeText={setEditingIncomeSourceName}
+                            editable={savingIncomeSourceId !== source.id}
+                            style={[styles.incomeEditInput, { borderColor: colors.border, color: colors.foreground }]}
+                            accessibilityLabel={`Edit ${source.name}`}
+                          />
+                        ) : (
+                          <View style={styles.incomeNameLine}>
+                            <Text style={[styles.incomeChipText, { color: colors.foreground }]} numberOfLines={1}>{source.name}</Text>
+                            {source.isMain ? <Text style={[styles.incomeMain, { color: colors.primary }]}>MAIN</Text> : null}
+                          </View>
+                        )}
+                        {canManageSharedIncome && editingIncomeSourceId !== source.id ? (
+                          <Text style={[styles.incomeOwner, { color: colors.mutedForeground }]}>
+                            For {memberNames.get(source.userId) ?? 'Group member'}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.incomeManagedActions}>
+                        <TextInput
+                          defaultValue={String(source.expectedMonthlyAmount ?? 0)}
+                          keyboardType="numeric"
+                          editable={canManageSharedIncome || source.userId === user?.id}
+                          onEndEditing={(event) => {
+                            if (canManageSharedIncome || source.userId === user?.id) {
+                              void handleSaveExpectedIncome(source, event.nativeEvent.text);
+                            }
+                          }}
+                          placeholder="Expected KES"
+                          placeholderTextColor={colors.mutedForeground}
+                          style={[styles.incomeExpectedInput, { borderColor: colors.border, color: colors.foreground }]}
+                          accessibilityLabel={`Expected monthly income for ${source.name}`}
+                        />
+                        {(canManageSharedIncome || source.userId === user?.id) ? (
+                          editingIncomeSourceId === source.id ? (
+                            <View style={styles.incomeEditActions}>
+                              <Pressable
+                                onPress={() => void handleSaveIncomeSource(source)}
+                                disabled={savingIncomeSourceId === source.id || !editingIncomeSourceName.trim()}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Save ${source.name}`}
+                              >
+                                {savingIncomeSourceId === source.id
+                                  ? <ActivityIndicator size="small" color={colors.primary} />
+                                  : <Feather name="check" size={17} color={colors.primary} />}
+                              </Pressable>
+                              <Pressable
+                                onPress={handleCancelEditIncomeSource}
+                                disabled={savingIncomeSourceId === source.id}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Cancel editing ${source.name}`}
+                              >
+                                <Feather name="x" size={17} color={colors.mutedForeground} />
+                              </Pressable>
+                            </View>
+                          ) : (
+                            <View style={styles.incomeEditActions}>
+                              <Pressable
+                                onPress={() => handleStartEditIncomeSource(source)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Edit ${source.name}`}
+                                hitSlop={8}
+                              >
+                                <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+                              </Pressable>
+                              <Pressable
+                                onPress={() => handleDeleteIncomeSource(source)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Remove ${source.name}`}
+                                hitSlop={8}
+                              >
+                                <Feather name="trash-2" size={16} color={colors.destructive} />
+                              </Pressable>
+                            </View>
+                          )
+                        ) : null}
+                      </View>
                     </View>
                   ))}
                 </View>
@@ -841,12 +1073,22 @@ const styles = StyleSheet.create({
    incomeEmpty: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, padding: 16, alignItems: 'center' },
    incomeEmptyTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
    incomeEmptyText: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 },
+   incomeAddRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, padding: 8, marginBottom: 10 },
+   incomeAddInput: { flex: 1, minWidth: 0, paddingHorizontal: 8, paddingVertical: 7, fontSize: 13, fontFamily: 'Inter_400Regular' },
+   incomeExpectedInput: { width: 92, borderWidth: 1, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 6, fontSize: 11, fontFamily: 'Inter_400Regular', textAlign: 'right' },
+   incomeAddButton: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
    incomeGroup: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
    incomeMember: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 8 },
-   incomeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-   incomeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
+   incomeChips: { gap: 8 },
+   incomeManagedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8 },
+   incomeManagedName: { flex: 1, minWidth: 0 },
+   incomeManagedActions: { alignItems: 'flex-end', gap: 7 },
+   incomeNameLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
    incomeChipText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
    incomeMain: { fontSize: 8, fontFamily: 'Inter_700Bold', letterSpacing: 0.5, opacity: 0.7 },
+   incomeOwner: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 2 },
+   incomeEditInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, fontFamily: 'Inter_400Regular' },
+   incomeEditActions: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 18 },
   list: { paddingHorizontal: 16, paddingTop: 20 },
   sectionLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginBottom: 12, marginLeft: 4 },
   sectionHint: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginHorizontal: 4, marginTop: -6, marginBottom: 12 },

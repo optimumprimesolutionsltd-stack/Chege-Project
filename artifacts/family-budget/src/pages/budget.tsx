@@ -443,6 +443,9 @@ export default function Budget() {
   const [managePriority, setManagePriority] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BudgetCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [newIncomeSourceName, setNewIncomeSourceName] = useState("");
+  const [newIncomeSourceAmount, setNewIncomeSourceAmount] = useState("");
+  const [addingIncomeSource, setAddingIncomeSource] = useState(false);
   const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
   const {
     data: ledger,
@@ -516,6 +519,53 @@ export default function Budget() {
 
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
+  const addIncomeSource = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = newIncomeSourceName.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Income source name required", description: "Enter a name before adding the source." });
+      return;
+    }
+    if (!user?.id) {
+      toast({ variant: "destructive", title: "Sign in required", description: "Sign in again before adding an income source." });
+      return;
+    }
+
+    setAddingIncomeSource(true);
+    try {
+      const response = await fetch("/api/income-sources", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          name,
+          isMain: false,
+          expectedMonthlyAmount: Math.max(0, Math.round(Number(newIncomeSourceAmount) || 0)),
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(typeof body.error === "string" ? body.error : "Could not add income source.");
+      }
+      setNewIncomeSourceName("");
+      setNewIncomeSourceAmount("");
+      await Promise.all([
+        refetchIncomeSources(),
+        qc.invalidateQueries({ queryKey: ["income-sources"] }),
+        qc.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() }),
+      ]);
+      toast({ title: "Income source added", description: `${name} is now available for expenses and deposits.` });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add income source",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setAddingIncomeSource(false);
+    }
+  };
   const saveIncomeSource = async (source: IncomeSource, rawName: string, rawAmount: string) => {
     const name = rawName.trim();
     if (!name) {
@@ -774,10 +824,32 @@ export default function Budget() {
              </div>
              <WalletCards className="w-5 h-5 text-secondary" />
            </div>
+            <form onSubmit={addIncomeSource} noValidate className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
+              <Input
+                value={newIncomeSourceName}
+                onChange={(event) => setNewIncomeSourceName(event.target.value)}
+                placeholder="e.g. Salary or business"
+                maxLength={80}
+                aria-label="New income source name"
+                disabled={addingIncomeSource}
+              />
+              <Input
+                type="number"
+                min="0"
+                value={newIncomeSourceAmount}
+                onChange={(event) => setNewIncomeSourceAmount(event.target.value)}
+                placeholder="Expected KES"
+                aria-label="Expected monthly income"
+                disabled={addingIncomeSource}
+              />
+              <Button type="submit" disabled={addingIncomeSource} className="w-full sm:w-auto">
+                {addingIncomeSource ? "Adding…" : "Add source"}
+              </Button>
+            </form>
            {incomeSources.length === 0 ? (
              <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center">
                <p className="text-sm font-medium">No income streams set up yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Add an income source from Settings, then set its expected amount here.</p>
+                 <p className="text-xs text-muted-foreground mt-1">Add an income source above so it is ready for your next expense or deposit.</p>
              </div>
            ) : (
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

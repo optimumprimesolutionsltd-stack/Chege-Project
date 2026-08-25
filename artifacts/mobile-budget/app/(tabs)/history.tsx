@@ -978,7 +978,7 @@ export default function HistoryScreen() {
                     <>
                       {editSources.length === 0 && (
                         <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>
-                          No income sources — add them in Settings, or choose Other.
+                          No income sources — add them from Budget, or choose Other.
                         </Text>
                       )}
                       <View style={styles.sourceChipsGrid}>

@@ -393,7 +393,7 @@ export default function AddExpenseSheet() {
             <ActivityIndicator size="small" color={colors.primary} style={{ alignSelf: 'flex-start' }} />
           ) : incomeSources.length === 0 ? (
             <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              No income sources set up — add them in Settings
+              No income sources set up — add them from Budget
             </Text>
           ) : (
             <View style={styles.sourceChipsGrid}>
@@ -698,7 +698,7 @@ export default function AddExpenseSheet() {
             {sourcesLoading ? (
               <ActivityIndicator size="small" color={colors.primary} style={{ alignSelf: 'flex-start' }} />
             ) : incomeSources.length === 0 ? (
-              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>No income sources set up — add them in Settings</Text>
+              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>No income sources set up — add them from Budget</Text>
             ) : (
               <View style={styles.sourceChipsGrid}>
                 {incomeSources.map((src, idx) => {

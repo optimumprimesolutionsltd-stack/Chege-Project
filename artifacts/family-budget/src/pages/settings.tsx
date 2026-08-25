@@ -6,8 +6,6 @@ import {
   useUpdateMemberRole,
   useGetGroup,
   useUpdateGroup,
-  getGetIncomeSourcesQueryKey,
-  type IncomeSource,
 } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { GroupInviteLinks } from "@/components/group-invite-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Check, LogOut, Pencil, Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
+import { LogOut, Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type GroupInvitation = {
@@ -54,13 +52,6 @@ export default function Settings() {
   const [groupName, setGroupName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [savingDisplayName, setSavingDisplayName] = useState(false);
-  const [newSourceName, setNewSourceName] = useState("");
-  const [addingSource, setAddingSource] = useState(false);
-  const [deletingSourceId, setDeletingSourceId] = useState<number | null>(null);
-  const [editingSourceId, setEditingSourceId] = useState<number | null>(null);
-  const [editingSourceName, setEditingSourceName] = useState("");
-  const [savingSourceId, setSavingSourceId] = useState<number | null>(null);
-  const [confirmingSource, setConfirmingSource] = useState<IncomeSource | null>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
   const canManageWorkspace = members?.some(
     (member) =>
@@ -90,17 +81,6 @@ export default function Settings() {
     queryKey: ["group-invitation-contacts"],
     queryFn: () => requestJson("/api/group-invitation-contacts"),
     enabled: canManageShared,
-  });
-  const { data: incomeSources = [], isLoading: incomeSourcesLoading } = useQuery<IncomeSource[]>({
-    queryKey: ["income-sources", canManageShared ? "all" : user?.id],
-    queryFn: () => canManageShared
-      ? requestJson<IncomeSource[]>("/api/income-sources")
-      : user?.id
-        ? requestJson<IncomeSource[]>(`/api/income-sources?userId=${encodeURIComponent(user.id)}`)
-        : Promise.resolve([]),
-    enabled: Boolean(user?.id),
-    staleTime: 0,
-    refetchOnMount: "always",
   });
 
   const handleSaveGroupName = async (event: React.FormEvent) => {
@@ -272,156 +252,10 @@ export default function Settings() {
     }
   };
 
-  const invalidateIncomeSources = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["income-sources"] }),
-      queryClient.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey() }),
-    ]);
-  };
-
-  const handleAddSource = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const name = newSourceName.trim();
-    if (!name) {
-      toast({
-        variant: "destructive",
-        title: "Source name required",
-        description: "Enter a name before adding the income source.",
-      });
-      return;
-    }
-    if (!user?.id) {
-      toast({
-        variant: "destructive",
-        title: "Sign in required",
-        description: "Sign in again before adding an income source.",
-      });
-      return;
-    }
-
-    setAddingSource(true);
-    try {
-      await requestJson<IncomeSource>("/api/income-sources", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, name, isMain: false }),
-      });
-      setNewSourceName("");
-      await invalidateIncomeSources();
-      toast({ title: "Income source added", description: `${name} is now available when recording an expense.` });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not add income source",
-        description: error instanceof Error ? error.message : undefined,
-      });
-    } finally {
-      setAddingSource(false);
-    }
-  };
-
-  const handleDeleteSource = async (source: IncomeSource) => {
-    if (!confirm(`Remove "${source.name}"? Existing expenses will not be changed.`)) return;
-
-    setDeletingSourceId(source.id);
-    try {
-      await requestJson(`/api/income-sources/${source.id}`, { method: "DELETE" });
-      await invalidateIncomeSources();
-      toast({ title: "Income source removed" });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not remove income source",
-        description: error instanceof Error ? error.message : undefined,
-      });
-    } finally {
-      setDeletingSourceId(null);
-    }
-  };
-
-  const handleStartEditSource = (source: IncomeSource) => {
-    setEditingSourceId(source.id);
-    setEditingSourceName(source.name);
-  };
-
-  const handleCancelEditSource = () => {
-    setEditingSourceId(null);
-    setEditingSourceName("");
-  };
-
-  const requestSaveSource = (source: IncomeSource) => {
-    const name = editingSourceName.trim();
-    if (!name) {
-      toast({
-        variant: "destructive",
-        title: "Source name required",
-        description: "Enter a name before saving the income source.",
-      });
-      return;
-    }
-    setConfirmingSource(source);
-  };
-
-  const handleSaveSource = async (source: IncomeSource) => {
-    const name = editingSourceName.trim();
-
-    setSavingSourceId(source.id);
-    try {
-      await requestJson<IncomeSource>(`/api/income-sources/${source.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          isMain: source.isMain,
-          expectedMonthlyAmount: source.expectedMonthlyAmount,
-        }),
-      });
-      handleCancelEditSource();
-      setConfirmingSource(null);
-      await invalidateIncomeSources();
-      toast({ title: "Income source updated" });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not update income source",
-        description: error instanceof Error ? error.message : undefined,
-      });
-    } finally {
-      setSavingSourceId(null);
-    }
-  };
-
   const pendingEmails = new Set(invitations.filter((invitation) => invitation.status === "pending").map((invitation) => invitation.email));
 
   return (
     <div className="w-full max-w-2xl space-y-8 pb-12">
-      <AlertDialog
-        open={!!confirmingSource}
-        onOpenChange={(open) => {
-          if (!open && savingSourceId === null) setConfirmingSource(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Apply income source changes?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will rename <strong>{confirmingSource?.name}</strong> to <strong>{editingSourceName.trim()}</strong>. Existing expenses and contributions will keep their recorded income source details.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={savingSourceId !== null}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                if (confirmingSource) void handleSaveSource(confirmingSource);
-              }}
-              disabled={savingSourceId !== null}
-            >
-              {savingSourceId !== null ? "Applying…" : "Confirm and apply"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-1">
@@ -467,133 +301,6 @@ export default function Settings() {
               This is the name other members see in shared budgets and activity.
             </p>
           </form>
-        </CardContent>
-      </Card>
-
-      {/* Income sources */}
-      <Card className="border-none shadow-md">
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle>{canManageShared ? "Shared budget income sources" : "Your income sources"}</CardTitle>
-          <CardDescription>
-            {canManageShared
-              ? "Admins and owners can edit or remove any member’s income source. Members can manage their own sources."
-              : "Add the places your personal expenses are funded from. They will appear in the Paid from choices when you record an expense."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
-          <form onSubmit={handleAddSource} noValidate className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              value={newSourceName}
-              onChange={(event) => setNewSourceName(event.target.value)}
-              placeholder="e.g. Salary or business"
-              maxLength={80}
-              className="h-11 bg-card"
-              aria-label="New income source name"
-            />
-            <Button type="submit" disabled={addingSource} className="h-11 w-full sm:w-auto sm:shrink-0">
-              {addingSource ? "Adding…" : "Add source"}
-            </Button>
-          </form>
-
-          {incomeSourcesLoading ? (
-            <div className="space-y-2 animate-pulse" aria-label="Loading income sources">
-              <div className="h-11 rounded-lg bg-muted" />
-              <div className="h-11 rounded-lg bg-muted" />
-            </div>
-          ) : incomeSources.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border px-4 py-5 text-center">
-              <p className="text-sm font-medium text-foreground">No income sources yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">Add one above so it is ready for your next expense.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {incomeSources.map((source) => {
-                const sourceOwner = members?.find((member) => member.userId === source.userId)?.userName
-                  ?? (source.userId === user?.id ? "You" : "Member");
-                const isEditing = editingSourceId === source.id;
-                const isSaving = savingSourceId === source.id;
-                return (
-                  <div key={source.id} className="flex flex-col gap-3 rounded-xl bg-muted/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    {isEditing ? (
-                      <Input
-                        autoFocus
-                        value={editingSourceName}
-                        onChange={(event) => setEditingSourceName(event.target.value)}
-                        maxLength={80}
-                        aria-label={`Edit ${source.name}`}
-                        disabled={isSaving}
-                        className="h-10 min-w-0 flex-1 bg-card"
-                      />
-                    ) : (
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-foreground">{source.name}</p>
-                        {canManageShared && (
-                          <p className="mt-0.5 text-xs text-muted-foreground">For {sourceOwner}</p>
-                        )}
-                      </div>
-                    )}
-                    <div className="flex w-full items-center gap-2 sm:w-auto">
-                      {isEditing ? (
-                        <>
-                            <Button
-                            type="button"
-                            variant="ghost"
-                              size="sm"
-                              className="min-h-10 flex-1 gap-1.5 px-3 sm:flex-none"
-                            aria-label={`Save ${source.name}`}
-                            onClick={() => void handleSaveSource(source)}
-                            disabled={isSaving || !editingSourceName.trim()}
-                          >
-                            <Check className="h-4 w-4 text-emerald-600" />
-                              <span>Save</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                              size="sm"
-                              className="min-h-10 flex-1 gap-1.5 px-3 sm:flex-none"
-                            aria-label={`Cancel editing ${source.name}`}
-                            onClick={handleCancelEditSource}
-                            disabled={isSaving}
-                          >
-                            <X className="h-4 w-4" />
-                              <span>Cancel</span>
-                          </Button>
-                        </>
-                      ) : (
-                          <Button
-                          type="button"
-                          variant="ghost"
-                            size="sm"
-                            className="min-h-10 flex-1 gap-1.5 px-3 sm:flex-none"
-                          aria-label={`Edit ${source.name}`}
-                            title={`Edit ${source.name}`}
-                          onClick={() => handleStartEditSource(source)}
-                          disabled={deletingSourceId === source.id}
-                        >
-                          <Pencil className="h-4 w-4" />
-                            <span>Edit</span>
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        title={`Remove ${source.name}`}
-                        className="min-h-10 flex-1 gap-1.5 px-3 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-none"
-                        aria-label={`Remove ${source.name}`}
-                        onClick={() => handleDeleteSource(source)}
-                        disabled={isEditing || deletingSourceId === source.id || isSaving}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span>Remove</span>
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </CardContent>
       </Card>
 
