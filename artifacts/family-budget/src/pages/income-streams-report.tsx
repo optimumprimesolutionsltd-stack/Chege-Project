@@ -321,7 +321,7 @@ export default function IncomeStreamsReport() {
         <>
           <Card className="overflow-hidden border-none shadow-md">
             <div className="h-1 bg-primary" />
-              <CardContent className="grid grid-cols-3 gap-3 pt-5">
+              <CardContent className="grid grid-cols-1 gap-3 pt-5 sm:grid-cols-3">
               <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Expected income</p>
                   <p className="mt-2 font-display text-3xl font-bold">{formatKes(report.totalExpected)}</p>
