@@ -16,6 +16,11 @@ export interface Group {
   accentColor: GroupAccentColor;
   /** @nullable */
   photoUrl?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  slogan?: string | null;
   isPrivate: boolean;
   role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */

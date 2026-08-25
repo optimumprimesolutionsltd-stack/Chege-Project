@@ -26,6 +26,11 @@ function normalizedSharedBudgetName(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
 }
 
+function normalizedSlogan(slogan: string | null | undefined): string | null {
+  const value = slogan?.trim().replace(/\s+/g, " ");
+  return value || null;
+}
+
 async function hasAccessibleSharedBudgetWithName(
   userId: string,
   name: string,
@@ -94,6 +99,7 @@ router.post("/groups", async (req, res): Promise<void> => {
     icon: group.icon,
     accentColor: group.accentColor,
     photoUrl: null,
+    slogan: null,
     isPrivate: false,
     role: "owner" as const,
   };
@@ -112,6 +118,7 @@ router.get("/group", async (req, res): Promise<void> => {
       icon: groupsTable.icon,
       accentColor: groupsTable.accentColor,
       photoPath: groupsTable.photoPath,
+      slogan: groupsTable.slogan,
       isPrivate: groupsTable.privateOwnerUserId,
     })
     .from(groupsTable)
@@ -154,6 +161,7 @@ router.patch("/group", async (req, res): Promise<void> => {
       ...(parsed.data.icon ? { icon: parsed.data.icon } : {}),
       ...(parsed.data.accentColor ? { accentColor: parsed.data.accentColor } : {}),
       ...(parsed.data.photoPath !== undefined ? { photoPath: parsed.data.photoPath } : {}),
+      ...(parsed.data.slogan !== undefined ? { slogan: normalizedSlogan(parsed.data.slogan) } : {}),
     })
     .where(eq(groupsTable.id, groupId))
     .returning({
@@ -162,6 +170,7 @@ router.patch("/group", async (req, res): Promise<void> => {
       icon: groupsTable.icon,
       accentColor: groupsTable.accentColor,
       photoPath: groupsTable.photoPath,
+      slogan: groupsTable.slogan,
       isPrivate: groupsTable.privateOwnerUserId,
     });
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }

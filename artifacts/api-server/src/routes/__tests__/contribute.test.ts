@@ -658,5 +658,30 @@ describe("POST /savings-goals/:id/contribute", () => {
       expect(res.body.isCompleted).toBe(false);
       expect(committed.isCompleted).toBe(false);
     });
+
+    it("rejects a contribution to an already funded goal without writing history", async () => {
+      const committed = makeRow(13, { current: 500, target: 500, completed: true });
+      const txUpdate = vi.fn();
+      const txInsert = vi.fn();
+
+      mockedDb.transaction = vi
+        .fn()
+        .mockImplementation(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) =>
+          cb({
+            select: makeSelectMock([{ ...committed }]),
+            update: txUpdate,
+            insert: txInsert,
+          }),
+        );
+
+      const res = await request(app)
+        .post("/savings-goals/13/contribute")
+        .send({ amount: 50 });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toMatchObject({ error: "This goal is already fully funded. Contributions are locked." });
+      expect(txUpdate).not.toHaveBeenCalled();
+      expect(txInsert).not.toHaveBeenCalled();
+    });
   });
 });

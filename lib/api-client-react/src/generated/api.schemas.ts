@@ -51,15 +51,27 @@ export interface RequestPhotoUploadInput {
   contentType: RequestPhotoUploadInputContentType;
   /**
      * @minimum 1
-     * @maximum 5242880
+     * @maximum 15728640
      */
   size: number;
 }
+
+export type PhotoUploadUrlResponseUploadMethod = typeof PhotoUploadUrlResponseUploadMethod[keyof typeof PhotoUploadUrlResponseUploadMethod];
+
+
+export const PhotoUploadUrlResponseUploadMethod = {
+  PUT: 'PUT',
+  POST: 'POST',
+} as const;
+
+export type PhotoUploadUrlResponseUploadFields = {[key: string]: string};
 
 export interface PhotoUploadUrlResponse {
   /** @pattern ^/objects/photos/[a-f0-9-]+$ */
   objectPath: string;
   uploadUrl: string;
+  uploadMethod: PhotoUploadUrlResponseUploadMethod;
+  uploadFields?: PhotoUploadUrlResponseUploadFields;
 }
 
 export interface AuthUser {
@@ -577,6 +589,11 @@ export interface Workspace {
   accentColor: WorkspaceAccentColor;
   /** @nullable */
   photoUrl?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  slogan?: string | null;
   isPrivate: boolean;
   role: WorkspaceRole;
 }
@@ -643,6 +660,11 @@ export interface Group {
   accentColor: GroupAccentColor;
   /** @nullable */
   photoUrl?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  slogan?: string | null;
   isPrivate: boolean;
   role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */
@@ -686,6 +708,11 @@ export interface UpdateGroupInput {
      * @pattern ^/objects/photos/[a-f0-9-]+$
      */
   photoPath?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  slogan?: string | null;
 }
 
 export type UpdateMemberRoleInputRole = typeof UpdateMemberRoleInputRole[keyof typeof UpdateMemberRoleInputRole];

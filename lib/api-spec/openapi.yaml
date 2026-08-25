@@ -1616,7 +1616,7 @@ components:
         size:
           type: number
           minimum: 1
-          maximum: 5242880
+          maximum: 15728640
       required: [contentType, size]
 
     PhotoUploadUrlResponse:
@@ -1627,7 +1627,14 @@ components:
           pattern: "^/objects/photos/[a-f0-9-]+$"
         uploadUrl:
           type: string
-      required: [objectPath, uploadUrl]
+        uploadMethod:
+          type: string
+          enum: [PUT, POST]
+        uploadFields:
+          type: object
+          additionalProperties:
+            type: string
+      required: [objectPath, uploadUrl, uploadMethod]
 
     AuthUser:
       type: object
@@ -2385,6 +2392,9 @@ components:
           enum: ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
         photoUrl:
           type: ["string", "null"]
+        slogan:
+          type: ["string", "null"]
+          maxLength: 120
         isPrivate:
           type: boolean
         role:
@@ -2435,6 +2445,9 @@ components:
           enum: ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
         photoUrl:
           type: ["string", "null"]
+        slogan:
+          type: ["string", "null"]
+          maxLength: 120
         isPrivate:
           type: boolean
         role:
@@ -2461,6 +2474,9 @@ components:
         photoPath:
           type: ["string", "null"]
           pattern: "^/objects/photos/[a-f0-9-]+$"
+        slogan:
+          type: ["string", "null"]
+          maxLength: 120
       required: [name]
 
     UpdateMemberRoleInput:

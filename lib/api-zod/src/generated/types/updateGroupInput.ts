@@ -21,4 +21,9 @@ export interface UpdateGroupInput {
      * @pattern ^/objects/photos/[a-f0-9-]+$
      */
   photoPath?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  slogan?: string | null;
 }

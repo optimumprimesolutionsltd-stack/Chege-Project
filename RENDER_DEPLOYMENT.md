@@ -1,0 +1,119 @@
+# Deploy Jamvi on Render
+
+Jamvi runs on Render as one Web Service: Express serves the API at `/api` and
+the built web app at the same public HTTPS origin. This keeps browser sessions,
+OAuth callbacks, invite links, and API calls on one domain.
+
+## 1. Connect the repository
+
+1. Push this Replit workspace to the connected GitHub repository.
+2. In Render, create a new **Blueprint** from that repository. Render reads
+   `render.yaml` and creates the Jamvi Web Service.
+3. Deploy the generated Render staging URL before attaching the final domain.
+
+The service builds from the repository root with pnpm 11.20.0. Its health check
+is `GET /api/healthz`.
+
+## 2. Configure Render environment variables
+
+Add the following values in the Render service's Environment page. Store
+secrets only in Render; do not commit them or paste them into chat.
+
+| Variable                 | Purpose                                                                  |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `DATABASE_URL`           | The external production PostgreSQL connection string.                    |
+| `APP_ORIGIN`             | The final public origin, for example `https://app.example.com`.          |
+| `APP_URL`                | The same final public origin. It is used in invitation and digest links. |
+| `AUTH_PROVIDER`          | Set to `google` for an externally hosted deployment.                     |
+| `GOOGLE_CLIENT_ID`       | Google OAuth client ID.                                                  |
+| `GOOGLE_CLIENT_SECRET`   | Google OAuth client secret.                                              |
+| `RESEND_API_KEY`         | Resend key used for invitations and monthly digests.                     |
+| `INVITATION_FROM_EMAIL`  | A verified Resend sender for invitations.                                |
+| `DIGEST_FROM_EMAIL`      | A verified Resend sender for monthly digests.                            |
+| `PHOTO_STORAGE_PROVIDER` | Set to `s3`.                                                             |
+| `S3_BUCKET`              | Private S3-compatible bucket name.                                       |
+| `S3_REGION`              | Bucket region. Use `auto` for Cloudflare R2.                             |
+| `S3_ENDPOINT`            | Optional provider endpoint; required by providers such as Cloudflare R2. |
+| `S3_FORCE_PATH_STYLE`    | Set to `true` when the S3-compatible provider requires path-style URLs.  |
+| `AWS_ACCESS_KEY_ID`      | Access key with access only to the private photo bucket.                 |
+| `AWS_SECRET_ACCESS_KEY`  | Matching secret key.                                                     |
+
+`NODE_ENV=production` and `SERVE_WEB=true` are defined by `render.yaml`.
+External production startup stops with a clear configuration error until the
+required sign-in, email, origin, and photo-storage settings are present.
+
+## 3. Set up Google OAuth
+
+Create a Google OAuth Web application and add this authorised redirect URI:
+
+```text
+https://your-final-domain.example/api/callback
+```
+
+Use the exact final HTTPS domain in both Google OAuth and `APP_ORIGIN`. Jamvi
+uses Google OAuth outside Replit; Replit Auth remains available for Replit
+development workflows.
+
+## 4. Move data safely
+
+1. Provision a PostgreSQL database in Render or another managed provider.
+2. Take a backup of the current Replit production database before any cutover.
+3. Restore that backup into the external database.
+4. Run the checked-in Drizzle migrations against the external database:
+
+   ```bash
+   corepack pnpm@11.20.0 --filter @workspace/db run migrate
+   ```
+
+5. Point staging at the external database and verify existing workspaces,
+   expenses, goals, joint-bank activity, and reports.
+6. During final cutover, pause writes, take one final backup, restore it, then
+   update Render's `DATABASE_URL`.
+
+Do not use `push-force` against an existing production database.
+
+## 5. Move private photos
+
+The Replit object-storage sidecar is not present on Render. Configure an
+S3-compatible private bucket before starting the external service. New photos
+are stored as private `photos/<id>` objects and receive short-lived signed URLs.
+
+Configure the bucket's CORS policy to allow `GET` and `POST` only from the
+Jamvi staging and final HTTPS origins. Permit the `Content-Type` request header
+for uploads; do not make the bucket or its object list public.
+
+Existing Replit-hosted photos need a verified one-time copy into the new private
+bucket using the same `photos/<id>` object names. Before final cutover, add the
+destination S3 credentials to the Replit workspace secrets temporarily and run:
+
+```bash
+# Read and verify every database-referenced Replit photo first.
+corepack pnpm@11.20.0 --filter @workspace/api-server run migrate:legacy-photos
+
+# Copy each photo, then verify target byte count and SHA-256 metadata.
+PHOTO_MIGRATION_WRITE=true \
+  corepack pnpm@11.20.0 --filter @workspace/api-server run migrate:legacy-photos
+```
+
+The command stops on any missing, oversized, unsupported, or mismatched photo.
+Do not attach the final domain until the write run completes successfully.
+
+## 6. Verify staging, then attach the domain
+
+Before changing DNS, confirm:
+
+- `/api/healthz` returns successfully.
+- Refreshing browser routes such as `/settings` and `/reports` still opens the
+  app rather than a 404 page.
+- Google sign-in completes and returns to the same final origin.
+- Workspace data, invite emails, and monthly-digest sender settings work.
+- Private photo upload and viewing work without public bucket access.
+
+Then add the ready custom domain in Render and use the DNS records Render
+provides. Keep `APP_ORIGIN` and `APP_URL` on the final domain.
+
+## Mobile follow-up
+
+Render hosts the web app and API, not the Expo application. After the Render
+domain is live, build a new Expo release with `EXPO_PUBLIC_DOMAIN` set to the
+final HTTPS origin and verify native sign-in separately.

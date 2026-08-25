@@ -5,9 +5,13 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { PhotoUploadUrlResponseUploadFields } from './photoUploadUrlResponseUploadFields';
+import type { PhotoUploadUrlResponseUploadMethod } from './photoUploadUrlResponseUploadMethod';
 
 export interface PhotoUploadUrlResponse {
   /** @pattern ^/objects/photos/[a-f0-9-]+$ */
   objectPath: string;
   uploadUrl: string;
+  uploadMethod: PhotoUploadUrlResponseUploadMethod;
+  uploadFields?: PhotoUploadUrlResponseUploadFields;
 }

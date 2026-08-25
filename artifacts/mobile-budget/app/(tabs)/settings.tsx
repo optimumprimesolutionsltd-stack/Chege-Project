@@ -65,6 +65,7 @@ const SHARED_BUDGET_ICONS = [
 const SHARED_BUDGET_ACCENTS = ['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669'] as const;
 type SharedBudgetIcon = (typeof SHARED_BUDGET_ICONS)[number]['value'];
 type SharedBudgetAccent = (typeof SHARED_BUDGET_ACCENTS)[number];
+const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 
 function getSharedBudgetIcon(icon?: string): keyof typeof Feather.glyphMap {
   return SHARED_BUDGET_ICONS.some((option) => option.value === icon)
@@ -90,6 +91,7 @@ export default function SettingsScreen() {
   const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [managingMembers, setManagingMembers] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [groupSlogan, setGroupSlogan] = useState('');
   const [groupIcon, setGroupIcon] = useState<SharedBudgetIcon>('users');
   const [groupAccentColor, setGroupAccentColor] = useState<SharedBudgetAccent>('#0F766E');
   const [savingGroupName, setSavingGroupName] = useState(false);
@@ -122,7 +124,8 @@ export default function SettingsScreen() {
     if (group?.name) setGroupName(group.name);
     if (group?.icon) setGroupIcon(group.icon as SharedBudgetIcon);
     if (group?.accentColor) setGroupAccentColor(group.accentColor as SharedBudgetAccent);
-  }, [group?.name, group?.icon, group?.accentColor]);
+    setGroupSlogan(group?.slogan ?? '');
+  }, [group?.name, group?.icon, group?.accentColor, group?.slogan]);
   useEffect(() => {
     setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
   }, [user?.firstName, user?.lastName]);
@@ -132,7 +135,8 @@ export default function SettingsScreen() {
       setEditingBudgetName(false);
       setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
       setGroupName(group?.name ?? '');
-    }, [group?.name, user?.firstName, user?.lastName]),
+      setGroupSlogan(group?.slogan ?? '');
+    }, [group?.name, group?.slogan, user?.firstName, user?.lastName]),
   );
   const canManageShared = !group?.isPrivate && members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
@@ -160,7 +164,12 @@ export default function SettingsScreen() {
     setSavingGroupName(true);
     try {
       await updateGroup.mutateAsync({
-        data: { name: groupName.trim(), icon: groupIcon, accentColor: groupAccentColor },
+        data: {
+          name: groupName.trim(),
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          slogan: groupSlogan.trim() || null,
+        },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
@@ -206,6 +215,7 @@ export default function SettingsScreen() {
   };
   const cancelBudgetNameEdit = () => {
     setGroupName(group?.name ?? '');
+    setGroupSlogan(group?.slogan ?? '');
     setEditingBudgetName(false);
   };
   const startDisplayNameEdit = () => {
@@ -215,6 +225,7 @@ export default function SettingsScreen() {
   };
   const startBudgetNameEdit = () => {
     setGroupName(group?.name ?? '');
+    setGroupSlogan(group?.slogan ?? '');
     setEditingBudgetName(true);
     requestAnimationFrame(() => budgetNameInputRef.current?.focus());
   };
@@ -253,7 +264,10 @@ export default function SettingsScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      // Photos are only used as compact workspace/profile avatars. Re-encoding
+      // the square crop avoids slow uploads from modern phone cameras.
+      quality: 0.65,
+      exif: false,
     });
     if (result.canceled || !result.assets[0]) return null;
 
@@ -265,19 +279,29 @@ export default function SettingsScreen() {
     }
     const localPhoto = await fetch(asset.uri);
     const photoBlob = await localPhoto.blob();
-    if (photoBlob.size < 1 || photoBlob.size > 5 * 1024 * 1024) {
-      Alert.alert('Choose a smaller photo', 'Use an image smaller than 5 MB.');
+    if (photoBlob.size < 1 || photoBlob.size > MAX_PHOTO_BYTES) {
+      Alert.alert('Choose a smaller photo', 'Use an image smaller than 15 MB.');
       return null;
     }
     const upload = await requestPhotoUpload({
       contentType: contentType as 'image/jpeg' | 'image/png' | 'image/webp',
       size: photoBlob.size,
     });
-    const uploaded = await fetch(upload.uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': contentType },
-      body: photoBlob,
-    });
+    const uploaded =
+      upload.uploadMethod === 'POST'
+        ? await (() => {
+            const body = new FormData();
+            for (const [key, value] of Object.entries(upload.uploadFields ?? {})) {
+              body.append(key, value);
+            }
+            body.append('file', photoBlob);
+            return fetch(upload.uploadUrl, { method: 'POST', body });
+          })()
+        : await fetch(upload.uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': contentType },
+            body: photoBlob,
+          });
     if (!uploaded.ok) throw new Error('Could not upload your photo. Please try again.');
     return upload.objectPath;
   };
@@ -303,7 +327,13 @@ export default function SettingsScreen() {
       const photoPath = await selectAndUploadPhoto();
       if (!photoPath) return;
       await updateGroup.mutateAsync({
-        data: { name: groupName.trim() || group.name, icon: groupIcon, accentColor: groupAccentColor, photoPath },
+        data: {
+          name: groupName.trim() || group.name,
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          slogan: groupSlogan.trim() || null,
+          photoPath,
+        },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
@@ -588,7 +618,7 @@ export default function SettingsScreen() {
             >
               {uploadingProfilePhoto ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="camera" size={14} color={colors.primary} />}
               <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
-                {uploadingProfilePhoto ? 'Uploading photo…' : 'Choose profile photo'}
+                {uploadingProfilePhoto ? 'Preparing photo…' : 'Choose profile photo'}
               </Text>
             </Pressable>
           </View>
@@ -613,6 +643,23 @@ export default function SettingsScreen() {
                    accessibilityLabel="Your display name"
                    style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground }]}
                  />
+                <Text style={[styles.rowLabel, { color: colors.foreground, marginTop: 12 }]}>
+                  Budget slogan <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>(optional)</Text>
+                </Text>
+                <TextInput
+                  testID="settings-budget-slogan-input"
+                  value={groupSlogan}
+                  onChangeText={setGroupSlogan}
+                  maxLength={120}
+                  placeholder="e.g. Saving together, one goal at a time"
+                  placeholderTextColor={colors.mutedForeground}
+                  accessibilityLabel="Budget slogan"
+                  editable={!savingGroupName && !updateGroup.isPending}
+                  style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground, marginTop: 6 }]}
+                />
+                <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
+                  This short line appears with your budget photo and name.
+                </Text>
                  <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
                    This is the name other members see in shared budgets and activity.
                  </Text>
@@ -758,6 +805,7 @@ export default function SettingsScreen() {
              <View style={styles.summaryRow}>
                <View style={{ flex: 1 }}>
                  <Text style={[styles.summaryValue, { color: colors.foreground }]}>{group?.name ?? 'Your budget'}</Text>
+                  {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic', marginTop: 4 }]}>{group.slogan}</Text> : null}
                  <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>Choose Edit when you’re ready to rename this budget.</Text>
                </View>
                <Pressable
@@ -773,6 +821,7 @@ export default function SettingsScreen() {
            ) : (
              <View style={{ padding: 14 }}>
                <Text style={[styles.summaryValue, { color: colors.foreground }]}>{group?.name ?? 'Shared budget'}</Text>
+                {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic', marginTop: 4 }]}>{group.slogan}</Text> : null}
                <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>An owner or admin manages this Shared budget’s name.</Text>
              </View>
            )}
@@ -791,6 +840,7 @@ export default function SettingsScreen() {
                 )}
                 <View style={{ flex: 1 }}>
                    <Text style={[styles.rowLabel, { color: colors.foreground }]}>{group?.name || 'Shared budget'}</Text>
+                   {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic' }]}>{group.slogan}</Text> : null}
                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This identity belongs to the group, not any one member.</Text>
                 </View>
               </View>
@@ -806,11 +856,11 @@ export default function SettingsScreen() {
                     )}
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.rowLabel, { color: colors.foreground }]}>Group photo</Text>
-                      <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>A square JPG, PNG, or WebP photo up to 5 MB.</Text>
+                       <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>A square JPG, PNG, or WebP photo up to 15 MB. Jamvi shrinks it first for a faster upload.</Text>
                       <View style={{ flexDirection: 'row', gap: 14, marginTop: 9 }}>
                         <Pressable disabled={uploadingGroupPhoto} onPress={() => void handlePickGroupPhoto()}>
                           <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
-                            {uploadingGroupPhoto ? 'Uploading…' : group?.photoUrl ? 'Change photo' : 'Choose photo'}
+                             {uploadingGroupPhoto ? 'Preparing photo…' : group?.photoUrl ? 'Change photo' : 'Choose photo'}
                           </Text>
                         </Pressable>
                         {group?.photoUrl ? (

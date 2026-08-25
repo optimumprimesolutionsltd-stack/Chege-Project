@@ -47,6 +47,9 @@ export const groupsTable = pgTable(
     // Group-owned image object path. The API resolves this private path to a
     // short-lived viewing URL only for a verified workspace member.
     photoPath: text("photo_path"),
+    // A short, optional line displayed with the workspace identity. It belongs
+    // to the workspace rather than a particular member, just like its photo.
+    slogan: text("slogan"),
     // Used exactly once to adopt the existing shared ledger without relying on
     // a personal name or a client-provided group identifier.
     legacyKey: text("legacy_key").unique(),

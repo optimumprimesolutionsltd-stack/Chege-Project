@@ -12,7 +12,7 @@ router.post("/storage/photos/upload-url", async (req, res): Promise<void> => {
 
   const parsed = RequestPhotoUploadBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Choose a JPG, PNG, or WebP image smaller than 5 MB." });
+    res.status(400).json({ error: "Choose a JPG, PNG, or WebP image smaller than 15 MB." });
     return;
   }
 

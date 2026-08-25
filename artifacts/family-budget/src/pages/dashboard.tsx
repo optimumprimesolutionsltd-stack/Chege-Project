@@ -15,12 +15,14 @@ import {
   useGetGroup,
    useGetIncomeSources,
    useGetWorkspaces,
+   useCreateBudgetCategory,
   useCreateSharedGroup,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
   getGetSavingsGoalsQueryKey,
   getGetJointAccountQueryKey,
   getGetExpensesQueryKey,
+  getGetBudgetCategoriesQueryKey,
    getGetIncomeSourcesQueryKey,
   type SavingsGoal,
   type IncomeSource,
@@ -363,6 +365,9 @@ function ExpenseForm({
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [isAddingSource, setIsAddingSource] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryBudget, setNewCategoryBudget] = useState("");
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [date, setDate] = useState(localDateInputValue());
@@ -382,9 +387,40 @@ function ExpenseForm({
     ? members
     : members.filter((member) => member.userId === currentUserId);
   const createExpense = useCreateExpense();
+  const createCategory = useCreateBudgetCategory();
   const qc = useQueryClient();
   const { toast } = useToast();
   const today = localDateInputValue();
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    const budgetAmount = Number(newCategoryBudget);
+    if (!name || !Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      toast({
+        variant: "destructive",
+        title: "Add a category name and monthly budget",
+        description: "The monthly budget must be a whole number of KES or zero.",
+      });
+      return;
+    }
+    try {
+      const created = await createCategory.mutateAsync({
+        data: { name, budgetAmount, priority: 1, isRecurring: true },
+      });
+      setCategory(created.name);
+      setNewCategoryName("");
+      setNewCategoryBudget("");
+      setIsAddingCategory(false);
+      await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      toast({ title: "Category added", description: `${created.name} is selected for this expense.` });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add category",
+        description: error instanceof Error ? error.message : "Check the name and try again.",
+      });
+    }
+  };
 
   const handleAddSource = async () => {
     const name = newSourceName.trim();
@@ -530,10 +566,53 @@ function ExpenseForm({
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Category <span className="text-destructive">*</span></label>
-          <select value={category} onChange={e => setCategory(e.target.value)} className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
-            <option value="">Pick a category</option>
-            {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-          </select>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+              <option value="">Pick a category</option>
+              {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+            {canManageShared && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 shrink-0"
+                onClick={() => setIsAddingCategory((open) => !open)}
+                aria-expanded={isAddingCategory}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create category
+              </Button>
+            )}
+          </div>
+          {canManageShared && isAddingCategory && (
+            <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Create a category</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">It will be saved to this budget and selected here.</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
+                <Input
+                  value={newCategoryName}
+                  onChange={(event) => setNewCategoryName(event.target.value)}
+                  placeholder="e.g. Transport"
+                  maxLength={60}
+                  className="h-10 bg-card"
+                />
+                <Input
+                  value={newCategoryBudget}
+                  onChange={(event) => setNewCategoryBudget(event.target.value)}
+                  placeholder="Monthly KES"
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="h-10 bg-card"
+                />
+                <Button type="button" className="h-10" disabled={createCategory.isPending} onClick={() => void handleAddCategory()}>
+                  {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">

@@ -40,12 +40,46 @@ const SHARED_BUDGET_ICONS = [
 const SHARED_BUDGET_ACCENTS = [
   "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669",
 ] as const;
+const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
+const PHOTO_OPTIMIZE_THRESHOLD_BYTES = 1024 * 1024;
+const PHOTO_MAX_DIMENSION = 1600;
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "include", ...options });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error ?? "Something went wrong.");
   return body as T;
+}
+
+async function optimizePhotoForUpload(file: File): Promise<File> {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size < 1 || file.size > MAX_PHOTO_BYTES) {
+    throw new Error("Choose a JPG, PNG, or WebP image smaller than 15 MB.");
+  }
+  if (file.size <= PHOTO_OPTIMIZE_THRESHOLD_BYTES) return file;
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = () => reject(new Error("Could not prepare this photo. Choose a different image."));
+      nextImage.src = sourceUrl;
+    });
+    const scale = Math.min(1, PHOTO_MAX_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const optimized = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
+    if (!optimized || optimized.size >= file.size) return file;
+    return new File([optimized], `${file.name.replace(/\.[^.]+$/, "") || "photo"}.jpg`, {
+      type: "image/jpeg",
+    });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
 }
 
 export default function Settings() {
@@ -65,6 +99,7 @@ export default function Settings() {
   const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [groupSlogan, setGroupSlogan] = useState("");
   const [groupIcon, setGroupIcon] = useState<(typeof SHARED_BUDGET_ICONS)[number]["value"]>("users");
   const [groupAccentColor, setGroupAccentColor] = useState<(typeof SHARED_BUDGET_ACCENTS)[number]>("#0F766E");
   const [displayName, setDisplayName] = useState("");
@@ -92,7 +127,8 @@ export default function Settings() {
     if (group?.name) setGroupName(group.name);
     if (group?.icon) setGroupIcon(group.icon as (typeof SHARED_BUDGET_ICONS)[number]["value"]);
     if (group?.accentColor) setGroupAccentColor(group.accentColor as (typeof SHARED_BUDGET_ACCENTS)[number]);
-  }, [group?.name, group?.icon, group?.accentColor]);
+    setGroupSlogan(group?.slogan ?? "");
+  }, [group?.name, group?.icon, group?.accentColor, group?.slogan]);
   useEffect(() => {
     setDisplayName([user?.firstName, user?.lastName].filter(Boolean).join(" "));
   }, [user?.firstName, user?.lastName]);
@@ -119,7 +155,12 @@ export default function Settings() {
     }
     try {
       await updateGroup.mutateAsync({
-        data: { name: groupName.trim(), icon: groupIcon, accentColor: groupAccentColor },
+        data: {
+          name: groupName.trim(),
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          slogan: groupSlogan.trim() || null,
+        },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
@@ -182,6 +223,7 @@ export default function Settings() {
   };
   const cancelBudgetNameEdit = () => {
     setGroupName(group?.name ?? "");
+    setGroupSlogan(group?.slogan ?? "");
     setEditingBudgetName(false);
   };
   const startDisplayNameEdit = () => {
@@ -190,6 +232,7 @@ export default function Settings() {
   };
   const startBudgetNameEdit = () => {
     setGroupName(group?.name ?? "");
+    setGroupSlogan(group?.slogan ?? "");
     setEditingBudgetName(true);
   };
 
@@ -205,17 +248,28 @@ export default function Settings() {
   }, [editingBudgetName]);
 
   const uploadPhotoFile = async (file: File) => {
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
-      throw new Error("Choose a JPG, PNG, or WebP image smaller than 5 MB.");
-    }
+    const optimizedFile = await optimizePhotoForUpload(file);
     const upload = await requestPhotoUpload.mutateAsync({
-      data: { contentType: file.type as "image/jpeg" | "image/png" | "image/webp", size: file.size },
+      data: {
+        contentType: optimizedFile.type as "image/jpeg" | "image/png" | "image/webp",
+        size: optimizedFile.size,
+      },
     });
-    const response = await fetch(upload.uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": file.type },
-      body: file,
-    });
+    const response =
+      upload.uploadMethod === "POST"
+        ? await (() => {
+            const body = new FormData();
+            for (const [key, value] of Object.entries(upload.uploadFields ?? {})) {
+              body.append(key, value);
+            }
+            body.append("file", optimizedFile);
+            return fetch(upload.uploadUrl, { method: "POST", body });
+          })()
+        : await fetch(upload.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": optimizedFile.type },
+            body: optimizedFile,
+          });
     if (!response.ok) throw new Error("Could not upload your photo. Please try again.");
     return upload.objectPath;
   };
@@ -239,7 +293,13 @@ export default function Settings() {
     try {
       const photoPath = await uploadPhotoFile(file);
       await updateGroup.mutateAsync({
-        data: { name: groupName.trim() || group.name, icon: groupIcon, accentColor: groupAccentColor, photoPath },
+        data: {
+          name: groupName.trim() || group.name,
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          slogan: groupSlogan.trim() || null,
+          photoPath,
+        },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
@@ -420,7 +480,7 @@ export default function Settings() {
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
               <Camera className="h-4 w-4" />
-              {uploadingProfilePhoto ? "Uploading…" : "Choose profile photo"}
+              {uploadingProfilePhoto ? "Preparing photo…" : "Choose profile photo"}
               <input
                 className="sr-only"
                 type="file"
@@ -488,19 +548,27 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
           {canManageWorkspace && editingBudgetName ? (
-            <form onSubmit={handleSaveGroupIdentity} noValidate className="flex flex-col gap-2 sm:flex-row">
+            <form onSubmit={handleSaveGroupIdentity} noValidate className="space-y-3">
               <Input ref={budgetNameInputRef} value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" aria-label="Budget name" disabled={updateGroup.isPending} />
-              <Button type="submit" disabled={updateGroup.isPending || !groupName.trim()} className="w-full sm:w-auto">
-                {updateGroup.isPending ? "Saving…" : "Save"}
-              </Button>
-              <Button type="button" variant="outline" onClick={cancelBudgetNameEdit} disabled={updateGroup.isPending} className="w-full sm:w-auto">
-                Cancel
-              </Button>
+              <div>
+                <label htmlFor="budget-slogan" className="text-sm font-semibold text-foreground">Budget slogan <span className="font-normal text-muted-foreground">(optional)</span></label>
+                <Input id="budget-slogan" value={groupSlogan} onChange={(event) => setGroupSlogan(event.target.value)} maxLength={120} placeholder="e.g. Saving together, one goal at a time" aria-describedby="budget-slogan-help" disabled={updateGroup.isPending} className="mt-1" />
+                <p id="budget-slogan-help" className="mt-1 text-xs leading-relaxed text-muted-foreground">This short line appears with your budget photo and name.</p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="submit" disabled={updateGroup.isPending || !groupName.trim()} className="w-full sm:w-auto">
+                  {updateGroup.isPending ? "Saving…" : "Save"}
+                </Button>
+                <Button type="button" variant="outline" onClick={cancelBudgetNameEdit} disabled={updateGroup.isPending} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+              </div>
             </form>
           ) : canManageWorkspace ? (
             <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold text-foreground">{group?.name ?? "Your budget"}</p>
+                {group?.slogan ? <p className="mt-1 text-sm italic text-muted-foreground">{group.slogan}</p> : null}
                 <p className="mt-1 text-sm text-muted-foreground">Choose Edit when you’re ready to rename this budget.</p>
               </div>
               <Button type="button" variant="outline" onClick={startBudgetNameEdit} className="w-full sm:w-auto sm:shrink-0">
@@ -511,6 +579,7 @@ export default function Settings() {
           ) : (
             <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
               <p className="text-lg font-semibold text-foreground">{group?.name ?? "Shared budget"}</p>
+                {group?.slogan ? <p className="mt-1 text-sm italic text-muted-foreground">{group.slogan}</p> : null}
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">An owner or admin manages this Shared budget’s name. Your access and shared records stay the same.</p>
             </div>
           )}
@@ -538,7 +607,8 @@ export default function Settings() {
               })()}
               <div>
                  <p className="font-semibold text-foreground">{group?.name || "Shared budget"}</p>
-                <p className="text-xs text-muted-foreground">This identity belongs to the group, not any one member.</p>
+                 {group?.slogan ? <p className="text-sm italic text-muted-foreground">{group.slogan}</p> : null}
+                 <p className="text-xs text-muted-foreground">This identity belongs to the group, not any one member.</p>
               </div>
             </div>
 
@@ -554,11 +624,11 @@ export default function Settings() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-foreground">Group photo</p>
-                      <p className="text-xs text-muted-foreground">Choose a square JPG, PNG, or WebP image up to 5 MB.</p>
+                       <p className="text-xs text-muted-foreground">Choose a JPG, PNG, or WebP image up to 15 MB. Jamvi shrinks large photos first for a faster upload.</p>
                     </div>
                     <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">
                       <Camera className="h-4 w-4" />
-                      {uploadingGroupPhoto ? "Uploading…" : "Choose photo"}
+                       {uploadingGroupPhoto ? "Preparing photo…" : "Choose photo"}
                       <input
                         className="sr-only"
                         type="file"

@@ -11,7 +11,7 @@ export interface RequestPhotoUploadInput {
   contentType: RequestPhotoUploadInputContentType;
   /**
      * @minimum 1
-     * @maximum 5242880
+     * @maximum 15728640
      */
   size: number;
 }

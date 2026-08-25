@@ -5,6 +5,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { authMiddleware } from "./middlewares/authMiddleware";
+import { attachWebBuild } from "./lib/webAppServing";
 
 const app: Express = express();
 
@@ -32,7 +33,11 @@ app.use(
 // in production) and React Native sends no Origin at all, so this allowlist
 // affects neither today. It exists so that when the app and API are split
 // across hostnames, a third-party page still cannot make credentialed calls.
-const allowedOrigins = (process.env.CORS_ORIGINS ?? process.env.APP_ORIGIN ?? "")
+const allowedOrigins = (
+  process.env.CORS_ORIGINS ??
+  process.env.APP_ORIGIN ??
+  ""
+)
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
@@ -76,6 +81,7 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+attachWebBuild(app);
 app.use(authMiddleware);
 
 app.use("/api", router);

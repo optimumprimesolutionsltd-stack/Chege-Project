@@ -833,6 +833,10 @@ export default function GoalsScreen() {
   };
 
   const openContribute = (goal: SavingsGoal) => {
+    if (goal.isCompleted || goal.currentAmount >= goal.targetAmount) {
+      Alert.alert('Goal fully funded', 'This goal has reached its target, so contributions are locked.');
+      return;
+    }
     if (sharedTransactionsLocked) {
       Alert.alert(
         'Invite one more member',
@@ -1127,7 +1131,7 @@ export default function GoalsScreen() {
                       {isFunded && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#1a3320', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 4 }}>
                           <Feather name="check-circle" size={14} color="#4ade80" />
-                          <Text style={{ color: '#4ade80', fontSize: 13, fontWeight: '600' }}>{canManageShared ? 'Goal reached! Mark it complete.' : 'Goal reached!'}</Text>
+                          <Text style={{ color: '#4ade80', fontSize: 13, fontWeight: '600' }}>Fully funded · Contributions locked</Text>
                         </View>
                       )}
                       <View style={styles.cardBottom}>
@@ -1174,7 +1178,7 @@ export default function GoalsScreen() {
                       </View>
                       <View style={styles.cardInfo}>
                         <Text style={[styles.cardName, { color: colors.foreground }]}>{goal.name}</Text>
-                        <Text style={[styles.cardSub, { color: '#4ade80' }]}>Goal reached!</Text>
+                         <Text style={[styles.cardSub, { color: '#4ade80' }]}>Completed · Contributions locked</Text>
                       </View>
                       <View style={styles.cardRight}>
                         <Text style={[styles.cardPct, { color: '#86efac' }]}>
@@ -2138,9 +2142,9 @@ export default function GoalsScreen() {
         <TouchableWithoutFeedback onPress={() => setHistoryMonthPickerVisible(false)}>
           <View style={styles.pickerOverlay}>
             <TouchableWithoutFeedback onPress={() => {}}>
-              <View style={[styles.pickerSheet, { backgroundColor: colors.card }]}>
+              <View style={[styles.pickerSheet, { backgroundColor: colors.dropdownBackground }]}>
                 <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
-                <Text style={[styles.pickerTitle, { color: colors.foreground }]}>Jump to month</Text>
+                <Text style={[styles.pickerTitle, { color: colors.dropdownForeground }]}>Jump to month</Text>
                 <FlatList
                   data={historyMonthOptions}
                   keyExtractor={(item: { month: number; year: number; label: string }) => `${item.year}-${item.month}`}
@@ -2157,7 +2161,7 @@ export default function GoalsScreen() {
                         onPress={() => jumpHistoryToMonth(item.month, item.year)}
                         style={[styles.pickerItem, isActive && { backgroundColor: colors.accent }]}
                       >
-                        <Text style={[styles.pickerItemText, { color: isActive ? colors.accentForeground : colors.foreground }, isActive && { fontFamily: 'Inter_700Bold' }]}>
+                        <Text style={[styles.pickerItemText, { color: isActive ? colors.accentForeground : colors.dropdownForeground }, isActive && { fontFamily: 'Inter_700Bold' }]}>
                           {item.label}
                         </Text>
                         {isActive && <Feather name="check" size={16} color={colors.accentForeground} />}

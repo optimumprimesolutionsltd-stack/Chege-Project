@@ -8,3 +8,9 @@ Personal profile photos and Shared budget photos are uploaded as private objects
 **Why:** A group image is owned by the shared workspace and must not be exposed through an unconditional public asset path. Signed viewing URLs also work in native image controls without sending session credentials in the image request.
 
 **How to apply:** Keep upload authorization on the server, validate photo type and size before minting upload URLs, and refresh identity/workspace queries after an upload or removal. Do not convert this flow to public object storage merely to simplify image rendering.
+
+Photo uploads are capped at 15 MB, while clients should compress high-resolution square images before direct upload.
+
+**Why:** Modern phone photos commonly exceed the former 5 MB limit; client-side optimization keeps normal uploads quick while the storage-side policy retains a firm abuse and cost boundary.
+
+**How to apply:** Keep the API input schema, storage POST policy, client validation, migration checks, help text, and regression tests aligned to the 15 MB limit. Do not raise only a client-side or server-side limit.

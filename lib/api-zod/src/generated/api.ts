@@ -75,7 +75,7 @@ export const UpdateProfilePhotoResponse = zod.object({
 /**
  * @summary Request a private signed upload URL for a profile or group photo
  */
-export const requestPhotoUploadBodySizeMax = 5242880;
+export const requestPhotoUploadBodySizeMax = 15728640;
 
 
 
@@ -89,7 +89,9 @@ export const requestPhotoUploadResponseObjectPathRegExp = new RegExp('^/objects/
 
 export const RequestPhotoUploadResponse = zod.object({
   "objectPath": zod.string().regex(requestPhotoUploadResponseObjectPathRegExp),
-  "uploadUrl": zod.string()
+  "uploadUrl": zod.string(),
+  "uploadMethod": zod.enum(['PUT', 'POST']),
+  "uploadFields": zod.record(zod.string(), zod.string()).optional()
 })
 
 
@@ -1163,12 +1165,17 @@ export const LeaveGroupResponse = zod.object({
 /**
  * @summary List the signed-in person's private and shared budget workspaces
  */
+export const getWorkspacesResponseSloganMax = 120;
+
+
+
 export const GetWorkspacesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
+  "slogan": zod.string().max(getWorkspacesResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
@@ -1182,12 +1189,17 @@ export const SelectWorkspaceBody = zod.object({
   "groupId": zod.number()
 })
 
+export const selectWorkspaceResponseSloganMax = 120;
+
+
+
 export const SelectWorkspaceResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
+  "slogan": zod.string().max(selectWorkspaceResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
@@ -1205,12 +1217,17 @@ export const CreateSharedGroupBody = zod.object({
   "name": zod.string().min(createSharedGroupBodyNameMin).max(createSharedGroupBodyNameMax)
 })
 
+export const createSharedGroupResponseSloganMax = 120;
+
+
+
 export const CreateSharedGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
+  "slogan": zod.string().max(createSharedGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
@@ -1448,12 +1465,17 @@ export const DeleteGroupInvitationContactResponse = zod.unknown()
 /**
  * @summary Get the active group's details
  */
+export const getGroupResponseSloganMax = 120;
+
+
+
 export const GetGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
+  "slogan": zod.string().max(getGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "role": zod.enum(['owner', 'admin', 'member']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
@@ -1467,14 +1489,21 @@ export const updateGroupBodyNameMin = 2;
 export const updateGroupBodyNameMax = 60;
 
 export const updateGroupBodyPhotoPathRegExp = new RegExp('^/objects/photos/[a-f0-9-]+$');
+export const updateGroupBodySloganMax = 120;
+
 
 
 export const UpdateGroupBody = zod.object({
   "name": zod.string().min(updateGroupBodyNameMin).max(updateGroupBodyNameMax),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']).optional(),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']).optional(),
-  "photoPath": zod.string().regex(updateGroupBodyPhotoPathRegExp).nullish()
+  "photoPath": zod.string().regex(updateGroupBodyPhotoPathRegExp).nullish(),
+  "slogan": zod.string().max(updateGroupBodySloganMax).nullish()
 })
+
+export const updateGroupResponseSloganMax = 120;
+
+
 
 export const UpdateGroupResponse = zod.object({
   "id": zod.number(),
@@ -1482,6 +1511,7 @@ export const UpdateGroupResponse = zod.object({
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
+  "slogan": zod.string().max(updateGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "role": zod.enum(['owner', 'admin', 'member']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')

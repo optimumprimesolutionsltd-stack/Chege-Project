@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Pressable,
   Platform,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -178,6 +179,7 @@ export default function ReportsScreen() {
   const [year, setYear] = useState(now.getFullYear());
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [watchDetailsOpen, setWatchDetailsOpen] = useState(false);
 
   const handleMonthChange = useCallback((m: number, y: number) => {
     setMonth(m); setYear(y);
@@ -283,6 +285,10 @@ export default function ReportsScreen() {
     .filter(c => c.spentAmount > c.budgetAmount)
     .map(c => c.category)
     .filter(Boolean);
+  const categoriesToWatch = useMemo(
+    () => sortedCategories.filter(c => c.spentAmount > c.budgetAmount),
+    [sortedCategories],
+  );
   const progressTone = progressLoading || progressError
     ? { color: colors.mutedForeground, background: colors.muted, border: colors.border, icon: 'info' as const }
     : progressStatus === 'Needs attention'
@@ -432,11 +438,26 @@ export default function ReportsScreen() {
                       : 'No expected-income target'}
                   </Text>
                 </View>
-                <View style={[styles.progressStat, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Categories to watch</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Categories to watch: ${overBudgetCount}. Tap to see which categories are over budget.`}
+                  accessibilityHint="Opens the over-budget category details"
+                  onPress={() => setWatchDetailsOpen(true)}
+                  style={({ pressed }) => [
+                    styles.progressStat,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    pressed && styles.progressStatPressed,
+                  ]}
+                >
+                  <View style={styles.progressStatHeading}>
+                    <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Categories to watch</Text>
+                    <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+                  </View>
                   <Text style={[styles.progressStatAmount, { color: colors.foreground }]}>{overBudgetCount}</Text>
-                  <Text style={[styles.progressStatSub, { color: colors.mutedForeground }]}>{overBudgetCount === 1 ? 'over its budget' : 'over their budgets'}</Text>
-                </View>
+                  <Text style={[styles.progressStatSub, { color: colors.mutedForeground }]}>
+                    {overBudgetCount === 1 ? 'over its budget' : 'Tap to see which ones'}
+                  </Text>
+                </Pressable>
               </View>
             )}
           </View>
@@ -901,6 +922,82 @@ export default function ReportsScreen() {
           )}
         </PageScrollView>
       )}
+
+      <Modal
+        visible={watchDetailsOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setWatchDetailsOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.detailsSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.detailsHeader}>
+              <View style={styles.detailsTitleBlock}>
+                <View style={[styles.detailsIcon, { backgroundColor: colors.destructive + '18' }]}>
+                  <Feather name="alert-triangle" size={18} color={colors.destructive} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.detailsTitle, { color: colors.foreground }]}>Categories to watch</Text>
+                  <Text style={[styles.detailsSubtitle, { color: colors.mutedForeground }]}>
+                    {categoriesToWatch.length === 0
+                      ? 'Nothing is over budget this month.'
+                      : `${categoriesToWatch.length} ${categoriesToWatch.length === 1 ? 'category is' : 'categories are'} over budget.`}
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close category details"
+                onPress={() => setWatchDetailsOpen(false)}
+                hitSlop={10}
+                style={[styles.detailsCloseButton, { backgroundColor: colors.muted }]}
+              >
+                <Feather name="x" size={18} color={colors.foreground} />
+              </Pressable>
+            </View>
+
+            {categoriesToWatch.length === 0 ? (
+              <View style={styles.detailsEmpty}>
+                <Feather name="check-circle" size={28} color={colors.primary} />
+                <Text style={[styles.detailsEmptyText, { color: colors.mutedForeground }]}>
+                  Keep going—your spending is within the category budgets you set.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.detailsList}
+                contentContainerStyle={styles.detailsListContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {categoriesToWatch.map((item) => (
+                  <View key={item.category} style={[styles.detailsRow, { borderColor: colors.border }]}>
+                    <View style={[styles.catIcon, { backgroundColor: colors.destructive + '18' }]}>
+                      <Feather
+                        name={CATEGORY_ICONS[item.category] ?? 'more-horizontal'}
+                        size={15}
+                        color={colors.destructive}
+                      />
+                    </View>
+                    <View style={styles.detailsRowContent}>
+                      <View style={styles.detailsRowTop}>
+                        <Text style={[styles.detailsCategoryName, { color: colors.foreground }]} numberOfLines={1}>
+                          {item.category}
+                        </Text>
+                        <Text style={[styles.detailsOverAmount, { color: colors.destructive }]}>
+                          {formatKES(item.spentAmount - item.budgetAmount)} over
+                        </Text>
+                      </View>
+                      <Text style={[styles.detailsRowMeta, { color: colors.mutedForeground }]}>
+                        {formatKES(item.spentAmount)} spent of {formatKES(item.budgetAmount)} budget
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -935,6 +1032,8 @@ const styles = StyleSheet.create({
   progressMessage: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   progressStats: { flexDirection: 'row', gap: 8 },
   progressStat: { flex: 1, borderRadius: 10, borderWidth: 1, padding: 10 },
+  progressStatPressed: { opacity: 0.72 },
+  progressStatHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
   progressStatLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
   progressStatAmount: { fontSize: 14, fontFamily: 'Inter_700Bold', marginTop: 4 },
   progressStatSub: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 2 },
@@ -1047,4 +1146,24 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold' },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+
+  // Category details sheet
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  detailsSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '78%' },
+  detailsHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 },
+  detailsTitleBlock: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  detailsIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  detailsTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  detailsSubtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  detailsCloseButton: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  detailsList: { flexGrow: 0 },
+  detailsListContent: { gap: 8, paddingBottom: 4 },
+  detailsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 11 },
+  detailsRowContent: { flex: 1, gap: 3 },
+  detailsRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  detailsCategoryName: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  detailsOverAmount: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  detailsRowMeta: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  detailsEmpty: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 24 },
+  detailsEmptyText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18, textAlign: 'center' },
 });

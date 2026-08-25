@@ -16,6 +16,11 @@ export interface Workspace {
   accentColor: WorkspaceAccentColor;
   /** @nullable */
   photoUrl?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  slogan?: string | null;
   isPrivate: boolean;
   role: WorkspaceRole;
 }

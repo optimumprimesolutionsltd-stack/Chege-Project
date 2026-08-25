@@ -81,6 +81,8 @@ export * from './openingBalance';
 export * from './openingBalanceInput';
 export * from './periodTotalsReport';
 export * from './photoUploadUrlResponse';
+export * from './photoUploadUrlResponseUploadFields';
+export * from './photoUploadUrlResponseUploadMethod';
 export * from './profilePhotoInput';
 export * from './requestPhotoUploadInput';
 export * from './requestPhotoUploadInputContentType';

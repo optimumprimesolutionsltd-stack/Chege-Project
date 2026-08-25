@@ -914,10 +914,10 @@ export default function BankScreen() {
                   <Feather name={showGoalPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
                 {showGoalPicker && (
-                  <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                  <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                     {savingsGoals.map(goal => (
                       <TouchableOpacity key={goal.id} style={styles.categoryOption} onPress={() => { setWithdrawGoalId(goal.id); setShowGoalPicker(false); }}>
-                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>{goal.name}</Text>
+                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{goal.name}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -1300,7 +1300,7 @@ export default function BankScreen() {
 
                 {/* Savings goal dropdown */}
                 {withdrawDest === 'savings' && showGoalPicker && savingsGoals.length > 0 && (
-                  <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                  <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                     {savingsGoals
                       .filter(g => !g.isCompleted)
                       .map(g => {
@@ -1316,8 +1316,8 @@ export default function BankScreen() {
                               setShowGoalPicker(false);
                             }}
                           >
-                            <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>{g.name}</Text>
-                            <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                            <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{g.name}</Text>
+                            <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
                               {pct}% funded
                             </Text>
                           </TouchableOpacity>
@@ -1325,7 +1325,7 @@ export default function BankScreen() {
                       })}
                     {savingsGoals.filter(g => !g.isCompleted).length === 0 && (
                       <TouchableOpacity style={styles.categoryOption}>
-                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>No active goals</Text>
+                        <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular' }}>No active goals</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1389,14 +1389,14 @@ export default function BankScreen() {
                   />
                 </TouchableOpacity>
                 {showCategoryPicker && (
-                  <View style={[styles.categoryDropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                  <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                     {categories.map(c => (
                       <TouchableOpacity
                         key={c.id}
                         style={styles.categoryOption}
                         onPress={() => { setExpenseCategory(c.name); setShowCategoryPicker(false); }}
                       >
-                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_400Regular' }}>{c.name}</Text>
+                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{c.name}</Text>
                       </TouchableOpacity>
                     ))}
                     <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }}>
@@ -1411,9 +1411,9 @@ export default function BankScreen() {
                           placeholder="e.g. Transport"
                           placeholderTextColor={colors.mutedForeground}
                           style={{
-                            flex: 1, height: 40, borderWidth: 1, borderColor: colors.border,
+                            flex: 1, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
                             borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
-                            fontFamily: 'Inter_400Regular', backgroundColor: colors.background,
+                            fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
                           }}
                           testID="bank-new-category-input"
                         />

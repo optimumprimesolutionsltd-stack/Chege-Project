@@ -333,7 +333,7 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
 
   // All reads and writes run inside a single transaction — a crash between them
   // rolls back everything.
-  const updated = await db.transaction(async (tx) => {
+  const contributionResult = await db.transaction(async (tx) => {
     // Lock the row so concurrent contributions serialize at the DB level.
     const [goal] = await tx
       .select()
@@ -341,7 +341,13 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
       .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
       .for("update");
 
-    if (!goal) return null;
+    if (!goal) return { kind: "not-found" as const };
+
+    // A completed or fully funded goal cannot accept another contribution.
+    // Without this guard a stale client could create a zero-value history row.
+    if (goal.isCompleted || goal.currentAmount >= goal.targetAmount) {
+      return { kind: "fully-funded" as const };
+    }
 
     // Cap the applied amount so the balance never exceeds the target.
     const needed = goal.targetAmount - goal.currentAmount;
@@ -357,7 +363,7 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
       .where(and(eq(savingsGoalsTable.id, id), eq(savingsGoalsTable.groupId, groupId)))
       .returning();
 
-    if (!updated) return null;
+    if (!updated) return { kind: "not-found" as const };
 
     // Notes have always been the legacy signal for a balance correction.
     // Keep ordinary contribution rows note-free so existing correction history
@@ -384,12 +390,19 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
       });
     }
 
-    return updated;
+    return { kind: "updated" as const, goal: updated };
   });
 
-  if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+  if (contributionResult.kind === "not-found") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (contributionResult.kind === "fully-funded") {
+    res.status(409).json({ error: "This goal is already fully funded. Contributions are locked." });
+    return;
+  }
 
-  res.json(formatGoal(updated));
+  res.json(formatGoal(contributionResult.goal));
 });
 
 // GET /savings-goals/:id/contributions — chronological contribution history

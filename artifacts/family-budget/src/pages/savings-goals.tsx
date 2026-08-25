@@ -651,6 +651,15 @@ export default function SavingsGoals() {
 
   const handleContribute = async (e: React.FormEvent, goal: SavingsGoal) => {
     e.preventDefault();
+    if (goal.isCompleted || goal.currentAmount >= goal.targetAmount) {
+      toast({
+        variant: "destructive",
+        title: "Goal is fully funded",
+        description: "Contributions are locked for this goal.",
+      });
+      setContributeId(null);
+      return;
+    }
     const total = Number(contributeAmount);
     if (!Number.isInteger(total) || total <= 0) {
       toast({
@@ -1182,7 +1191,7 @@ export default function SavingsGoals() {
                     {goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount && (
                       <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5">
                         <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                        <span className="text-sm font-medium text-emerald-600">Goal reached! Mark it complete when ready.</span>
+                        <span className="text-sm font-medium text-emerald-600">Fully funded — contributions are locked.</span>
                       </div>
                     )}
 

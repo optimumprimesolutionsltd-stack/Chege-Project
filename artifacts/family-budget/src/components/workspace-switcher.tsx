@@ -103,12 +103,13 @@ export function WorkspaceSwitcher({
           disabled={!activeWorkspaceId || selectWorkspace.isPending}
           onChange={(event) => requestWorkspaceSwitch(Number(event.target.value))}
           className={[
-            "min-w-0 flex-1 cursor-pointer outline-none transition-colors disabled:cursor-wait disabled:opacity-70",
+            "min-w-0 flex-1 cursor-pointer bg-white text-[#133921] outline-none transition-colors disabled:cursor-wait disabled:opacity-70",
             isDashboardVariant
-              ? "h-11 rounded-xl border border-input bg-background px-3 text-sm font-semibold text-foreground shadow-sm hover:border-primary/40 focus:ring-2 focus:ring-ring"
-              : "h-9 rounded-lg border border-sidebar-border bg-sidebar-accent/70 px-2 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent",
+              ? "h-11 rounded-xl border border-input px-3 text-sm font-semibold shadow-sm hover:border-primary/40 focus:ring-2 focus:ring-ring"
+              : "h-9 rounded-lg border border-sidebar-border px-2 text-xs font-semibold hover:bg-white",
             className,
           ].join(" ")}
+          style={{ colorScheme: "light" }}
         >
         <option value="" disabled>
           Choose a budget

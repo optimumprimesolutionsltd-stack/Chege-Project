@@ -187,4 +187,15 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-display tracking-tight;
   }
+
+  /* Native option lists otherwise inherit the dark theme on mobile browsers. */
+  select {
+    color-scheme: light;
+    background-color: #ffffff !important;
+    color: #133921 !important;
+  }
+  select option {
+    background-color: #ffffff;
+    color: #133921;
+  }
 }

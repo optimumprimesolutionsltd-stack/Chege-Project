@@ -40,6 +40,10 @@ const colors = {
     // Borders / inputs
     border: '#e0ebe4',
     input: '#d1e0d7',
+    dropdownBackground: '#ffffff',
+    dropdownForeground: '#133921',
+    dropdownMutedForeground: '#5c8a6c',
+    dropdownBorder: '#e0ebe4',
   },
 
   dark: {
@@ -69,6 +73,10 @@ const colors = {
 
     border: '#1e3b2b',
     input: '#244033',
+    dropdownBackground: '#ffffff',
+    dropdownForeground: '#133921',
+    dropdownMutedForeground: '#5c8a6c',
+    dropdownBorder: '#e0ebe4',
   },
 
   // 0.75rem = 12px — matches web app's --radius: 0.75rem
