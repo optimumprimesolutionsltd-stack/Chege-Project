@@ -14,6 +14,7 @@ import jointAccountRouter from "./joint-account";
 import incomeSourcesRouter from "./income-sources";
 import { invitationsRouter, publicInvitationsRouter } from "./invitations";
 import { inviteLinksRouter, publicInviteLinksRouter } from "./invite-links";
+import photoStorageRouter from "./photo-storage";
 import { requireMember } from "../middlewares/requireMember";
 
 const router: IRouter = Router();
@@ -40,5 +41,6 @@ router.use(jointAccountRouter);
 router.use(incomeSourcesRouter);
 router.use(invitationsRouter);
 router.use(inviteLinksRouter);
+router.use(photoStorageRouter);
 
 export default router;

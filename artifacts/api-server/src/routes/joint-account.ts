@@ -15,11 +15,33 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   getActiveGroupId,
+  isGroupManager,
   requireGroupManager,
   requireMemberSelfAttribution,
 } from "../lib/activeGroup";
 
 const router = Router();
+
+function currentBusinessDate(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts();
+  const value = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function isCurrentBusinessDate(value: string | Date | null | undefined): boolean {
+  if (!value) return false;
+  const date = typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10);
+  return date === currentBusinessDate();
+}
 
 async function validateIncomeSourceOwner(
   incomeSourceId: number,
@@ -435,7 +457,6 @@ router.post("/joint-account/transfers/from-savings", async (req, res): Promise<v
 router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!requireGroupManager(req, res)) return;
 
   const params = IdParam.safeParse(req.params);
   const parsed = UpdateJointAccountInput.safeParse(req.body);
@@ -447,6 +468,26 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     .where(and(eq(jointAccountTxTable.id, params.data.id), eq(jointAccountTxTable.groupId, groupId)))
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  const isMember = !isGroupManager(req);
+  if (isMember) {
+    const requestedMadeById = parsed.data.madeById === undefined
+      ? existing.madeById
+      : parsed.data.madeById;
+    if (
+      existing.type !== "deposit" ||
+      existing.savingsGoalId !== null ||
+      existing.expenseId !== null ||
+      existing.madeById !== req.user!.id ||
+      requestedMadeById !== req.user!.id ||
+      !isCurrentBusinessDate(existing.date) ||
+      !isCurrentBusinessDate(parsed.data.date)
+    ) {
+      res.status(403).json({
+        error: "Members can edit only their own deposits dated today. Ask an admin to correct an earlier or shared bank record.",
+      });
+      return;
+    }
+  }
   if (existing.savingsGoalId !== null) {
     res.status(400).json({ error: "Savings transfers cannot be edited. Delete and recreate the transfer instead." });
     return;
@@ -486,6 +527,10 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     const incomeSourceId = parsed.data.incomeSourceId === undefined
       ? existing.incomeSourceId
       : parsed.data.incomeSourceId;
+    if (incomeSourceId !== null) {
+      const error = await validateIncomeSourceOwner(incomeSourceId, madeById, groupId);
+      if (error) { res.status(400).json({ error }); return; }
+    }
     const [updated] = await db
       .update(jointAccountTxTable)
       .set({ amount, date, madeById, description, incomeSourceId, expenseCategory: null })

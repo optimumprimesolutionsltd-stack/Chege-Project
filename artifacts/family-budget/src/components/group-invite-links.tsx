@@ -5,7 +5,7 @@ import {
   useRevokeGroupInviteLink,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Copy, Link2, RotateCcw, ShieldCheck, X } from "lucide-react";
+import { Copy, Link2, MessageCircle, RotateCcw, ShieldCheck, X } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ function joinUrl(token: string) {
   return new URL(`${base}/join/${token}`, window.location.origin).toString();
 }
 
-export function GroupInviteLinks() {
+export function GroupInviteLinks({ groupName }: { groupName?: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: links = [] } = useGetGroupInviteLinks();
@@ -32,6 +32,11 @@ export function GroupInviteLinks() {
     } catch {
       toast({ variant: "destructive", title: "Could not copy link", description: "Select and copy the link manually." });
     }
+  };
+
+  const shareOnWhatsApp = (url: string) => {
+    const message = `Join ${groupName || "my Jamvi Shared budget"} using this private invite link: ${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   };
 
   const create = async () => {
@@ -99,11 +104,15 @@ export function GroupInviteLinks() {
                   : "For privacy, the full link is only shown when you create or reset it. Reset it to make a fresh copy."}
               </p>
               {shareUrl && (
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <input aria-label="Private invite link" readOnly value={shareUrl} className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-2 text-xs text-foreground" />
                   <Button type="button" size="icon" variant="outline" aria-label="Copy private invite link" onClick={() => void copy(shareUrl)}>
                     <Copy className="h-4 w-4" />
                   </Button>
+                   <Button type="button" size="sm" className="bg-[#25D366] text-white hover:bg-[#20bd5a]" onClick={() => shareOnWhatsApp(shareUrl)}>
+                     <MessageCircle className="mr-2 h-4 w-4" />
+                     Share on WhatsApp
+                   </Button>
                 </div>
               )}
             </div>

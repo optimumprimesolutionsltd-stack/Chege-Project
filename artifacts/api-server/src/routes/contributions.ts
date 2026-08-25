@@ -8,7 +8,7 @@ import {
 } from "@workspace/api-zod";
 import {
   getActiveGroupId,
-  isGroupManager,
+  requireGroupManager,
   requireMemberSelfAttribution,
   requireSharedTransactionEligibility,
 } from "../lib/activeGroup";
@@ -119,17 +119,7 @@ router.post("/contributions", async (req, res): Promise<void> => {
 router.delete("/contributions/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-
-  // Only registered group members may delete contributions
-  const [caller] = await db
-    .select({ userId: groupMembershipsTable.userId })
-    .from(groupMembershipsTable)
-    .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, req.user!.id)))
-    .limit(1);
-  if (!caller) {
-    res.status(403).json({ error: "Forbidden: not a group member" });
-    return;
-  }
+  if (!requireGroupManager(req, res)) return;
 
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
@@ -137,16 +127,9 @@ router.delete("/contributions/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const deleteConditions = isGroupManager(req)
-    ? and(eq(contributionsTable.id, id), eq(contributionsTable.groupId, groupId))
-    : and(
-        eq(contributionsTable.id, id),
-        eq(contributionsTable.groupId, groupId),
-        eq(contributionsTable.userId, req.user!.id),
-      );
   const [deleted] = await db
     .delete(contributionsTable)
-    .where(deleteConditions)
+    .where(and(eq(contributionsTable.id, id), eq(contributionsTable.groupId, groupId)))
     .returning();
 
   if (!deleted) {

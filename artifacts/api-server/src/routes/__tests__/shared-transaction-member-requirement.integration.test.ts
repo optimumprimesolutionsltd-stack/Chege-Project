@@ -186,6 +186,7 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
     expect(Number(goalContributionCount.count)).toBe(0);
   });
 
+
   it("returns a complete eligibility-aware group shape when reading and renaming", async () => {
     const current = await request(app).get("/group");
     expect(current.status).toBe(200);

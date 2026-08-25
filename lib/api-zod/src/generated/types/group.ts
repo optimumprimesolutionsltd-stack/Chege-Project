@@ -5,11 +5,17 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { GroupAccentColor } from './groupAccentColor';
+import type { GroupIcon } from './groupIcon';
 import type { GroupRole } from './groupRole';
 
 export interface Group {
   id: number;
   name: string;
+  icon: GroupIcon;
+  accentColor: GroupAccentColor;
+  /** @nullable */
+  photoUrl?: string | null;
   isPrivate: boolean;
   role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */

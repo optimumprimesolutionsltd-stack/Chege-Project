@@ -30,6 +30,8 @@ tags:
     description: Joint bank account deposits and disbursements
   - name: income-sources
     description: Income source presets per household member
+  - name: storage
+    description: Private photo upload operations
 
 paths:
   /healthz:
@@ -84,6 +86,68 @@ paths:
                 $ref: "#/components/schemas/AuthUserEnvelope"
         "400":
           description: Invalid name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/profile-photo:
+    put:
+      operationId: updateProfilePhoto
+      tags: [auth]
+      summary: Save or remove the authenticated user's custom profile photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfilePhotoInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          description: Invalid photo path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /storage/photos/upload-url:
+    post:
+      operationId: requestPhotoUpload
+      tags: [storage]
+      summary: Request a private signed upload URL for a profile or group photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestPhotoUploadInput"
+      responses:
+        "200":
+          description: Signed upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoUploadUrlResponse"
+        "400":
+          description: Unsupported or oversized image
           content:
             application/json:
               schema:
@@ -1535,6 +1599,36 @@ components:
       required:
         - name
 
+    ProfilePhotoInput:
+      type: object
+      properties:
+        photoPath:
+          type: ["string", "null"]
+          pattern: "^/objects/photos/[a-f0-9-]+$"
+      required: [photoPath]
+
+    RequestPhotoUploadInput:
+      type: object
+      properties:
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        size:
+          type: number
+          minimum: 1
+          maximum: 5242880
+      required: [contentType, size]
+
+    PhotoUploadUrlResponse:
+      type: object
+      properties:
+        objectPath:
+          type: string
+          pattern: "^/objects/photos/[a-f0-9-]+$"
+        uploadUrl:
+          type: string
+      required: [objectPath, uploadUrl]
+
     AuthUser:
       type: object
       properties:
@@ -2283,12 +2377,20 @@ components:
           type: number
         name:
           type: string
+        icon:
+          type: string
+          enum: [users, home, heart, briefcase, award, star]
+        accentColor:
+          type: string
+          enum: ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+        photoUrl:
+          type: ["string", "null"]
         isPrivate:
           type: boolean
         role:
           type: string
           enum: [owner, admin, member]
-      required: [id, name, isPrivate, role]
+      required: [id, name, icon, accentColor, isPrivate, role]
 
     GroupInviteLink:
       type: object
@@ -2325,6 +2427,14 @@ components:
           type: number
         name:
           type: string
+        icon:
+          type: string
+          enum: [users, home, heart, briefcase, award, star]
+        accentColor:
+          type: string
+          enum: ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+        photoUrl:
+          type: ["string", "null"]
         isPrivate:
           type: boolean
         role:
@@ -2333,7 +2443,7 @@ components:
         canRecordSharedTransactions:
           type: boolean
           description: Whether this workspace may record expenses and contributions right now
-      required: [id, name, isPrivate, role, canRecordSharedTransactions]
+      required: [id, name, icon, accentColor, isPrivate, role, canRecordSharedTransactions]
 
     UpdateGroupInput:
       type: object
@@ -2342,6 +2452,15 @@ components:
           type: string
           minLength: 2
           maxLength: 60
+        icon:
+          type: string
+          enum: [users, home, heart, briefcase, award, star]
+        accentColor:
+          type: string
+          enum: ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+        photoPath:
+          type: ["string", "null"]
+          pattern: "^/objects/photos/[a-f0-9-]+$"
       required: [name]
 
     UpdateMemberRoleInput:

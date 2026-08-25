@@ -24,6 +24,7 @@ interface AuthContextValue {
   login: () => Promise<void>;
   logout: () => Promise<void>;
   saveDisplayName: (name: string) => Promise<void>;
+  saveProfilePhoto: (photoPath: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -33,6 +34,7 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => {},
   logout: async () => {},
   saveDisplayName: async () => {},
+  saveProfilePhoto: async () => {},
 });
 
 // Compiled into the binary: an installed app calls whatever host was baked in
@@ -76,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await res.json();
       if (data.user) {
-        // A fresh app launch or sign-in must begin in Personal budget rather
+        // A fresh app launch or sign-in must begin in My budget rather
         // than restoring the Shared budget selected in a previous session.
         await AsyncStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
         setUser(data.user as AuthUser);
@@ -180,8 +182,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user as AuthUser);
   }, []);
 
+  const saveProfilePhoto = useCallback(async (photoPath: string | null) => {
+    const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+    if (!token) throw new Error('Your sign-in session has expired.');
+
+    const response = await fetch(`${getApiBaseUrl()}/api/auth/profile-photo`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ photoPath }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.error || 'Could not save your photo.');
+    }
+    const data = await response.json();
+    setUser(data.user as AuthUser);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, saveDisplayName }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, login, logout, saveDisplayName, saveProfilePhoto }}>
       {children}
     </AuthContext.Provider>
   );

@@ -64,6 +64,14 @@ export default function Bank() {
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) ?? false;
+  const canEditTransaction = (tx: EditableTransaction) =>
+    canManageShared || (
+      tx.type === "deposit" &&
+      tx.madeById === user?.id &&
+      tx.date === new Date().toISOString().split("T")[0] &&
+      !tx.savingsGoalId &&
+      (tx.contributorSplits?.length ?? 0) === 0
+    );
 
   const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | null>(null);
   const [amount, setAmount] = useState("");
@@ -240,11 +248,11 @@ export default function Bank() {
   };
 
   const openEdit = (tx: EditableTransaction) => {
-    if (!canManageShared) {
+    if (!canEditTransaction(tx)) {
       toast({
         variant: "destructive",
-        title: "Admin access required",
-        description: "Only a group owner or admin can edit a shared bank transaction.",
+        title: "This transaction is locked",
+        description: "Members can correct only their own deposits dated today. Ask an admin to correct an earlier or shared bank record.",
       });
       return;
     }
@@ -272,9 +280,9 @@ export default function Bank() {
   };
 
   useEffect(() => {
-    if (!bankEditId || openedDeepLinkId === bankEditId || !account || !canManageShared) return;
+    if (!bankEditId || openedDeepLinkId === bankEditId || !account) return;
     const target = account.transactions.find((transaction) => transaction.id === bankEditId);
-    if (!target) return;
+    if (!target || !canEditTransaction(target)) return;
 
     openEdit(target);
     setOpenedDeepLinkId(bankEditId);
@@ -282,7 +290,7 @@ export default function Bank() {
     params.delete("edit");
     const search = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
-  }, [account, bankEditId, canManageShared, openedDeepLinkId]);
+  }, [account, bankEditId, openedDeepLinkId, user?.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -470,7 +478,7 @@ export default function Bank() {
 
        {!canManageShared && (
          <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-           You can add your own contribution to the shared bank. An admin handles withdrawals, transfers, and transaction changes.
+            You can add and correct your own deposit today. An admin handles earlier records, withdrawals, transfers, and removals.
          </div>
        )}
 
@@ -629,8 +637,14 @@ export default function Bank() {
                     value={date}
                     onChange={e => setDate(e.target.value)}
                     required
+                    disabled={!canManageShared && editingTransaction !== null}
                     className="h-12 bg-card"
                   />
+                  {!canManageShared && editingTransaction !== null && (
+                    <p className="text-xs text-muted-foreground">
+                      Members can correct this deposit today, but only an admin can change its date.
+                    </p>
+                  )}
                 </div>
                 {mode === "disbursement" && (
                   <div className="space-y-2 sm:col-span-2">
@@ -975,7 +989,7 @@ export default function Bank() {
                     <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
                       {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
                     </p>
-                    {canManageShared && !isTransfer && <Button
+                    {canEditTransaction(tx) && !isTransfer && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-edit-tx-${tx.id}`}

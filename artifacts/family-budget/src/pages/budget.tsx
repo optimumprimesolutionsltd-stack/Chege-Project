@@ -62,6 +62,7 @@ function IncomeSourceEditor({
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     setName(source.name);
@@ -81,11 +82,18 @@ function IncomeSourceEditor({
     try {
       await onSave(source, name, expectedAmount);
       setConfirmOpen(false);
+      setIsEditing(false);
     } catch {
       // The parent already shows a clear server or validation message.
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancelEdit = () => {
+    setName(source.name);
+    setExpectedAmount(String(source.expectedMonthlyAmount));
+    setIsEditing(false);
   };
 
   const handleDelete = async () => {
@@ -116,38 +124,59 @@ function IncomeSourceEditor({
   return (
     <>
       <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto_auto] sm:items-end">
-          <div className="min-w-0 space-y-1">
-            <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-name-${source.id}`}>Income source</label>
-            <div className="flex items-center gap-1.5">
+        {isEditing ? (
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto_auto] sm:items-end">
+            <div className="min-w-0 space-y-1">
+              <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-name-${source.id}`}>Income source</label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  id={`income-source-name-${source.id}`}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  maxLength={80}
+                  className="h-9 bg-card text-sm"
+                  aria-label={`Income source name for ${source.name}`}
+                  disabled={saving || removing}
+                />
+                {source.isMain ? <span className="shrink-0 text-[10px] uppercase tracking-wide text-primary">Main</span> : null}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-amount-${source.id}`}>Expected monthly KES</label>
               <Input
-                id={`income-source-name-${source.id}`}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                maxLength={80}
+                id={`income-source-amount-${source.id}`}
+                type="number"
+                min="0"
+                value={expectedAmount}
+                onChange={(event) => setExpectedAmount(event.target.value)}
                 className="h-9 bg-card text-sm"
-                aria-label={`Income source name for ${source.name}`}
+                aria-label={`Expected monthly income for ${source.name}`}
                 disabled={saving || removing}
               />
-              {source.isMain ? <span className="shrink-0 text-[10px] uppercase tracking-wide text-primary">Main</span> : null}
             </div>
+            <Button type="button" size="sm" className="w-full sm:w-auto" onClick={handleSave} disabled={!hasChanges || saving || removing}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={handleCancelEdit} disabled={saving || removing}>
+              Cancel
+            </Button>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-foreground" htmlFor={`income-source-amount-${source.id}`}>Expected monthly KES</label>
-            <Input
-              id={`income-source-amount-${source.id}`}
-              type="number"
-              min="0"
-              value={expectedAmount}
-              onChange={(event) => setExpectedAmount(event.target.value)}
-              className="h-9 bg-card text-sm"
-              aria-label={`Expected monthly income for ${source.name}`}
-              disabled={saving || removing}
-            />
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-sm font-semibold text-foreground">{source.name}</p>
+                {source.isMain ? <span className="shrink-0 text-[10px] uppercase tracking-wide text-primary">Main</span> : null}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Expected {formatKes(source.expectedMonthlyAmount)} per month</p>
+            </div>
+            <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => setIsEditing(true)} disabled={saving || removing}>
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit
+            </Button>
           </div>
-          <Button type="button" size="sm" className="w-full sm:w-auto" onClick={handleSave} disabled={!hasChanges || saving || removing}>
-            {saving ? "Saving…" : "Save"}
-          </Button>
+        )}
+        <div className={isEditing ? "mt-3 flex justify-start sm:justify-end" : "mt-3 flex justify-start sm:justify-end"}>
           {canDelete ? (
             <Button
               type="button"

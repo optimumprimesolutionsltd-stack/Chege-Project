@@ -101,7 +101,7 @@ function OpenInvitationLinkButton() {
           </DialogHeader>
           <form onSubmit={openInvitation} className="space-y-5">
             <p className="text-sm leading-relaxed text-muted-foreground">
-               Paste the email invitation or private group link you received. It will add that Shared budget alongside your Personal budget after you accept.
+               Paste the email invitation or private group link you received. It will add that Shared budget alongside My budget after you accept.
             </p>
             <div className="space-y-2">
               <label htmlFor="group-invitation-link" className="text-sm font-semibold text-foreground">Invitation link</label>
@@ -157,14 +157,14 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
       <Card className="overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/[0.08] to-card shadow-sm">
         <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="max-w-2xl">
-             <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Your Personal budget is private</p>
+             <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">My budget is private</p>
             <h2 className="mt-1 font-display text-xl font-bold text-foreground">
               {hasExistingSharedBudget ? "Need another Shared budget?" : "Need to budget with other people?"}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                {hasExistingSharedBudget
                  ? "Create a separate Shared budget for another family, chama, club, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
-                 : "Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
+                 : "Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from My budget, and only people you invite can join."}
             </p>
              <p className="mt-2 text-xs font-medium text-foreground/70">
                Name it, create it, then invite the people who should share it.
@@ -187,7 +187,7 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
           </DialogHeader>
           <form onSubmit={submit} className="space-y-5">
             <p className="text-sm leading-relaxed text-muted-foreground">
-               You will be the owner. Your Personal budget records will stay private and will not be copied into this Shared budget.
+               You will be the owner. My budget records will stay private and will not be copied into this Shared budget.
             </p>
             <div className="space-y-2">
               <label htmlFor="shared-group-name" className="text-sm font-semibold text-foreground">Group name</label>
@@ -1000,7 +1000,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
-            {isSharedWorkspace ? "Shared budget" : "Personal budget"}
+            {isSharedWorkspace ? "Shared budget" : "My budget"}
           </p>
           <h1 className="mt-1 text-2xl font-display font-bold text-foreground sm:text-3xl">
             {group?.isPrivate ? "Personal overview" : "Group overview"}
@@ -1020,7 +1020,7 @@ export default function Dashboard() {
                 Viewing budget
               </p>
               <p className="mt-1 truncate font-display text-lg font-bold text-foreground">
-                {group ? workspaceLabel(group) : "Personal budget"}
+                {group ? workspaceLabel(group) : "My budget"}
               </p>
             </div>
             <span className="hidden shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary sm:inline-flex">
@@ -1367,7 +1367,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">{isSharedWorkspace ? "Joint Account" : "My Account"}</p>
-                  <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared budget funds" : "Personal budget funds"}</p>
+                  <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared budget funds" : "My budget funds"}</p>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />

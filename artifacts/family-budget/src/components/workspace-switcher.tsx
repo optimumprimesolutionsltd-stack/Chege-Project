@@ -3,7 +3,9 @@ import {
   useSelectWorkspace,
   type Workspace,
 } from "@workspace/api-client-react";
+import { useGetGroup } from "@workspace/api-client-react";
 import { useState } from "react";
+import { Award, BriefcaseBusiness, Heart, Home, Star, Users } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,11 +18,11 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export function workspaceLabel(workspace: Pick<Workspace, "isPrivate" | "name">) {
-  if (workspace.isPrivate) return "Personal budget";
+  if (workspace.isPrivate) return "My budget";
 
   const name = workspace.name.trim();
   const normalizedName = name.replace(/\s+/g, " ").toLocaleLowerCase("en-US");
-  return normalizedName === "shared budget" ? "Shared budget" : `Shared budget · ${name}`;
+  return normalizedName === "shared budget" || !name ? "Group" : name;
 }
 
 export function WorkspaceSwitcher({
@@ -37,10 +39,20 @@ export function WorkspaceSwitcher({
   showPendingLabel?: boolean;
 }) {
   const { data: workspaces = [] } = useGetWorkspaces();
+  const { data: activeGroup } = useGetGroup();
   const selectWorkspace = useSelectWorkspace();
   const isDashboardVariant = variant === "dashboard";
   const [pendingWorkspace, setPendingWorkspace] = useState<Workspace | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const activeSharedBudget = activeGroup && !activeGroup.isPrivate ? activeGroup : null;
+  const ActiveIcon = ({
+    users: Users,
+    home: Home,
+    heart: Heart,
+    briefcase: BriefcaseBusiness,
+    award: Award,
+    star: Star,
+  }[activeSharedBudget?.icon ?? "users"] ?? Users);
 
   const requestWorkspaceSwitch = (groupId: number) => {
     if (!groupId || groupId === activeWorkspaceId || selectWorkspace.isPending) return;
@@ -65,21 +77,39 @@ export function WorkspaceSwitcher({
 
   return (
     <>
-      <select
-        id={id}
-        aria-label="Choose a budget"
-        aria-busy={selectWorkspace.isPending}
-        value={activeWorkspaceId ?? ""}
-        disabled={!activeWorkspaceId || selectWorkspace.isPending}
-        onChange={(event) => requestWorkspaceSwitch(Number(event.target.value))}
-        className={[
-          "max-w-full cursor-pointer outline-none transition-colors disabled:cursor-wait disabled:opacity-70",
-          isDashboardVariant
-            ? "h-11 rounded-xl border border-input bg-background px-3 text-sm font-semibold text-foreground shadow-sm hover:border-primary/40 focus:ring-2 focus:ring-ring"
-            : "h-9 rounded-lg border border-sidebar-border bg-sidebar-accent/70 px-2 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent",
-          className,
-        ].join(" ")}
-      >
+      <div className="flex min-w-0 items-center gap-2">
+        {activeSharedBudget ? (
+          activeSharedBudget.photoUrl ? (
+            <img
+              src={activeSharedBudget.photoUrl}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-lg object-cover"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white"
+              style={{ backgroundColor: activeSharedBudget.accentColor }}
+            >
+              <ActiveIcon className="h-4 w-4" />
+            </span>
+          )
+        ) : null}
+        <select
+          id={id}
+          aria-label="Choose a budget"
+          aria-busy={selectWorkspace.isPending}
+          value={activeWorkspaceId ?? ""}
+          disabled={!activeWorkspaceId || selectWorkspace.isPending}
+          onChange={(event) => requestWorkspaceSwitch(Number(event.target.value))}
+          className={[
+            "min-w-0 flex-1 cursor-pointer outline-none transition-colors disabled:cursor-wait disabled:opacity-70",
+            isDashboardVariant
+              ? "h-11 rounded-xl border border-input bg-background px-3 text-sm font-semibold text-foreground shadow-sm hover:border-primary/40 focus:ring-2 focus:ring-ring"
+              : "h-9 rounded-lg border border-sidebar-border bg-sidebar-accent/70 px-2 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent",
+            className,
+          ].join(" ")}
+        >
         <option value="" disabled>
           Choose a budget
         </option>
@@ -91,7 +121,8 @@ export function WorkspaceSwitcher({
               {workspaceLabel(workspace)}
             </option>
           ))}
-      </select>
+        </select>
+      </div>
       {showPendingLabel && selectWorkspace.isPending ? (
         <p className="mt-2 text-xs font-medium text-muted-foreground" role="status" aria-live="polite">
             Switching budget…

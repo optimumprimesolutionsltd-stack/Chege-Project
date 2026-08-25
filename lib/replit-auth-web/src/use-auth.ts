@@ -1,5 +1,5 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { updateDisplayName, type AuthUser } from '@workspace/api-client-react';
+import { updateDisplayName, updateProfilePhoto, type AuthUser } from '@workspace/api-client-react';
 
 export type { AuthUser };
 
@@ -12,6 +12,7 @@ interface AuthState {
   logout: () => void;
   retry: () => void;
   saveDisplayName: (name: string) => Promise<void>;
+  saveProfilePhoto: (photoPath: string | null) => Promise<void>;
 }
 
 function getBasePath() {
@@ -127,6 +128,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authRequest = Promise.resolve(response.user);
   }, []);
 
+  const saveProfilePhoto = useCallback(async (photoPath: string | null) => {
+    const response = await updateProfilePhoto({ photoPath });
+    if (!response.user) {
+      throw new Error('Could not save your photo.');
+    }
+    setUser(response.user);
+    authRequest = Promise.resolve(response.user);
+  }, []);
+
   const value = useMemo<AuthState>(() => ({
     user,
     isLoading,
@@ -136,7 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     retry,
     saveDisplayName,
-  }), [user, isLoading, error, login, logout, retry, saveDisplayName]);
+    saveProfilePhoto,
+  }), [user, isLoading, error, login, logout, retry, saveDisplayName, saveProfilePhoto]);
 
   return createElement(AuthContext.Provider, { value }, children);
 }

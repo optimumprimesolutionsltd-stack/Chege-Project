@@ -70,6 +70,9 @@ import type {
   OpeningBalance,
   OpeningBalanceInput,
   PeriodTotalsReport,
+  PhotoUploadUrlResponse,
+  ProfilePhotoInput,
+  RequestPhotoUploadInput,
   SavingsGoal,
   SavingsGoalContributeInput,
   SavingsGoalContribution,
@@ -335,6 +338,148 @@ export const useUpdateDisplayName = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getUpdateDisplayNameMutationOptions(options));
+    }
+
+export const getUpdateProfilePhotoUrl = () => {
+
+
+
+
+  return `/api/auth/profile-photo`
+}
+
+/**
+ * @summary Save or remove the authenticated user's custom profile photo
+ */
+export const updateProfilePhoto = async (profilePhotoInput: ProfilePhotoInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthUserEnvelope> => {
+
+  return customFetch<AuthUserEnvelope>(getUpdateProfilePhotoUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(profilePhotoInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProfilePhotoMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProfilePhoto>>, TError,{data: BodyType<ProfilePhotoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProfilePhoto>>, TError,{data: BodyType<ProfilePhotoInput>}, TContext> => {
+
+const mutationKey = ['updateProfilePhoto'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProfilePhoto>>, {data: BodyType<ProfilePhotoInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateProfilePhoto(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProfilePhotoMutationResult = NonNullable<Awaited<ReturnType<typeof updateProfilePhoto>>>
+    export type UpdateProfilePhotoMutationBody = BodyType<ProfilePhotoInput>
+    export type UpdateProfilePhotoMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Save or remove the authenticated user's custom profile photo
+ */
+export const useUpdateProfilePhoto = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProfilePhoto>>, TError,{data: BodyType<ProfilePhotoInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProfilePhoto>>,
+        TError,
+        {data: BodyType<ProfilePhotoInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateProfilePhotoMutationOptions(options));
+    }
+
+export const getRequestPhotoUploadUrl = () => {
+
+
+
+
+  return `/api/storage/photos/upload-url`
+}
+
+/**
+ * @summary Request a private signed upload URL for a profile or group photo
+ */
+export const requestPhotoUpload = async (requestPhotoUploadInput: RequestPhotoUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<PhotoUploadUrlResponse> => {
+
+  return customFetch<PhotoUploadUrlResponse>(getRequestPhotoUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(requestPhotoUploadInput)
+  }
+);}
+
+
+
+
+
+export const getRequestPhotoUploadMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPhotoUpload>>, TError,{data: BodyType<RequestPhotoUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestPhotoUpload>>, TError,{data: BodyType<RequestPhotoUploadInput>}, TContext> => {
+
+const mutationKey = ['requestPhotoUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestPhotoUpload>>, {data: BodyType<RequestPhotoUploadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestPhotoUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestPhotoUploadMutationResult = NonNullable<Awaited<ReturnType<typeof requestPhotoUpload>>>
+    export type RequestPhotoUploadMutationBody = BodyType<RequestPhotoUploadInput>
+    export type RequestPhotoUploadMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Request a private signed upload URL for a profile or group photo
+ */
+export const useRequestPhotoUpload = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPhotoUpload>>, TError,{data: BodyType<RequestPhotoUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestPhotoUpload>>,
+        TError,
+        {data: BodyType<RequestPhotoUploadInput>},
+        TContext
+      > => {
+      return useMutation(getRequestPhotoUploadMutationOptions(options));
     }
 
 export const getGetExpensesUrl = (params?: GetExpensesParams,) => {

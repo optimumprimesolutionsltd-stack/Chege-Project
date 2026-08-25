@@ -8,16 +8,17 @@ import {
   CreateSharedGroupBody,
   CreateSharedGroupResponse,
   GetGroupResponse,
+  UpdateGroupBody,
   UpdateGroupResponse,
 } from "@workspace/api-zod";
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 import {
   canRecordSharedTransactions,
   getActiveGroupId,
   requireGroupManager,
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
+import { resolvePhotoUrl } from "../lib/photoStorage";
 
 const router = Router();
 
@@ -69,7 +70,13 @@ router.post("/groups", async (req, res): Promise<void> => {
     const [created] = await tx
       .insert(groupsTable)
       .values({ name, createdByUserId: req.user!.id })
-      .returning({ id: groupsTable.id, name: groupsTable.name });
+      .returning({
+        id: groupsTable.id,
+        name: groupsTable.name,
+        icon: groupsTable.icon,
+        accentColor: groupsTable.accentColor,
+        photoPath: groupsTable.photoPath,
+      });
     if (!created) throw new Error("Could not create group.");
 
     await tx.insert(groupMembershipsTable).values({
@@ -84,6 +91,9 @@ router.post("/groups", async (req, res): Promise<void> => {
   const workspace = {
     id: group.id,
     name: group.name,
+    icon: group.icon,
+    accentColor: group.accentColor,
+    photoUrl: null,
     isPrivate: false,
     role: "owner" as const,
   };
@@ -99,6 +109,9 @@ router.get("/group", async (req, res): Promise<void> => {
     .select({
       id: groupsTable.id,
       name: groupsTable.name,
+      icon: groupsTable.icon,
+      accentColor: groupsTable.accentColor,
+      photoPath: groupsTable.photoPath,
       isPrivate: groupsTable.privateOwnerUserId,
     })
     .from(groupsTable)
@@ -108,6 +121,7 @@ router.get("/group", async (req, res): Promise<void> => {
   const isPrivate = Boolean(group.isPrivate);
   res.json(GetGroupResponse.parse({
     ...group,
+    photoUrl: await resolvePhotoUrl(group.photoPath).catch(() => null),
     isPrivate,
     role: req.group!.role,
     canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),
@@ -119,28 +133,42 @@ router.patch("/group", async (req, res): Promise<void> => {
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
 
-  const parsed = z.object({ name: z.string().trim().min(2).max(60) }).safeParse(req.body);
+  const parsed = UpdateGroupBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Use a group name between 2 and 60 characters." });
+    res.status(400).json({ error: "Use a group name between 2 and 60 characters and choose a provided icon and accent color." });
     return;
   }
-  if (await hasAccessibleSharedBudgetWithName(req.user!.id, parsed.data.name, groupId)) {
+  const name = parsed.data.name.trim();
+  if (name.length < 2 || name.length > 60) {
+    res.status(400).json({ error: "Use a group name between 2 and 60 characters and choose a provided icon and accent color." });
+    return;
+  }
+  if (await hasAccessibleSharedBudgetWithName(req.user!.id, name, groupId)) {
     res.status(409).json({ error: "You already have a Shared budget with that name. Choose a different name." });
     return;
   }
 
   const [group] = await db.update(groupsTable)
-    .set({ name: parsed.data.name })
+    .set({
+      name,
+      ...(parsed.data.icon ? { icon: parsed.data.icon } : {}),
+      ...(parsed.data.accentColor ? { accentColor: parsed.data.accentColor } : {}),
+      ...(parsed.data.photoPath !== undefined ? { photoPath: parsed.data.photoPath } : {}),
+    })
     .where(eq(groupsTable.id, groupId))
     .returning({
       id: groupsTable.id,
       name: groupsTable.name,
+      icon: groupsTable.icon,
+      accentColor: groupsTable.accentColor,
+      photoPath: groupsTable.photoPath,
       isPrivate: groupsTable.privateOwnerUserId,
     });
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }
   const isPrivate = Boolean(group.isPrivate);
   res.json(UpdateGroupResponse.parse({
     ...group,
+    photoUrl: await resolvePhotoUrl(group.photoPath).catch(() => null),
     isPrivate,
     role: req.group!.role,
     canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),

@@ -22,12 +22,14 @@ import { useAuth } from '@/lib/auth';
 import {
   useCreateExpense,
   useGetBudgetCategories,
+  useCreateBudgetCategory,
   useGetMembers,
   useGetGroup,
   useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey,
   getGetDashboardActivityQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetBudgetCategoriesQueryKey,
   customFetch,
   ApiError,
 } from '@workspace/api-client-react';
@@ -94,6 +96,9 @@ export default function AddExpenseSheet() {
       member.userId === user?.id &&
       (member.role === 'owner' || member.role === 'admin'),
   );
+  const canManageCategories = members.some(
+    (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
+  );
   const selectablePayers = canManageShared
     ? members
     : members.filter((member) => member.userId === user?.id);
@@ -118,6 +123,9 @@ export default function AddExpenseSheet() {
   const [isCreatingSource, setIsCreatingSource] = useState(false);
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryBudget, setNewCategoryBudget] = useState('');
 
   // Load this payer's income sources from DB
   const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
@@ -168,6 +176,7 @@ export default function AddExpenseSheet() {
   }, [canManageShared, paidFromBank, payerIds.length, selectablePayers]);
 
   const { mutateAsync: createExpenseAsync } = useCreateExpense();
+  const createCategory = useCreateBudgetCategory();
   const [isPending, setIsPending] = useState(false);
 
   const invalidateExpenses = useCallback(() => {
@@ -219,6 +228,32 @@ export default function AddExpenseSheet() {
       setIsCreatingSource(false);
     }
   }, [newSourceName, paidById, payerSourceIds, queryClient]);
+
+  const handleCreateCategory = useCallback(async () => {
+    const name = newCategoryName.trim();
+    const budgetAmount = Number(newCategoryBudget);
+    if (!name || !Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      Alert.alert('Add a category name and monthly budget', 'The monthly budget must be a whole number of KES or zero.');
+      return;
+    }
+
+    try {
+      const created = await createCategory.mutateAsync({
+        data: { name, budgetAmount, priority: 1, isRecurring: true },
+      });
+      setCategory(created.name);
+      setNewCategoryName('');
+      setNewCategoryBudget('');
+      setIsCreatingCategory(false);
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      Alert.alert('Category added', `${created.name} is selected for this expense.`);
+    } catch (error) {
+      Alert.alert(
+        'Could not add category',
+        error instanceof Error ? error.message : 'Check the name and try again. Categories with the same name cannot be duplicated.',
+      );
+    }
+  }, [createCategory, newCategoryBudget, newCategoryName, queryClient]);
 
   const handleSubmit = useCallback(async () => {
     if (sharedTransactionsLocked) {
@@ -431,7 +466,66 @@ export default function AddExpenseSheet() {
               </Pressable>
             );
           })}
+          {canManageCategories ? (
+            <Pressable
+              onPress={() => setIsCreatingCategory((open) => !open)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: isCreatingCategory }}
+              style={[styles.categoryChip, { backgroundColor: isCreatingCategory ? colors.primary + '12' : colors.background, borderColor: colors.primary, borderRadius: colors.radius }]}
+            >
+              <Feather name="plus" size={14} color={colors.primary} />
+              <Text style={[styles.categoryChipText, { color: colors.primary }]}>New category</Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
+        {isCreatingCategory ? (
+          <View style={[styles.categoryCreateCard, { backgroundColor: colors.muted, borderColor: colors.primary + '45' }]}>
+            <View>
+              <Text style={[styles.categoryCreateTitle, { color: colors.foreground }]}>Create a category</Text>
+              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>It will be saved to this budget and selected for this expense.</Text>
+            </View>
+            <View style={styles.categoryCreateRow}>
+              <TextInput
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+                placeholder="e.g. Transport"
+                placeholderTextColor={colors.mutedForeground}
+                maxLength={60}
+                editable={!createCategory.isPending}
+                style={[styles.categoryCreateInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+              />
+              <TextInput
+                value={newCategoryBudget}
+                onChangeText={setNewCategoryBudget}
+                placeholder="Monthly KES"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numeric"
+                editable={!createCategory.isPending}
+                style={[styles.categoryCreateBudgetInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+              />
+            </View>
+            <View style={styles.categoryCreateActions}>
+              <Pressable
+                onPress={() => void handleCreateCategory()}
+                disabled={createCategory.isPending}
+                style={[styles.categoryCreateSave, { backgroundColor: colors.primary, opacity: createCategory.isPending ? 0.55 : 1 }]}
+              >
+                {createCategory.isPending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.categoryCreateSaveText}>Add category</Text>}
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setIsCreatingCategory(false);
+                  setNewCategoryName('');
+                  setNewCategoryBudget('');
+                }}
+                disabled={createCategory.isPending}
+                style={styles.categoryCreateCancel}
+              >
+                <Text style={[styles.categoryCreateCancelText, { color: colors.mutedForeground }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         {/* Running balance for selected category */}
         {category ? (() => {
@@ -1025,6 +1119,70 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500' as const,
     fontFamily: 'Inter_500Medium',
+  },
+  categoryCreateCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+  },
+  categoryCreateTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  categoryCreateHint: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+  },
+  categoryCreateRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  categoryCreateInput: {
+    flex: 1,
+    height: 42,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+  },
+  categoryCreateBudgetInput: {
+    width: 110,
+    height: 42,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+  },
+  categoryCreateActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  categoryCreateSave: {
+    minHeight: 38,
+    borderRadius: 9,
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryCreateSaveText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  categoryCreateCancel: {
+    minHeight: 38,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  categoryCreateCancelText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
   },
   textInput: {
     paddingHorizontal: 14,

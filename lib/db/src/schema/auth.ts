@@ -24,6 +24,9 @@ export const usersTable = pgTable('users', {
   firstName: varchar('first_name'),
   lastName: varchar('last_name'),
   profileImageUrl: varchar('profile_image_url'),
+  // A photo chosen in Jamvi takes precedence over the picture supplied by the
+  // sign-in provider, which may change whenever the person signs in again.
+  customProfilePhotoPath: varchar('custom_profile_photo_path'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

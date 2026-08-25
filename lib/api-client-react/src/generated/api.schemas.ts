@@ -30,6 +30,38 @@ export interface DisplayNameInput {
   name: string;
 }
 
+export interface ProfilePhotoInput {
+  /**
+     * @nullable
+     * @pattern ^/objects/photos/[a-f0-9-]+$
+     */
+  photoPath: string | null;
+}
+
+export type RequestPhotoUploadInputContentType = typeof RequestPhotoUploadInputContentType[keyof typeof RequestPhotoUploadInputContentType];
+
+
+export const RequestPhotoUploadInputContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+} as const;
+
+export interface RequestPhotoUploadInput {
+  contentType: RequestPhotoUploadInputContentType;
+  /**
+     * @minimum 1
+     * @maximum 5242880
+     */
+  size: number;
+}
+
+export interface PhotoUploadUrlResponse {
+  /** @pattern ^/objects/photos/[a-f0-9-]+$ */
+  objectPath: string;
+  uploadUrl: string;
+}
+
 export interface AuthUser {
   id: string;
   /** @nullable */
@@ -505,6 +537,30 @@ export interface WorkspaceSelectionInput {
   groupId: number;
 }
 
+export type WorkspaceIcon = typeof WorkspaceIcon[keyof typeof WorkspaceIcon];
+
+
+export const WorkspaceIcon = {
+  users: 'users',
+  home: 'home',
+  heart: 'heart',
+  briefcase: 'briefcase',
+  award: 'award',
+  star: 'star',
+} as const;
+
+export type WorkspaceAccentColor = typeof WorkspaceAccentColor[keyof typeof WorkspaceAccentColor];
+
+
+export const WorkspaceAccentColor = {
+  '#0F766E': '#0F766E',
+  '#2563EB': '#2563EB',
+  '#7C3AED': '#7C3AED',
+  '#DB2777': '#DB2777',
+  '#D97706': '#D97706',
+  '#059669': '#059669',
+} as const;
+
 export type WorkspaceRole = typeof WorkspaceRole[keyof typeof WorkspaceRole];
 
 
@@ -517,6 +573,10 @@ export const WorkspaceRole = {
 export interface Workspace {
   id: number;
   name: string;
+  icon: WorkspaceIcon;
+  accentColor: WorkspaceAccentColor;
+  /** @nullable */
+  photoUrl?: string | null;
   isPrivate: boolean;
   role: WorkspaceRole;
 }
@@ -543,6 +603,30 @@ export type GroupInviteLinkCreated = GroupInviteLink & {
   token: string;
 };
 
+export type GroupIcon = typeof GroupIcon[keyof typeof GroupIcon];
+
+
+export const GroupIcon = {
+  users: 'users',
+  home: 'home',
+  heart: 'heart',
+  briefcase: 'briefcase',
+  award: 'award',
+  star: 'star',
+} as const;
+
+export type GroupAccentColor = typeof GroupAccentColor[keyof typeof GroupAccentColor];
+
+
+export const GroupAccentColor = {
+  '#0F766E': '#0F766E',
+  '#2563EB': '#2563EB',
+  '#7C3AED': '#7C3AED',
+  '#DB2777': '#DB2777',
+  '#D97706': '#D97706',
+  '#059669': '#059669',
+} as const;
+
 export type GroupRole = typeof GroupRole[keyof typeof GroupRole];
 
 
@@ -555,11 +639,39 @@ export const GroupRole = {
 export interface Group {
   id: number;
   name: string;
+  icon: GroupIcon;
+  accentColor: GroupAccentColor;
+  /** @nullable */
+  photoUrl?: string | null;
   isPrivate: boolean;
   role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */
   canRecordSharedTransactions: boolean;
 }
+
+export type UpdateGroupInputIcon = typeof UpdateGroupInputIcon[keyof typeof UpdateGroupInputIcon];
+
+
+export const UpdateGroupInputIcon = {
+  users: 'users',
+  home: 'home',
+  heart: 'heart',
+  briefcase: 'briefcase',
+  award: 'award',
+  star: 'star',
+} as const;
+
+export type UpdateGroupInputAccentColor = typeof UpdateGroupInputAccentColor[keyof typeof UpdateGroupInputAccentColor];
+
+
+export const UpdateGroupInputAccentColor = {
+  '#0F766E': '#0F766E',
+  '#2563EB': '#2563EB',
+  '#7C3AED': '#7C3AED',
+  '#DB2777': '#DB2777',
+  '#D97706': '#D97706',
+  '#059669': '#059669',
+} as const;
 
 export interface UpdateGroupInput {
   /**
@@ -567,6 +679,13 @@ export interface UpdateGroupInput {
      * @maxLength 60
      */
   name: string;
+  icon?: UpdateGroupInputIcon;
+  accentColor?: UpdateGroupInputAccentColor;
+  /**
+     * @nullable
+     * @pattern ^/objects/photos/[a-f0-9-]+$
+     */
+  photoPath?: string | null;
 }
 
 export type UpdateMemberRoleInputRole = typeof UpdateMemberRoleInputRole[keyof typeof UpdateMemberRoleInputRole];

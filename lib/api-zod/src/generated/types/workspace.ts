@@ -5,11 +5,17 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { WorkspaceAccentColor } from './workspaceAccentColor';
+import type { WorkspaceIcon } from './workspaceIcon';
 import type { WorkspaceRole } from './workspaceRole';
 
 export interface Workspace {
   id: number;
   name: string;
+  icon: WorkspaceIcon;
+  accentColor: WorkspaceAccentColor;
+  /** @nullable */
+  photoUrl?: string | null;
   isPrivate: boolean;
   role: WorkspaceRole;
 }

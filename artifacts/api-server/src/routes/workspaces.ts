@@ -7,6 +7,7 @@ import { db, groupMembershipsTable, groupsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { Router } from "express";
 import { setActiveWorkspaceCookie } from "../lib/activeGroup";
+import { resolvePhotoUrl } from "../lib/photoStorage";
 
 const router = Router();
 
@@ -15,6 +16,9 @@ async function availableWorkspaces(userId: string) {
     .select({
       id: groupsTable.id,
       name: groupsTable.name,
+      icon: groupsTable.icon,
+      accentColor: groupsTable.accentColor,
+      photoPath: groupsTable.photoPath,
       privateOwnerUserId: groupsTable.privateOwnerUserId,
       role: groupMembershipsTable.role,
     })
@@ -22,12 +26,15 @@ async function availableWorkspaces(userId: string) {
     .innerJoin(groupsTable, eq(groupsTable.id, groupMembershipsTable.groupId))
     .where(eq(groupMembershipsTable.userId, userId));
 
-  return rows.map((row) => ({
+  return Promise.all(rows.map(async (row) => ({
     id: row.id,
     name: row.name,
+    icon: row.icon,
+    accentColor: row.accentColor,
+    photoUrl: await resolvePhotoUrl(row.photoPath).catch(() => null),
     isPrivate: Boolean(row.privateOwnerUserId),
     role: row.role as "owner" | "admin" | "member",
-  }));
+  })));
 }
 
 router.get("/workspaces", async (req, res): Promise<void> => {

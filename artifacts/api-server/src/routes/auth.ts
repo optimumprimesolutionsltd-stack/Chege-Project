@@ -50,10 +50,37 @@ import {
   type SessionData,
 } from '../lib/auth';
 import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
+import { resolvePhotoUrl } from '../lib/photoStorage';
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 
 const router: IRouter = Router();
+
+async function authUserPayload(user: {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  preferredName: string | null;
+  profileImageUrl: string | null;
+  customProfilePhotoPath: string | null;
+}) {
+  let customPhotoUrl: string | null = null;
+  try {
+    customPhotoUrl = await resolvePhotoUrl(user.customProfilePhotoPath);
+  } catch {
+    // A failed image URL must not prevent an authenticated person from opening Jamvi.
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.preferredName ?? user.firstName,
+    lastName: user.preferredName ? null : user.lastName,
+    profileImageUrl: customPhotoUrl ?? user.profileImageUrl,
+    needsDisplayName: !user.preferredName,
+  };
+}
 
 function getOrigin(req: Request): string {
   // When the browser talks to a separate frontend host that proxies /api here,
@@ -206,14 +233,7 @@ router.get('/auth/user', async (req: Request, res: Response) => {
   }
   res.json(
     GetCurrentAuthUserResponse.parse({
-      user: {
-        id: dbUser.id,
-        email: dbUser.email,
-        firstName: dbUser.preferredName ?? dbUser.firstName,
-        lastName: dbUser.preferredName ? null : dbUser.lastName,
-        profileImageUrl: dbUser.profileImageUrl,
-        needsDisplayName: !dbUser.preferredName,
-      },
+      user: await authUserPayload(dbUser),
     }),
   );
 });
@@ -250,16 +270,35 @@ router.put('/auth/display-name', async (req: Request, res: Response) => {
 
   res.json(
     GetCurrentAuthUserResponse.parse({
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.preferredName ?? user.firstName,
-        lastName: user.preferredName ? null : user.lastName,
-        profileImageUrl: user.profileImageUrl,
-        needsDisplayName: false,
-      },
+      user: { ...(await authUserPayload(user)), needsDisplayName: false },
     }),
   );
+});
+
+router.put('/auth/profile-photo', async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const { UpdateProfilePhotoBody, UpdateProfilePhotoResponse } = await import('@workspace/api-zod');
+  const parsed = UpdateProfilePhotoBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Choose a valid uploaded photo.' });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ customProfilePhotoPath: parsed.data.photoPath, updatedAt: new Date() })
+    .where(eq(usersTable.id, req.user.id))
+    .returning();
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  res.json(UpdateProfilePhotoResponse.parse({ user: await authUserPayload(user) }));
 });
 
 router.get('/login', async (req: Request, res: Response) => {

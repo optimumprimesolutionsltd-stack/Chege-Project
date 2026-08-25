@@ -86,7 +86,7 @@ export default function JoinGroupPage() {
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   {isAuthenticated
                     ? <>Signed in as <strong className="text-foreground">{user?.email ?? "your account"}</strong>. Join only if you know and trust this group.</>
-                     : "Sign in to join. Your Personal budget stays private and separate from this Shared budget."}
+                     : "Sign in to join. My budget stays private and separate from this Shared budget."}
                 </p>
               </div>
             </div>

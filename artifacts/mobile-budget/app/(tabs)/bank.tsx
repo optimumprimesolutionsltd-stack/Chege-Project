@@ -159,6 +159,13 @@ export default function BankScreen() {
       member.userId === user?.id &&
       (member.role === 'owner' || member.role === 'admin'),
   );
+  const canEditTransaction = (tx: Tx) =>
+    canManageShared || (
+      tx.type === 'deposit' &&
+      tx.madeById === user?.id &&
+      tx.date === todayIso() &&
+      !tx.savingsGoalId
+    );
   const selectableDepositors = canManageShared
     ? members
     : members.filter((member) => member.userId === user?.id);
@@ -295,8 +302,8 @@ export default function BankScreen() {
   };
 
   const openEdit = (tx: Tx) => {
-    if (!canManageShared) {
-      Alert.alert('Admin access required', 'Ask a group owner or admin to edit a shared bank transaction.');
+    if (!canEditTransaction(tx)) {
+      Alert.alert('This transaction is locked', 'Members can correct only their own deposits dated today. Ask an admin to correct an earlier or shared bank record.');
       return;
     }
     if (tx.savingsGoalId) {
@@ -732,7 +739,7 @@ export default function BankScreen() {
                     : dep
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
-                  {formatDateTime(item.createdAt)}{canManageShared ? ` · ${item.savingsGoalId ? 'Delete' : 'Edit or delete'}` : ''}
+                  {formatDateTime(item.createdAt)}{canManageShared ? ` · ${item.savingsGoalId ? 'Delete' : 'Edit or delete'}` : canEditTransaction(item) ? ' · Edit today' : ''}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
@@ -740,7 +747,7 @@ export default function BankScreen() {
                   {dep ? '+' : '-'}KES {formatKES(item.amount)}
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                  {canManageShared && !item.savingsGoalId && <TouchableOpacity
+                  {canEditTransaction(item) && !item.savingsGoalId && <TouchableOpacity
                     onPress={() => openEdit(item)}
                     hitSlop={8}
                     testID={`bank-edit-transaction-${item.id}`}
@@ -1453,7 +1460,9 @@ export default function BankScreen() {
             {/* Date */}
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Date</Text>
             <Pressable
-              onPress={() => setShowDatePicker(true)}
+              onPress={() => {
+                if (canManageShared || editingTransactionId === null) setShowDatePicker(true);
+              }}
               style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
               testID="bank-date-picker"
             >

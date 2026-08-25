@@ -32,3 +32,5 @@
 - [All-round onboarding](all-round-onboarding.md) — setup guidance should cover the complete workspace journey, not only budgets or goals.
 - [Manual bank opening balance](manual-bank-opening-balance.md) — bank balances start from an explicit workspace-level amount, not inferred from transaction history.
 - [GitHub history sync](github-history-sync.md) — GitHub OAuth connects through the API proxy, not the shell Git credential helper.
+- [Private photo personalization](private-photo-personalization.md) — personal and group photos use private storage paths and short-lived authorized viewing URLs, never public object links.
+- [Member money-record corrections](member-money-record-corrections.md) — members can correct only their own current-day personal money records; managers handle all removals and historical/shared changes.

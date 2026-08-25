@@ -31,11 +31,22 @@ export const GROUP_KIND = {
 
 export type GroupKind = (typeof GROUP_KIND)[keyof typeof GROUP_KIND];
 
+// Shared budgets use a small, recognizable identity system rather than
+// unrestricted uploads or colours. Defaults keep every existing workspace
+// usable and visually consistent after the additive schema update.
+export const DEFAULT_GROUP_ICON = "users";
+export const DEFAULT_GROUP_ACCENT_COLOR = "#0F766E";
+
 export const groupsTable = pgTable(
   "groups",
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
+    icon: text("icon").notNull().default(DEFAULT_GROUP_ICON),
+    accentColor: text("accent_color").notNull().default(DEFAULT_GROUP_ACCENT_COLOR),
+    // Group-owned image object path. The API resolves this private path to a
+    // short-lived viewing URL only for a verified workspace member.
+    photoPath: text("photo_path"),
     // Used exactly once to adopt the existing shared ledger without relying on
     // a personal name or a client-provided group identifier.
     legacyKey: text("legacy_key").unique(),

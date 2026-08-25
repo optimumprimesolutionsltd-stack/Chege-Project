@@ -6,6 +6,9 @@ import {
   useUpdateMemberRole,
   useGetGroup,
   useUpdateGroup,
+  useRequestPhotoUpload,
+  getGetGroupQueryKey,
+  getGetWorkspacesQueryKey,
 } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -15,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { GroupInviteLinks } from "@/components/group-invite-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { LogOut, Trash2, UserPlus, Shield, Send, RotateCcw, X } from "lucide-react";
+import { Award, BriefcaseBusiness, Camera, Heart, Home, LogOut, Star, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type GroupInvitation = {
@@ -26,6 +29,17 @@ type GroupInvitation = {
   status: "pending" | "accepted" | "cancelled" | "expired";
 };
 type InviteContact = { id: number; name: string; email: string; role: "admin" | "member" };
+const SHARED_BUDGET_ICONS = [
+  { value: "users", label: "People", icon: Users },
+  { value: "home", label: "Home", icon: Home },
+  { value: "heart", label: "Care", icon: Heart },
+  { value: "briefcase", label: "Work", icon: BriefcaseBusiness },
+  { value: "award", label: "Goals", icon: Award },
+  { value: "star", label: "Star", icon: Star },
+] as const;
+const SHARED_BUDGET_ACCENTS = [
+  "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669",
+] as const;
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "include", ...options });
@@ -35,13 +49,14 @@ async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export default function Settings() {
-  const { user, saveDisplayName } = useAuth();
+  const { user, saveDisplayName, saveProfilePhoto } = useAuth();
   const { data: members, isLoading } = useGetMembers();
   const removeMember = useRemoveMember();
   const leaveGroup = useLeaveGroup();
   const updateMemberRole = useUpdateMemberRole();
   const { data: group } = useGetGroup();
   const updateGroup = useUpdateGroup();
+  const requestPhotoUpload = useRequestPhotoUpload();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [inviteName, setInviteName] = useState("");
@@ -50,8 +65,12 @@ export default function Settings() {
   const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [groupIcon, setGroupIcon] = useState<(typeof SHARED_BUDGET_ICONS)[number]["value"]>("users");
+  const [groupAccentColor, setGroupAccentColor] = useState<(typeof SHARED_BUDGET_ACCENTS)[number]>("#0F766E");
   const [displayName, setDisplayName] = useState("");
   const [savingDisplayName, setSavingDisplayName] = useState(false);
+  const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
+  const [uploadingGroupPhoto, setUploadingGroupPhoto] = useState(false);
   const isPrivateWorkspace = group?.isPrivate ?? false;
   const canManageWorkspace = members?.some(
     (member) =>
@@ -67,7 +86,9 @@ export default function Settings() {
   const canLeaveGroup = Boolean(myMembership && myMembership.role !== "owner");
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
-  }, [group?.name]);
+    if (group?.icon) setGroupIcon(group.icon as (typeof SHARED_BUDGET_ICONS)[number]["value"]);
+    if (group?.accentColor) setGroupAccentColor(group.accentColor as (typeof SHARED_BUDGET_ACCENTS)[number]);
+  }, [group?.name, group?.icon, group?.accentColor]);
   useEffect(() => {
     setDisplayName([user?.firstName, user?.lastName].filter(Boolean).join(" "));
   }, [user?.firstName, user?.lastName]);
@@ -83,8 +104,7 @@ export default function Settings() {
     enabled: canManageShared,
   });
 
-  const handleSaveGroupName = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const saveGroupIdentity = async () => {
     if (!groupName.trim()) {
       toast({
         variant: "destructive",
@@ -94,15 +114,26 @@ export default function Settings() {
       return;
     }
     try {
-      await updateGroup.mutateAsync({ data: { name: groupName.trim() } });
-      toast({ title: "Group name updated" });
+      await updateGroup.mutateAsync({
+        data: { name: groupName.trim(), icon: groupIcon, accentColor: groupAccentColor },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+      ]);
+      toast({ title: "Shared budget updated", description: "Its name and identity now appear across Jamvi." });
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Could not update group name",
+        title: "Could not update Shared budget",
         description: error instanceof Error ? error.message : "Please try again.",
       });
     }
+  };
+
+  const handleSaveGroupIdentity = (event: React.FormEvent) => {
+    event.preventDefault();
+    void saveGroupIdentity();
   };
 
   const handleSaveDisplayName = async (event: React.FormEvent) => {
@@ -130,6 +161,55 @@ export default function Settings() {
       });
     } finally {
       setSavingDisplayName(false);
+    }
+  };
+
+  const uploadPhotoFile = async (file: File) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      throw new Error("Choose a JPG, PNG, or WebP image smaller than 5 MB.");
+    }
+    const upload = await requestPhotoUpload.mutateAsync({
+      data: { contentType: file.type as "image/jpeg" | "image/png" | "image/webp", size: file.size },
+    });
+    const response = await fetch(upload.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    if (!response.ok) throw new Error("Could not upload your photo. Please try again.");
+    return upload.objectPath;
+  };
+
+  const handleProfilePhotoChange = async (file?: File) => {
+    if (!file) return;
+    setUploadingProfilePhoto(true);
+    try {
+      await saveProfilePhoto(await uploadPhotoFile(file));
+      toast({ title: "Profile photo updated" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not update profile photo", description: error instanceof Error ? error.message : undefined });
+    } finally {
+      setUploadingProfilePhoto(false);
+    }
+  };
+
+  const handleGroupPhotoChange = async (file?: File) => {
+    if (!file || !group) return;
+    setUploadingGroupPhoto(true);
+    try {
+      const photoPath = await uploadPhotoFile(file);
+      await updateGroup.mutateAsync({
+        data: { name: groupName.trim() || group.name, icon: groupIcon, accentColor: groupAccentColor, photoPath },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+      ]);
+      toast({ title: "Group photo updated" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not update group photo", description: error instanceof Error ? error.message : undefined });
+    } finally {
+      setUploadingGroupPhoto(false);
     }
   };
 
@@ -262,7 +342,7 @@ export default function Settings() {
           {canManageShared
             ? "Manage who has access to this group budget."
             : isPrivateWorkspace
-              ? "This is your Personal budget. Only you can see it."
+              ? "This is My budget. Only you can see it."
             : "View your group and manage your own account details."}
         </p>
       </div>
@@ -277,9 +357,36 @@ export default function Settings() {
           <CardDescription>Your sign-in email is used to confirm invitations sent to you.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
-          <p className="rounded-lg bg-muted px-4 py-3 text-sm text-foreground">
-            Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email}</strong>
-          </p>
+          <div className="flex items-center gap-3 rounded-xl bg-muted px-4 py-3">
+            {user?.profileImageUrl ? (
+              <img src={user.profileImageUrl} alt="" className="h-12 w-12 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
+                {([user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "U").slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <p className="text-sm text-foreground">
+              Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email}</strong>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
+              <Camera className="h-4 w-4" />
+              {uploadingProfilePhoto ? "Uploading…" : "Choose profile photo"}
+              <input
+                className="sr-only"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={uploadingProfilePhoto}
+                onChange={(event) => void handleProfilePhotoChange(event.target.files?.[0])}
+              />
+            </label>
+            {user?.profileImageUrl ? (
+              <Button variant="ghost" size="sm" disabled={uploadingProfilePhoto} onClick={() => void saveProfilePhoto(null)}>
+                Use sign-in photo
+              </Button>
+            ) : null}
+          </div>
           <form onSubmit={handleSaveDisplayName} noValidate className="space-y-2">
             <label htmlFor="display-name" className="text-sm font-semibold text-foreground">Your name</label>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -309,13 +416,13 @@ export default function Settings() {
           <CardTitle>Budget name</CardTitle>
           <CardDescription>
             {isPrivateWorkspace
-              ? "This is the name for your Personal budget."
+               ? "This is the name for My budget."
               : "This is the name your Shared budget sees across Jamvi."}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
           {canManageWorkspace ? (
-            <form onSubmit={handleSaveGroupName} noValidate className="flex flex-col gap-2 sm:flex-row">
+            <form onSubmit={handleSaveGroupIdentity} noValidate className="flex flex-col gap-2 sm:flex-row">
               <Input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" />
               <Button type="submit" disabled={updateGroup.isPending} className="w-full sm:w-auto">
                 {updateGroup.isPending ? "Saving…" : "Save"}
@@ -326,17 +433,122 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
+      {!isPrivateWorkspace && (
+        <Card className="border-none shadow-md">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle>Shared budget identity</CardTitle>
+            <CardDescription>
+              A simple icon and accent color help members recognise this Shared budget when they switch between budgets.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5 px-4 pb-4 sm:px-6 sm:pb-6">
+            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/40 p-3">
+              {(() => {
+                const Icon = SHARED_BUDGET_ICONS.find((option) => option.value === groupIcon)?.icon ?? Users;
+                return group?.photoUrl ? (
+                  <img src={group.photoUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+                ) : (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: groupAccentColor }}>
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                );
+              })()}
+              <div>
+                <p className="font-semibold text-foreground">{groupName || group?.name || "Shared budget"}</p>
+                <p className="text-xs text-muted-foreground">This identity belongs to the group, not any one member.</p>
+              </div>
+            </div>
+
+            {canManageShared ? (
+              <>
+                  <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-background p-3">
+                    {group?.photoUrl ? (
+                      <img src={group.photoUrl} alt="" className="h-14 w-14 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded-xl text-white" style={{ backgroundColor: groupAccentColor }}>
+                        <Camera className="h-5 w-5" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">Group photo</p>
+                      <p className="text-xs text-muted-foreground">Choose a square JPG, PNG, or WebP image up to 5 MB.</p>
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">
+                      <Camera className="h-4 w-4" />
+                      {uploadingGroupPhoto ? "Uploading…" : "Choose photo"}
+                      <input
+                        className="sr-only"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        disabled={uploadingGroupPhoto}
+                        onChange={(event) => void handleGroupPhotoChange(event.target.files?.[0])}
+                      />
+                    </label>
+                  </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-foreground">Icon</p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                    {SHARED_BUDGET_ICONS.map((option) => {
+                      const Icon = option.icon;
+                      const selected = groupIcon === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setGroupIcon(option.value)}
+                          aria-pressed={selected}
+                          className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border text-xs font-medium transition-colors ${
+                            selected ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/20" : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted"
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-foreground">Accent color</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SHARED_BUDGET_ACCENTS.map((accent) => (
+                      <button
+                        key={accent}
+                        type="button"
+                        aria-label={`Use ${accent} as the accent color`}
+                        aria-pressed={groupAccentColor === accent}
+                        onClick={() => setGroupAccentColor(accent)}
+                        className={`h-9 w-9 rounded-full border-2 transition-transform hover:scale-105 ${
+                          groupAccentColor === accent ? "border-foreground ring-2 ring-offset-2 ring-ring" : "border-transparent"
+                        }`}
+                        style={{ backgroundColor: accent }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <Button type="button" onClick={() => void saveGroupIdentity()} disabled={updateGroup.isPending}>
+                  {updateGroup.isPending ? "Saving…" : "Save Shared budget identity"}
+                </Button>
+              </>
+            ) : (
+              <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                An owner or admin can update the Shared budget name, icon, and accent color.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Members */}
       <Card className="border-none shadow-md">
         <CardHeader className="p-4 sm:p-6">
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
-            <CardTitle>{isPrivateWorkspace ? "Personal budget" : "Group Members"}</CardTitle>
+            <CardTitle>{isPrivateWorkspace ? "My budget" : "Group Members"}</CardTitle>
           </div>
           <CardDescription>
             {isPrivateWorkspace
-              ? "Only you have access to this Personal budget. Shared budgets remain separate."
+               ? "Only you have access to My budget. Shared budgets remain separate."
               : canManageShared
                 ? "You can change any non-owner between Admin and Member or remove their access. The group owner is protected."
               : "The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups."}
@@ -400,7 +612,7 @@ export default function Settings() {
 
           {isPrivateWorkspace ? (
             <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
-                <p className="text-sm font-semibold text-foreground">Your Personal budget</p>
+                <p className="text-sm font-semibold text-foreground">My budget</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                   Expenses, goals, bank activity, and reports here belong only to you. A Shared budget has its own separate budget and members.
               </p>
@@ -441,7 +653,7 @@ export default function Settings() {
           )}
 
           {/* Invite member form */}
-          {canManageShared && <GroupInviteLinks />}
+          {canManageShared && <GroupInviteLinks groupName={group?.name} />}
           {canManageShared && (
             <form onSubmit={handleAdd} noValidate className="space-y-3 border-t border-border/50 pt-4">
               <div>
