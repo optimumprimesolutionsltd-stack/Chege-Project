@@ -16,7 +16,11 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export function workspaceLabel(workspace: Pick<Workspace, "isPrivate" | "name">) {
-  return workspace.isPrivate ? "Personal budget" : `Shared budget · ${workspace.name}`;
+  if (workspace.isPrivate) return "Personal budget";
+
+  const name = workspace.name.trim();
+  const normalizedName = name.replace(/\s+/g, " ").toLocaleLowerCase("en-US");
+  return normalizedName === "shared budget" ? "Shared budget" : `Shared budget · ${name}`;
 }
 
 export function WorkspaceSwitcher({
