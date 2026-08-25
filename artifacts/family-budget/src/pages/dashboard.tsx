@@ -117,7 +117,7 @@ function OpenInvitationLinkButton() {
   );
 }
 
-function CreateSharedGroupCard() {
+function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistingSharedBudget?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const createSharedGroup = useCreateSharedGroup();
@@ -151,16 +151,20 @@ function CreateSharedGroupCard() {
         <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="max-w-2xl">
              <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Your Personal budget is private</p>
-            <h2 className="mt-1 font-display text-xl font-bold text-foreground">Need to budget with other people?</h2>
+            <h2 className="mt-1 font-display text-xl font-bold text-foreground">
+              {hasExistingSharedBudget ? "Need another Shared budget?" : "Need to budget with other people?"}
+            </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-               Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join.
+               {hasExistingSharedBudget
+                 ? "Create a separate Shared budget for another family, chama, club, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
+                 : "Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <OpenInvitationLinkButton />
             <Button className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-               Start a group budget
+              {hasExistingSharedBudget ? "Create another Shared budget" : "Start a group budget"}
             </Button>
           </div>
         </CardContent>
@@ -201,9 +205,7 @@ function SharedGroupsFooter() {
   const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
 
   if (isLoading) return null;
-  // The dashboard switcher already lists every available Shared budget.
-  // Avoid rendering a second copy of those names in a separate card.
-  return sharedWorkspaces.length === 0 ? <CreateSharedGroupCard /> : null;
+  return <CreateSharedGroupCard hasExistingSharedBudget={sharedWorkspaces.length > 0} />;
 }
 
 // ── Quick Action: Bank Deposit ────────────────────────────────────────────────
