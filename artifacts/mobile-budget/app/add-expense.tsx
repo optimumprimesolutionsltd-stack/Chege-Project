@@ -376,7 +376,7 @@ export default function AddExpenseSheet() {
         })() : null}
 
         {/* Funding breakdown — only shown for a single named payer */}
-        {false && !paidFromBank && payerIds.length === 1 && (
+        {!paidFromBank && payerIds.length === 1 && (
         <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
           <View style={styles.fundingCardHeader}>
             <Feather name="layers" size={14} color={colors.primary} />
