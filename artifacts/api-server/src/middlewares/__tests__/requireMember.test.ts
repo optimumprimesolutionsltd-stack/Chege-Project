@@ -3,6 +3,7 @@ import express from "express";
 import request from "supertest";
 
 const legacyMemberIds = new Set<string>();
+const persistedUserIds = new Set<string>();
 const memberships = new Map<string, Array<{ groupId: number; role: string }>>();
 const privateWorkspaceIds = new Map<string, number>();
 let groupExists = false;
@@ -12,7 +13,9 @@ const groupsTable = {
   id: "groups.id",
   legacyKey: "groups.legacy_key",
   privateOwnerUserId: "groups.private_owner_user_id",
+  createdByUserId: "groups.created_by_user_id",
 };
+const usersTable = { id: "users.id" };
 const membersTable = {
   userId: "members.user_id",
   groupId: "members.group_id",
@@ -91,6 +94,12 @@ function selectQuery(fields: Record<string, unknown>) {
         monthlyTarget: null,
       }));
     }
+    if (table === usersTable) {
+      const userId = equalValue(filter, usersTable.id);
+      return typeof userId === "string" && persistedUserIds.has(userId)
+        ? [{ id: userId }]
+        : [];
+    }
     return [];
   };
   const query = {
@@ -118,6 +127,13 @@ function insertQuery(table: object) {
   return {
     values: (value: Record<string, unknown> | Record<string, unknown>[]) => {
       if (table === groupsTable && !Array.isArray(value)) {
+        const createdByUserId = value.createdByUserId;
+        if (
+          typeof createdByUserId === "string" &&
+          !persistedUserIds.has(createdByUserId)
+        ) {
+          throw new Error("groups.created_by_user_id must reference a persisted user");
+        }
         groupExists = true;
         if (typeof value.privateOwnerUserId === "string" && !privateWorkspaceIds.has(value.privateOwnerUserId)) {
           privateWorkspaceIds.set(value.privateOwnerUserId, nextGroupId++);
@@ -126,9 +142,15 @@ function insertQuery(table: object) {
       if (table === membersTable && !Array.isArray(value)) {
         legacyMemberIds.add(value.userId as string);
       }
+      if (table === usersTable && !Array.isArray(value)) {
+        persistedUserIds.add(value.id as string);
+      }
       if (table === groupMembershipsTable) {
         for (const member of Array.isArray(value) ? value : [value]) {
           const userId = member.userId as string;
+          if (!persistedUserIds.has(userId)) {
+            throw new Error("group_memberships.user_id must reference a persisted user");
+          }
           const existing = memberships.get(userId) ?? [];
           existing.push({
             groupId: member.groupId as number,
@@ -153,6 +175,7 @@ const tx = {
 
 const db = {
   select: vi.fn(selectQuery),
+  insert: vi.fn(insertQuery),
   transaction: vi.fn(async (callback: (transaction: typeof tx) => unknown) => callback(tx)),
 };
 
@@ -179,7 +202,7 @@ vi.mock("@workspace/db", () => ({
   jointAccountTxTable: simpleTable,
   savingsGoalContributionsTable: simpleTable,
   savingsGoalsTable: simpleTable,
-  usersTable: simpleTable,
+  usersTable,
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -224,6 +247,7 @@ function protectedApp(userId: string) {
 describe("requireMember", () => {
   beforeEach(() => {
     legacyMemberIds.clear();
+    persistedUserIds.clear();
     memberships.clear();
     privateWorkspaceIds.clear();
     groupExists = false;
@@ -241,6 +265,21 @@ describe("requireMember", () => {
     expect(legacyMemberIds.has("first-member")).toBe(true);
     expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
     expect(privateWorkspaceIds.has("first-member")).toBe(true);
+  });
+
+  it("persists a fresh authenticated user before creating their Personal budget", async () => {
+    const req = authenticatedRequest("fresh-user");
+    const next = vi.fn();
+
+    await requireMember(req, response(), next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(persistedUserIds.has("fresh-user")).toBe(true);
+    expect(privateWorkspaceIds.has("fresh-user")).toBe(true);
+    expect(memberships.get("fresh-user")).toContainEqual({
+      groupId: 2,
+      role: "owner",
+    });
   });
 
   it("reuses an existing group membership without re-adopting the ledger", async () => {

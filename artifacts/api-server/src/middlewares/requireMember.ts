@@ -28,6 +28,20 @@ const LEGACY_GROUP_KEY = "initial-shared-budget";
 const LEGACY_GROUP_NAME = "Shared budget";
 
 /**
+ * Sessions are normally created immediately after the auth callback persists a
+ * user. Re-checking the record here makes protected routes robust if a session
+ * arrives during a callback race or after a user row was removed externally.
+ * The insert is intentionally minimal: profile details remain owned by the
+ * auth upsert path.
+ */
+async function ensureAuthenticatedUser(userId: string): Promise<void> {
+  await db
+    .insert(usersTable)
+    .values({ id: userId })
+    .onConflictDoNothing();
+}
+
+/**
  * Resolves a signed-in person's private group before protected routes.
  *
  * The app historically had one implicit shared ledger. On the first protected
@@ -230,6 +244,7 @@ export async function requireMember(
 
   try {
     const userId = req.user.id;
+    await ensureAuthenticatedUser(userId);
     await adoptLegacyGroup(userId);
     const privateWorkspaceId = await ensurePrivateWorkspace(userId);
     const headerWorkspaceId = typeof req.get === "function"
