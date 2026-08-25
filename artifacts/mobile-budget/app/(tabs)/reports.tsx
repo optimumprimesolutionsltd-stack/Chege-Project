@@ -185,9 +185,9 @@ export default function ReportsScreen() {
 
   const queryParams = { month, year };
 
-  const { data: expenses    = [], isLoading: loadingExp,     refetch: refetchExp     } = useGetExpenses(queryParams);
-  const { data: catBreakdown = [], isLoading: loadingCat,    refetch: refetchCat     } = useGetDashboardCategoryBreakdown(queryParams);
-  const { data: summary,          isLoading: loadingSummary, refetch: refetchSummary } = useGetDashboardSummary(queryParams);
+  const { data: expenses    = [], isLoading: loadingExp,     isError: expensesError, refetch: refetchExp     } = useGetExpenses(queryParams);
+  const { data: catBreakdown = [], isLoading: loadingCat,    isError: categoryError, refetch: refetchCat     } = useGetDashboardCategoryBreakdown(queryParams);
+  const { data: summary,          isLoading: loadingSummary, isError: summaryError, refetch: refetchSummary } = useGetDashboardSummary(queryParams);
   const {
     data: incomeStreamReport,
     isLoading: loadingIncomeStreams,
@@ -259,6 +259,37 @@ export default function ReportsScreen() {
   const totalVariance    = totalBudget - totalSpent;
   const budgetPct        = totalBudget > 0 ? Math.min(totalSpent / totalBudget * 100, 100) : 0;
   const isOverBudget     = totalSpent > totalBudget;
+  const hasMonthlyActivity = totalSpent > 0 || sortedCategories.some(c => c.spentAmount > 0) || (incomeStreamReport?.totalFunding ?? 0) > 0;
+  const fundingGap = incomeStreamReport && incomeStreamReport.totalExpected > 0
+    ? incomeStreamReport.totalExpected - incomeStreamReport.totalFunding
+    : null;
+  const progressLoading = loadingSummary || loadingCat || loadingIncomeStreams || loadingExp;
+  const progressError = summaryError || categoryError || expensesError || incomeStreamsError;
+  const progressStatus = totalBudget <= 0
+    ? 'No budget yet'
+    : !hasMonthlyActivity
+      ? 'No activity yet'
+      : isOverBudget
+        ? 'Needs attention'
+        : overBudgetCount > 0 || budgetPct >= 80
+          ? 'Watch spending'
+          : 'On track';
+  const progressLabel = progressLoading
+    ? 'Checking this month'
+    : progressError
+      ? 'Summary unavailable'
+      : progressStatus;
+  const overBudgetCategoryNames = sortedCategories
+    .filter(c => c.spentAmount > c.budgetAmount)
+    .map(c => c.category)
+    .filter(Boolean);
+  const progressTone = progressLoading || progressError
+    ? { color: colors.mutedForeground, background: colors.muted, border: colors.border, icon: 'info' as const }
+    : progressStatus === 'Needs attention'
+    ? { color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.3)', icon: 'alert-triangle' as const }
+    : progressStatus === 'Watch spending'
+      ? { color: '#d97706', background: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.3)', icon: 'help-circle' as const }
+      : { color: colors.primary, background: 'rgba(34,197,94,0.08)', border: colors.border, icon: 'check-circle' as const };
 
   // Member spending
   const memberSpending = useMemo(() => {
@@ -344,6 +375,72 @@ export default function ReportsScreen() {
           refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
         >
+          {/* ── Plain-language monthly progress ── */}
+          <View
+            testID="monthly-progress-summary"
+            style={[styles.progressCard, { backgroundColor: progressTone.background, borderColor: progressTone.border }]}
+          >
+            <View style={styles.progressHeading}>
+              <Feather name={progressTone.icon} size={20} color={progressTone.color} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.progressEyebrow, { color: colors.mutedForeground }]}>HOW YOU’RE DOING</Text>
+                <View style={styles.progressTitleRow}>
+                  <Text style={[styles.progressTitle, { color: colors.foreground }]}>{progressLabel}</Text>
+                  <Text style={[styles.progressMonth, { color: colors.mutedForeground }]}>{MONTHS_SHORT[month - 1]} {year}</Text>
+                </View>
+              </View>
+            </View>
+            {progressLoading ? (
+              <View style={styles.progressMessageRow}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.progressMessage, { color: colors.mutedForeground }]}>Loading this month’s picture…</Text>
+              </View>
+            ) : progressError ? (
+              <Text style={[styles.progressMessage, { color: colors.mutedForeground }]}>
+                We couldn’t load enough information to summarize this month. The detailed report below may still be available.
+              </Text>
+            ) : totalBudget <= 0 ? (
+              <Text style={[styles.progressMessage, { color: colors.mutedForeground }]}>
+                No budget categories are set for this month, so there is no spending target to compare with.
+              </Text>
+            ) : !hasMonthlyActivity ? (
+              <Text style={[styles.progressMessage, { color: colors.mutedForeground }]}>
+                Nothing has been recorded yet. Your budget is {formatKES(totalBudget)}, with no spending or funding recorded.
+              </Text>
+            ) : (
+              <Text style={[styles.progressMessage, { color: colors.mutedForeground }]}>
+                You’ve spent {formatKES(totalSpent)} of {formatKES(totalBudget)} ({Math.round(budgetPct)}%).
+                {isOverBudget ? ` That is ${formatKES(totalSpent - totalBudget)} over budget.` : ` You have ${formatKES(totalBudget - totalSpent)} left.`}
+                {overBudgetCount > 0 ? ` ${overBudgetCategoryNames.slice(0, 3).join(', ')}${overBudgetCount > 3 ? ' and other categories' : ''} need${overBudgetCount === 1 ? 's' : ''} attention.` : ''}
+              </Text>
+            )}
+            {!progressLoading && !progressError && (
+              <View style={styles.progressStats}>
+                <View style={[styles.progressStat, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Spending</Text>
+                  <Text style={[styles.progressStatAmount, { color: colors.foreground }]}>{formatKES(totalSpent)}</Text>
+                  <Text style={[styles.progressStatSub, { color: colors.mutedForeground }]}>of {formatKES(totalBudget)} budget</Text>
+                </View>
+                <View style={[styles.progressStat, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Recorded funding</Text>
+                  <Text style={[styles.progressStatAmount, { color: colors.foreground }]}>{formatKES(incomeStreamReport?.totalFunding ?? 0)}</Text>
+                  <Text style={[styles.progressStatSub, { color: colors.mutedForeground }]}>
+                    {incomeStreamReport && incomeStreamReport.totalExpected > 0
+                      ? fundingGap !== null && fundingGap >= 0
+                        ? `${formatKES(fundingGap)} still expected`
+                        : `${formatKES(Math.abs(fundingGap ?? 0))} above expected`
+                      : 'No expected-income target'}
+                  </Text>
+                </View>
+                <View style={[styles.progressStat, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Categories to watch</Text>
+                  <Text style={[styles.progressStatAmount, { color: colors.foreground }]}>{overBudgetCount}</Text>
+                  <Text style={[styles.progressStatSub, { color: colors.mutedForeground }]}>{overBudgetCount === 1 ? 'over its budget' : 'over their budgets'}</Text>
+                </View>
+              </View>
+            )}
+          </View>
+
           {/* ── Summary cards ── */}
           <View style={styles.cardsRow}>
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -826,6 +923,21 @@ const styles = StyleSheet.create({
 
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { padding: 16, gap: 12 },
+
+  // Plain-language monthly progress
+  progressCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
+  progressHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  progressEyebrow: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8 },
+  progressTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 3 },
+  progressTitle: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  progressMonth: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+  progressMessageRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  progressMessage: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  progressStats: { flexDirection: 'row', gap: 8 },
+  progressStat: { flex: 1, borderRadius: 10, borderWidth: 1, padding: 10 },
+  progressStatLabel: { fontSize: 10, fontFamily: 'Inter_500Medium' },
+  progressStatAmount: { fontSize: 14, fontFamily: 'Inter_700Bold', marginTop: 4 },
+  progressStatSub: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 2 },
 
   // Summary cards (3 across)
   cardsRow: { flexDirection: 'row', gap: 8 },

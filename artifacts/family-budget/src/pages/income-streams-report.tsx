@@ -1,16 +1,20 @@
 import { useMemo, useState } from "react";
 import {
   getDashboardMonthlyReportPdf,
+  getGetDashboardCategoryBreakdownQueryKey,
   getGetDashboardIncomeStreamsQueryKey,
   getGetDashboardPeriodTotalsQueryKey,
+  getGetDashboardSummaryQueryKey,
+  useGetDashboardCategoryBreakdown,
   useGetDashboardIncomeStreams,
   useGetDashboardPeriodTotals,
+  useGetDashboardSummary,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { dateInputValue, getPeriodRange, type PeriodView } from "@/lib/period-range";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, Calendar, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Download, Landmark, Loader2, PiggyBank, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Calendar, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Download, Landmark, Loader2, PiggyBank, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
   if (recordType === "deposit") return "Joint bank deposit";
@@ -43,6 +47,14 @@ export default function IncomeStreamsReport() {
   const { data: report, isLoading, isError, refetch } = useGetDashboardIncomeStreams(
     { month, year },
     { query: { queryKey: getGetDashboardIncomeStreamsQueryKey({ month, year }), retry: false }, request: { cache: "no-store" } },
+  );
+  const monthlySummary = useGetDashboardSummary(
+    { month, year },
+    { query: { queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false }, request: { cache: "no-store" } },
+  );
+  const monthlyCategories = useGetDashboardCategoryBreakdown(
+    { month, year },
+    { query: { queryKey: getGetDashboardCategoryBreakdownQueryKey({ month, year }), retry: false }, request: { cache: "no-store" } },
   );
   const periodRange = useMemo(
     () => getPeriodRange({ view: periodView, anchorDate, month, year, customStartDate, customEndDate }),
@@ -80,6 +92,45 @@ export default function IncomeStreamsReport() {
     }
   };
   const currentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+  const progressCategories = (monthlyCategories.data ?? []) as Array<{
+    category: string;
+    budgetAmount: number;
+    spentAmount: number;
+  }>;
+  const progressBudget = monthlySummary.data?.totalBudget ?? 0;
+  const progressSpent = monthlySummary.data?.totalSpent ?? 0;
+  const progressOverCategoryNames = progressCategories
+    .filter((category) => category.spentAmount > category.budgetAmount)
+    .map((category) => category.category)
+    .filter(Boolean);
+  const progressHasActivity = progressSpent > 0 || progressCategories.some((category) => category.spentAmount > 0) || (report?.totalFunding ?? 0) > 0;
+  const progressUsagePercent = progressBudget > 0 ? Math.round((progressSpent / progressBudget) * 100) : 0;
+  const progressFundingGap = report && report.totalExpected > 0 ? report.totalExpected - report.totalFunding : null;
+  const progressLoading = monthlySummary.isLoading || monthlyCategories.isLoading || isLoading;
+  const progressError = monthlySummary.isError || monthlyCategories.isError || isError;
+  const progressStatus = progressBudget <= 0
+    ? "No budget yet"
+    : !progressHasActivity
+      ? "No activity yet"
+      : progressSpent > progressBudget
+        ? "Needs attention"
+        : progressOverCategoryNames.length > 0 || progressUsagePercent >= 80
+          ? "Watch spending"
+          : "On track";
+  const progressLabel = progressLoading
+    ? "Checking this month"
+    : progressError
+      ? "Summary unavailable"
+      : progressStatus;
+  const progressTone = progressLoading || progressError
+    ? "neutral"
+    : progressStatus === "Needs attention"
+    ? "destructive"
+    : progressStatus === "Watch spending"
+      ? "warning"
+      : progressStatus === "On track"
+        ? "positive"
+        : "neutral";
   const downloadPdf = async () => {
     setIsDownloading(true);
     setDownloadMessage(null);
@@ -147,6 +198,77 @@ export default function IncomeStreamsReport() {
           {downloadMessage}
         </div>
       )}
+
+      <Card
+        className={`overflow-hidden border-none shadow-md ${progressTone === "destructive" ? "bg-destructive/5" : progressTone === "warning" ? "bg-amber-500/5" : "bg-primary/5"}`}
+        data-testid="monthly-progress-summary"
+      >
+        <div className={`h-1 ${progressTone === "destructive" ? "bg-destructive" : progressTone === "warning" ? "bg-amber-500" : "bg-primary"}`} />
+        <CardContent className="space-y-4 p-4 sm:p-6">
+          <div className="flex items-start gap-3">
+            {progressTone === "destructive" ? (
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            ) : progressTone === "warning" ? (
+              <CircleHelp className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            ) : progressTone === "positive" ? (
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            ) : (
+              <CircleHelp className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">How you’re doing</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <h2 className="font-display text-xl font-bold">{progressLabel}</h2>
+                <span className="rounded-full bg-background/70 px-2.5 py-1 text-xs font-semibold text-muted-foreground">{formatMonthYear(month, year)}</span>
+              </div>
+              {progressLoading ? (
+                <p className="mt-1 text-sm text-muted-foreground">Loading this month’s picture…</p>
+              ) : progressError ? (
+                <p className="mt-1 text-sm text-muted-foreground">We couldn’t load enough information to summarize this month. The detailed report below may still be available.</p>
+              ) : progressBudget <= 0 ? (
+                <p className="mt-1 text-sm text-muted-foreground">No budget categories are set for this month, so there is no spending target to compare with.</p>
+              ) : !progressHasActivity ? (
+                <p className="mt-1 text-sm text-muted-foreground">Nothing has been recorded yet. Your budget is {formatKes(progressBudget)}, with no spending or funding recorded.</p>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  You’ve spent {formatKes(progressSpent)} of {formatKes(progressBudget)} ({progressUsagePercent}%).
+                  {progressSpent > progressBudget
+                    ? ` That is ${formatKes(progressSpent - progressBudget)} over budget.`
+                    : ` You have ${formatKes(progressBudget - progressSpent)} left.`}
+                  {progressOverCategoryNames.length > 0
+                    ? ` ${progressOverCategoryNames.slice(0, 3).join(", ")}${progressOverCategoryNames.length > 3 ? " and other categories" : ""} need attention.`
+                    : ""}
+                </p>
+              )}
+            </div>
+          </div>
+          {!progressLoading && !progressError && (
+            <div className="grid gap-2 text-sm sm:grid-cols-3">
+              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                <p className="text-xs text-muted-foreground">Spending</p>
+                <p className="mt-1 font-display text-lg font-bold">{formatKes(progressSpent)}</p>
+                <p className="text-xs text-muted-foreground">of {formatKes(progressBudget)} budget</p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                <p className="text-xs text-muted-foreground">Recorded funding</p>
+                <p className="mt-1 font-display text-lg font-bold">{formatKes(report?.totalFunding ?? 0)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {report && report.totalExpected > 0
+                    ? progressFundingGap !== null && progressFundingGap >= 0
+                      ? `${formatKes(progressFundingGap)} still expected`
+                      : `${formatKes(Math.abs(progressFundingGap ?? 0))} above expected`
+                    : "No expected-income target"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                <p className="text-xs text-muted-foreground">Categories to watch</p>
+                <p className="mt-1 font-display text-lg font-bold">{progressOverCategoryNames.length}</p>
+                <p className="text-xs text-muted-foreground">{progressOverCategoryNames.length === 1 ? "over its budget" : "over their budgets"}</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="overflow-hidden border-none shadow-md" data-testid="period-totals-report">
         <div className="h-1 bg-primary" />
