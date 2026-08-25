@@ -12,10 +12,10 @@ paths = [ "/" ]
 localPort = 25043
 
 [services.development]
-run = "pnpm --filter @workspace/family-budget run dev"
+run = "corepack pnpm@11.20.0 --filter @workspace/family-budget run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/family-budget", "run", "build" ]
+build = [ "corepack", "pnpm@11.20.0", "--filter", "@workspace/family-budget", "run", "build" ]
 serve = "static"
 publicDir = "artifacts/family-budget/dist/public"
 

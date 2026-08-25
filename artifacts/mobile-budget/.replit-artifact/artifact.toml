@@ -13,11 +13,11 @@ paths = [ "/mobile-budget/" ]
 localPort = 25707
 
 [services.development]
-run = "pnpm --filter @workspace/mobile-budget run dev"
+run = "corepack pnpm@11.20.0 --filter @workspace/mobile-budget run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/mobile-budget", "run", "build" ]
-run = [ "pnpm", "--filter", "@workspace/mobile-budget", "run", "serve" ]
+build = [ "corepack", "pnpm@11.20.0", "--filter", "@workspace/mobile-budget", "run", "build" ]
+run = [ "corepack", "pnpm@11.20.0", "--filter", "@workspace/mobile-budget", "run", "serve" ]
 
 [services.env]
 PORT = "25707"
