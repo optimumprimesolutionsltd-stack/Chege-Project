@@ -166,10 +166,13 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
                  ? "Create a separate Shared budget for another family, chama, club, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
                  : "Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
             </p>
+             <p className="mt-2 text-xs font-medium text-foreground/70">
+               Name it, create it, then invite the people who should share it.
+             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <OpenInvitationLinkButton />
-            <Button className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
+             <Button data-testid="create-shared-budget-cta" className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               {hasExistingSharedBudget ? "Create another Shared budget" : "Create a Shared budget"}
             </Button>
@@ -387,6 +390,12 @@ function ExpenseForm({
     }
   }, [canManageShared, currentUserId, paidBy]);
 
+  useEffect(() => {
+    if (!paidBy && selectableMembers.length === 1) {
+      setPaidBy(selectableMembers[0].userId);
+    }
+  }, [paidBy, selectableMembers]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
@@ -522,12 +531,14 @@ function ExpenseForm({
           {!canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
         </div>
       </div>
-      {!paidFromBank && payerId && (
+      {!paidFromBank && (
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">
-            Income source <span className="text-muted-foreground font-normal">(optional)</span>
+            Financed by <span className="text-muted-foreground font-normal">(income streams)</span>
           </label>
-          {isIncomeSourcesLoading ? (
+          {!payerId ? (
+            <p className="text-xs text-muted-foreground">Choose who paid above to see their income streams.</p>
+          ) : isIncomeSourcesLoading ? (
             <p className="text-xs text-muted-foreground">Loading income sources…</p>
           ) : incomeSources.length > 0 ? (
             <select

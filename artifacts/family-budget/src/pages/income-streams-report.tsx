@@ -152,7 +152,7 @@ export default function IncomeStreamsReport() {
         <div className="h-1 bg-primary" />
         <CardContent className="space-y-5 p-4 sm:p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+            <div className="min-w-0">
               <p className="font-display text-xl font-bold">Period totals</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {hasInvalidRange ? "Choose an end date on or after the start date." : displayPeriodRange(periodRange.startDate, periodRange.endDate)}
@@ -254,28 +254,28 @@ export default function IncomeStreamsReport() {
               </div>
 
                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
-                <div className="rounded-xl bg-muted/50 p-3">
+                <div className="min-w-0 rounded-xl bg-muted/50 p-3">
                   <Landmark className="h-4 w-4 text-primary" />
                   <p className="mt-2 text-xs text-muted-foreground">Bank deposits</p>
-                  <p className="mt-1 font-display text-lg font-bold">{formatKes(periodTotals.data.bankDepositTotal)}</p>
+                  <p className="mt-1 break-words font-display text-lg font-bold">{formatKes(periodTotals.data.bankDepositTotal)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{periodTotals.data.bankDepositCount} {periodTotals.data.bankDepositCount === 1 ? "deposit" : "deposits"}</p>
                 </div>
-                <div className="rounded-xl bg-muted/50 p-3">
+                <div className="min-w-0 rounded-xl bg-muted/50 p-3">
                   <TrendingDown className="h-4 w-4 text-destructive" />
                   <p className="mt-2 text-xs text-muted-foreground">Bank disbursed</p>
-                  <p className="mt-1 font-display text-lg font-bold">{formatKes(periodTotals.data.bankDisbursementTotal)}</p>
+                  <p className="mt-1 break-words font-display text-lg font-bold">{formatKes(periodTotals.data.bankDisbursementTotal)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{periodTotals.data.bankDisbursementCount} {periodTotals.data.bankDisbursementCount === 1 ? "withdrawal" : "withdrawals"}</p>
                 </div>
-                <div className="rounded-xl bg-muted/50 p-3">
+                <div className="min-w-0 rounded-xl bg-muted/50 p-3">
                   <PiggyBank className="h-4 w-4 text-primary" />
                   <p className="mt-2 text-xs text-muted-foreground">Goal savings</p>
-                  <p className="mt-1 font-display text-lg font-bold">{formatKes(periodTotals.data.savingsTotal)}</p>
+                  <p className="mt-1 break-words font-display text-lg font-bold">{formatKes(periodTotals.data.savingsTotal)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{periodTotals.data.savingsCount} {periodTotals.data.savingsCount === 1 ? "addition" : "additions"}</p>
                 </div>
-                <div className="rounded-xl bg-muted/50 p-3">
+                <div className="min-w-0 rounded-xl bg-muted/50 p-3">
                   <TrendingUp className="h-4 w-4 text-primary" />
                   <p className="mt-2 text-xs text-muted-foreground">Recorded expenses</p>
-                  <p className="mt-1 font-display text-lg font-bold">{formatKes(periodTotals.data.expenseTotal)}</p>
+                  <p className="mt-1 break-words font-display text-lg font-bold">{formatKes(periodTotals.data.expenseTotal)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">Before standalone bank costs</p>
                 </div>
               </div>
@@ -293,7 +293,7 @@ export default function IncomeStreamsReport() {
 
       <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
         <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold">Monthly income-stream detail</p>
           <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
             It combines personal portions of expenses, shared-bank deposits, and personal savings additions.

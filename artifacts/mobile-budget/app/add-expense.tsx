@@ -143,6 +143,12 @@ export default function AddExpenseSheet() {
     }
   }, [canManageShared, user?.id]);
 
+  useEffect(() => {
+    if (canManageShared && !paidFromBank && payerIds.length === 0 && selectablePayers.length === 1) {
+      setPayerIds([selectablePayers[0].userId]);
+    }
+  }, [canManageShared, paidFromBank, payerIds.length, selectablePayers]);
+
   const { mutateAsync: createExpenseAsync } = useCreateExpense();
   const [isPending, setIsPending] = useState(false);
 
@@ -375,12 +381,12 @@ export default function AddExpenseSheet() {
           );
         })() : null}
 
-        {/* Funding breakdown — only shown for a single named payer */}
-        {!paidFromBank && payerIds.length === 1 && (
+        {/* Funding breakdown — visible while choosing a single named payer */}
+        {!paidFromBank && payerIds.length <= 1 && (
         <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
           <View style={styles.fundingCardHeader}>
             <Feather name="layers" size={14} color={colors.primary} />
-            <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FUNDED FROM</Text>
+            <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FINANCED BY (INCOME STREAMS)</Text>
             <Text style={styles.fundingRequired}>* Required</Text>
           </View>
 
