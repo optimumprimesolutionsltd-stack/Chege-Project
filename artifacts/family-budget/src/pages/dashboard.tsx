@@ -46,6 +46,13 @@ import { WorkspaceSwitcher, workspaceLabel } from "@/components/workspace-switch
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
+function localDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 const OVERVIEW_SHORTCUTS = [
   { href: "/budget", label: "Budget", description: "Plan spending", icon: Wallet },
   { href: "/contributions", label: "Contributions", description: "See money in", icon: TrendingUp },
@@ -164,7 +171,7 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
             <OpenInvitationLinkButton />
             <Button className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              {hasExistingSharedBudget ? "Create another Shared budget" : "Start a group budget"}
+              {hasExistingSharedBudget ? "Create another Shared budget" : "Create a Shared budget"}
             </Button>
           </div>
         </CardContent>
@@ -347,16 +354,38 @@ function ExpenseForm({
 }) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
   const [category, setCategory] = useState("");
   const [paidBy, setPaidBy] = useState("");
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [paidFromBank, setPaidFromBank] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [date, setDate] = useState(localDateInputValue());
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
+  const payerId = paidBy || (!canManageShared ? currentUserId : "");
+  const { data: incomeSources = [], isLoading: isIncomeSourcesLoading } = useGetIncomeSources(
+    { userId: payerId },
+    {
+      query: {
+        enabled: Boolean(payerId),
+        queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }),
+      },
+    },
+  );
   const selectableMembers = canManageShared
     ? members
     : members.filter((member) => member.userId === currentUserId);
   const createExpense = useCreateExpense();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const today = localDateInputValue();
+
+  useEffect(() => {
+    if (!canManageShared && currentUserId && paidBy !== currentUserId) {
+      setPaidBy(currentUserId);
+    }
+  }, [canManageShared, currentUserId, paidBy]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,11 +414,27 @@ function ExpenseForm({
       });
       return;
     }
-    if (!paidBy) {
+    if (!category) {
+      toast({
+        variant: "destructive",
+        title: "Choose a category",
+        description: "Select a category before logging this expense.",
+      });
+      return;
+    }
+    if (!paidBy && !paidFromBank) {
       toast({
         variant: "destructive",
         title: "Choose who paid",
-        description: "Select the person who paid before logging this expense.",
+        description: "Select the person who paid, or choose the joint bank account.",
+      });
+      return;
+    }
+    if (date > today) {
+      toast({
+        variant: "destructive",
+        title: "Future date not allowed",
+        description: "Use today or an earlier date for an expense.",
       });
       return;
     }
@@ -399,8 +444,12 @@ function ExpenseForm({
           amount: amt,
           description,
           category: category,
-          paidById: canManageShared ? paidBy : currentUserId,
-          date: new Date().toISOString().split('T')[0],
+          notes: notes.trim() || undefined,
+          paidById: paidFromBank ? undefined : (paidBy || currentUserId),
+          paidFromBank,
+          isRecurring,
+          date,
+          ...(incomeSourceId && !paidFromBank ? { incomeSourceId } : {}),
         },
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
@@ -425,7 +474,7 @@ function ExpenseForm({
           <Input placeholder="What was it for?" value={description} onChange={e => setDescription(e.target.value)} required className="h-11 bg-card" />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Category <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <label className="text-sm font-semibold text-foreground">Category <span className="text-destructive">*</span></label>
           <select value={category} onChange={e => setCategory(e.target.value)} className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
             <option value="">Pick a category</option>
             {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
@@ -439,16 +488,87 @@ function ExpenseForm({
              {selectableMembers.map((m) => {
               const name = m.userName?.split(" ")[0] ?? "Member";
               return (
-                <button key={m.userId} type="button" onClick={() => setPaidBy(m.userId)}
+                <button
+                  key={m.userId}
+                  type="button"
+                  onClick={() => {
+                    setPaidBy(m.userId);
+                    setPaidFromBank(false);
+                    setIncomeSourceId(null);
+                  }}
                   className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
                   {name}
                 </button>
               );
             })}
           </div>
-          {!paidBy && <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>}
+          {!paidBy && !paidFromBank && <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>}
         </div>
       </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <Input placeholder="Any extra details…" value={notes} onChange={e => setNotes(e.target.value)} className="h-11 bg-card" />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Date <span className="text-destructive">*</span></label>
+          <Input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            max={canManageShared ? undefined : today}
+            className="h-11 bg-card"
+          />
+          {!canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
+        </div>
+      </div>
+      {!paidFromBank && payerId && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">
+            Income source <span className="text-muted-foreground font-normal">(optional)</span>
+          </label>
+          {isIncomeSourcesLoading ? (
+            <p className="text-xs text-muted-foreground">Loading income sources…</p>
+          ) : incomeSources.length > 0 ? (
+            <select
+              value={incomeSourceId?.toString() ?? ""}
+              onChange={e => setIncomeSourceId(e.target.value ? Number(e.target.value) : null)}
+              className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">No income source selected</option>
+              {incomeSources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
+            </select>
+          ) : (
+            <p className="text-xs text-muted-foreground">No income sources set up yet. Add one from Budget.</p>
+          )}
+          <p className="text-xs text-muted-foreground">Choosing a source helps Jamvi track where this spending was funded from.</p>
+        </div>
+      )}
+      {canManageShared && (
+        <div className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              const nextPaidFromBank = !paidFromBank;
+              setPaidFromBank(nextPaidFromBank);
+              if (nextPaidFromBank) {
+                setPaidBy("");
+                setIncomeSourceId(null);
+              }
+            }}
+            className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors sm:shrink-0 ${paidFromBank ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-300" : "border-input bg-card text-foreground hover:bg-muted/40"}`}
+          >
+            🏦 Joint bank account
+          </button>
+          <label className="flex items-start gap-2 text-sm text-foreground">
+            <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
+            <span>
+              <span className="font-semibold">Recurring expense</span>
+              <span className="block text-xs text-muted-foreground">Remind me to apply this next month.</span>
+            </span>
+          </label>
+        </div>
+      )}
       <div className="flex gap-3">
         <Button type="submit" className="h-11 px-6 rounded-xl bg-amber-600 hover:bg-amber-700 text-white" disabled={createExpense.isPending}>
           {createExpense.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -834,6 +954,8 @@ export default function Dashboard() {
           </p>
         </section>
       </div>
+
+      {group?.isPrivate && <SharedGroupsFooter />}
 
       {isSharedWorkspace && (
         <section aria-labelledby="group-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
@@ -1338,7 +1460,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {group?.isPrivate && <SharedGroupsFooter />}
     </div>
   );
 }
