@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useGetMembers,
   useLeaveGroup,
@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { GroupInviteLinks } from "@/components/group-invite-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Award, BriefcaseBusiness, Camera, Heart, Home, LogOut, Star, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
+import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Pencil, Star, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type GroupInvitation = {
@@ -69,8 +69,12 @@ export default function Settings() {
   const [groupAccentColor, setGroupAccentColor] = useState<(typeof SHARED_BUDGET_ACCENTS)[number]>("#0F766E");
   const [displayName, setDisplayName] = useState("");
   const [savingDisplayName, setSavingDisplayName] = useState(false);
+  const [editingDisplayName, setEditingDisplayName] = useState(false);
+  const [editingBudgetName, setEditingBudgetName] = useState(false);
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [uploadingGroupPhoto, setUploadingGroupPhoto] = useState(false);
+  const displayNameInputRef = useRef<HTMLInputElement>(null);
+  const budgetNameInputRef = useRef<HTMLInputElement>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
   const canManageWorkspace = members?.some(
     (member) =>
@@ -104,7 +108,7 @@ export default function Settings() {
     enabled: canManageShared,
   });
 
-  const saveGroupIdentity = async () => {
+  const saveGroupIdentity = async (closeBudgetNameEditor = false) => {
     if (!groupName.trim()) {
       toast({
         variant: "destructive",
@@ -121,7 +125,13 @@ export default function Settings() {
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
       ]);
-      toast({ title: "Shared budget updated", description: "Its name and identity now appear across Jamvi." });
+      toast({
+        title: isPrivateWorkspace ? "Budget updated" : "Shared budget updated",
+        description: isPrivateWorkspace
+          ? "Your budget name now appears across Jamvi."
+          : "Its name and identity now appear across Jamvi.",
+      });
+      if (closeBudgetNameEditor) setEditingBudgetName(false);
     } catch (error) {
       toast({
         variant: "destructive",
@@ -133,7 +143,7 @@ export default function Settings() {
 
   const handleSaveGroupIdentity = (event: React.FormEvent) => {
     event.preventDefault();
-    void saveGroupIdentity();
+    void saveGroupIdentity(true);
   };
 
   const handleSaveDisplayName = async (event: React.FormEvent) => {
@@ -153,6 +163,7 @@ export default function Settings() {
       await saveDisplayName(name);
       await queryClient.invalidateQueries();
       toast({ title: "Name updated" });
+      setEditingDisplayName(false);
     } catch (error) {
       toast({
         variant: "destructive",
@@ -163,6 +174,35 @@ export default function Settings() {
       setSavingDisplayName(false);
     }
   };
+
+  const savedDisplayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
+  const cancelDisplayNameEdit = () => {
+    setDisplayName([user?.firstName, user?.lastName].filter(Boolean).join(" "));
+    setEditingDisplayName(false);
+  };
+  const cancelBudgetNameEdit = () => {
+    setGroupName(group?.name ?? "");
+    setEditingBudgetName(false);
+  };
+  const startDisplayNameEdit = () => {
+    setDisplayName([user?.firstName, user?.lastName].filter(Boolean).join(" "));
+    setEditingDisplayName(true);
+  };
+  const startBudgetNameEdit = () => {
+    setGroupName(group?.name ?? "");
+    setEditingBudgetName(true);
+  };
+
+  useEffect(() => {
+    if (!editingDisplayName) return;
+    const frame = requestAnimationFrame(() => displayNameInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [editingDisplayName]);
+  useEffect(() => {
+    if (!editingBudgetName) return;
+    const frame = requestAnimationFrame(() => budgetNameInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [editingBudgetName]);
 
   const uploadPhotoFile = async (file: File) => {
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
@@ -365,10 +405,18 @@ export default function Settings() {
                 {([user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "U").slice(0, 1).toUpperCase()}
               </div>
             )}
-            <p className="text-sm text-foreground">
-              Signed in as <strong>{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email}</strong>
-            </p>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Signed in as</p>
+              <p className="truncate text-sm font-semibold text-foreground">{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "Your Jamvi account"}</p>
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <LockKeyhole className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{user?.email ?? "No sign-in email available"}</span>
+              </div>
+            </div>
           </div>
+          <p className="rounded-lg bg-muted/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            Your sign-in email is managed by your sign-in account and can’t be changed in Jamvi.
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
               <Camera className="h-4 w-4" />
@@ -387,10 +435,11 @@ export default function Settings() {
               </Button>
             ) : null}
           </div>
-          <form onSubmit={handleSaveDisplayName} noValidate className="space-y-2">
-            <label htmlFor="display-name" className="text-sm font-semibold text-foreground">Your name</label>
-            <div className="flex flex-col gap-2 sm:flex-row">
+          {editingDisplayName ? (
+            <form onSubmit={handleSaveDisplayName} noValidate className="space-y-2">
+              <label htmlFor="display-name" className="text-sm font-semibold text-foreground">Your name</label>
               <Input
+                ref={displayNameInputRef}
                 id="display-name"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
@@ -400,14 +449,31 @@ export default function Settings() {
                 aria-describedby="display-name-help"
                 disabled={savingDisplayName}
               />
-              <Button type="submit" disabled={savingDisplayName || !displayName.trim()} className="w-full sm:w-auto sm:shrink-0">
-                {savingDisplayName ? "Saving…" : "Save"}
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="submit" disabled={savingDisplayName || !displayName.trim()} className="w-full sm:w-auto sm:shrink-0">
+                  {savingDisplayName ? "Saving…" : "Save name"}
+                </Button>
+                <Button type="button" variant="outline" onClick={cancelDisplayNameEdit} disabled={savingDisplayName} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+              </div>
+              <p id="display-name-help" className="text-xs leading-relaxed text-muted-foreground">
+                This is the name other members see in shared budgets and activity.
+              </p>
+            </form>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Your name</p>
+                <p className="mt-1 text-sm text-muted-foreground">{savedDisplayName || "Not set"}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">This is the name other members see in shared budgets and activity.</p>
+              </div>
+              <Button type="button" variant="outline" onClick={startDisplayNameEdit} className="w-full sm:w-auto sm:shrink-0">
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
               </Button>
             </div>
-            <p id="display-name-help" className="text-xs leading-relaxed text-muted-foreground">
-              This is the name other members see in shared budgets and activity.
-            </p>
-          </form>
+          )}
         </CardContent>
       </Card>
 
@@ -421,15 +487,32 @@ export default function Settings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
-          {canManageWorkspace ? (
+          {canManageWorkspace && editingBudgetName ? (
             <form onSubmit={handleSaveGroupIdentity} noValidate className="flex flex-col gap-2 sm:flex-row">
-              <Input value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" />
-              <Button type="submit" disabled={updateGroup.isPending} className="w-full sm:w-auto">
+              <Input ref={budgetNameInputRef} value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" aria-label="Budget name" disabled={updateGroup.isPending} />
+              <Button type="submit" disabled={updateGroup.isPending || !groupName.trim()} className="w-full sm:w-auto">
                 {updateGroup.isPending ? "Saving…" : "Save"}
               </Button>
+              <Button type="button" variant="outline" onClick={cancelBudgetNameEdit} disabled={updateGroup.isPending} className="w-full sm:w-auto">
+                Cancel
+              </Button>
             </form>
+          ) : canManageWorkspace ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold text-foreground">{group?.name ?? "Your budget"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">Choose Edit when you’re ready to rename this budget.</p>
+              </div>
+              <Button type="button" variant="outline" onClick={startBudgetNameEdit} className="w-full sm:w-auto sm:shrink-0">
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </div>
           ) : (
-            <p className="text-lg font-semibold text-foreground">{group?.name ?? "Your budget"}</p>
+            <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
+              <p className="text-lg font-semibold text-foreground">{group?.name ?? "Shared budget"}</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">An owner or admin manages this Shared budget’s name. Your access and shared records stay the same.</p>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -454,7 +537,7 @@ export default function Settings() {
                 );
               })()}
               <div>
-                <p className="font-semibold text-foreground">{groupName || group?.name || "Shared budget"}</p>
+                 <p className="font-semibold text-foreground">{group?.name || "Shared budget"}</p>
                 <p className="text-xs text-muted-foreground">This identity belongs to the group, not any one member.</p>
               </div>
             </div>

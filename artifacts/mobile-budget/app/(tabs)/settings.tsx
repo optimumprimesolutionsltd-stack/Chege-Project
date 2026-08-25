@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
 import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -97,9 +97,13 @@ export default function SettingsScreen() {
   const [newGroupName, setNewGroupName] = useState('');
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
+  const [editingDisplayName, setEditingDisplayName] = useState(false);
+  const [editingBudgetName, setEditingBudgetName] = useState(false);
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [uploadingGroupPhoto, setUploadingGroupPhoto] = useState(false);
   const [sharingInvite, setSharingInvite] = useState(false);
+  const displayNameInputRef = useRef<TextInput>(null);
+  const budgetNameInputRef = useRef<TextInput>(null);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -122,7 +126,18 @@ export default function SettingsScreen() {
   useEffect(() => {
     setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
   }, [user?.firstName, user?.lastName]);
+  useFocusEffect(
+    React.useCallback(() => () => {
+      setEditingDisplayName(false);
+      setEditingBudgetName(false);
+      setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
+      setGroupName(group?.name ?? '');
+    }, [group?.name, user?.firstName, user?.lastName]),
+  );
   const canManageShared = !group?.isPrivate && members.some(
+    (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
+  );
+  const canManageWorkspace = members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
   );
   const myMembership = members.find((member) => member.userId === user?.id);
@@ -137,7 +152,7 @@ export default function SettingsScreen() {
     queryFn: () => customFetch<InviteContact[]>('/api/group-invitation-contacts'),
     enabled: !!user?.id && canManageShared,
   });
-  const handleSaveGroupName = async () => {
+  const handleSaveGroupName = async (closeBudgetNameEditor = false) => {
     if (!groupName.trim()) {
       Alert.alert('Group name required', 'Enter a group name before saving.');
       return;
@@ -151,7 +166,11 @@ export default function SettingsScreen() {
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
       ]);
-      Alert.alert('Shared budget updated', 'Its name and identity now appear across Jamvi.');
+       Alert.alert(
+         group?.isPrivate ? 'Budget updated' : 'Shared budget updated',
+         group?.isPrivate ? 'Your budget name now appears across Jamvi.' : 'Its name and identity now appear across Jamvi.',
+       );
+      if (closeBudgetNameEditor) setEditingBudgetName(false);
     } catch (error) {
       Alert.alert('Could not update Shared budget', error instanceof Error ? error.message : 'Use between 2 and 60 characters.');
     } finally {
@@ -170,6 +189,7 @@ export default function SettingsScreen() {
       await saveDisplayName(name);
       await queryClient.invalidateQueries();
       Alert.alert('Name updated');
+      setEditingDisplayName(false);
     } catch (error) {
       Alert.alert(
         'Could not update your name',
@@ -178,6 +198,25 @@ export default function SettingsScreen() {
     } finally {
       setSavingDisplayName(false);
     }
+  };
+
+  const cancelDisplayNameEdit = () => {
+    setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
+    setEditingDisplayName(false);
+  };
+  const cancelBudgetNameEdit = () => {
+    setGroupName(group?.name ?? '');
+    setEditingBudgetName(false);
+  };
+  const startDisplayNameEdit = () => {
+    setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
+    setEditingDisplayName(true);
+    requestAnimationFrame(() => displayNameInputRef.current?.focus());
+  };
+  const startBudgetNameEdit = () => {
+    setGroupName(group?.name ?? '');
+    setEditingBudgetName(true);
+    requestAnimationFrame(() => budgetNameInputRef.current?.focus());
   };
 
   const handleWhatsAppInvite = async () => {
@@ -532,11 +571,16 @@ export default function SettingsScreen() {
               <Text style={[styles.avatarInitials, { color: colors.primary }]}>{avatar.text}</Text>
             </View>
           )}
-          <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: colors.foreground }]}>{displayName}</Text>
-            {user?.email ? (
-              <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>{user.email}</Text>
-            ) : null}
+           <View style={styles.profileInfo}>
+             <Text style={[styles.profileEyebrow, { color: colors.mutedForeground }]}>SIGNED IN AS</Text>
+             <Text style={[styles.profileName, { color: colors.foreground }]}>{displayName || 'Your Jamvi account'}</Text>
+             {user?.email ? (
+               <View style={styles.lockedEmail}>
+                 <Feather name="lock" size={12} color={colors.mutedForeground} />
+                 <Text style={[styles.profileEmail, { color: colors.mutedForeground }]} numberOfLines={1}>{user.email}</Text>
+               </View>
+             ) : null}
+             <Text style={[styles.lockedHint, { color: colors.mutedForeground }]}>Your sign-in email can’t be changed in Jamvi.</Text>
             <Pressable
               onPress={() => void handlePickProfilePhoto()}
               disabled={uploadingProfilePhoto}
@@ -550,34 +594,72 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 8 }]}>
-          <View style={{ padding: 14 }}>
-            <Text style={[styles.rowLabel, { color: colors.foreground }]}>Your name</Text>
-            <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
-              This is the name other members see in shared budgets and activity.
-            </Text>
-            <TextInput
-              testID="settings-display-name-input"
-              value={displayNameInput}
-              onChangeText={setDisplayNameInput}
-              placeholder="e.g. Chege"
-              placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="words"
-              autoCorrect={false}
-              maxLength={40}
-              editable={!savingDisplayName}
-              style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground }]}
-            />
-            <Pressable
-              testID="settings-save-display-name"
-              disabled={savingDisplayName || !displayNameInput.trim()}
-              onPress={() => void handleSaveDisplayName()}
-              style={[styles.saveNameButton, { backgroundColor: colors.primary, opacity: savingDisplayName || !displayNameInput.trim() ? 0.55 : 1 }]}
-            >
-              {savingDisplayName ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveNameButtonText}>Save name</Text>}
-            </Pressable>
-          </View>
-        </View>
+         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 8 }]}>
+           <View style={{ padding: 14 }}>
+             {editingDisplayName ? (
+               <>
+                 <Text style={[styles.rowLabel, { color: colors.foreground }]}>Your name</Text>
+                 <TextInput
+                   ref={displayNameInputRef}
+                   testID="settings-display-name-input"
+                   value={displayNameInput}
+                   onChangeText={setDisplayNameInput}
+                   placeholder="e.g. Chege"
+                   placeholderTextColor={colors.mutedForeground}
+                   autoCapitalize="words"
+                   autoCorrect={false}
+                   maxLength={40}
+                   editable={!savingDisplayName}
+                   accessibilityLabel="Your display name"
+                   style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground }]}
+                 />
+                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
+                   This is the name other members see in shared budgets and activity.
+                 </Text>
+                 <View style={styles.editActions}>
+                   <Pressable
+                     testID="settings-save-display-name"
+                     accessibilityRole="button"
+                     accessibilityLabel="Save display name"
+                     disabled={savingDisplayName || !displayNameInput.trim()}
+                     onPress={() => void handleSaveDisplayName()}
+                     style={[styles.saveNameButton, { backgroundColor: colors.primary, opacity: savingDisplayName || !displayNameInput.trim() ? 0.55 : 1 }]}
+                   >
+                     {savingDisplayName ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveNameButtonText}>Save name</Text>}
+                   </Pressable>
+                   <Pressable
+                     accessibilityRole="button"
+                     accessibilityLabel="Cancel editing display name"
+                     disabled={savingDisplayName}
+                     onPress={cancelDisplayNameEdit}
+                     style={[styles.cancelButton, { borderColor: colors.border, opacity: savingDisplayName ? 0.55 : 1 }]}
+                   >
+                     <Text style={[styles.cancelButtonText, { color: colors.foreground }]}>Cancel</Text>
+                   </Pressable>
+                 </View>
+               </>
+             ) : (
+               <View style={styles.summaryRow}>
+                 <View style={{ flex: 1 }}>
+                   <Text style={[styles.rowLabel, { color: colors.foreground }]}>Your name</Text>
+                   <Text style={[styles.summaryValue, { color: colors.foreground }]}>{displayName || 'Not set'}</Text>
+                   <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
+                     This is the name other members see in shared budgets and activity.
+                   </Text>
+                 </View>
+                 <Pressable
+                   accessibilityRole="button"
+                   accessibilityLabel="Edit display name"
+                   onPress={startDisplayNameEdit}
+                   style={[styles.outlineButton, { borderColor: colors.border }]}
+                 >
+                   <Feather name="edit-2" size={14} color={colors.foreground} />
+                   <Text style={[styles.outlineButtonText, { color: colors.foreground }]}>Edit</Text>
+                 </Pressable>
+               </View>
+             )}
+           </View>
+         </View>
 
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGETS</Text>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -617,7 +699,7 @@ export default function SettingsScreen() {
               </Pressable>
             );
           })}
-          {group?.isPrivate ? (
+           {group?.isPrivate ? (
             <View style={[styles.workspaceInfo, { borderTopColor: colors.border, borderTopWidth: workspaces.length ? StyleSheet.hairlineWidth : 0 }]}>
                <Text style={[styles.rowLabel, { color: colors.foreground }]}>My budget</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
@@ -632,27 +714,69 @@ export default function SettingsScreen() {
                  <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Create a Shared budget</Text>
               </Pressable>
             </View>
-          ) : canManageShared ? (
-            <View style={styles.addRow}>
-              <TextInput
-                style={[styles.addInput, { color: colors.foreground, flex: 1 }]}
-                placeholder="Name your group"
-                placeholderTextColor={colors.mutedForeground}
-                value={groupName}
-                onChangeText={setGroupName}
-                maxLength={60}
-              />
-              <Pressable disabled={savingGroupName || updateGroup.isPending} onPress={handleSaveGroupName} style={[styles.saveGroupBtn, { backgroundColor: colors.primary, opacity: savingGroupName || updateGroup.isPending ? 0.5 : 1 }]}>
-                {savingGroupName || updateGroup.isPending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.saveGroupText}>Save</Text>}
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.row}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>{group?.name ?? 'Shared budget'}</Text>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>An admin can rename the Shared budget.</Text>
-            </View>
-          )}
+           ) : null}
         </View>
+         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGET NAME</Text>
+         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+           {canManageWorkspace && editingBudgetName ? (
+             <View style={{ padding: 14 }}>
+               <TextInput
+                 ref={budgetNameInputRef}
+                 testID="settings-budget-name-input"
+                 value={groupName}
+                 onChangeText={setGroupName}
+                 maxLength={60}
+                 placeholder="e.g. Mwangaza Chama"
+                 placeholderTextColor={colors.mutedForeground}
+                 accessibilityLabel="Budget name"
+                 editable={!savingGroupName && !updateGroup.isPending}
+                 style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground }]}
+               />
+               <View style={styles.editActions}>
+                 <Pressable
+                   testID="settings-save-budget-name"
+                   accessibilityRole="button"
+                   accessibilityLabel="Save budget name"
+                   disabled={savingGroupName || updateGroup.isPending || !groupName.trim()}
+                   onPress={() => void handleSaveGroupName(true)}
+                   style={[styles.saveNameButton, { backgroundColor: colors.primary, opacity: savingGroupName || updateGroup.isPending || !groupName.trim() ? 0.55 : 1 }]}
+                 >
+                   {savingGroupName || updateGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveNameButtonText}>Save budget name</Text>}
+                 </Pressable>
+                 <Pressable
+                   accessibilityRole="button"
+                   accessibilityLabel="Cancel editing budget name"
+                   disabled={savingGroupName || updateGroup.isPending}
+                   onPress={cancelBudgetNameEdit}
+                   style={[styles.cancelButton, { borderColor: colors.border, opacity: savingGroupName || updateGroup.isPending ? 0.55 : 1 }]}
+                 >
+                   <Text style={[styles.cancelButtonText, { color: colors.foreground }]}>Cancel</Text>
+                 </Pressable>
+               </View>
+             </View>
+           ) : canManageWorkspace ? (
+             <View style={styles.summaryRow}>
+               <View style={{ flex: 1 }}>
+                 <Text style={[styles.summaryValue, { color: colors.foreground }]}>{group?.name ?? 'Your budget'}</Text>
+                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>Choose Edit when you’re ready to rename this budget.</Text>
+               </View>
+               <Pressable
+                 accessibilityRole="button"
+                 accessibilityLabel="Edit budget name"
+                 onPress={startBudgetNameEdit}
+                 style={[styles.outlineButton, { borderColor: colors.border }]}
+               >
+                 <Feather name="edit-2" size={14} color={colors.foreground} />
+                 <Text style={[styles.outlineButtonText, { color: colors.foreground }]}>Edit</Text>
+               </Pressable>
+             </View>
+           ) : (
+             <View style={{ padding: 14 }}>
+               <Text style={[styles.summaryValue, { color: colors.foreground }]}>{group?.name ?? 'Shared budget'}</Text>
+               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>An owner or admin manages this Shared budget’s name.</Text>
+             </View>
+           )}
+         </View>
         {!group?.isPrivate && (
           <>
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGET IDENTITY</Text>
@@ -666,7 +790,7 @@ export default function SettingsScreen() {
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>{groupName || group?.name || 'Shared budget'}</Text>
+                   <Text style={[styles.rowLabel, { color: colors.foreground }]}>{group?.name || 'Shared budget'}</Text>
                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This identity belongs to the group, not any one member.</Text>
                 </View>
               </View>
@@ -1078,9 +1202,19 @@ const styles = StyleSheet.create({
   avatarFallback: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   avatarInitials: { fontSize: 20, fontWeight: '700', fontFamily: 'Inter_700Bold' },
   profileInfo: { flex: 1 },
+  profileEyebrow: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8, marginBottom: 3 },
   profileName: { fontSize: 17, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
   profileEmail: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  lockedEmail: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
+  lockedHint: { fontSize: 10, lineHeight: 14, fontFamily: 'Inter_400Regular', marginTop: 4 },
   profileNameInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, marginTop: 12, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  summaryValue: { fontSize: 16, fontFamily: 'Inter_600SemiBold', marginTop: 3 },
+  editActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  outlineButton: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9 },
+  outlineButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  cancelButton: { minHeight: 40, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, marginTop: 10 },
+  cancelButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   saveNameButton: { alignSelf: 'flex-start', minHeight: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, marginTop: 10 },
   saveNameButtonText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 
