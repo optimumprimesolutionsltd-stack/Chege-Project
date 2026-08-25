@@ -77,7 +77,7 @@ export const GetExpensesResponseItem = zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
   "label": zod.string().optional().describe('Optional readable source label retained for history.'),
   "amount": zod.number().min(1).multipleOf(getExpensesResponseIncomeSplitsItemAmountMultipleOf),
-  "incomeSourceId": zod.number().min(1).optional(),
+  "incomeSourceId": zod.number().min(1).optional().describe('Required for personal portions; omit for Joint-bank portions.'),
   "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
 })).optional(),
   "isRecurring": zod.boolean(),
@@ -90,6 +90,7 @@ export const GetExpensesResponse = zod.array(GetExpensesResponseItem)
 /**
  * @summary Create a new expense
  */
+
 export const createExpenseBodyIncomeSplitsItemAmountMultipleOf = 1;
 
 
@@ -102,14 +103,14 @@ export const CreateExpenseBody = zod.object({
   "notes": zod.string().optional(),
   "paidById": zod.string().nullish().describe('Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.'),
   "paidFromBank": zod.boolean().optional().describe('Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment.'),
-  "incomeSourceId": zod.number().optional(),
+  "incomeSourceId": zod.number().min(1).optional().describe('Required for a personal expense unless paidFromBank is true. Must belong to paidById.'),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
   "label": zod.string().optional().describe('Optional readable source label retained for history.'),
   "amount": zod.number().min(1).multipleOf(createExpenseBodyIncomeSplitsItemAmountMultipleOf),
-  "incomeSourceId": zod.number().min(1).optional(),
+  "incomeSourceId": zod.number().min(1).optional().describe('Required for personal portions; omit for Joint-bank portions.'),
   "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
-})).optional().describe('Whole-KES funding portions. Their amounts must equal amount exactly.'),
+})).optional().describe('Whole-KES funding portions. Their amounts must equal amount exactly. Every personal portion requires incomeSourceId; Joint-bank portions must not include one.'),
   "isRecurring": zod.boolean().optional(),
   "date": zod.coerce.date()
 })
@@ -132,7 +133,7 @@ export const CreateExpenseResponse = zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
   "label": zod.string().optional().describe('Optional readable source label retained for history.'),
   "amount": zod.number().min(1).multipleOf(createExpenseResponseIncomeSplitsItemAmountMultipleOf),
-  "incomeSourceId": zod.number().min(1).optional(),
+  "incomeSourceId": zod.number().min(1).optional().describe('Required for personal portions; omit for Joint-bank portions.'),
   "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
 })).optional(),
   "isRecurring": zod.boolean(),
@@ -148,6 +149,7 @@ export const UpdateExpenseParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
 export const updateExpenseBodyIncomeSplitsItemAmountMultipleOf = 1;
 
 
@@ -160,14 +162,14 @@ export const UpdateExpenseBody = zod.object({
   "notes": zod.string().optional(),
   "paidById": zod.string().nullish().describe('Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.'),
   "paidFromBank": zod.boolean().optional().describe('Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment.'),
-  "incomeSourceId": zod.number().optional(),
+  "incomeSourceId": zod.number().min(1).optional().describe('Required for a personal expense unless paidFromBank is true. Must belong to paidById.'),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
   "label": zod.string().optional().describe('Optional readable source label retained for history.'),
   "amount": zod.number().min(1).multipleOf(updateExpenseBodyIncomeSplitsItemAmountMultipleOf),
-  "incomeSourceId": zod.number().min(1).optional(),
+  "incomeSourceId": zod.number().min(1).optional().describe('Required for personal portions; omit for Joint-bank portions.'),
   "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
-})).optional().describe('Whole-KES funding portions. Their amounts must equal amount exactly.'),
+})).optional().describe('Whole-KES funding portions. Their amounts must equal amount exactly. Every personal portion requires incomeSourceId; Joint-bank portions must not include one.'),
   "isRecurring": zod.boolean().optional(),
   "date": zod.coerce.date()
 })
@@ -190,7 +192,7 @@ export const UpdateExpenseResponse = zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
   "label": zod.string().optional().describe('Optional readable source label retained for history.'),
   "amount": zod.number().min(1).multipleOf(updateExpenseResponseIncomeSplitsItemAmountMultipleOf),
-  "incomeSourceId": zod.number().min(1).optional(),
+  "incomeSourceId": zod.number().min(1).optional().describe('Required for personal portions; omit for Joint-bank portions.'),
   "fromBank": zod.boolean().describe('True when this amount came from the shared Joint bank.')
 })).optional(),
   "isRecurring": zod.boolean(),

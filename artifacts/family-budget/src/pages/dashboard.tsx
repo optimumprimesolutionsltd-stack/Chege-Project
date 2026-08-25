@@ -361,6 +361,8 @@ function ExpenseForm({
   const [category, setCategory] = useState("");
   const [paidBy, setPaidBy] = useState("");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const [newSourceName, setNewSourceName] = useState("");
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [date, setDate] = useState(localDateInputValue());
@@ -383,6 +385,42 @@ function ExpenseForm({
   const qc = useQueryClient();
   const { toast } = useToast();
   const today = localDateInputValue();
+
+  const handleAddSource = async () => {
+    const name = newSourceName.trim();
+    if (!payerId) return;
+    if (!name) {
+      toast({
+        variant: "destructive",
+        title: "Source name required",
+        description: "Enter a name before adding the income source.",
+      });
+      return;
+    }
+    try {
+      const response = await fetch("/api/income-sources", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: payerId, name, isMain: false }),
+      });
+      if (!response.ok) {
+        throw new Error("Could not create source");
+      }
+      const source: IncomeSource = await response.json();
+      setIncomeSourceId(source.id);
+      setNewSourceName("");
+      setIsAddingSource(false);
+      await qc.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }) });
+      toast({ title: "Income source added", description: `${source.name} is selected for this expense.` });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Could not add income source",
+        description: "Check the name and try again.",
+      });
+    }
+  };
 
   useEffect(() => {
     if (!canManageShared && currentUserId && paidBy !== currentUserId) {
@@ -436,6 +474,14 @@ function ExpenseForm({
         variant: "destructive",
         title: "Choose who paid",
         description: "Select the person who paid, or choose the joint bank account.",
+      });
+      return;
+    }
+    if (!paidFromBank && !incomeSourceId) {
+      toast({
+        variant: "destructive",
+        title: "Income source required",
+        description: "Choose the saved income stream that funded this expense, or select the joint bank account.",
       });
       return;
     }
@@ -533,8 +579,8 @@ function ExpenseForm({
       </div>
       {!paidFromBank && (
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">
-            Financed by <span className="text-muted-foreground font-normal">(income streams)</span>
+           <label className="text-sm font-semibold text-foreground">
+             Financed by <span className="text-destructive">*</span>
           </label>
           {!payerId ? (
             <p className="text-xs text-muted-foreground">Choose who paid above to see their income streams.</p>
@@ -546,12 +592,43 @@ function ExpenseForm({
               onChange={e => setIncomeSourceId(e.target.value ? Number(e.target.value) : null)}
               className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="">No income source selected</option>
+               <option value="">Select an income source...</option>
               {incomeSources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
             </select>
           ) : (
             <p className="text-xs text-muted-foreground">No income sources set up yet. Add one from Budget.</p>
           )}
+           {payerId && (
+             <div className="flex flex-wrap items-center gap-2">
+               {isAddingSource ? (
+                 <>
+                   <Input
+                     autoFocus
+                     placeholder="e.g. Freelance work"
+                     value={newSourceName}
+                     onChange={e => setNewSourceName(e.target.value)}
+                     onKeyDown={e => {
+                       if (e.key === "Enter") {
+                         e.preventDefault();
+                         void handleAddSource();
+                       }
+                     }}
+                     className="h-10 w-52 bg-card"
+                   />
+                   <Button type="button" size="sm" className="h-10" onClick={() => void handleAddSource()}>
+                     Save source
+                   </Button>
+                   <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingSource(false); setNewSourceName(""); }}>
+                     Cancel
+                   </Button>
+                 </>
+               ) : (
+                 <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingSource(true)}>
+                   + New source
+                 </Button>
+               )}
+             </div>
+           )}
           <p className="text-xs text-muted-foreground">Choosing a source helps Jamvi track where this spending was funded from.</p>
         </div>
       )}

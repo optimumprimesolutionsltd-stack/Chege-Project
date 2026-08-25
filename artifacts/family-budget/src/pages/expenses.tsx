@@ -46,6 +46,7 @@ import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { hasMissingPersonalFundingSource } from "@/lib/expense-funding-utils";
 
 type Expense = {
   id: number;
@@ -95,6 +96,7 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   // Multi-payer support (add form only; edit uses single paidById)
   const [payerIds, setPayerIds] = useState<string[]>(defaults?.paidById ? [defaults.paidById] : []);
   const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
+  const [payerIncomeSourceIds, setPayerIncomeSourceIds] = useState<Record<string, number | null>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [otherIncomeSourceLabel, setOtherIncomeSourceLabel] = useState<string | null>(null);
   const [paidFromBank, setPaidFromBank] = useState(false);
@@ -102,6 +104,7 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [date, setDate] = useState(defaults?.date ?? localDateInputValue(today));
   return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes,
            paidById, setPaidById, payerIds, setPayerIds, payerAmounts, setPayerAmounts,
+           payerIncomeSourceIds, setPayerIncomeSourceIds,
            incomeSourceId, setIncomeSourceId, otherIncomeSourceLabel, setOtherIncomeSourceLabel,
            paidFromBank, setPaidFromBank, isRecurring, setIsRecurring, date, setDate };
 }
@@ -119,6 +122,24 @@ function useIncomeSources(userId: string) {
     // Sources can be added from the mobile Settings screen. Always refresh
     // when this picker is mounted for a person so the web form does not retain
     // an earlier empty result.
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+function useIncomeSourcesForUsers(userIds: string[]) {
+  const ids = [...new Set(userIds)].sort();
+  return useQuery<Record<string, IncomeSource[]>>({
+    queryKey: ["income-sources", "payers", ids],
+    queryFn: async () => {
+      const entries = await Promise.all(ids.map(async (userId) => {
+        const res = await fetch(`/api/income-sources?userId=${encodeURIComponent(userId)}`, { credentials: "include" });
+        if (!res.ok) return [userId, []] as const;
+        return [userId, await res.json() as IncomeSource[]] as const;
+      }));
+      return Object.fromEntries(entries);
+    },
+    enabled: ids.length > 0,
     staleTime: 0,
     refetchOnMount: "always",
   });
@@ -238,11 +259,12 @@ export default function Expenses() {
   const [addNewSource, setAddNewSource] = useState(false);
   const [newSourceName, setNewSourceName] = useState("");
   const { data: addFormSources, refetch: refetchAddSources } = useIncomeSources(addForm.payerIds[0] ?? addForm.paidById);
+  const { data: addPayerSources = {} } = useIncomeSourcesForUsers(addForm.payerIds);
   const { data: editFormSources } = useIncomeSources(editForm.paidById);
 
   const resetAdd = () => {
     addForm.setAmount(""); addForm.setCategory(""); addForm.setDescription(""); addForm.setNotes("");
-    addForm.setPaidById(""); addForm.setPayerIds([]); addForm.setPayerAmounts({});
+    addForm.setPaidById(""); addForm.setPayerIds([]); addForm.setPayerAmounts({}); addForm.setPayerIncomeSourceIds({});
     addForm.setIncomeSourceId(null); addForm.setOtherIncomeSourceLabel(null); addForm.setIsRecurring(false);
     addForm.setDate(today);
     setAddNewSource(false); setNewSourceName("");
@@ -373,6 +395,7 @@ export default function Expenses() {
       if (res.ok) {
         const src: IncomeSource = await res.json();
         addForm.setIncomeSourceId(src.id);
+        addForm.setPayerIncomeSourceIds(prev => ({ ...prev, [paidById]: src.id }));
         setNewSourceName("");
         setAddNewSource(false);
         refetchAddSources();
@@ -432,8 +455,35 @@ export default function Expenses() {
       });
       return;
     }
+    if (!addForm.paidFromBank) {
+      const missingSource = hasMissingPersonalFundingSource({
+        payerIds,
+        isSplitPayment,
+        incomeSourceId: addForm.incomeSourceId,
+        payerIncomeSourceIds: addForm.payerIncomeSourceIds,
+      });
+      if (missingSource) {
+        toast({
+          variant: "destructive",
+          title: "Income source required",
+          description: "Choose the saved income stream that funded every personal portion, or select Joint bank.",
+        });
+        return;
+      }
+    }
     if (isSplitPayment) {
       const total = amount;
+      if (
+        payerIds.some((id) => Number(addForm.payerAmounts[id] || 0) <= 0) ||
+        (addForm.paidFromBank && Number(addForm.payerAmounts.__joint_bank__ || 0) <= 0)
+      ) {
+        toast({
+          variant: "destructive",
+          title: "Enter every funding portion",
+          description: "Each selected payer and Joint-bank portion must be greater than zero.",
+        });
+        return;
+      }
       const splitTotal = payerIds.reduce((s, id) => s + Number(addForm.payerAmounts[id] || 0), 0)
         + (addForm.paidFromBank ? Number(addForm.payerAmounts.__joint_bank__ || 0) : 0);
       if (!Number.isInteger(total) || splitTotal !== total) {
@@ -448,6 +498,7 @@ export default function Expenses() {
           ...payerIds.map((userId) => ({
             userId, amount: Number(addForm.payerAmounts[userId] || 0), fromBank: false,
             label: (members ?? []).find((member) => member.userId === userId)?.userName?.split(" ")[0] ?? "Member",
+            incomeSourceId: addForm.payerIncomeSourceIds[userId]!,
           })),
         ]
         : undefined;
@@ -512,24 +563,24 @@ export default function Expenses() {
       });
       return;
     }
-    if (editForm.otherIncomeSourceLabel !== null && !editForm.otherIncomeSourceLabel.trim()) {
+    if (!editForm.paidFromBank && !editHasMultipleFundingSplits && !editForm.incomeSourceId) {
       toast({
         variant: "destructive",
-        title: "Source label required",
-        description: "Describe the Other source before saving.",
+        title: "Income source required",
+        description: "Choose a saved income source before saving this personal expense.",
       });
       return;
     }
     const selectedSource = editFormSources?.find((source) => source.id === editForm.incomeSourceId);
     const fundingSplits = editForm.paidFromBank
       ? [{ userId: null, label: "Joint bank", amount, fromBank: true }]
-      : !editHasMultipleFundingSplits && (editForm.incomeSourceId || editForm.otherIncomeSourceLabel !== null)
+      : !editHasMultipleFundingSplits && editForm.incomeSourceId
         ? [{
           userId: editForm.paidById,
-          label: editForm.otherIncomeSourceLabel?.trim() || selectedSource?.name || "Household member",
+          label: selectedSource?.name || "Household member",
           amount,
           fromBank: false,
-          ...(selectedSource ? { incomeSourceId: selectedSource.id } : {}),
+          incomeSourceId: editForm.incomeSourceId,
         }]
         : undefined;
     try {
@@ -762,6 +813,13 @@ export default function Expenses() {
                         ? form.payerIds.filter(id => id !== m.userId)
                         : [...form.payerIds, m.userId];
                       form.setPayerIds(next);
+                      if (!next.includes(m.userId)) {
+                        form.setPayerIncomeSourceIds(prev => {
+                          const copy = { ...prev };
+                          delete copy[m.userId];
+                          return copy;
+                        });
+                      }
                       // Keep single paidById in sync for income sources
                       form.setPaidById(next.length === 1 ? next[0] : "");
                     } else {
@@ -808,17 +866,38 @@ export default function Expenses() {
                  {form.payerIds.map(pid => {
                   const member = (members ?? []).find(m => m.userId === pid);
                   const name = member?.userName?.split(" ")[0] ?? "Member";
+                   const sources = addPayerSources[pid] ?? [];
                   return (
-                    <div key={pid} className="flex items-center gap-3">
-                      <span className="text-sm font-semibold w-20 shrink-0">{name}</span>
-                      <input
-                        type="number"
-                        placeholder="0"
-                        min="0"
-                        value={form.payerAmounts[pid] ?? ""}
-                        onChange={e => form.setPayerAmounts(prev => ({ ...prev, [pid]: e.target.value }))}
-                        className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      />
+                     <div key={pid} className="space-y-2 rounded-lg border border-border/60 p-2.5">
+                       <div className="flex items-center gap-3">
+                         <span className="text-sm font-semibold w-20 shrink-0">{name}</span>
+                         <input
+                           type="number"
+                           placeholder="KES 0"
+                           min="0"
+                           step="1"
+                           value={form.payerAmounts[pid] ?? ""}
+                           onChange={e => form.setPayerAmounts(prev => ({ ...prev, [pid]: e.target.value }))}
+                           className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                         />
+                       </div>
+                       <select
+                         value={form.payerIncomeSourceIds[pid]?.toString() ?? ""}
+                         onChange={(event) => form.setPayerIncomeSourceIds(prev => ({
+                           ...prev,
+                           [pid]: event.target.value ? Number(event.target.value) : null,
+                         }))}
+                         className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+                         aria-label={`Income source for ${name}`}
+                       >
+                         <option value="" disabled>Select {name}'s income source...</option>
+                         {sources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+                       </select>
+                       {sources.length === 0 && (
+                         <p className="text-xs text-amber-600 dark:text-amber-400">
+                           {name} needs a saved income source before this portion can be recorded.
+                         </p>
+                       )}
                     </div>
                   );
                 })}
@@ -836,25 +915,31 @@ export default function Expenses() {
          {!form.paidFromBank && (mode === "add" ? form.payerIds.length === 1 : !!form.paidById) && (
           <div className="md:col-span-2 space-y-2">
             <label className="text-sm font-semibold text-foreground">
-              Paid from <span className="font-normal text-muted-foreground">(counts as contribution if personal)</span>
+              Paid from <span className="text-destructive">*</span>
             </label>
             <select
               disabled={mode === "edit" && editHasMultipleFundingSplits}
               className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              value={form.otherIncomeSourceLabel !== null ? "other" : (form.incomeSourceId?.toString() ?? "")}
+              value={form.otherIncomeSourceLabel !== null ? "legacy" : (form.incomeSourceId?.toString() ?? "")}
               onChange={e => {
                 const value = e.target.value;
-                if (value === "other") {
-                  form.setIncomeSourceId(null);
-                  form.setOtherIncomeSourceLabel("");
-                  return;
-                }
                 form.setIncomeSourceId(value ? Number(value) : null);
                 form.setOtherIncomeSourceLabel(null);
+                if (mode === "add" && form.payerIds[0]) {
+                  form.setPayerIncomeSourceIds(prev => ({
+                    ...prev,
+                    [form.payerIds[0]]: value ? Number(value) : null,
+                  }));
+                }
               }}
+              required
             >
-              <option value="">Select an income source...</option>
-              {mode === "edit" && <option value="other">Other source...</option>}
+              <option value="" disabled>Select an income source...</option>
+              {mode === "edit" && form.otherIncomeSourceLabel !== null && (
+                <option value="legacy" disabled>
+                  Historical source: {form.otherIncomeSourceLabel || "choose a saved source"}
+                </option>
+              )}
               {(mode === "add" ? addFormSources : editFormSources)?.map(src => (
                 <option key={src.id} value={src.id}>{src.name}</option>
               ))}
@@ -865,12 +950,9 @@ export default function Expenses() {
               </p>
             )}
             {mode === "edit" && form.otherIncomeSourceLabel !== null && (
-              <Input
-                placeholder="Describe the source (e.g. Consultancy, Parents)"
-                value={form.otherIncomeSourceLabel ?? ""}
-                onChange={(event) => form.setOtherIncomeSourceLabel(event.target.value)}
-                className="h-12 bg-card"
-              />
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                This historical label is not a saved income source. Choose a saved source before saving.
+              </p>
             )}
             {mode === "add" && (
               <div className="flex flex-wrap gap-2">

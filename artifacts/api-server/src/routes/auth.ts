@@ -49,6 +49,7 @@ import {
   SESSION_TTL,
   type SessionData,
 } from '../lib/auth';
+import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 
@@ -353,6 +354,9 @@ router.get('/callback', async (req: Request, res: Response) => {
   };
 
   const sid = await createSession(sessionData);
+  // A person may have been looking at a Shared budget before signing out.
+  // A new web sign-in must always begin in their Personal budget.
+  clearActiveWorkspaceCookie(res);
   setSessionCookie(res, sid);
   res.redirect(returnTo);
 });
@@ -402,6 +406,7 @@ router.get('/logout', async (req: Request, res: Response) => {
 
   const sid = getSessionId(req);
   await clearSession(res, sid);
+  clearActiveWorkspaceCookie(res);
 
   const config = await getOidcConfig();
   const providerLogout = buildProviderLogoutUrl(config, postLogoutRedirectUrl);

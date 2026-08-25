@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { PageFlatList } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import {
   useGetExpenses,
@@ -659,7 +660,7 @@ export default function HistoryScreen() {
         isLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
         ) : (
-          <FlatList
+          <PageFlatList
             data={expenseRows}
             keyExtractor={(row) =>
               row._kind === 'exp-header'
@@ -725,7 +726,7 @@ export default function HistoryScreen() {
         ) : summaryError ? (
           <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load contributions</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Check your group access, then pull down to try again.</Text></View>
         ) : (
-          <FlatList
+          <PageFlatList
             data={contributionRows}
             keyExtractor={(item) => `contribution-${item.id}`}
             ListHeaderComponent={
@@ -769,7 +770,7 @@ export default function HistoryScreen() {
         ) : activityError ? (
           <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load activity</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Pull down to try again.</Text></View>
         ) : (
-          <FlatList
+          <PageFlatList
             data={activityRows}
             keyExtractor={(row) =>
               row._kind === 'header' ? `hdr-${row.date}` : `child-${row.groupDate}-${row.item.id}`

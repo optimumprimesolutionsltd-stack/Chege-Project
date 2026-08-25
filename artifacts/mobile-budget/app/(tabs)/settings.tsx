@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Pressable,
   Alert,
   Platform,
@@ -25,6 +24,7 @@ import {
   useSelectWorkspace,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { resolveAvatarProps, getDisplayName } from '@/utils/avatarHelper';
 import {
@@ -365,7 +365,7 @@ export default function SettingsScreen() {
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Settings</Text>
       </View>
 
-      <ScrollView
+      <PageScrollView
         contentContainerStyle={[styles.content, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -711,7 +711,7 @@ export default function SettingsScreen() {
           <Feather name="log-out" size={18} color="#ef4444" />
           <Text style={styles.signOutText}>{loggingOut ? 'Signing out…' : 'Sign out'}</Text>
         </Pressable>
-      </ScrollView>
+      </PageScrollView>
       <Modal visible={createGroupOpen} transparent animationType="fade" onRequestClose={() => setCreateGroupOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

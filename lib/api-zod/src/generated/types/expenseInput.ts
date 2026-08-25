@@ -19,8 +19,12 @@ export interface ExpenseInput {
   paidById?: string | null;
   /** Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment. */
   paidFromBank?: boolean;
+  /**
+     * Required for a personal expense unless paidFromBank is true. Must belong to paidById.
+     * @minimum 1
+     */
   incomeSourceId?: number;
-  /** Whole-KES funding portions. Their amounts must equal amount exactly. */
+  /** Whole-KES funding portions. Their amounts must equal amount exactly. Every personal portion requires incomeSourceId; Joint-bank portions must not include one. */
   incomeSplits?: ExpenseFundingSplit[];
   isRecurring?: boolean;
   date: Date;

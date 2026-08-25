@@ -7,9 +7,11 @@ import React, {
   type ReactNode,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { AuthUser } from '@workspace/api-client-react';
+import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -74,6 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await res.json();
       if (data.user) {
+        // A fresh app launch or sign-in must begin in Personal budget rather
+        // than restoring the Shared budget selected in a previous session.
+        await AsyncStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
         setUser(data.user as AuthUser);
       } else {
         await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
@@ -148,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // swallow
     } finally {
       await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+      await AsyncStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
       setUser(null);
     }
   }, []);

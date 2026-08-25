@@ -111,15 +111,19 @@ async function validateFundingSplits(raw: unknown, amount: number, groupId: numb
   for (const split of splits) {
     if (split.fromBank) {
       if (split.userId) return { error: "A Joint-bank portion cannot name a personal payer." };
+      if (split.incomeSourceId !== undefined) {
+        return { error: "A Joint-bank portion cannot use a personal income source." };
+      }
       continue;
     }
     if (!split.userId) return { error: "Choose a household member for every personal funding portion." };
+    if (split.incomeSourceId === undefined) {
+      return { error: "Select an income source for every personal funding portion." };
+    }
     const memberError = await validateMemberId(split.userId, groupId);
     if (memberError) return { error: memberError };
-    if (split.incomeSourceId) {
-      const sourceError = await validateIncomeSource(split.incomeSourceId, groupId, split.userId);
-      if (sourceError) return { error: sourceError };
-    }
+    const sourceError = await validateIncomeSource(split.incomeSourceId, groupId, split.userId);
+    if (sourceError) return { error: sourceError };
   }
   return { splits };
 }
@@ -285,6 +289,48 @@ router.post("/expenses/apply-recurring", async (req, res) => {
   const existingKeys = new Set(existing.map((expense) => `${expense.category}||${expense.description}`));
   const toInsert = recurring.filter((expense) => !existingKeys.has(`${expense.category}||${expense.description}`));
   const newDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const recurringSplits = new Map<number, Array<typeof expenseIncomeSplitsTable.$inferSelect>>();
+
+  for (const original of toInsert) {
+    const sourceSplits = await db.select().from(expenseIncomeSplitsTable).where(and(
+      eq(expenseIncomeSplitsTable.expenseId, original.id),
+      eq(expenseIncomeSplitsTable.groupId, groupId),
+    ));
+    recurringSplits.set(original.id, sourceSplits);
+    if (sourceSplits.length > 0) {
+      const splitResult = await validateFundingSplits(sourceSplits.map((split) => ({
+        userId: split.userId,
+        label: split.label,
+        amount: split.amount,
+        incomeSourceId: split.incomeSourceId ?? undefined,
+        fromBank: split.fromBank,
+      })), original.amount, groupId);
+      if (splitResult.error) {
+        res.status(400).json({ error: `Cannot copy recurring expense "${original.description}": ${splitResult.error}` });
+        return;
+      }
+      continue;
+    }
+    if (original.paidFromBank) {
+      if (original.incomeSourceId !== null) {
+        res.status(400).json({ error: `Cannot copy recurring expense "${original.description}": a Joint-bank expense cannot use a personal income source.` });
+        return;
+      }
+      continue;
+    }
+    if (!original.paidById) {
+      res.status(400).json({ error: `Cannot copy recurring expense "${original.description}": choose a payer and income source first.` });
+      return;
+    }
+    const memberError = await validateMemberId(original.paidById, groupId);
+    if (memberError) { res.status(400).json({ error: memberError }); return; }
+    if (original.incomeSourceId === null) {
+      res.status(400).json({ error: `Cannot copy recurring expense "${original.description}": select an income source first.` });
+      return;
+    }
+    const sourceError = await validateIncomeSource(original.incomeSourceId, groupId, original.paidById);
+    if (sourceError) { res.status(400).json({ error: sourceError }); return; }
+  }
 
   await db.transaction(async (tx) => {
     for (const original of toInsert) {
@@ -294,11 +340,7 @@ router.post("/expenses/apply-recurring", async (req, res) => {
         notes: original.notes, paidById: original.paidById, incomeSourceId: original.incomeSourceId,
         paidFromBank: original.paidFromBank, isRecurring: true, date: newDate,
       }).returning();
-      const sourceSplits = await tx.select().from(expenseIncomeSplitsTable)
-        .where(and(
-          eq(expenseIncomeSplitsTable.expenseId, original.id),
-          eq(expenseIncomeSplitsTable.groupId, groupId),
-        ));
+      const sourceSplits = recurringSplits.get(original.id) ?? [];
       if (sourceSplits.length > 0) {
         await tx.insert(expenseIncomeSplitsTable).values(sourceSplits.map((split) => ({
           expenseId: created.id, groupId, userId: split.userId, label: split.label, amount: split.amount,
@@ -349,9 +391,19 @@ router.post("/expenses", async (req, res) => {
     const memberError = await validateMemberId(paidById, groupId);
     if (memberError) { res.status(400).json({ error: memberError }); return; }
   }
-  if (!splitResult.splits && incomeSourceId) {
+  if (!splitResult.splits && incomeSourceId !== undefined) {
     const error = await validateIncomeSource(incomeSourceId, groupId, paidById);
     if (error) { res.status(400).json({ error }); return; }
+  }
+  if (!splitResult.splits) {
+    if (paidFromBank === true && incomeSourceId !== undefined) {
+      res.status(400).json({ error: "A Joint-bank expense cannot use a personal income source." });
+      return;
+    }
+    if (paidFromBank !== true && incomeSourceId === undefined) {
+      res.status(400).json({ error: "Select an income source for every personal expense." });
+      return;
+    }
   }
 
   const expense = await db.transaction(async (tx) => {
@@ -361,7 +413,7 @@ router.post("/expenses", async (req, res) => {
     const [created] = await tx.insert(expensesTable).values({
       groupId,
       amount, category, description, notes: notes ?? null, paidById: namedPayer,
-      incomeSourceId: incomeSourceId ?? null, paidFromBank: allBank,
+      incomeSourceId: allBank ? null : incomeSourceId ?? null, paidFromBank: allBank,
       isRecurring: isRecurring ?? false, date: toDateString(date),
     }).returning();
     if (splits) await writeFundingSplits(tx, created.id, splits, groupId);
@@ -407,7 +459,7 @@ router.patch("/expenses/:id", async (req, res) => {
     const memberError = await validateMemberId(paidById, groupId);
     if (memberError) { res.status(400).json({ error: memberError }); return; }
   }
-  if (!splitResult.splits && incomeSourceId) {
+  if (!splitResult.splits && incomeSourceId !== undefined) {
     const error = await validateIncomeSource(incomeSourceId, groupId, paidById);
     if (error) { res.status(400).json({ error }); return; }
   }
@@ -444,6 +496,9 @@ router.patch("/expenses/:id", async (req, res) => {
     if (!splitResult.splits && previousSplits.length > 0 && amount !== existing.amount) {
       return { error: "Provide updated funding portions when changing the amount of a split-funded expense." };
     }
+    if (!splitResult.splits && previousSplits.some((split) => !split.fromBank && split.incomeSourceId === null)) {
+      return { error: "Provide updated funding portions with an income source for every personal portion." };
+    }
     const splits = splitResult.splits;
     const allBank = splits
       ? splits.every((split) => split.fromBank)
@@ -453,13 +508,24 @@ router.patch("/expenses/:id", async (req, res) => {
     const namedPayer = splits
       ? (allBank ? null : splits.find((split) => !split.fromBank)?.userId ?? null)
       : (allBank ? null : paidById ?? existing.paidById);
+    const effectiveIncomeSourceId = splits
+      ? splits.find((split) => !split.fromBank)?.incomeSourceId ?? null
+      : incomeSourceId ?? existing.incomeSourceId;
+    if (allBank) {
+      if (incomeSourceId !== undefined) {
+        return { error: "A Joint-bank expense cannot use a personal income source." };
+      }
+    } else {
+      if (!namedPayer) return { error: "Choose a household member for every personal expense." };
+      if (effectiveIncomeSourceId === null) {
+        return { error: "Select an income source for every personal expense." };
+      }
+      const sourceError = await validateIncomeSource(effectiveIncomeSourceId, groupId, namedPayer);
+      if (sourceError) return { error: sourceError };
+    }
     const [updated] = await tx.update(expensesTable).set({
       amount, category, description, notes: notes ?? null, paidById: namedPayer,
-      incomeSourceId: allBank
-        ? null
-        : splits
-          ? splits.find((split) => !split.fromBank)?.incomeSourceId ?? null
-          : incomeSourceId ?? existing.incomeSourceId,
+      incomeSourceId: allBank ? null : effectiveIncomeSourceId,
       paidFromBank: allBank,
       isRecurring: isRecurring ?? false, date: toDateString(date),
     }).where(and(eq(expensesTable.id, expenseId), eq(expensesTable.groupId, groupId))).returning();

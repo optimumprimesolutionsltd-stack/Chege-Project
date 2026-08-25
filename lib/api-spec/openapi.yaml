@@ -1627,9 +1627,11 @@ components:
           description: Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment.
         incomeSourceId:
           type: number
+          minimum: 1
+          description: Required for a personal expense unless paidFromBank is true. Must belong to paidById.
         incomeSplits:
           type: array
-          description: Whole-KES funding portions. Their amounts must equal amount exactly.
+          description: Whole-KES funding portions. Their amounts must equal amount exactly. Every personal portion requires incomeSourceId; Joint-bank portions must not include one.
           items:
             $ref: "#/components/schemas/ExpenseFundingSplit"
         isRecurring:
@@ -1659,6 +1661,7 @@ components:
         incomeSourceId:
           type: number
           minimum: 1
+          description: Required for personal portions; omit for Joint-bank portions.
         fromBank:
           type: boolean
           description: True when this amount came from the shared Joint bank.

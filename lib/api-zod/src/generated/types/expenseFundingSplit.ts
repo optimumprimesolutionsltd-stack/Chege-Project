@@ -16,7 +16,10 @@ export interface ExpenseFundingSplit {
   label?: string;
   /** @minimum 1 */
   amount: number;
-  /** @minimum 1 */
+  /**
+     * Required for personal portions; omit for Joint-bank portions.
+     * @minimum 1
+     */
   incomeSourceId?: number;
   /** True when this amount came from the shared Joint bank. */
   fromBank: boolean;

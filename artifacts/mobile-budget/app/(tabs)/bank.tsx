@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   RefreshControl,
   ActivityIndicator,
   Platform,
@@ -22,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useLocalSearchParams } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { PageFlatList } from '@/components/PageScrollReset';
 import {
   useGetJointAccount,
   useCreateDeposit,
@@ -670,7 +670,7 @@ export default function BankScreen() {
         )}
       </LinearGradient>
 
-      <FlatList
+      <PageFlatList
         data={transactions}
         keyExtractor={(item) => String(item.id)}
         refreshControl={

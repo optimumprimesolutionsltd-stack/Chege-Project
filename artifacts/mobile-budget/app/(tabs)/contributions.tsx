@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { PageScrollView } from '@/components/PageScrollReset';
 import {
   useGetDashboardSummary,
   useGetDashboardIncomeStreams,
@@ -578,7 +579,7 @@ export default function ContributionsScreen() {
         colors={colors}
       />
 
-      <ScrollView
+      <PageScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4ade80" />}
         contentContainerStyle={[styles.scroll, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }]}
@@ -621,7 +622,7 @@ export default function ContributionsScreen() {
             )}
           </View>
         ) : null}
-      </ScrollView>
+      </PageScrollView>
     </View>
   );
 }

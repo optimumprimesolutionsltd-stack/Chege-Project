@@ -26,6 +26,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useColors } from '@/hooks/useColors';
+import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { deriveContributorTotals, applyDateFilter, isCorrectionRow, MANUAL_ADJUSTMENT_NOTE } from '@/utils/contributorTotals';
 import { buildCascadePreview, parseWholeKesAmount } from '@/utils/cascadePreview';
@@ -1012,7 +1013,7 @@ export default function GoalsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
+      <PageScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />
@@ -1194,7 +1195,7 @@ export default function GoalsScreen() {
             )}
           </View>
         )}
-      </ScrollView>
+      </PageScrollView>
 
       {/* ── New Goal Modal ─────────────────────────────────────────────────── */}
       <Modal

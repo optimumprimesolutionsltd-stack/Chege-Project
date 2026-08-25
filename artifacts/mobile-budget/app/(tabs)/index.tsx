@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Pressable,
   RefreshControl,
   ActivityIndicator,
@@ -23,6 +22,7 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
+import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import BudgetRing from '@/components/BudgetRing';
 import ActivityCard from '@/components/ActivityCard';
@@ -356,7 +356,7 @@ export default function DashboardScreen() {
         colors={colors}
         topOffset={topPad}
       />
-      <ScrollView
+      <PageScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />
@@ -722,7 +722,7 @@ export default function DashboardScreen() {
             ))
           )}
         </View>
-      </ScrollView>
+      </PageScrollView>
 
     </View>
   );

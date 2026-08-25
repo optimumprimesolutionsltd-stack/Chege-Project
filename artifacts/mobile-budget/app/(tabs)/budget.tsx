@@ -19,6 +19,7 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { PageScrollView } from '@/components/PageScrollReset';
 import {
   getGetDashboardCategoryBreakdownQueryKey,
   getGetDashboardCategoryLedgerQueryKey,
@@ -635,7 +636,7 @@ export default function BudgetScreen() {
         </View>
       </Modal>
 
-      <ScrollView
+      <PageScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />}
         contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }}
@@ -1038,7 +1039,7 @@ export default function BudgetScreen() {
             </>
           )}
         </View>
-      </ScrollView>
+      </PageScrollView>
     </View>
   );
 }

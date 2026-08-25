@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useColors } from '@/hooks/useColors';
+import { PageScrollView } from '@/components/PageScrollReset';
 import {
   getDashboardMonthlyReportPdf,
   useGetExpenses,
@@ -338,7 +339,7 @@ export default function ReportsScreen() {
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : (
-        <ScrollView
+        <PageScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
           refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
@@ -801,7 +802,7 @@ export default function ReportsScreen() {
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Log expenses to see your report here</Text>
             </View>
           )}
-        </ScrollView>
+        </PageScrollView>
       )}
     </View>
   );

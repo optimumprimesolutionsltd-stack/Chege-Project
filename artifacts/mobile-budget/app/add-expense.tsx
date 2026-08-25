@@ -106,13 +106,16 @@ export default function AddExpenseSheet() {
   const [notes, setNotes] = useState('');
   const [payerIds, setPayerIds] = useState<string[]>([]);
   const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
+  const [payerIncomeSourceIds, setPayerIncomeSourceIds] = useState<Record<string, number | null>>({});
   const paidById = payerIds.length === 1 ? payerIds[0] : '';
   const [isRecurring, setIsRecurring] = useState(false);
   // Funding — joint bank toggle + personal income sources from DB
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
-  const [otherLabel, setOtherLabel] = useState('');
+  const [newSourcePayerId, setNewSourcePayerId] = useState<string | null>(null);
+  const [newSourceName, setNewSourceName] = useState('');
+  const [isCreatingSource, setIsCreatingSource] = useState(false);
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -126,13 +129,28 @@ export default function AddExpenseSheet() {
     enabled: !!paidById,
     staleTime: 60_000,
   });
+  const payerSourceIds = [...new Set(payerIds)].sort();
+  const { data: payerIncomeSources = {}, isLoading: payerSourcesLoading } = useQuery<Record<string, IncomeSource[]>>({
+    queryKey: ['income-sources', 'payers', payerSourceIds],
+    queryFn: async () => {
+      const entries = await Promise.all(payerSourceIds.map(async (userId) => {
+        const sources = await customFetch<IncomeSource[]>(`/api/income-sources?userId=${encodeURIComponent(userId)}`);
+        return [userId, sources] as const;
+      }));
+      return Object.fromEntries(entries);
+    },
+    enabled: payerSourceIds.length > 0,
+    staleTime: 60_000,
+  });
 
   // Reset funding selections whenever the payer changes
   useEffect(() => {
     setPaidFromBank(false);
     setSelectedSources([]);
     setSplitAmounts({});
-    setOtherLabel('');
+    setPayerIncomeSourceIds({});
+    setNewSourcePayerId(null);
+    setNewSourceName('');
   }, [paidById]);
 
   useEffect(() => {
@@ -160,6 +178,47 @@ export default function AddExpenseSheet() {
       queryKey: getGetDashboardSummaryQueryKey({ month: now.getMonth() + 1, year: now.getFullYear() }),
     });
   }, [queryClient]);
+
+  const handleCreateIncomeSource = useCallback(async (userId: string) => {
+    const name = newSourceName.trim();
+    if (!name) {
+      Alert.alert('Source name required', 'Enter a name before adding the income source.');
+      return;
+    }
+    setIsCreatingSource(true);
+    try {
+      const source = await customFetch<IncomeSource>('/api/income-sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, name, isMain: false }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['income-sources', userId] });
+      queryClient.invalidateQueries({ queryKey: ['income-sources', 'payers'] });
+      if (userId === paidById) {
+        queryClient.setQueryData<IncomeSource[]>(['income-sources', paidById], (previous = []) => [
+          ...previous.filter((item) => item.id !== source.id),
+          source,
+        ]);
+        setSelectedSources([source.name]);
+      } else {
+        queryClient.setQueryData<Record<string, IncomeSource[]>>(
+          ['income-sources', 'payers', payerSourceIds],
+          (previous = {}) => ({
+            ...previous,
+            [userId]: [...(previous[userId] ?? []).filter((item) => item.id !== source.id), source],
+          }),
+        );
+      }
+      setPayerIncomeSourceIds((previous) => ({ ...previous, [userId]: source.id }));
+      setNewSourceName('');
+      setNewSourcePayerId(null);
+      Alert.alert('Income source added', `${source.name} is ready to use for this expense.`);
+    } catch (error) {
+      Alert.alert('Could not add income source', getExpenseSaveError(error));
+    } finally {
+      setIsCreatingSource(false);
+    }
+  }, [newSourceName, paidById, payerSourceIds, queryClient]);
 
   const handleSubmit = useCallback(async () => {
     if (sharedTransactionsLocked) {
@@ -198,6 +257,18 @@ export default function AddExpenseSheet() {
     const isSplitPayment = sourceCount > 1;
 
     if (isSplitPayment) {
+      if (
+        effectivePayerIds.some((id) => (parseFloat(payerAmounts[id] || '0') || 0) <= 0) ||
+        (effectivePaidFromBank && (parseFloat(payerAmounts.__joint_bank__ || '0') || 0) <= 0)
+      ) {
+        Alert.alert('Enter every funding portion', 'Each selected payer and Joint-bank portion must be greater than zero.');
+        return;
+      }
+      const missingSourcePayer = effectivePayerIds.find((id) => !payerIncomeSourceIds[id]);
+      if (missingSourcePayer) {
+        Alert.alert('Income source required', 'Choose the saved income stream that funded every personal portion.');
+        return;
+      }
       const splitTotal = effectivePayerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)
         + (effectivePaidFromBank ? parseFloat(payerAmounts.__joint_bank__ || '0') || 0 : 0);
       if (!Number.isInteger(parsed) || splitTotal !== parsed) {
@@ -207,10 +278,6 @@ export default function AddExpenseSheet() {
     } else {
       if (!effectivePaidFromBank && selectedSources.length === 0) {
         Alert.alert('Source required', 'Please choose where this money came from.');
-        return;
-      }
-      if (selectedSources.includes('Other') && !otherLabel.trim()) {
-        Alert.alert('Label required', 'Please describe the "Other" source.');
         return;
       }
       if (selectedSources.length > 1) {
@@ -234,6 +301,7 @@ export default function AddExpenseSheet() {
               ...effectivePayerIds.map((userId) => ({
                 userId, label: members.find((member) => member.userId === userId)?.userName ?? 'Member',
                 amount: parseFloat(payerAmounts[userId] || '0') || 0, fromBank: false,
+                incomeSourceId: payerIncomeSourceIds[userId]!,
               })),
             ],
           } as Parameters<typeof createExpenseAsync>[0]['data'],
@@ -245,9 +313,9 @@ export default function AddExpenseSheet() {
           return {
             userId: paidById,
             fromBank: false,
-            label: name === 'Other' ? otherLabel.trim() : name,
+            label: name,
             amount: isSplit ? (parseFloat(splitAmounts[name] || '0') || 0) : parsed,
-            ...(source ? { incomeSourceId: source.id } : {}),
+            incomeSourceId: source!.id,
           };
         }).filter(s => s.amount > 0);
 
@@ -274,7 +342,7 @@ export default function AddExpenseSheet() {
     } finally {
       setIsPending(false);
     }
-  }, [amount, category, description, notes, payerIds, payerAmounts, paidById, selectedSources, splitAmounts, otherLabel, isRecurring, date, paidFromBank, members, canManageShared, user?.id, createExpenseAsync, invalidateExpenses]);
+  }, [amount, category, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, members, canManageShared, user?.id, createExpenseAsync, invalidateExpenses, sharedTransactionsLocked]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
@@ -382,7 +450,7 @@ export default function AddExpenseSheet() {
         })() : null}
 
         {/* Funding breakdown — visible while choosing a single named payer */}
-        {!paidFromBank && payerIds.length <= 1 && (
+        {!paidFromBank && payerIds.length === 0 && (
         <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
           <View style={styles.fundingCardHeader}>
             <Feather name="layers" size={14} color={colors.primary} />
@@ -426,44 +494,7 @@ export default function AddExpenseSheet() {
                   </Pressable>
                 );
               })}
-              {/* Other — free-text for unlisted sources */}
-              {(() => {
-                const selected = selectedSources.includes('Other');
-                return (
-                  <Pressable
-                    onPress={() => setSelectedSources(prev =>
-                      prev.includes('Other') ? prev.filter(k => k !== 'Other') : [...prev, 'Other']
-                    )}
-                    style={[styles.sourceChip, {
-                      backgroundColor: selected ? '#6b728022' : colors.background,
-                      borderColor: selected ? '#6b7280' : colors.border,
-                      borderRadius: colors.radius,
-                    }]}
-                  >
-                    <Feather name="more-horizontal" size={13} color={selected ? '#6b7280' : colors.mutedForeground} />
-                    <Text style={[styles.sourceChipText, { color: selected ? '#6b7280' : colors.foreground }]}>Other</Text>
-                    {selected && <Feather name="check" size={11} color="#6b7280" />}
-                  </Pressable>
-                );
-              })()}
             </View>
-          )}
-          {selectedSources.includes('Other') && (
-            <TextInput
-              style={[styles.textInput, {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-                color: colors.foreground,
-                borderRadius: colors.radius,
-                marginTop: 8,
-                paddingVertical: 10,
-              }]}
-              placeholder="Describe the source (e.g. Consultancy, Parents)"
-              placeholderTextColor={colors.mutedForeground}
-              value={otherLabel}
-              onChangeText={setOtherLabel}
-              returnKeyType="done"
-            />
           )}
 
           {/* Split amounts — shown when 2+ personal sources selected */}
@@ -480,9 +511,9 @@ export default function AddExpenseSheet() {
                     borderColor: color + '44',
                     borderRadius: colors.radius,
                   }]}>
-                    <Feather name={name === 'Other' ? 'more-horizontal' : 'briefcase'} size={14} color={color} />
+                     <Feather name="briefcase" size={14} color={color} />
                     <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
-                      {name === 'Other' ? (otherLabel || 'Other') : name}
+                       {name}
                     </Text>
                     <View style={styles.splitAmountInputBox}>
                       <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
@@ -590,11 +621,19 @@ export default function AddExpenseSheet() {
                     key={m.userId}
                     onPress={() => {
                       if (!canManageShared) return;
-                      setPayerIds(prev =>
-                        prev.includes(m.userId)
+                      setPayerIds(prev => {
+                        const next = prev.includes(m.userId)
                           ? prev.filter(id => id !== m.userId)
-                          : [...prev, m.userId]
-                      );
+                          : [...prev, m.userId];
+                        if (!next.includes(m.userId)) {
+                          setPayerIncomeSourceIds(sourceIds => {
+                            const copy = { ...sourceIds };
+                            delete copy[m.userId];
+                            return copy;
+                          });
+                        }
+                        return next;
+                      });
                     }}
                     style={[
                       styles.paidByPill,
@@ -658,25 +697,92 @@ export default function AddExpenseSheet() {
                   {payerIds.map((pid) => {
                     const member = members.find(m => m.userId === pid);
                     const name = member?.userName?.split(' ')[0] ?? 'Member';
+                    const sources = payerIncomeSources[pid] ?? [];
                     return (
-                      <View key={pid} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
-                          <Feather name="user" size={13} color={colors.mutedForeground} />
-                          <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                      <View key={pid} style={{ gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
+                            <Feather name="user" size={13} color={colors.mutedForeground} />
+                            <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{name}</Text>
+                          </View>
+                          <TextInput
+                            style={{
+                              flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                              borderColor: colors.border, backgroundColor: colors.muted,
+                              paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
+                              fontFamily: 'Inter_400Regular',
+                            }}
+                            keyboardType="numeric"
+                            placeholder="KES 0"
+                            placeholderTextColor={colors.mutedForeground}
+                            value={payerAmounts[pid] || ''}
+                            onChangeText={val => setPayerAmounts(prev => ({ ...prev, [pid]: val }))}
+                          />
                         </View>
-                        <TextInput
-                          style={{
-                            flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
-                            borderColor: colors.border, backgroundColor: colors.muted,
-                            paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
-                            fontFamily: 'Inter_400Regular',
-                          }}
-                          keyboardType="numeric"
-                          placeholder="0"
-                          placeholderTextColor={colors.mutedForeground}
-                          value={payerAmounts[pid] || ''}
-                          onChangeText={val => setPayerAmounts(prev => ({ ...prev, [pid]: val }))}
-                        />
+                        {payerSourcesLoading ? (
+                          <ActivityIndicator size="small" color={colors.primary} style={{ alignSelf: 'flex-start' }} />
+                        ) : sources.length === 0 ? (
+                          <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
+                            {name} needs an income source in Budget before this portion can be saved.
+                          </Text>
+                        ) : (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                            {sources.map((source) => {
+                              const selected = payerIncomeSourceIds[pid] === source.id;
+                              return (
+                                <Pressable
+                                  key={source.id}
+                                  onPress={() => setPayerIncomeSourceIds(prev => ({
+                                    ...prev,
+                                    [pid]: selected ? null : source.id,
+                                  }))}
+                                  style={[styles.sourceChip, {
+                                    backgroundColor: selected ? colors.primary + '20' : colors.background,
+                                    borderColor: selected ? colors.primary : colors.border,
+                                    borderRadius: colors.radius,
+                                  }]}
+                                >
+                                  <Feather name="briefcase" size={12} color={selected ? colors.primary : colors.mutedForeground} />
+                                  <Text style={[styles.sourceChipText, { color: selected ? colors.primary : colors.foreground }]}>
+                                    {source.name}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        )}
+                         <View style={styles.addSourceRow}>
+                           {newSourcePayerId === pid ? (
+                             <>
+                               <TextInput
+                                 autoFocus
+                                 style={[styles.newSourceInput, { flex: 1, backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                                 placeholder="e.g. Freelance work"
+                                 placeholderTextColor={colors.mutedForeground}
+                                 value={newSourceName}
+                                 onChangeText={setNewSourceName}
+                                 editable={!isCreatingSource}
+                                 onSubmitEditing={() => void handleCreateIncomeSource(pid)}
+                                 returnKeyType="done"
+                               />
+                               <Pressable
+                                 onPress={() => void handleCreateIncomeSource(pid)}
+                                 disabled={isCreatingSource}
+                                 style={[styles.addSourceButton, { backgroundColor: colors.primary, opacity: isCreatingSource ? 0.6 : 1 }]}
+                               >
+                                 {isCreatingSource ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.addSourceButtonText}>Save</Text>}
+                               </Pressable>
+                               <Pressable onPress={() => { setNewSourcePayerId(null); setNewSourceName(''); }} disabled={isCreatingSource}>
+                                 <Text style={[styles.cancelSourceText, { color: colors.mutedForeground }]}>Cancel</Text>
+                               </Pressable>
+                             </>
+                           ) : (
+                             <Pressable onPress={() => { setNewSourcePayerId(pid); setNewSourceName(''); }} style={styles.addSourceLink}>
+                               <Feather name="plus-circle" size={13} color={colors.primary} />
+                               <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>Add source for {name}</Text>
+                             </Pressable>
+                           )}
+                         </View>
                       </View>
                     );
                   })}
@@ -719,23 +825,46 @@ export default function AddExpenseSheet() {
                     </Pressable>
                   );
                 })}
-                <Pressable onPress={() => setSelectedSources(prev => prev.includes('Other') ? prev.filter(name => name !== 'Other') : [...prev, 'Other'])}
-                  style={[styles.sourceChip, { backgroundColor: selectedSources.includes('Other') ? '#6b728022' : colors.background, borderColor: selectedSources.includes('Other') ? '#6b7280' : colors.border, borderRadius: colors.radius }]}>
-                  <Feather name="more-horizontal" size={13} color={colors.mutedForeground} />
-                  <Text style={[styles.sourceChipText, { color: colors.foreground }]}>Other</Text>
-                </Pressable>
               </View>
             )}
-            {selectedSources.includes('Other') && (
-              <TextInput style={[styles.textInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, borderRadius: colors.radius, marginTop: 8, paddingVertical: 10 }]}
-                placeholder="Describe the source" placeholderTextColor={colors.mutedForeground} value={otherLabel} onChangeText={setOtherLabel} />
-            )}
+            <View style={styles.addSourceRow}>
+              {newSourcePayerId === paidById ? (
+                <>
+                  <TextInput
+                    autoFocus
+                    style={[styles.newSourceInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                    placeholder="e.g. Freelance work"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={newSourceName}
+                    onChangeText={setNewSourceName}
+                    editable={!isCreatingSource}
+                    onSubmitEditing={() => void handleCreateIncomeSource(paidById)}
+                    returnKeyType="done"
+                  />
+                  <Pressable
+                    onPress={() => void handleCreateIncomeSource(paidById)}
+                    disabled={isCreatingSource}
+                    style={[styles.addSourceButton, { backgroundColor: colors.primary, opacity: isCreatingSource ? 0.6 : 1 }]}
+                  >
+                    {isCreatingSource ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.addSourceButtonText}>Save</Text>}
+                  </Pressable>
+                  <Pressable onPress={() => { setNewSourcePayerId(null); setNewSourceName(''); }} disabled={isCreatingSource}>
+                    <Text style={[styles.cancelSourceText, { color: colors.mutedForeground }]}>Cancel</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable onPress={() => { setNewSourcePayerId(paidById); setNewSourceName(''); }} style={styles.addSourceLink}>
+                  <Feather name="plus-circle" size={14} color={colors.primary} />
+                  <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>Add another source</Text>
+                </Pressable>
+              )}
+            </View>
             {selectedSources.length > 1 && (
               <View style={{ marginTop: 12, gap: 6 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>How much from each source?</Text>
                 {selectedSources.map((name, index) => (
                   <View key={name} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: PALETTE[index % PALETTE.length] + '44', borderRadius: colors.radius }]}>
-                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]}>{name === 'Other' ? (otherLabel || 'Other') : name}</Text>
+                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]}>{name}</Text>
                     <TextInput style={[styles.splitAmountInput, { color: colors.foreground }]} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground}
                       value={splitAmounts[name] || ''} onChangeText={value => setSplitAmounts(prev => ({ ...prev, [name]: value }))} />
                   </View>
@@ -1032,6 +1161,50 @@ const styles = StyleSheet.create({
   sourceChipText: {
     fontSize: 12,
     fontFamily: 'Inter_500Medium',
+  },
+  addSourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  addSourceLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 4,
+  },
+  addSourceLinkText: {
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  newSourceInput: {
+    minWidth: 150,
+    flex: 1,
+    height: 38,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+  },
+  addSourceButton: {
+    minWidth: 58,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  addSourceButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  cancelSourceText: {
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
+    paddingHorizontal: 3,
   },
   // Split amount inputs
   splitAmountRow: {

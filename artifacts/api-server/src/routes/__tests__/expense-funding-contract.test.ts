@@ -88,6 +88,58 @@ describe("expense funding request contract", () => {
     expect(response.body.error).toContain("recognised household member");
   });
 
+  it("rejects a personal split without a saved income source", async () => {
+    const response = await request(app()).post("/expenses").send({
+      amount: 1000,
+      category: "Food",
+      description: "Groceries",
+      date: "2026-08-19",
+      incomeSplits: [{
+        userId: "member-1",
+        fromBank: false,
+        label: "Salary",
+        amount: 1000,
+      }],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("income source");
+  });
+
+  it("rejects a Joint-bank split that carries a personal income source", async () => {
+    const response = await request(app()).post("/expenses").send({
+      amount: 1000,
+      category: "Food",
+      description: "Groceries",
+      date: "2026-08-19",
+      incomeSplits: [{
+        userId: null,
+        fromBank: true,
+        label: "Joint bank",
+        amount: 1000,
+        incomeSourceId: 7,
+      }],
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("Joint-bank portion");
+  });
+
+  it("rejects a non-positive legacy income source ID before it can be saved", async () => {
+    const response = await request(app()).post("/expenses").send({
+      amount: 1000,
+      category: "Food",
+      description: "Groceries",
+      paidById: "member-1",
+      paidFromBank: false,
+      incomeSourceId: 0,
+      date: "2026-08-19",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("incomeSourceId");
+  });
+
   it("rejects an unrecognised legacy payer before creating an expense", async () => {
     const response = await request(app()).post("/expenses").send({
       amount: 1000,
