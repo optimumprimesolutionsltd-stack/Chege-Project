@@ -53,3 +53,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Production database backups stay local and must never be committed.
+jamvi-production-*.sql
