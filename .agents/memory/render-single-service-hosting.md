@@ -47,3 +47,14 @@ routes first use current workspace tables.
 **How to apply:** Verify Render's `DATABASE_URL` against the connection URL for
 the database that actually received the Jamvi restore, then rerun migrations
 after correcting the variable.
+
+Production acceptance should cover the complete first-user journey: Google
+sign-in, first Personal budget load, and creating/joining a Shared budget through
+an invitation.
+
+**Why:** Server health and authentication alone do not prove that workspace
+creation, membership, and the product's core shared-money path work on the
+external deployment.
+
+**How to apply:** Use those three flows as the minimum smoke test after a
+database or Render configuration change, before inviting real members.
