@@ -35,3 +35,15 @@ first request that exposes the mismatch.
 **How to apply:** Point Render's `DATABASE_URL` at the intended external
 database, run `corepack pnpm@11.20.0 --filter @workspace/db run migrate` once,
 and never use `push-force` against production.
+
+A successful migration command only proves that migrations ran against the
+database named by Render's current `DATABASE_URL`; it does not prove that URL is
+the intended restored Jamvi database.
+
+**Why:** A web service can stay healthy and report successful migrations while
+pointing at a separate or stale PostgreSQL database, then fail when authenticated
+routes first use current workspace tables.
+
+**How to apply:** Verify Render's `DATABASE_URL` against the connection URL for
+the database that actually received the Jamvi restore, then rerun migrations
+after correcting the variable.
