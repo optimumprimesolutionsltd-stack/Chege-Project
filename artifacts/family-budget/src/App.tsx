@@ -19,6 +19,7 @@ import Parity from '@/pages/parity';
 import IncomeStreamsReport from '@/pages/income-streams-report';
 import InvitePage from '@/pages/invite';
 import JoinGroupPage from '@/pages/join-group';
+import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal';
 
 const queryClient = new QueryClient();
 
@@ -163,6 +164,15 @@ function MainRouter() {
     enabled: isAuthenticated,
     retry: false,
   });
+
+  const publicPath = window.location.pathname.replace(/\/+$/, '');
+  if (publicPath.endsWith('/privacy')) {
+    return <PrivacyPolicyPage />;
+  }
+
+  if (publicPath.endsWith('/terms')) {
+    return <TermsOfServicePage />;
+  }
 
   // Auth-done page must be reachable before auth state resolves (popup context).
   if (window.location.pathname.endsWith('/auth-done')) {
