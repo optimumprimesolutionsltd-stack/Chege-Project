@@ -23,7 +23,7 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | Dashboard / Home | ✅ | ✅ | Web: charts & quick-action forms. Mobile: summary cards, bank balance, activity preview |
 | Monthly budget overview | ✅ | ✅ | Web: pie chart + category cards. Mobile: budget tab with category cards |
 | Full activity feed screen | ✅ | ❌ | Mobile shows a 5-item dashboard preview; full feed screen is a pending task |
-| Settings screen | ✅ | ❌ | Mobile Settings screen is a pending task |
+| Settings screen | ✅ | ✅ | Both platforms manage account and budget workspace settings |
 | Platform parity page | ✅ | ❌ | This page is web-only |
 | **Expenses** | | | |
 | Expense list | ✅ | ✅ | Mobile: hidden "History" tab reachable from dashboard |
@@ -35,6 +35,7 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | Calendar date picker on expenses | ✅ | ❌ | Mobile uses arrow controls (prev/next day); calendar picker is a pending task |
 | **Budget** | | | |
 | Category budget viewing | ✅ | ✅ | Both show spend vs. budget per category |
+| Budget identity personalization | ✅ | ✅ | Both support Unicode names, optional emoji, curated name styles, meaningful category icons, and theme-aware surfaces |
 | Edit category limits | ✅ | ❌ | Web-only |
 | Balance mismatch alert | ⏳ | ❌ | Web surface is a pending task |
 | **Contributions** | | | |
@@ -63,5 +64,6 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | Date selection on bank transactions | ✅ | ❌ | Mobile always uses today's date — pending task |
 | **Members & auth** | | | |
 | Authentication (sign-in) | ✅ | ✅ | Both use Replit Auth / deep-link token flow |
+| Batch email invitations | ✅ | ✅ | Managers can paste multiple email addresses and invite everyone in one batch with per-address results |
 | Add / remove partner | ✅ | ❌ | Settings page on web; no equivalent on mobile |
 | Dark mode | ✅ | ✅ | Both respect the system theme |

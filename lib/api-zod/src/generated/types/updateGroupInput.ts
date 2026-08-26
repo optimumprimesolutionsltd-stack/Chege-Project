@@ -7,6 +7,7 @@
  */
 import type { UpdateGroupInputAccentColor } from './updateGroupInputAccentColor';
 import type { UpdateGroupInputIcon } from './updateGroupInputIcon';
+import type { UpdateGroupInputNameStyle } from './updateGroupInputNameStyle';
 
 export interface UpdateGroupInput {
   /**
@@ -14,6 +15,12 @@ export interface UpdateGroupInput {
      * @maxLength 60
      */
   name: string;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  emoji?: string | null;
+  nameStyle?: UpdateGroupInputNameStyle;
   icon?: UpdateGroupInputIcon;
   accentColor?: UpdateGroupInputAccentColor;
   /**

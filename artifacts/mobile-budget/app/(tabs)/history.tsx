@@ -41,6 +41,7 @@ import {
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 
 const MONTH_PREF_KEY = 'expenses_month_pref';
 
@@ -48,12 +49,6 @@ const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
-
-const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
-  Food: 'shopping-cart', Transport: 'truck', Health: 'heart', Education: 'book',
-  Utilities: 'zap', Entertainment: 'tv', Clothing: 'tag', Savings: 'archive',
-  Housing: 'home', Communication: 'phone', Other: 'more-horizontal',
-};
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
 const JOINT_BANK_SOURCE = '__joint_bank__';
@@ -884,7 +879,7 @@ export default function HistoryScreen() {
                         onPress={() => setEditForm(f => ({ ...f, category: c.name }))}
                         style={[styles.chip, { backgroundColor: sel ? colors.secondary : colors.muted, borderColor: sel ? colors.secondary : colors.border }]}
                       >
-                        <Feather name={CATEGORY_ICONS[c.name] ?? 'tag'} size={12} color={sel ? '#fff' : colors.mutedForeground} />
+                        <Feather name={getCategoryIcon(c.name)} size={12} color={sel ? '#fff' : colors.mutedForeground} />
                         <Text style={[styles.chipText, { color: sel ? '#fff' : colors.foreground }]}>{c.name}</Text>
                       </Pressable>
                     );
@@ -1162,7 +1157,7 @@ function ExpenseRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const icon: keyof typeof Feather.glyphMap = CATEGORY_ICONS[expense.category] ?? 'shopping-bag';
+  const icon = getCategoryIcon(expense.category);
   return (
     <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={[styles.rowIcon, { backgroundColor: colors.accent }]}>

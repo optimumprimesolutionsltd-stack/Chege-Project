@@ -30,16 +30,19 @@ import {
   useUpdateGroup,
   getGetGroupQueryKey,
   getGetWorkspacesQueryKey,
+  type WorkspaceNameStyle,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
-import { resolveAvatarProps, getDisplayName } from '@/utils/avatarHelper';
+import { getDisplayName } from '@/utils/avatarHelper';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import {
   activateMobileWorkspace,
   leaveMobileSharedWorkspace,
   switchMobileWorkspace,
 } from '@/lib/workspace';
+import { WORKSPACE_NAME_STYLES, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 
 type GroupMember = {
   userId: string;
@@ -74,7 +77,7 @@ function getSharedBudgetIcon(icon?: string): keyof typeof Feather.glyphMap {
 }
 
 function workspaceLabel(workspace: { isPrivate: boolean; name: string }): string {
-  if (workspace.isPrivate) return 'My budget';
+  if (workspace.isPrivate) return 'Personal budget';
   const name = workspace.name.trim();
   return name.toLocaleLowerCase('en-US') === 'shared budget' || !name ? 'Group' : name;
 }
@@ -85,13 +88,13 @@ export default function SettingsScreen() {
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [inviteName, setInviteName] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteEmails, setInviteEmails] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'admin' | 'member'>('member');
-  const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [managingMembers, setManagingMembers] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupSlogan, setGroupSlogan] = useState('');
+  const [groupEmoji, setGroupEmoji] = useState('');
+  const [groupNameStyle, setGroupNameStyle] = useState<WorkspaceNameStyle>('plain');
   const [groupIcon, setGroupIcon] = useState<SharedBudgetIcon>('users');
   const [groupAccentColor, setGroupAccentColor] = useState<SharedBudgetAccent>('#0F766E');
   const [savingGroupName, setSavingGroupName] = useState(false);
@@ -125,7 +128,9 @@ export default function SettingsScreen() {
     if (group?.icon) setGroupIcon(group.icon as SharedBudgetIcon);
     if (group?.accentColor) setGroupAccentColor(group.accentColor as SharedBudgetAccent);
     setGroupSlogan(group?.slogan ?? '');
-  }, [group?.name, group?.icon, group?.accentColor, group?.slogan]);
+    setGroupEmoji(group?.emoji ?? '');
+    setGroupNameStyle(group?.nameStyle ?? 'plain');
+  }, [group?.name, group?.icon, group?.accentColor, group?.slogan, group?.emoji, group?.nameStyle]);
   useEffect(() => {
     setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
   }, [user?.firstName, user?.lastName]);
@@ -136,7 +141,9 @@ export default function SettingsScreen() {
       setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
       setGroupName(group?.name ?? '');
       setGroupSlogan(group?.slogan ?? '');
-    }, [group?.name, group?.slogan, user?.firstName, user?.lastName]),
+      setGroupEmoji(group?.emoji ?? '');
+      setGroupNameStyle(group?.nameStyle ?? 'plain');
+    }, [group?.name, group?.slogan, group?.emoji, group?.nameStyle, user?.firstName, user?.lastName]),
   );
   const canManageShared = !group?.isPrivate && members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
@@ -166,6 +173,8 @@ export default function SettingsScreen() {
       await updateGroup.mutateAsync({
         data: {
           name: groupName.trim(),
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
           icon: groupIcon,
           accentColor: groupAccentColor,
           slogan: groupSlogan.trim() || null,
@@ -216,6 +225,8 @@ export default function SettingsScreen() {
   const cancelBudgetNameEdit = () => {
     setGroupName(group?.name ?? '');
     setGroupSlogan(group?.slogan ?? '');
+    setGroupEmoji(group?.emoji ?? '');
+    setGroupNameStyle(group?.nameStyle ?? 'plain');
     setEditingBudgetName(false);
   };
   const startDisplayNameEdit = () => {
@@ -226,6 +237,8 @@ export default function SettingsScreen() {
   const startBudgetNameEdit = () => {
     setGroupName(group?.name ?? '');
     setGroupSlogan(group?.slogan ?? '');
+    setGroupEmoji(group?.emoji ?? '');
+    setGroupNameStyle(group?.nameStyle ?? 'plain');
     setEditingBudgetName(true);
     requestAnimationFrame(() => budgetNameInputRef.current?.focus());
   };
@@ -329,6 +342,8 @@ export default function SettingsScreen() {
       await updateGroup.mutateAsync({
         data: {
           name: groupName.trim() || group.name,
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
           icon: groupIcon,
           accentColor: groupAccentColor,
           slogan: groupSlogan.trim() || null,
@@ -352,7 +367,14 @@ export default function SettingsScreen() {
     setUploadingGroupPhoto(true);
     try {
       await updateGroup.mutateAsync({
-        data: { name: groupName.trim() || group.name, icon: groupIcon, accentColor: groupAccentColor, photoPath: null },
+        data: {
+          name: groupName.trim() || group.name,
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          photoPath: null,
+        },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
@@ -417,28 +439,35 @@ export default function SettingsScreen() {
     }
   };
   const handleInvite = async () => {
-    if (!inviteEmail.trim()) {
-      Alert.alert('Email required', 'Enter an email address before sending the invitation.');
+    const emails = [...new Set(inviteEmails.split(/[\s,;]+/).map((email) => email.trim().toLowerCase()).filter(Boolean))];
+    if (emails.length === 0) {
+      Alert.alert('Email addresses required', 'Enter one or more email addresses before sending invitations.');
       return;
     }
     setManagingMembers(true);
     try {
-      await customFetch('/api/group-invitations', {
+      const result = await customFetch<{ sent: GroupInvitation[]; failed: { email: string; error: string }[] }>('/api/group-invitations/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: inviteEmail.trim(),
+          emails,
           role: newMemberRole,
-          contactName: inviteName.trim() || undefined,
-          saveContact: saveInviteContact && Boolean(inviteName.trim()),
         }),
       });
-      setInviteName('');
-      setInviteEmail('');
+      setInviteEmails('');
       setNewMemberRole('member');
       queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
       queryClient.invalidateQueries({ queryKey: ['group-invitation-contacts'] });
-      Alert.alert('Invitation sent', `${inviteEmail.trim()} can sign in and accept the invitation.`);
+      if (result.sent.length === 0) {
+        throw new Error(result.failed[0]?.error ?? 'No invitations were sent.');
+      }
+      const failureNote = result.failed.length > 0
+        ? ` ${result.failed.length} could not be sent: ${result.failed.map((item) => `${item.email} (${item.error})`).join(', ')}`
+        : '';
+      Alert.alert(
+        result.sent.length === 1 ? 'Invitation sent' : `${result.sent.length} invitations sent`,
+        `${result.sent.map((item) => item.email).join(', ')} can sign in and accept.${failureNote}`,
+      );
     } catch (error) {
       Alert.alert('Could not send invitation', error instanceof Error ? error.message : 'Please try again.');
     } finally {
@@ -535,7 +564,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             setManagingMembers(true);
             try {
-               // A person always keeps their My budget, so leaving a shared group
+               // A person always keeps their Personal budget, so leaving a shared group
               // returns them there instead of ending their Jamvi session.
               await leaveMobileSharedWorkspace({
                 leave: () => customFetch('/api/members/me', { method: 'DELETE' }),
@@ -543,7 +572,7 @@ export default function SettingsScreen() {
                 resetQueries: () => queryClient.resetQueries(),
               });
               router.replace('/(tabs)');
-               Alert.alert('You left the group', 'You are now back in My budget.');
+               Alert.alert('You left the group', 'You are now back in your Personal budget.');
             } catch (error) {
               Alert.alert('Could not leave group', error instanceof Error ? error.message : 'Please try again.');
             } finally {
@@ -579,8 +608,6 @@ export default function SettingsScreen() {
   };
 
   const displayName = getDisplayName(user);
-  const avatar = resolveAvatarProps(user);
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -594,13 +621,12 @@ export default function SettingsScreen() {
       >
         {/* Profile card */}
         <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {avatar.kind === 'image' ? (
-            <Image source={{ uri: avatar.uri }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatarFallback, { backgroundColor: colors.primary + '22' }]}>
-              <Text style={[styles.avatarInitials, { color: colors.primary }]}>{avatar.text}</Text>
-            </View>
-          )}
+          <ProfileAvatar
+            user={user}
+            size={56}
+            backgroundColor={colors.primary + '22'}
+            foregroundColor={colors.primary}
+          />
            <View style={styles.profileInfo}>
              <Text style={[styles.profileEyebrow, { color: colors.mutedForeground }]}>SIGNED IN AS</Text>
              <Text style={[styles.profileName, { color: colors.foreground }]}>{displayName || 'Your Jamvi account'}</Text>
@@ -712,7 +738,7 @@ export default function SettingsScreen() {
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {workspaces.map((workspace, index) => {
             const selected = workspace.id === group?.id;
-            const label = workspace.isPrivate ? 'My budget' : (workspace.name.trim() || 'Group');
+            const label = workspaceIdentityText(workspace, workspace.isPrivate ? 'Personal budget' : 'Group');
             const detail = workspace.isPrivate
               ? 'Only you can access this budget'
               : `${workspace.name} · ${workspace.role === 'owner' ? 'Owner' : workspace.role === 'admin' ? 'Admin' : 'Member'}`;
@@ -729,13 +755,17 @@ export default function SettingsScreen() {
               >
                 {workspace.photoUrl ? (
                   <Image source={{ uri: workspace.photoUrl }} style={[styles.rowIcon, { borderRadius: 10 }]} />
-                ) : (
+                 ) : workspace.emoji ? (
+                   <View style={[styles.rowIcon, { backgroundColor: colors.muted }]}>
+                     <Text style={{ fontSize: 16 }}>{workspace.emoji}</Text>
+                   </View>
+                 ) : (
                   <View style={[styles.rowIcon, { backgroundColor: workspace.isPrivate ? (selected ? colors.primary + '20' : colors.muted) : `${workspace.accentColor}20` }]}>
                     <Feather name={workspace.isPrivate ? 'lock' : getSharedBudgetIcon(workspace.icon)} size={15} color={workspace.isPrivate ? (selected ? colors.primary : colors.mutedForeground) : workspace.accentColor} />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
+                   <Text style={[styles.rowLabel, { color: colors.foreground }, workspaceNameTextStyle(workspace.nameStyle)]}>{label}</Text>
                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{detail}</Text>
                 </View>
                 {selected ? (
@@ -748,7 +778,7 @@ export default function SettingsScreen() {
           })}
            {group?.isPrivate ? (
             <View style={[styles.workspaceInfo, { borderTopColor: colors.border, borderTopWidth: workspaces.length ? StyleSheet.hairlineWidth : 0 }]}>
-               <Text style={[styles.rowLabel, { color: colors.foreground }]}>My budget</Text>
+                <Text style={[styles.rowLabel, { color: colors.foreground }]}>Personal budget</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
                  Expenses, goals, bank activity, and reports here belong only to you. A Shared budget has its own separate money and members.
               </Text>
@@ -779,6 +809,59 @@ export default function SettingsScreen() {
                  editable={!savingGroupName && !updateGroup.isPending}
                  style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground }]}
                />
+                <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 5 }]}>
+                  Use any language, numbers, emoji, and special characters.
+                </Text>
+                <View style={styles.emojiStyleRow}>
+                  <View style={{ width: 92 }}>
+                    <Text style={[styles.rowLabel, { color: colors.foreground, marginTop: 12 }]}>Emoji</Text>
+                    <TextInput
+                      testID="settings-budget-emoji-input"
+                      value={groupEmoji}
+                      onChangeText={setGroupEmoji}
+                      maxLength={16}
+                      placeholder="🌱"
+                      placeholderTextColor={colors.mutedForeground}
+                      accessibilityLabel="Budget emoji"
+                      editable={!savingGroupName && !updateGroup.isPending}
+                      style={[styles.emojiInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowLabel, { color: colors.foreground, marginTop: 12 }]}>Name style</Text>
+                    <View style={styles.nameStyleChoices}>
+                      {WORKSPACE_NAME_STYLES.map((option) => {
+                        const selected = groupNameStyle === option.value;
+                        return (
+                          <Pressable
+                            key={option.value}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            accessibilityLabel={`Use ${option.label} budget name style`}
+                            onPress={() => setGroupNameStyle(option.value)}
+                            style={[styles.nameStyleChoice, {
+                              borderColor: selected ? colors.primary : colors.border,
+                              backgroundColor: selected ? colors.primary + '12' : colors.background,
+                            }]}
+                          >
+                            <Text style={[styles.nameStyleLabel, { color: selected ? colors.primary : colors.foreground }, workspaceNameTextStyle(option.value)]}>
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+                <View style={[styles.identityPreview, { marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: colors.muted }]}>
+                  <Text style={{ fontSize: 22 }}>{groupEmoji || '✨'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.summaryValue, { color: colors.foreground, marginTop: 0 }, workspaceNameTextStyle(groupNameStyle)]}>
+                      {groupName.trim() || 'Your budget'}
+                    </Text>
+                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This is how the budget name will look.</Text>
+                  </View>
+                </View>
                <View style={styles.editActions}>
                  <Pressable
                    testID="settings-save-budget-name"
@@ -804,7 +887,9 @@ export default function SettingsScreen() {
            ) : canManageWorkspace ? (
              <View style={styles.summaryRow}>
                <View style={{ flex: 1 }}>
-                 <Text style={[styles.summaryValue, { color: colors.foreground }]}>{group?.name ?? 'Your budget'}</Text>
+                  <Text style={[styles.summaryValue, { color: colors.foreground }, workspaceNameTextStyle(group?.nameStyle)]}>
+                    {group?.emoji ? `${group.emoji} ` : ''}{group?.name ?? 'Your budget'}
+                  </Text>
                   {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic', marginTop: 4 }]}>{group.slogan}</Text> : null}
                  <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>Choose Edit when you’re ready to rename this budget.</Text>
                </View>
@@ -820,7 +905,9 @@ export default function SettingsScreen() {
              </View>
            ) : (
              <View style={{ padding: 14 }}>
-               <Text style={[styles.summaryValue, { color: colors.foreground }]}>{group?.name ?? 'Shared budget'}</Text>
+                <Text style={[styles.summaryValue, { color: colors.foreground }, workspaceNameTextStyle(group?.nameStyle)]}>
+                  {group?.emoji ? `${group.emoji} ` : ''}{group?.name ?? 'Shared budget'}
+                </Text>
                 {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic', marginTop: 4 }]}>{group.slogan}</Text> : null}
                <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>An owner or admin manages this Shared budget’s name.</Text>
              </View>
@@ -839,7 +926,9 @@ export default function SettingsScreen() {
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                   <Text style={[styles.rowLabel, { color: colors.foreground }]}>{group?.name || 'Shared budget'}</Text>
+                   <Text style={[styles.rowLabel, { color: colors.foreground }, workspaceNameTextStyle(groupNameStyle)]}>
+                     {groupEmoji ? `${groupEmoji} ` : ''}{group?.name || 'Shared budget'}
+                   </Text>
                    {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic' }]}>{group.slogan}</Text> : null}
                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This identity belongs to the group, not any one member.</Text>
                 </View>
@@ -921,7 +1010,7 @@ export default function SettingsScreen() {
                   </Pressable>
                 </>
               ) : (
-                <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>An owner or admin can update this Shared budget’s name, icon, and accent color.</Text>
+                <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>An owner or admin can update this Shared budget’s name, emoji, style, icon, and accent color.</Text>
               )}
             </View>
           </>
@@ -1003,21 +1092,20 @@ export default function SettingsScreen() {
           {canManageShared ? (
             <View style={[styles.addRow, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, flexWrap: 'wrap', gap: 8 }]}>
               <Text style={{ width: '100%', color: colors.foreground, fontSize: 14, fontFamily: 'Inter_600SemiBold', marginBottom: 2 }}>
-                Invite someone by email
+                 Invite people by email
+              </Text>
+              <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 16 }}>
+                Paste multiple addresses separated by commas, spaces, or new lines.
               </Text>
               <TextInput
                 style={[styles.addInput, { color: colors.foreground, width: '100%' }]}
-                placeholder="Name for one-tap invite (optional)"
+                placeholder="alex@example.com, sam@example.com"
                 placeholderTextColor={colors.mutedForeground}
-                value={inviteName}
-                onChangeText={setInviteName}
-              />
-              <TextInput
-                style={[styles.addInput, { color: colors.foreground, flex: 1, minWidth: 170 }]}
-                placeholder="name@example.com"
-                placeholderTextColor={colors.mutedForeground}
-                value={inviteEmail}
-                onChangeText={setInviteEmail}
+                value={inviteEmails}
+                onChangeText={setInviteEmails}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -1033,15 +1121,9 @@ export default function SettingsScreen() {
               <Pressable disabled={managingMembers} onPress={handleInvite} style={[styles.addBtn, { backgroundColor: colors.primary, opacity: managingMembers ? 0.5 : 1 }]}>
                 {managingMembers ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={16} color="#fff" />}
               </Pressable>
-              <Pressable
-                onPress={() => setSaveInviteContact((value) => !value)}
-                style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 2 }}
-              >
-                <Feather name={saveInviteContact ? 'check-square' : 'square'} size={16} color={saveInviteContact ? colors.primary : colors.mutedForeground} />
-                <Text style={{ color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
-                  Save this person as a one-tap invite contact
-                </Text>
-              </Pressable>
+              <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                Batch invitations are email-only. Use Quick invite below for saved contacts.
+              </Text>
               <Text style={{ width: '100%', color: colors.mutedForeground, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
                 Tap Member to choose Admin instead. They only join after signing in and accepting the email invitation.
               </Text>
@@ -1186,7 +1268,7 @@ export default function SettingsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 5 }]}>
-                  You will be the owner. Nothing from My budget will be copied into this Shared budget.
+                  You will be the owner. Nothing from your Personal budget will be copied into this Shared budget.
                 </Text>
               </View>
               <Pressable onPress={() => setCreateGroupOpen(false)} hitSlop={10}>
@@ -1236,6 +1318,11 @@ const styles = StyleSheet.create({
   identityChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   identityIconChoice: { width: 76, minHeight: 56, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 3 },
   identityChoiceText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  emojiStyleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  emojiInput: { minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, marginTop: 6, fontSize: 20 },
+  nameStyleChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  nameStyleChoice: { minWidth: 76, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 8 },
+  nameStyleLabel: { fontSize: 12 },
   identityColors: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   identityColorChoice: { height: 34, width: 34, borderRadius: 17, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   identitySaveButton: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 },

@@ -7,11 +7,18 @@
  */
 import type { GroupAccentColor } from './groupAccentColor';
 import type { GroupIcon } from './groupIcon';
+import type { GroupNameStyle } from './groupNameStyle';
 import type { GroupRole } from './groupRole';
 
 export interface Group {
   id: number;
   name: string;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  emoji: string | null;
+  nameStyle: GroupNameStyle;
   icon: GroupIcon;
   accentColor: GroupAccentColor;
   /** @nullable */

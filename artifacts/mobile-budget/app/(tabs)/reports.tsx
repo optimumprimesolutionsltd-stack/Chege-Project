@@ -27,26 +27,13 @@ import {
   useGetMembers,
   useGetSavingsGoals,
 } from '@workspace/api-client-react';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
-  Food: 'shopping-cart',
-  Transport: 'truck',
-  Health: 'heart',
-  Education: 'book',
-  Utilities: 'zap',
-  Entertainment: 'tv',
-  Clothing: 'tag',
-  Savings: 'archive',
-  Housing: 'home',
-  Communication: 'phone',
-  Other: 'more-horizontal',
-};
 
 const MEMBER_COLORS = ['#22c55e', '#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#f59e0b'];
 
@@ -121,7 +108,7 @@ function BudgetRow({
   spentAmount: number;
   colors: ReturnType<typeof useColors>;
 }) {
-  const icon   = CATEGORY_ICONS[category] ?? 'more-horizontal';
+  const icon   = getCategoryIcon(category);
   const accent = CATEGORY_COLORS[category] ?? '#6b7280';
   const over   = spentAmount > budgetAmount;
   const pct    = budgetAmount > 0 ? Math.min(spentAmount / budgetAmount, 1) : 0;
@@ -855,7 +842,7 @@ export default function ReportsScreen() {
               </Text>
               {recurringExpenses.slice(0, 5).map(e => {
                 const accent = CATEGORY_COLORS[(e.category ?? '') as string] ?? '#6b7280';
-                const icon = CATEGORY_ICONS[(e.category ?? '') as string] ?? 'repeat';
+                const icon = getCategoryIcon((e.category ?? '') as string);
                 return (
                   <View key={e.id} style={[styles.expRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <View style={[styles.catIcon, { backgroundColor: accent + '22' }]}>
@@ -973,7 +960,7 @@ export default function ReportsScreen() {
                   <View key={item.category} style={[styles.detailsRow, { borderColor: colors.border }]}>
                     <View style={[styles.catIcon, { backgroundColor: colors.destructive + '18' }]}>
                       <Feather
-                        name={CATEGORY_ICONS[item.category] ?? 'more-horizontal'}
+                        name={getCategoryIcon(item.category)}
                         size={15}
                         color={colors.destructive}
                       />

@@ -21,6 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
+import { getCategoryIcon } from "@/lib/category-icons";
 
 type BudgetCategory = {
   id: number;
@@ -994,11 +995,16 @@ export default function Budget() {
                     const isOver = cat.percentUsed > 100;
                     const isNear = cat.percentUsed > 85 && !isOver;
                     const fullCat = allCategories.find(c => c.name === cat.category);
+                     const CategoryIcon = getCategoryIcon(cat.category);
                     return (
                        <Card key={cat.category} className="border-none shadow-sm bg-card hover:shadow-md transition-shadow">
                         <CardContent className="p-5 space-y-4">
                           <div className="flex justify-between items-start">
-                            <div className="flex-1 min-w-0">
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                <CategoryIcon className="h-4 w-4" aria-hidden="true" />
+                              </span>
+                              <div className="min-w-0">
                               <h3 className="font-semibold text-lg text-foreground">{cat.category}</h3>
                               <p className="text-sm text-muted-foreground">
                                 {cat.isBudgeted
@@ -1007,6 +1013,7 @@ export default function Budget() {
                                     : `One-time for ${formatMonthYear(cat.activeMonth ?? month, cat.activeYear ?? year)}`}</>
                                   : "No active budget assigned"}
                               </p>
+                              </div>
                             </div>
                             <div className="flex items-start gap-1 ml-2">
                               <div className="text-right mr-2">
@@ -1042,13 +1049,20 @@ export default function Budget() {
                       </Card>
                     );
                   })}
-                  {unusedItems.map(cat => (
+                  {unusedItems.map(cat => {
+                    const CategoryIcon = getCategoryIcon(cat.name);
+                    return (
                     <Card key={cat.id} className="border-none shadow-sm bg-card/60 hover:shadow-md transition-shadow opacity-70">
                       <CardContent className="p-5 space-y-4">
                         <div className="flex justify-between items-start">
-                          <div>
+                          <div className="flex items-start gap-3">
+                            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                              <CategoryIcon className="h-4 w-4" aria-hidden="true" />
+                            </span>
+                            <div>
                             <h3 className="font-semibold text-lg text-foreground">{cat.name}</h3>
                             <p className="text-sm text-muted-foreground">Limit: {formatKes(cat.budgetAmount)} · No spending yet</p>
+                            </div>
                           </div>
                           <div className="flex gap-1">
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(cat)}>
@@ -1071,7 +1085,8 @@ export default function Budget() {
                         </Button>
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );

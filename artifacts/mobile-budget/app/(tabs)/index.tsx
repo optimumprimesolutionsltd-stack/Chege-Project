@@ -26,6 +26,7 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import BudgetRing from '@/components/BudgetRing';
 import ActivityCard from '@/components/ActivityCard';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import {
   useGetDashboardSummary,
   useGetDashboardActivity,
@@ -381,6 +382,14 @@ export default function DashboardScreen() {
               )}
             </View>
             <View style={styles.headerControls}>
+              <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={10} accessibilityLabel="Open settings">
+                <ProfileAvatar
+                  user={user}
+                  size={34}
+                  backgroundColor="rgba(247,250,246,0.16)"
+                  foregroundColor="#f7faf6"
+                />
+              </Pressable>
               {/* Privacy toggle */}
               <Pressable onPress={togglePrivacy} hitSlop={10} style={styles.iconBtn}>
                 <Feather name={isPrivate ? 'eye-off' : 'eye'} size={20} color="rgba(247,250,246,0.7)" />

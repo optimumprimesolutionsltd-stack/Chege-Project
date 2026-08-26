@@ -31,6 +31,11 @@ function normalizedSlogan(slogan: string | null | undefined): string | null {
   return value || null;
 }
 
+function normalizedEmoji(emoji: string | null | undefined): string | null {
+  const value = emoji?.trim();
+  return value || null;
+}
+
 async function hasAccessibleSharedBudgetWithName(
   userId: string,
   name: string,
@@ -74,10 +79,17 @@ router.post("/groups", async (req, res): Promise<void> => {
   const group = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(groupsTable)
-      .values({ name, createdByUserId: req.user!.id })
+      .values({
+        name,
+        emoji: normalizedEmoji(parsed.data.emoji),
+        nameStyle: parsed.data.nameStyle,
+        createdByUserId: req.user!.id,
+      })
       .returning({
         id: groupsTable.id,
         name: groupsTable.name,
+        emoji: groupsTable.emoji,
+        nameStyle: groupsTable.nameStyle,
         icon: groupsTable.icon,
         accentColor: groupsTable.accentColor,
         photoPath: groupsTable.photoPath,
@@ -96,6 +108,8 @@ router.post("/groups", async (req, res): Promise<void> => {
   const workspace = {
     id: group.id,
     name: group.name,
+    emoji: group.emoji,
+    nameStyle: group.nameStyle,
     icon: group.icon,
     accentColor: group.accentColor,
     photoUrl: null,
@@ -115,6 +129,8 @@ router.get("/group", async (req, res): Promise<void> => {
     .select({
       id: groupsTable.id,
       name: groupsTable.name,
+      emoji: groupsTable.emoji,
+      nameStyle: groupsTable.nameStyle,
       icon: groupsTable.icon,
       accentColor: groupsTable.accentColor,
       photoPath: groupsTable.photoPath,
@@ -158,6 +174,8 @@ router.patch("/group", async (req, res): Promise<void> => {
   const [group] = await db.update(groupsTable)
     .set({
       name,
+      ...(parsed.data.emoji !== undefined ? { emoji: normalizedEmoji(parsed.data.emoji) } : {}),
+      ...(parsed.data.nameStyle ? { nameStyle: parsed.data.nameStyle } : {}),
       ...(parsed.data.icon ? { icon: parsed.data.icon } : {}),
       ...(parsed.data.accentColor ? { accentColor: parsed.data.accentColor } : {}),
       ...(parsed.data.photoPath !== undefined ? { photoPath: parsed.data.photoPath } : {}),
@@ -167,6 +185,8 @@ router.patch("/group", async (req, res): Promise<void> => {
     .returning({
       id: groupsTable.id,
       name: groupsTable.name,
+      emoji: groupsTable.emoji,
+      nameStyle: groupsTable.nameStyle,
       icon: groupsTable.icon,
       accentColor: groupsTable.accentColor,
       photoPath: groupsTable.photoPath,

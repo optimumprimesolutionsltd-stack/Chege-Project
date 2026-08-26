@@ -36,6 +36,14 @@ export type GroupKind = (typeof GROUP_KIND)[keyof typeof GROUP_KIND];
 // usable and visually consistent after the additive schema update.
 export const DEFAULT_GROUP_ICON = "users";
 export const DEFAULT_GROUP_ACCENT_COLOR = "#0F766E";
+export const GROUP_NAME_STYLE = {
+  PLAIN: "plain",
+  ITALIC: "italic",
+  BOLD: "bold",
+  SERIF: "serif",
+} as const;
+
+export type GroupNameStyle = (typeof GROUP_NAME_STYLE)[keyof typeof GROUP_NAME_STYLE];
 
 export const groupsTable = pgTable(
   "groups",
@@ -44,6 +52,10 @@ export const groupsTable = pgTable(
     name: text("name").notNull(),
     icon: text("icon").notNull().default(DEFAULT_GROUP_ICON),
     accentColor: text("accent_color").notNull().default(DEFAULT_GROUP_ACCENT_COLOR),
+    // Optional emoji gives each budget a quick, personal visual cue. The
+    // existing icon remains the fallback for budgets without one.
+    emoji: text("emoji"),
+    nameStyle: text("name_style").notNull().default(GROUP_NAME_STYLE.PLAIN),
     // Group-owned image object path. The API resolves this private path to a
     // short-lived viewing URL only for a verified workspace member.
     photoPath: text("photo_path"),

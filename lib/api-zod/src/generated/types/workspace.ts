@@ -7,11 +7,18 @@
  */
 import type { WorkspaceAccentColor } from './workspaceAccentColor';
 import type { WorkspaceIcon } from './workspaceIcon';
+import type { WorkspaceNameStyle } from './workspaceNameStyle';
 import type { WorkspaceRole } from './workspaceRole';
 
 export interface Workspace {
   id: number;
   name: string;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  emoji: string | null;
+  nameStyle: WorkspaceNameStyle;
   icon: WorkspaceIcon;
   accentColor: WorkspaceAccentColor;
   /** @nullable */

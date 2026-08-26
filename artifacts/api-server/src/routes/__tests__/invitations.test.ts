@@ -188,4 +188,33 @@ describe("group invitation management", () => {
     expect(response.status).toBe(403);
     expect(db.select).not.toHaveBeenCalled();
   });
+
+  it("rejects a batch containing an invalid email before creating invitations", async () => {
+    const response = await request(managerApp({
+      id: 7,
+      role: "admin",
+      isPrivate: false,
+    })).post("/group-invitations/batch").send({
+      emails: ["valid@example.com", "not-an-email"],
+      role: "member",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/valid email/i);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps batch invitations manager-only", async () => {
+    const response = await request(managerApp({
+      id: 7,
+      role: "member",
+      isPrivate: false,
+    })).post("/group-invitations/batch").send({
+      emails: ["one@example.com", "two@example.com"],
+      role: "member",
+    });
+
+    expect(response.status).toBe(403);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
 });

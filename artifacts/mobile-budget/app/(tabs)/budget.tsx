@@ -33,6 +33,7 @@ import {
   customFetch,
 } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 
 type BudgetCategory = {
   id: number;
@@ -66,16 +67,6 @@ const PRIORITY_GUIDE: Record<number, string> = {
   4: 'Stay connected and cared for: data, grooming, and similar costs.',
   5: 'Flexible spending that can wait when money is tight.',
   999: 'Spending recorded without a matching budget category yet.',
-};
-
-const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
-  Food: 'shopping-cart', Transport: 'truck', Health: 'heart', Education: 'book',
-  Utilities: 'zap', Entertainment: 'tv', Clothing: 'tag', Savings: 'archive',
-  Housing: 'home', Communication: 'phone', Other: 'more-horizontal',
-  'Nanny salary': 'users', 'School fees': 'book', 'Water & electricity': 'zap',
-  'Household supplies': 'box', 'Kids clothes': 'tag', 'Medical insurance': 'shield',
-  'Medical outpatient': 'heart', 'Uniform replenishment': 'book',
-  'Wifi/data': 'wifi', 'Pocket money': 'dollar-sign', Grooming: 'scissors', Rent: 'home',
 };
 
 function formatKES(n?: number | null): string {
@@ -931,7 +922,7 @@ export default function BudgetScreen() {
               {breakdown.map((cat) => {
                 const pct = cat.budgetAmount > 0 ? Math.min(cat.spentAmount / cat.budgetAmount, 1) : 0;
                 const isOver = cat.spentAmount > cat.budgetAmount && cat.budgetAmount > 0;
-                const icon = CATEGORY_ICONS[cat.category] ?? 'more-horizontal';
+                const icon = getCategoryIcon(cat.category);
                 const fullCat = allCategories.find(c => c.name === cat.category);
 
                 return (
@@ -988,7 +979,7 @@ export default function BudgetScreen() {
                 );
               })}
               {unusedCategories.map((cat) => {
-                const icon = CATEGORY_ICONS[cat.name] ?? 'more-horizontal';
+                const icon = getCategoryIcon(cat.name);
                 return (
                   <Pressable
                     key={cat.id}

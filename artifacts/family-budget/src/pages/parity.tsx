@@ -59,8 +59,8 @@ export const PARITY_ITEMS: ParityItem[] = [
     category: "Core screens",
     feature: "Settings screen",
     web: "done",
-    mobile: "missing",
-    note: "Mobile Settings screen is a pending task",
+    mobile: "done",
+    note: "Both platforms manage account and budget workspace settings",
   },
   {
     category: "Core screens",
@@ -128,6 +128,13 @@ export const PARITY_ITEMS: ParityItem[] = [
     web: "done",
     mobile: "done",
     note: "Both show spend vs. budget per category",
+  },
+  {
+    category: "Budget",
+    feature: "Budget identity personalization",
+    web: "done",
+    mobile: "done",
+    note: "Both support Unicode names, optional emoji, curated name styles, meaningful category icons, and theme-aware surfaces",
   },
   {
     category: "Budget",
@@ -304,6 +311,13 @@ export const PARITY_ITEMS: ParityItem[] = [
     web: "done",
     mobile: "done",
     note: "Both use Replit Auth / deep-link token flow",
+  },
+  {
+    category: "Members & auth",
+    feature: "Batch email invitations",
+    web: "done",
+    mobile: "done",
+    note: "Managers can paste multiple email addresses and invite everyone in one batch with per-address results",
   },
   {
     category: "Members & auth",

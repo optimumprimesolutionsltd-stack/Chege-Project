@@ -35,6 +35,7 @@ import type {
   Contribution,
   ContributionInput,
   CreateGroupInvitationInput,
+  CreateGroupInvitationsBatchInput,
   DashboardSummary,
   DepositInput,
   DisbursementInput,
@@ -58,6 +59,7 @@ import type {
   GroupInvitationContact,
   GroupInvitationContactInput,
   GroupInvitationPreview,
+  GroupInvitationsBatchResult,
   GroupInviteLink,
   GroupInviteLinkCreated,
   HealthStatus,
@@ -3867,6 +3869,77 @@ export const useCreateGroupInvitation = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateGroupInvitationMutationOptions(options));
+    }
+
+export const getCreateGroupInvitationsBatchUrl = () => {
+
+
+
+
+  return `/api/group-invitations/batch`
+}
+
+/**
+ * @summary Email several group invitations
+ */
+export const createGroupInvitationsBatch = async (createGroupInvitationsBatchInput: CreateGroupInvitationsBatchInput, options?: Parameters<typeof customFetch>[1]): Promise<GroupInvitationsBatchResult> => {
+
+  return customFetch<GroupInvitationsBatchResult>(getCreateGroupInvitationsBatchUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createGroupInvitationsBatchInput)
+  }
+);}
+
+
+
+
+
+export const getCreateGroupInvitationsBatchMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGroupInvitationsBatch>>, TError,{data: BodyType<CreateGroupInvitationsBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createGroupInvitationsBatch>>, TError,{data: BodyType<CreateGroupInvitationsBatchInput>}, TContext> => {
+
+const mutationKey = ['createGroupInvitationsBatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createGroupInvitationsBatch>>, {data: BodyType<CreateGroupInvitationsBatchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createGroupInvitationsBatch(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateGroupInvitationsBatchMutationResult = NonNullable<Awaited<ReturnType<typeof createGroupInvitationsBatch>>>
+    export type CreateGroupInvitationsBatchMutationBody = BodyType<CreateGroupInvitationsBatchInput>
+    export type CreateGroupInvitationsBatchMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Email several group invitations
+ */
+export const useCreateGroupInvitationsBatch = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createGroupInvitationsBatch>>, TError,{data: BodyType<CreateGroupInvitationsBatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createGroupInvitationsBatch>>,
+        TError,
+        {data: BodyType<CreateGroupInvitationsBatchInput>},
+        TContext
+      > => {
+      return useMutation(getCreateGroupInvitationsBatchMutationOptions(options));
     }
 
 export const getGetGroupInviteLinksUrl = () => {

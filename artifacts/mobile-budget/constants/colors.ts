@@ -14,7 +14,7 @@ const colors = {
     foreground: '#133921',
 
     // Cards
-    card: '#ffffff',
+    card: '#f8f8f2',
     cardForeground: '#133921',
 
     // Primary — forest green (HSL 142 40% 30%)
@@ -40,7 +40,7 @@ const colors = {
     // Borders / inputs
     border: '#e0ebe4',
     input: '#d1e0d7',
-    dropdownBackground: '#ffffff',
+    dropdownBackground: '#f8f8f2',
     dropdownForeground: '#133921',
     dropdownMutedForeground: '#5c8a6c',
     dropdownBorder: '#e0ebe4',
@@ -73,10 +73,10 @@ const colors = {
 
     border: '#1e3b2b',
     input: '#244033',
-    dropdownBackground: '#ffffff',
-    dropdownForeground: '#133921',
-    dropdownMutedForeground: '#5c8a6c',
-    dropdownBorder: '#e0ebe4',
+    dropdownBackground: '#162d20',
+    dropdownForeground: '#f7faf6',
+    dropdownMutedForeground: '#7aaa8a',
+    dropdownBorder: '#1e3b2b',
   },
 
   // 0.75rem = 12px — matches web app's --radius: 0.75rem

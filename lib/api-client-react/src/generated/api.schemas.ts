@@ -470,6 +470,28 @@ export interface CreateGroupInvitationInput {
   saveContact?: boolean;
 }
 
+export type CreateGroupInvitationsBatchInputRole = typeof CreateGroupInvitationsBatchInputRole[keyof typeof CreateGroupInvitationsBatchInputRole];
+
+
+export const CreateGroupInvitationsBatchInputRole = {
+  admin: 'admin',
+  member: 'member',
+} as const;
+
+export interface CreateGroupInvitationsBatchInput {
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  emails: string[];
+  role?: CreateGroupInvitationsBatchInputRole;
+}
+
+export type GroupInvitationsBatchResultFailedItem = {
+  email: string;
+  error: string;
+};
+
 export type GroupInvitationRole = typeof GroupInvitationRole[keyof typeof GroupInvitationRole];
 
 
@@ -499,6 +521,11 @@ export interface GroupInvitation {
   /** @nullable */
   cancelledAt?: string | null;
   status: GroupInvitationStatus;
+}
+
+export interface GroupInvitationsBatchResult {
+  sent: GroupInvitation[];
+  failed: GroupInvitationsBatchResultFailedItem[];
 }
 
 export type GroupInvitationPreviewRole = typeof GroupInvitationPreviewRole[keyof typeof GroupInvitationPreviewRole];
@@ -537,17 +564,43 @@ export type GroupInvitationContact = GroupInvitationContactInput & {
   id: number;
 };
 
+export type SharedGroupInputNameStyle = typeof SharedGroupInputNameStyle[keyof typeof SharedGroupInputNameStyle];
+
+
+export const SharedGroupInputNameStyle = {
+  plain: 'plain',
+  italic: 'italic',
+  bold: 'bold',
+  serif: 'serif',
+} as const;
+
 export interface SharedGroupInput {
   /**
      * @minLength 2
      * @maxLength 60
      */
   name: string;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  emoji?: string | null;
+  nameStyle?: SharedGroupInputNameStyle;
 }
 
 export interface WorkspaceSelectionInput {
   groupId: number;
 }
+
+export type WorkspaceNameStyle = typeof WorkspaceNameStyle[keyof typeof WorkspaceNameStyle];
+
+
+export const WorkspaceNameStyle = {
+  plain: 'plain',
+  italic: 'italic',
+  bold: 'bold',
+  serif: 'serif',
+} as const;
 
 export type WorkspaceIcon = typeof WorkspaceIcon[keyof typeof WorkspaceIcon];
 
@@ -585,6 +638,12 @@ export const WorkspaceRole = {
 export interface Workspace {
   id: number;
   name: string;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  emoji: string | null;
+  nameStyle: WorkspaceNameStyle;
   icon: WorkspaceIcon;
   accentColor: WorkspaceAccentColor;
   /** @nullable */
@@ -619,6 +678,16 @@ export interface GroupInviteLink {
 export type GroupInviteLinkCreated = GroupInviteLink & {
   token: string;
 };
+
+export type GroupNameStyle = typeof GroupNameStyle[keyof typeof GroupNameStyle];
+
+
+export const GroupNameStyle = {
+  plain: 'plain',
+  italic: 'italic',
+  bold: 'bold',
+  serif: 'serif',
+} as const;
 
 export type GroupIcon = typeof GroupIcon[keyof typeof GroupIcon];
 
@@ -656,6 +725,12 @@ export const GroupRole = {
 export interface Group {
   id: number;
   name: string;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  emoji: string | null;
+  nameStyle: GroupNameStyle;
   icon: GroupIcon;
   accentColor: GroupAccentColor;
   /** @nullable */
@@ -670,6 +745,16 @@ export interface Group {
   /** Whether this workspace may record expenses and contributions right now */
   canRecordSharedTransactions: boolean;
 }
+
+export type UpdateGroupInputNameStyle = typeof UpdateGroupInputNameStyle[keyof typeof UpdateGroupInputNameStyle];
+
+
+export const UpdateGroupInputNameStyle = {
+  plain: 'plain',
+  italic: 'italic',
+  bold: 'bold',
+  serif: 'serif',
+} as const;
 
 export type UpdateGroupInputIcon = typeof UpdateGroupInputIcon[keyof typeof UpdateGroupInputIcon];
 
@@ -701,6 +786,12 @@ export interface UpdateGroupInput {
      * @maxLength 60
      */
   name: string;
+  /**
+     * @maxLength 16
+     * @nullable
+     */
+  emoji?: string | null;
+  nameStyle?: UpdateGroupInputNameStyle;
   icon?: UpdateGroupInputIcon;
   accentColor?: UpdateGroupInputAccentColor;
   /**

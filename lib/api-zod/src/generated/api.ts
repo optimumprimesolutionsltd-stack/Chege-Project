@@ -1165,6 +1165,8 @@ export const LeaveGroupResponse = zod.object({
 /**
  * @summary List the signed-in person's private and shared budget workspaces
  */
+export const getWorkspacesResponseEmojiMax = 16;
+
 export const getWorkspacesResponseSloganMax = 120;
 
 
@@ -1172,6 +1174,8 @@ export const getWorkspacesResponseSloganMax = 120;
 export const GetWorkspacesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "emoji": zod.string().max(getWorkspacesResponseEmojiMax).nullable(),
+  "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
@@ -1189,6 +1193,8 @@ export const SelectWorkspaceBody = zod.object({
   "groupId": zod.number()
 })
 
+export const selectWorkspaceResponseEmojiMax = 16;
+
 export const selectWorkspaceResponseSloganMax = 120;
 
 
@@ -1196,6 +1202,8 @@ export const selectWorkspaceResponseSloganMax = 120;
 export const SelectWorkspaceResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "emoji": zod.string().max(selectWorkspaceResponseEmojiMax).nullable(),
+  "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
@@ -1211,11 +1219,17 @@ export const SelectWorkspaceResponse = zod.object({
 export const createSharedGroupBodyNameMin = 2;
 export const createSharedGroupBodyNameMax = 60;
 
+export const createSharedGroupBodyEmojiMax = 16;
+
 
 
 export const CreateSharedGroupBody = zod.object({
-  "name": zod.string().min(createSharedGroupBodyNameMin).max(createSharedGroupBodyNameMax)
+  "name": zod.string().min(createSharedGroupBodyNameMin).max(createSharedGroupBodyNameMax),
+  "emoji": zod.string().max(createSharedGroupBodyEmojiMax).nullish(),
+  "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']).optional()
 })
+
+export const createSharedGroupResponseEmojiMax = 16;
 
 export const createSharedGroupResponseSloganMax = 120;
 
@@ -1224,6 +1238,8 @@ export const createSharedGroupResponseSloganMax = 120;
 export const CreateSharedGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "emoji": zod.string().max(createSharedGroupResponseEmojiMax).nullable(),
+  "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
@@ -1273,6 +1289,36 @@ export const CreateGroupInvitationResponse = zod.object({
   "acceptedAt": zod.coerce.date().nullish(),
   "cancelledAt": zod.coerce.date().nullish(),
   "status": zod.enum(['pending', 'accepted', 'cancelled', 'expired'])
+})
+
+
+/**
+ * @summary Email several group invitations
+ */
+export const createGroupInvitationsBatchBodyEmailsMax = 50;
+
+export const createGroupInvitationsBatchBodyRoleDefault = `member`;
+
+export const CreateGroupInvitationsBatchBody = zod.object({
+  "emails": zod.array(zod.string()).min(1).max(createGroupInvitationsBatchBodyEmailsMax),
+  "role": zod.enum(['admin', 'member']).default(createGroupInvitationsBatchBodyRoleDefault)
+})
+
+export const CreateGroupInvitationsBatchResponse = zod.object({
+  "sent": zod.array(zod.object({
+  "id": zod.number(),
+  "email": zod.string(),
+  "role": zod.enum(['admin', 'member']),
+  "createdAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "acceptedAt": zod.coerce.date().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "status": zod.enum(['pending', 'accepted', 'cancelled', 'expired'])
+})),
+  "failed": zod.array(zod.object({
+  "email": zod.string(),
+  "error": zod.string()
+}))
 })
 
 
@@ -1465,6 +1511,8 @@ export const DeleteGroupInvitationContactResponse = zod.unknown()
 /**
  * @summary Get the active group's details
  */
+export const getGroupResponseEmojiMax = 16;
+
 export const getGroupResponseSloganMax = 120;
 
 
@@ -1472,6 +1520,8 @@ export const getGroupResponseSloganMax = 120;
 export const GetGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "emoji": zod.string().max(getGroupResponseEmojiMax).nullable(),
+  "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),
@@ -1488,6 +1538,8 @@ export const GetGroupResponse = zod.object({
 export const updateGroupBodyNameMin = 2;
 export const updateGroupBodyNameMax = 60;
 
+export const updateGroupBodyEmojiMax = 16;
+
 export const updateGroupBodyPhotoPathRegExp = new RegExp('^/objects/photos/[a-f0-9-]+$');
 export const updateGroupBodySloganMax = 120;
 
@@ -1495,11 +1547,15 @@ export const updateGroupBodySloganMax = 120;
 
 export const UpdateGroupBody = zod.object({
   "name": zod.string().min(updateGroupBodyNameMin).max(updateGroupBodyNameMax),
+  "emoji": zod.string().max(updateGroupBodyEmojiMax).nullish(),
+  "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']).optional(),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']).optional(),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']).optional(),
   "photoPath": zod.string().regex(updateGroupBodyPhotoPathRegExp).nullish(),
   "slogan": zod.string().max(updateGroupBodySloganMax).nullish()
 })
+
+export const updateGroupResponseEmojiMax = 16;
 
 export const updateGroupResponseSloganMax = 120;
 
@@ -1508,6 +1564,8 @@ export const updateGroupResponseSloganMax = 120;
 export const UpdateGroupResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "emoji": zod.string().max(updateGroupResponseEmojiMax).nullable(),
+  "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']),
   "icon": zod.enum(['users', 'home', 'heart', 'briefcase', 'award', 'star']),
   "accentColor": zod.enum(['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']),
   "photoUrl": zod.string().nullish(),

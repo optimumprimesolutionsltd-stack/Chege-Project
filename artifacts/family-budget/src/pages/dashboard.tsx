@@ -45,6 +45,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { WorkspaceSwitcher, workspaceLabel } from "@/components/workspace-switcher";
+import { workspaceNameClass } from "@/lib/workspace-identity";
+import { ProfileAvatar } from "@/components/profile-avatar";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
@@ -110,7 +112,7 @@ function OpenInvitationLinkButton() {
           </DialogHeader>
           <form onSubmit={openInvitation} className="space-y-5">
             <p className="text-sm leading-relaxed text-muted-foreground">
-               Paste the email invitation or private group link you received. It will add that Shared budget alongside My budget after you accept.
+               Paste the email invitation or private group link you received. It will add that Shared budget alongside your Personal budget after you accept.
             </p>
             <div className="space-y-2">
               <label htmlFor="group-invitation-link" className="text-sm font-semibold text-foreground">Invitation link</label>
@@ -196,7 +198,7 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
           </DialogHeader>
           <form onSubmit={submit} className="space-y-5">
             <p className="text-sm leading-relaxed text-muted-foreground">
-               You will be the owner. My budget records will stay private and will not be copied into this Shared budget.
+               You will be the owner. Personal budget records will stay private and will not be copied into this Shared budget.
             </p>
             <div className="space-y-2">
               <label htmlFor="shared-group-name" className="text-sm font-semibold text-foreground">Group name</label>
@@ -1117,9 +1119,11 @@ export default function Dashboard() {
   return (
     <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+        <div className="flex items-center gap-3">
+          <ProfileAvatar user={user} className="h-12 w-12 sm:h-14 sm:w-14" textClassName="text-lg" alt={user?.firstName ?? "User"} />
+          <div>
           <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
-            {isSharedWorkspace ? "Shared budget" : "My budget"}
+            {isSharedWorkspace ? "Shared budget" : "Personal budget"}
           </p>
           <h1 className="mt-1 text-2xl font-display font-bold text-foreground sm:text-3xl">
             {group?.isPrivate ? "Personal overview" : "Group overview"}
@@ -1127,6 +1131,7 @@ export default function Dashboard() {
           <p className="mt-1 text-muted-foreground">
             {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
           </p>
+          </div>
         </div>
 
         <section
@@ -1138,8 +1143,8 @@ export default function Dashboard() {
               <p id="dashboard-workspace-heading" className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
                 Viewing budget
               </p>
-              <p className="mt-1 truncate font-display text-lg font-bold text-foreground">
-                {group ? workspaceLabel(group) : "My budget"}
+              <p className={`mt-1 truncate text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
+                {group?.emoji ? `${group.emoji} ` : ""}{group ? workspaceLabel(group) : "Personal budget"}
               </p>
             </div>
             <span className="hidden shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary sm:inline-flex">
@@ -1486,7 +1491,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="font-semibold text-foreground">{isSharedWorkspace ? "Joint Account" : "My Account"}</p>
-                  <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared budget funds" : "My budget funds"}</p>
+                  <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared budget funds" : "Personal budget funds"}</p>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />

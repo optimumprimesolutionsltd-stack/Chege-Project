@@ -16,6 +16,8 @@ async function availableWorkspaces(userId: string) {
     .select({
       id: groupsTable.id,
       name: groupsTable.name,
+      emoji: groupsTable.emoji,
+      nameStyle: groupsTable.nameStyle,
       icon: groupsTable.icon,
       accentColor: groupsTable.accentColor,
       photoPath: groupsTable.photoPath,
@@ -30,6 +32,8 @@ async function availableWorkspaces(userId: string) {
   return Promise.all(rows.map(async (row) => ({
     id: row.id,
     name: row.name,
+    emoji: row.emoji,
+    nameStyle: row.nameStyle,
     icon: row.icon,
     accentColor: row.accentColor,
     photoUrl: await resolvePhotoUrl(row.photoPath).catch(() => null),

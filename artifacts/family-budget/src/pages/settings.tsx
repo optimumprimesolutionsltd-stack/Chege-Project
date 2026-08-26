@@ -20,6 +20,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
 import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Pencil, Star, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
+import type { WorkspaceNameStyle } from "@workspace/api-client-react";
+import { ProfileAvatar } from "@/components/profile-avatar";
 
 type GroupInvitation = {
   id: number;
@@ -93,13 +96,13 @@ export default function Settings() {
   const requestPhotoUpload = useRequestPhotoUpload();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [inviteName, setInviteName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteEmails, setInviteEmails] = useState("");
   const [newMemberRole, setNewMemberRole] = useState<"admin" | "member">("member");
-  const [saveInviteContact, setSaveInviteContact] = useState(true);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupSlogan, setGroupSlogan] = useState("");
+  const [groupEmoji, setGroupEmoji] = useState("");
+  const [groupNameStyle, setGroupNameStyle] = useState<WorkspaceNameStyle>("plain");
   const [groupIcon, setGroupIcon] = useState<(typeof SHARED_BUDGET_ICONS)[number]["value"]>("users");
   const [groupAccentColor, setGroupAccentColor] = useState<(typeof SHARED_BUDGET_ACCENTS)[number]>("#0F766E");
   const [displayName, setDisplayName] = useState("");
@@ -128,7 +131,9 @@ export default function Settings() {
     if (group?.icon) setGroupIcon(group.icon as (typeof SHARED_BUDGET_ICONS)[number]["value"]);
     if (group?.accentColor) setGroupAccentColor(group.accentColor as (typeof SHARED_BUDGET_ACCENTS)[number]);
     setGroupSlogan(group?.slogan ?? "");
-  }, [group?.name, group?.icon, group?.accentColor, group?.slogan]);
+    setGroupEmoji(group?.emoji ?? "");
+    setGroupNameStyle(group?.nameStyle ?? "plain");
+  }, [group?.name, group?.icon, group?.accentColor, group?.slogan, group?.emoji, group?.nameStyle]);
   useEffect(() => {
     setDisplayName([user?.firstName, user?.lastName].filter(Boolean).join(" "));
   }, [user?.firstName, user?.lastName]);
@@ -157,6 +162,8 @@ export default function Settings() {
       await updateGroup.mutateAsync({
         data: {
           name: groupName.trim(),
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
           icon: groupIcon,
           accentColor: groupAccentColor,
           slogan: groupSlogan.trim() || null,
@@ -224,6 +231,8 @@ export default function Settings() {
   const cancelBudgetNameEdit = () => {
     setGroupName(group?.name ?? "");
     setGroupSlogan(group?.slogan ?? "");
+    setGroupEmoji(group?.emoji ?? "");
+    setGroupNameStyle(group?.nameStyle ?? "plain");
     setEditingBudgetName(false);
   };
   const startDisplayNameEdit = () => {
@@ -233,6 +242,8 @@ export default function Settings() {
   const startBudgetNameEdit = () => {
     setGroupName(group?.name ?? "");
     setGroupSlogan(group?.slogan ?? "");
+    setGroupEmoji(group?.emoji ?? "");
+    setGroupNameStyle(group?.nameStyle ?? "plain");
     setEditingBudgetName(true);
   };
 
@@ -295,6 +306,8 @@ export default function Settings() {
       await updateGroup.mutateAsync({
         data: {
           name: groupName.trim() || group.name,
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
           icon: groupIcon,
           accentColor: groupAccentColor,
           slogan: groupSlogan.trim() || null,
@@ -315,32 +328,39 @@ export default function Settings() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) {
+    const emails = [...new Set(inviteEmails.split(/[\s,;]+/).map((email) => email.trim().toLowerCase()).filter(Boolean))];
+    if (emails.length === 0) {
       toast({
         variant: "destructive",
-        title: "Email required",
-        description: "Enter an email address before sending the invitation.",
+        title: "Email addresses required",
+        description: "Enter one or more email addresses before sending invitations.",
       });
       return;
     }
     setSendingInvite(true);
     try {
-      await requestJson("/api/group-invitations", {
+      const result = await requestJson<{ sent: GroupInvitation[]; failed: { email: string; error: string }[] }>(
+        "/api/group-invitations/batch",
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: inviteEmail.trim(),
+          emails,
           role: newMemberRole,
-          contactName: inviteName.trim() || undefined,
-          saveContact: saveInviteContact && Boolean(inviteName.trim()),
         }),
-      });
+        },
+      );
+      if (result.sent.length === 0) {
+        throw new Error(result.failed[0]?.error ?? "No invitations were sent.");
+      }
+      const failureNote = result.failed.length > 0
+        ? ` ${result.failed.length} could not be sent: ${result.failed.map((item) => `${item.email} (${item.error})`).join(", ")}`
+        : "";
       toast({
-        title: "Invitation sent",
-        description: `${inviteEmail.trim()} can sign in and accept the invitation.`,
+        title: result.sent.length === 1 ? "Invitation sent" : `${result.sent.length} invitations sent`,
+        description: `${result.sent.map((item) => item.email).join(", ")} can sign in and accept.${failureNote}`,
       });
-      setInviteName("");
-      setInviteEmail("");
+      setInviteEmails("");
       setNewMemberRole("member");
       queryClient.invalidateQueries({ queryKey: ["group-invitations"] });
       queryClient.invalidateQueries({ queryKey: ["group-invitation-contacts"] });
@@ -440,9 +460,9 @@ export default function Settings() {
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-1">
           {canManageShared
-            ? "Manage who has access to this group budget."
+            ? "Manage who has access to this Shared budget."
             : isPrivateWorkspace
-              ? "This is My budget. Only you can see it."
+              ? "This is your Personal budget. Only you can see it."
             : "View your group and manage your own account details."}
         </p>
       </div>
@@ -458,13 +478,7 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
           <div className="flex items-center gap-3 rounded-xl bg-muted px-4 py-3">
-            {user?.profileImageUrl ? (
-              <img src={user.profileImageUrl} alt="" className="h-12 w-12 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
-                {([user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "U").slice(0, 1).toUpperCase()}
-              </div>
-            )}
+            <ProfileAvatar user={user} className="h-12 w-12" textClassName="text-sm" />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Signed in as</p>
               <p className="truncate text-sm font-semibold text-foreground">{[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "Your Jamvi account"}</p>
@@ -542,7 +556,7 @@ export default function Settings() {
           <CardTitle>Budget name</CardTitle>
           <CardDescription>
             {isPrivateWorkspace
-               ? "This is the name for My budget."
+               ? "This is the name for your Personal budget."
               : "This is the name your Shared budget sees across Jamvi."}
           </CardDescription>
         </CardHeader>
@@ -550,6 +564,46 @@ export default function Settings() {
           {canManageWorkspace && editingBudgetName ? (
             <form onSubmit={handleSaveGroupIdentity} noValidate className="space-y-3">
               <Input ref={budgetNameInputRef} value={groupName} onChange={(event) => setGroupName(event.target.value)} maxLength={60} placeholder="e.g. Mwangaza Chama" aria-label="Budget name" disabled={updateGroup.isPending} />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Names can use any language, numbers, emoji, and special characters.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
+                <div>
+                  <label htmlFor="budget-emoji" className="text-sm font-semibold text-foreground">Emoji <span className="font-normal text-muted-foreground">(optional)</span></label>
+                  <Input
+                    id="budget-emoji"
+                    value={groupEmoji}
+                    onChange={(event) => setGroupEmoji(event.target.value)}
+                    maxLength={16}
+                    placeholder="e.g. 🌱"
+                    aria-describedby="budget-emoji-help"
+                    disabled={updateGroup.isPending}
+                    className="mt-1 text-xl"
+                  />
+                  <p id="budget-emoji-help" className="mt-1 text-xs text-muted-foreground">A quick visual cue.</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Name style</p>
+                  <div className="mt-1 grid grid-cols-2 gap-2">
+                    {WORKSPACE_NAME_STYLES.map((style) => (
+                      <button
+                        key={style.value}
+                        type="button"
+                        aria-pressed={groupNameStyle === style.value}
+                        onClick={() => setGroupNameStyle(style.value)}
+                        className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                          groupNameStyle === style.value
+                            ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/15"
+                            : "border-border bg-card text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        <span className={`block text-sm ${workspaceNameClass(style.value)}`}>{style.label}</span>
+                        <span className="block text-[11px] text-muted-foreground">{style.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               <div>
                 <label htmlFor="budget-slogan" className="text-sm font-semibold text-foreground">Budget slogan <span className="font-normal text-muted-foreground">(optional)</span></label>
                 <Input id="budget-slogan" value={groupSlogan} onChange={(event) => setGroupSlogan(event.target.value)} maxLength={120} placeholder="e.g. Saving together, one goal at a time" aria-describedby="budget-slogan-help" disabled={updateGroup.isPending} className="mt-1" />
@@ -567,7 +621,9 @@ export default function Settings() {
           ) : canManageWorkspace ? (
             <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-semibold text-foreground">{group?.name ?? "Your budget"}</p>
+                <p className={`text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
+                  {group?.emoji ? `${group.emoji} ` : ""}{group?.name ?? "Your budget"}
+                </p>
                 {group?.slogan ? <p className="mt-1 text-sm italic text-muted-foreground">{group.slogan}</p> : null}
                 <p className="mt-1 text-sm text-muted-foreground">Choose Edit when you’re ready to rename this budget.</p>
               </div>
@@ -578,7 +634,9 @@ export default function Settings() {
             </div>
           ) : (
             <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
-              <p className="text-lg font-semibold text-foreground">{group?.name ?? "Shared budget"}</p>
+              <p className={`text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
+                {group?.emoji ? `${group.emoji} ` : ""}{group?.name ?? "Shared budget"}
+              </p>
                 {group?.slogan ? <p className="mt-1 text-sm italic text-muted-foreground">{group.slogan}</p> : null}
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">An owner or admin manages this Shared budget’s name. Your access and shared records stay the same.</p>
             </div>
@@ -606,7 +664,9 @@ export default function Settings() {
                 );
               })()}
               <div>
-                 <p className="font-semibold text-foreground">{group?.name || "Shared budget"}</p>
+                 <p className={`text-lg text-foreground ${workspaceNameClass(groupNameStyle)}`}>
+                   {groupEmoji ? `${groupEmoji} ` : ""}{group?.name || "Shared budget"}
+                 </p>
                  {group?.slogan ? <p className="text-sm italic text-muted-foreground">{group.slogan}</p> : null}
                  <p className="text-xs text-muted-foreground">This identity belongs to the group, not any one member.</p>
               </div>
@@ -685,7 +745,7 @@ export default function Settings() {
               </>
             ) : (
               <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-                An owner or admin can update the Shared budget name, icon, and accent color.
+                An owner or admin can update the Shared budget name, emoji, style, icon, and accent color.
               </p>
             )}
           </CardContent>
@@ -697,11 +757,11 @@ export default function Settings() {
         <CardHeader className="p-4 sm:p-6">
           <div className="flex items-center gap-2">
             <UserPlus className="w-5 h-5 text-primary" />
-            <CardTitle>{isPrivateWorkspace ? "My budget" : "Group Members"}</CardTitle>
+            <CardTitle>{isPrivateWorkspace ? "Personal budget" : "Group Members"}</CardTitle>
           </div>
           <CardDescription>
             {isPrivateWorkspace
-               ? "Only you have access to My budget. Shared budgets remain separate."
+               ? "Only you have access to your Personal budget. Shared budgets remain separate."
               : canManageShared
                 ? "You can change any non-owner between Admin and Member or remove their access. The group owner is protected."
               : "The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups."}
@@ -765,7 +825,7 @@ export default function Settings() {
 
           {isPrivateWorkspace ? (
             <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
-                <p className="text-sm font-semibold text-foreground">My budget</p>
+                <p className="text-sm font-semibold text-foreground">Personal budget</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                   Expenses, goals, bank activity, and reports here belong only to you. A Shared budget has its own separate budget and members.
               </p>
@@ -810,29 +870,19 @@ export default function Settings() {
           {canManageShared && (
             <form onSubmit={handleAdd} noValidate className="space-y-3 border-t border-border/50 pt-4">
               <div>
-                <p className="text-sm font-medium text-foreground">Invite someone by email</p>
-                <p className="mt-1 text-xs text-muted-foreground">They will sign in with this email and accept the invitation before gaining access.</p>
+                <p className="text-sm font-medium text-foreground">Invite people by email</p>
+                <p className="mt-1 text-xs text-muted-foreground">Paste multiple addresses separated by commas, spaces, or new lines. Each person must sign in with their invited email and accept.</p>
               </div>
-              <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_auto_auto] md:items-end">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_auto_auto] md:items-end">
                 <label className="grid gap-1.5 text-xs font-medium text-foreground">
-                  Name <span className="font-normal text-muted-foreground">(optional)</span>
-                  <Input
-                    aria-label="Invitee name"
-                    placeholder="For your saved shortcut"
-                    value={inviteName}
-                    onChange={(e) => setInviteName(e.target.value)}
-                    className="h-11 bg-card text-foreground"
-                  />
-                </label>
-                <label className="grid gap-1.5 text-xs font-medium text-foreground">
-                  Email address
-                  <Input
-                    aria-label="Invitee email address"
-                    type="email"
-                    placeholder="name@example.com"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    className="h-11 bg-card text-foreground"
+                  Email addresses
+                  <textarea
+                    aria-label="Invitee email addresses"
+                    placeholder={"alex@example.com\nsam@example.com"}
+                    value={inviteEmails}
+                    onChange={(e) => setInviteEmails(e.target.value)}
+                    rows={3}
+                    className="min-h-11 resize-y rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </label>
                 <label className="grid gap-1.5 text-xs font-medium text-foreground">
@@ -858,15 +908,9 @@ export default function Settings() {
                 <span className="font-semibold text-foreground">Member</span> to participate in shared finances, or an{" "}
                 <span className="font-semibold text-foreground">Admin</span> to also manage members and group setup.
               </div>
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={saveInviteContact}
-                  onChange={(event) => setSaveInviteContact(event.target.checked)}
-                  disabled={!inviteName.trim()}
-                />
-                Save this person as a one-tap invite contact
-              </label>
+              <p className="text-xs text-muted-foreground">
+                Saved one-tap contacts can still be invited below; batch invites are email-only.
+              </p>
             </form>
           )}
           {canManageShared && inviteContacts.length > 0 && (

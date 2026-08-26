@@ -6,6 +6,7 @@ import {
 import { useGetGroup } from "@workspace/api-client-react";
 import { useState } from "react";
 import { Award, BriefcaseBusiness, Heart, Home, Star, Users } from "lucide-react";
+import { workspaceIdentityText, workspaceNameClass } from "@/lib/workspace-identity";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export function workspaceLabel(workspace: Pick<Workspace, "isPrivate" | "name">) {
-  if (workspace.isPrivate) return "My budget";
+  if (workspace.isPrivate) return "Personal budget";
 
   const name = workspace.name.trim();
   const normalizedName = name.replace(/\s+/g, " ").toLocaleLowerCase("en-US");
@@ -85,6 +86,13 @@ export function WorkspaceSwitcher({
               alt=""
               className="h-8 w-8 shrink-0 rounded-lg object-cover"
             />
+          ) : activeSharedBudget.emoji ? (
+            <span
+              aria-hidden="true"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-lg"
+            >
+              {activeSharedBudget.emoji}
+            </span>
           ) : (
             <span
               aria-hidden="true"
@@ -103,13 +111,12 @@ export function WorkspaceSwitcher({
           disabled={!activeWorkspaceId || selectWorkspace.isPending}
           onChange={(event) => requestWorkspaceSwitch(Number(event.target.value))}
           className={[
-            "min-w-0 flex-1 cursor-pointer bg-white text-[#133921] outline-none transition-colors disabled:cursor-wait disabled:opacity-70",
+            `min-w-0 flex-1 cursor-pointer bg-card text-foreground outline-none transition-colors disabled:cursor-wait disabled:opacity-70 ${workspaceNameClass(activeGroup?.nameStyle)}`,
             isDashboardVariant
               ? "h-11 rounded-xl border border-input px-3 text-sm font-semibold shadow-sm hover:border-primary/40 focus:ring-2 focus:ring-ring"
-              : "h-9 rounded-lg border border-sidebar-border px-2 text-xs font-semibold hover:bg-white",
+              : "h-9 rounded-lg border border-sidebar-border px-2 text-xs hover:bg-sidebar-accent",
             className,
           ].join(" ")}
-          style={{ colorScheme: "light" }}
         >
         <option value="" disabled>
           Choose a budget
@@ -119,7 +126,7 @@ export function WorkspaceSwitcher({
           .sort((a, b) => Number(b.isPrivate) - Number(a.isPrivate) || a.name.localeCompare(b.name))
           .map((workspace) => (
             <option key={workspace.id} value={workspace.id}>
-              {workspaceLabel(workspace)}
+              {workspaceIdentityText(workspace, workspace.isPrivate ? "Personal budget" : "Group")}
             </option>
           ))}
         </select>

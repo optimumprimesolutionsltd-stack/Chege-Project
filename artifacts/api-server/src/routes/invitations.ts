@@ -20,6 +20,10 @@ const inviteSchema = z.object({
   contactName: z.string().trim().min(1).max(80).optional(),
   saveContact: z.boolean().default(false),
 });
+const batchInviteSchema = z.object({
+  emails: z.array(z.string().trim().toLowerCase().email("Enter valid email addresses.").max(320)).min(1).max(50),
+  role: z.enum(["admin", "member"]).default("member"),
+});
 const contactSchema = z.object({
   name: z.string().trim().min(1).max(80),
   email: z.string().trim().toLowerCase().email("Enter a valid email address.").max(320),
@@ -170,6 +174,97 @@ function toInvitationResponse(invitation: {
   };
 }
 
+async function createAndSendInvitation(params: {
+  req: Request;
+  groupId: number;
+  email: string;
+  role: "admin" | "member";
+  contactName?: string;
+  saveContact?: boolean;
+}) {
+  const token = createToken();
+  const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
+  const created = await db.transaction(async (tx) => {
+    const [group] = await tx
+      .select({ id: groupsTable.id, name: groupsTable.name })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, params.groupId))
+      .for("update");
+    if (!group) throw new InvitationError("Group not found.", 404);
+
+    const [knownUser] = await tx
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(sql`lower(${usersTable.email}) = ${params.email}`)
+      .limit(1);
+    if (knownUser) {
+      const [existingMember] = await tx
+        .select({ userId: groupMembershipsTable.userId })
+        .from(groupMembershipsTable)
+        .where(and(eq(groupMembershipsTable.groupId, params.groupId), eq(groupMembershipsTable.userId, knownUser.id)))
+        .limit(1);
+      if (existingMember) throw new InvitationError("This person is already a member of the group.", 409);
+    }
+
+    const now = new Date();
+    const existingInvitationRows = await tx
+      .select({ id: groupInvitationsTable.id })
+      .from(groupInvitationsTable)
+      .where(and(
+        eq(groupInvitationsTable.groupId, params.groupId),
+        eq(groupInvitationsTable.email, params.email),
+        isNull(groupInvitationsTable.acceptedAt),
+        isNull(groupInvitationsTable.cancelledAt),
+        gt(groupInvitationsTable.expiresAt, now),
+      ))
+      .limit(1);
+    if (existingInvitationRows[0]) throw new InvitationError("There is already a pending invitation for this email.", 409);
+
+    const [invitation] = await tx
+      .insert(groupInvitationsTable)
+      .values({
+        groupId: params.groupId,
+        email: params.email,
+        role: params.role,
+        tokenHash: tokenHash(token),
+        createdByUserId: params.req.user!.id,
+        expiresAt,
+      })
+      .returning();
+    if (params.saveContact && params.contactName) {
+      await tx
+        .insert(groupInviteContactsTable)
+        .values({
+          groupId: params.groupId,
+          name: params.contactName,
+          email: params.email,
+          role: params.role,
+          createdByUserId: params.req.user!.id,
+        })
+        .onConflictDoUpdate({
+          target: [groupInviteContactsTable.groupId, groupInviteContactsTable.email],
+          set: { name: params.contactName, role: params.role, updatedAt: new Date() },
+        });
+    }
+    return { invitation, groupName: group.name };
+  });
+
+  try {
+    await sendInvitationEmail({
+      req: params.req,
+      email: params.email,
+      groupName: created.groupName,
+      role: params.role,
+      token,
+    });
+  } catch (error) {
+    await db.delete(groupInvitationsTable).where(eq(groupInvitationsTable.id, created.invitation.id));
+    throw error;
+  }
+
+  return toInvitationResponse(created.invitation);
+}
+
 export const publicInvitationsRouter = Router();
 export const invitationsRouter = Router();
 
@@ -297,75 +392,8 @@ invitationsRouter.post("/group-invitations", async (req, res): Promise<void> => 
 
   const { email, role, contactName, saveContact } = parsed.data;
   try {
-    const token = createToken();
-    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
-    const created = await db.transaction(async (tx) => {
-      const [group] = await tx
-        .select({ id: groupsTable.id, name: groupsTable.name })
-        .from(groupsTable)
-        .where(eq(groupsTable.id, groupId))
-        .for("update");
-      if (!group) throw new InvitationError("Group not found.", 404);
-
-      const [knownUser] = await tx
-        .select({ id: usersTable.id })
-        .from(usersTable)
-        .where(sql`lower(${usersTable.email}) = ${email}`)
-        .limit(1);
-      if (knownUser) {
-        const [existingMember] = await tx
-          .select({ userId: groupMembershipsTable.userId })
-          .from(groupMembershipsTable)
-          .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, knownUser.id)))
-          .limit(1);
-        if (existingMember) throw new InvitationError("This person is already a member of the group.", 409);
-      }
-
-      const now = new Date();
-      const [existingInvitationRows] = await Promise.all([
-        tx
-          .select({ id: groupInvitationsTable.id })
-          .from(groupInvitationsTable)
-          .where(and(
-            eq(groupInvitationsTable.groupId, groupId),
-            eq(groupInvitationsTable.email, email),
-            isNull(groupInvitationsTable.acceptedAt),
-            isNull(groupInvitationsTable.cancelledAt),
-            gt(groupInvitationsTable.expiresAt, now),
-          ))
-          .limit(1),
-      ]);
-      if (existingInvitationRows[0]) throw new InvitationError("There is already a pending invitation for this email.", 409);
-
-      const [invitation] = await tx
-        .insert(groupInvitationsTable)
-        .values({ groupId, email, role, tokenHash: tokenHash(token), createdByUserId: req.user!.id, expiresAt })
-        .returning();
-      if (saveContact && contactName) {
-        await tx
-          .insert(groupInviteContactsTable)
-          .values({ groupId, name: contactName, email, role, createdByUserId: req.user!.id })
-          .onConflictDoUpdate({
-            target: [groupInviteContactsTable.groupId, groupInviteContactsTable.email],
-            set: { name: contactName, role, updatedAt: new Date() },
-          });
-      }
-      return { invitation, groupName: group.name };
-    });
-    try {
-      await sendInvitationEmail({
-        req,
-        email,
-        groupName: created.groupName,
-        role,
-        token,
-      });
-    } catch (error) {
-      await db.delete(groupInvitationsTable).where(eq(groupInvitationsTable.id, created.invitation.id));
-      throw error;
-    }
-
-    res.status(201).json(toInvitationResponse(created.invitation));
+    const invitation = await createAndSendInvitation({ req, groupId, email, role, contactName, saveContact });
+    res.status(201).json(invitation);
   } catch (error) {
     if (error instanceof InvitationError) {
       res.status(error.status).json({ error: error.message });
@@ -374,6 +402,41 @@ invitationsRouter.post("/group-invitations", async (req, res): Promise<void> => 
     req.log.error(error, "Could not create group invitation");
     res.status(500).json({ error: "Could not send invitation email. Please try again." });
   }
+});
+
+invitationsRouter.post("/group-invitations/batch", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireSharedGroupManager(req, res)) return;
+
+  const parsed = batchInviteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Enter valid email addresses." });
+    return;
+  }
+
+  const emails = [...new Set(parsed.data.emails)];
+  const sent: ReturnType<typeof toInvitationResponse>[] = [];
+  const failed: { email: string; error: string }[] = [];
+  for (const email of emails) {
+    try {
+      sent.push(await createAndSendInvitation({
+        req,
+        groupId,
+        email,
+        role: parsed.data.role,
+      }));
+    } catch (error) {
+      failed.push({
+        email,
+        error: error instanceof InvitationError
+          ? error.message
+          : "Could not send invitation email. Please try again.",
+      });
+    }
+  }
+
+  res.status(201).json({ sent, failed });
 });
 
 invitationsRouter.post("/group-invitations/:id/resend", async (req, res): Promise<void> => {

@@ -6,8 +6,12 @@ const tables = vi.hoisted(() => ({
   groupsTable: {
     id: "group.id",
     name: "group.name",
+    emoji: "group.emoji",
+    nameStyle: "group.nameStyle",
     icon: "group.icon",
     accentColor: "group.accentColor",
+    photoPath: "group.photoPath",
+    slogan: "group.slogan",
     privateOwnerUserId: "group.privateOwnerUserId",
   },
   groupMembershipsTable: {
@@ -69,12 +73,16 @@ describe("PATCH /group identity", () => {
     });
   });
 
-  it("persists the allowed icon and accent selected by a manager", async () => {
+  it("persists a Unicode name and the curated identity selected by a manager", async () => {
     const updated = {
       id: 4,
-      name: "Mwangi family",
+      name: "Mwangaza 2026 + Chama №1",
+      emoji: "🪴",
+      nameStyle: "serif",
       icon: "heart",
       accentColor: "#DB2777",
+      photoPath: null,
+      slogan: null,
       isPrivate: null,
     };
     const set = vi.fn(() => ({
@@ -85,7 +93,9 @@ describe("PATCH /group identity", () => {
     mockedDb.update.mockReturnValue({ set });
 
     const response = await request(buildApp()).patch("/group").send({
-      name: "Mwangi family",
+      name: "Mwangaza 2026 + Chama №1",
+      emoji: "🪴",
+      nameStyle: "serif",
       icon: "heart",
       accentColor: "#DB2777",
     });
@@ -93,14 +103,18 @@ describe("PATCH /group identity", () => {
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
       id: 4,
-      name: "Mwangi family",
+      name: "Mwangaza 2026 + Chama №1",
+      emoji: "🪴",
+      nameStyle: "serif",
       icon: "heart",
       accentColor: "#DB2777",
       isPrivate: false,
       role: "owner",
     });
     expect(set).toHaveBeenCalledWith({
-      name: "Mwangi family",
+      name: "Mwangaza 2026 + Chama №1",
+      emoji: "🪴",
+      nameStyle: "serif",
       icon: "heart",
       accentColor: "#DB2777",
     });

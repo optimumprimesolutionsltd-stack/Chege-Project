@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useGetGroup, useGetMembers } from '@workspace/api-client-react';
 import { WorkspaceSwitcher, workspaceLabel } from '@/components/workspace-switcher';
+import { ProfileAvatar } from '@/components/profile-avatar';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -95,13 +96,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="p-4 border-t border-sidebar-border mt-auto">
           <div className="flex items-center gap-3 mb-4 px-2">
-            <div className="w-10 h-10 rounded-full bg-sidebar-accent border border-sidebar-border flex items-center justify-center overflow-hidden flex-shrink-0">
-              {user?.profileImageUrl ? (
-                <img src={user.profileImageUrl} alt={user.firstName ?? 'User'} className="w-full h-full object-cover" />
-              ) : (
-                <span className="font-bold text-sidebar-primary">{user?.firstName?.charAt(0) || 'U'}</span>
-              )}
-            </div>
+            <ProfileAvatar user={user} className="h-10 w-10 border border-sidebar-border bg-sidebar-accent text-sidebar-primary" textClassName="text-sm" alt={user?.firstName ?? 'User'} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate">{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'User'}</p>
               <p className="text-xs text-sidebar-foreground/60 capitalize truncate">{activeWorkspaceRoleLabel}</p>

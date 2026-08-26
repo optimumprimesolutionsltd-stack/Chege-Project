@@ -33,23 +33,15 @@ import {
   customFetch,
   ApiError,
 } from '@workspace/api-client-react';
+import { getCategoryIcon } from '@/lib/categoryIcons';
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
 type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
 
-const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
-  Food: 'shopping-cart',
-  Transport: 'truck',
-  Health: 'heart',
-  Education: 'book',
-  Utilities: 'zap',
-  Entertainment: 'tv',
-  Clothing: 'tag',
-  Savings: 'archive',
-  Housing: 'home',
-  Communication: 'phone',
-  Other: 'more-horizontal',
-};
+const DEFAULT_CATEGORY_NAMES = [
+  'Food', 'Transport', 'Health', 'Education', 'Utilities', 'Entertainment',
+  'Clothing', 'Savings', 'Housing', 'Communication', 'Other',
+];
 
 function getExpenseSaveError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -385,7 +377,7 @@ export default function AddExpenseSheet() {
   const categoryList =
     categories.length > 0
       ? categories.map((c) => c.name)
-      : Object.keys(CATEGORY_ICONS);
+      : DEFAULT_CATEGORY_NAMES;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -439,7 +431,7 @@ export default function AddExpenseSheet() {
           contentContainerStyle={styles.categoryScrollContent}
         >
           {categoryList.map((cat) => {
-            const icon = CATEGORY_ICONS[cat] ?? 'tag';
+            const icon = getCategoryIcon(cat);
             const selected = category === cat;
             return (
               <Pressable
