@@ -39,7 +39,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ACTIVITY_TYPE } from "@/lib/activityTypes";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -47,6 +47,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { WorkspaceSwitcher, workspaceLabel } from "@/components/workspace-switcher";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
+
+function getQuickActionFromLocation(location: string): Exclude<QuickAction, "none"> | null {
+  const locationSearch = location.includes("?") ? location.slice(location.indexOf("?")) : "";
+  const search = locationSearch || window.location.search;
+  const action = new URLSearchParams(search).get("quick");
+  return action === "income" || action === "expense" || action === "goal" ? action : null;
+}
 
 function localDateInputValue(date = new Date()) {
   const year = date.getFullYear();
@@ -880,8 +887,41 @@ export default function Dashboard() {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
-  const [activeAction, setActiveAction] = useState<QuickAction>("none");
+  const [location] = useLocation();
+  const requestedQuickAction = getQuickActionFromLocation(location);
+  const [activeAction, setActiveAction] = useState<QuickAction>(() => requestedQuickAction ?? "none");
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (!requestedQuickAction) return;
+    setActiveAction(requestedQuickAction);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("quick");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    const focusTimer = window.setTimeout(() => {
+      document.getElementById("dashboard-quick-actions")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [requestedQuickAction]);
+
+  useEffect(() => {
+    const handleQuickLog = (event: Event) => {
+      const action = (event as CustomEvent<Exclude<QuickAction, "none">>).detail;
+      if (action !== "income" && action !== "expense" && action !== "goal") return;
+      setActiveAction(action);
+      window.setTimeout(() => {
+        document.getElementById("dashboard-quick-actions")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 0);
+    };
+    window.addEventListener("jamvi:quick-log", handleQuickLog);
+    return () => window.removeEventListener("jamvi:quick-log", handleQuickLog);
+  }, []);
 
   const { data: summary, isLoading: isSummaryLoading, isError: isSummaryError } = useGetDashboardSummary({ month, year });
   const { data: activity, isLoading: isActivityLoading } = useGetDashboardActivity();
@@ -1348,8 +1388,8 @@ export default function Dashboard() {
          </aside>
        )}
 
-      {/* ── Quick Actions ── */}
-       <Card className="overflow-hidden border-none shadow-md">
+       {/* ── Quick Actions ── */}
+        <Card id="dashboard-quick-actions" className="scroll-mt-6 overflow-hidden border-none shadow-md">
         <CardContent className="p-0">
           {/* Action buttons row */}
           <div className="grid grid-cols-3 divide-x divide-border/50">

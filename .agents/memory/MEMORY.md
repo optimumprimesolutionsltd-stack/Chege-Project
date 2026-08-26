@@ -2,6 +2,7 @@
 - [Zod in api-server routes](zod-api-server.md) — use `import { z } from 'zod'` not `zod/v4`; esbuild can't resolve the subpath
 - [OpenAPI integer types](openapi-integer-types.md) — use `type: number` not `type: integer`; Orval generates `zod.int()` for integer which breaks on Zod v3
 - [Mobile deep link URL parsing](mobile-deeplink-parsing.md) — mobile-budget://auth?token=X has 'auth' as hostname not path; check parsed.hostname not parsed.path
+- [Wouter query-only navigation](wouter-query-navigation.md) — changing only a query does not notify a same-route component; use an event for in-place actions and query parsing for cross-route handoffs
 - [Mobile AsyncStorage usage](mobile-asyncstorage.md) — AsyncStorage is installed (v2.2.0 devDep); used for UI prefs (dashboard privacy, goal filters, expense month). Not for auth (SecureStore only).
 - [Mobile goals.tsx FlatList + useMemo](mobile-goals-imports.md) — goals.tsx uses both FlatList and useMemo; add them to React/RN imports when modifying that file or TS errors will surface.
 - [Bank screen delete hook](bank-delete-hook.md) — useDeleteJointAccountTransaction({ id }) is the hook for deleting joint-account transactions; long-press triggers it.

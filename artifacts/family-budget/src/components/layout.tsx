@@ -1,17 +1,19 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useGetGroup } from '@workspace/api-client-react';
+import { useGetGroup, useGetMembers } from '@workspace/api-client-react';
 import { WorkspaceSwitcher, workspaceLabel } from '@/components/workspace-switcher';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [location] = useLocation();
+  const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
+  const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
   const { data: group } = useGetGroup();
+  const { data: members = [] } = useGetMembers();
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -24,6 +26,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
     : activeWorkspaceRole === 'admin'
       ? 'Admin'
       : 'Member';
+  const sharedTransactionsLocked =
+    group?.isPrivate === false &&
+    group?.canRecordSharedTransactions === false &&
+    members.length < 2;
+
+  const openQuickLog = (action: 'income' | 'expense' | 'goal') => {
+    if (sharedTransactionsLocked && (action === 'expense' || action === 'goal')) return;
+    setIsQuickLogOpen(false);
+    setIsMobileMenuOpen(false);
+    if (location === '/') {
+      window.dispatchEvent(new CustomEvent('jamvi:quick-log', { detail: action }));
+      return;
+    }
+    navigate(action === 'income' ? '/?quick=income' : action === 'expense' ? '/?quick=expense' : '/?quick=goal');
+  };
 
   const navItems = [
     { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My budget', icon: LayoutDashboard },
@@ -144,8 +161,83 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      {/* Persistent quick logging control */}
+      <div className="fixed bottom-5 right-4 z-50 flex flex-col items-end gap-3 md:bottom-7 md:right-7">
+        {isQuickLogOpen && (
+          <div
+            role="menu"
+            aria-label="Quick log options"
+            className="w-64 overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-2xl"
+          >
+            <div className="px-3 pb-2 pt-2">
+              <p className="text-sm font-bold text-foreground">Quick log</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Record money without leaving the page you are on.</p>
+            </div>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openQuickLog('expense')}
+              disabled={sharedTransactionsLocked}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
+                <Receipt className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-foreground">Log expense</span>
+                <span className="block text-xs text-muted-foreground">Record spending now</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openQuickLog('income')}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+                <Landmark className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-foreground">Bank deposit</span>
+                <span className="block text-xs text-muted-foreground">Record money received</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openQuickLog('goal')}
+              disabled={sharedTransactionsLocked}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
+                <Target className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-foreground">Save to goal</span>
+                <span className="block text-xs text-muted-foreground">Move money toward a goal</span>
+              </span>
+            </button>
+            {sharedTransactionsLocked && (
+              <p className="mx-1 mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                Invite one more member before recording shared expenses or goal contributions.
+              </p>
+            )}
+          </div>
+        )}
+        <Button
+          type="button"
+          onClick={() => setIsQuickLogOpen((isOpen) => !isOpen)}
+          aria-expanded={isQuickLogOpen}
+          aria-label={isQuickLogOpen ? 'Close quick log' : 'Open quick log'}
+          className="h-12 rounded-full px-4 shadow-xl md:h-14 md:px-5"
+        >
+          {isQuickLogOpen ? <X className="mr-2 h-5 w-5" aria-hidden="true" /> : <Plus className="mr-2 h-5 w-5" aria-hidden="true" />}
+          <span className="text-sm font-bold">Quick log</span>
+        </Button>
+      </div>
+
       {/* Main Content */}
-      <main className="min-w-0 flex-1 flex flex-col min-h-screen pt-16 md:pt-0">
+      <main className="min-w-0 flex-1 flex flex-col min-h-screen pb-24 pt-16 md:pb-0 md:pt-0">
         <div className="min-w-0 flex-1 w-full max-w-6xl mx-auto p-4 md:p-8">
           {children}
         </div>
