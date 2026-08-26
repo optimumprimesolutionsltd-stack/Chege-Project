@@ -50,7 +50,7 @@ export default function LoginPage() {
         </section>
 
         <main className="w-full max-w-md">
-          <div className="rounded-[2rem] border p-6 shadow-2xl backdrop-blur-xl sm:p-8" style={{ backgroundColor: 'rgba(247,250,246,0.97)', borderColor: 'rgba(255,255,255,0.55)' }}>
+          <div className="rounded-[2rem] border p-6 shadow-2xl backdrop-blur-xl sm:p-8" style={{ backgroundColor: 'rgba(15,38,25,0.94)', borderColor: 'rgba(185,210,191,0.2)' }}>
             <div className="mb-8 flex items-start justify-between gap-4">
               <div className="flex items-center gap-3 lg:hidden">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: '#cf7217' }}>
@@ -61,26 +61,26 @@ export default function LoginPage() {
                   <p className="text-xs font-medium text-[#5f8d6d]">Shared finances, together</p>
                 </div>
               </div>
-              <div className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf3eb] text-[#2d6a4f]">
+              <div className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-[#dceee1]/15 text-[#a8d0b4]">
                 <Sparkles className="h-5 w-5" />
               </div>
             </div>
 
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#cf7217]">Welcome back</p>
-            <h2 className="mt-3 font-display text-3xl font-bold leading-tight tracking-tight text-[#183b26] sm:text-4xl">
+            <h2 className="mt-3 font-display text-3xl font-bold leading-tight tracking-tight text-[#f7faf6] sm:text-4xl">
               Your money, in focus.
             </h2>
-            <p className="mt-3 text-sm leading-6 text-[#5d7663]">
+            <p className="mt-3 text-sm leading-6 text-[#b9d2bf]">
               Sign in to pick up where your group left off.
             </p>
 
-            <div className="my-7 rounded-2xl border border-[#dce9df] bg-[#f4f8f4] p-4">
+            <div className="my-7 rounded-2xl border border-[#b9d2bf]/15 bg-white/[0.055] p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6b8972]">Your shared view</p>
-                  <p className="mt-1 font-display text-lg font-bold text-[#183b26]">Clearer decisions</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#9fc2a8]">Your shared view</p>
+                  <p className="mt-1 font-display text-lg font-bold text-[#f7faf6]">Clearer decisions</p>
                 </div>
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dceee1] text-[#2d6a4f]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#dceee1]/15 text-[#a8d0b4]">
                   <ArrowUpRight className="h-5 w-5" />
                 </div>
               </div>
@@ -105,7 +105,7 @@ export default function LoginPage() {
               </span>
               {isSigningIn ? 'Opening secure sign-in…' : 'Continue with Google'}
             </button>
-            <p className="mt-4 text-center text-xs leading-5 text-[#6b8972]">
+            <p className="mt-4 text-center text-xs leading-5 text-[#9fc2a8]">
               You’ll continue through Google’s secure sign-in. Your Jamvi account works on web and mobile.
             </p>
           </div>
