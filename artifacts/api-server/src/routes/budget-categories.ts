@@ -7,9 +7,50 @@ import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 
 const router = Router();
 
+const STARTER_CATEGORIES = [
+  { name: "Food", budgetAmount: 0, priority: 1, color: "#F97316" },
+  { name: "Housing", budgetAmount: 0, priority: 1, color: "#F59E0B" },
+  { name: "Utilities", budgetAmount: 0, priority: 1, color: "#EAB308" },
+  { name: "Health", budgetAmount: 0, priority: 2, color: "#EF4444" },
+  { name: "Education", budgetAmount: 0, priority: 2, color: "#3B82F6" },
+  { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6" },
+  { name: "Other", budgetAmount: 0, priority: 5, color: "#6B7280" },
+] as const;
+
+/**
+ * A budget without any categories leaves its expense picker unusable. Seed a
+ * small, editable starter set once so both new and older empty workspaces can
+ * record their first expense immediately.
+ */
+async function seedStarterCategoriesIfMissing(groupId: number): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [existingCategory] = await tx
+      .select({ id: budgetCategoriesTable.id })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.groupId, groupId))
+      .limit(1);
+
+    if (existingCategory) return;
+
+    await tx
+      .insert(budgetCategoriesTable)
+      .values(
+        STARTER_CATEGORIES.map((category) => ({
+          ...category,
+          groupId,
+          isRecurring: true,
+          activeMonth: null,
+          activeYear: null,
+        })),
+      )
+      .onConflictDoNothing();
+  });
+}
+
 router.get("/budget-categories", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  await seedStarterCategoriesIfMissing(groupId);
   const categories = await db
     .select()
     .from(budgetCategoriesTable)
