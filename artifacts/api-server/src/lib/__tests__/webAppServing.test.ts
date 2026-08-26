@@ -4,9 +4,10 @@ import path from "node:path";
 import express from "express";
 import request from "supertest";
 import { afterEach, describe, expect, it } from "vitest";
-import { attachWebBuild } from "../webAppServing";
+import { attachWebBuild, defaultBuildDir } from "../webAppServing";
 
 const directories: string[] = [];
+const originalWorkingDirectory = process.cwd();
 
 async function buildFixture(): Promise<string> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "jamvi-web-build-"));
@@ -20,6 +21,7 @@ async function buildFixture(): Promise<string> {
 }
 
 afterEach(async () => {
+  process.chdir(originalWorkingDirectory);
   await Promise.all(
     directories
       .splice(0)
@@ -28,6 +30,21 @@ afterEach(async () => {
 });
 
 describe("attachWebBuild", () => {
+  it("finds the sibling web build when started from the API package", () => {
+    const apiServerDirectory = path.resolve(import.meta.dirname, "../../..");
+    const expectedBuildDirectory = path.resolve(
+      apiServerDirectory,
+      "..",
+      "family-budget",
+      "dist",
+      "public",
+    );
+
+    process.chdir(apiServerDirectory);
+
+    expect(defaultBuildDir()).toBe(expectedBuildDirectory);
+  });
+
   it("serves static files and the SPA shell for browser routes", async () => {
     const app = express();
     attachWebBuild(app, { enabled: true, buildDir: await buildFixture() });

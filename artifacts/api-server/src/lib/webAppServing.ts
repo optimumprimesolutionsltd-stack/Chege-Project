@@ -1,5 +1,6 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express, { type Express } from "express";
 
 export interface WebBuildServingOptions {
@@ -7,11 +8,48 @@ export interface WebBuildServingOptions {
   buildDir?: string;
 }
 
-function defaultBuildDir(): string {
+function apiServerPackageDir(): string {
+  let directory = path.dirname(fileURLToPath(import.meta.url));
+
+  while (true) {
+    const manifestPath = path.join(directory, "package.json");
+
+    if (existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+          name?: string;
+        };
+
+        if (manifest.name === "@workspace/api-server") {
+          return directory;
+        }
+      } catch {
+        // Keep searching so an unrelated or malformed parent manifest does not
+        // make the deployment path depend on the current working directory.
+      }
+    }
+
+    const parent = path.dirname(directory);
+    if (parent === directory) {
+      throw new Error(
+        "Unable to locate the @workspace/api-server package directory.",
+      );
+    }
+    directory = parent;
+  }
+}
+
+export function defaultBuildDir(): string {
   const configured = process.env.WEB_DIST_DIR?.trim();
   return configured
     ? path.resolve(configured)
-    : path.resolve(process.cwd(), "artifacts/family-budget/dist/public");
+    : path.resolve(
+        apiServerPackageDir(),
+        "..",
+        "family-budget",
+        "dist",
+        "public",
+      );
 }
 
 /**
