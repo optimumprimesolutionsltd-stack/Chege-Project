@@ -7,11 +7,10 @@ import {
   type GroupKind,
   type Workspace,
 } from "@workspace/api-client-react";
-import { Award, BriefcaseBusiness, Heart, Home, Link2, Plus, Star, Users, UsersRound, Wallet } from "lucide-react";
+import { ArrowUpRight, Award, BriefcaseBusiness, Check, ChevronRight, Heart, Home, Link2, Plus, Star, Users, UsersRound, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, groupKindPresentation, type SharedGroupKind } from "@/components/group-kind";
 import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 
@@ -63,7 +62,7 @@ export function BudgetChooser({
 }: {
   user: { id?: string | null; firstName?: string | null; lastName?: string | null; email?: string | null; profileImageUrl?: string | null };
 }) {
-  const { data: workspaces = [], isLoading } = useGetWorkspaces();
+  const { data: workspaces = [], isLoading, isError: workspaceLoadFailed, refetch: refetchWorkspaces } = useGetWorkspaces();
   const selectWorkspace = useSelectWorkspace();
   const createSharedGroup = useCreateSharedGroup();
   const queryClient = useQueryClient();
@@ -75,7 +74,7 @@ export function BudgetChooser({
   const [link, setLink] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const userId = user.id ?? "";
-  const signedInName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "there";
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
 
   const enterApp = () => {
     if (userId) markBudgetChooserComplete(userId);
@@ -135,38 +134,71 @@ export function BudgetChooser({
 
   const personal = workspaces.filter((workspace) => workspace.isPrivate);
   const shared = workspaces.filter((workspace) => !workspace.isPrivate).sort((a, b) => a.name.localeCompare(b.name));
+  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? personal[0] ?? shared[0] ?? null;
+  const selectedName = selectedWorkspace?.isPrivate ? "Personal budget" : selectedWorkspace ? workspaceLabel(selectedWorkspace) : "";
+  const selectedDescription = selectedWorkspace?.isPrivate
+    ? "A private place for your plans, spending and goals."
+    : "A shared place for the people and plans you are building together.";
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-8 sm:px-6 sm:py-12">
-      <section className="mx-auto w-full max-w-3xl">
-        <div className="rounded-3xl border border-primary/15 bg-card p-6 shadow-xl sm:p-10">
-          <div className="flex items-start gap-4">
-            <ProfileAvatar user={user} alt="" className="h-14 w-14 border-2 border-primary/20" textClassName="text-lg" />
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Welcome to Jamvi</p>
-              <h1 className="mt-1 font-display text-3xl font-bold text-foreground sm:text-4xl">Hello, {signedInName}</h1>
-              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Choose a budget to open. Your Personal budget stays private; Shared budgets are visible only to their members.</p>
-            </div>
-          </div>
+    <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
+      <section className="mx-auto w-full max-w-5xl">
+        <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
+          <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Your Jamvi spaces</p>
+            <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">Choose a budget and get to work.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Jamvi gives each plan a clear place — personal money stays separate, while shared money stays easy for the right people to follow.</p>
+          </header>
 
-          {selectionError ? <p className="mt-5 rounded-xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" role="alert">{selectionError}</p> : null}
-          {isLoading ? <div className="mt-8 h-36 animate-pulse rounded-2xl bg-muted" role="status" aria-label="Loading budgets" /> : (
-            <div className="mt-8 space-y-7">
-              <div>
-                <div className="mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h2 className="font-display text-lg font-bold text-foreground">My Budget</h2></div>
-                <div className="grid gap-3">
-                  {personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label="Personal · only you" pending={selectWorkspace.isPending} onChoose={chooseWorkspace} />)}
+          <div className="p-6 sm:p-10">
+            {selectionError ? <p className="mb-6 rounded-xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" role="alert">{selectionError}</p> : null}
+            {isLoading ? <div className="h-36 animate-pulse rounded-2xl bg-muted" role="status" aria-label="Loading budgets" /> : workspaceLoadFailed ? (
+              <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-6 text-center" role="alert">
+                <h2 className="font-display text-xl font-bold text-foreground">Your budgets could not load</h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Check your connection and try again. Nothing has been changed.</p>
+                <Button type="button" variant="outline" className="mt-5 rounded-xl" onClick={() => void refetchWorkspaces()}>Try again</Button>
+              </div>
+            ) : (
+              <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)] lg:items-start">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Choose your starting space</p>
+                  <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Where would you like to begin?</h2>
+                  <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">Select a budget below. You can switch spaces whenever you need to.</p>
+
+                  <div className="mt-6 border-l-2 border-border pl-4">
+                    <div className="mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-bold text-foreground">Personal budget</h3></div>
+                    {personal.length ? <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label="Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => setSelectedWorkspaceId(item.id)} />)}</div> : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Your Personal budget is not ready yet. Try reloading your budgets.</p>}
+                  </div>
+
+                  <div className="mt-7 border-l-2 border-border pl-4">
+                    <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#087F8C]" /><h3 className="text-sm font-bold text-foreground">Shared budgets</h3></div>
+                    {shared.length ? <div className="grid gap-3">{shared.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label={groupKindPresentation(workspace.kind).label} selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => setSelectedWorkspaceId(item.id)} />)}</div> : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No Shared budgets yet. Create one or open an invitation link.</p>}
+                  </div>
                 </div>
+
+                <aside className="order-first rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6 lg:order-none" aria-live="polite">
+                  {selectedWorkspace ? <>
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><Check className="h-5 w-5" /></span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Selected space</p>
+                        <h2 className={`mt-1 truncate font-display text-xl font-bold text-foreground ${selectedWorkspace.isPrivate ? "" : workspaceNameClass(selectedWorkspace.nameStyle)}`}>{selectedName}</h2>
+                        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{selectedDescription}</p>
+                      </div>
+                    </div>
+                    <Button type="button" className="mt-6 h-12 w-full justify-between rounded-xl px-4" disabled={selectWorkspace.isPending} onClick={() => void chooseWorkspace(selectedWorkspace)}>
+                      <span>{selectWorkspace.isPending ? "Opening…" : `Open ${selectedName}`}</span><ArrowUpRight className="h-4 w-4" />
+                    </Button>
+                  </> : <p className="text-sm text-muted-foreground">Choose a budget to see the next step.</p>}
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                    <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => setIsCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Create a Shared budget</Button>
+                    <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={() => setIsJoinOpen(true)}><Link2 className="mr-2 h-4 w-4" />Join a Shared budget</Button>
+                  </div>
+                  <p className="mt-5 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">Personal and Shared budgets stay in their own space, so you always know where you are working.</p>
+                </aside>
               </div>
-              <div>
-                <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#087F8C]" /><h2 className="font-display text-lg font-bold text-foreground">Shared budgets</h2></div>
-                {shared.length ? <div className="grid gap-3">{shared.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label={groupKindPresentation(workspace.kind).label} pending={selectWorkspace.isPending} onChoose={chooseWorkspace} />)}</div> : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No Shared budgets yet. Create one or open an invitation link.</p>}
-              </div>
-            </div>
-          )}
-          <div className="mt-8 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row">
-            <Button type="button" className="h-11 flex-1 rounded-xl" onClick={() => setIsCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Create a Shared budget</Button>
-            <Button type="button" variant="outline" className="h-11 flex-1 rounded-xl" onClick={() => setIsJoinOpen(true)}><Link2 className="mr-2 h-4 w-4" />Join a Shared budget</Button>
+            )}
           </div>
         </div>
       </section>
@@ -185,6 +217,6 @@ export function BudgetChooser({
   );
 }
 
-function WorkspaceButton({ workspace, label, pending, onChoose }: { workspace: Workspace; label: string; pending: boolean; onChoose: (workspace: Workspace) => void }) {
-  return <button type="button" disabled={pending} onClick={() => void onChoose(workspace)} className="flex w-full items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:bg-primary/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70"><WorkspaceIdentity workspace={workspace} /><span className="min-w-0 flex-1"><span className={`block truncate text-base text-foreground ${workspaceNameClass(workspace.nameStyle)}`}>{workspaceLabel(workspace)}</span><span className="mt-1 block text-xs font-medium text-muted-foreground">{label}</span></span><span className="text-sm font-semibold text-primary">{pending ? "Opening…" : "Open"}</span></button>;
+function WorkspaceButton({ workspace, label, selected, pending, onChoose }: { workspace: Workspace; label: string; selected: boolean; pending: boolean; onChoose: (workspace: Workspace) => void }) {
+  return <button type="button" disabled={pending} aria-pressed={selected} onClick={() => onChoose(workspace)} className={`group flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70 ${selected ? "border-primary bg-primary/[0.06] ring-2 ring-primary/20" : "border-border bg-card hover:border-primary/50 hover:bg-primary/[0.03]"}`}><WorkspaceIdentity workspace={workspace} /><span className="min-w-0 flex-1"><span className={`block truncate text-base text-foreground ${workspace.isPrivate ? "" : workspaceNameClass(workspace.nameStyle)}`}>{workspace.isPrivate ? "Personal budget" : workspaceLabel(workspace)}</span><span className="mt-1 block text-xs font-medium text-muted-foreground">{label}</span></span><span className={`flex items-center gap-1 text-xs font-bold ${selected ? "text-primary" : "text-muted-foreground"}`}>{selected ? <><Check className="h-4 w-4" />Selected</> : <><span className="hidden sm:inline">Choose</span><ChevronRight className="h-4 w-4" /></>}</span></button>;
 }

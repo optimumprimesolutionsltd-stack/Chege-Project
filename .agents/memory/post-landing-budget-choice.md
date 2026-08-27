@@ -7,4 +7,4 @@ The public landing page carries Jamvi's full marketing story. The next page shou
 
 **Why:** Repeating a large hero and the same benefit pitch on the second page makes the journey feel boring and stalled instead of helping the user move forward.
 
-**How to apply:** Keep the post-landing page free of financial figures and dashboard content. Make the vertical budget rail the focal interaction, label the primary action `Open [budget]`, keep it visible early on mobile, and keep Create or Join shared actions secondary.
+**How to apply:** Keep the post-landing page free of financial figures and dashboard content. Make the vertical budget rail the focal interaction, label the primary action `Open [budget]`, keep it visible early on mobile, and keep Create or Join shared actions secondary. Until that Open action succeeds, gate every authenticated working route; invitation and join handoffs remain ahead of the gate.

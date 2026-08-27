@@ -22,6 +22,7 @@ import InvitePage from '@/pages/invite';
 import JoinGroupPage from '@/pages/join-group';
 import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal';
 import { BudgetChooser, hasCompletedBudgetChooser } from '@/components/budget-chooser';
+import { shouldShowBudgetChooser } from '@/lib/budget-chooser-routing';
 
 const queryClient = new QueryClient();
 
@@ -229,12 +230,11 @@ function MainRouter() {
     return <NoGroupAccess voluntarilyLeft={new URLSearchParams(window.location.search).get('left') === '1'} />;
   }
 
-  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-  const appPath = base && window.location.pathname.startsWith(`${base}/`)
-    ? window.location.pathname.slice(base.length)
-    : window.location.pathname;
-  const isHomeRoute = appPath === '/' || appPath === '';
-  if (isHomeRoute && !hasCompletedBudgetChooser(user?.id ?? '')) {
+  if (shouldShowBudgetChooser({
+    pathname: window.location.pathname,
+    basePath: import.meta.env.BASE_URL,
+    completed: hasCompletedBudgetChooser(user?.id ?? ''),
+  })) {
     return <BudgetChooser user={user ?? {}} />;
   }
 
