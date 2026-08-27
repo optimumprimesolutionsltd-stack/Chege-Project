@@ -58,7 +58,6 @@ function ClassicTabLayout({ showReports }: { showReports: boolean }) {
         tabBarInactiveTintColor: colors.mutedForeground,
         tabBarLabelStyle: { fontSize: 10 },
         tabBarStyle: {
-          position: 'absolute',
           backgroundColor: isIOS ? 'transparent' : colors.card,
           borderTopWidth: isWeb ? 1 : 0,
           borderTopColor: colors.border,
@@ -77,10 +76,16 @@ function ClassicTabLayout({ showReports }: { showReports: boolean }) {
             <View
               style={[
                 StyleSheet.absoluteFill,
-                { backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+                  {
+                    backgroundColor: colors.card,
+                    borderTopWidth: 1,
+                    borderTopColor: colors.border,
+                  },
               ]}
             />
-          ) : null,
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card }]} />
+            ),
       }}
     >
       {/* ── 5 visible tabs ── */}
@@ -161,19 +166,20 @@ function ClassicTabLayout({ showReports }: { showReports: boolean }) {
 }
 
 export default function TabLayout() {
+  const colors = useColors();
   const { data: group } = useGetGroup();
   const showReports = group?.isPrivate !== false;
 
   if (isLiquidGlassAvailable()) {
     return (
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: colors.card }}>
         <NativeTabLayout showReports={showReports} />
         <GlobalFAB />
       </View>
     );
   }
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.card }}>
       <ClassicTabLayout showReports={showReports} />
       <GlobalFAB />
     </View>

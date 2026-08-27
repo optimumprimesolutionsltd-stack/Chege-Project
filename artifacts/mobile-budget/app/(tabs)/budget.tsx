@@ -477,7 +477,7 @@ export default function BudgetScreen() {
                 <View style={[styles.priorityGuide, { backgroundColor: colors.accent }]}>
                   <Feather name="info" size={15} color={colors.accentForeground} />
                   <Text style={[styles.priorityGuideText, { color: colors.accentForeground }]}>
-                    Use Tier 1 for must-pay needs and Tier 5 for flexible spending. {PRIORITY_GUIDE[parseInt(formPriority, 10)] ?? ''}
+                     Tiers help you decide what to fund first when money is limited. Use Tier 1 for must-pay needs and Tier 5 for flexible spending. {PRIORITY_GUIDE[parseInt(formPriority, 10)] ?? ''}
                   </Text>
                 </View>
                 <View style={[styles.recurrenceRow, { borderColor: colors.border, backgroundColor: colors.muted }]}>
@@ -830,7 +830,7 @@ export default function BudgetScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.tierTitle, { color: colors.foreground }]}>Priority tier report</Text>
               <Text style={[styles.tierSubtitle, { color: colors.mutedForeground }]}>
-                See whether must-pay needs are covered before flexible spending.
+                 Tiers help protect essential spending first: Tier 1 is most urgent and Tier 5 can wait.
               </Text>
             </View>
             <Feather name="layers" size={19} color={colors.secondary} />

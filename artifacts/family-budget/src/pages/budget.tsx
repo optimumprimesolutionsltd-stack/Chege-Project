@@ -350,7 +350,7 @@ function CategoryDialog({
               <div className="rounded-xl bg-muted/60 px-3 py-2.5">
                 <p className="text-xs font-semibold text-foreground">How to use tiers</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  Start with Tier 1 for must-pay needs, then work down to Tier 5 for spending that can wait. {priorityGuide[Number(priority)]}
+                  Tiers help you decide what to fund first when money is limited. Start with Tier 1 for must-pay needs, then work down to Tier 5 for spending that can wait. {priorityGuide[Number(priority)]}
                 </p>
               </div>
             </div>
@@ -942,7 +942,7 @@ export default function Budget() {
             <div>
               <h2 className="font-display text-xl font-bold text-foreground">Priority tier report</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Compare your plan and actual spending from must-pay needs (Tier 1) to flexible spending (Tier 5).
+                Tiers help protect essential spending first when money is limited: Tier 1 is most urgent and Tier 5 can wait.
               </p>
             </div>
            {Array.from(new Set([
