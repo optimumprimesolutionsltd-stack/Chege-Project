@@ -22,12 +22,13 @@ import { useToast } from "@/hooks/use-toast";
 import { GroupInviteLinks } from "@/components/group-invite-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Pencil, Star, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
+import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Moon, Palette, Pencil, Star, Sun, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
 import type { WorkspaceNameStyle } from "@workspace/api-client-react";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, groupKindPresentation, type SharedGroupKind } from "@/components/group-kind";
+import { applyAppearance, readAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
 
 type GroupInvitation = {
   id: number;
@@ -116,6 +117,7 @@ export default function Settings() {
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [editingDisplayName, setEditingDisplayName] = useState(false);
   const [editingBudgetName, setEditingBudgetName] = useState(false);
+  const [appearance, setAppearance] = useState<Appearance>(() => readAppearance());
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [uploadingGroupPhoto, setUploadingGroupPhoto] = useState(false);
   const displayNameInputRef = useRef<HTMLInputElement>(null);
@@ -510,6 +512,16 @@ export default function Settings() {
 
   const pendingEmails = new Set(invitations.filter((invitation) => invitation.status === "pending").map((invitation) => invitation.email));
 
+  const chooseAppearance = (nextAppearance: Appearance) => {
+    setAppearance(nextAppearance);
+    applyAppearance(nextAppearance);
+    saveAppearance(nextAppearance);
+    toast({
+      title: nextAppearance === "white" ? "White appearance selected" : "Jamvi night selected",
+      description: "This preference is saved on this device.",
+    });
+  };
+
   return (
     <div className="w-full max-w-2xl space-y-8 pb-12">
       <div>
@@ -522,6 +534,60 @@ export default function Settings() {
             : "View your group and manage your own account details."}
         </p>
       </div>
+
+      <Card className="border-none shadow-md">
+        <CardHeader className="p-4 sm:p-6">
+          <div className="flex items-center gap-2">
+            <Palette className="h-5 w-5 text-primary" />
+            <CardTitle>Appearance</CardTitle>
+          </div>
+          <CardDescription>
+            Choose how Jamvi looks on this device. White is the default for a clear, easy-to-scan workspace.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+          <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Application appearance">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={appearance === "white"}
+              onClick={() => chooseAppearance("white")}
+              className={`flex min-h-24 items-center gap-3 rounded-xl border p-4 text-left transition-colors ${
+                appearance === "white"
+                  ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15"
+                  : "border-border bg-card text-foreground hover:bg-muted"
+              }`}
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-white text-amber-500 shadow-sm">
+                <Sun className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">White</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">A bright, simple background for everyday budgeting.</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={appearance === "midnight"}
+              onClick={() => chooseAppearance("midnight")}
+              className={`flex min-h-24 items-center gap-3 rounded-xl border p-4 text-left transition-colors ${
+                appearance === "midnight"
+                  ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/15"
+                  : "border-border bg-card text-foreground hover:bg-muted"
+              }`}
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-[#06183c] text-brand-gold shadow-sm">
+                <Moon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">Jamvi night</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">The existing navy look with softer contrast.</span>
+              </span>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Your account */}
       <Card className="border-none shadow-md">

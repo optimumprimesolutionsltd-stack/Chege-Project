@@ -33,10 +33,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     group?.canRecordSharedTransactions === false &&
     members.length < 2;
 
-  const openQuickLog = (action: 'income' | 'expense' | 'goal') => {
+  const openQuickLog = (action: 'income' | 'expense' | 'goal' | 'budget') => {
     if (sharedTransactionsLocked && (action === 'expense' || action === 'goal')) return;
     setIsQuickLogOpen(false);
     setIsMobileMenuOpen(false);
+    if (action === 'budget') {
+      navigate('/budget');
+      return;
+    }
     if (location === '/') {
       window.dispatchEvent(new CustomEvent('jamvi:quick-log', { detail: action }));
       return;
@@ -191,6 +195,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <span>
                 <span className="block text-sm font-semibold text-foreground">Bank deposit</span>
                 <span className="block text-xs text-muted-foreground">Record money received</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openQuickLog('budget')}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info">
+                <PieChart className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-foreground">Budget</span>
+                <span className="block text-xs text-muted-foreground">Plan monthly spending</span>
               </span>
             </button>
             <button

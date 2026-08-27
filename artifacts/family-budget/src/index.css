@@ -99,7 +99,7 @@
   --brand-gold: 44 98% 52%;
   --brand-surface: 216 57% 96%;
 
-  --background: 214 47% 98%;
+  --background: 0 0% 100%;
   --foreground: 218 84% 18%;
   --border: 214 39% 88%;
   
@@ -156,6 +156,10 @@
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+html[data-appearance="white"] {
+  --background: 0 0% 100%;
 }
 
 .dark {

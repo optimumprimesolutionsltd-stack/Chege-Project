@@ -1,8 +1,15 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <script>
+      try {
+        const appearance = localStorage.getItem("jamvi:appearance");
+        document.documentElement.classList.toggle("dark", appearance === "midnight");
+        document.documentElement.dataset.appearance = appearance === "midnight" ? "midnight" : "white";
+      } catch {}
+    </script>
     <title>Jamvi</title>
     <meta name="description" content="Shared finances, together." />
     <meta name="robots" content="index, follow" />

@@ -2,8 +2,9 @@ import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useEffect } from 'react';
 import { AuthProvider, useAuth } from '@workspace/replit-auth-web';
+import { applyAppearance, readAppearance } from '@/lib/appearance';
 import LoginPage from '@/pages/login';
 import { Layout } from '@/components/layout';
 import Dashboard from '@/pages/dashboard';
@@ -231,6 +232,10 @@ function MainRouter() {
 }
 
 function App() {
+  useEffect(() => {
+    applyAppearance(readAppearance());
+  }, []);
+
   return (
     <AppErrorBoundary>
       <AuthProvider>
