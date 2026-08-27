@@ -713,8 +713,14 @@ export default function Expenses() {
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">Category</label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <select className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-              value={form.category} onChange={e => chooseCategory(form, e.target.value)} required>
+            <select
+              className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-[#1e3b2b] bg-[#162d20] px-3 py-2 text-base text-[#f7faf6] shadow-sm transition-colors hover:border-[#4a9b60] hover:bg-[#1a3325] focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:border-input sm:bg-card sm:text-foreground sm:hover:border-primary/45 sm:hover:bg-muted/35"
+              style={{ colorScheme: "dark" }}
+              aria-label="Expense category"
+              value={form.category}
+              onChange={e => chooseCategory(form, e.target.value)}
+              required
+            >
               <option value="" disabled>Select category...</option>
               {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
@@ -722,7 +728,7 @@ export default function Expenses() {
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 w-full sm:w-auto shrink-0"
+                className="h-12 w-full shrink-0 border-[#1e3b2b] bg-[#162d20] text-[#f7faf6] hover:bg-[#1a3325] sm:w-auto sm:border-input sm:bg-transparent sm:text-foreground sm:hover:bg-accent"
                 onClick={() => {
                   form.setCategory("");
                   setIsCreatingCategory((open) => !open);
@@ -735,10 +741,10 @@ export default function Expenses() {
             )}
           </div>
           {isCreatingCategory && (
-            <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
+            <div className="space-y-3 rounded-xl border border-[#4a9b60]/45 bg-[#162d20] p-3 text-[#f7faf6] sm:border-primary/20 sm:bg-primary/5 sm:text-foreground">
               <div>
-                <p className="text-sm font-semibold text-foreground">Set up the right category</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Name this spending clearly. We’ll save the category and select it without clearing the rest of your expense.</p>
+                <p className="text-sm font-semibold text-[#f7faf6] sm:text-foreground">Set up the right category</p>
+                <p className="mt-0.5 text-xs text-[#b9d2bf] sm:text-muted-foreground">Name this spending clearly. We’ll save the category and select it without clearing the rest of your expense.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input
@@ -746,7 +752,7 @@ export default function Expenses() {
                   value={newCategoryName}
                   onChange={(event) => setNewCategoryName(event.target.value)}
                   aria-label="New category name"
-                  className="h-10 bg-card"
+                  className="h-10 border-[#1e3b2b] bg-[#1a3325] text-[#f7faf6] placeholder:text-[#7aaa8a] sm:border-input sm:bg-card sm:text-foreground sm:placeholder:text-muted-foreground"
                 />
                 <Input
                   type="number"
@@ -756,7 +762,7 @@ export default function Expenses() {
                   value={newCategoryBudget}
                   onChange={(event) => setNewCategoryBudget(event.target.value)}
                   aria-label="New category monthly budget in KES"
-                  className="h-10 bg-card"
+                  className="h-10 border-[#1e3b2b] bg-[#1a3325] text-[#f7faf6] placeholder:text-[#7aaa8a] sm:border-input sm:bg-card sm:text-foreground sm:placeholder:text-muted-foreground"
                 />
                 <label className="space-y-1 text-xs font-semibold text-foreground">
                   Priority
@@ -764,7 +770,8 @@ export default function Expenses() {
                     value={newCategoryPriority}
                     onChange={(event) => setNewCategoryPriority(event.target.value)}
                     aria-label="New category priority"
-                    className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+                    className="h-10 w-full rounded-md border border-[#1e3b2b] bg-[#1a3325] px-3 text-sm text-[#f7faf6] sm:border-input sm:bg-card sm:text-foreground"
+                    style={{ colorScheme: "dark" }}
                   >
                     <option value="1">1 · Must-pay</option>
                     <option value="2">2 · Important</option>
@@ -773,10 +780,10 @@ export default function Expenses() {
                     <option value="5">5 · Flexible</option>
                   </select>
                 </label>
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-[#1e3b2b] bg-[#1a3325] px-3 py-2 sm:border-border/70 sm:bg-card">
                   <div>
-                    <p className="text-xs font-semibold text-foreground">Recurring</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs font-semibold text-[#f7faf6] sm:text-foreground">Recurring</p>
+                    <p className="text-xs text-[#b9d2bf] sm:text-muted-foreground">
                       {newCategoryRecurring
                         ? "Available every month"
                         : `Only for ${formatMonthYear(Number(form.date.slice(5, 7)), Number(form.date.slice(0, 4)))}`}
@@ -806,7 +813,7 @@ export default function Expenses() {
                   setNewCategoryRecurring(true);
                   setNewCategoryPriority("3");
                 }}
-                className="h-10 rounded-md px-3 text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="h-10 rounded-md px-3 text-left text-xs font-medium text-[#b9d2bf] hover:bg-[#1a3325] hover:text-[#f7faf6] sm:text-muted-foreground sm:hover:bg-muted sm:hover:text-foreground"
               >
                 Cancel
               </button>
@@ -1090,12 +1097,12 @@ export default function Expenses() {
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Expenses</h1>
           <p className="text-muted-foreground mt-1">Track where the money is going.</p>
         </div>
-        <div className="flex w-full items-center justify-between gap-1 bg-card rounded-xl p-1 border shadow-sm sm:w-auto sm:justify-start">
-          <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg hover:bg-muted">
-            <ArrowLeft className="h-5 w-5 text-foreground/70" />
+        <div className="flex w-full items-center justify-between gap-1 rounded-xl border border-[#1e3b2b] bg-[#162d20] p-1 text-[#f7faf6] shadow-sm sm:w-auto sm:justify-start sm:border-input sm:bg-card sm:text-foreground">
+          <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg text-[#f7faf6]/80 hover:bg-[#1a3325] hover:text-[#f7faf6] sm:text-foreground/70 sm:hover:bg-muted">
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-1.5 px-1">
-            <Calendar className="w-4 h-4 text-primary shrink-0" />
+            <Calendar className="w-4 h-4 shrink-0 text-primary" />
             <select
               value={`${year}-${String(month).padStart(2, '0')}`}
               onChange={e => {
@@ -1103,7 +1110,8 @@ export default function Expenses() {
                 setYear(y);
                 setMonth(m);
               }}
-              className="font-semibold font-display text-sm text-foreground bg-transparent border-none outline-none cursor-pointer"
+              className="cursor-pointer border-none bg-transparent font-display text-sm font-semibold text-[#f7faf6] outline-none sm:text-foreground"
+              style={{ colorScheme: "dark" }}
             >
               {Array.from({ length: 24 }, (_, i) => {
                 const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -1117,9 +1125,9 @@ export default function Expenses() {
               })}
             </select>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg hover:bg-muted"
+          <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg text-[#f7faf6]/80 hover:bg-[#1a3325] hover:text-[#f7faf6] sm:text-foreground/70 sm:hover:bg-muted"
             disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
-            <ArrowRight className="h-5 w-5 text-foreground/70" />
+            <ArrowRight className="h-5 w-5" />
           </Button>
         </div>
       </div>

@@ -813,9 +813,9 @@ export default function Budget() {
           <p className="text-muted-foreground mt-1">Manage category limits and track spending.</p>
         </div>
          <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
-           <div className="flex w-full items-center justify-between gap-2 rounded-xl border bg-card p-1 shadow-sm sm:w-auto">
-            <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg hover:bg-muted">
-              <ArrowLeft className="h-5 w-5 text-foreground/70" />
+           <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-[#1e3b2b] bg-[#162d20] p-1 text-[#f7faf6] shadow-sm sm:w-auto sm:border-input sm:bg-card sm:text-foreground">
+             <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg text-[#f7faf6]/80 hover:bg-[#1a3325] hover:text-[#f7faf6] sm:text-foreground/70 sm:hover:bg-muted">
+               <ArrowLeft className="h-5 w-5" />
             </Button>
              <div className="min-w-0 flex-1 text-center font-display font-semibold sm:w-36 sm:flex-none">
                <span className="inline-flex items-center justify-center gap-2">
@@ -823,12 +823,12 @@ export default function Budget() {
               {formatMonthYear(month, year)}
                </span>
             </div>
-            <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg hover:bg-muted" disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
-              <ArrowRight className="h-5 w-5 text-foreground/70" />
+             <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg text-[#f7faf6]/80 hover:bg-[#1a3325] hover:text-[#f7faf6] sm:text-foreground/70 sm:hover:bg-muted" disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
+               <ArrowRight className="h-5 w-5" />
             </Button>
           </div>
-             {canManageShared && <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-              <Button variant="outline" onClick={() => openManage()} className="w-full gap-2 sm:w-auto">
+             {canManageShared && <div className="grid w-full grid-cols-2 gap-2 rounded-xl bg-[#162d20] p-1 sm:flex sm:w-auto sm:bg-transparent sm:p-0">
+               <Button variant="outline" onClick={() => openManage()} className="w-full gap-2 border-[#1e3b2b] bg-[#1a3325] text-[#f7faf6] hover:bg-[#244033] hover:text-white sm:w-auto sm:border-input sm:bg-transparent sm:text-foreground sm:hover:bg-accent sm:hover:text-accent-foreground">
                <SlidersHorizontal className="w-4 h-4" /> Edit existing
              </Button>
                <Button onClick={() => openAddForPriority(1)} className="w-full gap-2 sm:w-auto">
