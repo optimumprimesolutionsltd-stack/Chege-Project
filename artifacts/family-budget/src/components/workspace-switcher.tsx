@@ -7,6 +7,7 @@ import { useGetGroup } from "@workspace/api-client-react";
 import { useState } from "react";
 import { Award, BriefcaseBusiness, Heart, Home, Star, Users } from "lucide-react";
 import { workspaceIdentityText, workspaceNameClass } from "@/lib/workspace-identity";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,6 +47,7 @@ export function WorkspaceSwitcher({
   const [pendingWorkspace, setPendingWorkspace] = useState<Workspace | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const activeSharedBudget = activeGroup && !activeGroup.isPrivate ? activeGroup : null;
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const ActiveIcon = ({
     users: Users,
     home: Home,
@@ -103,33 +105,40 @@ export function WorkspaceSwitcher({
             </span>
           )
         ) : null}
-        <select
-          id={id}
-          aria-label="Choose a budget"
-          aria-busy={selectWorkspace.isPending}
-          value={activeWorkspaceId ?? ""}
+        <Select
+          value={activeWorkspaceId ? String(activeWorkspaceId) : ""}
           disabled={!activeWorkspaceId || selectWorkspace.isPending}
-          onChange={(event) => requestWorkspaceSwitch(Number(event.target.value))}
-          className={[
-            `min-w-0 flex-1 cursor-pointer bg-card text-foreground outline-none transition-colors disabled:cursor-wait disabled:opacity-70 ${workspaceNameClass(activeGroup?.nameStyle)}`,
+          onValueChange={(value) => requestWorkspaceSwitch(Number(value))}
+        >
+          <SelectTrigger
+            id={id}
+            aria-label="Choose a budget"
+            aria-busy={selectWorkspace.isPending}
+            className={[
+              `min-w-0 flex-1 cursor-pointer bg-card text-foreground outline-none transition-colors disabled:cursor-wait disabled:opacity-70 ${workspaceNameClass(activeGroup?.nameStyle)}`,
             isDashboardVariant
               ? "h-11 rounded-xl border border-input px-3 text-sm font-semibold shadow-sm hover:border-primary/40 focus:ring-2 focus:ring-ring"
               : "h-9 rounded-lg border border-sidebar-border px-2 text-xs hover:bg-sidebar-accent",
             className,
           ].join(" ")}
-        >
-        <option value="" disabled>
-          Choose a budget
-        </option>
-        {workspaces
-          .slice()
-          .sort((a, b) => Number(b.isPrivate) - Number(a.isPrivate) || a.name.localeCompare(b.name))
-          .map((workspace) => (
-            <option key={workspace.id} value={workspace.id}>
-              {workspaceIdentityText(workspace, workspace.isPrivate ? "Personal budget" : "Group")}
-            </option>
-          ))}
-        </select>
+          >
+            <SelectValue placeholder="Choose a budget">
+              {activeWorkspace
+                ? workspaceIdentityText(activeWorkspace, activeWorkspace.isPrivate ? "Personal budget" : "Group")
+                : "Choose a budget"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent className="border-sidebar-border bg-popover text-popover-foreground">
+            {workspaces
+              .slice()
+              .sort((a, b) => Number(b.isPrivate) - Number(a.isPrivate) || a.name.localeCompare(b.name))
+              .map((workspace) => (
+                <SelectItem key={workspace.id} value={String(workspace.id)} className={workspaceNameClass(workspace.nameStyle)}>
+                  {workspaceIdentityText(workspace, workspace.isPrivate ? "Personal budget" : "Group")}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
       </div>
       {showPendingLabel && selectWorkspace.isPending ? (
         <p className="mt-2 text-xs font-medium text-muted-foreground" role="status" aria-live="polite">
