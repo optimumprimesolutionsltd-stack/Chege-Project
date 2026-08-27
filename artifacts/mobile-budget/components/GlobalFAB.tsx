@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 
 const FAB_ACTIONS = [
@@ -15,11 +15,17 @@ const FAB_ACTIONS = [
 export function GlobalFAB() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const segments = useSegments();
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
   const fabBottom  = Platform.OS === 'web' ? 100 : insets.bottom + 70;
   const menuBottom = Platform.OS === 'web' ? 166 : insets.bottom + 136;
+  const isTabHome = segments[0] === '(tabs)' && !segments[1];
+  const goHome = () => {
+    setOpen(false);
+    router.replace('/(tabs)');
+  };
 
   return (
     <>
@@ -47,6 +53,22 @@ export function GlobalFAB() {
             </Pressable>
           ))}
         </View>
+      )}
+
+      {!isTabHome && (
+        <Pressable
+          testID="global-home"
+          accessibilityRole="button"
+          accessibilityLabel="Go to Home"
+          style={[
+            styles.homePill,
+            { bottom: fabBottom, backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+          onPress={goHome}
+        >
+          <Feather name="home" size={17} color={colors.primary} />
+          <Text style={[styles.homePillText, { color: colors.foreground }]}>Home</Text>
+        </Pressable>
       )}
 
       {/* FAB button */}
@@ -114,5 +136,28 @@ const styles = StyleSheet.create({
   menuLabel: {
     fontSize: 15,
     fontFamily: 'Inter_600SemiBold',
+  },
+  homePill: {
+    position: 'absolute',
+    right: 88,
+    minWidth: 76,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 7,
+    elevation: 7,
+  },
+  homePillText: {
+    fontSize: 13,
+    fontFamily: 'Inter_700Bold',
   },
 });

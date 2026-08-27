@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Platform, View } from 'react-native';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -103,8 +103,36 @@ function RootLayoutNav() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const currentRoute = segments[0];
+  const isTabsRoute = segments[0] === '(tabs)';
+  const isTabsHome = isTabsRoute && !segments[1];
   const resolvedChooserUserId = useRef<string | null>(null);
   const [checkingChooser, setCheckingChooser] = useState(true);
+
+  // Keep Android's hardware back action inside Jamvi. A back press from a
+  // tab returns to the beginning instead of closing the app unexpectedly;
+  // a second press from Home requires an explicit exit choice.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !isAuthenticated || !isTabsRoute) return;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!isTabsHome) {
+        router.replace('/(tabs)');
+        return true;
+      }
+
+      Alert.alert(
+        'You’re at Home',
+        'This is the beginning of Jamvi.',
+        [
+          { text: 'Stay in Jamvi', style: 'cancel' },
+          { text: 'Exit Jamvi', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ],
+      );
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [isAuthenticated, isTabsHome, isTabsRoute]);
 
   // Re-fetch all data the moment the user signs in so queries that ran
   // before auth completed (with no token) get a fresh attempt.

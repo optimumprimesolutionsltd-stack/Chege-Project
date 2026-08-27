@@ -237,6 +237,11 @@ export default function DashboardScreen() {
           colors={[colors.brandNavy, '#05255E', colors.brandBlue]}
           style={[styles.header, { paddingTop: topPad + 12 }]}
         >
+          <View style={styles.homeStatus}>
+            <Feather name="home" size={13} color={colors.secondary} />
+            <Text style={styles.homeStatusText}>HOME · START HERE</Text>
+          </View>
+
           {/* Top row: greeting + profile */}
           <View style={styles.headerTop}>
             <View style={styles.greetingBlock}>
@@ -617,6 +622,8 @@ const styles = StyleSheet.create({
   accessButtonText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   header: { paddingHorizontal: 20, paddingBottom: 20 },
+  homeStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 9 },
+  homeStatusText: { fontSize: 10, color: '#FDBB0A', fontFamily: 'Inter_700Bold', letterSpacing: 1.1 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   greetingBlock: { flex: 1, minWidth: 0 },
   headerUtilityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
