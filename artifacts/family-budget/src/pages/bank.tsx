@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
-  useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank,
+  useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank, useGetGroup,
   getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
   getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey, useUpdateJointAccountOpeningBalance,
 } from "@workspace/api-client-react";
@@ -46,6 +46,7 @@ type EditableTransaction = {
 export default function Bank() {
   const bankEditId = getBankEditDeepLink();
   const { data: account, isLoading } = useGetJointAccount();
+  const { data: group } = useGetGroup();
   const { data: members } = useGetMembers();
   const { data: categories } = useGetBudgetCategories();
   const createDeposit = useCreateDeposit();
@@ -59,13 +60,16 @@ export default function Bank() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const canManageShared = members?.some(
+  const isSharedWorkspace = group?.isPrivate === false;
+  const isWorkspaceManager = members?.some(
     (member) =>
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) ?? false;
+  const canManageShared = isSharedWorkspace && isWorkspaceManager;
+  const canManageAccount = group !== undefined && (!isSharedWorkspace || canManageShared);
   const canEditTransaction = (tx: EditableTransaction) =>
-    canManageShared || (
+    canManageAccount || (
       tx.type === "deposit" &&
       tx.madeById === user?.id &&
       tx.date === new Date().toISOString().split("T")[0] &&
@@ -155,7 +159,7 @@ export default function Bank() {
   };
 
   const handleCreateCategory = async () => {
-    if (!canManageShared) {
+    if (!canManageAccount) {
       toast({
         variant: "destructive",
         title: "Admin access required",
@@ -205,12 +209,11 @@ export default function Bank() {
     setAmount("");
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
-    // Always reset to Joint bank — never silently attribute to the signed-in user
-    setDepositorIds([]);
+    setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : []);
     setDepositorAmounts({});
     setIncomeSourceId(null);
     setDepositSourceKind(null);
-    setWithdrawerId(JOINT_BANK_ID);
+    setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : JOINT_BANK_ID);
     setExpenseCategory("");
     setWithdrawalDestinationKind("category");
     setTransferDirection("to_savings");
@@ -221,7 +224,7 @@ export default function Bank() {
   };
 
   const openMode = (m: "deposit" | "disbursement" | "transfer") => {
-    if (!canManageShared && m !== "deposit") {
+    if (!canManageAccount && m !== "deposit") {
       toast({
         variant: "destructive",
         title: "Admin access required",
@@ -229,15 +232,14 @@ export default function Bank() {
       });
       return;
     }
-    // Reset attribution to Joint bank every time a form opens
     setAmount("");
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
-    setDepositorIds(!canManageShared && user?.id ? [user.id] : []);
+    setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : (!canManageShared && user?.id ? [user.id] : []));
     setDepositorAmounts({});
     setIncomeSourceId(null);
     setDepositSourceKind(null);
-    setWithdrawerId(JOINT_BANK_ID);
+    setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : JOINT_BANK_ID);
     setExpenseCategory("");
     setWithdrawalDestinationKind("category");
     setTransferDirection("to_savings");
@@ -362,7 +364,7 @@ export default function Bank() {
           });
           return;
         }
-        const data = { amount: total, goalId: transferGoalId, narration: description.trim(), date, madeById: null };
+        const data = { amount: total, goalId: transferGoalId, narration: description.trim(), date, madeById: isSharedWorkspace ? null : user?.id };
         if (transferDirection === "to_savings") {
           await transferToSavings.mutateAsync({ data });
           toast({ title: "Moved to savings" });
@@ -385,7 +387,9 @@ export default function Bank() {
             amount: total,
             description: description.trim() || expenseCategory,
             date,
-            madeById: mode === "deposit" ? depositorIds[0] ?? null : withdrawerId,
+            madeById: mode === "deposit"
+              ? (!isSharedWorkspace ? user?.id : depositorIds[0] ?? null)
+              : (!isSharedWorkspace ? user?.id : withdrawerId),
             ...(mode === "deposit" && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(mode === "disbursement" ? { expenseCategory, destinationKind: withdrawalDestinationKind } : {}),
           },
@@ -408,7 +412,7 @@ export default function Bank() {
           });
         } else {
           // Single named depositor or Joint bank (null)
-          const madeById = depositorIds.length === 1 ? depositorIds[0] : null;
+          const madeById = !isSharedWorkspace ? user?.id : depositorIds.length === 1 ? depositorIds[0] : null;
           await createDeposit.mutateAsync({
             data: {
               amount: Number(amount),
@@ -428,7 +432,7 @@ export default function Bank() {
             description: description.trim() || expenseCategory,
             date,
             expenseCategory,
-            madeById: withdrawerId,
+            madeById: !isSharedWorkspace ? user?.id : withdrawerId,
             destinationKind: withdrawalDestinationKind,
           },
         });
@@ -442,7 +446,7 @@ export default function Bank() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!canManageShared) {
+    if (!canManageAccount) {
       toast({
         variant: "destructive",
         title: "Admin access required",
@@ -465,18 +469,24 @@ export default function Bank() {
 
   // Helpers for attribution labels in transaction list
   const madeByLabel = (madeByName: string | null | undefined, type: string) => {
-    if (!madeByName) return "Joint bank";
+    if (!madeByName) return isSharedWorkspace ? "Joint bank" : "Personal account";
     return madeByName;
   };
 
   return (
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
-        <h1 className="text-3xl font-display font-bold text-foreground">Joint Bank Account</h1>
-        <p className="text-muted-foreground mt-1">Track money going in and out of your Shared budget.</p>
+        <h1 className="text-3xl font-display font-bold text-foreground">
+          {isSharedWorkspace ? "Joint Account" : "Personal Account"}
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          {isSharedWorkspace
+            ? "Track money going in and out of your Shared budget."
+            : "Track money going in and out of your Personal budget."}
+        </p>
       </div>
 
-       {!canManageShared && (
+       {isSharedWorkspace && !canManageShared && (
          <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
             You can add and correct your own deposit today. An admin handles earlier records, withdrawals, transfers, and removals.
          </div>
@@ -498,7 +508,7 @@ export default function Bank() {
                   <span className="opacity-75">
                     Opening balance: <span className="font-semibold">{formatKes(account?.openingBalance ?? 0)}</span>
                   </span>
-                  {canManageShared && (
+                  {canManageAccount && (
                     <Button
                       type="button"
                       variant="secondary"
@@ -530,7 +540,7 @@ export default function Bank() {
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">Set starting balance</CardTitle>
             <CardDescription>
-              Enter the money already in this Shared budget’s bank account before the transactions shown below.
+              Enter the money already in this {isSharedWorkspace ? "Shared budget’s Joint account" : "Personal account"} before the transactions shown below.
               This is a workspace-level value and does not create a transaction.
             </CardDescription>
           </CardHeader>
@@ -571,15 +581,15 @@ export default function Bank() {
 
       {/* Action buttons / form */}
       {!mode ? (
-        <div className={`grid gap-3 ${canManageShared ? "grid-cols-3" : "grid-cols-1"}`}>
-          {canManageShared && <Button
+        <div className={`grid gap-3 ${canManageAccount ? "grid-cols-3" : "grid-cols-1"}`}>
+          {canManageAccount && <Button
             data-testid="button-deposit"
             onClick={() => openMode("deposit")}
             className="h-12 px-6 rounded-xl flex-1"
           >
             <ArrowDownLeft className="w-5 h-5 mr-2" /> Deposit
           </Button>}
-          {canManageShared && <Button
+          {canManageAccount && <Button
             data-testid="button-withdraw"
             onClick={() => openMode("disbursement")}
             variant="outline"
@@ -606,10 +616,10 @@ export default function Bank() {
             </CardTitle>
             <CardDescription>
               {mode === "deposit"
-                ? "Money going into the joint bank account."
+                ? `Money going into your ${isSharedWorkspace ? "Joint account" : "Personal account"}.`
                 : mode === "transfer"
-                  ? "Move Shared budget funds between the joint bank account and a savings goal."
-                  : "Money going out of the joint bank account."}
+                  ? `Move ${isSharedWorkspace ? "Shared budget" : "Personal budget"} funds between this account and a savings goal.`
+                  : `Money going out of your ${isSharedWorkspace ? "Joint account" : "Personal account"}.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -637,10 +647,10 @@ export default function Bank() {
                     value={date}
                     onChange={e => setDate(e.target.value)}
                     required
-                    disabled={!canManageShared && editingTransaction !== null}
+                    disabled={isSharedWorkspace && !canManageShared && editingTransaction !== null}
                     className="h-12 bg-card"
                   />
-                  {!canManageShared && editingTransaction !== null && (
+                  {isSharedWorkspace && !canManageShared && editingTransaction !== null && (
                     <p className="text-xs text-muted-foreground">
                       Members can correct this deposit today, but only an admin can change its date.
                     </p>
@@ -742,10 +752,14 @@ export default function Bank() {
                   <>
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">
-                        Who is depositing?
+                        {isSharedWorkspace ? "Who is depositing?" : "Personal account"}
                         {canManageShared && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
                       </label>
-                      <div className="grid grid-cols-3 gap-2" data-testid="deposit-attribution">
+                      {!isSharedWorkspace ? (
+                        <p className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                          This deposit will be recorded in your name and kept in your Personal budget.
+                        </p>
+                      ) : <div className="grid grid-cols-3 gap-2" data-testid="deposit-attribution">
                         {/* Joint bank chip — mutually exclusive with named members */}
                         {canManageShared && <button
                           key="joint-bank"
@@ -792,7 +806,7 @@ export default function Bank() {
                             </button>
                           );
                         })}
-                      </div>
+                      </div>}
 
                       {/* Per-depositor split rows — only when multiple named depositors */}
                       {depositorIds.length > 1 && (() => {
@@ -873,7 +887,7 @@ export default function Bank() {
                 {/* ── WITHDRAWAL: who is withdrawing ── */}
                 {mode === "disbursement" && (
                   <>
-                    <div className="space-y-2 sm:col-span-2">
+                    {isSharedWorkspace && <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">Who is withdrawing?</label>
                       <div className="grid grid-cols-3 gap-2" data-testid="withdrawal-attribution">
                         {/* Joint bank — default selection */}
@@ -912,7 +926,7 @@ export default function Bank() {
                           );
                         })}
                       </div>
-                    </div>
+                    </div>}
 
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">Where is the money going?</label>
@@ -998,7 +1012,7 @@ export default function Bank() {
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>}
-                    {canManageShared && <Button
+                    {canManageAccount && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-delete-tx-${tx.id}`}

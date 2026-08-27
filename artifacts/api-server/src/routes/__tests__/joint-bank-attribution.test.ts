@@ -78,26 +78,34 @@ const mockedDb = db as unknown as MockableDb;
 // ---------------------------------------------------------------------------
 const AUTHED_USER_ID = "user-authed-123";
 
-function buildJointApp() {
+function buildJointApp(isPrivate?: boolean) {
   const app = express();
   app.use(express.json());
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: AUTHED_USER_ID };
-    req.group = { id: 1, role: "owner" };
+    req.group = {
+      id: 1,
+      role: "owner",
+      ...(isPrivate === undefined ? {} : { isPrivate }),
+    };
     next();
   });
   app.use("/", jointAccountRouter);
   return app;
 }
 
-function buildSavingsApp() {
+function buildSavingsApp(isPrivate?: boolean) {
   const app = express();
   app.use(express.json());
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: AUTHED_USER_ID };
-    req.group = { id: 1, role: "owner" };
+    req.group = {
+      id: 1,
+      role: "owner",
+      ...(isPrivate === undefined ? {} : { isPrivate }),
+    };
     next();
   });
   app.use("/", savingsGoalsRouter);
@@ -105,7 +113,9 @@ function buildSavingsApp() {
 }
 
 const jointApp = buildJointApp();
+const personalApp = buildJointApp(true);
 const savingsApp = buildSavingsApp();
+const personalSavingsApp = buildSavingsApp(true);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -174,6 +184,33 @@ beforeEach(() => {
 // ===========================================================================
 
 describe("POST /joint-account/deposit — madeById attribution", () => {
+  it("rejects an unattributed deposit in a Personal budget", async () => {
+    const res = await request(personalApp)
+      .post("/joint-account/deposit")
+      .send({ amount: 1000, description: "Salary", date: "2024-06-01" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Personal account activity/i);
+    expect(mockedDb.insert).not.toHaveBeenCalled();
+  });
+
+  it("records a Personal budget deposit under the signed-in user", async () => {
+    const captured: { current: unknown } = { current: undefined };
+    mockedDb.insert = makeInsertMock(captured);
+
+    const res = await request(personalApp)
+      .post("/joint-account/deposit")
+      .send({
+        amount: 1000,
+        description: "Salary",
+        date: "2024-06-01",
+        madeById: AUTHED_USER_ID,
+      });
+
+    expect(res.status).toBe(201);
+    expect((captured.current as { madeById: unknown }).madeById).toBe(AUTHED_USER_ID);
+  });
+
   it("stores null (Joint bank) when madeById is omitted — does NOT fall back to req.user", async () => {
     const captured: { current: unknown } = { current: undefined };
 
@@ -234,6 +271,22 @@ describe("POST /joint-account/deposit — madeById attribution", () => {
 // ===========================================================================
 
 describe("POST /joint-account/disbursement — madeById attribution", () => {
+  it("rejects Joint-account withdrawal attribution in a Personal budget", async () => {
+    const res = await request(personalApp)
+      .post("/joint-account/disbursement")
+      .send({
+        amount: 200,
+        description: "Groceries",
+        expenseCategory: "Food",
+        date: "2024-06-01",
+        madeById: null,
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Personal account activity/i);
+    expect(mockedDb.insert).not.toHaveBeenCalled();
+  });
+
   it("stores null (Joint bank) when madeById is omitted — does NOT fall back to req.user", async () => {
     const captured: { current: unknown } = { current: undefined };
     mockedDb.insert = makeInsertMock(captured);
@@ -330,6 +383,48 @@ describe("POST /savings-goals/:id/contribute — userId attribution", () => {
       return cb(tx);
     });
   }
+
+  it("defaults an omitted Personal budget userId to the signed-in user", async () => {
+    const captured: { current: unknown } = { current: undefined };
+    wireSavingsTransactionForContribute(captured);
+
+    const res = await request(personalSavingsApp)
+      .post("/savings-goals/1/contribute")
+      .send({ amount: 100 });
+
+    expect(res.status).toBe(200);
+    expect((captured.current as { createdByUserId: unknown }).createdByUserId).toBe(AUTHED_USER_ID);
+  });
+
+  it("accepts explicit self-attribution in a Personal budget", async () => {
+    const captured: { current: unknown } = { current: undefined };
+    wireSavingsTransactionForContribute(captured);
+
+    const res = await request(personalSavingsApp)
+      .post("/savings-goals/1/contribute")
+      .send({ amount: 100, userId: AUTHED_USER_ID });
+
+    expect(res.status).toBe(200);
+    expect((captured.current as { createdByUserId: unknown }).createdByUserId).toBe(AUTHED_USER_ID);
+  });
+
+  it("rejects explicit Joint-account attribution in a Personal budget", async () => {
+    const res = await request(personalSavingsApp)
+      .post("/savings-goals/1/contribute")
+      .send({ amount: 100, userId: null });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Personal account activity/i);
+  });
+
+  it("rejects foreign attribution in a Personal budget", async () => {
+    const res = await request(personalSavingsApp)
+      .post("/savings-goals/1/contribute")
+      .send({ amount: 100, userId: VALID_MEMBER_ID });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Personal account activity/i);
+  });
 
   it("records null (Joint bank) when userId is omitted — does NOT fall back to req.user", async () => {
     const captured: { current: unknown } = { current: undefined };

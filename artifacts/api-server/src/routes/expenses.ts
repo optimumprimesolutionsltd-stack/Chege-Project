@@ -301,6 +301,15 @@ router.post("/expenses/apply-recurring", async (req, res) => {
       eq(expenseIncomeSplitsTable.groupId, groupId),
     ));
     recurringSplits.set(original.id, sourceSplits);
+    if (
+      req.group?.isPrivate &&
+      (original.paidFromBank || sourceSplits.some((split) => split.fromBank))
+    ) {
+      res.status(403).json({
+        error: `Cannot copy recurring expense "${original.description}": Joint-account funding is not available in a Personal budget.`,
+      });
+      return;
+    }
     if (sourceSplits.length > 0) {
       const splitResult = await validateFundingSplits(sourceSplits.map((split) => ({
         userId: split.userId,
@@ -378,6 +387,13 @@ router.post("/expenses", async (req, res) => {
   }
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
+  if (
+    req.group?.isPrivate &&
+    (paidFromBank === true || splitResult.splits?.some((split) => split.fromBank))
+  ) {
+    res.status(403).json({ error: "Joint-account expense funding is not available in a Personal budget." });
+    return;
+  }
   const isParticipatingMember = req.group?.role === "member";
   if (isParticipatingMember) {
     if (!isCurrentExpenseDate(date)) {
@@ -450,6 +466,13 @@ router.patch("/expenses/:id", async (req, res) => {
   }
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
+  if (
+    req.group?.isPrivate &&
+    (paidFromBank === true || splitResult.splits?.some((split) => split.fromBank))
+  ) {
+    res.status(403).json({ error: "Joint-account expense funding is not available in a Personal budget." });
+    return;
+  }
   const isParticipatingMember = req.group?.role === "member";
   if (isParticipatingMember) {
     if (!isCurrentExpenseDate(date)) {
@@ -486,6 +509,13 @@ router.patch("/expenses/:id", async (req, res) => {
         eq(expenseIncomeSplitsTable.expenseId, expenseId),
         eq(expenseIncomeSplitsTable.groupId, groupId),
       ));
+    const keepsOrAddsBankFunding = splitResult.splits
+      ? splitResult.splits.some((split) => split.fromBank)
+      : (paidFromBank ?? existing.paidFromBank) ||
+        previousSplits.some((split) => split.fromBank);
+    if (req.group?.isPrivate && keepsOrAddsBankFunding) {
+      return { forbidden: "personal-bank" as const };
+    }
     if (
       isParticipatingMember &&
       (
@@ -563,6 +593,8 @@ router.patch("/expenses/:id", async (req, res) => {
     res.status(403).json({
       error: result.forbidden === "past-expense"
         ? "Members can edit expenses dated today only. Ask an admin to correct a past expense."
+        : result.forbidden === "personal-bank"
+          ? "Joint-account expense funding is not available in a Personal budget."
         : "Members can edit only their own personal expenses.",
     });
     return;

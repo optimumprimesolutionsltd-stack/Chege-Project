@@ -269,32 +269,32 @@ function IncomeForm({
   onDone,
   currentUserId,
   canManageShared,
+  isSharedWorkspace,
 }: {
   onDone: () => void;
   currentUserId?: string;
   canManageShared: boolean;
+  isSharedWorkspace: boolean;
 }) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [madeById, setMadeById] = useState<string>("");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const { data: members = [] } = useGetMembers();
-  const selectableMembers = canManageShared
-    ? members
-    : members.filter((member) => member.userId === currentUserId);
+  const selectedDepositorId = canManageShared ? madeById : currentUserId ?? "";
   const createDeposit = useCreateDeposit();
   const qc = useQueryClient();
   const { toast } = useToast();
   const now = new Date();
 
   const { data: incomeSources } = useQuery<IncomeSource[]>({
-    queryKey: ["income-sources", madeById],
+    queryKey: ["income-sources", selectedDepositorId],
     queryFn: async () => {
-      const res = await fetch(`/api/income-sources?userId=${madeById}`, { credentials: "include" });
+      const res = await fetch(`/api/income-sources?userId=${selectedDepositorId}`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!madeById,
+    enabled: !!selectedDepositorId,
     staleTime: 60_000,
   });
 
@@ -317,34 +317,48 @@ function IncomeForm({
       });
       return;
     }
+    if (!selectedDepositorId) {
+      toast({
+        variant: "destructive",
+        title: "Choose who is depositing",
+        description: isSharedWorkspace
+          ? "Select a group member before recording this deposit."
+          : "Your account is still loading. Please try again.",
+      });
+      return;
+    }
     try {
       await createDeposit.mutateAsync({
         data: {
           amount: amt,
           description: description.trim() || "Deposit",
           date: now.toISOString().split("T")[0],
-          madeById: canManageShared ? madeById : currentUserId,
+          madeById: selectedDepositorId,
           ...(incomeSourceId ? { incomeSourceId } : {}),
         } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
       qc.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
-       const who = members.find(m => m.userId === (canManageShared ? madeById : currentUserId))?.userName?.split(" ")[0] ?? "Member";
+       const who = members.find(m => m.userId === selectedDepositorId)?.userName?.split(" ")[0] ?? (isSharedWorkspace ? "Member" : "You");
       toast({ title: "Deposit recorded", description: `${who} · ${formatKes(amt)} added to this month.` });
       onDone();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not record deposit." });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not record deposit",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     }
   };
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {/* Person picker */}
-      <div className="space-y-1.5">
-        <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
-        <div className="grid grid-cols-2 gap-2">
-          {selectableMembers.map((m) => {
+      {canManageShared ? (
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {members.map((m) => {
             const name = m.userName?.split(" ")[0] ?? "Member";
             return (
               <button key={m.userId} type="button" onClick={() => { setMadeById(m.userId); setIncomeSourceId(null); }}
@@ -352,9 +366,21 @@ function IncomeForm({
                 {name}
               </button>
             );
-          })}
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">
+            {isSharedWorkspace ? "Depositing in your own name" : "Personal account deposit"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isSharedWorkspace
+              ? "This deposit will be added under your membership."
+              : "This money will be recorded only in your Personal budget."}
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
@@ -988,6 +1014,7 @@ export default function Dashboard() {
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   );
+  const canManageShared = isSharedWorkspace && canManageSetup;
   const [isSetupPathOpen, setIsSetupPathOpen] = useState(false);
   const [isSetupDeferred, setIsSetupDeferred] = useState(false);
   const [showSetupNudge, setShowSetupNudge] = useState(false);
@@ -1432,7 +1459,7 @@ export default function Dashboard() {
         <Card id="dashboard-quick-actions" className="scroll-mt-6 overflow-hidden border-none shadow-md">
         <CardContent className="p-0">
           {/* Action buttons row */}
-          <div className="grid grid-cols-3 divide-x divide-border/50">
+          <div className="grid grid-cols-4 divide-x divide-border/50">
             {[
               { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: "💰", active: "bg-success/10", text: "text-success" },
               { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: "📋", active: "bg-warning/10", text: "text-warning" },
@@ -1450,6 +1477,17 @@ export default function Dashboard() {
                 {activeAction === key && <X className="w-3.5 h-3.5 mt-0.5 opacity-60" />}
               </button>
             ))}
+            <Link
+              href="/budget"
+              data-testid="dashboard-create-budget-cta"
+              className="flex min-w-0 flex-col items-center justify-center gap-1.5 px-1 py-5 text-center text-xs font-medium text-foreground transition-colors hover:bg-muted/40 sm:px-3 sm:text-sm"
+            >
+              <span className="text-2xl leading-none">📊</span>
+              <span className="block sm:hidden">Budget</span>
+              <span className="hidden max-w-full break-words sm:block">
+                {(summary?.totalBudget ?? 0) > 0 ? "Manage Budget" : "Create Budget"}
+              </span>
+            </Link>
           </div>
           {sharedTransactionsLocked && (
             <p className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
@@ -1460,9 +1498,9 @@ export default function Dashboard() {
           {/* Expanded form */}
           {activeAction !== "none" && (
             <div className="border-t border-border/50 p-6 bg-muted/20">
-              {activeAction === "income"  && <IncomeForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageSetup} />}
-              {activeAction === "expense" && <ExpenseForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageSetup} />}
-              {activeAction === "goal"    && <GoalForm goals={goals} onDone={() => setActiveAction("none")} memberUserId={canManageSetup ? undefined : user?.id} />}
+              {activeAction === "income"  && <IncomeForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageShared} isSharedWorkspace={isSharedWorkspace} />}
+              {activeAction === "expense" && <ExpenseForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageShared} />}
+              {activeAction === "goal"    && <GoalForm goals={goals} onDone={() => setActiveAction("none")} memberUserId={canManageShared ? undefined : user?.id} />}
             </div>
           )}
         </CardContent>
@@ -1525,7 +1563,7 @@ export default function Dashboard() {
                   <Building2 className="w-5 h-5 text-sky-600 dark:text-sky-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">{isSharedWorkspace ? "Joint Account" : "My Account"}</p>
+                  <p className="font-semibold text-foreground">{isSharedWorkspace ? "Joint Account" : "Personal Account"}</p>
                   <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared budget funds" : "Personal budget funds"}</p>
                 </div>
               </div>

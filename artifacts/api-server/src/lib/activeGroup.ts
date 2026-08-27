@@ -128,7 +128,10 @@ export function requireMemberSelfAttribution(
   res: Response,
   userIds: Array<string | null | undefined>,
 ): boolean {
-  if (isGroupManager(req)) return true;
+  // Managers may attribute shared-group activity to the joint account or
+  // another member. A Personal budget has no joint account: even its owner
+  // must record money only in their own name.
+  if (!req.group?.isPrivate && isGroupManager(req)) return true;
 
   if (
     !req.user?.id ||
@@ -136,7 +139,9 @@ export function requireMemberSelfAttribution(
     userIds.some((userId) => userId !== req.user!.id)
   ) {
     res.status(403).json({
-      error: "Members can only record money in their own name. Ask an admin to record shared-bank activity.",
+      error: req.group?.isPrivate
+        ? "Personal account activity must be recorded in your own name."
+        : "Members can only record money in their own name. Ask an admin to record shared-bank activity.",
     });
     return false;
   }

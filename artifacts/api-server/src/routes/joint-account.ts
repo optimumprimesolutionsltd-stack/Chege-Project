@@ -317,6 +317,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
 
   const parsed = DisbursementInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
+  if (!requireMemberSelfAttribution(req, res, [parsed.data.madeById])) return;
 
   const { amount, description, date, expenseCategory, destinationKind } = parsed.data;
   if (destinationKind === "other" && !description.trim()) {
@@ -370,6 +371,7 @@ async function createSavingsTransfer(
 
   const parsed = SavingsTransferInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid transfer details" }); return; }
+  if (!requireMemberSelfAttribution(req, res, [parsed.data.madeById])) return;
 
   const { amount, goalId, narration, date } = parsed.data;
   const madeById = parsed.data.madeById ?? null;
@@ -468,11 +470,12 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     .where(and(eq(jointAccountTxTable.id, params.data.id), eq(jointAccountTxTable.groupId, groupId)))
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  const requestedMadeById = parsed.data.madeById === undefined
+    ? existing.madeById
+    : parsed.data.madeById;
+  if (!requireMemberSelfAttribution(req, res, [requestedMadeById])) return;
   const isMember = !isGroupManager(req);
   if (isMember) {
-    const requestedMadeById = parsed.data.madeById === undefined
-      ? existing.madeById
-      : parsed.data.madeById;
     if (
       existing.type !== "deposit" ||
       existing.savingsGoalId !== null ||

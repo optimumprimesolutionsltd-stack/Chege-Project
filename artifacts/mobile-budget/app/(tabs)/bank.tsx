@@ -38,6 +38,7 @@ import {
   getGetDashboardSummaryQueryKey,
   getGetSavingsGoalsQueryKey,
   useUpdateJointAccountOpeningBalance,
+  useGetGroup,
   customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -94,6 +95,7 @@ export default function BankScreen() {
   const handledShortcut = useRef<string | null>(null);
 
   const { data, isLoading, refetch } = useGetJointAccount();
+  const { data: group } = useGetGroup();
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -154,13 +156,16 @@ export default function BankScreen() {
   const { mutateAsync: updateOpeningBalance } = useUpdateJointAccountOpeningBalance();
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
-  const canManageShared = members.some(
+  const isSharedWorkspace = group?.isPrivate === false;
+  const isWorkspaceManager = members.some(
     (member) =>
       member.userId === user?.id &&
       (member.role === 'owner' || member.role === 'admin'),
   );
+  const canManageShared = isSharedWorkspace && isWorkspaceManager;
+  const canManageAccount = group !== undefined && (!isSharedWorkspace || canManageShared);
   const canEditTransaction = (tx: Tx) =>
-    canManageShared || (
+    canManageAccount || (
       tx.type === 'deposit' &&
       tx.madeById === user?.id &&
       tx.date === todayIso() &&
@@ -199,7 +204,7 @@ export default function BankScreen() {
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
 
   const openModal = (type: TxType) => {
-    if (!canManageShared && type !== 'deposit') {
+    if (!canManageAccount && type !== 'deposit') {
       Alert.alert('Admin access required', 'Ask a group owner or admin to record a shared transfer or withdrawal.');
       return;
     }
@@ -212,12 +217,11 @@ export default function BankScreen() {
     setNewCategoryName('');
     setDate(todayIso());
     setShowDatePicker(false);
-    // Default to Joint bank for both deposits and withdrawals
-    setDepositorIds(!canManageShared && user?.id ? [user.id] : []);
+    setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : (!canManageShared && user?.id ? [user.id] : []));
     setDepositorAmounts({});
     setIncomeSourceId(null);
     setDepositSourceKind(null);
-    setWithdrawerId(null);
+    setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : null);
     // Reset withdrawal destination
     setWithdrawDest(null);
     setWithdrawSourceName(null);
@@ -278,7 +282,7 @@ export default function BankScreen() {
   };
 
   const handleDelete = (tx: Tx) => {
-    if (!canManageShared) {
+    if (!canManageAccount) {
       Alert.alert('Admin access required', 'Ask a group owner or admin to delete a shared bank transaction.');
       return;
     }
@@ -318,11 +322,15 @@ export default function BankScreen() {
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
     setShowCategoryPicker(false);
-    setDepositorIds(type === 'deposit' && tx.madeById ? [tx.madeById] : []);
+    setDepositorIds(type === 'deposit'
+      ? (!isSharedWorkspace && user?.id ? [user.id] : tx.madeById ? [tx.madeById] : [])
+      : []);
     setDepositorAmounts({});
     setIncomeSourceId(null);
     setDepositSourceKind(null);
-    setWithdrawerId(type === 'disbursement' ? tx.madeById ?? null : null);
+    setWithdrawerId(type === 'disbursement'
+      ? (!isSharedWorkspace ? user?.id ?? null : tx.madeById ?? null)
+      : null);
     setWithdrawDest(type === 'disbursement' ? 'other' : null);
     setWithdrawSourceName(null);
     setWithdrawGoalId(null);
@@ -429,7 +437,7 @@ export default function BankScreen() {
           goalId: selectedGoal.id,
           narration: description.trim(),
           date,
-          madeById: null,
+          madeById: isSharedWorkspace ? null : user?.id,
         };
         if (transferDirection === 'to_savings') {
           await transferBankToSavings({ data: transfer });
@@ -483,15 +491,17 @@ export default function BankScreen() {
             amount: parsed,
             description: finalDescription,
             date,
-            madeById: txType === 'deposit'
-              ? validDepositorIds[0] ?? null
-              : withdrawerId ?? null,
+            madeById: !isSharedWorkspace
+              ? user?.id
+              : txType === 'deposit'
+                ? validDepositorIds[0] ?? null
+                : withdrawerId ?? null,
             ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
           },
         });
       } else if (txType === 'deposit') {
-        const isJoint = validDepositorIds.length === 0;
+        const isJoint = isSharedWorkspace && validDepositorIds.length === 0;
         const isMultiDepositor = validDepositorIds.length > 1;
 
         if (isMultiDepositor) {
@@ -564,7 +574,7 @@ export default function BankScreen() {
             description: finalDescription,
             date,
             expenseCategory,
-            madeById: withdrawerId ?? null,
+            madeById: !isSharedWorkspace ? user?.id : withdrawerId ?? null,
             destinationKind: withdrawDest === 'other' ? 'other' : 'category',
           },
         });
@@ -591,13 +601,13 @@ export default function BankScreen() {
   const txPayerLabel = (tx: Tx): string => {
     if (tx.type === 'deposit') {
       if (tx.madeByName) return tx.madeByName;
-      if (tx.madeById === null || tx.madeById === undefined) return 'Joint bank';
-      return 'Joint bank';
+       if (tx.madeById === null || tx.madeById === undefined) return isSharedWorkspace ? 'Joint bank' : 'Personal account';
+       return isSharedWorkspace ? 'Joint bank' : 'Personal account';
     }
     // disbursement
     if (tx.madeByName) return tx.madeByName;
-    if (tx.madeById === null || tx.madeById === undefined) return 'Joint bank';
-    return 'Joint bank';
+    if (tx.madeById === null || tx.madeById === undefined) return isSharedWorkspace ? 'Joint bank' : 'Personal account';
+    return isSharedWorkspace ? 'Joint bank' : 'Personal account';
   };
 
   return (
@@ -607,7 +617,7 @@ export default function BankScreen() {
         colors={['#0a1a10', '#0f2217', '#132a1c']}
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
-        <Text style={styles.headerTitle}>Bank Account</Text>
+        <Text style={styles.headerTitle}>{isSharedWorkspace ? 'Joint Account' : 'Personal Account'}</Text>
         {isLoading ? (
           <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
         ) : (
@@ -632,7 +642,7 @@ export default function BankScreen() {
                 <Text style={styles.openingBalanceLabel}>Opening balance</Text>
                 <Text style={styles.openingBalanceValue}>KES {formatKES(data?.openingBalance)}</Text>
               </View>
-              {canManageShared && (
+              {canManageAccount && (
                 <TouchableOpacity
                   style={styles.editOpeningBalanceBtn}
                   onPress={openOpeningBalanceEditor}
@@ -647,7 +657,7 @@ export default function BankScreen() {
 
             {/* Action buttons inside header */}
             <View style={styles.actionRow}>
-              {canManageShared && <TouchableOpacity
+              {canManageAccount && <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => openModal('deposit')}
                 activeOpacity={0.8}
@@ -655,7 +665,7 @@ export default function BankScreen() {
                 <Feather name="arrow-down-left" size={16} color="#0a1a10" />
                 <Text style={styles.actionBtnText}>Deposit</Text>
               </TouchableOpacity>}
-              {canManageShared && <TouchableOpacity
+              {canManageAccount && <TouchableOpacity
                 style={[styles.actionBtn, styles.actionBtnDisburse]}
                 onPress={() => openModal('disbursement')}
                 activeOpacity={0.8}
@@ -739,7 +749,7 @@ export default function BankScreen() {
                     : dep
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
-                  {formatDateTime(item.createdAt)}{canManageShared ? ` · ${item.savingsGoalId ? 'Delete' : 'Edit or delete'}` : canEditTransaction(item) ? ' · Edit today' : ''}
+                  {formatDateTime(item.createdAt)}{canManageAccount ? ` · ${item.savingsGoalId ? 'Delete' : 'Edit or delete'}` : canEditTransaction(item) ? ' · Edit today' : ''}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
@@ -754,7 +764,7 @@ export default function BankScreen() {
                   >
                     <Feather name="edit-2" size={16} color={colors.mutedForeground} />
                   </TouchableOpacity>}
-                  {canManageShared && <TouchableOpacity
+                  {canManageAccount && <TouchableOpacity
                     onPress={() => handleDelete(item)}
                     hitSlop={8}
                     testID={`bank-delete-transaction-${item.id}`}
@@ -938,10 +948,17 @@ export default function BankScreen() {
             {isDeposit && members.length > 0 && (
               <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  Who is depositing?{' '}
+                  {isSharedWorkspace ? 'Who is depositing?' : 'Personal account'}{' '}
                   {canManageShared && <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>}
                 </Text>
-                <View style={styles.memberRow}>
+                {!isSharedWorkspace ? (
+                  <View style={[styles.personalAccountNotice, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                    <Feather name="user" size={15} color={colors.primary} />
+                    <Text style={[styles.personalAccountNoticeText, { color: colors.mutedForeground }]}>
+                      This deposit is recorded in your name and stays in your Personal budget.
+                    </Text>
+                  </View>
+                ) : <View style={styles.memberRow}>
                   {/* Joint bank chip — selected when no named members chosen */}
                   {canManageShared && <TouchableOpacity
                     testID="bank-deposit-joint-chip"
@@ -1004,7 +1021,7 @@ export default function BankScreen() {
                       </TouchableOpacity>
                     );
                   })}
-                </View>
+                </View>}
 
                 {/* Per-depositor split rows (multi only) */}
                 {validDepositorIds.length > 1 && (() => {
@@ -1881,6 +1898,22 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap' as const,
     gap: 10,
     marginBottom: 16,
+  },
+  personalAccountNotice: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  personalAccountNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Inter_400Regular',
   },
   memberPill: {
     flexDirection: 'row' as const,

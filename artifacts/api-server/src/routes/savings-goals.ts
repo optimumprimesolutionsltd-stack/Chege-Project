@@ -174,7 +174,8 @@ router.post("/savings-goals/cascade-contribute", async (req, res): Promise<void>
 
   const { amount: totalAmount, goalIds, contributorSplits } = parsed.data;
   const effectiveContributorSplits =
-    req.group?.role === "member" && (!contributorSplits || contributorSplits.length === 0)
+    (req.group?.isPrivate || req.group?.role === "member") &&
+    (!contributorSplits || contributorSplits.length === 0)
       ? [{ userId: req.user!.id, amount: totalAmount }]
       : contributorSplits;
 
@@ -316,7 +317,8 @@ router.post("/savings-goals/:id/contribute", async (req, res): Promise<void> => 
   // Explicit null or omitted → Joint bank (null). Never fall back to req.user.
   const userId = bodyParsed.data.userId ?? null;
   const effectiveUserId =
-    req.group?.role === "member" && bodyParsed.data.userId === undefined
+    (req.group?.isPrivate || req.group?.role === "member") &&
+    bodyParsed.data.userId === undefined
       ? req.user!.id
       : userId;
 

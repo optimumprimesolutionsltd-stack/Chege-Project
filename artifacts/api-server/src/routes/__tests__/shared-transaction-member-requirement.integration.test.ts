@@ -108,9 +108,11 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
         .where(eq(savingsGoalContributionsTable.groupId, newSharedGroupId));
       await db.delete(savingsGoalsTable).where(eq(savingsGoalsTable.groupId, newSharedGroupId));
       await db.delete(expenseIncomeSplitsTable)
-        .where(eq(expenseIncomeSplitsTable.groupId, newSharedGroupId));
-      await db.delete(jointAccountTxTable).where(eq(jointAccountTxTable.groupId, newSharedGroupId));
-      await db.delete(expensesTable).where(eq(expensesTable.groupId, newSharedGroupId));
+        .where(sql`${expenseIncomeSplitsTable.groupId} in (${newSharedGroupId}, ${privateGroupId})`);
+      await db.delete(jointAccountTxTable)
+        .where(sql`${jointAccountTxTable.groupId} in (${newSharedGroupId}, ${privateGroupId})`);
+      await db.delete(expensesTable)
+        .where(sql`${expensesTable.groupId} in (${newSharedGroupId}, ${privateGroupId})`);
       await db.delete(contributionsTable).where(eq(contributionsTable.groupId, newSharedGroupId));
       await db.delete(expensesTable).where(eq(expensesTable.groupId, legacyGroupId));
       await db.delete(contributionsTable).where(eq(contributionsTable.groupId, privateGroupId));
@@ -244,11 +246,29 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
   it("keeps one-person private budgets and legacy shared budgets usable", async () => {
     activeGroupId = privateGroupId;
     activeGroupIsPrivate = true;
+    const privateJointExpense = await request(app).post("/expenses").send({
+      amount: 500,
+      category: "Food",
+      description: "Stale Joint account submission",
+      paidFromBank: true,
+      isRecurring: false,
+      date: "2026-08-21",
+    });
+    const privateJointSplitExpense = await request(app).post("/expenses").send({
+      amount: 500,
+      category: "Food",
+      description: "Stale Joint account split",
+      incomeSplits: [{ amount: 500, fromBank: true }],
+      isRecurring: false,
+      date: "2026-08-21",
+    });
     const privateContribution = await request(app).post("/contributions").send({
       amount: 500,
       month: 8,
       year: 2026,
     });
+    expect(privateJointExpense.status, JSON.stringify(privateJointExpense.body)).toBe(403);
+    expect(privateJointSplitExpense.status, JSON.stringify(privateJointSplitExpense.body)).toBe(403);
     expect(privateContribution.status, JSON.stringify(privateContribution.body)).toBe(201);
 
     activeGroupId = legacyGroupId;
@@ -263,5 +283,66 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
       date: "2026-08-21",
     });
     expect(legacyExpense.status, JSON.stringify(legacyExpense.body)).toBe(201);
+  });
+
+  it("does not copy legacy Joint-funded recurring expenses into a Personal budget", async () => {
+    activeGroupId = privateGroupId;
+    activeGroupIsPrivate = true;
+
+    const [legacyBankExpense] = await db.insert(expensesTable).values({
+      groupId: privateGroupId,
+      amount: 700,
+      category: "Food",
+      description: "Legacy recurring bank expense",
+      paidById: null,
+      incomeSourceId: null,
+      paidFromBank: true,
+      isRecurring: true,
+      date: "2026-07-01",
+    }).returning();
+
+    const bankResponse = await request(app)
+      .post("/expenses/apply-recurring")
+      .send({ month: 8, year: 2026 });
+    expect(bankResponse.status, JSON.stringify(bankResponse.body)).toBe(403);
+
+    await db.delete(expensesTable).where(eq(expensesTable.id, legacyBankExpense.id));
+
+    const [legacySplitExpense] = await db.insert(expensesTable).values({
+      groupId: privateGroupId,
+      amount: 900,
+      category: "Transport",
+      description: "Legacy recurring split expense",
+      paidById: null,
+      incomeSourceId: null,
+      paidFromBank: true,
+      isRecurring: true,
+      date: "2026-07-01",
+    }).returning();
+    await db.insert(expenseIncomeSplitsTable).values({
+      expenseId: legacySplitExpense.id,
+      groupId: privateGroupId,
+      userId: null,
+      label: "Joint bank",
+      amount: 900,
+      incomeSourceId: null,
+      fromBank: true,
+    });
+
+    const splitResponse = await request(app)
+      .post("/expenses/apply-recurring")
+      .send({ month: 8, year: 2026 });
+    expect(splitResponse.status, JSON.stringify(splitResponse.body)).toBe(403);
+
+    const copied = await db.select({ id: expensesTable.id }).from(expensesTable).where(and(
+      eq(expensesTable.groupId, privateGroupId),
+      sql`EXTRACT(MONTH FROM ${expensesTable.date}) = 8`,
+      sql`EXTRACT(YEAR FROM ${expensesTable.date}) = 2026`,
+    ));
+    const bankTransactions = await db.select({ id: jointAccountTxTable.id })
+      .from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.groupId, privateGroupId));
+    expect(copied).toHaveLength(0);
+    expect(bankTransactions).toHaveLength(0);
   });
 });
