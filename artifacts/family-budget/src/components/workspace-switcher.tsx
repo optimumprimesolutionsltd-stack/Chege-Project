@@ -46,7 +46,7 @@ export function WorkspaceSwitcher({
   const isDashboardVariant = variant === "dashboard";
   const [pendingWorkspace, setPendingWorkspace] = useState<Workspace | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
-  const activeSharedBudget = activeGroup && !activeGroup.isPrivate ? activeGroup : null;
+  const activeBrandedBudget = activeGroup ?? null;
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const ActiveIcon = ({
     users: Users,
@@ -55,7 +55,7 @@ export function WorkspaceSwitcher({
     briefcase: BriefcaseBusiness,
     award: Award,
     star: Star,
-  }[activeSharedBudget?.icon ?? "users"] ?? Users);
+  }[activeBrandedBudget?.icon ?? "users"] ?? Users);
 
   const requestWorkspaceSwitch = (groupId: number) => {
     if (!groupId || groupId === activeWorkspaceId || selectWorkspace.isPending) return;
@@ -80,66 +80,157 @@ export function WorkspaceSwitcher({
 
   return (
     <>
-      <div className="flex min-w-0 items-center gap-2">
-        {activeSharedBudget ? (
-          activeSharedBudget.photoUrl ? (
-            <img
-              src={activeSharedBudget.photoUrl}
-              alt=""
-              className="h-8 w-8 shrink-0 rounded-lg object-cover"
-            />
-          ) : activeSharedBudget.emoji ? (
-            <span
-              aria-hidden="true"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-lg"
-            >
-              {activeSharedBudget.emoji}
-            </span>
-          ) : (
-            <span
-              aria-hidden="true"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white"
-              style={{ backgroundColor: activeSharedBudget.accentColor }}
-            >
-              <ActiveIcon className="h-4 w-4" />
-            </span>
-          )
-        ) : null}
-        <Select
-          value={activeWorkspaceId ? String(activeWorkspaceId) : ""}
-          disabled={!activeWorkspaceId || selectWorkspace.isPending}
-          onValueChange={(value) => requestWorkspaceSwitch(Number(value))}
+      {isDashboardVariant ? (
+        <div
+          className={`flex w-full snap-x snap-mandatory scroll-p-1 overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-3 ${className}`}
+          role="group"
+          aria-label="Available budgets"
         >
-          <SelectTrigger
-            id={id}
-            aria-label="Choose a budget"
-            aria-busy={selectWorkspace.isPending}
-            className={[
-              `min-w-0 flex-1 cursor-pointer bg-card text-foreground outline-none transition-colors disabled:cursor-wait disabled:opacity-70 ${workspaceNameClass(activeGroup?.nameStyle)}`,
-            isDashboardVariant
-              ? "h-11 rounded-xl border border-input px-3 text-sm font-semibold shadow-sm hover:border-primary/40 focus:ring-2 focus:ring-ring"
-              : "h-9 rounded-lg border border-sidebar-border px-2 text-xs hover:bg-sidebar-accent",
-            className,
-          ].join(" ")}
+          {workspaces
+            .slice()
+            .sort((a, b) => Number(b.isPrivate) - Number(a.isPrivate) || a.name.localeCompare(b.name))
+            .map((workspace) => {
+              const isActive = workspace.id === activeWorkspaceId;
+              const accentColor = workspace.accentColor ?? "#003383";
+              const WIcon = {
+                users: Users,
+                home: Home,
+                heart: Heart,
+                briefcase: BriefcaseBusiness,
+                award: Award,
+                star: Star,
+              }[workspace.icon ?? "users"] ?? Users;
+
+              return (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  disabled={selectWorkspace.isPending}
+                  aria-pressed={isActive}
+                  onClick={() => requestWorkspaceSwitch(workspace.id)}
+                  className={`group relative flex shrink-0 snap-start items-center gap-3 rounded-2xl border p-3 pr-5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70 ${
+                    isActive
+                      ? "bg-card shadow-md"
+                      : "border-border bg-card hover:border-primary/40 hover:bg-accent/10"
+                  }`}
+                  style={isActive ? {
+                    borderColor: accentColor,
+                    background: `linear-gradient(135deg, ${accentColor}24 0%, hsl(var(--card)) 68%)`,
+                    boxShadow: `0 0 0 1px ${accentColor}40, 0 8px 24px -16px ${accentColor}`,
+                  } : undefined}
+                >
+                  {isActive ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-y-3 left-0 w-1 rounded-r-full"
+                      style={{ backgroundColor: accentColor }}
+                    />
+                  ) : null}
+                  {workspace.photoUrl ? (
+                    <img
+                      src={workspace.photoUrl}
+                      alt=""
+                      className="h-11 w-11 shrink-0 rounded-xl border-2 object-cover"
+                      style={{ borderColor: accentColor, boxShadow: `0 0 0 3px ${accentColor}24` }}
+                    />
+                  ) : workspace.emoji ? (
+                    <span
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-xl"
+                      style={{ backgroundColor: `${accentColor}24`, borderColor: `${accentColor}66` }}
+                    >
+                      {workspace.emoji}
+                    </span>
+                  ) : (
+                    <span
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
+                      style={{ backgroundColor: workspace.accentColor }}
+                    >
+                      <WIcon className="h-5 w-5" />
+                    </span>
+                  )}
+                  <div className="flex flex-col justify-center">
+                    <span className={`text-sm text-foreground ${workspaceNameClass(workspace.nameStyle)}`}>
+                      {workspace.name.trim() || (workspace.isPrivate ? "Personal budget" : "Group")}
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      {workspace.isPrivate ? "Private" : "Shared"}
+                      {isActive ? (
+                        <span className="inline-flex items-center gap-1 font-semibold" style={{ color: accentColor }}>
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: accentColor }} />
+                          Open
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+        </div>
+      ) : (
+        <div className="flex min-w-0 items-center gap-2">
+          {activeBrandedBudget ? (
+            activeBrandedBudget.photoUrl ? (
+              <img
+                src={activeBrandedBudget.photoUrl}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-lg border-2 object-cover"
+                style={{ borderColor: activeBrandedBudget.accentColor }}
+              />
+            ) : activeBrandedBudget.emoji ? (
+              <span
+                aria-hidden="true"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-lg"
+                style={{
+                  backgroundColor: `${activeBrandedBudget.accentColor}24`,
+                  borderColor: `${activeBrandedBudget.accentColor}66`,
+                }}
+              >
+                {activeBrandedBudget.emoji}
+              </span>
+            ) : (
+              <span
+                aria-hidden="true"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white"
+              style={{ backgroundColor: activeBrandedBudget.accentColor }}
+              >
+                <ActiveIcon className="h-4 w-4" />
+              </span>
+            )
+          ) : null}
+          <Select
+            value={activeWorkspaceId ? String(activeWorkspaceId) : ""}
+            disabled={!activeWorkspaceId || selectWorkspace.isPending}
+            onValueChange={(value) => requestWorkspaceSwitch(Number(value))}
           >
-            <SelectValue placeholder="Choose a budget">
-              {activeWorkspace
-                ? workspaceIdentityText(activeWorkspace, activeWorkspace.isPrivate ? "Personal budget" : "Group")
-                : "Choose a budget"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent className="border-sidebar-border bg-popover text-popover-foreground">
-            {workspaces
-              .slice()
-              .sort((a, b) => Number(b.isPrivate) - Number(a.isPrivate) || a.name.localeCompare(b.name))
-              .map((workspace) => (
-                <SelectItem key={workspace.id} value={String(workspace.id)} className={workspaceNameClass(workspace.nameStyle)}>
-                  {workspaceIdentityText(workspace, workspace.isPrivate ? "Personal budget" : "Group")}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-      </div>
+            <SelectTrigger
+              id={id}
+              aria-label="Choose a budget"
+              aria-busy={selectWorkspace.isPending}
+              className={[
+                `min-w-0 flex-1 cursor-pointer bg-card text-foreground outline-none transition-colors disabled:cursor-wait disabled:opacity-70 ${workspaceNameClass(activeGroup?.nameStyle)}`,
+                "h-9 rounded-lg border border-sidebar-border px-2 text-xs hover:bg-sidebar-accent",
+                className,
+              ].join(" ")}
+            >
+              <SelectValue placeholder="Choose a budget">
+                {activeWorkspace
+                  ? workspaceIdentityText(activeWorkspace, activeWorkspace.isPrivate ? "Personal budget" : "Group")
+                  : "Choose a budget"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent className="border-sidebar-border bg-popover text-popover-foreground">
+              {workspaces
+                .slice()
+                .sort((a, b) => Number(b.isPrivate) - Number(a.isPrivate) || a.name.localeCompare(b.name))
+                .map((workspace) => (
+                  <SelectItem key={workspace.id} value={String(workspace.id)} className={workspaceNameClass(workspace.nameStyle)}>
+                    {workspaceIdentityText(workspace, workspace.isPrivate ? "Personal budget" : "Group")}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       {showPendingLabel && selectWorkspace.isPending ? (
         <p className="mt-2 text-xs font-medium text-muted-foreground" role="status" aria-live="polite">
             Switching budget…

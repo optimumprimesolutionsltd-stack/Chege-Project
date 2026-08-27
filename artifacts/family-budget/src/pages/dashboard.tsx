@@ -1178,6 +1178,7 @@ export default function Dashboard() {
   if (breakdown.filter(b => b.spentAmount > 0).length > 5) {
     chartData.push({ name: "Others", value: breakdown.filter(b => b.spentAmount > 0).sort((a,b) => b.spentAmount - a.spentAmount).slice(5).reduce((s,b) => s + b.spentAmount, 0), color: "hsl(var(--muted-foreground))" });
   }
+  const workspaceAccentColor = group?.accentColor ?? "#003383";
   return (
     <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -1198,18 +1199,33 @@ export default function Dashboard() {
 
         <section
           aria-labelledby="dashboard-workspace-heading"
-          className="w-full rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:max-w-sm"
+          className="w-full rounded-2xl border bg-card p-4 shadow-sm sm:max-w-sm"
+          style={{
+            borderColor: `${workspaceAccentColor}80`,
+            background: `linear-gradient(135deg, ${workspaceAccentColor}20 0%, hsl(var(--card)) 62%)`,
+          }}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p id="dashboard-workspace-heading" className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
+              <p
+                id="dashboard-workspace-heading"
+                className="text-xs font-bold uppercase tracking-[0.15em]"
+                style={{ color: workspaceAccentColor }}
+              >
                 Viewing budget
               </p>
               <p className={`mt-1 truncate text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
                 {group?.emoji ? `${group.emoji} ` : ""}{group ? workspaceLabel(group) : "Personal budget"}
               </p>
             </div>
-            <span className="hidden shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary sm:inline-flex">
+            <span
+              className="hidden shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold sm:inline-flex"
+              style={{
+                backgroundColor: `${workspaceAccentColor}20`,
+                borderColor: `${workspaceAccentColor}60`,
+                color: workspaceAccentColor,
+              }}
+            >
               {isSharedWorkspace ? "Shared" : "Personal"}
             </span>
           </div>

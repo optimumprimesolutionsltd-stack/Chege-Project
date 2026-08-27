@@ -48,6 +48,7 @@ const SHARED_BUDGET_ICONS = [
 ] as const;
 const SHARED_BUDGET_ACCENTS = [
   "#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00",
+  "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669",
 ] as const;
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 const PHOTO_OPTIMIZE_THRESHOLD_BYTES = 1024 * 1024;
@@ -198,7 +199,7 @@ export default function Settings() {
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Could not update Shared budget",
+        title: isPrivateWorkspace ? "Could not update Personal budget" : "Could not update Shared budget",
         description: error instanceof Error ? error.message : "Please try again.",
       });
     }
@@ -376,9 +377,13 @@ export default function Settings() {
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
       ]);
-      toast({ title: "Group photo updated" });
+      toast({ title: isPrivateWorkspace ? "Personal budget photo updated" : "Group photo updated" });
     } catch (error) {
-      toast({ variant: "destructive", title: "Could not update group photo", description: error instanceof Error ? error.message : undefined });
+      toast({
+        variant: "destructive",
+        title: isPrivateWorkspace ? "Could not update Personal budget photo" : "Could not update group photo",
+        description: error instanceof Error ? error.message : undefined,
+      });
     } finally {
       setUploadingGroupPhoto(false);
     }
@@ -765,12 +770,13 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
-      {!isPrivateWorkspace && (
-        <Card className="border-none shadow-md">
+      <Card className="border-none shadow-md">
           <CardHeader className="p-4 sm:p-6">
-            <CardTitle>Shared budget identity</CardTitle>
+            <CardTitle>{isPrivateWorkspace ? "Personal budget identity" : "Shared budget identity"}</CardTitle>
             <CardDescription>
-              A simple icon and accent color help members recognise this Shared budget when they switch between budgets.
+              {isPrivateWorkspace
+                ? "Give your Personal budget a distinct look so it is easy to recognise when you switch budgets."
+                : "A photo, icon, and accent colour help members recognise this Shared budget when they switch budgets."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 px-4 pb-4 sm:px-6 sm:pb-6">
@@ -790,27 +796,37 @@ export default function Settings() {
                    {groupEmoji ? `${groupEmoji} ` : ""}{group?.name || "Shared budget"}
                  </p>
                  {group?.slogan ? <p className="text-sm italic text-muted-foreground">{group.slogan}</p> : null}
-                 <p className="text-xs text-muted-foreground">This identity belongs to the group, not any one member.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isPrivateWorkspace
+                      ? "This identity belongs only to your Personal budget."
+                      : "This identity belongs to the group, not any one member."}
+                  </p>
               </div>
             </div>
 
-            {canManageShared ? (
+            {canManageWorkspace ? (
               <>
-                  <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-background p-3">
-                    {group?.photoUrl ? (
-                      <img src={group.photoUrl} alt="" className="h-14 w-14 rounded-xl object-cover" />
-                    ) : (
-                      <div className="flex h-14 w-14 items-center justify-center rounded-xl text-white" style={{ backgroundColor: groupAccentColor }}>
-                        <Camera className="h-5 w-5" />
+                  <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background p-3 sm:flex-row sm:items-center">
+                    <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+                      {group?.photoUrl ? (
+                        <img src={group.photoUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+                      ) : (
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: groupAccentColor }}>
+                          <Camera className="h-5 w-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">
+                          {isPrivateWorkspace ? "Personal budget photo" : "Shared budget photo"}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          Choose a JPG, PNG, or WebP image up to 15 MB. Jamvi shrinks large photos first for a faster upload.
+                        </p>
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground">Group photo</p>
-                       <p className="text-xs text-muted-foreground">Choose a JPG, PNG, or WebP image up to 15 MB. Jamvi shrinks large photos first for a faster upload.</p>
                     </div>
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted">
+                    <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-input bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted sm:w-auto sm:shrink-0">
                       <Camera className="h-4 w-4" />
-                       {uploadingGroupPhoto ? "Preparing photo…" : "Choose photo"}
+                      {uploadingGroupPhoto ? "Preparing photo…" : "Choose photo"}
                       <input
                         className="sr-only"
                         type="file"
@@ -862,17 +878,20 @@ export default function Settings() {
                   </div>
                 </div>
                 <Button type="button" onClick={() => void saveGroupIdentity()} disabled={updateGroup.isPending}>
-                  {updateGroup.isPending ? "Saving…" : "Save Shared budget identity"}
+                  {updateGroup.isPending
+                    ? "Saving…"
+                    : isPrivateWorkspace
+                      ? "Save Personal budget identity"
+                      : "Save Shared budget identity"}
                 </Button>
               </>
             ) : (
               <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-                An owner or admin can update the Shared budget name, emoji, style, icon, and accent color.
+                An owner or admin can update the Shared budget name, emoji, style, icon, and accent colour.
               </p>
             )}
           </CardContent>
-        </Card>
-      )}
+      </Card>
        {!isPrivateWorkspace && (
          <Card className="border-none shadow-md">
            <CardHeader className="p-4 sm:p-6">
