@@ -19,6 +19,8 @@ import {
   useCreateSharedGroup,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
+  getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardTrendsQueryKey,
   getGetSavingsGoalsQueryKey,
   getGetJointAccountQueryKey,
   getGetExpensesQueryKey,
@@ -31,11 +33,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatKes, formatDate } from "@/lib/utils";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-    ArrowDownRight, Wallet, Activity as ActivityIcon,
-   Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, CheckCircle2, Sparkles, Link2, BriefcaseBusiness, UsersRound,
-    Receipt, BarChart3, Landmark,
+   Wallet, Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +66,7 @@ function localDateInputValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-const OVERVIEW_SHORTCUTS = [
+const SHARED_OVERVIEW_SHORTCUTS = [
   { href: "/budget", label: "Budget", description: "Plan spending", icon: Wallet },
   { href: "/contributions", label: "Contributions", description: "See money in", icon: TrendingUp },
   { href: "/expenses", label: "Expenses", description: "Review spending", icon: Receipt },
@@ -988,22 +988,19 @@ export default function Dashboard() {
 
   const { data: summary, isLoading: isSummaryLoading, isError: isSummaryError } = useGetDashboardSummary({ month, year });
   const { data: activity, isLoading: isActivityLoading } = useGetDashboardActivity();
-  const { data: breakdown, isLoading: isBreakdownLoading } = useGetDashboardCategoryBreakdown({ month, year });
-  const { data: trends, isLoading: isTrendsLoading } = useGetDashboardTrends({ months: 6 });
+  const { data: group } = useGetGroup();
+  const isSharedWorkspace = group?.isPrivate === false;
+  const { data: breakdown, isLoading: isBreakdownLoading } = useGetDashboardCategoryBreakdown(
+    { month, year },
+    { query: { enabled: isSharedWorkspace, queryKey: getGetDashboardCategoryBreakdownQueryKey({ month, year }) } },
+  );
+  const { data: trends, isLoading: isTrendsLoading } = useGetDashboardTrends(
+    { months: 6 },
+    { query: { enabled: isSharedWorkspace, queryKey: getGetDashboardTrendsQueryKey({ months: 6 }) } },
+  );
   const { data: goals } = useGetSavingsGoals();
   const { data: bankAccount } = useGetJointAccount();
-  const { data: group } = useGetGroup();
   const { data: members = [] } = useGetMembers();
-  const { data: incomeSources = [], isLoading: isIncomeSourcesLoading } = useGetIncomeSources(
-    { userId: user?.id },
-    {
-      query: {
-        enabled: Boolean(user?.id),
-        queryKey: getGetIncomeSourcesQueryKey({ userId: user?.id }),
-      },
-    },
-  );
-  const isSharedWorkspace = group?.isPrivate === false;
   // The group response may be cached across an invitation acceptance. A live
   // two-person member list is enough to enable the form; the API still checks
   // eligibility again before it records any shared money.
@@ -1015,95 +1012,6 @@ export default function Dashboard() {
       (member.role === "owner" || member.role === "admin"),
   );
   const canManageShared = isSharedWorkspace && canManageSetup;
-  const [isSetupPathOpen, setIsSetupPathOpen] = useState(false);
-  const [isSetupDeferred, setIsSetupDeferred] = useState(false);
-  const [showSetupNudge, setShowSetupNudge] = useState(false);
-
-  const setupSteps = [
-    {
-      id: "budget",
-      label: "Set your monthly budget",
-      description: "Give this month’s spending a clear plan.",
-      href: "/budget",
-      icon: Wallet,
-      done: (summary?.totalBudget ?? 0) > 0,
-    },
-    {
-      id: "income",
-      label: "Add an income source",
-      description: "Name where the money you budget comes from.",
-      href: "/settings",
-      icon: BriefcaseBusiness,
-      done: incomeSources.length > 0,
-    },
-    {
-      id: "bank",
-      label: isSharedWorkspace ? "Fund the shared bank" : "Record bank funding",
-      description: "Record the first deposit so your available funds are clear.",
-      href: "/bank",
-      icon: Building2,
-      done: (bankAccount?.transactions?.length ?? 0) > 0,
-    },
-    {
-      id: "goal",
-      label: "Create a savings goal",
-      description: "Start putting money aside for something important.",
-      href: "/savings-goals",
-      icon: Target,
-      done: (goals?.length ?? 0) > 0,
-    },
-    ...(isSharedWorkspace ? [{
-      id: "invite",
-      label: "Invite your group",
-      description: "Bring in the people who will manage this budget with you.",
-      href: "/settings",
-      icon: UsersRound,
-      done: members.length > 1,
-    }] : []),
-  ];
-  const completeSetupSteps = setupSteps.filter(step => step.done).length;
-  const pendingSetupSteps = setupSteps.filter(step => !step.done);
-  const nextSetupStep = pendingSetupSteps[0];
-  const isSetupComplete = completeSetupSteps === setupSteps.length;
-  const setupNudgeKey = group?.id && user?.id
-    ? `jamvi:onboarding-nudge:${group.id}:${user.id}`
-    : null;
-
-  useEffect(() => {
-    if (
-      !canManageSetup ||
-      isSetupDeferred ||
-      !setupNudgeKey ||
-      !nextSetupStep ||
-      isSummaryLoading ||
-      isIncomeSourcesLoading
-    ) {
-      setShowSetupNudge(false);
-      return;
-    }
-
-    const now = Date.now();
-    const lastShown = Number(window.localStorage.getItem(setupNudgeKey) ?? 0);
-    const sixHours = 6 * 60 * 60 * 1000;
-    if (now - lastShown < sixHours) return;
-
-    const showTimer = window.setTimeout(() => {
-      window.localStorage.setItem(setupNudgeKey, String(Date.now()));
-      setShowSetupNudge(true);
-    }, 1200);
-    const hideTimer = window.setTimeout(() => setShowSetupNudge(false), 13_200);
-    return () => {
-      window.clearTimeout(showTimer);
-      window.clearTimeout(hideTimer);
-    };
-  }, [
-    canManageSetup,
-    isSetupDeferred,
-    isIncomeSourcesLoading,
-    isSummaryLoading,
-    nextSetupStep?.id,
-    setupNudgeKey,
-  ]);
 
   // Compute this-month totals from the transactions array
   const monthlyDeposited = bankAccount?.transactions
@@ -1132,7 +1040,7 @@ export default function Dashboard() {
   const toggle = (action: QuickAction) =>
     setActiveAction(prev => prev === action ? "none" : action);
 
-  if (isSummaryLoading || isActivityLoading || isBreakdownLoading) {
+  if (isSummaryLoading || isActivityLoading) {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-20 bg-muted rounded-2xl"></div>
@@ -1164,20 +1072,24 @@ export default function Dashboard() {
     );
   }
 
-  if (!summary || !activity || !breakdown) return null;
+  if (!summary || !activity) return null;
 
   const percentSpent = summary.totalBudget > 0 ? (summary.totalSpent / summary.totalBudget) * 100 : 0;
   const isOverBudget = percentSpent > 100;
-  const overBudgetCategories = breakdown.filter(b => b.percentUsed > 100);
-
-  const chartData = breakdown
-    .filter(b => b.spentAmount > 0)
-    .sort((a, b) => b.spentAmount - a.spentAmount)
-    .slice(0, 5)
-    .map(b => ({ name: b.category, value: b.spentAmount, color: b.color || "hsl(var(--primary))" }));
-  if (breakdown.filter(b => b.spentAmount > 0).length > 5) {
-    chartData.push({ name: "Others", value: breakdown.filter(b => b.spentAmount > 0).sort((a,b) => b.spentAmount - a.spentAmount).slice(5).reduce((s,b) => s + b.spentAmount, 0), color: "hsl(var(--muted-foreground))" });
-  }
+  const overBudgetCategories = isSharedWorkspace
+    ? (breakdown ?? []).filter((category) => category.remaining < 0)
+    : [];
+  const chartData = isSharedWorkspace
+    ? (breakdown ?? [])
+        .filter((category) => category.spentAmount > 0)
+        .sort((a, b) => b.spentAmount - a.spentAmount)
+        .slice(0, 6)
+        .map((category) => ({
+          name: category.category,
+          value: category.spentAmount,
+          color: category.color || "hsl(var(--primary))",
+        }))
+    : [];
   const workspaceAccentColor = group?.accentColor ?? "#003383";
   return (
     <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
@@ -1257,7 +1169,7 @@ export default function Dashboard() {
             </p>
           </div>
           <nav aria-label="Group overview shortcuts" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            {OVERVIEW_SHORTCUTS.map((shortcut) => {
+            {SHARED_OVERVIEW_SHORTCUTS.map((shortcut) => {
               const ShortcutIcon = shortcut.icon;
               return (
                 <Link
@@ -1281,211 +1193,23 @@ export default function Dashboard() {
         </section>
       )}
 
-       {canManageSetup && nextSetupStep && isSetupDeferred && (
-         <Card className="border border-border/70 bg-muted/35 shadow-sm">
-           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-             <div>
-               <p className="text-sm font-bold text-foreground">Setup paused</p>
-               <p className="mt-0.5 text-sm text-muted-foreground">
-                 Pick up with {nextSetupStep.label.toLowerCase()} whenever you are ready.
-               </p>
-             </div>
-             <Button
-               type="button"
-               size="sm"
-               data-testid="setup-resume-cta"
-               className="rounded-lg"
-               onClick={() => setIsSetupDeferred(false)}
-             >
-               Resume setup
-             </Button>
-           </CardContent>
-         </Card>
-       )}
-       {canManageSetup && nextSetupStep && !isSetupDeferred && (
-         <Card
-           className={`overflow-hidden shadow-sm ${
-             isSetupComplete
-               ? "border border-border/60 bg-muted/50 text-muted-foreground"
-               : "border border-primary/15 bg-primary/[0.04]"
-           }`}
-         >
-           <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="max-w-xl">
-                  <p className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.16em] ${
-                   isSetupComplete ? "text-muted-foreground" : "text-primary"
-                 }`}>
-                   {!isSetupComplete && <Sparkles className="h-3.5 w-3.5" />}
-                   Start here · Step {Math.min(completeSetupSteps + 1, setupSteps.length)} of {setupSteps.length}
-                </p>
-                 <h2 className="mt-1 font-display text-xl font-bold text-foreground sm:text-2xl">
-                    {isSetupComplete ? "You’re all set" : completeSetupSteps > 0 ? "Almost there" : "Set up Jamvi"}
-                 </h2>
-                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                   {isSetupComplete
-                     ? "Your core setup is complete. You can keep using Jamvi as normal."
-                      : "One real action at a time. You can come back whenever you are ready."}
-                </p>
-                 <div className={`mt-4 h-2 w-full max-w-md overflow-hidden rounded-full ${
-                   isSetupComplete ? "bg-muted-foreground/20" : "bg-primary/10"
-                 }`}>
-                  <div
-                     className={`h-full rounded-full transition-all duration-500 ${
-                       isSetupComplete ? "bg-muted-foreground/60" : "bg-secondary"
-                     }`}
-                    style={{ width: `${(completeSetupSteps / setupSteps.length) * 100}%` }}
-                  />
-                </div>
-              </div>
-               {nextSetupStep ? (
-                 <Link
-                   href={nextSetupStep.href}
-                   data-testid="setup-primary-cta"
-                   className="group flex min-h-14 w-full items-center gap-3 rounded-xl border border-primary/15 bg-card px-3.5 py-2.5 text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.03] sm:max-w-sm"
-                 >
-                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/15 text-xl">
-                      {(() => {
-                        const NextStepIcon = nextSetupStep.icon;
-                        return <NextStepIcon className="h-5 w-5" />;
-                      })()}
-                   </span>
-                   <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary/75">Do this next</span>
-                     <span className="block truncate font-display text-sm font-bold">{nextSetupStep.label}</span>
-                   </span>
-                   <ChevronRight className="h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-1" />
-                 </Link>
-               ) : (
-                 <button
-                   type="button"
-                   disabled
-                   data-testid="setup-primary-cta"
-                   className="flex min-h-16 w-full cursor-not-allowed items-center gap-3 rounded-2xl bg-muted-foreground/15 px-4 py-3 text-muted-foreground shadow-none sm:max-w-sm"
-                 >
-                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted-foreground/15">
-                     <CheckCircle2 className="h-5 w-5" />
-                   </span>
-                   <span className="min-w-0 flex-1 text-left">
-                     <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Setup complete</span>
-                     <span className="block truncate font-display text-base font-bold">All core steps done</span>
-                   </span>
-                   <CheckCircle2 className="h-5 w-5 shrink-0" />
-                 </button>
-               )}
-            </div>
-              {!isSetupComplete && (
-                <div className="mt-4">
-                  <div className="flex flex-wrap items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      data-testid="setup-path-toggle"
-                      aria-expanded={isSetupPathOpen}
-                      className="h-8 px-2 text-xs text-muted-foreground"
-                      onClick={() => setIsSetupPathOpen((isOpen) => !isOpen)}
-                    >
-                      {isSetupPathOpen ? "Hide setup path" : "See all setup steps"}
-                      <ChevronRight className={`ml-1 h-3.5 w-3.5 transition-transform ${isSetupPathOpen ? "rotate-90" : ""}`} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      data-testid="setup-skip-cta"
-                      className="h-8 px-2 text-xs text-muted-foreground"
-                      onClick={() => setIsSetupDeferred(true)}
-                    >
-                      Skip for now
-                    </Button>
-                  </div>
-                  {isSetupPathOpen && (
-                    <ol className="mt-2 divide-y divide-border/60 rounded-xl border border-border/70 bg-card/70 px-3">
-                      {setupSteps.map((step, index) => {
-                        const StepIcon = step.done ? CheckCircle2 : step.icon;
-                        const isNext = step.id === nextSetupStep?.id;
-                        return (
-                          <li key={step.id} className="flex items-center gap-3 py-3">
-                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${step.done ? "bg-success/10 text-success" : "bg-primary/10 text-primary"}`}>
-                              <StepIcon className="h-4 w-4" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className={`block text-sm font-semibold ${step.done ? "text-muted-foreground line-through" : "text-foreground"}`}>
-                                {index + 1}. {step.label}
-                              </span>
-                              <span className="block text-xs leading-relaxed text-muted-foreground">{step.description}</span>
-                            </span>
-                            {isNext && (
-                              <Link href={step.href} data-testid={`setup-step-${step.id}`} className="text-xs font-bold text-primary hover:underline">
-                                Start
-                              </Link>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  )}
-                </div>
-              )}
-          </CardContent>
-        </Card>
-      )}
-       {showSetupNudge && nextSetupStep && (
-         <aside
-           aria-live="polite"
-           className="fixed bottom-5 right-5 z-50 w-[calc(100%-2.5rem)] max-w-sm rounded-2xl border border-primary/25 bg-card p-4 shadow-2xl sm:bottom-8 sm:right-8"
-         >
-           <div className="flex items-start gap-3">
-             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-               <Sparkles className="h-4 w-4" />
-             </span>
-             <div className="min-w-0 flex-1">
-               <p className="text-sm font-bold text-foreground">Almost there</p>
-               <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
-                 Your next small step is {nextSetupStep.label.toLowerCase()}.
-               </p>
-               <Link
-                 href={nextSetupStep.href}
-                 data-testid="setup-nudge-cta"
-                 onClick={() => setShowSetupNudge(false)}
-                 className="mt-3 inline-flex text-sm font-bold text-primary hover:underline"
-               >
-                 Start now <ChevronRight className="ml-1 h-4 w-4" />
-               </Link>
-             </div>
-             <Button
-               type="button"
-               variant="ghost"
-               size="icon"
-               data-testid="setup-nudge-close"
-               aria-label="Dismiss setup reminder"
-               className="h-7 w-7 shrink-0"
-               onClick={() => setShowSetupNudge(false)}
-             >
-               <X className="h-4 w-4" />
-             </Button>
-           </div>
-         </aside>
-       )}
-
        {/* ── Quick Actions ── */}
         <Card id="dashboard-quick-actions" className="scroll-mt-6 overflow-hidden border-none shadow-md">
         <CardContent className="p-0">
           {/* Action buttons row */}
           <div className="grid grid-cols-4 divide-x divide-border/50">
             {[
-              { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: "💰", active: "bg-success/10", text: "text-success" },
-              { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: "📋", active: "bg-warning/10", text: "text-warning" },
-              { key: "goal" as const,   label: "Save to Goal", shortLabel: "Save",     icon: "🎯", active: "bg-info/10", text: "text-info" },
-            ].map(({ key, label, shortLabel, icon, active, text }) => (
+               { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: Building2, active: "bg-success/10", text: "text-success" },
+               { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: Receipt, active: "bg-warning/10", text: "text-warning" },
+               { key: "goal" as const,   label: "Save to Goal", shortLabel: "Save",     icon: Target, active: "bg-info/10", text: "text-info" },
+             ].map(({ key, label, shortLabel, icon: ActionIcon, active, text }) => (
               <button
                 key={key}
                 onClick={() => toggle(key)}
                 disabled={sharedTransactionsLocked && (key === "expense" || key === "goal")}
                 className={`flex min-w-0 flex-col items-center justify-center gap-1.5 px-1 py-5 text-center text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 sm:px-3 sm:text-sm ${activeAction === key ? `${active} ${text}` : "hover:bg-muted/40 text-foreground"}`}
               >
-                <span className="text-2xl leading-none">{icon}</span>
+                <ActionIcon className="h-5 w-5" aria-hidden="true" />
                 <span className="block sm:hidden">{shortLabel}</span>
                 <span className="hidden sm:block max-w-full break-words">{label}</span>
                 {activeAction === key && <X className="w-3.5 h-3.5 mt-0.5 opacity-60" />}
@@ -1496,7 +1220,7 @@ export default function Dashboard() {
               data-testid="dashboard-create-budget-cta"
               className="flex min-w-0 flex-col items-center justify-center gap-1.5 px-1 py-5 text-center text-xs font-medium text-foreground transition-colors hover:bg-muted/40 sm:px-3 sm:text-sm"
             >
-              <span className="text-2xl leading-none">📊</span>
+               <Wallet className="h-5 w-5" aria-hidden="true" />
               <span className="block sm:hidden">Budget</span>
               <span className="hidden max-w-full break-words sm:block">
                 {(summary?.totalBudget ?? 0) > 0 ? "Manage Budget" : "Create Budget"}
@@ -1520,16 +1244,50 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Over-budget alert */}
-      {overBudgetCategories.length > 0 && (
-        <div className="bg-destructive/10 border border-destructive/30 rounded-2xl p-4 flex items-start gap-3">
-          <div className="w-8 h-8 rounded-full bg-destructive/20 flex items-center justify-center shrink-0 mt-0.5">
-            <span className="text-destructive font-bold text-sm">!</span>
+       {/* Personal budget keeps recent activity immediately after quick actions. */}
+       {!isSharedWorkspace && <Card className="overflow-hidden border border-border/70 shadow-sm">
+         <CardContent className="p-4 sm:p-6">
+           <div className="mb-3 flex items-center justify-between">
+             <div>
+               <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Updates</p>
+               <p className="mt-1 text-base font-bold text-foreground">Recent activity</p>
+             </div>
+             <Link href="/activity" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+           </div>
+           {activity.length > 0 ? (
+             <div className="divide-y divide-border/50">
+               {activity.slice(0, 6).map((item) => (
+                 <div key={item.id} className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1">
+                   <div className="flex min-w-0 items-center gap-2.5">
+                     <span className={`h-2 w-2 shrink-0 rounded-full ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/50" : "bg-primary"}`} />
+                     <div className="min-w-0">
+                       <p className="truncate text-sm text-foreground">{item.description}</p>
+                       <p className="text-xs text-muted-foreground">{item.userName ?? "Joint bank"} · {formatDate(item.date)}</p>
+                     </div>
+                   </div>
+                   <p className={`ml-3 shrink-0 whitespace-nowrap text-sm font-semibold ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
+                     {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
+                   </p>
+                 </div>
+               ))}
+             </div>
+           ) : (
+             <p className="py-4 text-center text-sm text-muted-foreground">No activity yet.</p>
+           )}
+         </CardContent>
+       </Card>}
+
+      {isSharedWorkspace && overBudgetCategories.length > 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 p-4">
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-destructive/20">
+            <span className="text-sm font-bold text-destructive">!</span>
           </div>
           <div>
-            <p className="font-semibold text-destructive">Over budget in {overBudgetCategories.length} {overBudgetCategories.length === 1 ? "category" : "categories"}</p>
-            <p className="text-sm text-destructive/80 mt-0.5">
-              {overBudgetCategories.map(c => `${c.category} (+${formatKes(Math.abs(c.remaining))})`).join(" · ")}
+            <p className="font-semibold text-destructive">
+              Over budget in {overBudgetCategories.length} {overBudgetCategories.length === 1 ? "category" : "categories"}
+            </p>
+            <p className="mt-0.5 text-sm text-destructive/80">
+              {overBudgetCategories.map((category) => `${category.category} (+${formatKes(Math.abs(category.remaining))})`).join(" · ")}
             </p>
           </div>
         </div>
@@ -1566,6 +1324,84 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {isSharedWorkspace && (
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <Card className="overflow-hidden border-none shadow-md">
+            <CardHeader className="border-b border-border/50 bg-muted/30 pb-4">
+              <div className="flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-secondary" />
+                <CardTitle className="text-xl">Group Contributions</CardTitle>
+              </div>
+              <CardDescription>Target vs contributed for this month</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 p-6">
+              {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(
+                ({ name, contributed, target }: {name: string; contributed: number; target: number | null}, index: number) => (
+                  <div key={`${name}-${index}`} className="space-y-3">
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-lg font-semibold text-foreground">{name}</p>
+                        {target != null && <p className="text-sm text-muted-foreground">Target: {formatKes(target)}</p>}
+                      </div>
+                      <p className="font-display text-xl font-bold text-primary">{formatKes(contributed)}</p>
+                    </div>
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-secondary/20">
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ${index === 0 ? "bg-primary" : "bg-secondary"}`}
+                        style={{ width: `${Math.min(target && target > 0 ? (contributed / target) * 100 : 0, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ),
+              )}
+              <Link href="/contributions" className="block pt-2 text-sm font-medium text-primary hover:underline">
+                View contribution history →
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden border-none shadow-md">
+            <CardHeader className="border-b border-border/50 bg-muted/30 pb-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-secondary" />
+                <CardTitle className="text-xl">Top Spending</CardTitle>
+              </div>
+              <CardDescription>Where the group money is going</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6">
+              {isBreakdownLoading ? (
+                <div className="h-[220px] animate-pulse rounded-xl bg-muted/30" />
+              ) : chartData.length > 0 ? (
+                <>
+                  <div className="h-[220px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none">
+                          {chartData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => formatKes(value)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                    {chartData.map((entry) => (
+                      <div key={entry.name} className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+                        <span className="text-xs text-muted-foreground">{entry.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex h-[220px] items-center justify-center">
+                  <p className="text-center text-muted-foreground">No group expenses recorded this month yet.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Bank Account Balance Card */}
       <Link href="/bank">
@@ -1609,84 +1445,6 @@ export default function Dashboard() {
         </Card>
       </Link>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Contributions */}
-        <Card className="border-none shadow-md overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border/50 pb-4">
-            <div className="flex items-center gap-2"><Wallet className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">{isSharedWorkspace ? "Group Contributions" : "My Contributions"}</CardTitle></div>
-            <CardDescription>Target vs Contributed for this month</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 space-y-6">
-            {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(({ name, contributed, target }: {name: string; contributed: number; target: number | null}, idx: number) => {
-              const color = idx === 0 ? "bg-primary" : "bg-secondary";
-              return (
-                <div key={`${name}-${idx}`} className="space-y-3">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="font-semibold text-foreground text-lg">{name}</p>
-                      {target != null && <p className="text-sm text-muted-foreground">Target: {formatKes(target)}</p>}
-                    </div>
-                    <p className="font-display font-bold text-xl text-primary">{formatKes(contributed)}</p>
-                  </div>
-                  <div className="h-2.5 w-full bg-secondary/20 rounded-full overflow-hidden">
-                    <div className={`h-full ${color} rounded-full transition-all duration-1000`} style={{ width: `${Math.min(target && target > 0 ? (contributed / target) * 100 : 0, 100)}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-            <Link href="/contributions" className="text-sm font-medium text-primary hover:underline block pt-2">View contribution history →</Link>
-          </CardContent>
-        </Card>
-
-        {/* Category Breakdown Chart */}
-        <Card className="border-none shadow-md overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border/50 pb-4">
-            <div className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">Top Spending</CardTitle></div>
-            <CardDescription>Where the money is going</CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6">
-            {chartData.length > 0 ? (
-              <>
-                <div className="h-[220px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none">
-                        {chartData.map((_, i) => <Cell key={i} fill={chartData[i].color} />)}
-                      </Pie>
-                      <Tooltip
-                        formatter={(v: number) => formatKes(v)}
-                        contentStyle={{
-                          borderRadius: "0.75rem",
-                          backgroundColor: "hsl(var(--popover))",
-                          color: "hsl(var(--popover-foreground))",
-                          border: "1px solid hsl(var(--popover-border))",
-                          boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.25)",
-                        }}
-                        itemStyle={{ color: "hsl(var(--popover-foreground))" }}
-                        labelStyle={{ color: "hsl(var(--popover-foreground))" }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
-                  {chartData.map((entry, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-                      <span className="text-xs text-muted-foreground">{entry.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="h-[220px] flex items-center justify-center">
-                <p className="text-center text-muted-foreground">No expenses recorded this month yet.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-      </div>
-
       {/* Savings Goals */}
       {nearestGoal && (
         <Card className="border-none shadow-md overflow-hidden">
@@ -1719,56 +1477,65 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* 6-Month Trend */}
-      <Card className="border-none shadow-md overflow-hidden">
-        <CardHeader className="bg-muted/30 border-b border-border/50 pb-4">
-          <div className="flex items-center gap-2"><TrendingUp className="w-5 h-5 text-secondary" /><CardTitle className="text-xl">6-Month Trend</CardTitle></div>
-          <CardDescription>Monthly total spending</CardDescription>
-        </CardHeader>
-        <CardContent className="p-6 h-[280px]">
-          {isTrendsLoading ? <div className="h-full bg-muted/30 rounded-xl animate-pulse" /> : trends && trends.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trends} margin={{ top: 5, right: 30, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={40} />
-                <Tooltip formatter={(v: number) => [formatKes(v), "Spent"]} contentStyle={{ borderRadius: "0.75rem", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
-                <Bar dataKey="totalSpent" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} maxBarSize={56} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : <div className="h-full flex items-center justify-center text-muted-foreground">No trend data yet.</div>}
-        </CardContent>
-      </Card>
+      {isSharedWorkspace && (
+        <>
+          <Card className="overflow-hidden border-none shadow-md">
+            <CardHeader className="border-b border-border/50 bg-muted/30 pb-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-secondary" />
+                <CardTitle className="text-xl">6-Month Trend</CardTitle>
+              </div>
+              <CardDescription>Monthly total group spending</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[280px] p-6">
+              {isTrendsLoading ? (
+                <div className="h-full animate-pulse rounded-xl bg-muted/30" />
+              ) : trends && trends.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={trends} margin={{ top: 5, right: 30, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={40} />
+                    <Tooltip formatter={(value: number) => [formatKes(value), "Spent"]} />
+                    <Bar dataKey="totalSpent" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} maxBarSize={56} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-muted-foreground">No trend data yet.</div>
+              )}
+            </CardContent>
+          </Card>
 
-      {/* Recent Activity */}
-      <Card className="border-none shadow-md overflow-hidden">
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-base font-bold text-foreground">Recent Activity</p>
-            <Link href="/activity" className="text-xs font-medium text-primary hover:underline">View all</Link>
-          </div>
-          {activity.length > 0 ? (
-            <div className="space-y-1">
-              {activity.slice(0, 6).map((item) => (
-                <div key={item.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/40" : "bg-primary"}`} />
-                    <div className="min-w-0">
-                      <p className="text-sm text-foreground truncate">{item.description}</p>
-                      <p className="text-xs text-muted-foreground">{item.userName} · {formatDate(item.date)}</p>
+          <Card className="overflow-hidden border-none shadow-md">
+            <CardContent className="p-4 sm:p-6">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-base font-bold text-foreground">Recent Activity</p>
+                <Link href="/activity" className="text-xs font-medium text-primary hover:underline">View all</Link>
+              </div>
+              {activity.length > 0 ? (
+                <div className="space-y-1">
+                  {activity.slice(0, 6).map((item) => (
+                    <div key={item.id} className="flex items-center justify-between border-b border-border/30 py-2 last:border-0">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/40" : "bg-primary"}`} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-foreground">{item.description}</p>
+                          <p className="text-xs text-muted-foreground">{item.userName} · {formatDate(item.date)}</p>
+                        </div>
+                      </div>
+                      <p className={`ml-3 whitespace-nowrap text-sm font-medium ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
+                        {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
+                      </p>
                     </div>
-                  </div>
-                  <p className={`text-sm font-medium whitespace-nowrap ml-3 ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
-                    {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
-                  </p>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">No recent activity.</p>
-          )}
-        </CardContent>
-      </Card>
+              ) : (
+                <p className="py-4 text-center text-sm text-muted-foreground">No recent activity.</p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       {group?.isPrivate && <SharedGroupsFooter />}
 

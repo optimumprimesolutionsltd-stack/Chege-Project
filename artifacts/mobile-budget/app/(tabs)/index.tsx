@@ -33,11 +33,7 @@ import {
   useGetDashboardSummary,
   useGetDashboardActivity,
   useGetJointAccount,
-  useGetSavingsGoals,
-  useGetMembers,
   useGetGroup,
-  useGetIncomeSources,
-  getGetIncomeSourcesQueryKey,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
@@ -63,27 +59,20 @@ function shortKES(n?: number | null): string {
 type Shortcut = {
   icon: keyof typeof Feather.glyphMap;
   label: string;
+  description?: string;
   color: string;
   bg: string;
   route: string;
 };
 
-type SetupNudgeStep = {
-  label: string;
-  route: string;
-};
+const PERSONAL_SHORTCUTS: Shortcut[] = [
+  { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
+  { icon: 'credit-card', label: 'Deposit',  color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank?shortcut=deposit' },
+  { icon: 'bar-chart-2', label: 'Budget',   color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget'          },
+  { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
+];
 
-type SetupStep = {
-  id: string;
-  label: string;
-  detail: string;
-  icon: keyof typeof Feather.glyphMap;
-  color: string;
-  route: string;
-  done: boolean;
-};
-
-const SHORTCUTS: Shortcut[] = [
+const SHARED_SHORTCUTS: Shortcut[] = [
   { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
   { icon: 'credit-card', label: 'Deposit',  color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank?shortcut=deposit' },
   { icon: 'pie-chart',   label: 'Reports',  color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports'         },
@@ -91,13 +80,13 @@ const SHORTCUTS: Shortcut[] = [
   { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
 ];
 
-const OVERVIEW_SHORTCUTS: Shortcut[] = [
-  { icon: 'bar-chart-2', label: 'Budget',        color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget'        },
-  { icon: 'trending-up', label: 'Contributions', color: '#3CDD62', bg: '#0D3428', route: '/(tabs)/contributions' },
-  { icon: 'file-text',   label: 'Expenses',      color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/history'       },
-  { icon: 'target',      label: 'Goals',         color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/goals'         },
-  { icon: 'credit-card', label: 'Bank',          color: '#08B7B0', bg: '#0B343B', route: '/(tabs)/bank'          },
-  { icon: 'pie-chart',   label: 'Reports',       color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports'       },
+const SHARED_OVERVIEW_SHORTCUTS: Shortcut[] = [
+  { icon: 'bar-chart-2', label: 'Budget',        color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget',        description: 'Plan spending' },
+  { icon: 'trending-up', label: 'Contributions', color: '#3CDD62', bg: '#0D3428', route: '/(tabs)/contributions', description: 'See money in' },
+  { icon: 'file-text',   label: 'Expenses',      color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/history',       description: 'Review spending' },
+  { icon: 'target',      label: 'Goals',         color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/goals',         description: 'Track targets' },
+  { icon: 'credit-card', label: 'Bank',          color: '#08B7B0', bg: '#0B343B', route: '/(tabs)/bank',          description: 'Manage funds' },
+  { icon: 'pie-chart',   label: 'Reports',       color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports',       description: 'Understand trends' },
 ];
 
 export default function DashboardScreen() {
@@ -129,7 +118,6 @@ export default function DashboardScreen() {
 
   const {
     data: summary,
-    isLoading: summaryLoading,
     isError: summaryError,
     refetch: refetchSummary,
   } = useGetDashboardSummary({ month, year });
@@ -145,37 +133,15 @@ export default function DashboardScreen() {
     isLoading: bankAccountLoading,
     refetch: refetchBank,
   } = useGetJointAccount();
-  const { data: savingsGoals = [], refetch: refetchGoals } = useGetSavingsGoals();
-  const { data: members = [], refetch: refetchMembers } = useGetMembers();
   const { data: group } = useGetGroup();
   const isSharedWorkspace = group?.isPrivate === false;
-  const canManageSetup = members.some(
-    (member) =>
-      member.userId === user?.id &&
-      (member.role === 'owner' || member.role === 'admin'),
-  );
-
-  const { data: incomeSources = [], isLoading: incomeSourcesLoading, refetch: refetchIncomeSources } = useGetIncomeSources(
-    { userId: user?.id },
-    {
-      query: {
-        enabled: !!user?.id,
-        queryKey: getGetIncomeSourcesQueryKey({ userId: user?.id }),
-      },
-    }
-  );
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchSummary(), refetchActivity(), refetchBank(), refetchGoals(), refetchMembers(), refetchIncomeSources()]);
+    await Promise.all([refetchSummary(), refetchActivity(), refetchBank()]);
     setRefreshing(false);
-  }, [refetchSummary, refetchActivity, refetchBank, refetchGoals, refetchMembers, refetchIncomeSources]);
-
-  const [showNudge, setShowNudge] = useState(false);
-  const [nudgeStep, setNudgeStep] = useState<SetupNudgeStep | null>(null);
-  const [isSetupExpanded, setIsSetupExpanded] = useState(false);
-  const [isSetupDeferred, setIsSetupDeferred] = useState(false);
+  }, [refetchSummary, refetchActivity, refetchBank]);
 
   // Compute this-month bank totals from transactions
   const monthlyDeposited = useMemo(() => {
@@ -196,11 +162,10 @@ export default function DashboardScreen() {
       .reduce((s, t) => s + t.amount, 0);
   }, [bankAccount, month, year]);
 
-  const spentPercent = summary
-    ? summary.totalBudget > 0 ? summary.totalSpent / summary.totalBudget : 0
-    : 0;
   const isOver = summary ? summary.totalSpent > summary.totalBudget : false;
-
+  const spentPercent = summary?.totalBudget
+    ? summary.totalSpent / summary.totalBudget
+    : 0;
   const recentActivity = useMemo(() => (activity ?? []).slice(0, 5), [activity]);
 
   const greeting = useMemo(() => {
@@ -215,101 +180,17 @@ export default function DashboardScreen() {
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
   const workspaceAccentColor = group?.accentColor ?? colors.brandBlue;
   const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
+  const shortcuts = isSharedWorkspace ? SHARED_SHORTCUTS : PERSONAL_SHORTCUTS;
+  type MemberContribution = {
+    userId: string;
+    name: string;
+    contributed: number;
+    spent: number;
+    target: number | null;
+  };
+  const memberContributions = ((summary as any)?.memberContributions ?? []) as MemberContribution[];
+  const contributionColors = [colors.brandTeal, colors.brandGold, colors.brandBlue, colors.brandGreen, colors.info];
 
-  const allSetupSteps = useMemo(() => {
-    const steps: SetupStep[] = [
-      {
-        id: 'budget',
-        label: 'Set a monthly budget',
-        detail: 'Plan what you can spend this month.',
-        icon: 'bar-chart-2' as const,
-        color: colors.brandTeal,
-        route: '/(tabs)/budget',
-        done: (summary?.totalBudget ?? 0) > 0,
-      },
-      {
-        id: 'income',
-        label: 'Add an income source',
-        detail: 'Name where your funds come from.',
-        icon: 'briefcase' as const,
-        color: colors.brandGold,
-        route: '/(tabs)/settings',
-        done: incomeSources.length > 0,
-      },
-      {
-        id: 'bank',
-        label: 'Set up bank funding',
-        detail: 'Record your first deposit.',
-        icon: 'credit-card' as const,
-        color: colors.info,
-        route: '/(tabs)/bank',
-        done: (bankAccount?.transactions?.length ?? 0) > 0,
-      },
-      {
-        id: 'savings',
-        label: 'Create a savings goal',
-        detail: 'Start saving for something important.',
-        icon: 'target' as const,
-        color: colors.brandBlue,
-        route: '/(tabs)/goals',
-        done: savingsGoals.length > 0,
-      },
-    ];
-
-    if (isSharedWorkspace) {
-      steps.push({
-        id: 'invite',
-        label: 'Invite your group',
-        detail: 'Add people who will use this budget.',
-        icon: 'users' as const,
-        color: colors.success,
-        route: '/(tabs)/settings',
-        done: members.length > 1,
-      });
-    }
-    return steps;
-  }, [summary, incomeSources, bankAccount, savingsGoals, members, isSharedWorkspace, colors]);
-
-  const completeSetupSteps = allSetupSteps.filter(step => step.done).length;
-  const pendingSetupSteps = allSetupSteps.filter(step => !step.done);
-  const nextSetupStep = pendingSetupSteps[0];
-  const isSetupComplete = completeSetupSteps === allSetupSteps.length;
-
-  useEffect(() => {
-    if (!group?.id || !canManageSetup || isSetupDeferred) return;
-    if (summaryLoading || bankAccountLoading || incomeSourcesLoading) return;
-
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    const checkNudge = async () => {
-      const next = allSetupSteps.find(s => !s.done);
-      if (!next) return;
-
-      const today = new Date().toISOString().split('T')[0];
-      const key = `jamvi_nudge_${group.id}_${today}`;
-
-      try {
-        const hasShown = await AsyncStorage.getItem(key);
-        if (!hasShown) {
-          setNudgeStep({ label: next.label, route: next.route });
-          setShowNudge(true);
-          await AsyncStorage.setItem(key, 'true');
-
-          timeoutId = setTimeout(() => {
-            setShowNudge(false);
-          }, 6000);
-        }
-      } catch (err) {
-        // ignore async storage errors
-      }
-    };
-
-    checkNudge();
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [group?.id, canManageSetup, isSetupDeferred, summaryLoading, bankAccountLoading, incomeSourcesLoading, allSetupSteps]);
 
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear((y) => y - 1); }
@@ -319,11 +200,6 @@ export default function DashboardScreen() {
     if (month === 12) { setMonth(1); setYear((y) => y + 1); }
     else setMonth((m) => m + 1);
   }
-
-  // Contribution bars — dynamic per member
-  type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
-  const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
-  const CONTRIBS_COLORS = [colors.brandTeal, colors.brandGold, colors.brandBlue, colors.brandGreen, colors.info];
 
   if (summaryError) {
     return (
@@ -349,18 +225,6 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SetupNudge
-        visible={showNudge}
-        step={nudgeStep}
-        onClose={() => setShowNudge(false)}
-        onStart={() => {
-          if (!nudgeStep) return;
-          setShowNudge(false);
-          router.push(nudgeStep.route as any);
-        }}
-        colors={colors}
-        topOffset={topPad}
-      />
       <PageScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -449,13 +313,8 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Budget ring */}
-          <View style={styles.ringWrap}>
-            {summaryLoading ? (
-              <View style={styles.ringPlaceholder}>
-                <ActivityIndicator size="large" color={colors.brandGold} />
-              </View>
-            ) : (
+          {isSharedWorkspace && (
+            <View style={styles.ringWrap}>
               <BudgetRing
                 percent={spentPercent}
                 spent={summary?.totalSpent ?? 0}
@@ -463,30 +322,29 @@ export default function DashboardScreen() {
                 isOver={isOver}
                 hideValues={isPrivate}
               />
-            )}
-          </View>
+            </View>
+          )}
 
           {/* Stats strip */}
           <View style={styles.statsStrip}>
             <StatCell label="Budget" value={isPrivate ? '••••' : shortKES(summary?.totalBudget)} />
             <View style={styles.stripDivider} />
-             <StatCell label="Spent" value={isPrivate ? '••••' : shortKES(summary?.totalSpent)} valueColor={isOver ? colors.destructive : colors.foreground} />
+            <StatCell label="Spent" value={isPrivate ? '••••' : shortKES(summary?.totalSpent)} valueColor={isOver ? colors.destructive : colors.foreground} />
             <View style={styles.stripDivider} />
-             <StatCell label="Left" value={isPrivate ? '••••' : shortKES(summary?.remaining)} valueColor={isOver ? colors.destructive : colors.success} />
+            <StatCell label="Left" value={isPrivate ? '••••' : shortKES(summary?.remaining)} valueColor={isOver ? colors.destructive : colors.success} />
           </View>
 
-          {/* Contribution mini-bars — one per group member */}
-          {summary && memberContribs.length > 0 && (
+          {isSharedWorkspace && memberContributions.length > 0 && (
             <View style={styles.contribRow}>
-              {memberContribs.map((m, idx) => (
-                <React.Fragment key={m.userId}>
-                  {idx > 0 && <View style={styles.contribDivider} />}
+              {memberContributions.map((member, index) => (
+                <React.Fragment key={member.userId}>
+                  {index > 0 && <View style={styles.contribDivider} />}
                   <ContribBar
-                    name={m.name}
-                    contributed={m.contributed}
-                    spent={m.spent}
-                    target={m.target ?? 1}
-                    color={CONTRIBS_COLORS[idx % CONTRIBS_COLORS.length]}
+                    name={member.name}
+                    contributed={member.contributed}
+                    spent={member.spent}
+                    target={member.target ?? 1}
+                    color={contributionColors[index % contributionColors.length]}
                     hidden={isPrivate}
                   />
                 </React.Fragment>
@@ -497,7 +355,7 @@ export default function DashboardScreen() {
 
         {/* Quick shortcuts */}
         <View style={styles.shortcutRow}>
-          {SHORTCUTS.map(s => (
+          {shortcuts.map(s => (
             <Pressable
               key={s.label}
               testID={`home-shortcut-${s.label.toLowerCase()}`}
@@ -521,7 +379,7 @@ export default function DashboardScreen() {
               Open the shared budget, contributions, expenses, goals, bank, or reports without hunting through the menu.
             </Text>
             <View style={styles.overviewNavGrid}>
-              {OVERVIEW_SHORTCUTS.map((shortcut) => (
+              {SHARED_OVERVIEW_SHORTCUTS.map((shortcut) => (
                 <Pressable
                   key={shortcut.label}
                   testID={`overview-shortcut-${shortcut.label.toLowerCase()}`}
@@ -535,135 +393,42 @@ export default function DashboardScreen() {
                 >
                   <Feather name={shortcut.icon} size={18} color={shortcut.color} />
                   <Text style={[styles.overviewNavButtonText, { color: shortcut.color }]}>{shortcut.label}</Text>
-                  <Feather name="chevron-right" size={14} color={shortcut.color} />
+                  <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]}>{shortcut.description}</Text>
+                  <Feather name="chevron-right" size={13} color={shortcut.color} style={styles.overviewNavChevron} />
                 </Pressable>
               ))}
             </View>
           </View>
         )}
 
-        {canManageSetup && nextSetupStep && isSetupDeferred && (
-          <Pressable
-            testID="setup-resume-cta"
-            onPress={() => setIsSetupDeferred(false)}
-            style={[styles.setupCard, { backgroundColor: colors.muted, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 12 }]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.setupListLabel, { color: colors.foreground }]}>Setup paused</Text>
-              <Text style={[styles.setupListDetail, { color: colors.mutedForeground }]}>
-                Resume with {nextSetupStep.label.toLowerCase()} when you are ready.
-              </Text>
+        {/* Personal budget keeps activity before the account summary. */}
+        {!isSharedWorkspace && <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={[styles.sectionEyebrow, { color: colors.primary }]}>UPDATES</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent activity</Text>
             </View>
-            <Feather name="play" size={18} color={colors.primary} />
-          </Pressable>
-        )}
-        {canManageSetup && nextSetupStep && !isSetupDeferred && (
-          <View
-            style={[
-              styles.setupCard,
-              {
-                backgroundColor: isSetupComplete ? colors.muted : colors.card,
-                borderColor: isSetupComplete ? colors.border : colors.primary,
-              },
-            ]}
-          >
-            <View style={styles.setupHeader}>
-              <View style={{ flex: 1 }}>
-                <View style={styles.setupEyebrowRow}>
-                  {!isSetupComplete && <Feather name="zap" size={12} color={colors.primary} />}
-                  <Text style={[styles.setupEyebrow, { color: isSetupComplete ? colors.mutedForeground : colors.primary }]}>
-                    START HERE · STEP {Math.min(completeSetupSteps + 1, allSetupSteps.length)} OF {allSetupSteps.length}
-                  </Text>
-                </View>
-                <Text style={[styles.setupTitle, { color: isSetupComplete ? colors.foreground : colors.foreground }]}>
-                  {isSetupComplete ? 'You’re all set' : 'Finish setting up Jamvi'}
-                </Text>
-                <Text style={[styles.setupSubtitle, { color: colors.mutedForeground }]}>
-                  {isSetupComplete ? 'Your core setup is complete.' : 'A few small wins and you are ready to go.'}
-                </Text>
-              </View>
-              {!isSetupComplete && (
-                <Pressable testID="setup-expand-btn" onPress={() => setIsSetupExpanded(!isSetupExpanded)} hitSlop={10} style={{ padding: 6, backgroundColor: colors.muted, borderRadius: 20 }}>
-                  <Feather name={isSetupExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.foreground} />
-                </Pressable>
-              )}
-            </View>
-            <View style={[styles.setupTrack, { backgroundColor: isSetupComplete ? colors.border : `${colors.primary}18` }]}>
-              <View style={[styles.setupFill, { backgroundColor: isSetupComplete ? colors.mutedForeground : colors.secondary, width: `${(completeSetupSteps / allSetupSteps.length) * 100}%` }]} />
-            </View>
-
-            {!isSetupExpanded && nextSetupStep && (
-              <Pressable
-                testID="setup-primary-cta"
-                onPress={() => router.push(nextSetupStep.route as any)}
-                style={({ pressed }) => [
-                  styles.setupPrimaryCta,
-                  {
-                    backgroundColor: colors.secondary,
-                    opacity: pressed ? 0.82 : 1,
-                  },
-                ]}
-              >
-                <View style={[styles.setupPrimaryIcon, { backgroundColor: `${colors.background}24` }]}>
-                  <Feather name={nextSetupStep.icon} size={19} color={colors.background} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.setupCtaLabel, { color: colors.background }]}>
-                    DO THIS NEXT
-                  </Text>
-                  <Text style={[styles.setupCtaTitle, { color: colors.background }]}>
-                    {nextSetupStep.label}
-                  </Text>
-                </View>
-                <Feather name="arrow-right" size={20} color={colors.background} />
-              </Pressable>
-            )}
-            {!isSetupExpanded && nextSetupStep && (
-              <Pressable
-                testID="setup-skip-cta"
-                onPress={() => setIsSetupDeferred(true)}
-                style={styles.setupSkipButton}
-              >
-                <Text style={[styles.setupSkipButtonText, { color: colors.mutedForeground }]}>Skip for now</Text>
-              </Pressable>
-            )}
-
-            {isSetupExpanded && !isSetupComplete && (
-              <View style={styles.setupList}>
-                {allSetupSteps.map((step, idx) => (
-                  <View key={step.id} style={[styles.setupListItem, { borderTopColor: colors.border, borderTopWidth: idx > 0 ? 1 : 0 }]}>
-                    <View style={[styles.setupListIcon, { backgroundColor: step.done ? colors.primary + '20' : colors.muted }]}>
-                      <Feather name={step.done ? 'check' : step.icon} size={14} color={step.done ? colors.primary : colors.mutedForeground} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.setupListLabel, { color: step.done ? colors.mutedForeground : colors.foreground, textDecorationLine: step.done ? 'line-through' : 'none' }]}>
-                        {step.label}
-                      </Text>
-                      <Text style={[styles.setupListDetail, { color: colors.mutedForeground }]}>{step.detail}</Text>
-                    </View>
-                    {!step.done && step.id === nextSetupStep.id && (
-                      <Pressable testID={`setup-step-${step.id}`} style={[styles.setupListBtn, { backgroundColor: colors.primary }]} onPress={() => router.push(step.route as any)}>
-                        <Text style={[styles.setupListBtnText, { color: colors.primaryForeground }]}>Go</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {isSetupComplete && (
-              <View style={[styles.setupPrimaryCta, { backgroundColor: colors.muted, marginTop: 16 }]}>
-                <View style={[styles.setupPrimaryIcon, { backgroundColor: `${colors.foreground}16` }]}>
-                  <Feather name="check-circle" size={19} color={colors.foreground} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.setupCtaLabel, { color: colors.foreground }]}>SETUP COMPLETE</Text>
-                  <Text style={[styles.setupCtaTitle, { color: colors.foreground }]}>All core steps done</Text>
-                </View>
-              </View>
-            )}
+            <Pressable onPress={() => router.push('/(tabs)/history')}>
+              <Text style={[styles.seeAll, { color: colors.secondary }]}>See all</Text>
+            </Pressable>
           </View>
-        )}
+
+          {activityLoading ? (
+            <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
+          ) : recentActivity.length === 0 ? (
+            <View style={styles.empty}>
+              <Feather name="inbox" size={32} color={colors.mutedForeground} />
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No activity yet this month</Text>
+              <Pressable onPress={() => router.push('/add-expense')} style={[styles.emptyBtn, { borderColor: colors.primary }]}>
+                <Text style={[styles.emptyBtnText, { color: colors.primary }]}>Log your first expense</Text>
+              </Pressable>
+            </View>
+          ) : (
+            recentActivity.map((item) => (
+              <ActivityCard key={item.id} item={item} colors={colors} />
+            ))
+          )}
+        </View>}
 
         {/* Bank Account Balance Card */}
         <Pressable
@@ -714,31 +479,28 @@ export default function DashboardScreen() {
           )}
         </Pressable>
 
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Activity</Text>
-            <Pressable onPress={() => router.push('/(tabs)/history')}>
-              <Text style={[styles.seeAll, { color: colors.secondary }]}>See all</Text>
-            </Pressable>
-          </View>
-
-          {activityLoading ? (
-            <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
-          ) : recentActivity.length === 0 ? (
-            <View style={styles.empty}>
-              <Feather name="inbox" size={32} color={colors.mutedForeground} />
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No activity yet this month</Text>
-              <Pressable onPress={() => router.push('/add-expense')} style={[styles.emptyBtn, { borderColor: colors.primary }]}>
-                <Text style={[styles.emptyBtnText, { color: colors.primary }]}>Log your first expense</Text>
+        {isSharedWorkspace && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Activity</Text>
+              <Pressable onPress={() => router.push('/(tabs)/history')}>
+                <Text style={[styles.seeAll, { color: colors.secondary }]}>See all</Text>
               </Pressable>
             </View>
-          ) : (
-            recentActivity.map((item) => (
-              <ActivityCard key={item.id} item={item} colors={colors} />
-            ))
-          )}
-        </View>
+            {activityLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
+            ) : recentActivity.length === 0 ? (
+              <View style={styles.empty}>
+                <Feather name="inbox" size={32} color={colors.mutedForeground} />
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No activity yet this month</Text>
+              </View>
+            ) : (
+              recentActivity.map((item) => (
+                <ActivityCard key={item.id} item={item} colors={colors} />
+              ))
+            )}
+          </View>
+        )}
 
         {!isSharedWorkspace && (
           <View style={[styles.groupCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
@@ -772,56 +534,6 @@ export default function DashboardScreen() {
       </PageScrollView>
 
     </View>
-  );
-}
-
-function SetupNudge({ visible, step, onClose, onStart, colors, topOffset }: {
-  visible: boolean;
-  step: SetupNudgeStep | null;
-  onClose: () => void;
-  onStart: () => void;
-  colors: any;
-  topOffset: number;
-}) {
-  const translateY = useSharedValue(-100);
-
-  useEffect(() => {
-    if (visible) {
-      translateY.value = withTiming(topOffset + 12, { duration: 400 });
-    } else {
-      translateY.value = withTiming(-100, { duration: 400 });
-    }
-  }, [visible, topOffset]);
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-    opacity: translateY.value > -50 ? 1 : 0,
-  }));
-
-  return (
-    <Animated.View style={[
-      {
-        position: 'absolute',
-        left: 16,
-        right: 16,
-        zIndex: 100,
-        pointerEvents: visible ? 'box-none' : 'none',
-      },
-      style
-    ]}>
-      <View style={{ backgroundColor: colors.primary, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: `${colors.primaryForeground}22` }}>
-        <Feather name="info" size={18} color={colors.primaryForeground} />
-        <Pressable testID="setup-nudge-cta" onPress={onStart} style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={{ color: colors.primaryForeground, fontSize: 13, fontFamily: 'Inter_700Bold' }}>Almost there</Text>
-          <Text style={{ color: colors.primaryForeground, fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 1 }}>
-            Start: {step?.label ?? 'your next setup step'}
-          </Text>
-        </Pressable>
-        <Pressable testID="setup-nudge-close" onPress={onClose} hitSlop={10} style={{ padding: 4 }}>
-          <Feather name="x" size={16} color={colors.primaryForeground} />
-        </Pressable>
-      </View>
-    </Animated.View>
   );
 }
 
@@ -859,27 +571,36 @@ function BankBalanceSkeleton() {
   );
 }
 
-function ContribBar({ name, contributed, spent, target, color, hidden }: { name: string; contributed: number; spent: number; target: number; color: string; hidden: boolean }) {
+function ContribBar({ name, contributed, spent, target, color, hidden }: {
+  name: string;
+  contributed: number;
+  spent: number;
+  target: number;
+  color: string;
+  hidden: boolean;
+}) {
   const net = contributed - spent;
-  const pctContrib = Math.min(contributed / Math.max(target, 1), 1);
-  const pctSpent = Math.min(spent / Math.max(contributed, 1), 1);
-  const fmt = (n: number) => hidden ? '••••' : n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
+  const contributedPercent = Math.min(contributed / Math.max(target, 1), 1);
+  const spentPercent = Math.min(spent / Math.max(contributed, 1), 1);
+  const format = (value: number) => hidden
+    ? '••••'
+    : value.toLocaleString('en-KE', { maximumFractionDigits: 0 });
+
   return (
     <View style={styles.contribItem}>
       <View style={styles.contribLabelRow}>
         <Text style={styles.contribName}>{name}</Text>
         <Text style={[styles.contribAmt, { color: net < 0 ? '#f87171' : color }]}>
-          {hidden ? '••••' : `Net ${net >= 0 ? '+' : ''}${fmt(net)}`}
+          {hidden ? '••••' : `Net ${net >= 0 ? '+' : ''}${format(net)}`}
         </Text>
       </View>
-      {/* Contribution track */}
       <View style={styles.contribTrack}>
-        <View style={[styles.contribFill, { width: `${pctContrib * 100}%` as any, backgroundColor: color, opacity: 0.35 }]} />
-        <View style={[styles.contribFill, StyleSheet.absoluteFillObject, { width: `${pctSpent * pctContrib * 100}%` as any, backgroundColor: '#ef4444', borderRadius: 2 }]} />
+        <View style={[styles.contribFill, { width: `${contributedPercent * 100}%` as any, backgroundColor: color, opacity: 0.35 }]} />
+        <View style={[styles.contribFill, StyleSheet.absoluteFillObject, { width: `${spentPercent * contributedPercent * 100}%` as any, backgroundColor: '#ef4444' }]} />
       </View>
       <View style={styles.contribLabelRow}>
-        <Text style={[styles.contribSubLabel, { color: 'rgba(247,250,246,0.4)' }]}>In: {fmt(contributed)}</Text>
-        <Text style={[styles.contribSubLabel, { color: 'rgba(247,250,246,0.4)' }]}>Out: {fmt(spent)}</Text>
+        <Text style={styles.contribSubLabel}>In: {format(contributed)}</Text>
+        <Text style={styles.contribSubLabel}>Out: {format(spent)}</Text>
       </View>
     </View>
   );
@@ -912,15 +633,12 @@ const styles = StyleSheet.create({
   navBtn: { padding: 4 },
   monthLabel: { fontSize: 13, color: '#F4F8FF', fontFamily: 'Inter_500Medium', minWidth: 56, textAlign: 'center' },
 
-  ringWrap: { alignItems: 'center', marginBottom: 16 },
-  ringPlaceholder: { width: 196, height: 196, alignItems: 'center', justifyContent: 'center' },
-
   statsStrip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, paddingVertical: 12, marginBottom: 14 },
   statCell: { flex: 1, alignItems: 'center' },
   statLabel: { fontSize: 10, color: '#A5B9D4', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 3 },
   statValue: { fontSize: 11, fontWeight: '500' as const, fontFamily: 'Inter_500Medium', opacity: 0.75 },
   stripDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
-
+  ringWrap: { alignItems: 'center', marginBottom: 16 },
   contribRow: { flexDirection: 'row', gap: 12 },
   contribDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
   contribItem: { flex: 1 },
@@ -929,11 +647,20 @@ const styles = StyleSheet.create({
   contribAmt: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   contribTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', marginBottom: 4 },
   contribFill: { height: '100%', borderRadius: 2 },
-  contribSubLabel: { fontSize: 9, fontFamily: 'Inter_400Regular' },
+  contribSubLabel: { fontSize: 9, color: 'rgba(247,250,246,0.4)', fontFamily: 'Inter_400Regular' },
 
   shortcutRow: { flexDirection: 'row', marginHorizontal: 16, paddingTop: 16, paddingBottom: 4, gap: 8 },
   shortcutBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 14, gap: 5 },
   shortcutLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+  overviewNavCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
+  overviewNavEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  overviewNavTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 4 },
+  overviewNavSubtitle: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 5 },
+  overviewNavGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  overviewNavButton: { width: '48%', minHeight: 72, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 9, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, position: 'relative' },
+  overviewNavButtonText: { fontSize: 11, lineHeight: 15, textAlign: 'center', fontFamily: 'Inter_600SemiBold', flexShrink: 1 },
+  overviewNavButtonDescription: { fontSize: 9, lineHeight: 12, textAlign: 'center', fontFamily: 'Inter_400Regular', flexShrink: 1 },
+  overviewNavChevron: { position: 'absolute', top: 6, right: 6 },
   groupCtaCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
   groupCtaHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   groupCtaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
@@ -942,40 +669,9 @@ const styles = StyleSheet.create({
   groupCtaText: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 11 },
   groupCtaButton: { minHeight: 46, borderRadius: 12, paddingHorizontal: 14, marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   groupCtaButtonText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
-  overviewNavCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
-  overviewNavEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
-  overviewNavTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 4 },
-  overviewNavSubtitle: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 5 },
-  overviewNavGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  overviewNavButton: { width: '48%', minHeight: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  overviewNavButtonText: { flex: 1, fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-
-  setupCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 20, padding: 18 },
-  setupHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  setupEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  setupEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
-  setupTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 5 },
-  setupSubtitle: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 4 },
-  setupTrack: { height: 7, borderRadius: 4, overflow: 'hidden', marginTop: 16 },
-  setupFill: { height: '100%', borderRadius: 4 },
-  setupPrimaryCta: { minHeight: 68, borderRadius: 16, marginTop: 16, paddingHorizontal: 14, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  setupPrimaryIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  setupCtaLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.8 },
-  setupCtaTitle: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 2 },
-  setupLaterSteps: { fontSize: 11, fontFamily: 'Inter_500Medium', lineHeight: 17, marginTop: 13 },
-
-  setupList: { marginTop: 16 },
-  setupListItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  setupListIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  setupListLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
-  setupListDetail: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  setupListBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  setupListBtnText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
-  setupSkipButton: { alignSelf: 'flex-start', paddingHorizontal: 4, paddingTop: 10, paddingBottom: 2 },
-  setupSkipButtonText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
-
   section: { paddingHorizontal: 20, paddingTop: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  sectionEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1, marginBottom: 3 },
   sectionTitle: { fontSize: 17, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
   seeAll: { fontSize: 13, fontFamily: 'Inter_500Medium' },
 

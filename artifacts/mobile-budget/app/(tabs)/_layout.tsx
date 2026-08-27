@@ -9,10 +9,11 @@ import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlobalFAB } from '@/components/GlobalFAB';
+import { useGetGroup } from '@workspace/api-client-react';
 
 // iOS 26+: NativeTabs with liquid glass support
-// 5 core tabs — Bank, Reports, Settings accessible via Home shortcuts / header gear
-function NativeTabLayout() {
+// 5 core tabs — Bank and Settings remain accessible from Home/header controls.
+function NativeTabLayout({ showReports }: { showReports: boolean }) {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -31,11 +32,17 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'target', selected: 'target' }} />
         <Label>Goals</Label>
       </NativeTabs.Trigger>
+      {showReports && (
+        <NativeTabs.Trigger name="reports">
+          <Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} />
+          <Label>Reports</Label>
+        </NativeTabs.Trigger>
+      )}
     </NativeTabs>
   );
 }
 
-function ClassicTabLayout() {
+function ClassicTabLayout({ showReports }: { showReports: boolean }) {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -126,32 +133,48 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="reports"
+        options={showReports
+          ? {
+              title: 'Reports',
+              tabBarIcon: ({ color }) =>
+                isIOS ? (
+                  <SymbolView name="chart.pie.fill" tintColor={color} size={24} />
+                ) : (
+                  <Feather name="pie-chart" size={22} color={color} />
+                ),
+            }
+          : { href: null }}
+      />
+      <Tabs.Screen
         name="contributions"
         options={{
           href: null,
         }}
       />
 
-      {/* ── Hidden — accessible via Home shortcuts / header gear ── */}
+      {/* ── Hidden — accessible via Home/header controls ── */}
       <Tabs.Screen name="bank"     options={{ href: null }} />
-      <Tabs.Screen name="reports"  options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
     </Tabs>
   );
 }
 
 export default function TabLayout() {
+  const { data: group } = useGetGroup();
+  const showReports = group?.isPrivate !== false;
+
   if (isLiquidGlassAvailable()) {
     return (
       <View style={{ flex: 1 }}>
-        <NativeTabLayout />
+        <NativeTabLayout showReports={showReports} />
         <GlobalFAB />
       </View>
     );
   }
   return (
     <View style={{ flex: 1 }}>
-      <ClassicTabLayout />
+      <ClassicTabLayout showReports={showReports} />
       <GlobalFAB />
     </View>
   );
