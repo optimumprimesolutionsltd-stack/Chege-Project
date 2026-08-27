@@ -373,9 +373,9 @@ export default function DashboardScreen() {
           colors={[colors.brandNavy, '#05255E', colors.brandBlue]}
           style={[styles.header, { paddingTop: topPad + 12 }]}
         >
-          {/* Top row: greeting + controls */}
+          {/* Top row: greeting + profile */}
           <View style={styles.headerTop}>
-            <View>
+            <View style={styles.greetingBlock}>
               {displayName ? (
                 <Text>
                   <Text style={styles.greeting}>{greeting}, </Text>
@@ -385,15 +385,19 @@ export default function DashboardScreen() {
                 <Text style={styles.greeting}>{greeting}</Text>
               )}
             </View>
-            <View style={styles.headerControls}>
-              <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={10} accessibilityLabel="Open settings">
-                <ProfileAvatar
-                  user={user}
-                  size={34}
-                  backgroundColor="rgba(247,250,246,0.16)"
-                   foregroundColor="#F4F8FF"
-                />
-              </Pressable>
+            <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={10} accessibilityLabel="Open settings">
+              <ProfileAvatar
+                user={user}
+                size={34}
+                backgroundColor="rgba(247,250,246,0.16)"
+                foregroundColor="#F4F8FF"
+              />
+            </Pressable>
+          </View>
+
+          {/* Utility row: privacy, settings, and month */}
+          <View style={styles.headerUtilityRow}>
+            <View style={styles.utilityControls}>
               {/* Privacy toggle */}
               <Pressable onPress={togglePrivacy} hitSlop={10} style={styles.iconBtn}>
                 <Feather name={isPrivate ? 'eye-off' : 'eye'} size={20} color="rgba(247,250,246,0.7)" />
@@ -402,16 +406,16 @@ export default function DashboardScreen() {
               <Pressable onPress={() => router.push('/(tabs)/settings')} hitSlop={10} style={styles.iconBtn}>
                 <Feather name="settings" size={19} color="rgba(247,250,246,0.7)" />
               </Pressable>
-              {/* Month nav */}
-              <View style={styles.monthNav}>
-                <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
-                  <Feather name="chevron-left" size={18} color="rgba(247,250,246,0.7)" />
-                </Pressable>
-                <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
-                <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
-                  <Feather name="chevron-right" size={18} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
-                </Pressable>
-              </View>
+            </View>
+            {/* Month nav */}
+            <View style={styles.monthNav}>
+              <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
+                <Feather name="chevron-left" size={18} color="rgba(247,250,246,0.7)" />
+              </Pressable>
+              <Text style={styles.monthLabel}>{MONTHS_SHORT[month - 1]} {year}</Text>
+              <Pressable onPress={nextMonth} style={styles.navBtn} hitSlop={8} disabled={isCurrentMonth}>
+                <Feather name="chevron-right" size={18} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
+              </Pressable>
             </View>
           </View>
 
@@ -508,36 +512,6 @@ export default function DashboardScreen() {
             </Pressable>
           ))}
         </View>
-
-        {!isSharedWorkspace && (
-          <View style={[styles.groupCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
-            <View style={styles.groupCtaHeader}>
-              <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
-                <Feather name="users" size={20} color={colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>BUDGET TOGETHER</Text>
-                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
-              </View>
-            </View>
-            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-              Create a separate budget for your family, chama, club, or team. In Settings, tap Create a Shared budget, name it, then invite your members.
-            </Text>
-            <Pressable
-              testID="home-create-shared-budget-cta"
-              accessibilityRole="button"
-              accessibilityLabel="Open Settings to create a Shared budget"
-              onPress={() => router.push('/(tabs)/settings')}
-              style={({ pressed }) => [
-                styles.groupCtaButton,
-                { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
-              ]}
-            >
-              <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Create a Shared budget</Text>
-              <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
-            </Pressable>
-          </View>
-        )}
 
         {isSharedWorkspace && (
           <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -765,6 +739,36 @@ export default function DashboardScreen() {
             ))
           )}
         </View>
+
+        {!isSharedWorkspace && (
+          <View style={[styles.groupCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
+            <View style={styles.groupCtaHeader}>
+              <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <Feather name="users" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>SHARED BUDGETS</Text>
+                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>Manage budgets with others</Text>
+              </View>
+            </View>
+            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+              Create a Shared budget from Settings when you are ready to manage money with a group.
+            </Text>
+            <Pressable
+              testID="home-create-shared-budget-cta"
+              accessibilityRole="button"
+              accessibilityLabel="Open Settings to manage Shared budgets"
+              onPress={() => router.push('/(tabs)/settings')}
+              style={({ pressed }) => [
+                styles.groupCtaButton,
+                { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
+              ]}
+            >
+              <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Manage Shared budgets</Text>
+              <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
+            </Pressable>
+          </View>
+        )}
       </PageScrollView>
 
     </View>
@@ -892,8 +896,10 @@ const styles = StyleSheet.create({
   accessButtonText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   header: { paddingHorizontal: 20, paddingBottom: 20 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  headerControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  greetingBlock: { flex: 1, minWidth: 0 },
+  headerUtilityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  utilityControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   workspaceIdentity: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 15, padding: 10, marginBottom: 16 },
   workspaceIdentityIcon: { width: 38, height: 38, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   workspaceIdentityCopy: { flex: 1, minWidth: 0 },
@@ -925,7 +931,7 @@ const styles = StyleSheet.create({
   contribFill: { height: '100%', borderRadius: 2 },
   contribSubLabel: { fontSize: 9, fontFamily: 'Inter_400Regular' },
 
-  shortcutRow: { flexDirection: 'row', paddingHorizontal: 12, paddingTop: 16, paddingBottom: 4, gap: 8 },
+  shortcutRow: { flexDirection: 'row', marginHorizontal: 16, paddingTop: 16, paddingBottom: 4, gap: 8 },
   shortcutBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 14, gap: 5 },
   shortcutLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   groupCtaCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },

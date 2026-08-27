@@ -1245,8 +1245,6 @@ export default function Dashboard() {
         </section>
       </div>
 
-      {group?.isPrivate && <SharedGroupsFooter />}
-
       {isSharedWorkspace && (
         <section aria-labelledby="group-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
           <div className="mb-4">
@@ -1771,6 +1769,8 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      {group?.isPrivate && <SharedGroupsFooter />}
 
     </div>
   );
