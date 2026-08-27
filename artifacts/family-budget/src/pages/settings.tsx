@@ -618,6 +618,9 @@ export default function Settings() {
           <p className="rounded-lg bg-muted/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
             Your sign-in email is managed by your sign-in account and can’t be changed in Jamvi.
           </p>
+          <p className="rounded-lg bg-muted/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            Your profile photo represents you wherever your name appears. It is separate from the photo used to identify a selected budget.
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
               <Camera className="h-4 w-4" />
@@ -775,8 +778,8 @@ export default function Settings() {
             <CardTitle>{isPrivateWorkspace ? "Personal budget identity" : "Shared budget identity"}</CardTitle>
             <CardDescription>
               {isPrivateWorkspace
-                ? "Give your Personal budget a distinct look so it is easy to recognise when you switch budgets."
-                : "A photo, icon, and accent colour help members recognise this Shared budget when they switch budgets."}
+                ? "This identity belongs to your Personal budget, not to your profile. Your profile photo still represents you."
+                : "A photo, icon, and accent colour help members recognise this Shared budget when they switch budgets. It is separate from every member’s profile photo."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 px-4 pb-4 sm:px-6 sm:pb-6">
@@ -798,8 +801,8 @@ export default function Settings() {
                  {group?.slogan ? <p className="text-sm italic text-muted-foreground">{group.slogan}</p> : null}
                   <p className="text-xs text-muted-foreground">
                     {isPrivateWorkspace
-                      ? "This identity belongs only to your Personal budget."
-                      : "This identity belongs to the group, not any one member."}
+                       ? "Your profile photo represents you; this identity belongs only to your Personal budget."
+                       : "This identity belongs to the group, not any one member or their profile."}
                   </p>
               </div>
             </div>
@@ -821,7 +824,7 @@ export default function Settings() {
                           {isPrivateWorkspace ? "Personal budget photo" : "Shared budget photo"}
                         </p>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                          Choose a JPG, PNG, or WebP image up to 15 MB. Jamvi shrinks large photos first for a faster upload.
+                          This photo identifies the selected Shared budget when members switch budgets. It does not change anyone’s profile photo. Choose a JPG, PNG, or WebP image up to 15 MB. Jamvi shrinks large photos first for a faster upload.
                         </p>
                       </div>
                     </div>

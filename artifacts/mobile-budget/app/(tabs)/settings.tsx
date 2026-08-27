@@ -699,6 +699,9 @@ export default function SettingsScreen() {
                </View>
              ) : null}
              <Text style={[styles.lockedHint, { color: colors.mutedForeground }]}>Your sign-in email can’t be changed in Jamvi.</Text>
+              <Text style={[styles.lockedHint, { color: colors.mutedForeground, marginTop: 4 }]}>
+                Your profile photo represents you. It is separate from the identity and photo of the selected budget.
+              </Text>
             <Pressable
               onPress={() => void handlePickProfilePhoto()}
               disabled={uploadingProfilePhoto}
@@ -1066,8 +1069,8 @@ export default function SettingsScreen() {
                    {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic' }]}>{group.slogan}</Text> : null}
                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
                      {group?.isPrivate
-                       ? 'This identity belongs only to your Personal budget.'
-                       : 'This identity belongs to the group, not any one member.'}
+                        ? 'Your profile photo represents you; this identity belongs only to your Personal budget.'
+                        : 'This identity belongs to the group, not any one member or their profile.'}
                    </Text>
                 </View>
               </View>
@@ -1086,7 +1089,7 @@ export default function SettingsScreen() {
                        <Text style={[styles.rowLabel, { color: colors.foreground }]}>
                          {group?.isPrivate ? 'Personal budget photo' : 'Shared budget photo'}
                        </Text>
-                        <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>A square JPG, PNG, or WebP photo up to 15 MB. Jamvi shrinks it first for a faster upload.</Text>
+                         <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>This photo identifies the selected Shared budget when members switch budgets. It does not change anyone’s profile photo. Use a square JPG, PNG, or WebP photo up to 15 MB; Jamvi shrinks it first for a faster upload.</Text>
                       <View style={{ flexDirection: 'row', gap: 14, marginTop: 9 }}>
                         <Pressable disabled={uploadingGroupPhoto} onPress={() => void handlePickGroupPhoto()}>
                           <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
