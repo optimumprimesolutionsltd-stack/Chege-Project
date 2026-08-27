@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import {
   CreateContributionBody,
   GetContributionsQueryParams,
+  UpdateContributionBody,
 } from "@workspace/api-zod";
 import {
   getActiveGroupId,
@@ -20,6 +21,16 @@ function displayName(u: { firstName?: string | null; email?: string | null } | n
   if (u?.firstName) return u.firstName;
   const prefix = u?.email?.split("@")[0] ?? "";
   return prefix ? prefix.charAt(0).toUpperCase() + prefix.slice(1) : "Unknown";
+}
+
+function isToday(value: Date | string): boolean {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(value instanceof Date ? value : new Date(value)) === formatter.format(new Date());
 }
 
 router.get("/contributions", async (req, res): Promise<void> => {
@@ -99,8 +110,8 @@ router.post("/contributions", async (req, res): Promise<void> => {
       groupId,
       userId: targetUserId,
       amount,
-      month: Math.round(month),
-      year: Math.round(year),
+      month,
+      year,
       note: note ?? null,
     })
     .returning();
@@ -113,6 +124,84 @@ router.post("/contributions", async (req, res): Promise<void> => {
     ...contribution,
     userName: displayName(user),
     createdAt: contribution.createdAt instanceof Date ? contribution.createdAt.toISOString() : contribution.createdAt,
+  });
+});
+
+router.patch("/contributions/:id", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
+
+  const id = Number(req.params.id);
+  const parsed = UpdateContributionBody.safeParse(req.body);
+  if (!Number.isFinite(id) || !parsed.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+
+  const [existing] = await db
+    .select({
+      id: contributionsTable.id,
+      userId: contributionsTable.userId,
+      createdAt: contributionsTable.createdAt,
+    })
+    .from(contributionsTable)
+    .where(and(eq(contributionsTable.id, id), eq(contributionsTable.groupId, groupId)))
+    .limit(1);
+
+  if (!existing) {
+    res.status(404).json({ error: "Contribution not found" });
+    return;
+  }
+
+  const { amount, month, year, note, forUserId } = parsed.data;
+  let targetUserId = existing.userId;
+  if (forUserId) {
+    const [membership] = await db
+      .select({ userId: groupMembershipsTable.userId })
+      .from(groupMembershipsTable)
+      .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, forUserId)))
+      .limit(1);
+    if (!membership) {
+      res.status(400).json({ error: "User not found or not a member of this group" });
+      return;
+    }
+    targetUserId = forUserId;
+  }
+
+  const participatingMember = req.group?.role === "member";
+  if (participatingMember && (existing.userId !== req.user!.id || !isToday(existing.createdAt))) {
+    res.status(403).json({
+      error: "Members can edit only their own contributions recorded today. Ask an admin to correct an older record.",
+    });
+    return;
+  }
+  if (!requireMemberSelfAttribution(req, res, [targetUserId])) return;
+
+  const [updated] = await db
+    .update(contributionsTable)
+    .set({
+      userId: targetUserId,
+      amount,
+      month: Math.round(month),
+      year: Math.round(year),
+      note: note ?? null,
+    })
+    .where(and(eq(contributionsTable.id, id), eq(contributionsTable.groupId, groupId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Contribution not found" });
+    return;
+  }
+
+  const user = await db.query.usersTable.findFirst({
+    where: eq(usersTable.id, updated.userId),
+  });
+  res.json({
+    ...updated,
+    userName: displayName(user),
+    createdAt: updated.createdAt instanceof Date ? updated.createdAt.toISOString() : updated.createdAt,
   });
 });
 

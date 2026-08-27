@@ -204,6 +204,7 @@ export default function BudgetScreen() {
   const canManageSharedIncome = group?.isPrivate === false && members.some(
     member => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
   );
+  const canManageCategories = group?.isPrivate === true || canManageSharedIncome;
   const refreshIncomeSources = async () => {
     await Promise.all([
       refetchIncomeSources(),
@@ -903,7 +904,9 @@ export default function BudgetScreen() {
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BY CATEGORY</Text>
           {!isLoading && breakdown.length > 0 ? (
             <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>
-              Tap a category to see the expenses behind its total. Hold to edit or remove it.
+              {canManageCategories
+                ? 'Tap a category to see its expenses. Use Edit or Remove to manage the budget.'
+                : 'Tap a category to see the expenses behind its total. Owners and admins manage category budgets.'}
             </Text>
           ) : null}
 
@@ -929,11 +932,6 @@ export default function BudgetScreen() {
                   <Pressable
                     key={cat.category}
                     onPress={() => setLedgerCategory({ category: cat.category, isBudgeted: cat.isBudgeted })}
-                    onLongPress={() => fullCat && Alert.alert(cat.category, undefined, [
-                      { text: 'Edit', onPress: () => fullCat && openEdit(fullCat) },
-                      { text: 'Remove', style: 'destructive', onPress: () => fullCat && handleDelete(fullCat) },
-                      { text: 'Cancel', style: 'cancel' },
-                    ])}
                     testID={`budget-ledger-${cat.category}`}
                     accessibilityRole="button"
                     accessibilityLabel={`View ${cat.category} spending`}
@@ -961,10 +959,17 @@ export default function BudgetScreen() {
                           <Text style={[styles.catSpent, { color: colors.foreground }]}>{formatKES(cat.spentAmount)}</Text>
                           <Text style={[styles.catBudget, { color: colors.mutedForeground }]}>/ {formatKES(cat.budgetAmount)}</Text>
                         </View>
-                        {fullCat && (
-                          <Pressable onPress={() => openEdit(fullCat)} hitSlop={8} style={styles.editBtn}>
-                            <Feather name="edit-2" size={13} color={colors.mutedForeground} />
-                          </Pressable>
+                        {fullCat && canManageCategories && (
+                          <>
+                            <Pressable onPress={() => openEdit(fullCat)} hitSlop={8} style={styles.editBtn}>
+                              <Feather name="edit-2" size={13} color={colors.mutedForeground} />
+                              <Text style={[styles.editBtnText, { color: colors.mutedForeground }]}>Edit</Text>
+                            </Pressable>
+                            <Pressable onPress={() => handleDelete(fullCat)} hitSlop={8} style={styles.editBtn}>
+                              <Feather name="trash-2" size={13} color="#ef4444" />
+                              <Text style={[styles.editBtnText, { color: '#ef4444' }]}>Remove</Text>
+                            </Pressable>
+                          </>
                         )}
                       </View>
                     </View>
@@ -984,11 +989,6 @@ export default function BudgetScreen() {
                   <Pressable
                     key={cat.id}
                     onPress={() => setLedgerCategory({ category: cat.name, isBudgeted: true })}
-                    onLongPress={() => Alert.alert(cat.name, undefined, [
-                      { text: 'Edit', onPress: () => openEdit(cat) },
-                      { text: 'Remove', style: 'destructive', onPress: () => handleDelete(cat) },
-                      { text: 'Cancel', style: 'cancel' },
-                    ])}
                     testID={`budget-ledger-${cat.name}`}
                     accessibilityRole="button"
                     accessibilityLabel={`View ${cat.name} spending`}
@@ -1014,9 +1014,18 @@ export default function BudgetScreen() {
                           <Text style={[styles.catSpent, { color: colors.foreground }]}>0</Text>
                           <Text style={[styles.catBudget, { color: colors.mutedForeground }]}>/ {formatKES(cat.budgetAmount)}</Text>
                         </View>
-                        <Pressable onPress={() => openEdit(cat)} hitSlop={8} style={styles.editBtn} accessibilityLabel={`Edit ${cat.name} budget`}>
-                          <Feather name="edit-2" size={13} color={colors.mutedForeground} />
-                        </Pressable>
+                        {canManageCategories && (
+                          <>
+                            <Pressable onPress={() => openEdit(cat)} hitSlop={8} style={styles.editBtn} accessibilityLabel={`Edit ${cat.name} budget`}>
+                              <Feather name="edit-2" size={13} color={colors.mutedForeground} />
+                              <Text style={[styles.editBtnText, { color: colors.mutedForeground }]}>Edit</Text>
+                            </Pressable>
+                            <Pressable onPress={() => handleDelete(cat)} hitSlop={8} style={styles.editBtn} accessibilityLabel={`Remove ${cat.name} budget`}>
+                              <Feather name="trash-2" size={13} color="#ef4444" />
+                              <Text style={[styles.editBtnText, { color: '#ef4444' }]}>Remove</Text>
+                            </Pressable>
+                          </>
+                        )}
                       </View>
                     </View>
                     <View style={[styles.barTrack, { backgroundColor: colors.border }]} />
@@ -1096,7 +1105,8 @@ const styles = StyleSheet.create({
   catAmounts: { alignItems: 'flex-end' },
   catSpent: { fontSize: 15, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
   catBudget: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 1 },
-  editBtn: { padding: 2 },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4, paddingVertical: 3 },
+  editBtnText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   viewSpendingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
   viewSpendingText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },

@@ -188,6 +188,60 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
     expect(Number(goalContributionCount.count)).toBe(0);
   });
 
+  it("blocks editing an existing contribution while a new shared group has only one member", async () => {
+    activeGroupId = newSharedGroupId;
+    activeGroupIsPrivate = false;
+    const [existing] = await db.insert(contributionsTable).values({
+      groupId: newSharedGroupId,
+      userId: ownerId,
+      amount: 700,
+      month: 8,
+      year: 2026,
+      note: "Existing locked contribution",
+    }).returning();
+
+    const response = await request(app)
+      .patch(`/contributions/${existing.id}`)
+      .send({ amount: 900, month: 8, year: 2026, note: "Should not update" });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toMatch(/invite at least one more member/i);
+
+    const [unchanged] = await db.select({ amount: contributionsTable.amount })
+      .from(contributionsTable)
+      .where(eq(contributionsTable.id, existing.id));
+    expect(unchanged.amount).toBe(700);
+  });
+
+  it("does not update a contribution that belongs to another workspace", async () => {
+    const [privateContribution] = await db.insert(contributionsTable).values({
+      groupId: privateGroupId,
+      userId: ownerId,
+      amount: 1100,
+      month: 8,
+      year: 2026,
+      note: "Private workspace record",
+    }).returning();
+    activeGroupId = legacyGroupId;
+    activeGroupIsPrivate = false;
+
+    const response = await request(app)
+      .patch(`/contributions/${privateContribution.id}`)
+      .send({ amount: 2200, month: 8, year: 2026, note: "Cross-workspace attempt" });
+
+    expect(response.status).toBe(404);
+
+    const [unchanged] = await db.select({
+      amount: contributionsTable.amount,
+      note: contributionsTable.note,
+    })
+      .from(contributionsTable)
+      .where(eq(contributionsTable.id, privateContribution.id));
+    expect(unchanged).toMatchObject({ amount: 1100, note: "Private workspace record" });
+    activeGroupId = newSharedGroupId;
+    activeGroupIsPrivate = false;
+  });
+
 
   it("returns a complete eligibility-aware group shape when reading and renaming", async () => {
     const current = await request(app).get("/group");

@@ -97,14 +97,14 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Edit an expense (incl. payer correction)",
     web: "done",
     mobile: "done",
-    note: "Both support editing all fields including payer",
+    note: "Both show a visible Edit action and a prefilled form for all fields, including payer",
   },
   {
     category: "Expenses",
     feature: "Delete an expense",
     web: "done",
     mobile: "done",
-    note: "Both support deletion with confirmation",
+    note: "Both show a visible Remove action with a destructive confirmation",
   },
   {
     category: "Expenses",
@@ -145,10 +145,10 @@ export const PARITY_ITEMS: ParityItem[] = [
   },
   {
     category: "Budget",
-    feature: "Edit category limits",
+    feature: "Edit or remove category limits",
     web: "done",
-    mobile: "missing",
-    note: "Web-only",
+    mobile: "done",
+    note: "Both show visible Edit and Remove actions; manager permissions still apply in Shared budgets",
   },
   {
     category: "Budget",
@@ -165,6 +165,13 @@ export const PARITY_ITEMS: ParityItem[] = [
     web: "done",
     mobile: "done",
     note: "Both support recording monthly contributions per person",
+  },
+  {
+    category: "Contributions",
+    feature: "Edit or remove contribution records",
+    web: "done",
+    mobile: "done",
+    note: "Both have a month-scoped management list. Owners/admins manage all; members can edit only their own current-day record and cannot remove",
   },
   {
     category: "Contributions",
@@ -222,7 +229,7 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Delete a goal",
     web: "done",
     mobile: "done",
-    note: "Both support deletion with confirmation",
+    note: "Both expose visible management actions and require confirmation before removal",
   },
   {
     category: "Savings goals",
@@ -251,6 +258,13 @@ export const PARITY_ITEMS: ParityItem[] = [
     web: "done",
     mobile: "done",
     note: "Both show per-goal contribution history with month / range filters",
+  },
+  {
+    category: "Savings goals",
+    feature: "Remove a savings contribution or correction",
+    web: "done",
+    mobile: "done",
+    note: "Owners/admins can remove an entry from goal history with confirmation; the goal balance is recalculated",
   },
   {
     category: "Savings goals",

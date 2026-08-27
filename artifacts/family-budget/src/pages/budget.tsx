@@ -1023,11 +1023,11 @@ export default function Budget() {
                                 </p>
                               </div>
                               {canManageShared && fullCat && <>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(fullCat)}>
-                                  <Pencil className="w-3.5 h-3.5" />
+                                <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(fullCat)}>
+                                  <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(fullCat)}>
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(fullCat)}>
+                                  <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
                                 </Button>
                               </>}
                             </div>
@@ -1065,11 +1065,11 @@ export default function Budget() {
                             </div>
                           </div>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(cat)}>
-                              <Pencil className="w-3.5 h-3.5" />
+                            <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(cat)}>
+                              <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(cat)}>
-                              <Trash2 className="w-3.5 h-3.5" />
+                            <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(cat)}>
+                              <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
                             </Button>
                           </div>
                         </div>

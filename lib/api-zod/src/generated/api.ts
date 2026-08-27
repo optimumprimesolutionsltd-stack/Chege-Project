@@ -419,6 +419,44 @@ export const DeleteBudgetCategoryResponse = zod.object({
 
 
 /**
+ * @summary Update a contribution by ID
+ */
+export const UpdateContributionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateContributionBodyAmountMultipleOf = 1;
+
+export const updateContributionBodyMonthMax = 12;
+export const updateContributionBodyMonthMultipleOf = 1;
+
+export const updateContributionBodyYearMin = 2000;
+export const updateContributionBodyYearMax = 2200;
+export const updateContributionBodyYearMultipleOf = 1;
+
+
+
+export const UpdateContributionBody = zod.object({
+  "amount": zod.number().min(1).multipleOf(updateContributionBodyAmountMultipleOf),
+  "month": zod.number().min(1).max(updateContributionBodyMonthMax).multipleOf(updateContributionBodyMonthMultipleOf),
+  "year": zod.number().min(updateContributionBodyYearMin).max(updateContributionBodyYearMax).multipleOf(updateContributionBodyYearMultipleOf),
+  "note": zod.string().optional(),
+  "forUserId": zod.string().optional().describe('Record this contribution on behalf of another household member (their ID)')
+})
+
+export const UpdateContributionResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.string(),
+  "userName": zod.string(),
+  "amount": zod.number().describe('Amount in KES'),
+  "month": zod.number(),
+  "year": zod.number(),
+  "note": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Delete a contribution by ID
  */
 export const DeleteContributionParams = zod.object({
@@ -454,10 +492,21 @@ export const GetContributionsResponse = zod.array(GetContributionsResponseItem)
 /**
  * @summary Record a contribution
  */
+export const createContributionBodyAmountMultipleOf = 1;
+
+export const createContributionBodyMonthMax = 12;
+export const createContributionBodyMonthMultipleOf = 1;
+
+export const createContributionBodyYearMin = 2000;
+export const createContributionBodyYearMax = 2200;
+export const createContributionBodyYearMultipleOf = 1;
+
+
+
 export const CreateContributionBody = zod.object({
-  "amount": zod.number(),
-  "month": zod.number(),
-  "year": zod.number(),
+  "amount": zod.number().min(1).multipleOf(createContributionBodyAmountMultipleOf),
+  "month": zod.number().min(1).max(createContributionBodyMonthMax).multipleOf(createContributionBodyMonthMultipleOf),
+  "year": zod.number().min(createContributionBodyYearMin).max(createContributionBodyYearMax).multipleOf(createContributionBodyYearMultipleOf),
   "note": zod.string().optional(),
   "forUserId": zod.string().optional().describe('Record this contribution on behalf of another household member (their ID)')
 })

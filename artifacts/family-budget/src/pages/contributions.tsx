@@ -1,13 +1,31 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type FormEvent } from "react";
 import {
   useGetDashboardSummary,
   useGetDashboardIncomeStreams,
   useGetGroup,
+  useGetMembers,
+  useGetContributions,
+  useUpdateContribution,
+  useDeleteContribution,
+  getGetContributionsQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardActivityQueryKey,
+  getGetDashboardIncomeStreamsQueryKey,
+  getGetDashboardPeriodTotalsQueryKey,
+  type Contribution,
 } from "@workspace/api-client-react";
+import { useAuth } from "@workspace/replit-auth-web";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatKes, formatMonthYear } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { formatDate, formatKes, formatMonthYear } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, Calendar, TrendingUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
 type IncomeStream = {
@@ -24,6 +42,19 @@ type IncomeStream = {
 const MEMBER_ACCENT_COLORS = ["#08B7B0", "#FDBB0A", "#003383", "#3CDD62", "#6C9FE6"];
 
 const CONTRIBUTIONS_MONTH_KEY = "contributions-month-pref";
+
+type ContributionEditor = {
+  id: number;
+  amount: string;
+  month: number;
+  year: number;
+  note: string;
+  forUserId: string;
+};
+
+function wasCreatedToday(createdAt: string) {
+  return new Date(createdAt).toDateString() === new Date().toDateString();
+}
 
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(value / max, 1) : 0;
@@ -168,7 +199,11 @@ function MemberCard({
 }
 
 export default function Contributions() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: group } = useGetGroup();
+  const { data: members } = useGetMembers();
   const isSharedWorkspace = group?.isPrivate === false;
   const now = new Date();
   const [month, setMonth] = useState(() => {
@@ -196,11 +231,105 @@ export default function Contributions() {
     isLoading: isIncomeStreamsLoading,
     isError: incomeStreamsError,
   } = useGetDashboardIncomeStreams({ month, year });
+  const {
+    data: contributions,
+    isLoading: isContributionsLoading,
+    isError: contributionsError,
+  } = useGetContributions({ month, year });
+  const updateContribution = useUpdateContribution();
+  const deleteContribution = useDeleteContribution();
+  const [editor, setEditor] = useState<ContributionEditor | null>(null);
+  const [contributionToRemove, setContributionToRemove] = useState<Contribution | null>(null);
 
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
 
   const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
+  const currentMembership = members?.find((member) => member.userId === user?.id);
+  const canManageContributions =
+    currentMembership?.role === "owner" || currentMembership?.role === "admin";
+  const canEditContribution = (contribution: Contribution) =>
+    canManageContributions ||
+    (contribution.userId === user?.id && wasCreatedToday(contribution.createdAt));
+
+  const invalidateContributionData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetContributionsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetDashboardPeriodTotalsQueryKey() }),
+    ]);
+  };
+
+  const startEditContribution = (contribution: Contribution) => {
+    if (!canEditContribution(contribution)) {
+      toast({
+        variant: "destructive",
+        title: "An admin needs to correct this record",
+        description: "Members can edit only their own contribution recorded today.",
+      });
+      return;
+    }
+    setEditor({
+      id: contribution.id,
+      amount: String(contribution.amount),
+      month: contribution.month,
+      year: contribution.year,
+      note: contribution.note ?? "",
+      forUserId: contribution.userId,
+    });
+  };
+
+  const saveContribution = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editor) return;
+    const amount = Number(editor.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+      toast({ variant: "destructive", title: "Enter a whole KES amount greater than zero" });
+      return;
+    }
+    if (!Number.isInteger(editor.month) || editor.month < 1 || editor.month > 12 ||
+      !Number.isInteger(editor.year) || editor.year < 2000 || editor.year > 2200) {
+      toast({ variant: "destructive", title: "Enter a valid contribution month and year" });
+      return;
+    }
+    try {
+      await updateContribution.mutateAsync({
+        id: editor.id,
+        data: {
+          amount, month: editor.month, year: editor.year,
+          note: editor.note.trim() || undefined,
+          ...(canManageContributions ? { forUserId: editor.forUserId } : {}),
+        },
+      });
+      setEditor(null);
+      await invalidateContributionData();
+      toast({ title: "Contribution updated" });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Could not update contribution",
+        description: "Check the details and try again.",
+      });
+    }
+  };
+
+  const confirmRemoveContribution = async () => {
+    if (!contributionToRemove) return;
+    try {
+      await deleteContribution.mutateAsync({ id: contributionToRemove.id });
+      setContributionToRemove(null);
+      await invalidateContributionData();
+      toast({ title: "Contribution removed" });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Could not remove contribution",
+        description: "Please try again or contact an admin.",
+      });
+    }
+  };
   const totalContrib = memberContribs.reduce((s, m) => s + m.contributed, 0);
   const totalTarget = memberContribs.reduce((s, m) => s + (m.target ?? 0), 0);
   const streamsByMember = useMemo(() => {
@@ -280,6 +409,146 @@ export default function Contributions() {
         </div>
       </div>
 
+      {/* Contribution records */}
+      <Card className="border-none shadow-md">
+        <CardContent className="pt-5">
+          <div className="flex flex-col gap-1 border-b border-border/60 pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="font-display text-xl font-bold text-foreground">Contribution records</h2>
+              <p className="text-sm text-muted-foreground">
+                Records for {formatMonthYear(month, year)}.
+              </p>
+            </div>
+            <p className="text-xs font-medium text-muted-foreground">
+              {contributions?.length ?? 0} recorded
+            </p>
+          </div>
+
+          {!canManageContributions && (
+            <p className="mt-4 rounded-xl bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
+              Members can edit only their own record created today. Admins handle removals and older corrections.
+            </p>
+          )}
+
+          <div className="mt-4 space-y-3">
+            {isContributionsLoading ? (
+              <div className="h-24 animate-pulse rounded-xl bg-muted/60" />
+            ) : contributionsError ? (
+              <p className="rounded-xl bg-destructive/10 px-3 py-3 text-sm text-destructive">
+                We couldn’t load contribution records. Refresh the page and try again.
+              </p>
+            ) : contributions?.length === 0 ? (
+              <p className="rounded-xl bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
+                No contribution records have been added for this month.
+              </p>
+            ) : contributions?.map((contribution) => {
+              const isEditing = editor?.id === contribution.id;
+              const mayEdit = canEditContribution(contribution);
+              return (
+                <div key={contribution.id} className="rounded-xl border border-border/70 p-3 sm:p-4">
+                  {isEditing && editor ? (
+                    <form onSubmit={saveContribution} className="space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="font-display font-bold text-foreground">Edit contribution</h3>
+                        <Button type="button" variant="ghost" onClick={() => setEditor(null)}>Cancel</Button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="space-y-1.5 text-sm font-medium text-foreground">
+                          Amount (KES)
+                          <Input
+                            type="number" min="1" step="1" required value={editor.amount}
+                            onChange={(event) => setEditor({ ...editor, amount: event.target.value })}
+                          />
+                        </label>
+                        <label className="space-y-1.5 text-sm font-medium text-foreground">
+                          Member attribution
+                          {canManageContributions ? (
+                            <select
+                              value={editor.forUserId}
+                              onChange={(event) => setEditor({ ...editor, forUserId: event.target.value })}
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            >
+                              {!members?.some((member) => member.userId === editor.forUserId) && (
+                                <option value={editor.forUserId}>{contribution.userName}</option>
+                              )}
+                              {members?.map((member) => (
+                                <option key={member.userId} value={member.userId}>
+                                  {member.userName || "Household member"}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <Input value={contribution.userName} disabled />
+                          )}
+                        </label>
+                        <label className="space-y-1.5 text-sm font-medium text-foreground">
+                          Month
+                          <select
+                            value={editor.month}
+                            onChange={(event) => setEditor({ ...editor, month: Number(event.target.value) })}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          >
+                            {Array.from({ length: 12 }, (_, index) => (
+                              <option key={index + 1} value={index + 1}>
+                                {new Intl.DateTimeFormat("en-US", { month: "long" }).format(new Date(2000, index, 1))}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="space-y-1.5 text-sm font-medium text-foreground">
+                          Year
+                          <Input
+                            type="number" min="2000" max="2200" required value={editor.year}
+                            onChange={(event) => setEditor({ ...editor, year: Number(event.target.value) })}
+                          />
+                        </label>
+                      </div>
+                      <label className="block space-y-1.5 text-sm font-medium text-foreground">
+                        Note
+                        <textarea
+                          value={editor.note}
+                          onChange={(event) => setEditor({ ...editor, note: event.target.value })}
+                          className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          placeholder="Optional note"
+                        />
+                      </label>
+                      <Button type="submit" disabled={updateContribution.isPending}>
+                        {updateContribution.isPending ? "Saving…" : "Save changes"}
+                      </Button>
+                    </form>
+                  ) : (
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <p className="font-semibold text-foreground">{contribution.userName}</p>
+                          <p className="font-display text-lg font-bold text-primary">{formatKes(contribution.amount)}</p>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Recorded {formatDate(contribution.createdAt)}
+                          {contribution.note ? ` · ${contribution.note}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        {mayEdit && (
+                          <Button type="button" variant="outline" onClick={() => startEditContribution(contribution)}>
+                            Edit
+                          </Button>
+                        )}
+                        {canManageContributions && (
+                          <Button type="button" variant="destructive" onClick={() => setContributionToRemove(contribution)}>
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Combined total */}
       {summary && (
         <Card className="border-none shadow-md">
@@ -350,6 +619,36 @@ export default function Contributions() {
           ))}
         </div>
       ) : null}
+
+      <AlertDialog
+        open={contributionToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteContribution.isPending) setContributionToRemove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this contribution?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the {contributionToRemove ? formatKes(contributionToRemove.amount) : ""} contribution
+              {contributionToRemove ? ` recorded for ${contributionToRemove.userName}` : ""}. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteContribution.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmRemoveContribution();
+              }}
+              disabled={deleteContribution.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteContribution.isPending ? "Removing…" : "Remove contribution"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

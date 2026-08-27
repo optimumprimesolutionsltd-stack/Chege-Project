@@ -25,17 +25,23 @@ import { PageFlatList } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import {
   useGetExpenses,
+  useGetContributions,
   useGetDashboardActivity,
   useGetDashboardSummary,
+  useGetGroup,
   useUpdateExpense,
   useDeleteExpense,
+  useUpdateContribution,
+  useDeleteContribution,
   useApplyRecurringExpenses,
   useGetBudgetCategories,
   useGetMembers,
   getGetExpensesQueryKey,
+  getGetContributionsQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
   getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardIncomeStreamsQueryKey,
   customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -100,6 +106,8 @@ type EditForm = {
 
 type FeedTab = 'expenses' | 'activity' | 'contributions';
 type ContributionMember = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
+type Contribution = { id: number; userId: string; userName: string; amount: number; month: number; year: number; note?: string | null; createdAt: string };
+type ContributionEditForm = { amount: string; note: string; month: number; year: number; forUserId: string };
 
 export default function HistoryScreen() {
   const colors = useColors();
@@ -165,8 +173,11 @@ export default function HistoryScreen() {
   const [applyingRecurring, setApplyingRecurring] = useState(false);
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
+  const { data: group } = useGetGroup();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
+  const updateContribution = useUpdateContribution();
+  const deleteContribution = useDeleteContribution();
 
   const handleApplyRecurring = async () => {
     setApplyingRecurring(true);
@@ -183,11 +194,17 @@ export default function HistoryScreen() {
     }
   };
 
-  // Keep the general Activity feed recent; only Contributions is month-scoped.
+  // The general Activity feed is intentionally recent rather than month-scoped.
   const recentActivity = useGetDashboardActivity(
     undefined,
     { query: { queryKey: getGetDashboardActivityQueryKey(), retry: false, enabled: activeTab === 'activity' } },
   );
+  const contributionsQuery = useGetContributions(
+    { month, year },
+    { query: { queryKey: getGetContributionsQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+  );
+  // Shared-budget funding remains a summary card; standalone records below
+  // deliberately come only from GET /contributions.
   const monthlyActivity = useGetDashboardActivity(
     { month, year },
     { query: { queryKey: getGetDashboardActivityQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
@@ -197,16 +214,18 @@ export default function HistoryScreen() {
     { query: { queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
   );
   const contributionMembers = ((summary as { memberContributions?: ContributionMember[] } | undefined)?.memberContributions ?? []);
-  const activityFeed = activeTab === 'contributions' ? monthlyActivity.data ?? [] : recentActivity.data ?? [];
-  const activityLoading = activeTab === 'contributions' ? monthlyActivity.isLoading : recentActivity.isLoading;
-  const activityError = activeTab === 'contributions' ? monthlyActivity.isError : recentActivity.isError;
-  const contributionRows = useMemo(
-    () => activityFeed.filter((raw) => (raw as ActivityItem).type === ACTIVITY_TYPE.CONTRIBUTION) as ActivityItem[],
-    [activityFeed],
-  );
+  const activityFeed = recentActivity.data ?? [];
+  const activityLoading = recentActivity.isLoading;
+  const activityError = recentActivity.isError;
+  const contributions = (contributionsQuery.data ?? []) as Contribution[];
+  const isSharedWorkspace = group?.isPrivate === false;
+  const currentMember = members.find((member) => member.userId === user?.id);
+  const isContributionManager = group?.role === 'owner' || group?.role === 'admin'
+    || currentMember?.role === 'owner' || currentMember?.role === 'admin';
+  const isSharedMember = isSharedWorkspace && !isContributionManager;
   const sharedHouseholdRows = useMemo(
-    () => activityFeed.filter((raw) => (raw as ActivityItem).type === 'household') as ActivityItem[],
-    [activityFeed],
+    () => (monthlyActivity.data ?? []).filter((raw) => (raw as ActivityItem).type === 'household') as ActivityItem[],
+    [monthlyActivity.data],
   );
 
   // Grouped activity — collapsed by default, tap header to expand
@@ -310,12 +329,12 @@ export default function HistoryScreen() {
     if (activeTab === 'activity') {
       await recentActivity.refetch();
     } else if (activeTab === 'contributions') {
-      await Promise.all([monthlyActivity.refetch(), refetchSummary()]);
+      await Promise.all([contributionsQuery.refetch(), monthlyActivity.refetch(), refetchSummary()]);
     } else {
       await refetch();
     }
     setRefreshing(false);
-  }, [refetch, recentActivity, monthlyActivity, refetchSummary, activeTab]);
+  }, [refetch, recentActivity, contributionsQuery, monthlyActivity, refetchSummary, activeTab]);
 
   // Edit modal state
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -521,6 +540,101 @@ export default function HistoryScreen() {
     ]);
   };
 
+  const [editingContribution, setEditingContribution] = useState<Contribution | null>(null);
+  const [contributionForm, setContributionForm] = useState<ContributionEditForm>({
+    amount: '', note: '', month, year, forUserId: '',
+  });
+  const [savingContribution, setSavingContribution] = useState(false);
+
+  const canEditContribution = (contribution: Contribution) => {
+    if (!user) return false;
+    if (!isSharedWorkspace) return contribution.userId === user.id;
+    if (isContributionManager) return true;
+    return contribution.userId === user.id
+      && new Date(contribution.createdAt).toDateString() === new Date().toDateString();
+  };
+
+  const canRemoveContribution = (contribution: Contribution) => {
+    if (!user) return false;
+    return isSharedWorkspace
+      ? isContributionManager
+      : contribution.userId === user.id;
+  };
+
+  const openContributionEdit = (contribution: Contribution) => {
+    setContributionForm({
+      amount: String(contribution.amount),
+      note: contribution.note ?? '',
+      month: contribution.month,
+      year: contribution.year,
+      forUserId: contribution.userId,
+    });
+    setEditingContribution(contribution);
+  };
+
+  const invalidateContributionCaches = () => {
+    queryClient.invalidateQueries({ queryKey: getGetContributionsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() });
+  };
+
+  const saveContribution = async () => {
+    if (!editingContribution) return;
+    const amount = Number(contributionForm.amount);
+    if (!Number.isInteger(amount) || amount <= 0) {
+      Alert.alert('Whole amount required', 'Enter a whole KES contribution amount greater than zero.');
+      return;
+    }
+    if (!Number.isInteger(contributionForm.month)
+      || contributionForm.month < 1
+      || contributionForm.month > 12
+      || !Number.isInteger(contributionForm.year)
+      || contributionForm.year < 2000
+      || contributionForm.year > 2200
+      || !contributionForm.forUserId) {
+      Alert.alert('Missing fields', 'Choose a valid month, year, and member.');
+      return;
+    }
+    setSavingContribution(true);
+    try {
+      await updateContribution.mutateAsync({
+        id: editingContribution.id,
+        data: {
+          amount,
+          month: contributionForm.month,
+          year: contributionForm.year,
+          note: contributionForm.note.trim() || undefined,
+          ...(isContributionManager ? { forUserId: contributionForm.forUserId } : {}),
+        },
+      });
+      invalidateContributionCaches();
+      setEditingContribution(null);
+    } catch {
+      Alert.alert('Error', 'Could not save this contribution.');
+    } finally {
+      setSavingContribution(false);
+    }
+  };
+
+  const removeContribution = (contribution: Contribution) => {
+    Alert.alert('Remove contribution', `Remove KES ${formatKES(contribution.amount)} from ${contribution.userName}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteContribution.mutateAsync({ id: contribution.id });
+            invalidateContributionCaches();
+          } catch {
+            Alert.alert('Error', 'Could not remove this contribution.');
+          }
+        },
+      },
+    ]);
+  };
+
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
@@ -716,13 +830,13 @@ export default function HistoryScreen() {
           />
         )
       ) : activeTab === 'contributions' ? (
-        summaryLoading ? (
+        summaryLoading || contributionsQuery.isLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} size="large" />
-        ) : summaryError ? (
+        ) : summaryError || contributionsQuery.isError ? (
           <View style={styles.empty}><Feather name="alert-circle" size={36} color={colors.destructive} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Couldn’t load contributions</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Check your group access, then pull down to try again.</Text></View>
         ) : (
           <PageFlatList
-            data={contributionRows}
+            data={contributions}
             keyExtractor={(item) => `contribution-${item.id}`}
             ListHeaderComponent={
               <View style={styles.contributionListHeader}>
@@ -750,13 +864,26 @@ export default function HistoryScreen() {
                     {sharedHouseholdRows.map((item) => <View key={item.id} style={styles.sharedFundingRow}><Text style={[styles.sharedFundingText, { color: colors.foreground }]} numberOfLines={1}>{item.description}</Text><Text style={[styles.sharedFundingAmount, { color: colors.foreground }]}>KES {formatKES(item.amount)}</Text></View>)}
                   </View>
                 )}
-                <Text style={[styles.contributionRowsTitle, { color: colors.foreground }]}>Contribution activity</Text>
+                {isSharedMember && (
+                  <View style={[styles.contributionPermissionNote, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                    <Feather name="lock" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.contributionPermissionText, { color: colors.mutedForeground }]}>Members can edit only their own contributions created today. Only owners and admins can remove records.</Text>
+                  </View>
+                )}
+                <Text style={[styles.contributionRowsTitle, { color: colors.foreground }]}>Standalone contributions</Text>
               </View>
             }
-            renderItem={({ item }) => <View style={styles.contributionRow}><ActivityCard item={item} colors={colors} /></View>}
+            renderItem={({ item }) => (
+              <ContributionRow
+                contribution={item}
+                colors={colors}
+                onEdit={canEditContribution(item) ? () => openContributionEdit(item) : undefined}
+                onRemove={canRemoveContribution(item) ? () => removeContribution(item) : undefined}
+              />
+            )}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
-            ListEmptyComponent={<View style={styles.empty}><Feather name="trending-up" size={36} color={colors.mutedForeground} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>No contributions this month</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Member totals are still shown above when available.</Text></View>}
+            ListEmptyComponent={<View style={styles.empty}><Feather name="trending-up" size={36} color={colors.mutedForeground} /><Text style={[styles.emptyTitle, { color: colors.foreground }]}>No standalone contributions</Text><Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Member totals are still shown above when available.</Text></View>}
           />
         )
       ) : (
@@ -1145,6 +1272,90 @@ export default function HistoryScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      <Modal visible={!!editingContribution} animationType="slide" transparent onRequestClose={() => setEditingContribution(null)}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalKAV}>
+            <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+              <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit Contribution</Text>
+                <Pressable onPress={() => setEditingContribution(null)} hitSlop={8}>
+                  <Feather name="x" size={22} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalBody}>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount (KES)</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  value={contributionForm.amount}
+                  onChangeText={(amount) => setContributionForm((form) => ({ ...form, amount }))}
+                  keyboardType="numeric"
+                  placeholder="e.g. 5000"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Note (optional)</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                  value={contributionForm.note}
+                  onChangeText={(note) => setContributionForm((form) => ({ ...form, note }))}
+                  placeholder="What is this contribution for?"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+                <View style={styles.contributionDateRow}>
+                  <View style={styles.contributionDateField}>
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>Month</Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                      value={String(contributionForm.month)}
+                      keyboardType="number-pad"
+                      onChangeText={(value) => setContributionForm((form) => ({ ...form, month: Number(value) || 0 }))}
+                    />
+                  </View>
+                  <View style={styles.contributionDateField}>
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>Year</Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                      value={String(contributionForm.year)}
+                      keyboardType="number-pad"
+                      onChangeText={(value) => setContributionForm((form) => ({ ...form, year: Number(value) || 0 }))}
+                    />
+                  </View>
+                </View>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Member attribution</Text>
+                <View style={styles.memberRow}>
+                  {members.map((member) => {
+                    const selected = contributionForm.forUserId === member.userId;
+                    return (
+                      <Pressable
+                        key={member.userId}
+                        disabled={!isContributionManager}
+                        onPress={() => setContributionForm((form) => ({ ...form, forUserId: member.userId }))}
+                        style={[styles.memberPill, {
+                          backgroundColor: selected ? colors.primary + '22' : colors.muted,
+                          borderColor: selected ? colors.primary : colors.border,
+                          opacity: isContributionManager || selected ? 1 : 0.55,
+                        }]}
+                      >
+                        <Feather name="user" size={12} color={selected ? colors.primary : colors.mutedForeground} />
+                        <Text style={[styles.memberPillText, { color: selected ? colors.primary : colors.foreground }]}>
+                          {member.userName ?? 'Member'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {!isContributionManager && (
+                  <Text style={[styles.contributionPermissionText, { color: colors.mutedForeground }]}>Only owners and admins can change member attribution.</Text>
+                )}
+                <Pressable onPress={saveContribution} disabled={savingContribution} style={[styles.saveBtn, savingContribution && { opacity: 0.6 }]}>
+                  {savingContribution ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
+                </Pressable>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1175,13 +1386,58 @@ function ExpenseRow({
           −{expense.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
         </Text>
         <View style={styles.rowActions}>
-          <Pressable onPress={onEdit} hitSlop={6} style={styles.actionBtn}>
+          <Pressable onPress={onEdit} hitSlop={6} style={styles.actionBtn} accessibilityRole="button" accessibilityLabel={`Edit ${expense.description}`}>
             <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+            <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Edit</Text>
           </Pressable>
-          <Pressable onPress={onDelete} hitSlop={6} style={styles.actionBtn}>
+          <Pressable onPress={onDelete} hitSlop={6} style={styles.actionBtn} accessibilityRole="button" accessibilityLabel={`Remove ${expense.description}`}>
             <Feather name="trash-2" size={14} color="#ef4444" />
+            <Text style={[styles.actionBtnText, { color: '#ef4444' }]}>Remove</Text>
           </Pressable>
         </View>
+      </View>
+    </View>
+  );
+}
+
+function ContributionRow({
+  contribution, colors, onEdit, onRemove,
+}: {
+  contribution: Contribution;
+  colors: any;
+  onEdit?: () => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <View style={[styles.standaloneContributionRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
+        <Feather name="trending-up" size={16} color={colors.primary} />
+      </View>
+      <View style={styles.rowInfo}>
+        <Text style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{contribution.userName}</Text>
+        <Text style={[styles.rowMeta, { color: colors.mutedForeground }]}>
+          {MONTHS_SHORT[contribution.month - 1]} {contribution.year} · Added {formatDate(contribution.createdAt)}
+        </Text>
+        {contribution.note ? <Text style={[styles.rowNotes, { color: colors.mutedForeground }]}>{contribution.note}</Text> : null}
+      </View>
+      <View style={styles.contributionRowRight}>
+        <Text style={[styles.rowAmount, { color: colors.primary }]}>+{formatKES(contribution.amount)}</Text>
+        {(onEdit || onRemove) && (
+          <View style={styles.contributionActions}>
+            {onEdit && (
+              <Pressable onPress={onEdit} style={[styles.contributionActionButton, { borderColor: colors.border }]} accessibilityLabel="Edit contribution">
+                <Feather name="edit-2" size={13} color={colors.mutedForeground} />
+                <Text style={[styles.contributionActionText, { color: colors.foreground }]}>Edit</Text>
+              </Pressable>
+            )}
+            {onRemove && (
+              <Pressable onPress={onRemove} style={[styles.contributionActionButton, { borderColor: colors.destructive }]} accessibilityLabel="Remove contribution">
+                <Feather name="trash-2" size={13} color={colors.destructive} />
+                <Text style={[styles.contributionActionText, { color: colors.destructive }]}>Remove</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -1230,6 +1486,15 @@ const styles = StyleSheet.create({
   contributionStat: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   contributionRowsTitle: { marginTop: 6, fontSize: 14, fontFamily: 'Inter_700Bold' },
   contributionRow: { marginBottom: 10 },
+  contributionPermissionNote: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderWidth: 1, borderRadius: 10, padding: 10 },
+  contributionPermissionText: { flex: 1, fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular' },
+  standaloneContributionRow: { flexDirection: 'row', alignItems: 'flex-start', padding: 12, borderWidth: 1, borderRadius: 12, marginBottom: 10, gap: 10 },
+  contributionRowRight: { alignItems: 'flex-end', gap: 8 },
+  contributionActions: { flexDirection: 'row', gap: 6 },
+  contributionActionButton: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 5 },
+  contributionActionText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  contributionDateRow: { flexDirection: 'row', gap: 10 },
+  contributionDateField: { flex: 1 },
   sharedFunding: { borderWidth: 1, borderRadius: 14, padding: 13, gap: 5 },
   sharedFundingTitle: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   sharedFundingText: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular' },
@@ -1245,7 +1510,8 @@ const styles = StyleSheet.create({
   rowRight: { alignItems: 'flex-end', gap: 6 },
   rowAmount: { fontSize: 14, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
   rowActions: { flexDirection: 'row', gap: 8 },
-  actionBtn: { padding: 2 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 4 },
+  actionBtnText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
 
   empty: { alignItems: 'center', paddingTop: 80, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },

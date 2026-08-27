@@ -19,6 +19,16 @@ import type { SavingsGoal, CascadeContributeAllocation } from "@workspace/api-cl
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatKes } from "@/lib/utils";
 import {
   getChipRange,
@@ -318,16 +328,15 @@ function GoalContributionHistory({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    size="sm"
+                    className="h-8 shrink-0 px-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => onDeleteContribution(c as GoalContribution)}
                     disabled={isDeletingContribution}
-                    title="Delete contribution"
-                    aria-label={`Delete ${isAdjustment ? "balance correction" : "contribution"} from ${c.contributorName}`}
+                    aria-label={`Remove ${isAdjustment ? "balance correction" : "contribution"} from ${c.contributorName}`}
                   >
                     {isDeletingContribution
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <Trash2 className="w-3.5 h-3.5" />}
+                      : <><Trash2 className="mr-1 w-3.5 h-3.5" /> Remove</>}
                   </Button>
                 )}
               </div>
@@ -374,6 +383,7 @@ export default function SavingsGoals() {
   const inconsistentGoals = consistencyData?.inconsistentGoals ?? [];
 
   const [mode, setMode] = useState<GoalFormMode>("none");
+  const [deleteTarget, setDeleteTarget] = useState<SavingsGoal | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<number | null>(() => {
     try {
       const raw = localStorage.getItem("goal-history-expanded");
@@ -730,10 +740,10 @@ export default function SavingsGoals() {
   };
 
   const handleDelete = async (goal: SavingsGoal) => {
-    if (!confirm(`Delete goal "${goal.name}"? This cannot be undone.`)) return;
     try {
       await deleteGoal.mutateAsync({ id: goal.id });
       toast({ title: "Goal deleted" });
+      setDeleteTarget(null);
       invalidate();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete goal." });
@@ -1163,15 +1173,15 @@ export default function SavingsGoals() {
                         <Target className="w-5 h-5 text-primary shrink-0" />
                         <CardTitle className="text-lg leading-tight">{goal.name}</CardTitle>
                       </div>
-                      <div className="flex gap-1 shrink-0">
-                        {canManageShared && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEdit(goal)} title="Edit goal">
-                          <Pencil className="w-4 h-4" />
+                      <div className="flex flex-wrap justify-end gap-1 shrink-0">
+                        {canManageShared && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => openEdit(goal)}>
+                          <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
                         </Button>}
-                        {canManageShared && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-emerald-600" onClick={() => handleMarkComplete(goal)} title="Mark complete">
-                          <CheckCircle2 className="w-4 h-4" />
+                        {canManageShared && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-emerald-600" onClick={() => handleMarkComplete(goal)}>
+                          <CheckCircle2 className="mr-1 w-3.5 h-3.5" /> Complete
                         </Button>}
-                        {canManageShared && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(goal)} title="Delete goal">
-                          <Trash2 className="w-4 h-4" />
+                        {canManageShared && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(goal)}>
+                          <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
                         </Button>}
                       </div>
                     </div>
@@ -1355,8 +1365,8 @@ export default function SavingsGoals() {
                           {canManageShared && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleMarkComplete(goal)} title="Reopen goal">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                           </Button>}
-                          {canManageShared && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(goal)} title="Delete goal">
-                            <Trash2 className="w-3.5 h-3.5" />
+                          {canManageShared && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(goal)}>
+                            <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
                           </Button>}
                         </div>
                       </div>
@@ -1398,6 +1408,31 @@ export default function SavingsGoals() {
           )}
         </>
       )}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this savings goal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `"${deleteTarget.name}", its contribution history, and its saved balance will be removed. This cannot be undone.`
+                : "This savings goal will be removed."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep goal</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteGoal.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (deleteTarget) void handleDelete(deleteTarget);
+              }}
+            >
+              {deleteGoal.isPending ? "Removing…" : "Remove goal"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

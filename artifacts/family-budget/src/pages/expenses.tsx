@@ -43,6 +43,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -188,6 +198,7 @@ export default function Expenses() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [editHasMultipleFundingSplits, setEditHasMultipleFundingSplits] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -668,10 +679,10 @@ export default function Expenses() {
       });
       return;
     }
-    if (!confirm("Delete this expense?")) return;
     try {
       await deleteExpense.mutateAsync({ id });
       toast({ title: "Expense deleted" });
+      setDeleteTarget(null);
       invalidate();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete expense." });
@@ -1440,27 +1451,27 @@ export default function Expenses() {
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/50 pt-3 sm:mt-0 sm:justify-end sm:border-t-0 sm:pt-0">
                       <p className="font-display font-bold text-lg text-foreground">{formatKes(expense.amount)}</p>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
                         {canEditExpense(expense as Expense) && (
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted"
+                          size="sm"
+                          className="h-9 px-3 text-muted-foreground hover:text-foreground hover:bg-muted"
                           onClick={() => startEdit(expense as Expense)}
                           aria-label={`Edit ${expense.description}`}
                         >
-                          <Pencil className="w-4 h-4" />
+                          <Pencil className="mr-1.5 w-4 h-4" /> Edit
                         </Button>
                         )}
                         {canManageExpenses && (
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 w-9"
-                          onClick={() => handleDelete(expense.id)}
-                          aria-label={`Delete ${expense.description}`}
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 px-3"
+                          onClick={() => setDeleteTarget(expense as Expense)}
+                          aria-label={`Remove ${expense.description}`}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="mr-1.5 w-4 h-4" /> Remove
                         </Button>
                         )}
                       </div>
@@ -1476,6 +1487,31 @@ export default function Expenses() {
           </div>
         </Card>
       )}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this expense?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `"${deleteTarget.description}" and its effect on balances, reports, and activity will be removed. This cannot be undone.`
+                : "This expense will be removed."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep expense</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteExpense.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (deleteTarget) void handleDelete(deleteTarget.id);
+              }}
+            >
+              {deleteExpense.isPending ? "Removing…" : "Remove expense"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

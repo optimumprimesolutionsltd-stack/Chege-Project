@@ -38,6 +38,7 @@ import {
   useContributeToSavingsGoal,
   useCascadeContribute,
   useGetSavingsGoalContributions,
+  useDeleteSavingsGoalContribution,
   getGetSavingsGoalContributionsQueryKey,
   getGetSavingsGoalsQueryKey,
   getGetJointAccountQueryKey,
@@ -363,6 +364,7 @@ export default function GoalsScreen() {
 
   const { mutateAsync: updateGoal } = useUpdateSavingsGoal();
   const { mutateAsync: deleteGoal } = useDeleteSavingsGoal();
+  const deleteHistoryContribution = useDeleteSavingsGoalContribution();
 
   const openEditGoal = (goal: SavingsGoal) => {
     if (!canManageShared) {
@@ -684,6 +686,36 @@ export default function GoalsScreen() {
       AsyncStorage.setItem(goalFilterStorageKey(historyGoal.id), JSON.stringify(stored)).catch(() => {});
     }
     setHistoryVisible(false);
+  };
+
+  const confirmDeleteHistoryContribution = (contribution: SavingsGoalContribution) => {
+    if (!historyGoal || !canManageShared) return;
+    const entryLabel = contribution.note != null ? 'balance correction' : 'contribution';
+    Alert.alert(
+      `Remove ${entryLabel}?`,
+      `This entry will be removed from "${historyGoal.name}", and the goal balance will be recalculated.`,
+      [
+        { text: 'Keep entry', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteHistoryContribution.mutateAsync({
+                id: historyGoal.id,
+                contributionId: contribution.id,
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              invalidateGoalQueries();
+              invalidateContribHistory(historyGoal.id);
+            } catch {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('Could not remove entry', 'The savings entry was not changed. Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   // ── Contribute modal ────────────────────────────────────────────────────────
@@ -1093,10 +1125,8 @@ export default function GoalsScreen() {
                   const pct = goal.targetAmount > 0 ? Math.min(goal.currentAmount / goal.targetAmount, 1) : 0;
                   const isFunded = goal.targetAmount > 0 && goal.currentAmount >= goal.targetAmount;
                   return (
-                    <Pressable
+                    <View
                       key={goal.id}
-                      onLongPress={canManageShared ? () => openGoalActions(goal) : undefined}
-                      delayLongPress={400}
                       style={[styles.card, { backgroundColor: colors.card, borderColor: isFunded ? '#4ade80' : colors.border }]}
                     >
                       <View style={styles.cardTop}>
@@ -1118,7 +1148,8 @@ export default function GoalsScreen() {
                             hitSlop={8}
                             style={styles.kebabBtn}
                           >
-                            <Feather name="more-vertical" size={18} color={colors.mutedForeground} />
+                             <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+                             <Text style={[styles.kebabBtnText, { color: colors.mutedForeground }]}>Manage</Text>
                           </TouchableOpacity>}
                         </View>
                       </View>
@@ -1156,7 +1187,7 @@ export default function GoalsScreen() {
                           </Pressable>
                         )}
                       </View>
-                    </Pressable>
+                    </View>
                   );
                 })}
               </>
@@ -1166,10 +1197,8 @@ export default function GoalsScreen() {
               <>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground, marginTop: 8 }]}>COMPLETED</Text>
                 {done.map((goal) => (
-                  <Pressable
+                  <View
                     key={goal.id}
-                    onLongPress={canManageShared ? () => openCompletedGoalActions(goal) : undefined}
-                    delayLongPress={400}
                     style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, opacity: 0.7 }]}
                   >
                     <View style={styles.cardTop}>
@@ -1189,11 +1218,12 @@ export default function GoalsScreen() {
                           hitSlop={8}
                           style={styles.kebabBtn}
                         >
-                          <Feather name="more-vertical" size={18} color={colors.mutedForeground} />
+                          <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+                          <Text style={[styles.kebabBtnText, { color: colors.mutedForeground }]}>Manage</Text>
                         </TouchableOpacity>}
                       </View>
                     </View>
-                  </Pressable>
+                  </View>
                 ))}
               </>
             )}
@@ -2121,6 +2151,20 @@ export default function GoalsScreen() {
                               {c.note}
                             </Text>
                           )}
+                          {canManageShared && (
+                            <Pressable
+                              onPress={() => confirmDeleteHistoryContribution(c)}
+                              disabled={deleteHistoryContribution.isPending}
+                              style={styles.historyRemoveBtn}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Remove savings ${isCorrection ? 'balance correction' : 'contribution'}`}
+                            >
+                              <Feather name="trash-2" size={13} color="#ef4444" />
+                              <Text style={styles.historyRemoveText}>
+                                {deleteHistoryContribution.isPending ? 'Removing…' : 'Remove'}
+                              </Text>
+                            </Pressable>
+                          )}
                         </View>
                       </View>
                     );
@@ -2473,7 +2517,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   cardRight: { alignItems: 'flex-end', justifyContent: 'space-between', gap: 4 },
-  kebabBtn: { padding: 4 },
+  kebabBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 4 },
+  kebabBtnText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   cardPct: {
     fontSize: 18,
     fontWeight: '700' as const,
@@ -2813,6 +2858,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     marginTop: 2,
+  },
+  historyRemoveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingVertical: 5,
+    marginTop: 3,
+  },
+  historyRemoveText: {
+    color: '#ef4444',
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
   },
   historyAdjustmentBadge: {
     borderRadius: 4,

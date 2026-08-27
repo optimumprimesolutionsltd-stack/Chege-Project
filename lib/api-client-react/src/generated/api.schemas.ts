@@ -280,8 +280,17 @@ export interface Contribution {
 }
 
 export interface ContributionInput {
+  /** @minimum 1 */
   amount: number;
+  /**
+     * @minimum 1
+     * @maximum 12
+     */
   month: number;
+  /**
+     * @minimum 2000
+     * @maximum 2200
+     */
   year: number;
   note?: string;
   /** Record this contribution on behalf of another household member (their ID) */

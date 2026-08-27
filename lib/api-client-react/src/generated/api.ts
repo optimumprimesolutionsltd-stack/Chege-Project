@@ -1294,6 +1294,78 @@ export const useDeleteBudgetCategory = <TError = ErrorType<ErrorResponse>,
       return useMutation(getDeleteBudgetCategoryMutationOptions(options));
     }
 
+export const getUpdateContributionUrl = (id: number,) => {
+
+
+
+
+  return `/api/contributions/${id}`
+}
+
+/**
+ * @summary Update a contribution by ID
+ */
+export const updateContribution = async (id: number,
+    contributionInput: ContributionInput, options?: Parameters<typeof customFetch>[1]): Promise<Contribution> => {
+
+  return customFetch<Contribution>(getUpdateContributionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(contributionInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateContributionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContribution>>, TError,{id: number;data: BodyType<ContributionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateContribution>>, TError,{id: number;data: BodyType<ContributionInput>}, TContext> => {
+
+const mutationKey = ['updateContribution'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateContribution>>, {id: number;data: BodyType<ContributionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateContribution(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateContributionMutationResult = NonNullable<Awaited<ReturnType<typeof updateContribution>>>
+    export type UpdateContributionMutationBody = BodyType<ContributionInput>
+    export type UpdateContributionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update a contribution by ID
+ */
+export const useUpdateContribution = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContribution>>, TError,{id: number;data: BodyType<ContributionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateContribution>>,
+        TError,
+        {id: number;data: BodyType<ContributionInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateContributionMutationOptions(options));
+    }
+
 export const getDeleteContributionUrl = (id: number,) => {
 
 

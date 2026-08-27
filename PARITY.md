@@ -29,18 +29,19 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | **Expenses** | | | |
 | Expense list | ✅ | ✅ | Mobile: hidden "History" tab reachable from dashboard |
 | Log an expense | ✅ | ✅ | Web: inline form. Mobile: dedicated add-expense screen |
-| Edit an expense (incl. payer correction) | ✅ | ✅ | Both support editing all fields including payer |
-| Delete an expense | ✅ | ✅ | Both support deletion with confirmation |
+| Edit an expense (incl. payer correction) | ✅ | ✅ | Both show a visible Edit action and a prefilled form for all fields, including payer |
+| Delete an expense | ✅ | ✅ | Both show a visible Remove action with a destructive confirmation |
 | Recurring expense flag | ✅ | ✅ | Both allow marking an expense as recurring |
 | Apply prior-month recurring expenses | ✅ | ❌ | Mobile apply-from-prior-month is a pending task |
 | Calendar date picker on expenses | ✅ | ❌ | Mobile uses arrow controls (prev/next day); calendar picker is a pending task |
 | **Budget** | | | |
 | Category budget viewing | ✅ | ✅ | Both show spend vs. budget per category |
 | Budget identity personalization | ✅ | ✅ | Both support Unicode names, optional emoji, curated name styles, meaningful category icons, and theme-aware surfaces |
-| Edit category limits | ✅ | ❌ | Web-only |
+| Edit or remove category limits | ✅ | ✅ | Both show visible Edit and Remove actions; manager permissions still apply in Shared budgets |
 | Balance mismatch alert | ⏳ | ❌ | Web surface is a pending task |
 | **Contributions** | | | |
 | Record a deposit / contribution | ✅ | ✅ | Both support recording monthly contributions per person |
+| Edit or remove contribution records | ✅ | ✅ | Both have a month-scoped management list. Owners/admins manage all; members can edit only their own current-day record and cannot remove |
 | Contributor summary | ✅ | ✅ | Both show per-person contributed/target/spent/net |
 | Month navigation (prev/next) | ✅ | ✅ | Both support browsing past months |
 | Month-jump picker | ✅ | ✅ | Both have a 24-month jump picker (web: contributions; mobile: contributions + history) |
@@ -49,11 +50,12 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | Create a savings goal | ✅ | ✅ | Both support goal creation with name, target, and optional deadline |
 | Goal deadline | ✅ | ✅ | Both include a deadline picker on create/edit |
 | Edit a goal (name / target / deadline) | ✅ | ✅ | Both support editing; mobile also renames completed goals |
-| Delete a goal | ✅ | ✅ | Both support deletion with confirmation |
+| Delete a goal | ✅ | ✅ | Both expose visible management actions and require confirmation before removal |
 | Contribute to a single goal | ✅ | ✅ | Both support per-goal contributions |
 | Cascade / waterfall contribution | ✅ | ❌ | Web distributes across all goals in priority order; mobile is single-goal only |
 | Goal completion badge | ✅ | ✅ | Web: badge on goal card. Mobile: "Goal reached!" label; completed goals omit contribute button |
 | Goal history with date filters | ✅ | ✅ | Both show per-goal contribution history with month/range filters |
+| Remove a savings contribution or correction | ✅ | ✅ | Owners/admins can remove an entry from goal history with confirmation; the goal balance is recalculated |
 | Display correction reason in history | ⏳ | ⏳ | Reason is captured on both platforms but not yet shown in history — pending task |
 | Balance correction (edit current amount) | ✅ | ✅ | Both allow correcting current amount; large corrections (>50%) require a reason |
 | **Bank** | | | |
