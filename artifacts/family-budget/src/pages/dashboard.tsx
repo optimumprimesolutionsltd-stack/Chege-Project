@@ -1601,7 +1601,18 @@ export default function Dashboard() {
                       <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none">
                         {chartData.map((_, i) => <Cell key={i} fill={chartData[i].color} />)}
                       </Pie>
-                      <Tooltip formatter={(v: number) => formatKes(v)} contentStyle={{ borderRadius: "0.75rem", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
+                      <Tooltip
+                        formatter={(v: number) => formatKes(v)}
+                        contentStyle={{
+                          borderRadius: "0.75rem",
+                          backgroundColor: "hsl(var(--popover))",
+                          color: "hsl(var(--popover-foreground))",
+                          border: "1px solid hsl(var(--popover-border))",
+                          boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.25)",
+                        }}
+                        itemStyle={{ color: "hsl(var(--popover-foreground))" }}
+                        labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
