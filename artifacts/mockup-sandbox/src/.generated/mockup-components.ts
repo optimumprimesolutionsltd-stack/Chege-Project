@@ -2,5 +2,6 @@
 type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/jamvi-home/Current.tsx": () => import("../components/mockups/jamvi-home/Current.tsx"),
-  "./components/mockups/jamvi-home/WorkspaceInbox.tsx": () => import("../components/mockups/jamvi-home/WorkspaceInbox.tsx")
+  "./components/mockups/jamvi-home/WorkspaceInbox.tsx": () => import("../components/mockups/jamvi-home/WorkspaceInbox.tsx"),
+  "./components/mockups/jamvi-home/WorkspaceInboxRefined.tsx": () => import("../components/mockups/jamvi-home/WorkspaceInboxRefined.tsx")
 };
