@@ -35,7 +35,7 @@ const budgetPaths: BudgetPath[] = [
   },
   {
     id: 'family',
-    name: 'Family budget',
+    name: 'Shared budget',
     context: 'For home',
     purpose: 'Plan household life without mixing everything together.',
     detail: 'A shared place for home priorities, while personal choices stay personal.',

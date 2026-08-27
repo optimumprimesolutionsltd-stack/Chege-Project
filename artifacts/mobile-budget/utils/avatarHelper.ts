@@ -11,12 +11,12 @@ export interface AvatarUser {
 }
 
 /**
- * Returns the display name for a user, falling back to 'Family Member'.
+ * Returns the display name for a user, falling back to 'Member'.
  */
 export function getDisplayName(user: AvatarUser | null | undefined): string {
   return (
     [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
-    'Family Member'
+    'Member'
   );
 }
 

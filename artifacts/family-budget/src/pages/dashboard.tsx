@@ -35,7 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-   Wallet, Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark,
+   Wallet, Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1093,6 +1093,10 @@ export default function Dashboard() {
   const workspaceAccentColor = group?.accentColor ?? "#003383";
   return (
     <div className="min-w-0 overflow-x-hidden space-y-6 pb-12 sm:space-y-8">
+      <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+        <Home className="h-3.5 w-3.5" aria-hidden="true" />
+        Home · Start here
+      </div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-center gap-3">
           <ProfileAvatar user={user} className="h-12 w-12 sm:h-14 sm:w-14" textClassName="text-lg" alt={user?.firstName ?? "User"} />
@@ -1126,7 +1130,7 @@ export default function Dashboard() {
               >
                 Viewing budget
               </p>
-              <p className={`mt-1 truncate text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
+              <p className={`mt-1 break-words text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
                 {group ? workspaceLabel(group) : "Personal budget"}
               </p>
             </div>
@@ -1176,14 +1180,14 @@ export default function Dashboard() {
                   key={shortcut.href}
                   href={shortcut.href}
                   data-testid={`overview-shortcut-${shortcut.label.toLowerCase()}`}
-                  className="group flex min-h-20 items-center gap-3 rounded-xl border border-border/80 bg-background px-3 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group flex min-h-20 min-w-0 items-center gap-3 rounded-xl border border-border/80 bg-background px-3 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <ShortcutIcon className="h-4 w-4" aria-hidden="true" />
                   </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-bold text-foreground">{shortcut.label}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{shortcut.description}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block w-full whitespace-normal break-words text-sm font-bold leading-tight text-foreground">{shortcut.label}</span>
+                    <span className="mt-1 block w-full whitespace-normal break-words text-xs leading-tight text-muted-foreground">{shortcut.description}</span>
                   </span>
                   <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                 </Link>

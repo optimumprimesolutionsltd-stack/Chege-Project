@@ -1,5 +1,5 @@
 /**
- * Jamvi brand tokens shared with family-budget/src/index.css.
+ * Jamvi brand tokens shared with the web app styles.
  *
  * Logo palette: navy #011C4E, royal blue #003383, turquoise #08B7B0,
  * bright green #3CDD62, and gold #FDBB0A. Keep status roles separate so

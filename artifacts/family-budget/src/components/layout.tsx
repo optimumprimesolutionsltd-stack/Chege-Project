@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
 import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useGetGroup, useGetMembers } from '@workspace/api-client-react';
@@ -14,6 +14,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
   const [location, navigate] = useLocation();
+  const allowBrowserExitRef = useRef(false);
   const { user, logout } = useAuth();
   const { data: group } = useGetGroup();
   const { data: members = [] } = useGetMembers();
@@ -21,6 +22,38 @@ export function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [location]);
+
+  useEffect(() => {
+    const guardedUrl = window.location.href;
+    const guardState = { ...(window.history.state ?? {}), jamviHomeGuard: true };
+    window.history.pushState(guardState, '', guardedUrl);
+
+    const handleBrowserBack = () => {
+      if (allowBrowserExitRef.current) {
+        allowBrowserExitRef.current = false;
+        return;
+      }
+
+      if (location !== '/') {
+        navigate('/', { replace: true });
+        return;
+      }
+
+      const leave = window.confirm(
+        'You are at Home, the beginning of Jamvi. Do you want to leave the application?',
+      );
+      if (leave) {
+        allowBrowserExitRef.current = true;
+        window.history.back();
+        return;
+      }
+
+      window.history.pushState(guardState, '', guardedUrl);
+    };
+
+    window.addEventListener('popstate', handleBrowserBack);
+    return () => window.removeEventListener('popstate', handleBrowserBack);
+  }, [location, navigate]);
 
   const isSharedWorkspace = group?.isPrivate === false;
   const activeWorkspaceRole = group?.role ?? (group?.isPrivate ? 'owner' : 'member');

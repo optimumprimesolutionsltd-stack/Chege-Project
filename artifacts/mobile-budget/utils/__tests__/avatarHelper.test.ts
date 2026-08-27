@@ -33,16 +33,16 @@ describe('getDisplayName', () => {
     expect(getDisplayName({ firstName: null, lastName: 'Doe' })).toBe('Doe');
   });
 
-  it('falls back to "Family Member" when both names are null', () => {
-    expect(getDisplayName({ firstName: null, lastName: null })).toBe('Family Member');
+  it('falls back to "Member" when both names are null', () => {
+    expect(getDisplayName({ firstName: null, lastName: null })).toBe('Member');
   });
 
-  it('falls back to "Family Member" when user is null', () => {
-    expect(getDisplayName(null)).toBe('Family Member');
+  it('falls back to "Member" when user is null', () => {
+    expect(getDisplayName(null)).toBe('Member');
   });
 
-  it('falls back to "Family Member" when user is undefined', () => {
-    expect(getDisplayName(undefined)).toBe('Family Member');
+  it('falls back to "Member" when user is undefined', () => {
+    expect(getDisplayName(undefined)).toBe('Member');
   });
 });
 
@@ -67,7 +67,7 @@ describe('getInitials', () => {
   });
 
   it('returns "FM" for the fallback display name', () => {
-    expect(getInitials('Family Member')).toBe('FM');
+    expect(getInitials('Member')).toBe('M');
   });
 });
 
@@ -120,10 +120,10 @@ describe('resolveAvatarProps — fallback path (profileImageUrl absent)', () => 
     expect(result.text).toBe('J');
   });
 
-  it('uses "FM" initials for the default fallback display name', () => {
+  it('uses "M" initials for the default fallback display name', () => {
     const result = resolveAvatarProps({ firstName: null, lastName: null, profileImageUrl: null });
     if (result.kind !== 'initials') throw new Error('Expected initials kind');
-    expect(result.text).toBe('FM');
+    expect(result.text).toBe('M');
   });
 
   it('returns kind "initials" when user is null', () => {

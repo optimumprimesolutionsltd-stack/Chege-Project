@@ -12,7 +12,7 @@ type Budget = {
 };
 
 const sharedBudgets: Budget[] = [
-  { name: 'Mwangaza Family', kind: 'Family budget', detail: 'Home bills, food & school', people: '5 members', accent: '#19b7ae', initials: 'MF' },
+  { name: 'Mwangaza Family', kind: 'Shared budget', detail: 'Home bills, food & school', people: '5 members', accent: '#19b7ae', initials: 'MF' },
   { name: 'Tujenge Chama', kind: 'Chama budget', detail: 'Monthly contributions & table banking', people: '8 members', accent: '#f0b429', initials: 'TC' },
   { name: 'St. Luke Welfare', kind: 'Church budget', detail: 'Welfare contributions & support', people: '24 members', accent: '#8aa8df', initials: 'SL' },
   { name: 'Sprint Crew', kind: 'Team budget', detail: 'Team lunch & shared tools', people: '6 members', accent: '#df8c68', initials: 'SC' },

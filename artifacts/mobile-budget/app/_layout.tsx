@@ -106,6 +106,7 @@ function RootLayoutNav() {
   const isTabsRoute = segments[0] === '(tabs)';
   const isTabsHome = isTabsRoute && !segments[1];
   const resolvedChooserUserId = useRef<string | null>(null);
+  const allowWebExitRef = useRef(false);
   const [checkingChooser, setCheckingChooser] = useState(true);
 
   // Keep Android's hardware back action inside Jamvi. A back press from a
@@ -132,6 +133,42 @@ function RootLayoutNav() {
     });
 
     return () => subscription.remove();
+  }, [isAuthenticated, isTabsHome, isTabsRoute]);
+
+  // Expo web runs inside the phone browser, so React Native's BackHandler is
+  // not involved. Keep browser Back inside the app and ask before leaving
+  // Jamvi from its Home screen.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isAuthenticated || !isTabsRoute || typeof window === 'undefined') return;
+
+    const homeUrl = window.location.href;
+    const guardState = { ...(window.history.state ?? {}), jamviHomeGuard: true };
+    window.history.pushState(guardState, '', homeUrl);
+
+    const handlePopState = () => {
+      if (allowWebExitRef.current) {
+        allowWebExitRef.current = false;
+        return;
+      }
+
+      if (!isTabsHome) {
+        router.replace('/(tabs)');
+        return;
+      }
+
+      const leave = window.confirm(
+        'You are at the beginning of Jamvi. Do you want to leave the application?',
+      );
+      if (leave) {
+        allowWebExitRef.current = true;
+        window.history.back();
+        return;
+      }
+      window.history.pushState(guardState, '', homeUrl);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, [isAuthenticated, isTabsHome, isTabsRoute]);
 
   // Re-fetch all data the moment the user signs in so queries that ran

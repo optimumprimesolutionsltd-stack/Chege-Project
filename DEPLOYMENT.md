@@ -21,7 +21,7 @@ monthly digest with `node-cron`, neither of which survives on Vercel functions.
 | `GOOGLE_CLIENT_SECRET` | OAuth client secret. |
 | `APP_ORIGIN` | The origin users load in the browser — the Vercel URL, e.g. `https://family-budget.vercel.app`. See below. |
 | `RESEND_API_KEY` | Resend key for the monthly digest. Previously held by the Replit connector. |
-| `DIGEST_FROM_EMAIL` | Optional. Defaults to `Family Budget <onboarding@resend.dev>`. |
+| `DIGEST_FROM_EMAIL` | Optional. Defaults to `Jamvi <onboarding@resend.dev>`. |
 | `PORT` | Set by the host. |
 
 `ISSUER_URL` defaults to `https://accounts.google.com` and only needs setting
