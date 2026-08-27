@@ -314,6 +314,36 @@ export default function DashboardScreen() {
           </View>
 
           {isSharedWorkspace && (
+            <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
+              <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>Your group areas</Text>
+              <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
+                Quickly see what each Group tab helps you manage.
+              </Text>
+              <View style={styles.overviewNavGrid}>
+                {SHARED_OVERVIEW_SHORTCUTS.map((shortcut) => (
+                  <Pressable
+                    key={shortcut.label}
+                    testID={`overview-shortcut-${shortcut.label.toLowerCase()}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${shortcut.label}`}
+                    style={({ pressed }) => [
+                      styles.overviewNavButton,
+                      { backgroundColor: shortcut.bg, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
+                    ]}
+                    onPress={() => router.push(shortcut.route as any)}
+                  >
+                    <Feather name={shortcut.icon} size={18} color={shortcut.color} />
+                    <Text style={[styles.overviewNavButtonText, { color: shortcut.color }]}>{shortcut.label}</Text>
+                    <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]}>{shortcut.description}</Text>
+                    <Feather name="chevron-right" size={13} color={shortcut.color} style={styles.overviewNavChevron} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {isSharedWorkspace && (
             <View style={styles.ringWrap}>
               <BudgetRing
                 percent={spentPercent}
@@ -370,36 +400,6 @@ export default function DashboardScreen() {
             </Pressable>
           ))}
         </View>
-
-        {isSharedWorkspace && (
-          <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
-            <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>Go straight to a budget area</Text>
-            <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
-              Open the shared budget, contributions, expenses, goals, bank, or reports without hunting through the menu.
-            </Text>
-            <View style={styles.overviewNavGrid}>
-              {SHARED_OVERVIEW_SHORTCUTS.map((shortcut) => (
-                <Pressable
-                  key={shortcut.label}
-                  testID={`overview-shortcut-${shortcut.label.toLowerCase()}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${shortcut.label}`}
-                  style={({ pressed }) => [
-                    styles.overviewNavButton,
-                    { backgroundColor: shortcut.bg, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
-                  ]}
-                  onPress={() => router.push(shortcut.route as any)}
-                >
-                  <Feather name={shortcut.icon} size={18} color={shortcut.color} />
-                  <Text style={[styles.overviewNavButtonText, { color: shortcut.color }]}>{shortcut.label}</Text>
-                  <Text style={[styles.overviewNavButtonDescription, { color: colors.mutedForeground }]}>{shortcut.description}</Text>
-                  <Feather name="chevron-right" size={13} color={shortcut.color} style={styles.overviewNavChevron} />
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
 
         {/* Personal budget keeps activity before the account summary. */}
         {!isSharedWorkspace && <View style={styles.section}>
