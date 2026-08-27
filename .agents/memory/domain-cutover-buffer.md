@@ -3,8 +3,16 @@ name: Domain cutover buffer
 description: Production domain migration rule for Jamvi's Render hosting.
 ---
 
-Keep the currently working production domain active as a buffer while introducing or verifying any replacement domain.
+Use two Render Web Services for Jamvi: the existing generated `onrender.com`
+service tracks `staging`, while a separate service tracks `main` and owns the
+paid public domain. Render's automatically assigned hostname for the
+production service does not need to be exposed or purchased as another domain.
 
-**Why:** A DNS change can take time to propagate and can interrupt users, sessions, OAuth callbacks, or invitation links if the new route is not ready.
+**Why:** This lets every release be verified on the existing Render hostname
+before it reaches the public domain, without requiring a third purchased
+domain or risking that staging changes share production infrastructure.
 
-**How to apply:** All candidate deployments should first land on a separate Render staging service and its generated Render URL. Only merge verified changes into `main`, which deploys the production service and its current public domain. Keep staging data and secrets separate from production.
+**How to apply:** Develop on a feature branch, merge to `staging`, verify the
+existing Render URL, then merge the verified commit to `main`. Keep staging
+and production databases, OAuth applications, email settings, photo buckets,
+and origin URLs separate. Attach the paid domain only to production.

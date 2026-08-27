@@ -1,5 +1,9 @@
 # Deploying off Replit
 
+> Current hosting uses the two-service Render setup documented in
+> [`RENDER_DEPLOYMENT.md`](./RENDER_DEPLOYMENT.md). The Vercel/API split below
+> is retained as legacy reference only.
+
 The app is split across two hosts: the Vite SPA on Vercel, and the Express API
 on any host that runs a long-lived Node process (Railway, Render, Fly.io).
 The API is not serverless-ready — it calls `app.listen` and schedules the

@@ -8,13 +8,15 @@
 # stores it as an environment variable on the service.
 
 services:
-  # Jamvi's API and web application intentionally share one public origin. It
-  # keeps /api requests, cookies, invite links, and OAuth callbacks consistent.
+  # Staging keeps the current generated Render hostname as the verification URL.
+  # Keep this service's database, OAuth credentials, email settings, and photo
+  # bucket separate from production.
   - type: web
     name: jamvi
     runtime: node
     region: frankfurt
     plan: starter
+    branch: staging
     autoDeploy: true
     buildCommand: corepack pnpm@11.20.0 install --frozen-lockfile --prod=false --config.strictDepBuilds=false && corepack pnpm@11.20.0 run build:render
     startCommand: corepack pnpm@11.20.0 --filter @workspace/api-server run start
@@ -34,6 +36,61 @@ services:
         value: s3
 
       # Enter the final custom HTTPS origin and all credentials in Render.
+      - key: APP_ORIGIN
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: INVITATION_FROM_EMAIL
+        sync: false
+      - key: DIGEST_FROM_EMAIL
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_FORCE_PATH_STYLE
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+  # Production follows main and owns the final custom domain. It intentionally
+  # repeats the same configuration rather than sharing environment variables
+  # with staging, so a staging test cannot write to production services.
+  - type: web
+    name: jamvi-production
+    runtime: node
+    region: frankfurt
+    plan: starter
+    branch: main
+    autoDeploy: true
+    buildCommand: corepack pnpm@11.20.0 install --frozen-lockfile --prod=false --config.strictDepBuilds=false && corepack pnpm@11.20.0 run build:render
+    startCommand: corepack pnpm@11.20.0 --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_WEB
+        value: "true"
+      - key: AUTH_PROVIDER
+        value: google
+      - key: ISSUER_URL
+        value: https://accounts.google.com
+      - key: PHOTO_STORAGE_PROVIDER
+        value: s3
       - key: APP_ORIGIN
         sync: false
       - key: APP_URL
