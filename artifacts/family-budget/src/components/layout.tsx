@@ -59,11 +59,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen w-full max-w-full overflow-x-hidden bg-background text-foreground selection:bg-primary/20">
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
-        <div className="p-6 flex items-center gap-3">
-          <div className="flex h-10 w-40 shrink-0 items-center justify-center rounded-xl bg-[#f7faf6] px-2 shadow-sm">
+        <div className="p-6">
+          <div className="flex h-10 w-40 items-center justify-center rounded-xl bg-[#f7faf6] px-2 shadow-sm">
             <BrandLogo className="h-8 w-full" />
           </div>
-          <div className="min-w-0">
+          <div className="mt-2 min-w-0">
+            <span className="block text-[11px] font-medium text-sidebar-foreground/70">Shared finances, together</span>
             <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
           </div>
         </div>

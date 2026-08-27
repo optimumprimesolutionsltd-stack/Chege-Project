@@ -25,10 +25,11 @@ export default function LoginPage() {
 
       <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl items-center justify-center gap-12 lg:min-h-[calc(100vh-4rem)] lg:justify-between">
         <section className="hidden max-w-xl flex-1 lg:block">
-          <div className="mb-8 flex items-center gap-3">
+          <div className="mb-8 flex flex-col items-start gap-2">
             <div className="flex h-12 w-44 items-center justify-center rounded-2xl bg-[#f7faf6] px-3 shadow-lg">
               <BrandLogo className="h-10 w-full" />
             </div>
+            <p className="pl-1 text-xs font-medium text-[#7aaa8a]">Shared finances, together</p>
           </div>
 
           <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-[#e5a052]">A calmer way to budget</p>
@@ -49,10 +50,11 @@ export default function LoginPage() {
         <main className="w-full max-w-md">
           <div className="rounded-[2rem] border p-6 shadow-2xl backdrop-blur-xl sm:p-8" style={{ backgroundColor: 'rgba(15,38,25,0.94)', borderColor: 'rgba(185,210,191,0.2)' }}>
             <div className="mb-8 flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3 lg:hidden">
+              <div className="flex flex-col items-start gap-2 lg:hidden">
                 <div className="flex h-11 w-36 items-center justify-center rounded-2xl bg-[#f7faf6] px-2">
                   <BrandLogo className="h-9 w-full" />
                 </div>
+                <p className="pl-1 text-xs font-medium text-[#7aaa8a]">Shared finances, together</p>
               </div>
               <div className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-[#dceee1]/15 text-[#a8d0b4]">
                 <Sparkles className="h-5 w-5" />
