@@ -321,6 +321,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /budget-categories/recommendations:
+    get:
+      operationId: getBudgetCategoryRecommendations
+      tags: [budget-categories]
+      summary: Preview category recommendations for the active workspace
+      responses:
+        "200":
+          description: Existing and missing recommended expense categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetCategoryRecommendations"
+  /budget-categories/recommendations/apply:
+    post:
+      operationId: applyBudgetCategoryRecommendations
+      tags: [budget-categories]
+      summary: Add missing recommended categories to the active workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetCategoryRecommendationApplyInput"
+      responses:
+        "200":
+          description: Recommendations applied without changing existing categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetCategoryRecommendations"
+
   /budget-categories/{id}:
     put:
       operationId: updateBudgetCategory
@@ -1897,6 +1928,44 @@ components:
           minimum: 2000
           maximum: 2200
 
+    BudgetCategoryRecommendation:
+      type: object
+      properties:
+        name:
+          type: string
+        budgetAmount:
+          type: number
+        priority:
+          type: number
+        color:
+          type: string
+        exists:
+          type: boolean
+      required: [name, budgetAmount, priority, color, exists]
+
+    BudgetCategoryRecommendations:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/GroupKind"
+        existing:
+          type: array
+          items:
+            $ref: "#/components/schemas/BudgetCategoryRecommendation"
+        missing:
+          type: array
+          items:
+            $ref: "#/components/schemas/BudgetCategoryRecommendation"
+      required: [kind, existing, missing]
+
+    BudgetCategoryRecommendationApplyInput:
+      type: object
+      description: Applies only missing recommendations; existing categories are never changed.
+      properties:
+        confirm:
+          type: boolean
+          default: true
+
     Contribution:
       type: object
       properties:
@@ -2433,6 +2502,9 @@ components:
         nameStyle:
           type: string
           enum: [plain, italic, bold, serif]
+        kind:
+          $ref: "#/components/schemas/GroupKind"
+          default: family
       required: [name]
 
     WorkspaceSelectionInput:
@@ -2468,10 +2540,12 @@ components:
           maxLength: 120
         isPrivate:
           type: boolean
+        kind:
+          $ref: "#/components/schemas/GroupKind"
         role:
           type: string
           enum: [owner, admin, member]
-      required: [id, name, emoji, nameStyle, icon, accentColor, isPrivate, role]
+      required: [id, name, emoji, nameStyle, icon, accentColor, isPrivate, kind, role]
 
     GroupInviteLink:
       type: object
@@ -2527,13 +2601,15 @@ components:
           maxLength: 120
         isPrivate:
           type: boolean
+        kind:
+          $ref: "#/components/schemas/GroupKind"
         role:
           type: string
           enum: [owner, admin, member]
         canRecordSharedTransactions:
           type: boolean
           description: Whether this workspace may record expenses and contributions right now
-      required: [id, name, emoji, nameStyle, icon, accentColor, isPrivate, role, canRecordSharedTransactions]
+      required: [id, name, emoji, nameStyle, icon, accentColor, isPrivate, kind, role, canRecordSharedTransactions]
 
     UpdateGroupInput:
       type: object
@@ -2560,7 +2636,13 @@ components:
         slogan:
           type: ["string", "null"]
           maxLength: 120
+        kind:
+          $ref: "#/components/schemas/GroupKind"
       required: [name]
+
+    GroupKind:
+      type: string
+      enum: [personal, family, chama, club, team, other]
 
     UpdateMemberRoleInput:
       type: object

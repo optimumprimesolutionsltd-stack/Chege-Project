@@ -27,6 +27,8 @@ import type {
   AuthUserEnvelope,
   BudgetCategory,
   BudgetCategoryInput,
+  BudgetCategoryRecommendationApplyInput,
+  BudgetCategoryRecommendations,
   BudgetCategoryUpdateInput,
   CascadeContributeInput,
   CascadeContributeResult,
@@ -999,6 +1001,154 @@ export const useCreateBudgetCategory = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateBudgetCategoryMutationOptions(options));
+    }
+
+export const getGetBudgetCategoryRecommendationsUrl = () => {
+
+
+
+
+  return `/api/budget-categories/recommendations`
+}
+
+/**
+ * @summary Preview category recommendations for the active workspace
+ */
+export const getBudgetCategoryRecommendations = async ( options?: Parameters<typeof customFetch>[1]): Promise<BudgetCategoryRecommendations> => {
+
+  return customFetch<BudgetCategoryRecommendations>(getGetBudgetCategoryRecommendationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBudgetCategoryRecommendationsQueryKey = () => {
+    return [
+    `/api/budget-categories/recommendations`
+    ] as const;
+    }
+
+
+export const getGetBudgetCategoryRecommendationsQueryOptions = <TData = Awaited<ReturnType<typeof getBudgetCategoryRecommendations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBudgetCategoryRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBudgetCategoryRecommendationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBudgetCategoryRecommendations>>> = ({ signal }) => getBudgetCategoryRecommendations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBudgetCategoryRecommendations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBudgetCategoryRecommendationsQueryResult = NonNullable<Awaited<ReturnType<typeof getBudgetCategoryRecommendations>>>
+export type GetBudgetCategoryRecommendationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Preview category recommendations for the active workspace
+ */
+
+export function useGetBudgetCategoryRecommendations<TData = Awaited<ReturnType<typeof getBudgetCategoryRecommendations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBudgetCategoryRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBudgetCategoryRecommendationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getApplyBudgetCategoryRecommendationsUrl = () => {
+
+
+
+
+  return `/api/budget-categories/recommendations/apply`
+}
+
+/**
+ * @summary Add missing recommended categories to the active workspace
+ */
+export const applyBudgetCategoryRecommendations = async (budgetCategoryRecommendationApplyInput: BudgetCategoryRecommendationApplyInput, options?: Parameters<typeof customFetch>[1]): Promise<BudgetCategoryRecommendations> => {
+
+  return customFetch<BudgetCategoryRecommendations>(getApplyBudgetCategoryRecommendationsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(budgetCategoryRecommendationApplyInput)
+  }
+);}
+
+
+
+
+
+export const getApplyBudgetCategoryRecommendationsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyBudgetCategoryRecommendations>>, TError,{data: BodyType<BudgetCategoryRecommendationApplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof applyBudgetCategoryRecommendations>>, TError,{data: BodyType<BudgetCategoryRecommendationApplyInput>}, TContext> => {
+
+const mutationKey = ['applyBudgetCategoryRecommendations'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyBudgetCategoryRecommendations>>, {data: BodyType<BudgetCategoryRecommendationApplyInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  applyBudgetCategoryRecommendations(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyBudgetCategoryRecommendationsMutationResult = NonNullable<Awaited<ReturnType<typeof applyBudgetCategoryRecommendations>>>
+    export type ApplyBudgetCategoryRecommendationsMutationBody = BodyType<BudgetCategoryRecommendationApplyInput>
+    export type ApplyBudgetCategoryRecommendationsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add missing recommended categories to the active workspace
+ */
+export const useApplyBudgetCategoryRecommendations = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyBudgetCategoryRecommendations>>, TError,{data: BodyType<BudgetCategoryRecommendationApplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof applyBudgetCategoryRecommendations>>,
+        TError,
+        {data: BodyType<BudgetCategoryRecommendationApplyInput>},
+        TContext
+      > => {
+      return useMutation(getApplyBudgetCategoryRecommendationsMutationOptions(options));
     }
 
 export const getUpdateBudgetCategoryUrl = (id: number,) => {

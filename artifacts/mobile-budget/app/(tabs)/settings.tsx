@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Modal,
   Share,
+  ScrollView,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,8 +30,12 @@ import {
   useGetWorkspaces,
   useSelectWorkspace,
   useUpdateGroup,
+  useGetBudgetCategoryRecommendations,
+  useApplyBudgetCategoryRecommendations,
   getGetGroupQueryKey,
   getGetWorkspacesQueryKey,
+  getGetBudgetCategoriesQueryKey,
+  getGetBudgetCategoryRecommendationsQueryKey,
   type WorkspaceNameStyle,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
@@ -43,6 +49,7 @@ import {
   switchMobileWorkspace,
 } from '@/lib/workspace';
 import { WORKSPACE_NAME_STYLES, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
+import { SHARED_GROUP_KINDS, sharedGroupKindDetails, type SharedGroupKind } from '@/lib/groupKinds';
 
 type GroupMember = {
   userId: string;
@@ -100,6 +107,8 @@ export default function SettingsScreen() {
   const [savingGroupName, setSavingGroupName] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupKind, setNewGroupKind] = useState<SharedGroupKind | null>(null);
+  const [editingGroupKind, setEditingGroupKind] = useState(false);
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [editingDisplayName, setEditingDisplayName] = useState(false);
@@ -123,6 +132,13 @@ export default function SettingsScreen() {
   const createSharedGroup = useCreateSharedGroup();
   const createInviteLink = useCreateGroupInviteLink();
   const updateGroup = useUpdateGroup();
+  const recommendations = useGetBudgetCategoryRecommendations({
+    query: {
+      queryKey: getGetBudgetCategoryRecommendationsQueryKey(),
+      enabled: !!group && !group.isPrivate,
+    },
+  });
+  const applyRecommendations = useApplyBudgetCategoryRecommendations();
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
     if (group?.icon) setGroupIcon(group.icon as SharedBudgetIcon);
@@ -424,18 +440,52 @@ export default function SettingsScreen() {
       Alert.alert('Group name required', 'Enter at least two characters before creating a group.');
       return;
     }
+    if (!newGroupKind) {
+      Alert.alert('Choose a budget type', 'Select the kind of Shared budget you are creating.');
+      return;
+    }
     try {
-      const workspace = await createSharedGroup.mutateAsync({ data: { name } });
+      const workspace = await createSharedGroup.mutateAsync({ data: { name, kind: newGroupKind } });
       await activateMobileWorkspace({
         groupId: workspace.id,
         storage: AsyncStorage,
         resetQueries: () => queryClient.resetQueries(),
       });
       setNewGroupName('');
+      setNewGroupKind(null);
       setCreateGroupOpen(false);
        Alert.alert('Shared budget created', 'Your budget records stayed private and separate.');
     } catch (error) {
       Alert.alert('Could not create group', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const handleSaveGroupKind = async () => {
+    if (!newGroupKind) return;
+    try {
+      await updateGroup.mutateAsync({ data: {
+        name: group?.name ?? groupName,
+        kind: newGroupKind,
+      } });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
+      ]);
+      setEditingGroupKind(false);
+    } catch (error) {
+      Alert.alert('Could not update budget type', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const handleApplyRecommendations = async () => {
+    try {
+      await applyRecommendations.mutateAsync({ data: { confirm: true } });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
+      ]);
+      Alert.alert('Recommended categories added', 'Only categories that were missing were added.');
+    } catch (error) {
+      Alert.alert('Could not add recommended categories', error instanceof Error ? error.message : 'Please try again.');
     }
   };
   const handleInvite = async () => {
@@ -915,6 +965,71 @@ export default function SettingsScreen() {
          </View>
         {!group?.isPrivate && (
           <>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGET TYPE</Text>
+            <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 10 }]}>
+              <View style={styles.kindHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>{sharedGroupKindDetails(group?.kind).label}</Text>
+                  <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                    {sharedGroupKindDetails(group?.kind).description}
+                  </Text>
+                </View>
+                {canManageShared ? (
+                  <Pressable testID="edit-shared-budget-kind" onPress={() => {
+                    setNewGroupKind((group?.kind === 'personal' ? 'other' : group?.kind) ?? 'other');
+                    setEditingGroupKind((value) => !value);
+                  }}>
+                    <Text style={[styles.kindAction, { color: colors.primary }]}>{editingGroupKind ? 'Cancel' : 'Edit'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {editingGroupKind && canManageShared ? (
+                <>
+                  <View style={styles.kindChoices}>
+                    {SHARED_GROUP_KINDS.map((choice) => {
+                      const selected = newGroupKind === choice.value;
+                      return (
+                        <Pressable key={choice.value} onPress={() => setNewGroupKind(choice.value)}
+                          accessibilityRole="radio" accessibilityState={{ checked: selected }}
+                          style={[styles.kindChoice, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary + '12' : colors.background }]}>
+                          <Text style={[styles.kindChoiceLabel, { color: selected ? colors.primary : colors.foreground }]}>{choice.label}</Text>
+                          <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{choice.description}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Pressable testID="save-shared-budget-kind" onPress={() => void handleSaveGroupKind()} disabled={updateGroup.isPending}
+                    style={[styles.identitySaveButton, { backgroundColor: colors.primary, opacity: updateGroup.isPending ? 0.55 : 1 }]}>
+                    <Text style={styles.saveGroupText}>{updateGroup.isPending ? 'Saving…' : 'Save budget type'}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                Your budget type suggests categories; changing it never removes or changes existing categories.
+              </Text>
+              {recommendations.isLoading ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : recommendations.isError ? (
+                <Pressable onPress={() => void recommendations.refetch()}>
+                  <Text style={[styles.kindAction, { color: colors.primary }]}>Couldn’t load recommendations. Tap to retry.</Text>
+                </Pressable>
+              ) : recommendations.data?.missing.length ? (
+                <View style={styles.recommendationBlock}>
+                  <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                    Recommended to add: {recommendations.data.missing.map((item) => item.name).join(', ')}
+                  </Text>
+                  {canManageShared ? (
+                    <Pressable testID="apply-category-recommendations" onPress={() => void handleApplyRecommendations()}
+                      disabled={applyRecommendations.isPending}
+                      style={[styles.identitySaveButton, { backgroundColor: colors.primary, opacity: applyRecommendations.isPending ? 0.55 : 1 }]}>
+                      <Text style={styles.saveGroupText}>{applyRecommendations.isPending ? 'Adding…' : 'Add missing categories'}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : (
+                <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>All recommended categories are already available.</Text>
+              )}
+            </View>
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGET IDENTITY</Text>
             <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 14 }]}>
               <View style={styles.identityPreview}>
@@ -1262,7 +1377,9 @@ export default function SettingsScreen() {
         </Pressable>
       </PageScrollView>
       <Modal visible={createGroupOpen} transparent animationType="fade" onRequestClose={() => setCreateGroupOpen(false)}>
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalKAV}>
+          <View style={styles.modalBackdrop}>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
@@ -1285,16 +1402,34 @@ export default function SettingsScreen() {
               placeholderTextColor={colors.mutedForeground}
               style={[styles.modalInput, { borderColor: colors.border, color: colors.foreground }]}
             />
+            <Text style={[styles.modalKindLabel, { color: colors.foreground }]}>What kind of Shared budget is this?</Text>
+            <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This sets useful category recommendations. You can change it later.</Text>
+            <View style={styles.kindChoices}>
+              {SHARED_GROUP_KINDS.map((choice) => {
+                const selected = newGroupKind === choice.value;
+                return (
+                  <Pressable key={choice.value} testID={`new-shared-group-kind-${choice.value}`}
+                    onPress={() => setNewGroupKind(choice.value)} accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    style={[styles.kindChoice, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary + '12' : colors.background }]}>
+                    <Text style={[styles.kindChoiceLabel, { color: selected ? colors.primary : colors.foreground }]}>{choice.label}</Text>
+                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{choice.description}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <Pressable
               testID="confirm-create-private-group"
-              disabled={createSharedGroup.isPending}
+              disabled={createSharedGroup.isPending || !newGroupKind}
               onPress={() => void handleCreateSharedGroup()}
-              style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: createSharedGroup.isPending ? 0.55 : 1 }]}
+              style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: createSharedGroup.isPending || !newGroupKind ? 0.55 : 1 }]}
             >
               {createSharedGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalCreateText}>Create Shared budget</Text>}
             </Pressable>
           </View>
-        </View>
+          </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1326,13 +1461,23 @@ const styles = StyleSheet.create({
   identityColors: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   identityColorChoice: { height: 34, width: 34, borderRadius: 17, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   identitySaveButton: { alignSelf: 'flex-start', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  kindHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  kindAction: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  kindChoices: { gap: 7, marginTop: 4 },
+  kindChoice: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9 },
+  kindChoiceLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  recommendationBlock: { gap: 8 },
   createGroupButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 13, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
   createGroupButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalKAV: { flex: 1 },
+  modalScroll: { maxHeight: '100%' },
+  modalScrollContent: { flexGrow: 1, justifyContent: 'center' },
   modalCard: { borderWidth: 1, borderRadius: 16, padding: 18 },
   modalHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   modalTitle: { fontSize: 19, fontFamily: 'Inter_700Bold' },
   modalInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, marginTop: 18, fontFamily: 'Inter_400Regular', fontSize: 15 },
+  modalKindLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold', marginTop: 16, marginBottom: 4 },
   modalCreateButton: { minHeight: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   modalCreateText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   avatar: { width: 56, height: 56, borderRadius: 28 },

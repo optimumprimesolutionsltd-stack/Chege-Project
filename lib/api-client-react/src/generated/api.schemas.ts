@@ -233,6 +233,39 @@ export interface BudgetCategoryUpdateInput {
   activeYear?: number | null;
 }
 
+export interface BudgetCategoryRecommendation {
+  name: string;
+  budgetAmount: number;
+  priority: number;
+  color: string;
+  exists: boolean;
+}
+
+export type GroupKind = typeof GroupKind[keyof typeof GroupKind];
+
+
+export const GroupKind = {
+  personal: 'personal',
+  family: 'family',
+  chama: 'chama',
+  club: 'club',
+  team: 'team',
+  other: 'other',
+} as const;
+
+export interface BudgetCategoryRecommendations {
+  kind: GroupKind;
+  existing: BudgetCategoryRecommendation[];
+  missing: BudgetCategoryRecommendation[];
+}
+
+/**
+ * Applies only missing recommendations; existing categories are never changed.
+ */
+export interface BudgetCategoryRecommendationApplyInput {
+  confirm?: boolean;
+}
+
 export interface Contribution {
   id: number;
   userId: string;
@@ -586,6 +619,7 @@ export interface SharedGroupInput {
      */
   emoji?: string | null;
   nameStyle?: SharedGroupInputNameStyle;
+  kind?: GroupKind;
 }
 
 export interface WorkspaceSelectionInput {
@@ -654,6 +688,7 @@ export interface Workspace {
      */
   slogan?: string | null;
   isPrivate: boolean;
+  kind: GroupKind;
   role: WorkspaceRole;
 }
 
@@ -741,6 +776,7 @@ export interface Group {
      */
   slogan?: string | null;
   isPrivate: boolean;
+  kind: GroupKind;
   role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */
   canRecordSharedTransactions: boolean;
@@ -804,6 +840,7 @@ export interface UpdateGroupInput {
      * @nullable
      */
   slogan?: string | null;
+  kind?: GroupKind;
 }
 
 export type UpdateMemberRoleInputRole = typeof UpdateMemberRoleInputRole[keyof typeof UpdateMemberRoleInputRole];

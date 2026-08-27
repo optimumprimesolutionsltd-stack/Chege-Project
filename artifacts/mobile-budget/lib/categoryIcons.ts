@@ -17,6 +17,15 @@ const CATEGORY_ICON_RULES: { terms: string[]; icon: keyof typeof Feather.glyphMa
   { terms: ['grooming', 'salon', 'barber'], icon: 'scissors' },
   { terms: ['pocket money', 'allowance'], icon: 'dollar-sign' },
   { terms: ['household', 'supplies'], icon: 'box' },
+  { terms: ['meeting', 'event'], icon: 'calendar' },
+  { terms: ['project'], icon: 'folder' },
+  { terms: ['welfare'], icon: 'heart' },
+  { terms: ['administration', 'operations', 'service'], icon: 'clipboard' },
+  { terms: ['equipment', 'tool'], icon: 'tool' },
+  { terms: ['venue'], icon: 'map-pin' },
+  { terms: ['membership activit'], icon: 'users' },
+  { terms: ['salary', 'salaries'], icon: 'dollar-sign' },
+  { terms: ['training'], icon: 'book-open' },
   { terms: ['other', 'misc'], icon: 'more-horizontal' },
 ];
 

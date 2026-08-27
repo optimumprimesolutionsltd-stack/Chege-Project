@@ -7,6 +7,7 @@
  */
 import type { GroupAccentColor } from './groupAccentColor';
 import type { GroupIcon } from './groupIcon';
+import type { GroupKind } from './groupKind';
 import type { GroupNameStyle } from './groupNameStyle';
 import type { GroupRole } from './groupRole';
 
@@ -29,6 +30,7 @@ export interface Group {
      */
   slogan?: string | null;
   isPrivate: boolean;
+  kind: GroupKind;
   role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */
   canRecordSharedTransactions: boolean;

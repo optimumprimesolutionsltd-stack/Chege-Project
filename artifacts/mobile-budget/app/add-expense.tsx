@@ -39,11 +39,6 @@ import { getCategoryIcon } from '@/lib/categoryIcons';
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
 type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
 
-const DEFAULT_CATEGORY_NAMES = [
-  'Food', 'Transport', 'Health', 'Education', 'Utilities', 'Entertainment',
-  'Clothing', 'Savings', 'Housing', 'Communication', 'Other',
-];
-
 function getExpenseSaveError(error: unknown): string {
   if (error instanceof ApiError) {
     const responseError = error.data;
@@ -79,7 +74,8 @@ export default function AddExpenseSheet() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: categories = [] } = useGetBudgetCategories();
+  const categoriesQuery = useGetBudgetCategories();
+  const categories = categoriesQuery.data ?? [];
   const { data: members = [] } = useGetMembers();
   const { data: group } = useGetGroup();
   const sharedTransactionsLocked =
@@ -278,25 +274,9 @@ export default function AddExpenseSheet() {
   }, [createCategory, date, newCategoryBudget, newCategoryName, newCategoryPriority, newCategoryRecurring, queryClient]);
 
   const chooseCategory = useCallback((name: string) => {
-    if (name !== 'Other') {
-      setCategory(name);
-      setIsCreatingCategory(false);
-      return;
-    }
-    setCategory('');
-    if (!canManageCategories) {
-      Alert.alert(
-        'Ask a budget manager to add this category',
-        'Members can use existing categories, while owners and admins manage the shared budget setup.',
-      );
-      return;
-    }
-    setNewCategoryName('');
-    setNewCategoryBudget('');
-    setNewCategoryRecurring(true);
-    setNewCategoryPriority('3');
-    setIsCreatingCategory(true);
-  }, [canManageCategories]);
+    setCategory(name);
+    setIsCreatingCategory(false);
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (sharedTransactionsLocked) {
@@ -424,11 +404,7 @@ export default function AddExpenseSheet() {
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
-  // Derive category list — use API categories if loaded, fallback to common ones
-  const categoryList =
-    categories.length > 0
-      ? categories.map((c) => c.name)
-      : DEFAULT_CATEGORY_NAMES;
+  const categoryList = categories.map((item) => item.name);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -481,7 +457,20 @@ export default function AddExpenseSheet() {
           style={styles.categoryScroll}
           contentContainerStyle={styles.categoryScrollContent}
         >
-          {categoryList.map((cat) => {
+          {categoriesQuery.isLoading ? (
+            <View style={styles.categoryStatus}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>Loading categories…</Text>
+            </View>
+          ) : categoriesQuery.isError ? (
+            <Pressable onPress={() => void categoriesQuery.refetch()} style={styles.categoryStatus}>
+              <Text style={[styles.categoryStatusText, { color: colors.primary }]}>Couldn’t load categories. Tap to retry.</Text>
+            </Pressable>
+          ) : categoryList.length === 0 ? (
+            <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>
+              {canManageCategories ? 'No categories yet. Create one to continue.' : 'No categories are available. Ask a budget manager to add one.'}
+            </Text>
+          ) : categoryList.map((cat) => {
             const icon = getCategoryIcon(cat);
             const selected = category === cat;
             return (
@@ -1206,6 +1195,8 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
     fontFamily: 'Inter_500Medium',
   },
+  categoryStatus: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  categoryStatusText: { fontSize: 13, fontFamily: 'Inter_400Regular' },
   categoryCreateCard: {
     marginTop: 10,
     borderWidth: 1,

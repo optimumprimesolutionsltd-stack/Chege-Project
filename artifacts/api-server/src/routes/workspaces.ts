@@ -22,6 +22,7 @@ async function availableWorkspaces(userId: string) {
       accentColor: groupsTable.accentColor,
       photoPath: groupsTable.photoPath,
       slogan: groupsTable.slogan,
+      kind: groupsTable.kind,
       privateOwnerUserId: groupsTable.privateOwnerUserId,
       role: groupMembershipsTable.role,
     })
@@ -39,6 +40,7 @@ async function availableWorkspaces(userId: string) {
     photoUrl: await resolvePhotoUrl(row.photoPath).catch(() => null),
     slogan: row.slogan,
     isPrivate: Boolean(row.privateOwnerUserId),
+    kind: (row.kind ?? "family") as "personal" | "family" | "chama" | "club" | "team" | "other",
     role: row.role as "owner" | "admin" | "member",
   })));
 }

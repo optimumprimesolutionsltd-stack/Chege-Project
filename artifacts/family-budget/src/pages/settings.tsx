@@ -7,8 +7,12 @@ import {
   useGetGroup,
   useUpdateGroup,
   useRequestPhotoUpload,
+  useGetBudgetCategoryRecommendations,
+  useApplyBudgetCategoryRecommendations,
   getGetGroupQueryKey,
   getGetWorkspacesQueryKey,
+  getGetBudgetCategoriesQueryKey,
+  getGetBudgetCategoryRecommendationsQueryKey,
 } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -23,6 +27,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
 import type { WorkspaceNameStyle } from "@workspace/api-client-react";
 import { ProfileAvatar } from "@/components/profile-avatar";
+import { SHARED_GROUP_KINDS, groupKindPresentation, type SharedGroupKind } from "@/components/group-kind";
 
 type GroupInvitation = {
   id: number;
@@ -93,6 +98,7 @@ export default function Settings() {
   const updateMemberRole = useUpdateMemberRole();
   const { data: group } = useGetGroup();
   const updateGroup = useUpdateGroup();
+  const applyCategoryRecommendations = useApplyBudgetCategoryRecommendations();
   const requestPhotoUpload = useRequestPhotoUpload();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -105,6 +111,7 @@ export default function Settings() {
   const [groupNameStyle, setGroupNameStyle] = useState<WorkspaceNameStyle>("plain");
   const [groupIcon, setGroupIcon] = useState<(typeof SHARED_BUDGET_ICONS)[number]["value"]>("users");
   const [groupAccentColor, setGroupAccentColor] = useState<(typeof SHARED_BUDGET_ACCENTS)[number]>("#0F766E");
+  const [groupKind, setGroupKind] = useState<SharedGroupKind>("other");
   const [displayName, setDisplayName] = useState("");
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [editingDisplayName, setEditingDisplayName] = useState(false);
@@ -126,6 +133,9 @@ export default function Settings() {
   ) ?? false) && !isPrivateWorkspace;
   const myMembership = members?.find((member) => member.userId === user?.id);
   const canLeaveGroup = Boolean(myMembership && myMembership.role !== "owner");
+  const { data: categoryRecommendations, isLoading: isLoadingRecommendations, isError: hasRecommendationsError } = useGetBudgetCategoryRecommendations({
+    query: { queryKey: getGetBudgetCategoryRecommendationsQueryKey(), enabled: !isPrivateWorkspace },
+  });
   useEffect(() => {
     if (group?.name) setGroupName(group.name);
     if (group?.icon) setGroupIcon(group.icon as (typeof SHARED_BUDGET_ICONS)[number]["value"]);
@@ -133,7 +143,8 @@ export default function Settings() {
     setGroupSlogan(group?.slogan ?? "");
     setGroupEmoji(group?.emoji ?? "");
     setGroupNameStyle(group?.nameStyle ?? "plain");
-  }, [group?.name, group?.icon, group?.accentColor, group?.slogan, group?.emoji, group?.nameStyle]);
+    if (group?.kind && group.kind !== "personal") setGroupKind(group.kind);
+  }, [group?.name, group?.icon, group?.accentColor, group?.slogan, group?.emoji, group?.nameStyle, group?.kind]);
   useEffect(() => {
     setDisplayName([user?.firstName, user?.lastName].filter(Boolean).join(" "));
   }, [user?.firstName, user?.lastName]);
@@ -172,6 +183,8 @@ export default function Settings() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
       ]);
       toast({
         title: isPrivateWorkspace ? "Budget updated" : "Shared budget updated",
@@ -186,6 +199,47 @@ export default function Settings() {
         title: "Could not update Shared budget",
         description: error instanceof Error ? error.message : "Please try again.",
       });
+    }
+  };
+
+  const saveGroupKind = async () => {
+    if (!group) return;
+    try {
+      await updateGroup.mutateAsync({
+        data: {
+          name: groupName.trim() || group.name,
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          slogan: groupSlogan.trim() || null,
+          kind: groupKind,
+        },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
+      ]);
+      toast({ title: "Group kind updated", description: "Existing categories were not changed. Review the missing recommendations below." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not update group type", description: error instanceof Error ? error.message : "Please try again." });
+    }
+  };
+
+  const applyMissingRecommendations = async () => {
+    try {
+      await applyCategoryRecommendations.mutateAsync({ data: { confirm: true } });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
+      ]);
+      toast({ title: "Recommended categories added", description: "Existing categories were left unchanged." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not add recommendations", description: error instanceof Error ? error.message : "Please try again." });
     }
   };
 
@@ -317,6 +371,8 @@ export default function Settings() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
       ]);
       toast({ title: "Group photo updated" });
     } catch (error) {
@@ -751,6 +807,92 @@ export default function Settings() {
           </CardContent>
         </Card>
       )}
+       {!isPrivateWorkspace && (
+         <Card className="border-none shadow-md">
+           <CardHeader className="p-4 sm:p-6">
+             <CardTitle>Shared budget kind</CardTitle>
+             <CardDescription>
+               This helps Jamvi suggest useful budget categories for your group.
+             </CardDescription>
+           </CardHeader>
+           <CardContent className="space-y-5 px-4 pb-4 sm:px-6 sm:pb-6">
+             {canManageShared ? (
+               <>
+                 <fieldset className="space-y-2">
+                   <legend className="text-sm font-semibold text-foreground">What kind of group is this?</legend>
+                   <div className="grid gap-2 sm:grid-cols-2">
+                     {SHARED_GROUP_KINDS.map((option) => {
+                       const selected = groupKind === option.value;
+                       return (
+                         <button
+                           key={option.value}
+                           type="button"
+                           aria-pressed={selected}
+                           onClick={() => setGroupKind(option.value)}
+                           className={`rounded-xl border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border bg-card hover:border-primary/50 hover:bg-muted/50"}`}
+                         >
+                           <span className="block text-sm font-semibold text-foreground">{option.label}</span>
+                           <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{option.description}</span>
+                         </button>
+                       );
+                     })}
+                   </div>
+                 </fieldset>
+                 <p className="rounded-lg bg-muted px-3 py-2 text-sm leading-relaxed text-muted-foreground">
+                   Changing the kind does not alter any existing categories. It only changes the recommendations you can add.
+                 </p>
+                 <Button type="button" onClick={() => void saveGroupKind()} disabled={updateGroup.isPending || groupKind === group?.kind}>
+                   {updateGroup.isPending ? "Saving…" : "Save group type"}
+                 </Button>
+               </>
+             ) : (
+               <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
+                 <p className="text-sm font-semibold text-foreground">{groupKindPresentation(group?.kind).label}</p>
+                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{groupKindPresentation(group?.kind).description}</p>
+                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                   An owner or admin can change this kind. Changing it does not alter existing categories.
+                 </p>
+               </div>
+             )}
+
+             <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
+               <div>
+                 <p className="text-sm font-semibold text-foreground">Recommended categories</p>
+                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                   {isLoadingRecommendations
+                     ? "Checking recommendations…"
+                     : hasRecommendationsError
+                       ? "Could not load category recommendations. Please try again."
+                     : categoryRecommendations?.missing.length
+                       ? `Missing recommendations for this ${groupKindPresentation(categoryRecommendations.kind).label.toLowerCase()} budget:`
+                       : "All recommended categories for this budget are already present."}
+                 </p>
+               </div>
+               {categoryRecommendations?.missing.length ? (
+                 <>
+                   <ul className="flex flex-wrap gap-2" aria-label="Missing recommended categories">
+                     {categoryRecommendations.missing.map((recommendation) => (
+                       <li key={recommendation.name} className="rounded-full border border-border bg-background px-3 py-1 text-sm text-foreground">
+                         {recommendation.name}
+                       </li>
+                     ))}
+                   </ul>
+                   {canManageShared ? (
+                     <Button
+                       type="button"
+                       variant="outline"
+                       onClick={() => void applyMissingRecommendations()}
+                       disabled={applyCategoryRecommendations.isPending}
+                     >
+                       {applyCategoryRecommendations.isPending ? "Adding…" : `Add ${categoryRecommendations.missing.length} missing recommendation${categoryRecommendations.missing.length === 1 ? "" : "s"}`}
+                     </Button>
+                   ) : null}
+                 </>
+               ) : null}
+             </div>
+           </CardContent>
+         </Card>
+       )}
 
       {/* Members */}
       <Card className="border-none shadow-md">

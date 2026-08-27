@@ -36,3 +36,4 @@
 - [Private photo personalization](private-photo-personalization.md) — personal and group photos use private storage paths and short-lived authorized viewing URLs, never public object links.
 - [Member money-record corrections](member-money-record-corrections.md) — members can correct only their own current-day personal money records; managers handle all removals and historical/shared changes.
 - [Render single-service hosting](render-single-service-hosting.md) — production keeps the web app and API in one Render service for same-origin sessions, OAuth, and API calls.
+- [Group-aware category packs](group-aware-category-packs.md) — group type selects starter expenses; later type changes never rewrite categories, and recommendations only add missing names.

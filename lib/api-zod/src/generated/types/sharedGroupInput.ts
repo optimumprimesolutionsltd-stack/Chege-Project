@@ -5,6 +5,7 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { GroupKind } from './groupKind';
 import type { SharedGroupInputNameStyle } from './sharedGroupInputNameStyle';
 
 export interface SharedGroupInput {
@@ -19,4 +20,5 @@ export interface SharedGroupInput {
      */
   emoji?: string | null;
   nameStyle?: SharedGroupInputNameStyle;
+  kind?: GroupKind;
 }

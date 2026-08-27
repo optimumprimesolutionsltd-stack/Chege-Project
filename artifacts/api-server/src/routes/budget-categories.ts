@@ -1,21 +1,17 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { budgetCategoriesTable, expensesTable, jointAccountTxTable } from "@workspace/db";
+import { budgetCategoriesTable, expensesTable, groupsTable, jointAccountTxTable } from "@workspace/db";
 import { and, asc, eq, ne } from "drizzle-orm";
 import { z } from "zod";
+import {
+  ApplyBudgetCategoryRecommendationsBody,
+  ApplyBudgetCategoryRecommendationsResponse,
+  GetBudgetCategoryRecommendationsResponse,
+} from "@workspace/api-zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
+import { categoryPackForKind, categoryPackRows, normalizedCategoryPackKind } from "../lib/categoryPacks";
 
 const router = Router();
-
-const STARTER_CATEGORIES = [
-  { name: "Food", budgetAmount: 0, priority: 1, color: "#F97316" },
-  { name: "Housing", budgetAmount: 0, priority: 1, color: "#F59E0B" },
-  { name: "Utilities", budgetAmount: 0, priority: 1, color: "#EAB308" },
-  { name: "Health", budgetAmount: 0, priority: 2, color: "#EF4444" },
-  { name: "Education", budgetAmount: 0, priority: 2, color: "#3B82F6" },
-  { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6" },
-  { name: "Other", budgetAmount: 0, priority: 5, color: "#6B7280" },
-] as const;
 
 /**
  * A budget without any categories leaves its expense picker unusable. Seed a
@@ -32,19 +28,45 @@ async function seedStarterCategoriesIfMissing(groupId: number): Promise<void> {
 
     if (existingCategory) return;
 
-    await tx
-      .insert(budgetCategoriesTable)
-      .values(
-        STARTER_CATEGORIES.map((category) => ({
-          ...category,
-          groupId,
-          isRecurring: true,
-          activeMonth: null,
-          activeYear: null,
-        })),
-      )
-      .onConflictDoNothing();
+    const [group] = await tx
+      .select({ kind: groupsTable.kind })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, groupId))
+      .limit(1);
+    if (!group) return;
+
+    await tx.insert(budgetCategoriesTable).values(categoryPackRows(groupId, group.kind)).onConflictDoNothing();
   });
+}
+
+function normalizedCategoryName(name: string): string {
+  return name.trim().toLocaleLowerCase("en-US");
+}
+
+function recommendationPreview(kind: string | null | undefined, categoryNames: string[]) {
+  const existingNames = new Set(categoryNames.map(normalizedCategoryName));
+  const recommended = categoryPackForKind(kind).map((category) => ({
+    ...category,
+    exists: existingNames.has(normalizedCategoryName(category.name)),
+  }));
+  return {
+    kind: normalizedCategoryPackKind(kind),
+    existing: recommended.filter((category) => category.exists),
+    missing: recommended.filter((category) => !category.exists),
+  };
+}
+
+async function getCategoryRecommendationPreview(groupId: number) {
+  const [group] = await db
+    .select({ kind: groupsTable.kind })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+  const categories = await db
+    .select({ name: budgetCategoriesTable.name })
+    .from(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.groupId, groupId));
+  return recommendationPreview(group?.kind, categories.map((category) => category.name));
 }
 
 router.get("/budget-categories", async (req, res) => {
@@ -57,6 +79,44 @@ router.get("/budget-categories", async (req, res) => {
     .where(eq(budgetCategoriesTable.groupId, groupId))
     .orderBy(asc(budgetCategoriesTable.priority), asc(budgetCategoriesTable.name));
   res.json(categories);
+});
+
+router.get("/budget-categories/recommendations", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  res.json(GetBudgetCategoryRecommendationsResponse.parse(await getCategoryRecommendationPreview(groupId)));
+});
+
+router.post("/budget-categories/recommendations/apply", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+  const parsed = ApplyBudgetCategoryRecommendationsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid recommendation request." });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    const [group] = await tx
+      .select({ kind: groupsTable.kind })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, groupId))
+      .limit(1);
+    if (!group) return;
+    const categories = await tx
+      .select({ name: budgetCategoriesTable.name })
+      .from(budgetCategoriesTable)
+      .where(eq(budgetCategoriesTable.groupId, groupId));
+    const existingNames = new Set(categories.map((category) => normalizedCategoryName(category.name)));
+    const missingRows = categoryPackRows(groupId, group.kind)
+      .filter((category) => !existingNames.has(normalizedCategoryName(category.name)));
+    if (missingRows.length > 0) {
+      await tx.insert(budgetCategoriesTable).values(missingRows).onConflictDoNothing();
+    }
+  });
+
+  res.json(ApplyBudgetCategoryRecommendationsResponse.parse(await getCategoryRecommendationPreview(groupId)));
 });
 
 const categoryFields = z.object({

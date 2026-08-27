@@ -5,6 +5,7 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { GroupKind } from './groupKind';
 import type { UpdateGroupInputAccentColor } from './updateGroupInputAccentColor';
 import type { UpdateGroupInputIcon } from './updateGroupInputIcon';
 import type { UpdateGroupInputNameStyle } from './updateGroupInputNameStyle';
@@ -33,4 +34,5 @@ export interface UpdateGroupInput {
      * @nullable
      */
   slogan?: string | null;
+  kind?: GroupKind;
 }

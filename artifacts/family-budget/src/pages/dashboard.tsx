@@ -26,6 +26,7 @@ import {
    getGetIncomeSourcesQueryKey,
   type SavingsGoal,
   type IncomeSource,
+  type GroupKind,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -47,6 +48,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { WorkspaceSwitcher, workspaceLabel } from "@/components/workspace-switcher";
 import { workspaceNameClass } from "@/lib/workspace-identity";
 import { ProfileAvatar } from "@/components/profile-avatar";
+import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
@@ -138,6 +140,7 @@ function OpenInvitationLinkButton() {
 function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistingSharedBudget?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<SharedGroupKind | null>(null);
   const createSharedGroup = useCreateSharedGroup();
   const { toast } = useToast();
 
@@ -151,8 +154,16 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
       });
       return;
     }
+    if (!kind) {
+      toast({
+        variant: "destructive",
+        title: "Choose a group type",
+        description: "Choose what this Shared budget is for before creating it.",
+      });
+      return;
+    }
     try {
-      await createSharedGroup.mutateAsync({ data: { name: name.trim() } });
+      await createSharedGroup.mutateAsync({ data: { name: name.trim(), kind: kind as GroupKind } });
       window.location.assign("/");
     } catch (error) {
       toast({
@@ -191,7 +202,10 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
         </CardContent>
       </Card>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) setKind(null);
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
              <DialogTitle>Create a Shared budget</DialogTitle>
@@ -211,6 +225,27 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
                 onChange={(event) => setName(event.target.value)}
               />
             </div>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-foreground">What kind of group is this?</legend>
+              <p className="text-xs text-muted-foreground">Choose one to tailor category recommendations for this Shared budget.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {SHARED_GROUP_KINDS.map((option) => {
+                  const selected = kind === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setKind(option.value)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border hover:border-primary/50 hover:bg-muted/50"}`}
+                    >
+                      <span className="block text-sm font-semibold text-foreground">{option.label}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
             <Button type="submit" className="w-full" disabled={createSharedGroup.isPending}>
                {createSharedGroup.isPending ? "Creating…" : "Create Shared budget"}
             </Button>

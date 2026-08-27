@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   db,
+  budgetCategoriesTable,
   groupMembershipsTable,
   groupsTable,
 } from "@workspace/db";
@@ -19,6 +20,7 @@ import {
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
 import { resolvePhotoUrl } from "../lib/photoStorage";
+import { categoryPackRows } from "../lib/categoryPacks";
 
 const router = Router();
 
@@ -83,6 +85,7 @@ router.post("/groups", async (req, res): Promise<void> => {
         name,
         emoji: normalizedEmoji(parsed.data.emoji),
         nameStyle: parsed.data.nameStyle,
+        kind: parsed.data.kind,
         createdByUserId: req.user!.id,
       })
       .returning({
@@ -93,6 +96,7 @@ router.post("/groups", async (req, res): Promise<void> => {
         icon: groupsTable.icon,
         accentColor: groupsTable.accentColor,
         photoPath: groupsTable.photoPath,
+        kind: groupsTable.kind,
       });
     if (!created) throw new Error("Could not create group.");
 
@@ -102,6 +106,7 @@ router.post("/groups", async (req, res): Promise<void> => {
       role: "owner",
       addedByUserId: req.user!.id,
     });
+    await tx.insert(budgetCategoriesTable).values(categoryPackRows(created.id, created.kind));
     return created;
   });
 
@@ -115,6 +120,7 @@ router.post("/groups", async (req, res): Promise<void> => {
     photoUrl: null,
     slogan: null,
     isPrivate: false,
+    kind: group.kind as "personal" | "family" | "chama" | "club" | "team" | "other",
     role: "owner" as const,
   };
   setActiveWorkspaceCookie(res, group.id);
@@ -135,6 +141,7 @@ router.get("/group", async (req, res): Promise<void> => {
       accentColor: groupsTable.accentColor,
       photoPath: groupsTable.photoPath,
       slogan: groupsTable.slogan,
+      kind: groupsTable.kind,
       isPrivate: groupsTable.privateOwnerUserId,
     })
     .from(groupsTable)
@@ -144,6 +151,7 @@ router.get("/group", async (req, res): Promise<void> => {
   const isPrivate = Boolean(group.isPrivate);
   res.json(GetGroupResponse.parse({
     ...group,
+    kind: group.kind ?? "family",
     photoUrl: await resolvePhotoUrl(group.photoPath).catch(() => null),
     isPrivate,
     role: req.group!.role,
@@ -180,6 +188,7 @@ router.patch("/group", async (req, res): Promise<void> => {
       ...(parsed.data.accentColor ? { accentColor: parsed.data.accentColor } : {}),
       ...(parsed.data.photoPath !== undefined ? { photoPath: parsed.data.photoPath } : {}),
       ...(parsed.data.slogan !== undefined ? { slogan: normalizedSlogan(parsed.data.slogan) } : {}),
+      ...(parsed.data.kind ? { kind: parsed.data.kind } : {}),
     })
     .where(eq(groupsTable.id, groupId))
     .returning({
@@ -191,12 +200,14 @@ router.patch("/group", async (req, res): Promise<void> => {
       accentColor: groupsTable.accentColor,
       photoPath: groupsTable.photoPath,
       slogan: groupsTable.slogan,
+      kind: groupsTable.kind,
       isPrivate: groupsTable.privateOwnerUserId,
     });
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }
   const isPrivate = Boolean(group.isPrivate);
   res.json(UpdateGroupResponse.parse({
     ...group,
+    kind: group.kind ?? "family",
     photoUrl: await resolvePhotoUrl(group.photoPath).catch(() => null),
     isPrivate,
     role: req.group!.role,

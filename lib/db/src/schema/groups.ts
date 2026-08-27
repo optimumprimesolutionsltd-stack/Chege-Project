@@ -27,6 +27,8 @@ export const GROUP_KIND = {
   FAMILY: "family",
   CHAMA: "chama",
   CLUB: "club",
+  TEAM: "team",
+  OTHER: "other",
 } as const;
 
 export type GroupKind = (typeof GROUP_KIND)[keyof typeof GROUP_KIND];
