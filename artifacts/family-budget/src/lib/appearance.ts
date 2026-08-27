@@ -3,14 +3,16 @@ export type Appearance = "white" | "midnight";
 export const APPEARANCE_STORAGE_KEY = "jamvi:appearance";
 
 export function readAppearance(): Appearance {
-  if (typeof window === "undefined") return "white";
+  if (typeof window === "undefined") return "midnight";
 
   try {
     return window.localStorage.getItem(APPEARANCE_STORAGE_KEY) === "midnight"
       ? "midnight"
-      : "white";
+      : window.localStorage.getItem(APPEARANCE_STORAGE_KEY) === "white"
+        ? "white"
+        : "midnight";
   } catch {
-    return "white";
+    return "midnight";
   }
 }
 

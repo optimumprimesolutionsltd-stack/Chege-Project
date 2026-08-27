@@ -542,7 +542,7 @@ export default function Settings() {
             <CardTitle>Appearance</CardTitle>
           </div>
           <CardDescription>
-            Choose how Jamvi looks on this device. White is the default for a clear, easy-to-scan workspace.
+            Choose how Jamvi looks on this device. Your current Jamvi night theme stays selected unless you choose White.
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
@@ -563,7 +563,7 @@ export default function Settings() {
               </span>
               <span>
                 <span className="block text-sm font-semibold">White</span>
-                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">A bright, simple background for everyday budgeting.</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">An optional bright, simple background for everyday budgeting.</span>
               </span>
             </button>
             <button
@@ -581,7 +581,7 @@ export default function Settings() {
                 <Moon className="h-5 w-5" aria-hidden="true" />
               </span>
               <span>
-                <span className="block text-sm font-semibold">Jamvi night</span>
+                <span className="block text-sm font-semibold">Jamvi night <span className="font-normal text-muted-foreground">(current)</span></span>
                 <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">The existing navy look with softer contrast.</span>
               </span>
             </button>
