@@ -21,6 +21,7 @@ import IncomeStreamsReport from '@/pages/income-streams-report';
 import InvitePage from '@/pages/invite';
 import JoinGroupPage from '@/pages/join-group';
 import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal';
+import { BudgetChooser, hasCompletedBudgetChooser } from '@/components/budget-chooser';
 
 const queryClient = new QueryClient();
 
@@ -148,7 +149,7 @@ function NoGroupAccess({ voluntarilyLeft }: { voluntarilyLeft: boolean }) {
 }
 
 function MainRouter() {
-  const { isAuthenticated, isLoading, error: authError, retry: retryAuth } = useAuth();
+  const { isAuthenticated, isLoading, error: authError, retry: retryAuth, user } = useAuth();
   const {
     data: hasGroupAccess,
     isLoading: isCheckingGroupAccess,
@@ -226,6 +227,15 @@ function MainRouter() {
 
   if (hasGroupAccess === false) {
     return <NoGroupAccess voluntarilyLeft={new URLSearchParams(window.location.search).get('left') === '1'} />;
+  }
+
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const appPath = base && window.location.pathname.startsWith(`${base}/`)
+    ? window.location.pathname.slice(base.length)
+    : window.location.pathname;
+  const isHomeRoute = appPath === '/' || appPath === '';
+  if (isHomeRoute && !hasCompletedBudgetChooser(user?.id ?? '')) {
+    return <BudgetChooser user={user ?? {}} />;
   }
 
   return <AuthenticatedApp />;

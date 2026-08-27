@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -13,7 +13,7 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,7 +21,11 @@ import * as Updates from 'expo-updates';
 import { setBaseUrl, setAuthTokenGetter, setWorkspaceIdGetter } from '@workspace/api-client-react';
 import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
-import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
+import {
+  ACTIVE_WORKSPACE_STORAGE_KEY,
+  isMobileBudgetChooserComplete,
+  mobileBudgetEntryRedirect,
+} from '@/lib/workspace';
 
 // Check for OTA updates and show an update prompt when one is available.
 // Skipped in development (Expo Go / dev-client) where Updates is not active.
@@ -97,6 +101,10 @@ const queryClient = new QueryClient({
 
 function RootLayoutNav() {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const segments = useSegments();
+  const currentRoute = segments[0];
+  const resolvedChooserUserId = useRef<string | null>(null);
+  const [checkingChooser, setCheckingChooser] = useState(true);
 
   // Re-fetch all data the moment the user signs in so queries that ran
   // before auth completed (with no token) get a fresh attempt.
@@ -107,18 +115,43 @@ function RootLayoutNav() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!isLoading) {
-      if (!isAuthenticated) {
-        router.replace('/login');
-      } else if (user?.needsDisplayName) {
-        router.replace('/profile-setup');
-      } else {
-        router.replace('/(tabs)');
-      }
+    let active = true;
+    if (isLoading) {
+      setCheckingChooser(true);
+      return () => { active = false; };
     }
-  }, [isLoading, isAuthenticated, user?.needsDisplayName]);
+    if (!isAuthenticated) {
+      resolvedChooserUserId.current = null;
+      setCheckingChooser(false);
+      router.replace('/login');
+      return () => { active = false; };
+    }
+    if (user?.needsDisplayName) {
+      setCheckingChooser(false);
+      router.replace('/profile-setup');
+      return () => { active = false; };
+    }
+    if (!user?.id) return () => { active = false; };
+    if (resolvedChooserUserId.current === user.id) {
+      setCheckingChooser(false);
+      return () => { active = false; };
+    }
 
-  if (isLoading) {
+    setCheckingChooser(true);
+    void isMobileBudgetChooserComplete({ userId: user.id, storage: AsyncStorage })
+      .then((complete) => {
+        if (!active) return;
+        resolvedChooserUserId.current = user.id;
+        const destination = mobileBudgetEntryRedirect({ chooserComplete: complete, currentRoute });
+        if (destination) router.replace(destination);
+      })
+      .finally(() => {
+        if (active) setCheckingChooser(false);
+      });
+    return () => { active = false; };
+  }, [isLoading, isAuthenticated, user?.id, user?.needsDisplayName, currentRoute]);
+
+  if (isLoading || checkingChooser) {
     return (
       <View
         style={{
@@ -138,6 +171,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="profile-setup" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="budget-chooser" options={{ gestureEnabled: false }} />
       <Stack.Screen
         name="add-expense"
         options={{

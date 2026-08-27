@@ -1,11 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ACTIVE_WORKSPACE_STORAGE_KEY,
+  budgetChooserCompleteStorageKey,
+  completeMobileBudgetChooser,
+  isMobileBudgetChooserComplete,
   leaveMobileSharedWorkspace,
+  mobileBudgetEntryRedirect,
   switchMobileWorkspace,
 } from "../workspace";
 
 describe("mobile workspace transitions", () => {
+  it("scopes chooser completion to the signed-in user and fails closed on storage errors", async () => {
+    const storage = {
+      getItem: vi.fn(async () => "true"),
+      setItem: vi.fn(async () => undefined),
+    };
+
+    expect(budgetChooserCompleteStorageKey("person-a")).not.toBe(budgetChooserCompleteStorageKey("person-b"));
+    await expect(isMobileBudgetChooserComplete({ userId: "person-a", storage })).resolves.toBe(true);
+    await completeMobileBudgetChooser({ userId: "person-a", storage });
+    expect(storage.setItem).toHaveBeenCalledWith(budgetChooserCompleteStorageKey("person-a"), "true");
+
+    storage.getItem.mockRejectedValueOnce(new Error("disk unavailable"));
+    await expect(isMobileBudgetChooserComplete({ userId: "person-a", storage })).resolves.toBe(false);
+  });
+
+  it("forces incomplete users through the chooser but preserves completed deep links", () => {
+    expect(mobileBudgetEntryRedirect({ chooserComplete: false, currentRoute: "add-expense" })).toBe("/budget-chooser");
+    expect(mobileBudgetEntryRedirect({ chooserComplete: true, currentRoute: "add-expense" })).toBeNull();
+    expect(mobileBudgetEntryRedirect({ chooserComplete: true, currentRoute: "(tabs)" })).toBeNull();
+    expect(mobileBudgetEntryRedirect({ chooserComplete: true, currentRoute: "login" })).toBe("/(tabs)");
+    expect(mobileBudgetEntryRedirect({ chooserComplete: true, currentRoute: "budget-chooser" })).toBe("/(tabs)");
+  });
+
   it("does not persist or render a workspace until the server accepts the selection", async () => {
     const steps: string[] = [];
     const select = vi.fn(async (groupId: number) => {

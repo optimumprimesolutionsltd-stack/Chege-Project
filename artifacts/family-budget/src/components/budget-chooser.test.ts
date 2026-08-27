@@ -1,0 +1,44 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { budgetChooserCompletionKey, hasCompletedBudgetChooser } from "./budget-chooser";
+
+describe("budget chooser completion", () => {
+  let values: Map<string, string>;
+
+  beforeEach(() => {
+    values = new Map();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => values.get(key) ?? null,
+          setItem: (key: string, value: string) => values.set(key, value),
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, "window");
+  });
+
+  it("uses a user-specific, safely encoded key", () => {
+    expect(budgetChooserCompletionKey("member/a")).toBe("jamvi:budget-chooser:completed:member%2Fa");
+    window.localStorage.setItem(budgetChooserCompletionKey("member/a"), "true");
+    expect(hasCompletedBudgetChooser("member/a")).toBe(true);
+    expect(hasCompletedBudgetChooser("member b")).toBe(false);
+  });
+
+  it("does not bypass the chooser when browser storage cannot be read", () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: () => {
+            throw new Error("Storage unavailable");
+          },
+        },
+      },
+    });
+    expect(hasCompletedBudgetChooser("member")).toBe(false);
+  });
+});

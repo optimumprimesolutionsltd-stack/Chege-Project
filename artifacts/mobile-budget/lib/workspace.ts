@@ -1,11 +1,56 @@
 export const ACTIVE_WORKSPACE_STORAGE_KEY = "active_workspace_id";
+export const BUDGET_CHOOSER_COMPLETE_STORAGE_PREFIX = "budget_chooser_complete:";
 
 type WorkspaceStorage = {
+  getItem?(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<unknown>;
   removeItem(key: string): Promise<unknown>;
 };
 
 type ResetWorkspaceQueries = () => Promise<unknown> | unknown;
+
+export function budgetChooserCompleteStorageKey(userId: string): string {
+  return `${BUDGET_CHOOSER_COMPLETE_STORAGE_PREFIX}${userId}`;
+}
+
+export function mobileBudgetEntryRedirect({
+  chooserComplete,
+  currentRoute,
+}: {
+  chooserComplete: boolean;
+  currentRoute?: string;
+}): "/(tabs)" | "/budget-chooser" | null {
+  if (!chooserComplete) return "/budget-chooser";
+  if (!currentRoute || currentRoute === "login" || currentRoute === "profile-setup" || currentRoute === "budget-chooser") {
+    return "/(tabs)";
+  }
+  return null;
+}
+
+/** Storage trouble must never let a person bypass their first workspace choice. */
+export async function isMobileBudgetChooserComplete({
+  userId,
+  storage,
+}: {
+  userId: string;
+  storage: Pick<WorkspaceStorage, "getItem">;
+}): Promise<boolean> {
+  try {
+    return (await storage.getItem?.(budgetChooserCompleteStorageKey(userId))) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export async function completeMobileBudgetChooser({
+  userId,
+  storage,
+}: {
+  userId: string;
+  storage: Pick<WorkspaceStorage, "setItem">;
+}): Promise<void> {
+  await storage.setItem(budgetChooserCompleteStorageKey(userId), "true");
+}
 
 export async function activateMobileWorkspace({
   groupId,

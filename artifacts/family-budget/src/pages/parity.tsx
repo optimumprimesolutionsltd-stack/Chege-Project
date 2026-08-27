@@ -43,6 +43,13 @@ export const PARITY_ITEMS: ParityItem[] = [
   },
   {
     category: "Core screens",
+    feature: "Budget chooser before Home",
+    web: "done",
+    mobile: "done",
+    note: "First authenticated entry lets users choose Personal or a member Shared budget before financial details load; returning users can continue directly",
+  },
+  {
+    category: "Core screens",
     feature: "Monthly budget overview",
     web: "done",
     mobile: "done",
