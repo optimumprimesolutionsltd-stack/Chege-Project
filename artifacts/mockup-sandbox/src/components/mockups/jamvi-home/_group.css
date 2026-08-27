@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.jamvi-home {
+  --navy: #011c4e;
+  --blue: #003383;
+  --teal: #08b7b0;
+  --green: #3cdd62;
+  --gold: #fdbb0a;
+  --page: #f5f8fc;
+  --ink: #06224f;
+  --muted: #4d6687;
+  --line: #d7e3f1;
+  box-sizing: border-box;
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--page);
+  font-family: Inter, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.jamvi-home *, .jamvi-home *::before, .jamvi-home *::after { box-sizing: border-box; }
+.jamvi-home button { font: inherit; cursor: pointer; }
+.jh-header { padding: 79px 20px 20px; color: #f4f8ff; background: linear-gradient(135deg, #011c4e 0%, #05255e 56%, #003383 100%); }
+.jh-top, .jh-controls, .jh-month, .jh-shortcuts, .jh-bank-head, .jh-bank-stats, .jh-section-head, .jh-activity, .jh-overview-button, .jh-setup-head, .jh-setup-cta, .jh-setup-eyebrow { display: flex; align-items: center; }
+.jh-top { justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 10px; }
+.jh-greeting { color: #a5b9d4; font-size: 12px; }
+.jh-name { color: #f4f8ff; font-size: 20px; font-weight: 700; }
+.jh-controls { gap: 10px; }
+.jh-avatar, .jh-icon-button, .jh-nav-button { border: 0; color: #f4f8ff; background: transparent; display: grid; place-items: center; padding: 4px; }
+.jh-avatar { width: 34px; height: 34px; border-radius: 50%; background: rgba(247,250,246,.16); font-size: 14px; font-weight: 700; }
+.jh-icon-button { color: rgba(247,250,246,.7); }
+.jh-month { gap: 2px; }
+.jh-nav-button:disabled { color: rgba(247,250,246,.2); cursor: default; }
+.jh-month-label { width: 56px; color: #f4f8ff; font-size: 13px; font-weight: 500; text-align: center; }
+.jh-ring-wrap { display: grid; place-items: center; margin-bottom: 16px; }
+.jh-ring { position: relative; width: 196px; height: 196px; }
+.jh-ring svg { width: 196px; height: 196px; transform: rotate(-90deg); }
+.jh-ring-track { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 18; }
+.jh-ring-progress { fill: none; stroke: var(--gold); stroke-width: 18; stroke-linecap: round; stroke-dasharray: 559.2; transition: stroke-dashoffset .4s ease; }
+.jh-ring-center { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; }
+.jh-percent { color: #f4f8ff; font-size: 42px; font-weight: 800; line-height: 46px; }
+.jh-used { color: #a5b9d4; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+.jh-spent { color: var(--gold); font-size: 15px; font-weight: 700; }
+.jh-total { color: rgba(247,250,246,.5); font-size: 11px; margin-top: 1px; }
+.jh-stats { display: grid; grid-template-columns: 1fr 1px 1fr 1px 1fr; border-radius: 14px; padding: 12px 0; background: rgba(255,255,255,.07); margin-bottom: 14px; }
+.jh-stat { text-align: center; }.jh-stat-label { color: #a5b9d4; font-size: 10px; letter-spacing: .5px; margin-bottom: 3px; }.jh-stat-value { color: rgba(244,248,255,.75); font-size: 11px; font-weight: 500; }.jh-stat-divider { background: rgba(255,255,255,.12); }
+.jh-contributions { display: flex; gap: 12px; }.jh-contribution { flex: 1; min-width: 0; }.jh-contribution + .jh-contribution { border-left: 1px solid rgba(255,255,255,.1); padding-left: 12px; }
+.jh-contribution-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 4px; font-size: 11px; }.jh-contribution-name { color: rgba(247,250,246,.5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.jh-net { font-weight: 600; white-space: nowrap; }.jh-contribution-track { height: 4px; overflow: hidden; border-radius: 2px; background: rgba(255,255,255,.1); margin-bottom: 4px; }.jh-contribution-fill { height: 100%; border-radius: 2px; }.jh-contribution-sub { color: rgba(247,250,246,.4); font-size: 9px; }
+.jh-shortcuts { padding: 16px 12px 4px; gap: 8px; }.jh-shortcut { min-width: 0; flex: 1; border: 0; border-radius: 14px; padding: 12px 2px; display: grid; justify-items: center; gap: 5px; }.jh-shortcut span { font-size: 10px; font-weight: 600; }
+.jh-overview, .jh-setup, .jh-bank { margin: 16px 16px 0; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }.jh-eyebrow { color: var(--navy); font-size: 10px; font-weight: 700; letter-spacing: 1px; }.jh-overview h2, .jh-setup h2 { font-size: 18px; line-height: 1.25; margin: 4px 0 0; }.jh-overview p, .jh-setup p { color: var(--muted); font-size: 12px; line-height: 18px; margin: 5px 0 0; }
+.jh-overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }.jh-overview-button { min-height: 46px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; gap: 7px; text-align: left; }.jh-overview-button span { flex: 1; font-size: 11px; font-weight: 600; }
+.jh-setup { border-color: var(--navy); border-radius: 20px; padding: 18px; }.jh-setup-head { align-items: flex-start; gap: 12px; }.jh-setup-head > div { flex: 1; }.jh-setup h2 { font-size: 20px; margin-top: 5px; }.jh-setup-toggle { border: 0; border-radius: 20px; padding: 6px; display: grid; background: #e7eff8; color: var(--ink); }.jh-setup-eyebrow { gap: 5px; color: var(--navy); font-size: 10px; font-weight: 700; letter-spacing: 1px; }.jh-setup-track { height: 7px; overflow: hidden; border-radius: 4px; background: rgba(1,28,78,.09); margin-top: 16px; }.jh-setup-fill { width: 50%; height: 100%; border-radius: inherit; background: var(--gold); }.jh-setup-cta { min-height: 68px; padding: 11px 14px; margin-top: 16px; color: var(--navy); background: var(--gold); border: 0; border-radius: 16px; gap: 11px; text-align: left; width: 100%; }.jh-setup-cta-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: rgba(245,248,252,.2); }.jh-setup-cta div:nth-child(2) { flex: 1; }.jh-setup-label { font-size: 10px; font-weight: 700; letter-spacing: .8px; }.jh-setup-action { display: block; font-size: 15px; font-weight: 700; margin-top: 2px; }.jh-skip { border: 0; padding: 10px 4px 2px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 500; }.jh-setup-list { margin-top: 16px; }.jh-step { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }.jh-step:first-child { border-top: 0; }.jh-step-icon { width: 28px; height: 28px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 8px; background: #e7eff8; color: var(--muted); }.jh-step-copy { flex: 1; }.jh-step-title { font-size: 13px; font-weight: 600; }.jh-step-detail { color: var(--muted); font-size: 11px; margin-top: 2px; }.jh-go { border: 0; border-radius: 8px; padding: 6px 12px; color: white; background: var(--navy); font-size: 11px; font-weight: 600; }
+.jh-bank { padding: 0; overflow: hidden; border-radius: 16px; margin-top: 12px; }.jh-bank-head { gap: 10px; padding: 12px 16px; }.jh-bank-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: var(--teal); background: rgba(56,189,248,.15); }.jh-bank-copy { flex: 1; }.jh-bank-title { font-size: 14px; font-weight: 600; }.jh-bank-sub { color: var(--muted); font-size: 11px; }.jh-bank-arrow { color: var(--muted); }.jh-bank-stats { border-top: 1px solid rgba(128,128,128,.15); }.jh-bank-stat { flex: 1; padding: 12px 3px; text-align: center; }.jh-bank-stat + .jh-bank-stat { border-left: 1px solid var(--line); }.jh-bank-label { color: var(--muted); font-size: 9px; letter-spacing: .4px; margin-bottom: 3px; }.jh-bank-value { color: var(--blue); font-size: 13px; font-weight: 600; }.jh-bank-stat:first-child .jh-bank-value { font-size: 16px; font-weight: 700; }
+.jh-section { padding: 20px 20px 105px; }.jh-section-head { justify-content: space-between; margin-bottom: 16px; }.jh-section h2 { margin: 0; font-size: 17px; }.jh-see-all { border: 0; padding: 0; color: var(--gold); background: transparent; font-size: 13px; font-weight: 500; }.jh-activity { gap: 12px; padding: 14px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }.jh-activity-icon { width: 40px; height: 40px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 10px; }.jh-activity-copy { min-width: 0; flex: 1; }.jh-activity-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }.jh-activity-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }.jh-activity-amount { font-size: 14px; font-weight: 700; }
+@media (min-width: 403px) { .jamvi-home { max-width: 402px; margin: 0 auto; } }
