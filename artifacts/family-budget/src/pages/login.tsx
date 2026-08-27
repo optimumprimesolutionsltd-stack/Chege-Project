@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@workspace/replit-auth-web';
 import { ArrowUpRight, ShieldCheck, Sparkles, TrendingUp, Users, WalletCards } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 
 function FeatureRow({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
@@ -25,12 +26,8 @@ export default function LoginPage() {
       <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl items-center justify-center gap-12 lg:min-h-[calc(100vh-4rem)] lg:justify-between">
         <section className="hidden max-w-xl flex-1 lg:block">
           <div className="mb-8 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl shadow-lg" style={{ backgroundColor: '#cf7217' }}>
-              <TrendingUp className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <p className="font-display text-xl font-bold tracking-tight text-[#f7faf6]">Jamvi</p>
-              <p className="text-xs font-medium text-[#7aaa8a]">Shared finances, together</p>
+            <div className="flex h-12 w-44 items-center justify-center rounded-2xl bg-[#f7faf6] px-3 shadow-lg">
+              <BrandLogo className="h-10 w-full" />
             </div>
           </div>
 
@@ -53,12 +50,8 @@ export default function LoginPage() {
           <div className="rounded-[2rem] border p-6 shadow-2xl backdrop-blur-xl sm:p-8" style={{ backgroundColor: 'rgba(15,38,25,0.94)', borderColor: 'rgba(185,210,191,0.2)' }}>
             <div className="mb-8 flex items-start justify-between gap-4">
               <div className="flex items-center gap-3 lg:hidden">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl" style={{ backgroundColor: '#cf7217' }}>
-                  <TrendingUp className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="font-display text-xl font-bold tracking-tight text-[#183b26]">Jamvi</p>
-                  <p className="text-xs font-medium text-[#5f8d6d]">Shared finances, together</p>
+                <div className="flex h-11 w-36 items-center justify-center rounded-2xl bg-[#f7faf6] px-2">
+                  <BrandLogo className="h-9 w-full" />
                 </div>
               </div>
               <div className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-[#dceee1]/15 text-[#a8d0b4]">

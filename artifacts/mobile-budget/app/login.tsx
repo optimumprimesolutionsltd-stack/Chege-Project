@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth';
+import { BrandLogo } from '@/components/BrandLogo';
 
 export default function LoginScreen() {
   const { login, isLoading } = useAuth();
@@ -44,10 +45,9 @@ export default function LoginScreen() {
     >
       {/* Brand mark */}
       <View style={styles.brandWrap}>
-        <View style={styles.iconCircle}>
-          <Feather name="trending-up" size={36} color="#cf7217" />
+        <View style={styles.logoSurface}>
+          <BrandLogo style={styles.wordmark} />
         </View>
-        <Text style={styles.appName}>Jamvi</Text>
         <Text style={styles.tagline}>Shared finances, together</Text>
       </View>
 
@@ -112,23 +112,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 40,
   },
-  iconCircle: {
-    width: 80,
-    height: 80,
+  logoSurface: {
+    width: 250,
+    height: 92,
     borderRadius: 24,
-    backgroundColor: 'rgba(207,114,23,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(207,114,23,0.3)',
+    backgroundColor: '#f7faf6',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
+    paddingHorizontal: 12,
   },
-  appName: {
-    fontSize: 40,
-    fontWeight: '800' as const,
-    color: '#f7faf6',
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: -1,
+  wordmark: {
+    width: '100%',
+    height: '100%',
   },
   tagline: {
     fontSize: 16,

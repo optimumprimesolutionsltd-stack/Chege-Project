@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useGetGroup, useGetMembers } from '@workspace/api-client-react';
 import { WorkspaceSwitcher, workspaceLabel } from '@/components/workspace-switcher';
 import { ProfileAvatar } from '@/components/profile-avatar';
+import { BrandLogo } from '@/components/brand-logo';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -59,13 +60,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
         <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 bg-sidebar-primary rounded-xl flex items-center justify-center shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-sidebar-primary-foreground">
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-            </svg>
+          <div className="flex h-10 w-40 shrink-0 items-center justify-center rounded-xl bg-[#f7faf6] px-2 shadow-sm">
+            <BrandLogo className="h-8 w-full" />
           </div>
           <div className="min-w-0">
-            <span className="block font-display font-bold text-xl tracking-tight">Jamvi</span>
             <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
           </div>
         </div>
@@ -112,13 +110,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-sidebar border-b border-sidebar-border z-50 flex items-center justify-between px-4">
         <div className="flex items-center gap-2 text-sidebar-foreground">
-          <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-sidebar-primary-foreground">
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-            </svg>
+          <div className="flex h-8 w-28 items-center justify-center rounded-lg bg-[#f7faf6] px-1.5">
+            <BrandLogo className="h-6 w-full" />
           </div>
           <div className="min-w-0">
-            <span className="block font-display font-bold text-lg leading-none">Jamvi</span>
             <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
           </div>
         </div>
