@@ -7,4 +7,4 @@ Keep the currently working production domain active as a buffer while introducin
 
 **Why:** A DNS change can take time to propagate and can interrupt users, sessions, OAuth callbacks, or invitation links if the new route is not ready.
 
-**How to apply:** Configure and verify the replacement domain on Render first. Do not remove or repoint the current domain until the new domain serves the complete Jamvi app successfully and the cutover is intentional.
+**How to apply:** All candidate deployments should first land on a separate Render staging service and its generated Render URL. Only merge verified changes into `main`, which deploys the production service and its current public domain. Keep staging data and secrets separate from production.
