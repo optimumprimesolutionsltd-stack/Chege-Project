@@ -21,7 +21,7 @@ type IncomeStream = {
   variance: number;
   transactionCount: number;
 };
-const MEMBER_ACCENT_COLORS = ["#4ade80", "#f97316", "#38bdf8", "#f472b6", "#a78bfa"];
+const MEMBER_ACCENT_COLORS = ["#08B7B0", "#FDBB0A", "#003383", "#3CDD62", "#6C9FE6"];
 
 const CONTRIBUTIONS_MONTH_KEY = "contributions-month-pref";
 
@@ -90,7 +90,7 @@ function MemberCard({
           </div>
           <div className="bg-muted/50 rounded-xl p-3 text-center">
             <p className="text-xs text-muted-foreground mb-0.5">Net</p>
-            <p className={`font-display font-bold text-sm ${net >= 0 ? "text-green-600" : "text-destructive"}`}>
+            <p className={`font-display font-bold text-sm ${net >= 0 ? "text-success" : "text-destructive"}`}>
               {net >= 0 ? "+" : ""}{formatKes(net)}
             </p>
           </div>
@@ -293,7 +293,7 @@ export default function Contributions() {
               <p className="text-muted-foreground text-sm mb-1">of {formatKes(totalTarget)}</p>
             </div>
             <div className="mt-3">
-              <ProgressBar value={totalContrib} max={totalTarget} color="#6366f1" />
+              <ProgressBar value={totalContrib} max={totalTarget} color="#003383" />
               <p className="text-xs text-muted-foreground mt-1.5">
                 {Math.round(totalTarget > 0 ? (totalContrib / totalTarget) * 100 : 0)}% of combined target
               </p>

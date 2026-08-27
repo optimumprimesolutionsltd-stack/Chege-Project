@@ -1,82 +1,114 @@
 /**
- * Design tokens derived from the sibling web artifact (family-budget/src/index.css).
- * Earthy Greens and Rich Ambers palette — synced so both artifacts share the same identity.
+ * Jamvi brand tokens shared with family-budget/src/index.css.
+ *
+ * Logo palette: navy #011C4E, royal blue #003383, turquoise #08B7B0,
+ * bright green #3CDD62, and gold #FDBB0A. Keep status roles separate so
+ * success, warning, and destructive states stay immediately understandable.
  */
 
 const colors = {
   light: {
     // Legacy aliases
-    text: '#133921',
-    tint: '#2e6b44',
+    text: '#06224F',
+    tint: '#011C4E',
 
     // Surfaces
-    background: '#f7faf6',
-    foreground: '#133921',
+    background: '#F5F8FC',
+    foreground: '#06224F',
 
     // Cards
-    card: '#f8f8f2',
-    cardForeground: '#133921',
+    card: '#FFFFFF',
+    cardForeground: '#06224F',
 
-    // Primary — forest green (HSL 142 40% 30%)
-    primary: '#2e6b44',
+    // Primary — Jamvi navy
+    primary: '#011C4E',
     primaryForeground: '#ffffff',
 
-    // Secondary — rich amber (HSL 30 80% 45%)
-    secondary: '#cf7217',
-    secondaryForeground: '#ffffff',
+    // Secondary — Jamvi gold
+    secondary: '#FDBB0A',
+    secondaryForeground: '#011C4E',
 
     // Muted
-    muted: '#edf2ed',
-    mutedForeground: '#5c8a6c',
+    muted: '#E7EFF8',
+    mutedForeground: '#4D6687',
 
-    // Accent — warm amber tint (HSL 30 80% 95%)
-    accent: '#fcf3e8',
-    accentForeground: '#a15912',
+    // Accent — turquoise tint
+    accent: '#E1F6F4',
+    accentForeground: '#0B6A69',
 
     // Destructive
     destructive: '#d92626',
     destructiveForeground: '#ffffff',
+    success: '#209E45',
+    successForeground: '#ffffff',
+    warning: '#C98C00',
+    warningForeground: '#011C4E',
+    info: '#003383',
+    infoForeground: '#ffffff',
+
+    // Logo and focus
+    brandNavy: '#011C4E',
+    brandBlue: '#003383',
+    brandTeal: '#08B7B0',
+    brandGreen: '#3CDD62',
+    brandGold: '#FDBB0A',
+    logoSurface: '#E7EFFB',
+    focus: '#08B7B0',
 
     // Borders / inputs
-    border: '#e0ebe4',
-    input: '#d1e0d7',
-    dropdownBackground: '#f8f8f2',
-    dropdownForeground: '#133921',
-    dropdownMutedForeground: '#5c8a6c',
-    dropdownBorder: '#e0ebe4',
+    border: '#D7E3F1',
+    input: '#C3D3E8',
+    dropdownBackground: '#FFFFFF',
+    dropdownForeground: '#06224F',
+    dropdownMutedForeground: '#4D6687',
+    dropdownBorder: '#D7E3F1',
   },
 
   dark: {
-    text: '#f7faf6',
-    tint: '#4a9b60',
+    text: '#F4F8FF',
+    tint: '#2D70C8',
 
-    background: '#0f2217',
-    foreground: '#f7faf6',
+    background: '#040F29',
+    foreground: '#F4F8FF',
 
-    card: '#162d20',
-    cardForeground: '#f7faf6',
+    card: '#091A3D',
+    cardForeground: '#F4F8FF',
 
-    primary: '#4a9b60',
+    primary: '#2D70C8',
     primaryForeground: '#ffffff',
 
-    secondary: '#d4801f',
-    secondaryForeground: '#ffffff',
+    secondary: '#FDBB0A',
+    secondaryForeground: '#011C4E',
 
-    muted: '#1a3325',
-    mutedForeground: '#7aaa8a',
+    muted: '#10274F',
+    mutedForeground: '#A5B9D4',
 
-    accent: '#2a4535',
-    accentForeground: '#f0c070',
+    accent: '#124A4B',
+    accentForeground: '#9BE5DF',
 
     destructive: '#e53e3e',
     destructiveForeground: '#ffffff',
+    success: '#3CDD62',
+    successForeground: '#040F29',
+    warning: '#FDBB0A',
+    warningForeground: '#011C4E',
+    info: '#6C9FE6',
+    infoForeground: '#040F29',
 
-    border: '#1e3b2b',
-    input: '#244033',
-    dropdownBackground: '#162d20',
-    dropdownForeground: '#f7faf6',
-    dropdownMutedForeground: '#7aaa8a',
-    dropdownBorder: '#1e3b2b',
+    brandNavy: '#011C4E',
+    brandBlue: '#003383',
+    brandTeal: '#08B7B0',
+    brandGreen: '#3CDD62',
+    brandGold: '#FDBB0A',
+    logoSurface: '#E7EFFB',
+    focus: '#2DD4CC',
+
+    border: '#1D3B67',
+    input: '#28517E',
+    dropdownBackground: '#091A3D',
+    dropdownForeground: '#F4F8FF',
+    dropdownMutedForeground: '#A5B9D4',
+    dropdownBorder: '#1D3B67',
   },
 
   // 0.75rem = 12px — matches web app's --radius: 0.75rem

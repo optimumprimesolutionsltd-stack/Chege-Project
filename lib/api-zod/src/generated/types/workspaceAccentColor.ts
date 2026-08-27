@@ -10,6 +10,12 @@ export type WorkspaceAccentColor = typeof WorkspaceAccentColor[keyof typeof Work
 
 
 export const WorkspaceAccentColor = {
+  '#011C4E': '#011C4E',
+  '#003383': '#003383',
+  '#087F8C': '#087F8C',
+  '#08B7B0': '#08B7B0',
+  '#209E45': '#209E45',
+  '#C98C00': '#C98C00',
   '#0F766E': '#0F766E',
   '#2563EB': '#2563EB',
   '#7C3AED': '#7C3AED',

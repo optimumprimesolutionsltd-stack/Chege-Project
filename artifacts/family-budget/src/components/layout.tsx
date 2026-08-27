@@ -60,7 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
         <div className="p-6">
-          <div className="flex h-10 w-40 items-center justify-center rounded-xl bg-[#f7faf6] px-2 shadow-sm">
+            <div className="flex h-10 w-40 items-center justify-center rounded-xl bg-brand-surface px-2 shadow-sm">
             <BrandLogo className="h-8 w-full" />
           </div>
           <div className="mt-2 min-w-0">
@@ -111,7 +111,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-sidebar border-b border-sidebar-border z-50 flex items-center justify-between px-4">
         <div className="flex items-center gap-2 text-sidebar-foreground">
-          <div className="flex h-8 w-28 items-center justify-center rounded-lg bg-[#f7faf6] px-1.5">
+           <div className="flex h-8 w-28 items-center justify-center rounded-lg bg-brand-surface px-1.5">
             <BrandLogo className="h-6 w-full" />
           </div>
           <div className="min-w-0">
@@ -171,7 +171,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               disabled={sharedTransactionsLocked}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/10 text-warning">
                 <Receipt className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
@@ -185,7 +185,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               onClick={() => openQuickLog('income')}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
                 <Landmark className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>
@@ -200,7 +200,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               disabled={sharedTransactionsLocked}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info">
                 <Target className="h-4 w-4" aria-hidden="true" />
               </span>
               <span>

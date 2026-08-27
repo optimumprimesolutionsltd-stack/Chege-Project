@@ -9,17 +9,17 @@ const EXPENSE_TIERS = [
   },
   {
     tier: 2, label: "Health & Education",
-    bar: "bg-orange-400", badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
+    bar: "bg-warning", badge: "bg-warning/10 text-warning",
     categories: ["Medical outpatient", "Medical insurance", "Uniform replenishment"],
   },
   {
     tier: 3, label: "Daily Household",
-    bar: "bg-yellow-400", badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400",
+    bar: "bg-brand-gold", badge: "bg-brand-gold/15 text-[#8A6200] dark:text-brand-gold",
     categories: ["Household supplies", "Kids clothes"],
   },
   {
     tier: 4, label: "Connectivity & Care",
-    bar: "bg-blue-400", badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+    bar: "bg-brand-teal", badge: "bg-brand-teal/10 text-[#087F8C] dark:text-brand-teal",
     categories: ["Wifi/data", "Grooming"],
   },
   {
@@ -714,8 +714,7 @@ export default function Expenses() {
           <label className="text-sm font-semibold text-foreground">Category</label>
           <div className="flex flex-col gap-2 sm:flex-row">
             <select
-              className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-[#1e3b2b] bg-[#162d20] px-3 py-2 text-base text-[#f7faf6] shadow-sm transition-colors hover:border-[#4a9b60] hover:bg-[#1a3325] focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:border-input sm:bg-card sm:text-foreground sm:hover:border-primary/45 sm:hover:bg-muted/35"
-              style={{ colorScheme: "dark" }}
+              className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Expense category"
               value={form.category}
               onChange={e => chooseCategory(form, e.target.value)}
@@ -728,7 +727,7 @@ export default function Expenses() {
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 w-full shrink-0 border-[#1e3b2b] bg-[#162d20] text-[#f7faf6] hover:bg-[#1a3325] sm:w-auto sm:border-input sm:bg-transparent sm:text-foreground sm:hover:bg-accent"
+                className="h-12 w-full shrink-0 border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
                 onClick={() => {
                   form.setCategory("");
                   setIsCreatingCategory((open) => !open);
@@ -741,10 +740,10 @@ export default function Expenses() {
             )}
           </div>
           {isCreatingCategory && (
-            <div className="space-y-3 rounded-xl border border-[#4a9b60]/45 bg-[#162d20] p-3 text-[#f7faf6] sm:border-primary/20 sm:bg-primary/5 sm:text-foreground">
+            <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-foreground">
               <div>
-                <p className="text-sm font-semibold text-[#f7faf6] sm:text-foreground">Set up the right category</p>
-                <p className="mt-0.5 text-xs text-[#b9d2bf] sm:text-muted-foreground">Name this spending clearly. We’ll save the category and select it without clearing the rest of your expense.</p>
+                <p className="text-sm font-semibold text-foreground">Set up the right category</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Name this spending clearly. We’ll save the category and select it without clearing the rest of your expense.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input
@@ -752,7 +751,7 @@ export default function Expenses() {
                   value={newCategoryName}
                   onChange={(event) => setNewCategoryName(event.target.value)}
                   aria-label="New category name"
-                  className="h-10 border-[#1e3b2b] bg-[#1a3325] text-[#f7faf6] placeholder:text-[#7aaa8a] sm:border-input sm:bg-card sm:text-foreground sm:placeholder:text-muted-foreground"
+                  className="h-10 border-input bg-card text-foreground placeholder:text-muted-foreground"
                 />
                 <Input
                   type="number"
@@ -762,7 +761,7 @@ export default function Expenses() {
                   value={newCategoryBudget}
                   onChange={(event) => setNewCategoryBudget(event.target.value)}
                   aria-label="New category monthly budget in KES"
-                  className="h-10 border-[#1e3b2b] bg-[#1a3325] text-[#f7faf6] placeholder:text-[#7aaa8a] sm:border-input sm:bg-card sm:text-foreground sm:placeholder:text-muted-foreground"
+                  className="h-10 border-input bg-card text-foreground placeholder:text-muted-foreground"
                 />
                 <label className="space-y-1 text-xs font-semibold text-foreground">
                   Priority
@@ -770,8 +769,7 @@ export default function Expenses() {
                     value={newCategoryPriority}
                     onChange={(event) => setNewCategoryPriority(event.target.value)}
                     aria-label="New category priority"
-                    className="h-10 w-full rounded-md border border-[#1e3b2b] bg-[#1a3325] px-3 text-sm text-[#f7faf6] sm:border-input sm:bg-card sm:text-foreground"
-                    style={{ colorScheme: "dark" }}
+                    className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground"
                   >
                     <option value="1">1 · Must-pay</option>
                     <option value="2">2 · Important</option>
@@ -780,10 +778,10 @@ export default function Expenses() {
                     <option value="5">5 · Flexible</option>
                   </select>
                 </label>
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-[#1e3b2b] bg-[#1a3325] px-3 py-2 sm:border-border/70 sm:bg-card">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
                   <div>
-                    <p className="text-xs font-semibold text-[#f7faf6] sm:text-foreground">Recurring</p>
-                    <p className="text-xs text-[#b9d2bf] sm:text-muted-foreground">
+                    <p className="text-xs font-semibold text-foreground">Recurring</p>
+                    <p className="text-xs text-muted-foreground">
                       {newCategoryRecurring
                         ? "Available every month"
                         : `Only for ${formatMonthYear(Number(form.date.slice(5, 7)), Number(form.date.slice(0, 4)))}`}
@@ -813,7 +811,7 @@ export default function Expenses() {
                   setNewCategoryRecurring(true);
                   setNewCategoryPriority("3");
                 }}
-                className="h-10 rounded-md px-3 text-left text-xs font-medium text-[#b9d2bf] hover:bg-[#1a3325] hover:text-[#f7faf6] sm:text-muted-foreground sm:hover:bg-muted sm:hover:text-foreground"
+                className="h-10 rounded-md px-3 text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 Cancel
               </button>
@@ -1097,8 +1095,8 @@ export default function Expenses() {
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Expenses</h1>
           <p className="text-muted-foreground mt-1">Track where the money is going.</p>
         </div>
-        <div className="flex w-full items-center justify-between gap-1 rounded-xl border border-[#1e3b2b] bg-[#162d20] p-1 text-[#f7faf6] shadow-sm sm:w-auto sm:justify-start sm:border-input sm:bg-card sm:text-foreground">
-          <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg text-[#f7faf6]/80 hover:bg-[#1a3325] hover:text-[#f7faf6] sm:text-foreground/70 sm:hover:bg-muted">
+        <div className="flex w-full items-center justify-between gap-1 rounded-xl border border-input bg-card p-1 text-foreground shadow-sm sm:w-auto sm:justify-start">
+          <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-10 w-10 rounded-lg text-foreground/70 hover:bg-muted hover:text-foreground">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-1.5 px-1">
@@ -1110,8 +1108,7 @@ export default function Expenses() {
                 setYear(y);
                 setMonth(m);
               }}
-              className="cursor-pointer border-none bg-transparent font-display text-sm font-semibold text-[#f7faf6] outline-none sm:text-foreground"
-              style={{ colorScheme: "dark" }}
+              className="cursor-pointer border-none bg-transparent font-display text-sm font-semibold text-foreground outline-none"
             >
               {Array.from({ length: 24 }, (_, i) => {
                 const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -1125,7 +1122,7 @@ export default function Expenses() {
               })}
             </select>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg text-[#f7faf6]/80 hover:bg-[#1a3325] hover:text-[#f7faf6] sm:text-foreground/70 sm:hover:bg-muted"
+          <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg text-foreground/70 hover:bg-muted hover:text-foreground"
             disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
             <ArrowRight className="h-5 w-5" />
           </Button>
@@ -1167,20 +1164,20 @@ export default function Expenses() {
             {/* Income vs Target */}
             <div className="space-y-2 pt-1 border-t border-border/40">
               <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                <TrendingUp className="w-4 h-4 text-green-600" /> Income
+                <TrendingUp className="w-4 h-4 text-success" /> Income
               </span>
               {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(({ name, contributed, target }: {name: string; contributed: number; target: number | null}) => (
                 <div key={name} className="space-y-1">
                   <div className="flex flex-col gap-0.5 text-xs sm:flex-row sm:justify-between sm:gap-2">
                     <span className="font-medium text-foreground">{name}</span>
                     <span className="font-mono">
-                      <span className={target != null && contributed >= target ? "text-green-600 font-bold" : "text-foreground"}>{formatKes(contributed)}</span>
+                      <span className={target != null && contributed >= target ? "font-bold text-success" : "text-foreground"}>{formatKes(contributed)}</span>
                       {target != null && <span className="text-muted-foreground"> / {formatKes(target)}</span>}
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${target != null && contributed >= target ? "bg-green-500" : "bg-amber-400"}`}
+                      className={`h-full rounded-full transition-all ${target != null && contributed >= target ? "bg-success" : "bg-warning"}`}
                       style={{ width: `${Math.min(100, target && target > 0 ? (contributed / target) * 100 : 0)}%` }}
                     />
                   </div>
@@ -1203,7 +1200,7 @@ export default function Expenses() {
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
                           <p className="text-xs text-muted-foreground mb-0.5">Income</p>
-                          <p className={`text-sm font-bold font-mono ${target != null && contributed >= target ? "text-green-600" : "text-amber-500"}`}>
+                          <p className={`font-mono text-sm font-bold ${target != null && contributed >= target ? "text-success" : "text-warning"}`}>
                             {formatKes(contributed)}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -1217,7 +1214,7 @@ export default function Expenses() {
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-0.5">Net</p>
-                          <p className={`text-sm font-bold font-mono ${overSpent ? "text-destructive" : "text-green-600"}`}>
+                          <p className={`font-mono text-sm font-bold ${overSpent ? "text-destructive" : "text-success"}`}>
                             {overSpent ? "-" : "+"}{formatKes(Math.abs(net))}
                           </p>
                           <p className="text-xs text-muted-foreground">{overSpent ? "deficit" : "surplus"}</p>

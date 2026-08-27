@@ -381,7 +381,7 @@ function IncomeForm({
         </div>
       )}
       <div className="flex gap-3">
-        <Button type="submit" className="h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex-1 text-base" disabled={createDeposit.isPending}>
+        <Button type="submit" className="h-12 flex-1 rounded-xl bg-success px-6 text-base text-success-foreground hover:bg-success/90" disabled={createDeposit.isPending}>
           {createDeposit.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           Record Deposit
         </Button>
@@ -781,7 +781,7 @@ function ExpenseForm({
         </div>
       )}
       <div className="flex gap-3">
-        <Button type="submit" className="h-11 px-6 rounded-xl bg-amber-600 hover:bg-amber-700 text-white" disabled={createExpense.isPending}>
+        <Button type="submit" className="h-11 rounded-xl bg-warning px-6 text-warning-foreground hover:bg-warning/90" disabled={createExpense.isPending}>
           {createExpense.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           Log Expense
         </Button>
@@ -878,7 +878,7 @@ function GoalForm({
             <ChevronRight className="w-4 h-4 text-primary shrink-0" />
             <span className="flex-1 font-medium text-foreground">{a.goalName}</span>
             <span className="font-bold text-primary">{formatKes(a.allocated)}</span>
-            {a.completed && <span className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded-full font-semibold">Complete! 🎉</span>}
+            {a.completed && <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-semibold text-success">Complete! 🎉</span>}
           </div>
         ))}
         <Button variant="ghost" size="sm" onClick={onDone} className="mt-1">Done</Button>
@@ -909,7 +909,7 @@ function GoalForm({
         </div>
       </div>
       <div className="flex gap-3">
-        <Button type="submit" className="h-11 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white" disabled={isPending}>
+        <Button type="submit" className="h-11 rounded-xl bg-info px-6 text-info-foreground hover:bg-info/90" disabled={isPending}>
           {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           Save
         </Button>
@@ -1366,7 +1366,7 @@ export default function Dashboard() {
                         const isNext = step.id === nextSetupStep?.id;
                         return (
                           <li key={step.id} className="flex items-center gap-3 py-3">
-                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${step.done ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary"}`}>
+                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${step.done ? "bg-success/10 text-success" : "bg-primary/10 text-primary"}`}>
                               <StepIcon className="h-4 w-4" />
                             </span>
                             <span className="min-w-0 flex-1">
@@ -1434,9 +1434,9 @@ export default function Dashboard() {
           {/* Action buttons row */}
           <div className="grid grid-cols-3 divide-x divide-border/50">
             {[
-              { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: "💰", active: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-400" },
-              { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: "📋", active: "bg-amber-50 dark:bg-amber-950/40",   text: "text-amber-700 dark:text-amber-400" },
-              { key: "goal" as const,   label: "Save to Goal", shortLabel: "Save",     icon: "🎯", active: "bg-blue-50 dark:bg-blue-950/40",     text: "text-blue-700 dark:text-blue-400" },
+              { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: "💰", active: "bg-success/10", text: "text-success" },
+              { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: "📋", active: "bg-warning/10", text: "text-warning" },
+              { key: "goal" as const,   label: "Save to Goal", shortLabel: "Save",     icon: "🎯", active: "bg-info/10", text: "text-info" },
             ].map(({ key, label, shortLabel, icon, active, text }) => (
               <button
                 key={key}
@@ -1540,7 +1540,7 @@ export default function Dashboard() {
               </div>
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Deposited</p>
-                <p className="text-sm sm:text-lg font-semibold text-emerald-600 dark:text-emerald-400 break-all">
+                <p className="break-all text-sm font-semibold text-success sm:text-lg">
                   +{formatKes(monthlyDeposited)}
                 </p>
                 <p className="text-xs text-muted-foreground">this month</p>

@@ -633,7 +633,7 @@ export default function BudgetScreen() {
         contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }}
       >
         {/* Header */}
-        <LinearGradient colors={['#0a1a10', '#0f2217', '#132a1c']} style={[styles.header, { paddingTop: topPad + 16 }]}>
+        <LinearGradient colors={[colors.brandNavy, '#05255E', colors.brandBlue]} style={[styles.header, { paddingTop: topPad + 16 }]}>
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Budget</Text>
             <View style={styles.headerRight}>
@@ -1039,23 +1039,23 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 24, paddingBottom: 24 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  headerTitle: { fontSize: 26, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+  headerTitle: { fontSize: 26, fontWeight: '700' as const, color: '#F4F8FF', fontFamily: 'Inter_700Bold' },
    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
    reportActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   navBtn: { padding: 4 },
-  monthLabel: { fontSize: 14, color: '#f7faf6', fontFamily: 'Inter_500Medium', minWidth: 64, textAlign: 'center' },
+  monthLabel: { fontSize: 14, color: '#F4F8FF', fontFamily: 'Inter_500Medium', minWidth: 64, textAlign: 'center' },
   addBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,222,128,0.15)', alignItems: 'center', justifyContent: 'center' },
    manageBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.10)' },
    manageBtnText: { color: '#d9fbe5', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   overallCard: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 16, padding: 16 },
   overallRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  overallLabel: { fontSize: 12, color: '#7aaa8a', fontFamily: 'Inter_400Regular', letterSpacing: 0.5 },
-  overallPct: { fontSize: 14, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+  overallLabel: { fontSize: 12, color: '#A5B9D4', fontFamily: 'Inter_400Regular', letterSpacing: 0.5 },
+  overallPct: { fontSize: 14, fontWeight: '700' as const, color: '#F4F8FF', fontFamily: 'Inter_700Bold' },
    overallAmounts: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 12 },
-   overallMiniLabel: { color: '#7aaa8a', fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5, marginBottom: 3 },
-  overallSpent: { fontSize: 16, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
-  overallTarget: { fontSize: 14, color: '#7aaa8a', fontFamily: 'Inter_400Regular', alignSelf: 'flex-end' },
+   overallMiniLabel: { color: '#A5B9D4', fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5, marginBottom: 3 },
+  overallSpent: { fontSize: 16, fontWeight: '700' as const, color: '#F4F8FF', fontFamily: 'Inter_700Bold' },
+  overallTarget: { fontSize: 14, color: '#A5B9D4', fontFamily: 'Inter_400Regular', alignSelf: 'flex-end' },
   barTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
    incomeSection: { paddingHorizontal: 16, paddingTop: 18 },

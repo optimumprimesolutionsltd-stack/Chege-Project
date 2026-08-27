@@ -98,7 +98,7 @@ export function UpdatePrompt({ message, onDismiss }: Props) {
 
         {/* Icon badge */}
         <View style={styles.iconWrap}>
-          <Feather name="download-cloud" size={28} color="#cf7217" />
+          <Feather name="download-cloud" size={28} color="#FDBB0A" />
         </View>
 
         {/* Heading */}
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#0f2217',
+    backgroundColor: '#011C4E',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#cf7217',
+    backgroundColor: '#FDBB0A',
     borderRadius: 14,
     paddingVertical: 16,
     marginBottom: 12,

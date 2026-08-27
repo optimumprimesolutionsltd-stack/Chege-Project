@@ -82,20 +82,20 @@ type SetupStep = {
 };
 
 const SHORTCUTS: Shortcut[] = [
-  { icon: 'plus-circle', label: 'Expense',  color: '#4ade80', bg: '#1a3320', route: '/add-expense'            },
-  { icon: 'credit-card', label: 'Deposit',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank?shortcut=deposit' },
-  { icon: 'pie-chart',   label: 'Reports',  color: '#60a5fa', bg: '#0a1a2a', route: '/(tabs)/reports'         },
-  { icon: 'bar-chart-2', label: 'Budget',   color: '#a78bfa', bg: '#1a0a2a', route: '/(tabs)/budget'          },
-  { icon: 'settings',    label: 'Settings', color: '#94a3b8', bg: '#1a1a28', route: '/(tabs)/settings'        },
+  { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
+  { icon: 'credit-card', label: 'Deposit',  color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank?shortcut=deposit' },
+  { icon: 'pie-chart',   label: 'Reports',  color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports'         },
+  { icon: 'bar-chart-2', label: 'Budget',   color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget'          },
+  { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
 ];
 
 const OVERVIEW_SHORTCUTS: Shortcut[] = [
-  { icon: 'bar-chart-2', label: 'Budget',        color: '#a78bfa', bg: '#1a0a2a', route: '/(tabs)/budget'        },
-  { icon: 'trending-up', label: 'Contributions', color: '#4ade80', bg: '#102a1a', route: '/(tabs)/contributions' },
-  { icon: 'file-text',   label: 'Expenses',      color: '#fb923c', bg: '#2a1c0a', route: '/(tabs)/history'       },
-  { icon: 'target',      label: 'Goals',         color: '#fbbf24', bg: '#2a220a', route: '/(tabs)/goals'         },
-  { icon: 'credit-card', label: 'Bank',          color: '#38bdf8', bg: '#0a1a2a', route: '/(tabs)/bank'          },
-  { icon: 'pie-chart',   label: 'Reports',       color: '#60a5fa', bg: '#0a1a2a', route: '/(tabs)/reports'       },
+  { icon: 'bar-chart-2', label: 'Budget',        color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget'        },
+  { icon: 'trending-up', label: 'Contributions', color: '#3CDD62', bg: '#0D3428', route: '/(tabs)/contributions' },
+  { icon: 'file-text',   label: 'Expenses',      color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/history'       },
+  { icon: 'target',      label: 'Goals',         color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/goals'         },
+  { icon: 'credit-card', label: 'Bank',          color: '#08B7B0', bg: '#0B343B', route: '/(tabs)/bank'          },
+  { icon: 'pie-chart',   label: 'Reports',       color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports'       },
 ];
 
 export default function DashboardScreen() {
@@ -219,7 +219,7 @@ export default function DashboardScreen() {
         label: 'Set a monthly budget',
         detail: 'Plan what you can spend this month.',
         icon: 'bar-chart-2' as const,
-        color: '#a78bfa',
+        color: colors.brandTeal,
         route: '/(tabs)/budget',
         done: (summary?.totalBudget ?? 0) > 0,
       },
@@ -228,7 +228,7 @@ export default function DashboardScreen() {
         label: 'Add an income source',
         detail: 'Name where your funds come from.',
         icon: 'briefcase' as const,
-        color: '#f472b6',
+        color: colors.brandGold,
         route: '/(tabs)/settings',
         done: incomeSources.length > 0,
       },
@@ -237,7 +237,7 @@ export default function DashboardScreen() {
         label: 'Set up bank funding',
         detail: 'Record your first deposit.',
         icon: 'credit-card' as const,
-        color: '#38bdf8',
+        color: colors.info,
         route: '/(tabs)/bank',
         done: (bankAccount?.transactions?.length ?? 0) > 0,
       },
@@ -246,7 +246,7 @@ export default function DashboardScreen() {
         label: 'Create a savings goal',
         detail: 'Start saving for something important.',
         icon: 'target' as const,
-        color: '#f59e0b',
+        color: colors.brandBlue,
         route: '/(tabs)/goals',
         done: savingsGoals.length > 0,
       },
@@ -258,13 +258,13 @@ export default function DashboardScreen() {
         label: 'Invite your group',
         detail: 'Add people who will use this budget.',
         icon: 'users' as const,
-        color: '#4ade80',
+        color: colors.success,
         route: '/(tabs)/settings',
         done: members.length > 1,
       });
     }
     return steps;
-  }, [summary, incomeSources, bankAccount, savingsGoals, members, isSharedWorkspace]);
+  }, [summary, incomeSources, bankAccount, savingsGoals, members, isSharedWorkspace, colors]);
 
   const completeSetupSteps = allSetupSteps.filter(step => step.done).length;
   const pendingSetupSteps = allSetupSteps.filter(step => !step.done);
@@ -319,7 +319,7 @@ export default function DashboardScreen() {
   // Contribution bars — dynamic per member
   type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
   const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
-  const CONTRIBS_COLORS = ['#4ade80', '#f97316', '#38bdf8', '#f472b6', '#a78bfa'];
+  const CONTRIBS_COLORS = [colors.brandTeal, colors.brandGold, colors.brandBlue, colors.brandGreen, colors.info];
 
   if (summaryError) {
     return (
@@ -366,7 +366,7 @@ export default function DashboardScreen() {
       >
         {/* Dark header */}
         <LinearGradient
-          colors={['#0a1a10', '#0f2217', '#132a1c']}
+          colors={[colors.brandNavy, '#05255E', colors.brandBlue]}
           style={[styles.header, { paddingTop: topPad + 12 }]}
         >
           {/* Top row: greeting + controls */}
@@ -387,7 +387,7 @@ export default function DashboardScreen() {
                   user={user}
                   size={34}
                   backgroundColor="rgba(247,250,246,0.16)"
-                  foregroundColor="#f7faf6"
+                   foregroundColor="#F4F8FF"
                 />
               </Pressable>
               {/* Privacy toggle */}
@@ -415,7 +415,7 @@ export default function DashboardScreen() {
           <View style={styles.ringWrap}>
             {summaryLoading ? (
               <View style={styles.ringPlaceholder}>
-                <ActivityIndicator size="large" color="#cf7217" />
+                <ActivityIndicator size="large" color={colors.brandGold} />
               </View>
             ) : (
               <BudgetRing
@@ -432,9 +432,9 @@ export default function DashboardScreen() {
           <View style={styles.statsStrip}>
             <StatCell label="Budget" value={isPrivate ? '••••' : shortKES(summary?.totalBudget)} />
             <View style={styles.stripDivider} />
-            <StatCell label="Spent" value={isPrivate ? '••••' : shortKES(summary?.totalSpent)} valueColor={isOver ? '#f87171' : '#f7faf6'} />
+             <StatCell label="Spent" value={isPrivate ? '••••' : shortKES(summary?.totalSpent)} valueColor={isOver ? colors.destructive : colors.foreground} />
             <View style={styles.stripDivider} />
-            <StatCell label="Left" value={isPrivate ? '••••' : shortKES(summary?.remaining)} valueColor={isOver ? '#f87171' : '#4ade80'} />
+             <StatCell label="Left" value={isPrivate ? '••••' : shortKES(summary?.remaining)} valueColor={isOver ? colors.destructive : colors.success} />
           </View>
 
           {/* Contribution mini-bars — one per group member */}
@@ -664,7 +664,7 @@ export default function DashboardScreen() {
         >
           <View style={styles.bankCardHeader}>
             <View style={styles.bankIconWrap}>
-              <Feather name="credit-card" size={18} color="#38bdf8" />
+              <Feather name="credit-card" size={18} color={colors.brandTeal} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.bankCardTitle, { color: colors.foreground }]}>{isSharedWorkspace ? 'Joint Account' : 'My Account'}</Text>
@@ -678,7 +678,7 @@ export default function DashboardScreen() {
               {bankAccountLoading ? (
                 <BankBalanceSkeleton />
               ) : (
-                <Text style={[styles.bankBalance, { color: '#38bdf8' }]}>
+                <Text style={[styles.bankBalance, { color: colors.info }]}>
                   {bankAccount ? (isPrivate ? '••••' : `KES ${shortKES(bankAccount.balance)}`) : '—'}
                 </Text>
               )}
@@ -686,21 +686,21 @@ export default function DashboardScreen() {
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>IN THIS MONTH</Text>
-              <Text style={[styles.bankStatValue, { color: '#4ade80' }]}>
+              <Text style={[styles.bankStatValue, { color: colors.success }]}>
                 {isPrivate ? '••••' : `+KES ${shortKES(monthlyDeposited)}`}
               </Text>
             </View>
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>OUT THIS MONTH</Text>
-              <Text style={[styles.bankStatValue, { color: '#f87171' }]}>
+              <Text style={[styles.bankStatValue, { color: colors.destructive }]}>
                 {isPrivate ? '••••' : `-KES ${shortKES(monthlyDisbursed)}`}
               </Text>
             </View>
           </View>
           {bankAccount && bankAccount.balance === 0 && (!bankAccount.transactions || bankAccount.transactions.length === 0) && (
             <View style={styles.bankEmptyState}>
-              <Feather name="inbox" size={15} color="#38bdf8" style={{ opacity: 0.6 }} />
+              <Feather name="inbox" size={15} color={colors.brandTeal} style={{ opacity: 0.6 }} />
               <Text style={styles.bankEmptyText}>No deposits yet — tap to add one</Text>
             </View>
           )}
@@ -787,7 +787,7 @@ function SetupNudge({ visible, step, onClose, onStart, colors, topOffset }: {
   );
 }
 
-function StatCell({ label, value, valueColor = '#f7faf6' }: { label: string; value: string; valueColor?: string }) {
+function StatCell({ label, value, valueColor = '#F4F8FF' }: { label: string; value: string; valueColor?: string }) {
   return (
     <View style={styles.statCell}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -861,18 +861,18 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   headerControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconBtn: { padding: 4 },
-  greeting: { fontSize: 12, color: '#7aaa8a', fontFamily: 'Inter_400Regular' },
-  name: { fontSize: 20, fontWeight: '700' as const, color: '#f7faf6', fontFamily: 'Inter_700Bold' },
+  greeting: { fontSize: 12, color: '#A5B9D4', fontFamily: 'Inter_400Regular' },
+  name: { fontSize: 20, fontWeight: '700' as const, color: '#F4F8FF', fontFamily: 'Inter_700Bold' },
   monthNav: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   navBtn: { padding: 4 },
-  monthLabel: { fontSize: 13, color: '#f7faf6', fontFamily: 'Inter_500Medium', minWidth: 56, textAlign: 'center' },
+  monthLabel: { fontSize: 13, color: '#F4F8FF', fontFamily: 'Inter_500Medium', minWidth: 56, textAlign: 'center' },
 
   ringWrap: { alignItems: 'center', marginBottom: 16 },
   ringPlaceholder: { width: 196, height: 196, alignItems: 'center', justifyContent: 'center' },
 
   statsStrip: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, paddingVertical: 12, marginBottom: 14 },
   statCell: { flex: 1, alignItems: 'center' },
-  statLabel: { fontSize: 10, color: '#7aaa8a', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 3 },
+  statLabel: { fontSize: 10, color: '#A5B9D4', fontFamily: 'Inter_400Regular', letterSpacing: 0.5, marginBottom: 3 },
   statValue: { fontSize: 11, fontWeight: '500' as const, fontFamily: 'Inter_500Medium', opacity: 0.75 },
   stripDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
 
@@ -953,5 +953,5 @@ const styles = StyleSheet.create({
   bankStatDivider: { width: 1, marginVertical: 10 },
 
   bankEmptyState: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
-  bankEmptyText: { fontSize: 13, color: '#38bdf8', fontFamily: 'Inter_400Regular', opacity: 0.8 },
+  bankEmptyText: { fontSize: 13, color: '#08B7B0', fontFamily: 'Inter_400Regular', opacity: 0.8 },
 });

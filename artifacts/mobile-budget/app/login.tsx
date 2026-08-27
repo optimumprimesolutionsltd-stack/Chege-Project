@@ -33,14 +33,14 @@ export default function LoginScreen() {
   if (isLoading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#cf7217" />
+        <ActivityIndicator size="large" color="#FDBB0A" />
       </View>
     );
   }
 
   return (
     <LinearGradient
-      colors={['#0a1a10', '#0f2217', '#163020']}
+      colors={['#00132F', '#011C4E', '#003383']}
       style={[styles.container, { paddingTop: topPad + 20, paddingBottom: botPad + 24 }]}
     >
       {/* Brand mark */}
@@ -89,7 +89,7 @@ function FeatureRow({ icon, text }: { icon: keyof typeof Feather.glyphMap; text:
   return (
     <View style={styles.featureRow}>
       <View style={styles.featureIcon}>
-        <Feather name={icon} size={16} color="#cf7217" />
+        <Feather name={icon} size={16} color="#FDBB0A" />
       </View>
       <Text style={styles.featureText}>{text}</Text>
     </View>
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0f2217',
+    backgroundColor: '#011C4E',
   },
   container: {
     flex: 1,
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     width: 250,
     height: 92,
     borderRadius: 24,
-    backgroundColor: '#f7faf6',
+    backgroundColor: '#E7EFFB',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 16,
-    color: '#7aaa8a',
+    color: '#A5B9D4',
     fontFamily: 'Inter_400Regular',
     marginTop: 8,
   },
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 15,
-    color: '#f7faf6',
+    color: '#F4F8FF',
     fontFamily: 'Inter_500Medium',
     flex: 1,
   },
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: '#2e6b44',
+    backgroundColor: '#003383',
     borderRadius: 16,
     paddingVertical: 16,
     width: '100%',

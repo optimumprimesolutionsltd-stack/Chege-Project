@@ -35,20 +35,20 @@ const MONTHS = [
 ];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const MEMBER_COLORS = ['#22c55e', '#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#f59e0b'];
+const MEMBER_COLORS = ['#08B7B0', '#FDBB0A', '#003383', '#3CDD62', '#6C9FE6', '#C98C00'];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Food: '#f97316',
-  Transport: '#8b5cf6',
-  Health: '#ef4444',
-  Education: '#3b82f6',
-  Utilities: '#eab308',
-  Entertainment: '#ec4899',
-  Clothing: '#14b8a6',
-  Savings: '#22c55e',
-  Housing: '#f59e0b',
-  Communication: '#6366f1',
-  Other: '#6b7280',
+  Food: '#C98C00',
+  Transport: '#08B7B0',
+  Health: '#D92626',
+  Education: '#003383',
+  Utilities: '#FDBB0A',
+  Entertainment: '#6C9FE6',
+  Clothing: '#087F8C',
+  Savings: '#209E45',
+  Housing: '#B56D0A',
+  Communication: '#2D70C8',
+  Other: '#6B7280',
 };
 
 function formatKES(n?: number | null): string {
@@ -113,7 +113,7 @@ function BudgetRow({
   const over   = spentAmount > budgetAmount;
   const pct    = budgetAmount > 0 ? Math.min(spentAmount / budgetAmount, 1) : 0;
   const variance = budgetAmount - spentAmount;          // positive = under
-  const varColor = over ? '#ef4444' : '#22c55e';
+  const varColor = over ? colors.destructive : colors.success;
 
   return (
     <View style={[styles.budgetRow, { backgroundColor: colors.card, borderColor: over ? 'rgba(239,68,68,0.25)' : colors.border }]}>
@@ -128,7 +128,7 @@ function BudgetRow({
         <View style={styles.budgetRowTop}>
           <Text style={[styles.catName, { color: colors.foreground }]} numberOfLines={1}>{category}</Text>
           <View style={styles.budgetAmounts}>
-            <Text style={[styles.budgetActual, { color: over ? '#ef4444' : colors.foreground }]}>
+            <Text style={[styles.budgetActual, { color: over ? colors.destructive : colors.foreground }]}>
               {formatKES(spentAmount)}
             </Text>
             <Text style={[styles.budgetOf, { color: colors.mutedForeground }]}>
@@ -141,7 +141,7 @@ function BudgetRow({
         <View style={[styles.barBg, { backgroundColor: colors.muted }]}>
           <View style={[
             styles.barFill,
-            { width: `${pct * 100}%` as any, backgroundColor: over ? '#ef4444' : accent },
+            { width: `${pct * 100}%` as any, backgroundColor: over ? colors.destructive : accent },
           ]} />
         </View>
 
@@ -338,7 +338,7 @@ export default function ReportsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <LinearGradient
-        colors={['#0a3d2e', '#0d5c44']}
+        colors={[colors.brandNavy, colors.brandBlue]}
         style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 12 : 8) }]}
       >
         <Text style={styles.headerTitle}>Reports</Text>
@@ -351,7 +351,7 @@ export default function ReportsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Download ${MONTHS[month - 1]} ${year} report as PDF`}
             >
-              {isExporting ? <ActivityIndicator color="#0a3d2e" size="small" /> : <Feather name="download" size={16} color="#0a3d2e" />}
+              {isExporting ? <ActivityIndicator color={colors.brandNavy} size="small" /> : <Feather name="download" size={16} color={colors.brandNavy} />}
               <Text style={styles.pdfButtonText}>{isExporting ? 'Creating…' : 'PDF'}</Text>
             </Pressable>
           </View>
@@ -768,7 +768,7 @@ export default function ReportsScreen() {
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Who Spent</Text>
               {memberSpending.map((m, idx) => {
                 const pct = totalSpent > 0 ? Math.round((m.spent / totalSpent) * 100) : 0;
-                const hue = idx === 0 ? '#f97316' : '#8b5cf6';
+                const hue = idx === 0 ? colors.brandGold : colors.brandTeal;
                 return (
                   <View key={m.userId} style={[styles.memberRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <View style={[styles.memberAvatar, { backgroundColor: hue + '22' }]}>
@@ -997,7 +997,7 @@ const styles = StyleSheet.create({
   headerControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   pdfButton: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, backgroundColor: '#ffffff', paddingHorizontal: 11, paddingVertical: 9 },
   pdfButtonDisabled: { opacity: 0.55 },
-  pdfButtonText: { color: '#0a3d2e', fontSize: 12, fontFamily: 'Inter_700Bold' },
+  pdfButtonText: { color: '#011C4E', fontSize: 12, fontFamily: 'Inter_700Bold' },
   pdfError: { color: '#fee2e2', fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17 },
 
   monthPicker: { flexDirection: 'row', alignItems: 'center', gap: 12 },

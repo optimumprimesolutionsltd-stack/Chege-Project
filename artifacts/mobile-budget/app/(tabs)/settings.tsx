@@ -72,7 +72,7 @@ const SHARED_BUDGET_ICONS = [
   { value: 'award', label: 'Goals' },
   { value: 'star', label: 'Star' },
 ] as const;
-const SHARED_BUDGET_ACCENTS = ['#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669'] as const;
+const SHARED_BUDGET_ACCENTS = ['#011C4E', '#003383', '#087F8C', '#08B7B0', '#209E45', '#C98C00'] as const;
 type SharedBudgetIcon = (typeof SHARED_BUDGET_ICONS)[number]['value'];
 type SharedBudgetAccent = (typeof SHARED_BUDGET_ACCENTS)[number];
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
@@ -103,7 +103,7 @@ export default function SettingsScreen() {
   const [groupEmoji, setGroupEmoji] = useState('');
   const [groupNameStyle, setGroupNameStyle] = useState<WorkspaceNameStyle>('plain');
   const [groupIcon, setGroupIcon] = useState<SharedBudgetIcon>('users');
-  const [groupAccentColor, setGroupAccentColor] = useState<SharedBudgetAccent>('#0F766E');
+  const [groupAccentColor, setGroupAccentColor] = useState<SharedBudgetAccent>('#003383');
   const [savingGroupName, setSavingGroupName] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');

@@ -125,10 +125,10 @@ function RootLayoutNav() {
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#0f2217',
+          backgroundColor: '#011C4E',
         }}
       >
-        <ActivityIndicator size="large" color="#cf7217" />
+        <ActivityIndicator size="large" color="#FDBB0A" />
       </View>
     );
   }

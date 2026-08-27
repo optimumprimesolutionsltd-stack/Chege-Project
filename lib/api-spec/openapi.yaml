@@ -2532,7 +2532,7 @@ components:
           enum: [users, home, heart, briefcase, award, star]
         accentColor:
           type: string
-          enum: ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
         photoUrl:
           type: ["string", "null"]
         slogan:
@@ -2593,7 +2593,7 @@ components:
           enum: [users, home, heart, briefcase, award, star]
         accentColor:
           type: string
-          enum: ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
         photoUrl:
           type: ["string", "null"]
         slogan:
@@ -2629,7 +2629,7 @@ components:
           enum: [users, home, heart, briefcase, award, star]
         accentColor:
           type: string
-          enum: ["#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
+          enum: ["#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00", "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669"]
         photoPath:
           type: ["string", "null"]
           pattern: "^/objects/photos/[a-f0-9-]+$"

@@ -43,7 +43,7 @@ export default function ProfileSetupScreen() {
 
   return (
     <LinearGradient
-      colors={['#0a1a10', '#0f2217', '#163020']}
+      colors={['#00132F', '#011C4E', '#003383']}
       style={[styles.container, { paddingTop: (Platform.OS === 'web' ? 67 : insets.top) + 28 }]}
     >
       <KeyboardAvoidingView
@@ -51,7 +51,7 @@ export default function ProfileSetupScreen() {
         style={styles.content}
       >
         <View style={styles.iconCircle}>
-          <Feather name="user" size={32} color="#cf7217" />
+          <Feather name="user" size={32} color="#FDBB0A" />
         </View>
         <Text style={styles.title}>What should we call you?</Text>
         <Text style={styles.subtitle}>
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     width: 72,
   },
-  title: { color: '#f7faf6', fontFamily: 'Inter_700Bold', fontSize: 30, letterSpacing: -0.5 },
+  title: { color: '#F4F8FF', fontFamily: 'Inter_700Bold', fontSize: 30, letterSpacing: -0.5 },
   subtitle: { color: '#8fb19a', fontFamily: 'Inter_400Regular', fontSize: 16, lineHeight: 24, marginTop: 12 },
   label: { color: '#8fb19a', fontFamily: 'Inter_600SemiBold', fontSize: 12, letterSpacing: 0.8, marginTop: 34, marginBottom: 8 },
   input: {
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.16)',
     borderRadius: 14,
     borderWidth: 1,
-    color: '#f7faf6',
+    color: '#F4F8FF',
     fontFamily: 'Inter_400Regular',
     fontSize: 17,
     height: 54,
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   error: { color: '#fca5a5', fontFamily: 'Inter_400Regular', fontSize: 13, marginTop: 8 },
   button: {
     alignItems: 'center',
-    backgroundColor: '#2e6b44',
+    backgroundColor: '#003383',
     borderRadius: 16,
     flexDirection: 'row',
     gap: 10,
