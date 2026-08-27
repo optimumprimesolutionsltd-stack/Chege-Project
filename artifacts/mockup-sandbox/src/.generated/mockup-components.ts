@@ -4,6 +4,7 @@ export const modules: ModuleMap = {
   "./components/mockups/jamvi-home/BudgetChooser.tsx": () => import("../components/mockups/jamvi-home/BudgetChooser.tsx"),
   "./components/mockups/jamvi-home/Current.tsx": () => import("../components/mockups/jamvi-home/Current.tsx"),
   "./components/mockups/jamvi-home/MyBudgetFirst.tsx": () => import("../components/mockups/jamvi-home/MyBudgetFirst.tsx"),
+  "./components/mockups/jamvi-home/VerticalBudgetRail.tsx": () => import("../components/mockups/jamvi-home/VerticalBudgetRail.tsx"),
   "./components/mockups/jamvi-home/WorkspaceChoice.tsx": () => import("../components/mockups/jamvi-home/WorkspaceChoice.tsx"),
   "./components/mockups/jamvi-home/WorkspaceInbox.tsx": () => import("../components/mockups/jamvi-home/WorkspaceInbox.tsx"),
   "./components/mockups/jamvi-home/WorkspaceInboxRefined.tsx": () => import("../components/mockups/jamvi-home/WorkspaceInboxRefined.tsx")
