@@ -39,6 +39,32 @@ function app(role: "owner" | "admin" | "member" = "owner") {
 }
 
 describe("expense funding request contract", () => {
+  it("rejects Other as a final expense category", async () => {
+    const response = await request(app()).post("/expenses").send({
+      amount: 1000,
+      category: "Other",
+      description: "Unclassified spending",
+      paidFromBank: true,
+      date: "2026-08-19",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("specific category");
+  });
+
+  it("rejects changing an expense category to Other", async () => {
+    const response = await request(app()).patch("/expenses/1").send({
+      amount: 1000,
+      category: " other ",
+      description: "Unclassified spending",
+      paidFromBank: true,
+      date: "2026-08-19",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("specific category");
+  });
+
   it("explains which malformed field prevented an expense from being saved", async () => {
     const response = await request(app()).post("/expenses").send({
       amount: "1000",

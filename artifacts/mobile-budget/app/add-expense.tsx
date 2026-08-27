@@ -30,6 +30,7 @@ import {
   getGetDashboardActivityQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetBudgetCategoriesQueryKey,
+  getGetDashboardCategoryBreakdownQueryKey,
   customFetch,
   ApiError,
 } from '@workspace/api-client-react';
@@ -118,6 +119,8 @@ export default function AddExpenseSheet() {
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryBudget, setNewCategoryBudget] = useState('');
+  const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
+  const [newCategoryPriority, setNewCategoryPriority] = useState('3');
 
   // Load this payer's income sources from DB
   const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
@@ -224,28 +227,76 @@ export default function AddExpenseSheet() {
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();
     const budgetAmount = Number(newCategoryBudget);
-    if (!name || !Number.isInteger(budgetAmount) || budgetAmount < 0) {
-      Alert.alert('Add a category name and monthly budget', 'The monthly budget must be a whole number of KES or zero.');
+    const priority = Number(newCategoryPriority);
+    const [expenseYear, expenseMonth] = date.split('-').map(Number);
+    if (!name) {
+      Alert.alert('Category name required', 'Give this spending a clear name, such as Transport or Childcare.');
+      return;
+    }
+    if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      Alert.alert('Enter a valid monthly budget', 'Use a whole number of KES or zero.');
+      return;
+    }
+    if (!Number.isInteger(priority) || priority < 1 || priority > 5) {
+      Alert.alert('Choose a valid priority', 'Select a priority from 1 (must-pay) to 5 (flexible).');
       return;
     }
 
     try {
       const created = await createCategory.mutateAsync({
-        data: { name, budgetAmount, priority: 1, isRecurring: true },
+        data: {
+          name,
+          budgetAmount,
+          priority,
+          isRecurring: newCategoryRecurring,
+          activeMonth: newCategoryRecurring ? null : expenseMonth,
+          activeYear: newCategoryRecurring ? null : expenseYear,
+        },
       });
       setCategory(created.name);
       setNewCategoryName('');
       setNewCategoryBudget('');
+      setNewCategoryRecurring(true);
+      setNewCategoryPriority('3');
       setIsCreatingCategory(false);
-      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: ['budget-categories-full'] }),
+        queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+      ]);
       Alert.alert('Category added', `${created.name} is selected for this expense.`);
     } catch (error) {
+      const duplicate = error instanceof ApiError && error.status === 409;
       Alert.alert(
-        'Could not add category',
-        error instanceof Error ? error.message : 'Check the name and try again. Categories with the same name cannot be duplicated.',
+        duplicate ? 'Category name already used' : 'Could not add category',
+        duplicate
+          ? 'Choose a different name or select the existing category from the list.'
+          : error instanceof Error ? error.message : 'Check the category details and try again.',
       );
     }
-  }, [createCategory, newCategoryBudget, newCategoryName, queryClient]);
+  }, [createCategory, date, newCategoryBudget, newCategoryName, newCategoryPriority, newCategoryRecurring, queryClient]);
+
+  const chooseCategory = useCallback((name: string) => {
+    if (name !== 'Other') {
+      setCategory(name);
+      setIsCreatingCategory(false);
+      return;
+    }
+    setCategory('');
+    if (!canManageCategories) {
+      Alert.alert(
+        'Ask a budget manager to add this category',
+        'Members can use existing categories, while owners and admins manage the shared budget setup.',
+      );
+      return;
+    }
+    setNewCategoryName('');
+    setNewCategoryBudget('');
+    setNewCategoryRecurring(true);
+    setNewCategoryPriority('3');
+    setIsCreatingCategory(true);
+  }, [canManageCategories]);
 
   const handleSubmit = useCallback(async () => {
     if (sharedTransactionsLocked) {
@@ -436,7 +487,7 @@ export default function AddExpenseSheet() {
             return (
               <Pressable
                 key={cat}
-                onPress={() => setCategory(cat)}
+                onPress={() => chooseCategory(cat)}
                 style={[
                   styles.categoryChip,
                   {
@@ -460,7 +511,10 @@ export default function AddExpenseSheet() {
           })}
           {canManageCategories ? (
             <Pressable
-              onPress={() => setIsCreatingCategory((open) => !open)}
+              onPress={() => {
+                setCategory('');
+                setIsCreatingCategory((open) => !open);
+              }}
               accessibilityRole="button"
               accessibilityState={{ expanded: isCreatingCategory }}
               style={[styles.categoryChip, { backgroundColor: isCreatingCategory ? colors.primary + '12' : colors.background, borderColor: colors.primary, borderRadius: colors.radius }]}
@@ -473,8 +527,45 @@ export default function AddExpenseSheet() {
         {isCreatingCategory ? (
           <View style={[styles.categoryCreateCard, { backgroundColor: colors.muted, borderColor: colors.primary + '45' }]}>
             <View>
-              <Text style={[styles.categoryCreateTitle, { color: colors.foreground }]}>Create a category</Text>
-              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>It will be saved to this budget and selected for this expense.</Text>
+              <Text style={[styles.categoryCreateTitle, { color: colors.foreground }]}>Set up the right category</Text>
+              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>Name this spending clearly. We’ll save and select it without clearing the rest of your expense.</Text>
+            </View>
+            <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>Priority: 1 is must-pay; 5 is flexible.</Text>
+            <View style={styles.categoryPriorityRow}>
+              {[1, 2, 3, 4, 5].map((priority) => (
+                <Pressable
+                  key={priority}
+                  onPress={() => setNewCategoryPriority(String(priority))}
+                  disabled={createCategory.isPending}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`Priority ${priority}`}
+                  accessibilityState={{ checked: newCategoryPriority === String(priority), disabled: createCategory.isPending }}
+                  style={[
+                    styles.categoryPriorityChip,
+                    {
+                      borderColor: newCategoryPriority === String(priority) ? colors.primary : colors.border,
+                      backgroundColor: newCategoryPriority === String(priority) ? colors.primary + '18' : colors.background,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: newCategoryPriority === String(priority) ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{priority}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={[styles.categoryRecurringRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.categoryCreateTitle, { color: colors.foreground, fontSize: 13 }]}>Recurring category</Text>
+                <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>
+                  {newCategoryRecurring ? 'Available every month' : 'Only available this month'}
+                </Text>
+              </View>
+              <Switch
+                value={newCategoryRecurring}
+                onValueChange={setNewCategoryRecurring}
+                disabled={createCategory.isPending}
+                accessibilityLabel="Recurring category"
+                accessibilityHint="When on, this category is available every month"
+              />
             </View>
             <View style={styles.categoryCreateRow}>
               <TextInput
@@ -509,6 +600,9 @@ export default function AddExpenseSheet() {
                   setIsCreatingCategory(false);
                   setNewCategoryName('');
                   setNewCategoryBudget('');
+                  setNewCategoryRecurring(true);
+                  setNewCategoryPriority('3');
+                  setCategory('');
                 }}
                 disabled={createCategory.isPending}
                 style={styles.categoryCreateCancel}
@@ -1149,6 +1243,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
+  },
+  categoryPriorityRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  categoryPriorityChip: {
+    width: 38,
+    height: 38,
+    borderWidth: 1,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryRecurringRow: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
   },
   categoryCreateActions: {
     flexDirection: 'row',

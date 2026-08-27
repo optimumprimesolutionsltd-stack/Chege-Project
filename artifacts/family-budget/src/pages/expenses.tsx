@@ -35,13 +35,14 @@ import {
   useGetDashboardSummary, useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
   getGetBudgetCategoriesQueryKey, getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
-  type IncomeSource,
+  type IncomeSource, ApiError,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -191,6 +192,8 @@ export default function Expenses() {
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBudget, setNewCategoryBudget] = useState("");
+  const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
+  const [newCategoryPriority, setNewCategoryPriority] = useState("3");
 
   const addForm = useExpenseForm(undefined, now);
   const editForm = useExpenseForm();
@@ -269,6 +272,7 @@ export default function Expenses() {
     addForm.setDate(today);
     setAddNewSource(false); setNewSourceName("");
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
+    setNewCategoryRecurring(true); setNewCategoryPriority("3");
     setIsAdding(false);
   };
 
@@ -303,6 +307,7 @@ export default function Expenses() {
     editForm.setIsRecurring(expense.isRecurring);
     editForm.setDate(expense.date);
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
+    setNewCategoryRecurring(true); setNewCategoryPriority("3");
     setEditingId(expense.id);
     setIsAdding(false);
   };
@@ -338,17 +343,28 @@ export default function Expenses() {
 
   const cancelEdit = () => {
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
+    setNewCategoryRecurring(true); setNewCategoryPriority("3");
     setEditingId(null);
   };
 
   const handleQuickCreateCategory = async (form: ReturnType<typeof useExpenseForm>) => {
     const budgetAmount = Number(newCategoryBudget);
-    if (!newCategoryName.trim() || !Number.isInteger(budgetAmount) || budgetAmount < 0) {
+    const priority = Number(newCategoryPriority);
+    const [expenseYear, expenseMonth] = form.date.split("-").map(Number);
+    if (!newCategoryName.trim()) {
       toast({
         variant: "destructive",
-        title: "Add the category name and monthly budget",
-        description: "The monthly budget must be a whole number of KES or zero.",
+        title: "Category name required",
+        description: "Give this spending a clear name, such as Transport or Childcare.",
       });
+      return;
+    }
+    if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      toast({ variant: "destructive", title: "Enter a valid monthly budget", description: "Use a whole number of KES or zero." });
+      return;
+    }
+    if (!Number.isInteger(priority) || priority < 1 || priority > 5) {
+      toast({ variant: "destructive", title: "Choose a valid priority", description: "Select a priority from 1 (must-pay) to 5 (flexible)." });
       return;
     }
 
@@ -357,23 +373,57 @@ export default function Expenses() {
         data: {
           name: newCategoryName.trim(),
           budgetAmount,
-          priority: 1,
-          isRecurring: true,
+          priority,
+          isRecurring: newCategoryRecurring,
+          activeMonth: newCategoryRecurring ? null : expenseMonth,
+          activeYear: newCategoryRecurring ? null : expenseYear,
         },
       });
       form.setCategory(category.name);
       setIsCreatingCategory(false);
       setNewCategoryName("");
       setNewCategoryBudget("");
-      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      setNewCategoryRecurring(true);
+      setNewCategoryPriority("3");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: ["budget-categories-full"] }),
+      ]);
       toast({ title: "Category created", description: `${category.name} is ready to use.` });
-    } catch {
+    } catch (error) {
+      const duplicate = error instanceof ApiError && error.status === 409;
       toast({
         variant: "destructive",
-        title: "Could not create category",
-        description: "Check the name and try again. Categories with the same name cannot be duplicated.",
+        title: duplicate ? "Category name already used" : "Could not create category",
+        description: duplicate
+          ? "Choose a different name or select the existing category from the list."
+          : "Check the category details and try again.",
       });
     }
+  };
+
+  const chooseCategory = (form: ReturnType<typeof useExpenseForm>, value: string) => {
+    if (value !== "Other") {
+      form.setCategory(value);
+      setIsCreatingCategory(false);
+      return;
+    }
+    form.setCategory("");
+    if (!canManageCategories) {
+      toast({
+        variant: "destructive",
+        title: "Ask a budget manager to add this category",
+        description: "Members can use existing categories, while owners and admins manage the shared budget setup.",
+      });
+      return;
+    }
+    setNewCategoryName("");
+    setNewCategoryBudget("");
+    setNewCategoryRecurring(true);
+    setNewCategoryPriority("3");
+    setIsCreatingCategory(true);
   };
 
   const handleAddNewSource = async (paidById: string) => {
@@ -664,7 +714,7 @@ export default function Expenses() {
           <label className="text-sm font-semibold text-foreground">Category</label>
           <div className="flex flex-col gap-2 sm:flex-row">
             <select className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-              value={form.category} onChange={e => form.setCategory(e.target.value)} required>
+              value={form.category} onChange={e => chooseCategory(form, e.target.value)} required>
               <option value="" disabled>Select category...</option>
               {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
@@ -673,7 +723,10 @@ export default function Expenses() {
                 type="button"
                 variant="outline"
                 className="h-12 w-full sm:w-auto shrink-0"
-                onClick={() => setIsCreatingCategory((open) => !open)}
+                onClick={() => {
+                  form.setCategory("");
+                  setIsCreatingCategory((open) => !open);
+                }}
                 aria-expanded={isCreatingCategory}
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -684,10 +737,10 @@ export default function Expenses() {
           {isCreatingCategory && (
             <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">Create a category</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Add its name and monthly budget, then we’ll select it for this expense.</p>
+                <p className="text-sm font-semibold text-foreground">Set up the right category</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Name this spending clearly. We’ll save the category and select it without clearing the rest of your expense.</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Input
                   placeholder="e.g. Transport"
                   value={newCategoryName}
@@ -705,6 +758,34 @@ export default function Expenses() {
                   aria-label="New category monthly budget in KES"
                   className="h-10 bg-card"
                 />
+                <label className="space-y-1 text-xs font-semibold text-foreground">
+                  Priority
+                  <select
+                    value={newCategoryPriority}
+                    onChange={(event) => setNewCategoryPriority(event.target.value)}
+                    aria-label="New category priority"
+                    className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+                  >
+                    <option value="1">1 · Must-pay</option>
+                    <option value="2">2 · Important</option>
+                    <option value="3">3 · Everyday</option>
+                    <option value="4">4 · Lower priority</option>
+                    <option value="5">5 · Flexible</option>
+                  </select>
+                </label>
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Recurring</p>
+                    <p className="text-xs text-muted-foreground">
+                      {newCategoryRecurring
+                        ? "Available every month"
+                        : `Only for ${formatMonthYear(Number(form.date.slice(5, 7)), Number(form.date.slice(0, 4)))}`}
+                    </p>
+                  </div>
+                  <Switch checked={newCategoryRecurring} onCheckedChange={setNewCategoryRecurring} aria-label="New category recurring" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
                   type="button"
                   size="sm"
@@ -715,18 +796,21 @@ export default function Expenses() {
                   {createCategory.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Add category
                 </Button>
-              </div>
-              <button
+                <button
                 type="button"
                 onClick={() => {
+                  form.setCategory("");
                   setIsCreatingCategory(false);
                   setNewCategoryName("");
                   setNewCategoryBudget("");
+                  setNewCategoryRecurring(true);
+                  setNewCategoryPriority("3");
                 }}
-                className="text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                className="h-10 rounded-md px-3 text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 Cancel
               </button>
+              </div>
             </div>
           )}
           {form.category && (() => {

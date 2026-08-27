@@ -137,6 +137,10 @@ function toDateString(value: string | Date) {
   return typeof value === "string" ? value : value.toISOString().split("T")[0];
 }
 
+function isReservedSetupCategory(category: string) {
+  return category.trim().toLocaleLowerCase() === "other";
+}
+
 function currentExpenseDate() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Nairobi",
@@ -368,6 +372,10 @@ router.post("/expenses", async (req, res) => {
     return;
   }
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
+  if (isReservedSetupCategory(category)) {
+    res.status(400).json({ error: "Choose a specific category. Other is only used to start category setup." });
+    return;
+  }
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
   const isParticipatingMember = req.group?.role === "member";
@@ -436,6 +444,10 @@ router.patch("/expenses/:id", async (req, res) => {
   if (!idParsed.success || !parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const expenseId = idParsed.data.id;
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
+  if (isReservedSetupCategory(category)) {
+    res.status(400).json({ error: "Choose a specific category. Other is only used to start category setup." });
+    return;
+  }
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
   const isParticipatingMember = req.group?.role === "member";
