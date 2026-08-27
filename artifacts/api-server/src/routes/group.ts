@@ -152,7 +152,7 @@ router.get("/group", async (req, res): Promise<void> => {
   res.json(GetGroupResponse.parse({
     ...group,
     kind: group.kind ?? "family",
-    photoUrl: await resolvePhotoUrl(group.photoPath).catch(() => null),
+    photoUrl: isPrivate ? null : await resolvePhotoUrl(group.photoPath).catch(() => null),
     isPrivate,
     role: req.group!.role,
     canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),
@@ -167,6 +167,14 @@ router.patch("/group", async (req, res): Promise<void> => {
   const parsed = UpdateGroupBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Use a group name between 2 and 60 characters and choose a provided icon and accent color." });
+    return;
+  }
+  if (
+    req.group?.isPrivate
+    && parsed.data.photoPath !== undefined
+    && parsed.data.photoPath !== null
+  ) {
+    res.status(400).json({ error: "Photos are only available for Shared budgets." });
     return;
   }
   const name = parsed.data.name.trim();
@@ -208,7 +216,7 @@ router.patch("/group", async (req, res): Promise<void> => {
   res.json(UpdateGroupResponse.parse({
     ...group,
     kind: group.kind ?? "family",
-    photoUrl: await resolvePhotoUrl(group.photoPath).catch(() => null),
+    photoUrl: isPrivate ? null : await resolvePhotoUrl(group.photoPath).catch(() => null),
     isPrivate,
     role: req.group!.role,
     canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),

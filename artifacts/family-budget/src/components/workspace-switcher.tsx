@@ -6,7 +6,7 @@ import {
 import { useGetGroup } from "@workspace/api-client-react";
 import { useState } from "react";
 import { Award, BriefcaseBusiness, Heart, Home, Star, Users } from "lucide-react";
-import { workspaceIdentityText, workspaceNameClass } from "@/lib/workspace-identity";
+import { workspaceIdentityText, workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -18,14 +18,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-export function workspaceLabel(workspace: Pick<Workspace, "isPrivate" | "name">) {
-  if (workspace.isPrivate) return "Personal budget";
-
-  const name = workspace.name.trim();
-  const normalizedName = name.replace(/\s+/g, " ").toLocaleLowerCase("en-US");
-  return normalizedName === "shared budget" || !name ? "Group" : name;
-}
 
 export function WorkspaceSwitcher({
   activeWorkspaceId,

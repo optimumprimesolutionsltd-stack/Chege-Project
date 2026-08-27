@@ -30,19 +30,22 @@ async function availableWorkspaces(userId: string) {
     .innerJoin(groupsTable, eq(groupsTable.id, groupMembershipsTable.groupId))
     .where(eq(groupMembershipsTable.userId, userId));
 
-  return Promise.all(rows.map(async (row) => ({
-    id: row.id,
-    name: row.name,
-    emoji: row.emoji,
-    nameStyle: row.nameStyle,
-    icon: row.icon,
-    accentColor: row.accentColor,
-    photoUrl: await resolvePhotoUrl(row.photoPath).catch(() => null),
-    slogan: row.slogan,
-    isPrivate: Boolean(row.privateOwnerUserId),
-    kind: (row.kind ?? "family") as "personal" | "family" | "chama" | "club" | "team" | "other",
-    role: row.role as "owner" | "admin" | "member",
-  })));
+  return Promise.all(rows.map(async (row) => {
+    const isPrivate = Boolean(row.privateOwnerUserId);
+    return {
+      id: row.id,
+      name: row.name,
+      emoji: row.emoji,
+      nameStyle: row.nameStyle,
+      icon: row.icon,
+      accentColor: row.accentColor,
+      photoUrl: isPrivate ? null : await resolvePhotoUrl(row.photoPath).catch(() => null),
+      slogan: row.slogan,
+      isPrivate,
+      kind: (row.kind ?? "family") as "personal" | "family" | "chama" | "club" | "team" | "other",
+      role: row.role as "owner" | "admin" | "member",
+    };
+  }));
 }
 
 router.get("/workspaces", async (req, res): Promise<void> => {

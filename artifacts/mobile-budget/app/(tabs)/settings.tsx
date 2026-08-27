@@ -72,7 +72,10 @@ const SHARED_BUDGET_ICONS = [
   { value: 'award', label: 'Goals' },
   { value: 'star', label: 'Star' },
 ] as const;
-const SHARED_BUDGET_ACCENTS = ['#011C4E', '#003383', '#087F8C', '#08B7B0', '#209E45', '#C98C00'] as const;
+const SHARED_BUDGET_ACCENTS = [
+  '#011C4E', '#003383', '#087F8C', '#08B7B0', '#209E45', '#C98C00',
+  '#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669',
+] as const;
 type SharedBudgetIcon = (typeof SHARED_BUDGET_ICONS)[number]['value'];
 type SharedBudgetAccent = (typeof SHARED_BUDGET_ACCENTS)[number];
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
@@ -206,7 +209,10 @@ export default function SettingsScreen() {
        );
       if (closeBudgetNameEditor) setEditingBudgetName(false);
     } catch (error) {
-      Alert.alert('Could not update Shared budget', error instanceof Error ? error.message : 'Use between 2 and 60 characters.');
+       Alert.alert(
+         group?.isPrivate ? 'Could not update Personal budget' : 'Could not update Shared budget',
+         error instanceof Error ? error.message : 'Use between 2 and 60 characters.',
+       );
     } finally {
       setSavingGroupName(false);
     }
@@ -370,9 +376,12 @@ export default function SettingsScreen() {
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
       ]);
-      Alert.alert('Group photo updated');
+       Alert.alert(group.isPrivate ? 'Personal budget photo updated' : 'Shared budget photo updated');
     } catch (error) {
-      Alert.alert('Could not update group photo', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(
+        group.isPrivate ? 'Could not update Personal budget photo' : 'Could not update Shared budget photo',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
     } finally {
       setUploadingGroupPhoto(false);
     }
@@ -396,9 +405,12 @@ export default function SettingsScreen() {
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
       ]);
-      Alert.alert('Group photo removed');
+       Alert.alert(group.isPrivate ? 'Personal budget photo removed' : 'Shared budget photo removed');
     } catch (error) {
-      Alert.alert('Could not remove group photo', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(
+        group.isPrivate ? 'Could not remove Personal budget photo' : 'Could not remove Shared budget photo',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
     } finally {
       setUploadingGroupPhoto(false);
     }
@@ -804,14 +816,17 @@ export default function SettingsScreen() {
                 ]}
               >
                 {workspace.photoUrl ? (
-                  <Image source={{ uri: workspace.photoUrl }} style={[styles.rowIcon, { borderRadius: 10 }]} />
+                  <Image
+                    source={{ uri: workspace.photoUrl }}
+                    style={[styles.rowIcon, { borderRadius: 10, borderWidth: 2, borderColor: workspace.accentColor }]}
+                  />
                  ) : workspace.emoji ? (
-                   <View style={[styles.rowIcon, { backgroundColor: colors.muted }]}>
+                    <View style={[styles.rowIcon, { backgroundColor: `${workspace.accentColor}24`, borderWidth: 1, borderColor: `${workspace.accentColor}66` }]}>
                      <Text style={{ fontSize: 16 }}>{workspace.emoji}</Text>
                    </View>
                  ) : (
-                  <View style={[styles.rowIcon, { backgroundColor: workspace.isPrivate ? (selected ? colors.primary + '20' : colors.muted) : `${workspace.accentColor}20` }]}>
-                    <Feather name={workspace.isPrivate ? 'lock' : getSharedBudgetIcon(workspace.icon)} size={15} color={workspace.isPrivate ? (selected ? colors.primary : colors.mutedForeground) : workspace.accentColor} />
+                   <View style={[styles.rowIcon, { backgroundColor: `${workspace.accentColor}20` }]}>
+                     <Feather name={getSharedBudgetIcon(workspace.icon)} size={15} color={workspace.accentColor} />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
@@ -819,7 +834,7 @@ export default function SettingsScreen() {
                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{detail}</Text>
                 </View>
                 {selected ? (
-                  <Feather name="check-circle" size={19} color={colors.primary} />
+                   <Feather name="check-circle" size={19} color={workspace.accentColor} />
                 ) : (
                   <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
                 )}
@@ -963,8 +978,8 @@ export default function SettingsScreen() {
              </View>
            )}
          </View>
-        {!group?.isPrivate && (
-          <>
+         {!group?.isPrivate && (
+           <>
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGET TYPE</Text>
             <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 10 }]}>
               <View style={styles.kindHeader}>
@@ -1030,11 +1045,15 @@ export default function SettingsScreen() {
                 <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>All recommended categories are already available.</Text>
               )}
             </View>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGET IDENTITY</Text>
-            <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 14 }]}>
+           </>
+         )}
+         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+           {group?.isPrivate ? 'PERSONAL BUDGET IDENTITY' : 'SHARED BUDGET IDENTITY'}
+         </Text>
+         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 14 }]}>
               <View style={styles.identityPreview}>
                 {group?.photoUrl ? (
-                  <Image source={{ uri: group.photoUrl }} style={[styles.identityIcon, { borderRadius: 12 }]} />
+                   <Image source={{ uri: group.photoUrl }} style={[styles.identityIcon, { borderRadius: 12, borderWidth: 2, borderColor: groupAccentColor }]} />
                 ) : (
                   <View style={[styles.identityIcon, { backgroundColor: groupAccentColor }]}>
                     <Feather name={getSharedBudgetIcon(groupIcon)} size={20} color="#fff" />
@@ -1042,25 +1061,32 @@ export default function SettingsScreen() {
                 )}
                 <View style={{ flex: 1 }}>
                    <Text style={[styles.rowLabel, { color: colors.foreground }, workspaceNameTextStyle(groupNameStyle)]}>
-                     {groupEmoji ? `${groupEmoji} ` : ''}{group?.name || 'Shared budget'}
+                      {groupEmoji ? `${groupEmoji} ` : ''}{group?.name || (group?.isPrivate ? 'Personal budget' : 'Shared budget')}
                    </Text>
                    {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic' }]}>{group.slogan}</Text> : null}
-                  <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This identity belongs to the group, not any one member.</Text>
+                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                     {group?.isPrivate
+                       ? 'This identity belongs only to your Personal budget.'
+                       : 'This identity belongs to the group, not any one member.'}
+                   </Text>
                 </View>
               </View>
-              {canManageShared ? (
+               {canManageWorkspace ? (
                 <>
+                   {!group?.isPrivate ? (
                   <View style={[styles.identityPreview, { padding: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, borderRadius: 12 }]}>
                     {group?.photoUrl ? (
-                      <Image source={{ uri: group.photoUrl }} style={[styles.identityIcon, { borderRadius: 12 }]} />
+                       <Image source={{ uri: group.photoUrl }} style={[styles.identityIcon, { borderRadius: 12, borderWidth: 2, borderColor: groupAccentColor }]} />
                     ) : (
                       <View style={[styles.identityIcon, { backgroundColor: groupAccentColor }]}>
                         <Feather name="camera" size={20} color="#fff" />
                       </View>
                     )}
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.rowLabel, { color: colors.foreground }]}>Group photo</Text>
-                       <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>A square JPG, PNG, or WebP photo up to 15 MB. Jamvi shrinks it first for a faster upload.</Text>
+                       <Text style={[styles.rowLabel, { color: colors.foreground }]}>
+                         {group?.isPrivate ? 'Personal budget photo' : 'Shared budget photo'}
+                       </Text>
+                        <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>A square JPG, PNG, or WebP photo up to 15 MB. Jamvi shrinks it first for a faster upload.</Text>
                       <View style={{ flexDirection: 'row', gap: 14, marginTop: 9 }}>
                         <Pressable disabled={uploadingGroupPhoto} onPress={() => void handlePickGroupPhoto()}>
                           <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
@@ -1075,6 +1101,7 @@ export default function SettingsScreen() {
                       </View>
                     </View>
                   </View>
+                   ) : null}
                   <View>
                     <Text style={[styles.rowLabel, { color: colors.foreground, marginBottom: 8 }]}>Choose an icon</Text>
                     <View style={styles.identityChoices}>
@@ -1087,10 +1114,10 @@ export default function SettingsScreen() {
                             accessibilityState={{ selected }}
                             accessibilityLabel={`Use ${option.label} icon`}
                             onPress={() => setGroupIcon(option.value)}
-                            style={[styles.identityIconChoice, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary + '12' : colors.background }]}
+                            style={[styles.identityIconChoice, { borderColor: selected ? groupAccentColor : colors.border, backgroundColor: selected ? groupAccentColor + '12' : colors.background }]}
                           >
-                            <Feather name={option.value} size={16} color={selected ? colors.primary : colors.mutedForeground} />
-                            <Text style={[styles.identityChoiceText, { color: selected ? colors.primary : colors.mutedForeground }]}>{option.label}</Text>
+                            <Feather name={option.value} size={16} color={selected ? groupAccentColor : colors.mutedForeground} />
+                            <Text style={[styles.identityChoiceText, { color: selected ? groupAccentColor : colors.mutedForeground }]}>{option.label}</Text>
                           </Pressable>
                         );
                       })}
@@ -1121,15 +1148,23 @@ export default function SettingsScreen() {
                     onPress={() => void handleSaveGroupName()}
                     style={[styles.identitySaveButton, { backgroundColor: colors.primary, opacity: savingGroupName || updateGroup.isPending ? 0.55 : 1 }]}
                   >
-                    {savingGroupName || updateGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveGroupText}>Save Shared budget identity</Text>}
+                    {savingGroupName || updateGroup.isPending ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.saveGroupText}>
+                        {group?.isPrivate ? 'Save Personal budget identity' : 'Save Shared budget identity'}
+                      </Text>
+                    )}
                   </Pressable>
                 </>
               ) : (
-                <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>An owner or admin can update this Shared budget’s name, emoji, style, icon, and accent color.</Text>
+                <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                   {group?.isPrivate
+                     ? 'Only you can update your Personal budget’s name, emoji, style, icon, and accent colour.'
+                     : 'An owner or admin can update this Shared budget’s name, emoji, style, icon, and accent colour.'}
+                </Text>
               )}
-            </View>
-          </>
-        )}
+         </View>
 
         {/* Shared group access */}
         {!group?.isPrivate && (

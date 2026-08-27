@@ -45,8 +45,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { WorkspaceSwitcher, workspaceLabel } from "@/components/workspace-switcher";
-import { workspaceNameClass } from "@/lib/workspace-identity";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
 
@@ -1215,7 +1215,7 @@ export default function Dashboard() {
                 Viewing budget
               </p>
               <p className={`mt-1 truncate text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
-                {group?.emoji ? `${group.emoji} ` : ""}{group ? workspaceLabel(group) : "Personal budget"}
+                {group ? workspaceLabel(group) : "Personal budget"}
               </p>
             </div>
             <span

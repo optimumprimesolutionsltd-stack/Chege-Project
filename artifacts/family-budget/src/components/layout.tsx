@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useGetGroup, useGetMembers } from '@workspace/api-client-react';
-import { WorkspaceSwitcher, workspaceLabel } from '@/components/workspace-switcher';
+import { WorkspaceSwitcher } from '@/components/workspace-switcher';
+import { workspaceLabel } from '@/lib/workspace-identity';
 import { ProfileAvatar } from '@/components/profile-avatar';
 import { BrandLogo } from '@/components/brand-logo';
 

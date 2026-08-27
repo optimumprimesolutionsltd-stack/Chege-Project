@@ -1,4 +1,4 @@
-import type { WorkspaceNameStyle } from "@workspace/api-client-react";
+import type { Workspace, WorkspaceNameStyle } from "@workspace/api-client-react";
 
 export const WORKSPACE_NAME_STYLES: {
   value: WorkspaceNameStyle;
@@ -29,4 +29,16 @@ export function workspaceIdentityText(
   fallback: string,
 ): string {
   return `${workspace.emoji ? `${workspace.emoji} ` : ""}${workspace.name.trim() || fallback}`;
+}
+
+export function workspaceLabel(
+  workspace: Pick<Workspace, "isPrivate" | "name" | "emoji">,
+): string {
+  const name = workspace.name.trim();
+  const normalizedName = name.replace(/\s+/g, " ").toLocaleLowerCase("en-US");
+  const displayName = workspace.isPrivate
+    ? (name || "Personal budget")
+    : (normalizedName === "shared budget" || !name ? "Group" : name);
+
+  return `${workspace.emoji ? `${workspace.emoji} ` : ""}${displayName}`;
 }

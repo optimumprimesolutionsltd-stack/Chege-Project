@@ -806,6 +806,7 @@ export default function Settings() {
 
             {canManageWorkspace ? (
               <>
+                {!isPrivateWorkspace ? (
                   <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background p-3 sm:flex-row sm:items-center">
                     <div className="flex min-w-0 items-center gap-3 sm:flex-1">
                       {group?.photoUrl ? (
@@ -836,6 +837,7 @@ export default function Settings() {
                       />
                     </label>
                   </div>
+                ) : null}
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-foreground">Icon</p>
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">

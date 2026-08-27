@@ -7,6 +7,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  Image,
 } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -27,6 +28,7 @@ import { useAuth } from '@/lib/auth';
 import BudgetRing from '@/components/BudgetRing';
 import ActivityCard from '@/components/ActivityCard';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
+import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import {
   useGetDashboardSummary,
   useGetDashboardActivity,
@@ -211,6 +213,8 @@ export default function DashboardScreen() {
   const displayName = user?.firstName?.trim() || '';
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+  const workspaceAccentColor = group?.accentColor ?? colors.brandBlue;
+  const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
 
   const allSetupSteps = useMemo(() => {
     const steps: SetupStep[] = [
@@ -408,6 +412,36 @@ export default function DashboardScreen() {
                   <Feather name="chevron-right" size={18} color={isCurrentMonth ? 'rgba(247,250,246,0.2)' : 'rgba(247,250,246,0.7)'} />
                 </Pressable>
               </View>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.workspaceIdentity,
+              {
+                borderColor: `${workspaceAccentColor}80`,
+                backgroundColor: `${workspaceAccentColor}25`,
+              },
+            ]}
+          >
+            {group?.photoUrl ? (
+              <Image
+                source={{ uri: group.photoUrl }}
+                style={[styles.workspaceIdentityIcon, { borderColor: workspaceAccentColor }]}
+              />
+            ) : (
+              <View style={[styles.workspaceIdentityIcon, { backgroundColor: workspaceAccentColor }]}>
+                <Feather name={workspaceIcon} size={18} color={colors.primaryForeground} />
+              </View>
+            )}
+            <View style={styles.workspaceIdentityCopy}>
+              <Text style={styles.workspaceIdentityEyebrow}>
+                {isSharedWorkspace ? 'SHARED BUDGET' : 'PERSONAL BUDGET'}
+              </Text>
+              <Text style={[styles.workspaceIdentityName, workspaceNameTextStyle(group?.nameStyle)]}>
+                {group?.emoji ? `${group.emoji} ` : ''}
+                {group?.name || (isSharedWorkspace ? 'Shared budget' : 'Personal budget')}
+              </Text>
             </View>
           </View>
 
@@ -860,6 +894,11 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 20 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   headerControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  workspaceIdentity: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 15, padding: 10, marginBottom: 16 },
+  workspaceIdentityIcon: { width: 38, height: 38, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  workspaceIdentityCopy: { flex: 1, minWidth: 0 },
+  workspaceIdentityEyebrow: { fontSize: 9, color: '#A5B9D4', fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  workspaceIdentityName: { fontSize: 16, color: '#F4F8FF', marginTop: 2 },
   iconBtn: { padding: 4 },
   greeting: { fontSize: 12, color: '#A5B9D4', fontFamily: 'Inter_400Regular' },
   name: { fontSize: 20, fontWeight: '700' as const, color: '#F4F8FF', fontFamily: 'Inter_700Bold' },
