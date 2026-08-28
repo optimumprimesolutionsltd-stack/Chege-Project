@@ -124,11 +124,11 @@ export default function Settings() {
   const displayNameInputRef = useRef<HTMLInputElement>(null);
   const budgetNameInputRef = useRef<HTMLInputElement>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
-  const canManageWorkspace = members?.some(
+  const canManageWorkspace = isPrivateWorkspace || (members?.some(
     (member) =>
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
-  ) ?? false;
+  ) ?? false);
   const canManageShared = (members?.some(
     (member) =>
       member.userId === user?.id &&

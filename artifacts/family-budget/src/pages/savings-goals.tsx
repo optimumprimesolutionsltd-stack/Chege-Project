@@ -434,6 +434,7 @@ export default function SavingsGoals() {
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) ?? false;
+  const canManageGoals = group?.isPrivate === true || canManageShared;
 
   // Cascade payment state
   const [showCascade, setShowCascade] = useState(false);
@@ -496,7 +497,7 @@ export default function SavingsGoals() {
 
     const contributorSplits =
       cascadeAttributionIds.length === 0
-        ? [{ userId: null, amount }]
+        ? [{ userId: group?.isPrivate === true ? user?.id ?? null : null, amount }]
         : cascadeAttributionIds.length === 1
           ? [{ userId: cascadeAttributionIds[0], amount }]
           : cascadeAttributionIds.map((userId) => ({
@@ -751,7 +752,7 @@ export default function SavingsGoals() {
   };
 
   const handleDeleteContribution = async (goal: SavingsGoal, contribution: GoalContribution) => {
-    if (!canManageShared) {
+    if (!canManageGoals) {
       toast({
         variant: "destructive",
         title: "Admin access required",
@@ -788,7 +789,7 @@ export default function SavingsGoals() {
         </div>
         {mode === "none" && (
           <div className="flex gap-2 flex-wrap">
-            {canManageShared && activeGoals.length > 1 && !showCascade && (
+            {canManageGoals && activeGoals.length > 1 && !showCascade && (
               <Button
                 variant="outline"
                 onClick={openCascade}
@@ -799,7 +800,7 @@ export default function SavingsGoals() {
                 Distribute Payment
               </Button>
             )}
-            {canManageShared && <Button
+            {canManageGoals && <Button
               onClick={openCreate}
               className="rounded-xl h-12 px-6 shadow-md hover:-translate-y-0.5 transition-transform"
             >
@@ -810,7 +811,7 @@ export default function SavingsGoals() {
         )}
       </div>
 
-      {!canManageShared && (
+      {!canManageGoals && (
         <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
           An admin sets up and updates shared goals. You can add money to any active goal in your own name.
         </div>
@@ -1138,8 +1139,8 @@ export default function SavingsGoals() {
                   <Target className="w-8 h-8 text-muted-foreground/50" />
                 </div>
                 <p className="text-lg font-medium text-foreground">No goals yet</p>
-                <p className="text-sm mt-1">{canManageShared ? "Create your first savings goal to start tracking." : "Ask an admin to create the first shared savings goal."}</p>
-                {canManageShared && <Button onClick={openCreate} className="mt-6 rounded-xl">
+                <p className="text-sm mt-1">{canManageGoals ? "Create your first savings goal to start tracking." : "Ask an admin to create the first shared savings goal."}</p>
+                {canManageGoals && <Button onClick={openCreate} className="mt-6 rounded-xl">
                   <Plus className="w-4 h-4 mr-2" /> New Goal
                 </Button>}
               </CardContent>
@@ -1174,13 +1175,13 @@ export default function SavingsGoals() {
                         <CardTitle className="text-lg leading-tight">{goal.name}</CardTitle>
                       </div>
                       <div className="flex flex-wrap justify-end gap-1 shrink-0">
-                        {canManageShared && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => openEdit(goal)}>
+                        {canManageGoals && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => openEdit(goal)}>
                           <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
                         </Button>}
-                        {canManageShared && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-emerald-600" onClick={() => handleMarkComplete(goal)}>
+                        {canManageGoals && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-emerald-600" onClick={() => handleMarkComplete(goal)}>
                           <CheckCircle2 className="mr-1 w-3.5 h-3.5" /> Complete
                         </Button>}
-                        {canManageShared && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(goal)}>
+                        {canManageGoals && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(goal)}>
                           <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
                         </Button>}
                       </div>
@@ -1334,7 +1335,7 @@ export default function SavingsGoals() {
                           goalId={goal.id}
                           filter={getGoalFilter(goal.id)}
                           onFilterChange={(f) => setGoalFilter(goal.id, f)}
-                          canManageShared={canManageShared}
+                          canManageShared={canManageGoals}
                           onDeleteContribution={(contribution) => handleDeleteContribution(goal, contribution)}
                           isDeletingContribution={deleteContribution.isPending}
                         />
@@ -1362,10 +1363,10 @@ export default function SavingsGoals() {
                           <p className="font-semibold text-foreground">{goal.name}</p>
                         </div>
                         <div className="flex gap-1 shrink-0">
-                          {canManageShared && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleMarkComplete(goal)} title="Reopen goal">
+                          {canManageGoals && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => handleMarkComplete(goal)} title="Reopen goal">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                           </Button>}
-                          {canManageShared && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(goal)}>
+                          {canManageGoals && <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(goal)}>
                             <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
                           </Button>}
                         </div>
@@ -1394,7 +1395,7 @@ export default function SavingsGoals() {
                             goalId={goal.id}
                             filter={getGoalFilter(goal.id)}
                             onFilterChange={(f) => setGoalFilter(goal.id, f)}
-                            canManageShared={canManageShared}
+                            canManageShared={canManageGoals}
                             onDeleteContribution={(contribution) => handleDeleteContribution(goal, contribution)}
                             isDeletingContribution={deleteContribution.isPending}
                           />

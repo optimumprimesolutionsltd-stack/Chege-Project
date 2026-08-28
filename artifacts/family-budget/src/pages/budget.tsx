@@ -8,6 +8,7 @@ import {
   getGetExpensesQueryKey,
   useGetDashboardCategoryBreakdown,
   useGetDashboardCategoryLedger,
+  useGetGroup,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -425,6 +426,7 @@ export default function Budget() {
   const [year, setYear] = useState(now.getFullYear());
   const { toast } = useToast();
   const { user } = useAuth();
+  const { data: group } = useGetGroup();
   const qc = useQueryClient();
 
   const {
@@ -669,7 +671,7 @@ export default function Budget() {
     (member) =>
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
-  );
+  ) || group?.isPrivate === true;
   const groupedIncomeSources = incomeSources.reduce((groups, source) => {
     const existing = groups.get(source.userId) ?? [];
     existing.push(source);

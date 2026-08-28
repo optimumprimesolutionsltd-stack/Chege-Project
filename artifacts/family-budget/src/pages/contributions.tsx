@@ -247,6 +247,7 @@ export default function Contributions() {
   const memberContribs = ((summary as any)?.memberContributions ?? []) as MemberContrib[];
   const currentMembership = members?.find((member) => member.userId === user?.id);
   const canManageContributions =
+    group?.isPrivate === true ||
     currentMembership?.role === "owner" || currentMembership?.role === "admin";
   const canEditContribution = (contribution: Contribution) =>
     canManageContributions ||
