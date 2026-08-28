@@ -116,6 +116,7 @@ export default function DashboardScreen() {
 
   const {
     data: summary,
+    isLoading: summaryLoading,
     isError: summaryError,
     refetch: refetchSummary,
   } = useGetDashboardSummary({ month, year });
@@ -180,6 +181,7 @@ export default function DashboardScreen() {
   const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
   const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
   const shortcuts = isSharedWorkspace ? SHARED_SHORTCUTS : PERSONAL_SHORTCUTS;
+  const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   type MemberContribution = {
     userId: string;
     name: string;
@@ -409,6 +411,40 @@ export default function DashboardScreen() {
             </Pressable>
           ))}
         </View>
+
+        {!summaryLoading && summary && summary.totalBudget === 0 && (
+          <View style={[styles.budgetCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
+            <View style={styles.groupCtaHeader}>
+              <View style={[styles.groupCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <Feather name="bar-chart-2" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>YOUR NEXT STEP</Text>
+                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>No budget yet</Text>
+              </View>
+            </View>
+            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+              {canManageBudget
+                ? 'Add your first budget category so you can plan spending and see what is left.'
+                : 'An owner or admin will add the budget categories for this Shared budget.'}
+            </Text>
+            {canManageBudget ? (
+              <Pressable
+                testID="home-create-first-budget"
+                accessibilityRole="button"
+                accessibilityLabel="Set up your first budget"
+                onPress={() => router.push('/(tabs)/budget')}
+                style={({ pressed }) => [
+                  styles.groupCtaButton,
+                  { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
+                ]}
+              >
+                <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Set up your budget</Text>
+                <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
+              </Pressable>
+            ) : null}
+          </View>
+        )}
 
         {/* Personal budget keeps activity before the account summary. */}
         {!isSharedWorkspace && <View style={styles.section}>
@@ -673,6 +709,7 @@ const styles = StyleSheet.create({
   overviewNavButtonDescription: { width: '100%', maxWidth: '100%', flexShrink: 1, fontSize: 9, lineHeight: 12, textAlign: 'center', fontFamily: 'Inter_400Regular' },
   overviewNavChevron: { position: 'absolute', top: 6, right: 6 },
   groupCtaCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
+  budgetCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
   groupCtaHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   groupCtaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   groupCtaEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },

@@ -938,10 +938,20 @@ export default function BudgetScreen() {
            ) : breakdown.length === 0 && unusedCategories.length === 0 ? (
             <View style={styles.empty}>
               <Feather name="bar-chart-2" size={40} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No categories yet</Text>
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No budget yet</Text>
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                Tap + to add your first budget category
+                Start by adding a category and the amount you want to set aside for it.
               </Text>
+              <Pressable
+                testID="budget-create-first-category"
+                accessibilityRole="button"
+                accessibilityLabel="Add your first budget category"
+                onPress={() => openAdd()}
+                style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+              >
+                <Feather name="plus" size={17} color={colors.primaryForeground} />
+                <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Add first category</Text>
+              </Pressable>
             </View>
           ) : (
             <>
@@ -1135,6 +1145,8 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingHorizontal: 40 },
+  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, marginTop: 6 },
+  emptyActionText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalKAV: { justifyContent: 'flex-end' },

@@ -836,8 +836,20 @@ export default function HistoryScreen() {
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Feather name="inbox" size={36} color={colors.mutedForeground} />
-                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No expenses</Text>
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>{MONTHS_SHORT[month - 1]} {year} is empty</Text>
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No expenses yet</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                  {MONTHS_SHORT[month - 1]} {year} is empty. Record your first expense to start seeing your spending here.
+                </Text>
+                <Pressable
+                  testID="history-create-first-expense"
+                  accessibilityRole="button"
+                  accessibilityLabel="Log your first expense"
+                  onPress={() => router.push('/add-expense')}
+                  style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+                >
+                  <Feather name="plus" size={16} color={colors.primaryForeground} />
+                  <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Log first expense</Text>
+                </Pressable>
               </View>
             }
           />
@@ -965,6 +977,16 @@ export default function HistoryScreen() {
                 <Feather name="activity" size={36} color={colors.mutedForeground} />
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No activity yet</Text>
                 <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Expenses and contributions will appear here</Text>
+                <Pressable
+                  testID="history-create-first-activity"
+                  accessibilityRole="button"
+                  accessibilityLabel="Log your first expense"
+                  onPress={() => router.push('/add-expense')}
+                  style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+                >
+                  <Feather name="plus" size={16} color={colors.primaryForeground} />
+                  <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Log first expense</Text>
+                </Pressable>
               </View>
             }
           />
@@ -1528,7 +1550,9 @@ const styles = StyleSheet.create({
 
   empty: { alignItems: 'center', paddingTop: 80, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
-  emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
+  emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingHorizontal: 24 },
+  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, marginTop: 6 },
+  emptyActionText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },

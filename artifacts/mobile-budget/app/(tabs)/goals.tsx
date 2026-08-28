@@ -1079,8 +1079,21 @@ export default function GoalsScreen() {
             <Feather name="target" size={40} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No savings goals yet</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              {canManageShared ? 'Tap "New Goal" to create your first goal' : 'An admin will create shared goals for the group'}
+              {canManageShared ? 'Create a goal now and start tracking progress towards it.' : 'An owner or admin will create shared goals for the group.'}
             </Text>
+            {canManageShared ? (
+              <TouchableOpacity
+                testID="goals-create-first"
+                accessibilityRole="button"
+                accessibilityLabel="Create your first savings goal"
+                style={[styles.newGoalBtn, { marginTop: 6 }]}
+                onPress={openNewGoal}
+                activeOpacity={0.8}
+              >
+                <Feather name="plus" size={16} color="#0a1a10" />
+                <Text style={styles.newGoalBtnText}>Create first goal</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : (
           <View style={styles.list}>

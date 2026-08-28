@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useColors } from '@/hooks/useColors';
@@ -909,6 +910,16 @@ export default function ReportsScreen() {
               <Feather name="bar-chart-2" size={48} color={colors.mutedForeground} />
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No data for {MONTHS_SHORT[month - 1]} {year}</Text>
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Log expenses to see your report here</Text>
+              <Pressable
+                testID="reports-create-first-expense"
+                accessibilityRole="button"
+                accessibilityLabel="Log an expense to start your report"
+                onPress={() => router.push('/add-expense')}
+                style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+              >
+                <Feather name="plus" size={16} color={colors.primaryForeground} />
+                <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Log first expense</Text>
+              </Pressable>
             </View>
           )}
         </PageScrollView>
@@ -1137,6 +1148,8 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: 'Inter_600SemiBold' },
   emptyText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, marginTop: 2 },
+  emptyActionText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   // Category details sheet
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },

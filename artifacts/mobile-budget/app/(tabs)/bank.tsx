@@ -879,6 +879,16 @@ export default function BankScreen() {
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
                 Money you put in or take out will appear here
               </Text>
+              <Pressable
+                testID="bank-create-first-deposit"
+                accessibilityRole="button"
+                accessibilityLabel="Record your first deposit"
+                onPress={() => openModal('deposit')}
+                style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+              >
+                <Feather name="plus" size={16} color={colors.primaryForeground} />
+                <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Record first deposit</Text>
+              </Pressable>
             </View>
           ) : null
         }
@@ -1977,6 +1987,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
   },
+  emptyAction: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, marginTop: 6 },
+  emptyActionText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   // Modal styles
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
