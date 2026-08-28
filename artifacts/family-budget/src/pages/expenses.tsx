@@ -43,6 +43,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1416,20 +1417,7 @@ export default function Expenses() {
           <div className="divide-y divide-border/50">
             {expenses.map((expense) => (
               <div key={expense.id}>
-                {editingId === expense.id ? (
-                  <div className="p-4 bg-accent/20 sm:p-5">
-                    {expenseFormFields(
-                      editForm,
-                      updateExpense.isPending,
-                      (e) => handleUpdate(e, expense.id),
-                      cancelEdit,
-                      "Edit Expense",
-                      "Save Changes",
-                      "edit",
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-4 hover:bg-muted/20 transition-colors sm:flex sm:items-start sm:justify-between sm:gap-4 sm:p-5">
+                <div className="p-4 hover:bg-muted/20 transition-colors sm:flex sm:items-start sm:justify-between sm:gap-4 sm:p-5">
                     <div className="flex items-start gap-4 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-accent/60 flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-xs font-bold text-primary">{expense.category.slice(0, 2).toUpperCase()}</span>
@@ -1489,8 +1477,7 @@ export default function Expenses() {
                         )}
                       </div>
                     </div>
-                  </div>
-                )}
+                </div>
               </div>
             ))}
           </div>
@@ -1500,6 +1487,24 @@ export default function Expenses() {
           </div>
         </Card>
       )}
+      <Dialog open={editingId !== null} onOpenChange={(open) => !open && cancelEdit()}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+          <DialogTitle className="sr-only">Edit Expense</DialogTitle>
+          {editingId !== null && (() => {
+            const expense = expenses?.find((item) => item.id === editingId);
+            if (!expense) return null;
+            return expenseFormFields(
+              editForm,
+              updateExpense.isPending,
+              (e) => handleUpdate(e, expense.id),
+              cancelEdit,
+              "Edit Expense",
+              "Save Changes",
+              "edit",
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
