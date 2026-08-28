@@ -222,7 +222,8 @@ export default function HistoryScreen() {
   const contributions = (contributionsQuery.data ?? []) as Contribution[];
   const isSharedWorkspace = group?.isPrivate === false;
   const currentMember = members.find((member) => member.userId === user?.id);
-  const isContributionManager = group?.role === 'owner' || group?.role === 'admin'
+  const isContributionManager = group?.isPrivate === true
+    || group?.role === 'owner' || group?.role === 'admin'
     || currentMember?.role === 'owner' || currentMember?.role === 'admin';
   const isSharedMember = isSharedWorkspace && !isContributionManager;
   const canEditExpenseRecord = (expense: Expense) => {

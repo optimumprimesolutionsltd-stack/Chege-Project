@@ -226,7 +226,11 @@ export default function Expenses() {
   const queryClient = useQueryClient();
   const currentMembership = members?.find((member) => member.userId === user?.id);
   const canManageExpenses =
-    currentMembership?.role === "owner" || currentMembership?.role === "admin";
+    group?.isPrivate === true ||
+    group?.role === "owner" ||
+    group?.role === "admin" ||
+    currentMembership?.role === "owner" ||
+    currentMembership?.role === "admin";
   const memberPayerId = canManageExpenses ? undefined : currentMembership?.userId;
   const canManageCategories = canManageExpenses;
   const canEditExpense = (expense: Expense) =>

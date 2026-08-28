@@ -136,11 +136,14 @@ export default function AddExpenseSheet() {
     .find((expense) => expense.id === editId);
   const sharedTransactionsLocked =
     group?.canRecordSharedTransactions === false && members.length < 2;
-  const canManageShared = members.some(
-    (member) =>
-      member.userId === user?.id &&
-      (member.role === 'owner' || member.role === 'admin'),
-  );
+  const canManageShared = group?.isPrivate === true
+    || group?.role === 'owner'
+    || group?.role === 'admin'
+    || members.some(
+      (member) =>
+        member.userId === user?.id &&
+        (member.role === 'owner' || member.role === 'admin'),
+    );
   const isSharedWorkspace = group?.isPrivate === false;
   const originalPersonalPayerId = editingExpense?.paidById
     ?? editingExpense?.incomeSplits?.find((split) => !split.fromBank)?.userId
