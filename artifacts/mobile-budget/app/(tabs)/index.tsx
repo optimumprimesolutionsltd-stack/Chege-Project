@@ -67,16 +67,14 @@ type Shortcut = {
 
 const PERSONAL_SHORTCUTS: Shortcut[] = [
   { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
-  { icon: 'credit-card', label: 'Deposit',  color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank?shortcut=deposit' },
-  { icon: 'bar-chart-2', label: 'Budget',   color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget'          },
+  { icon: 'credit-card', label: 'Deposit / Withdraw', color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank' },
   { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
 ];
 
 const SHARED_SHORTCUTS: Shortcut[] = [
   { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
-  { icon: 'credit-card', label: 'Deposit',  color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank?shortcut=deposit' },
+  { icon: 'credit-card', label: 'Deposit / Withdraw', color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank' },
   { icon: 'pie-chart',   label: 'Reports',  color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports'         },
-  { icon: 'bar-chart-2', label: 'Budget',   color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget'          },
   { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
 ];
 
@@ -227,11 +225,16 @@ export default function DashboardScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <PageScrollView
+        style={{ backgroundColor: colors.background }}
+        overScrollMode="never"
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />
         }
-        contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 100 : 110 }}
+        contentContainerStyle={{
+          paddingBottom: Platform.OS === 'web' ? 100 : 110,
+          backgroundColor: colors.background,
+        }}
       >
         {/* Dark header */}
         <LinearGradient
