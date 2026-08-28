@@ -11,7 +11,7 @@ import {
   incomeSourcesTable,
   groupsTable,
 } from "@workspace/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   getActiveGroupId,
@@ -93,6 +93,14 @@ const UpdateJointAccountInput = z.object({
   expenseCategory: z.string().trim().min(1).max(80).optional(),
   sourceKind: z.enum(["income_source", "other"]).optional(),
   destinationKind: z.enum(["category", "other"]).optional(),
+  contributorSplits: z.array(z.object({
+    userId: z.string().min(1),
+    amount: z.number().int().positive(),
+    incomeSourceId: z.number().int().positive().nullable().optional(),
+  })).optional(),
+  transferDirection: z.enum(["to_savings", "from_savings"]).optional(),
+  goalId: z.number().int().positive().optional(),
+  narration: z.string().trim().min(1).max(200).optional(),
 });
 
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
@@ -473,7 +481,10 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const requestedMadeById = parsed.data.madeById === undefined
     ? existing.madeById
     : parsed.data.madeById;
-  if (!requireMemberSelfAttribution(req, res, [requestedMadeById])) return;
+  const requestedAttributions = parsed.data.contributorSplits?.length
+    ? parsed.data.contributorSplits.map((split) => split.userId)
+    : [requestedMadeById];
+  if (!requireMemberSelfAttribution(req, res, requestedAttributions)) return;
   const isMember = !isGroupManager(req);
   if (isMember) {
     if (
@@ -491,10 +502,6 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
       return;
     }
   }
-  if (existing.savingsGoalId !== null) {
-    res.status(400).json({ error: "Savings transfers cannot be edited. Delete and recreate the transfer instead." });
-    return;
-  }
   if (existing.expenseId !== null) {
     res.status(400).json({ error: "This is the Joint-bank portion of an expense. Edit the expense instead." });
     return;
@@ -508,8 +515,127 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
       ),
     )
     .limit(1);
-  if (existingSplits.length > 0) {
-    res.status(400).json({ error: "A split deposit cannot be edited. Delete and recreate it to preserve its contributor history." });
+  if (existing.savingsGoalId !== null) {
+    if (!requireGroupManager(req, res)) return;
+    const direction = parsed.data.transferDirection ?? existing.transferDirection;
+    const goalId = parsed.data.goalId ?? existing.savingsGoalId;
+    const narration = parsed.data.narration;
+    if (
+      (direction !== "to_savings" && direction !== "from_savings") ||
+      !goalId ||
+      !narration
+    ) {
+      res.status(400).json({ error: "Transfer direction, savings goal, and narration are required." });
+      return;
+    }
+    if (requestedMadeById !== null) {
+      const err = await validateMemberId(requestedMadeById, groupId);
+      if (err) { res.status(400).json({ error: err }); return; }
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [lockedBankTx] = await tx
+        .select()
+        .from(jointAccountTxTable)
+        .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
+        .for("update");
+      if (!lockedBankTx || lockedBankTx.savingsGoalId === null) {
+        return { error: "Transfer not found.", status: 404 as const };
+      }
+      const [linkedContribution] = await tx
+        .select({ id: savingsGoalContributionsTable.id })
+        .from(savingsGoalContributionsTable)
+        .where(and(
+          eq(savingsGoalContributionsTable.bankTransactionId, lockedBankTx.id),
+          eq(savingsGoalContributionsTable.groupId, groupId),
+        ))
+        .for("update");
+      if (!linkedContribution) {
+        return { error: "This transfer is missing its linked savings history.", status: 409 as const };
+      }
+
+      const goalIds = [...new Set([lockedBankTx.savingsGoalId, goalId])].sort((a, b) => a - b);
+      const goals = await tx
+        .select()
+        .from(savingsGoalsTable)
+        .where(and(
+          eq(savingsGoalsTable.groupId, groupId),
+          inArray(savingsGoalsTable.id, goalIds),
+        ))
+        .orderBy(savingsGoalsTable.id)
+        .for("update");
+      const oldGoal = goals.find((goal) => goal.id === lockedBankTx.savingsGoalId);
+      const newGoal = goals.find((goal) => goal.id === goalId);
+      if (!oldGoal || !newGoal) {
+        return { error: "Savings goal not found.", status: 404 as const };
+      }
+
+      const oldDelta = lockedBankTx.transferDirection === "to_savings"
+        ? lockedBankTx.amount
+        : -lockedBankTx.amount;
+      const newDelta = direction === "to_savings" ? parsed.data.amount : -parsed.data.amount;
+      const nextAmounts = new Map(goals.map((goal) => [goal.id, goal.currentAmount]));
+      nextAmounts.set(oldGoal.id, (nextAmounts.get(oldGoal.id) ?? 0) - oldDelta);
+      const newGoalAmountAfterReversal = nextAmounts.get(newGoal.id) ?? 0;
+      nextAmounts.set(newGoal.id, (nextAmounts.get(newGoal.id) ?? 0) + newDelta);
+
+      for (const goal of goals) {
+        const nextAmount = nextAmounts.get(goal.id)!;
+        if (nextAmount < 0) {
+          return { error: `Only KES ${goal.currentAmount} is available in ${goal.name}.`, status: 409 as const };
+        }
+        if (nextAmount > goal.targetAmount) {
+          return { error: `Only KES ${goal.targetAmount - newGoalAmountAfterReversal} can be moved into ${goal.name}.`, status: 400 as const };
+        }
+      }
+
+      for (const goal of goals) {
+        const nextAmount = nextAmounts.get(goal.id)!;
+        await tx
+          .update(savingsGoalsTable)
+          .set({ currentAmount: nextAmount, isCompleted: nextAmount >= goal.targetAmount })
+          .where(and(eq(savingsGoalsTable.id, goal.id), eq(savingsGoalsTable.groupId, groupId)));
+      }
+
+      const description = direction === "to_savings"
+        ? `Transfer to savings — ${narration}`
+        : `Transfer from savings — ${narration}`;
+      const [updated] = await tx
+        .update(jointAccountTxTable)
+        .set({
+          type: direction === "to_savings" ? "disbursement" : "deposit",
+          amount: parsed.data.amount,
+          description,
+          date: parsed.data.date,
+          madeById: requestedMadeById,
+          incomeSourceId: null,
+          expenseCategory: null,
+          savingsGoalId: goalId,
+          transferDirection: direction,
+        })
+        .where(and(eq(jointAccountTxTable.id, lockedBankTx.id), eq(jointAccountTxTable.groupId, groupId)))
+        .returning();
+      await tx
+        .update(savingsGoalContributionsTable)
+        .set({
+          goalId,
+          amount: newDelta,
+          note: direction === "to_savings"
+            ? `Bank transfer in: ${narration}`
+            : `Bank transfer out: ${narration}`,
+        })
+        .where(and(
+          eq(savingsGoalContributionsTable.bankTransactionId, lockedBankTx.id),
+          eq(savingsGoalContributionsTable.groupId, groupId),
+        ));
+      return { updated };
+    });
+
+    if (!result.updated) {
+      res.status(result.status ?? 409).json({ error: result.error ?? "Could not update transfer." });
+      return;
+    }
+    res.json(await enrichTx(result.updated, groupId));
     return;
   }
 
@@ -527,18 +653,89 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
       res.status(400).json({ error: "Add a narration for an Other source." });
       return;
     }
-    const incomeSourceId = parsed.data.incomeSourceId === undefined
+    const contributorSplits = parsed.data.contributorSplits;
+    if (contributorSplits && contributorSplits.length > 0) {
+      if (!requireGroupManager(req, res)) return;
+      if (parsed.data.madeById !== undefined) {
+        res.status(400).json({ error: "Provide either madeById or contributorSplits, not both." });
+        return;
+      }
+      if (new Set(contributorSplits.map((split) => split.userId)).size !== contributorSplits.length) {
+        res.status(400).json({ error: "Each contributor can appear only once." });
+        return;
+      }
+      const splitTotal = contributorSplits.reduce((sum, split) => sum + split.amount, 0);
+      if (splitTotal !== amount) {
+        res.status(400).json({ error: `Contributor portions (${splitTotal}) must equal the deposit total (${amount}).` });
+        return;
+      }
+      for (const split of contributorSplits) {
+        const memberError = await validateMemberId(split.userId, groupId);
+        if (memberError) { res.status(400).json({ error: memberError }); return; }
+        if (split.incomeSourceId) {
+          const sourceError = await validateIncomeSourceOwner(split.incomeSourceId, split.userId, groupId);
+          if (sourceError) { res.status(400).json({ error: sourceError }); return; }
+        }
+      }
+    }
+    if (existingSplits.length > 0 && isMember) {
+      res.status(403).json({ error: "Only an owner or admin can edit a split deposit." });
+      return;
+    }
+    if (
+      existingSplits.length > 0 &&
+      contributorSplits === undefined &&
+      (
+        amount !== existing.amount ||
+        parsed.data.madeById !== undefined ||
+        parsed.data.incomeSourceId !== undefined
+      )
+    ) {
+      res.status(400).json({
+        error: "Include the complete contributor split list when changing a split deposit's amount or attribution.",
+      });
+      return;
+    }
+    const hasSplits = !!contributorSplits?.length;
+    const incomeSourceId = hasSplits
+      ? null
+      : parsed.data.incomeSourceId === undefined
       ? existing.incomeSourceId
       : parsed.data.incomeSourceId;
     if (incomeSourceId !== null) {
       const error = await validateIncomeSourceOwner(incomeSourceId, madeById, groupId);
       if (error) { res.status(400).json({ error }); return; }
     }
-    const [updated] = await db
-      .update(jointAccountTxTable)
-      .set({ amount, date, madeById, description, incomeSourceId, expenseCategory: null })
-      .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(jointAccountTxTable)
+        .set({
+          amount,
+          date,
+          madeById: hasSplits ? null : madeById,
+          description,
+          incomeSourceId,
+          expenseCategory: null,
+        })
+        .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
+        .returning();
+      if (contributorSplits !== undefined) {
+        await tx.delete(jointAccountDepositSplitsTable).where(and(
+          eq(jointAccountDepositSplitsTable.transactionId, existing.id),
+          eq(jointAccountDepositSplitsTable.groupId, groupId),
+        ));
+        if (contributorSplits.length > 0) {
+          await tx.insert(jointAccountDepositSplitsTable).values(contributorSplits.map((split) => ({
+            groupId,
+            transactionId: existing.id,
+            userId: split.userId,
+            amount: split.amount,
+            incomeSourceId: split.incomeSourceId ?? null,
+          })));
+        }
+      }
+      return row;
+    });
     res.json(await enrichTx(updated, groupId));
     return;
   }

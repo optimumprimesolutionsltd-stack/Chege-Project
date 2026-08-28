@@ -784,6 +784,7 @@ export const GetJointAccountResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
@@ -859,6 +860,7 @@ export const CreateDepositResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
@@ -902,6 +904,7 @@ export const CreateDisbursementResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
@@ -947,6 +950,7 @@ export const TransferBankToSavingsResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
@@ -992,6 +996,7 @@ export const TransferSavingsToBankResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),
@@ -1016,6 +1021,12 @@ export const UpdateJointAccountTransactionParams = zod.object({
 
 export const updateJointAccountTransactionBodyAmountMultipleOf = 1;
 
+export const updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf = 1;
+
+
+
+export const updateJointAccountTransactionBodyNarrationMax = 200;
+
 
 
 export const UpdateJointAccountTransactionBody = zod.object({
@@ -1026,7 +1037,15 @@ export const UpdateJointAccountTransactionBody = zod.object({
   "incomeSourceId": zod.number().nullish().describe('Preserved for deposits unless explicitly changed'),
   "expenseCategory": zod.string().optional().describe('Required for withdrawals; deposits ignore this field'),
   "sourceKind": zod.enum(['income_source', 'other']).optional(),
-  "destinationKind": zod.enum(['category', 'other']).optional()
+  "destinationKind": zod.enum(['category', 'other']).optional(),
+  "contributorSplits": zod.array(zod.object({
+  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "amount": zod.number().min(1).multipleOf(updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf),
+  "incomeSourceId": zod.number().min(1).optional()
+})).optional().describe('Replacement contributor portions for a deposit. Send an empty array to remove existing splits.'),
+  "transferDirection": zod.enum(['to_savings', 'from_savings']).optional().describe('Required when editing a linked savings transfer'),
+  "goalId": zod.number().min(1).optional().describe('Savings goal receiving or supplying an edited transfer'),
+  "narration": zod.string().min(1).max(updateJointAccountTransactionBodyNarrationMax).optional().describe('Required when editing a linked savings transfer')
 })
 
 export const updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf = 1;
@@ -1041,6 +1060,7 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
+  "incomeSourceId": zod.number().nullish().describe('Income source attached to a single-depositor deposit'),
   "expenseCategory": zod.string().nullish().describe('Expense category this disbursement covers (optional)'),
   "savingsGoalId": zod.number().nullish().describe('Linked savings goal for a bank transfer'),
   "savingsGoalName": zod.string().nullish(),

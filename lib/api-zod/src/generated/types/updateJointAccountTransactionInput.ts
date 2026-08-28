@@ -5,8 +5,10 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { DepositContributorSplit } from './depositContributorSplit';
 import type { UpdateJointAccountTransactionInputDestinationKind } from './updateJointAccountTransactionInputDestinationKind';
 import type { UpdateJointAccountTransactionInputSourceKind } from './updateJointAccountTransactionInputSourceKind';
+import type { UpdateJointAccountTransactionInputTransferDirection } from './updateJointAccountTransactionInputTransferDirection';
 
 export interface UpdateJointAccountTransactionInput {
   /** @minimum 1 */
@@ -25,4 +27,19 @@ export interface UpdateJointAccountTransactionInput {
   expenseCategory?: string;
   sourceKind?: UpdateJointAccountTransactionInputSourceKind;
   destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
+  /** Replacement contributor portions for a deposit. Send an empty array to remove existing splits. */
+  contributorSplits?: DepositContributorSplit[];
+  /** Required when editing a linked savings transfer */
+  transferDirection?: UpdateJointAccountTransactionInputTransferDirection;
+  /**
+     * Savings goal receiving or supplying an edited transfer
+     * @minimum 1
+     */
+  goalId?: number;
+  /**
+     * Required when editing a linked savings transfer
+     * @minLength 1
+     * @maxLength 200
+     */
+  narration?: string;
 }

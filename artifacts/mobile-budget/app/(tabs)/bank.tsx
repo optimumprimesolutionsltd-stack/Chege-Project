@@ -67,10 +67,12 @@ type Tx = {
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
+  incomeSourceId?: number | null;
   expenseCategory?: string | null;
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
   transferDirection?: string | null;
+  contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
   date: string;
   createdAt?: string | null;
 };
@@ -311,32 +313,36 @@ export default function BankScreen() {
       Alert.alert('This transaction is locked', 'Members can correct only their own deposits dated today. Ask an admin to correct an earlier or shared bank record.');
       return;
     }
-    if (tx.savingsGoalId) {
-      Alert.alert('Transfer cannot be edited', 'Delete and recreate a savings transfer to keep both balances in sync.');
-      return;
-    }
-    const type: TxType = tx.type === 'deposit' ? 'deposit' : 'disbursement';
+    const type: TxType = tx.savingsGoalId
+      ? 'transfer'
+      : tx.type === 'deposit' ? 'deposit' : 'disbursement';
     setTxType(type);
     setEditingTransactionId(tx.id);
     setAmount(String(tx.amount));
-    setDescription(tx.description);
+    setDescription(type === 'transfer'
+      ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, '')
+      : tx.description);
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
     setShowCategoryPicker(false);
+    const splitIds = tx.contributorSplits?.map((split) => split.userId) ?? [];
     setDepositorIds(type === 'deposit'
-      ? (!isSharedWorkspace && user?.id ? [user.id] : tx.madeById ? [tx.madeById] : [])
+      ? (splitIds.length > 0 ? splitIds : !isSharedWorkspace && user?.id ? [user.id] : tx.madeById ? [tx.madeById] : [])
       : []);
-    setDepositorAmounts({});
-    setIncomeSourceId(null);
+    setDepositorAmounts(Object.fromEntries(
+      (tx.contributorSplits ?? []).map((split) => [split.userId, String(split.amount)]),
+    ));
+    setIncomeSourceId(tx.incomeSourceId ?? null);
     setDepositSourceKind(null);
     setWithdrawerId(type === 'disbursement'
       ? (!isSharedWorkspace ? user?.id ?? null : tx.madeById ?? null)
       : null);
     setWithdrawDest(type === 'disbursement' ? 'other' : null);
     setWithdrawSourceName(null);
-    setWithdrawGoalId(null);
+    setWithdrawGoalId(tx.savingsGoalId ?? null);
     setShowGoalPicker(false);
     setShowDatePicker(false);
+    setTransferDirection(tx.transferDirection === 'from_savings' ? 'from_savings' : 'to_savings');
     setModalVisible(true);
   };
 
@@ -440,7 +446,12 @@ export default function BankScreen() {
           date,
           madeById: isSharedWorkspace ? null : user?.id,
         };
-        if (transferDirection === 'to_savings') {
+        if (editingTransactionId !== null) {
+          await updateTransaction({
+            id: editingTransactionId,
+            data: { ...transfer, transferDirection },
+          });
+        } else if (transferDirection === 'to_savings') {
           await transferBankToSavings({ data: transfer });
         } else {
           await transferSavingsToBank({ data: transfer });
@@ -482,10 +493,19 @@ export default function BankScreen() {
     setSubmitting(true);
     try {
       if (editingTransactionId !== null) {
-        if (txType === 'deposit' && validDepositorIds.length > 1) {
-          Alert.alert('One depositor per entry', 'Edit each deposited entry separately.');
-          return;
-        }
+        const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
+        const contributorSplits = txType === 'deposit' && validDepositorIds.length > 1
+          ? validDepositorIds.map((userId) => ({
+              userId,
+              amount: parseFloat(depositorAmounts[userId] || '0') || 0,
+              ...(() => {
+                const existingSourceId = editingTransaction?.contributorSplits
+                  ?.find((split) => split.userId === userId)
+                  ?.incomeSourceId;
+                return existingSourceId ? { incomeSourceId: existingSourceId } : {};
+              })(),
+            }))
+          : [];
         await updateTransaction({
           id: editingTransactionId,
           data: {
@@ -495,8 +515,10 @@ export default function BankScreen() {
             madeById: !isSharedWorkspace
               ? user?.id
               : txType === 'deposit'
-                ? validDepositorIds[0] ?? null
+                ? contributorSplits.length > 0 ? undefined : validDepositorIds[0] ?? null
                 : withdrawerId ?? null,
+            ...(txType === 'deposit' ? { contributorSplits } : {}),
+            ...(txType === 'deposit' && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
           },
@@ -751,7 +773,7 @@ export default function BankScreen() {
                     : dep
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
-                  {formatDateTime(item.createdAt)}{canManageAccount ? ` · ${item.savingsGoalId ? 'Delete' : 'Edit or delete'}` : canEditTransaction(item) ? ' · Edit today' : ''}
+                  {formatDateTime(item.createdAt)}{canManageAccount ? ' · Edit or delete' : canEditTransaction(item) ? ' · Edit today' : ''}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
@@ -759,7 +781,7 @@ export default function BankScreen() {
                   {dep ? '+' : '-'}KES {formatKES(item.amount)}
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                  {canEditTransaction(item) && !item.savingsGoalId && <TouchableOpacity
+                  {canEditTransaction(item) && <TouchableOpacity
                     onPress={() => openEdit(item)}
                     hitSlop={8}
                     testID={`bank-edit-transaction-${item.id}`}
@@ -849,7 +871,7 @@ export default function BankScreen() {
 
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
               {editingTransactionId !== null
-                ? `Edit ${isDeposit ? 'Deposit' : 'Withdrawal'}`
+                ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Transfer' : 'Withdrawal'}`
                 : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : 'Take Money Out'}
             </Text>
 

@@ -16,6 +16,11 @@ export interface JointAccountTransaction {
   madeById?: string | null;
   madeByName?: string | null;
   /**
+     * Income source attached to a single-depositor deposit
+     * @nullable
+     */
+  incomeSourceId?: number | null;
+  /**
      * Expense category this disbursement covers (optional)
      * @nullable
      */

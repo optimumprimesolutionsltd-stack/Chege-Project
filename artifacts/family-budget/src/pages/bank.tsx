@@ -36,6 +36,7 @@ type EditableTransaction = {
   description: string;
   date: string;
   madeById?: string | null;
+  incomeSourceId?: number | null;
   expenseCategory?: string | null;
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
@@ -258,26 +259,30 @@ export default function Bank() {
       });
       return;
     }
-    if (tx.savingsGoalId) {
-      toast({
-        title: "Transfer cannot be edited",
-        description: "Delete and recreate a savings transfer to keep both balances in sync.",
-      });
-      return;
-    }
-    const transactionMode = tx.type === "deposit" ? "deposit" : "disbursement";
+    const transactionMode = tx.savingsGoalId
+      ? "transfer"
+      : tx.type === "deposit" ? "deposit" : "disbursement";
     setEditingTransaction(tx);
     setMode(transactionMode);
     setAmount(String(tx.amount));
-    setDescription(tx.description);
+    setDescription(transactionMode === "transfer"
+      ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, "")
+      : tx.description);
     setDate(tx.date);
-    setDepositorIds(transactionMode === "deposit" && tx.madeById ? [tx.madeById] : []);
-    setDepositorAmounts({});
-    setIncomeSourceId(null);
+    const splitIds = tx.contributorSplits?.map((split) => split.userId) ?? [];
+    setDepositorIds(transactionMode === "deposit"
+      ? splitIds.length > 0 ? splitIds : tx.madeById ? [tx.madeById] : []
+      : []);
+    setDepositorAmounts(Object.fromEntries(
+      (tx.contributorSplits ?? []).map((split) => [split.userId, String(split.amount)]),
+    ));
+    setIncomeSourceId(tx.incomeSourceId ?? null);
     setDepositSourceKind(null);
     setWithdrawerId(transactionMode === "disbursement" ? tx.madeById ?? null : JOINT_BANK_ID);
     setExpenseCategory(tx.expenseCategory ?? "");
     setWithdrawalDestinationKind(tx.description !== tx.expenseCategory ? "other" : "category");
+    setTransferDirection(tx.transferDirection === "from_savings" ? "from_savings" : "to_savings");
+    setTransferGoalId(tx.savingsGoalId ?? null);
     setNewCategoryName("");
   };
 
@@ -365,6 +370,16 @@ export default function Bank() {
           return;
         }
         const data = { amount: total, goalId: transferGoalId, narration: description.trim(), date, madeById: isSharedWorkspace ? null : user?.id };
+        if (editingTransaction) {
+          await updateTx.mutateAsync({
+            id: editingTransaction.id,
+            data: { ...data, transferDirection },
+          });
+          toast({ title: "Transfer updated" });
+          resetForm();
+          invalidate();
+          return;
+        }
         if (transferDirection === "to_savings") {
           await transferToSavings.mutateAsync({ data });
           toast({ title: "Moved to savings" });
@@ -377,10 +392,18 @@ export default function Bank() {
         return;
       }
       if (editingTransaction) {
-        if (mode === "deposit" && depositorIds.length > 1) {
-          toast({ variant: "destructive", title: "Split deposit", description: "Delete and recreate it to preserve each contributor's history." });
-          return;
-        }
+        const contributorSplits = depositorIds.length > 1
+          ? depositorIds.map((userId) => ({
+              userId,
+              amount: Number(depositorAmounts[userId] || 0),
+              ...(() => {
+                const existingSourceId = editingTransaction.contributorSplits
+                  ?.find((split) => split.userId === userId)
+                  ?.incomeSourceId;
+                return existingSourceId ? { incomeSourceId: existingSourceId } : {};
+              })(),
+            }))
+          : [];
         await updateTx.mutateAsync({
           id: editingTransaction.id,
           data: {
@@ -388,8 +411,10 @@ export default function Bank() {
             description: description.trim() || expenseCategory,
             date,
             madeById: mode === "deposit"
-              ? (!isSharedWorkspace ? user?.id : depositorIds[0] ?? null)
+              ? (contributorSplits.length > 0 ? undefined : !isSharedWorkspace ? user?.id : depositorIds[0] ?? null)
               : (!isSharedWorkspace ? user?.id : withdrawerId),
+            ...(mode === "deposit" ? { contributorSplits } : {}),
+            ...(mode === "deposit" && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(mode === "deposit" && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(mode === "disbursement" ? { expenseCategory, destinationKind: withdrawalDestinationKind } : {}),
           },
@@ -611,7 +636,7 @@ export default function Bank() {
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">
               {editingTransaction
-                ? `Edit ${mode === "deposit" ? "Deposit" : "Withdrawal"}`
+                ? `Edit ${mode === "deposit" ? "Deposit" : mode === "transfer" ? "Transfer" : "Withdrawal"}`
                 : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
@@ -1003,7 +1028,7 @@ export default function Bank() {
                     <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
                       {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
                     </p>
-                    {canEditTransaction(tx) && !isTransfer && <Button
+                    {canEditTransaction(tx) && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-edit-tx-${tx.id}`}

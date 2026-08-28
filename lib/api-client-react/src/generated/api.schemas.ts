@@ -917,6 +917,11 @@ export interface JointAccountTransaction {
   madeById?: string | null;
   madeByName?: string | null;
   /**
+     * Income source attached to a single-depositor deposit
+     * @nullable
+     */
+  incomeSourceId?: number | null;
+  /**
      * Expense category this disbursement covers (optional)
      * @nullable
      */
@@ -1047,6 +1052,17 @@ export const UpdateJointAccountTransactionInputDestinationKind = {
   other: 'other',
 } as const;
 
+/**
+ * Required when editing a linked savings transfer
+ */
+export type UpdateJointAccountTransactionInputTransferDirection = typeof UpdateJointAccountTransactionInputTransferDirection[keyof typeof UpdateJointAccountTransactionInputTransferDirection];
+
+
+export const UpdateJointAccountTransactionInputTransferDirection = {
+  to_savings: 'to_savings',
+  from_savings: 'from_savings',
+} as const;
+
 export interface UpdateJointAccountTransactionInput {
   /** @minimum 1 */
   amount: number;
@@ -1064,6 +1080,21 @@ export interface UpdateJointAccountTransactionInput {
   expenseCategory?: string;
   sourceKind?: UpdateJointAccountTransactionInputSourceKind;
   destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
+  /** Replacement contributor portions for a deposit. Send an empty array to remove existing splits. */
+  contributorSplits?: DepositContributorSplit[];
+  /** Required when editing a linked savings transfer */
+  transferDirection?: UpdateJointAccountTransactionInputTransferDirection;
+  /**
+     * Savings goal receiving or supplying an edited transfer
+     * @minimum 1
+     */
+  goalId?: number;
+  /**
+     * Required when editing a linked savings transfer
+     * @minLength 1
+     * @maxLength 200
+     */
+  narration?: string;
 }
 
 export interface SavingsTransferInput {

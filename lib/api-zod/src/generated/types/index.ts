@@ -111,6 +111,7 @@ export * from './updateGroupInputNameStyle';
 export * from './updateJointAccountTransactionInput';
 export * from './updateJointAccountTransactionInputDestinationKind';
 export * from './updateJointAccountTransactionInputSourceKind';
+export * from './updateJointAccountTransactionInputTransferDirection';
 export * from './updateMemberRoleInput';
 export * from './updateMemberRoleInputRole';
 export * from './workspace';

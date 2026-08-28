@@ -2747,6 +2747,9 @@ components:
         madeByName:
           type: string
           nullable: true
+        incomeSourceId:
+          type: ["number", "null"]
+          description: Income source attached to a single-depositor deposit
         expenseCategory:
           type: ["string", "null"]
           nullable: true
@@ -2936,6 +2939,24 @@ components:
         destinationKind:
           type: string
           enum: [category, other]
+        contributorSplits:
+          type: array
+          description: Replacement contributor portions for a deposit. Send an empty array to remove existing splits.
+          items:
+            $ref: "#/components/schemas/DepositContributorSplit"
+        transferDirection:
+          type: string
+          enum: [to_savings, from_savings]
+          description: Required when editing a linked savings transfer
+        goalId:
+          type: number
+          minimum: 1
+          description: Savings goal receiving or supplying an edited transfer
+        narration:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Required when editing a linked savings transfer
       required:
         - amount
         - date

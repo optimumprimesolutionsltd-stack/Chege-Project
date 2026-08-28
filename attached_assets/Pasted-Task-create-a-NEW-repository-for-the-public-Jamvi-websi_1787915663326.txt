@@ -1,0 +1,69 @@
+Task: create a NEW repository for the public Jamvi website, and design its
+architecture. Do not write the site yet — architecture and design plan first.
+
+SCOPE
+
+This is the public marketing website only: the pages people see BEFORE they
+log in. The Jamvi application already exists in a separate repository and is
+finished. Do not copy it, import from it, or modify it.
+
+STEP 1 — CREATE THE REPOSITORY
+
+  Name:       jamvi-website
+  Owner:      optimumprimesolutionsltd-stack
+  Visibility: PRIVATE
+  Init with:  README, .gitignore (Node), and nothing else
+
+Confirm the URL when done. Do not put it inside the existing Chege-Project
+repo — that repository has a history of Replit/GitHub divergence and the
+website should not inherit it.
+
+STEP 2 — RESEARCH, THEN REPORT BACK
+
+Research Splitwise (splitwise.com) and tell me what you found:
+- how they explain a money-between-people problem without jargon
+- their "how it works" flow, and how few steps it has
+- how they use illustration rather than product screenshots
+- what comes first, second and third on the homepage
+- how the pricing page presents free versus paid
+
+Draw INSPIRATION from the structure and clarity. Do NOT copy their copy,
+layout, illustrations or visual identity.
+
+STEP 3 — PROPOSE AN ARCHITECTURE
+
+Recommend and justify:
+- framework (it must produce static, fast, SEO-indexable pages — the app is
+  React/Vite, but this is a content site and does not have to match)
+- folder structure
+- how pages and content are authored
+- how it deploys from GitHub
+- how brand assets are shared with the app without coupling the two
+
+STEP 4 — DESIGN PLAN
+
+- Palette, with hex values SAMPLED from the Jamvi logo, not guessed. The logo
+  is four figures joined in a circle: deep navy, teal, amber, white space.
+  Do not introduce a fourth colour.
+- Typography, two faces maximum
+- Page structure for: home, features, pricing, about, FAQ, plus clear
+  Sign up / Log in paths pointing at the app
+
+WHAT JAMVI IS — get the positioning right
+
+A personal and group money-management platform for Kenya. Personal budgets,
+shared group budgets, expenses, contributions, income sources, savings goals,
+joint bank funds, reports, members, roles, invitations.
+
+- NOT "a chama app" — chamas are one audience, not the product
+- NOT "a budgeting app" — it is broader money management
+- It works for ONE person alone. The tagline is "Manage Money Together", but
+  the site must never imply a group is required. The free personal tier is
+  the difference from competitors, who are group-only.
+- Kenya-first. KES. Mobile-first — most visitors arrive on a phone.
+
+ON PRICING: design the page, but do NOT state amounts or promise "free for
+families, paid for chamas". That boundary is self-declared and unenforceable.
+Frame tiers around what you GET, not who you ARE. Amounts are TBD.
+
+STOP after step 4 and wait for my approval. Do not build the site yet.
