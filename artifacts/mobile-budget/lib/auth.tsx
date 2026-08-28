@@ -42,7 +42,7 @@ const AuthContext = createContext<AuthContextValue>({
 // the Replit deployment, which is being retired - an APK carrying it would have
 // stopped signing anyone in the day that deployment was deleted, recoverable
 // only by a store update. Verify before every release.
-const PRODUCTION_API = 'https://jamvi-api.onrender.com';
+const PRODUCTION_API = 'https://jamvi.co.ke';
 
 function getApiBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_DOMAIN) {
