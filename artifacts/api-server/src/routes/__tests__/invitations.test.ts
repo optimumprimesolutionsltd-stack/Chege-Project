@@ -8,6 +8,10 @@ vi.mock("@workspace/db", () => {
   });
   return {
     db: { select: vi.fn(), transaction: vi.fn() },
+    // Accepting an invitation now checks the workspace has room, which reads
+    // the group's plan. Without this the constant is undefined and every
+    // acceptance throws.
+    GROUP_PLAN: { FREE: "free", PAID: "paid" },
     groupsTable: table("groups"),
     groupInvitationsTable: table("group_invitations"),
     groupMembershipsTable: table("group_memberships"),
