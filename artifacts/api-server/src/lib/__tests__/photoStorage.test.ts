@@ -1,5 +1,20 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
+const { s3Send } = vi.hoisted(() => ({
+  s3Send: vi.fn(),
+}));
+
+vi.mock("@aws-sdk/client-s3", () => ({
+  GetObjectCommand: class {
+    constructor(public input: unknown) {}
+  },
+  HeadObjectCommand: class {
+    constructor(public input: unknown) {}
+  },
+  S3Client: class {
+    send = s3Send;
+  },
+}));
 vi.mock("@aws-sdk/s3-request-presigner", () => ({
   getSignedUrl: vi.fn(),
 }));
@@ -27,6 +42,7 @@ beforeEach(() => {
   vi.stubEnv("S3_FORCE_PATH_STYLE", "true");
   vi.stubEnv("AWS_ACCESS_KEY_ID", "test-access-key");
   vi.stubEnv("AWS_SECRET_ACCESS_KEY", "test-secret-key");
+  s3Send.mockResolvedValue({});
   vi.mocked(getSignedUrl).mockResolvedValue(signedUrl);
   vi.mocked(createPresignedPost).mockResolvedValue({
     url: signedUrl,
@@ -76,6 +92,21 @@ describe("S3 private photo storage", () => {
       }),
       { expiresIn: 60 * 60 },
     );
+    expect(s3Send).toHaveBeenCalledWith({
+      input: {
+        Bucket: "jamvi-private",
+        Key: expect.stringMatching(/^photos\/[a-f0-9-]+$/),
+      },
+    });
+  });
+
+  it("does not sign a URL when the private photo object is missing", async () => {
+    s3Send.mockRejectedValueOnce(new Error("NotFound"));
+
+    await expect(
+      resolvePhotoUrl("/objects/photos/3dc216cd-296f-4d0d-97aa-6ceeeb1ee34c"),
+    ).rejects.toThrow("NotFound");
+    expect(getSignedUrl).not.toHaveBeenCalled();
   });
 
   it("validates S3 configuration and preserves stored photo path recognition", () => {

@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -103,10 +103,19 @@ async function signObjectUrl(
 }
 
 async function signS3DownloadUrl(objectName: string): Promise<string> {
+  const client = s3ClientInstance();
+  const bucket = s3Bucket();
+  await client.send(
+    new HeadObjectCommand({
+      Bucket: bucket,
+      Key: objectName,
+    }),
+  );
+
   return getSignedUrl(
-    s3ClientInstance(),
+    client,
     new GetObjectCommand({
-      Bucket: s3Bucket(),
+      Bucket: bucket,
       Key: objectName,
     }),
     { expiresIn: 60 * 60 },
