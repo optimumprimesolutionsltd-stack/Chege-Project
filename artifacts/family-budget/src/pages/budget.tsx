@@ -1001,14 +1001,14 @@ export default function Budget() {
                     return (
                        <Card key={cat.category} className="border-none shadow-sm bg-card hover:shadow-md transition-shadow">
                         <CardContent className="p-5 space-y-4">
-                          <div className="flex justify-between items-start">
-                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                         <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
+                             <div className="flex min-w-0 w-full items-start gap-3 sm:flex-1">
                               <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                                 <CategoryIcon className="h-4 w-4" aria-hidden="true" />
                               </span>
                               <div className="min-w-0">
-                              <h3 className="font-semibold text-lg text-foreground">{cat.category}</h3>
-                              <p className="text-sm text-muted-foreground">
+                               <h3 className="break-words text-lg font-semibold leading-snug text-foreground">{cat.category}</h3>
+                               <p className="break-words text-sm text-muted-foreground">
                                 {cat.isBudgeted
                                   ? <>Limit: {formatKes(cat.budgetAmount)} · {cat.isRecurring
                                     ? "Recurring"
@@ -1017,21 +1017,23 @@ export default function Budget() {
                               </p>
                               </div>
                             </div>
-                            <div className="flex items-start gap-1 ml-2">
-                              <div className="text-right mr-2">
+                             <div className="flex w-full min-w-0 flex-wrap items-start justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+                               <div className="shrink-0 text-left sm:mr-2 sm:text-right">
                                 <p className={`font-display font-bold text-lg ${isOver ? "text-destructive" : "text-primary"}`}>{formatKes(cat.spentAmount)}</p>
                                 <p className="text-xs font-medium text-muted-foreground">
                                   {isOver ? <span className="text-destructive">Over by {formatKes(Math.abs(cat.remaining))}</span> : <span>{formatKes(cat.remaining)} left</span>}
                                 </p>
                               </div>
-                              {canManageShared && fullCat && <>
-                                <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(fullCat)}>
-                                  <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
-                                </Button>
-                                <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(fullCat)}>
-                                  <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
-                                </Button>
-                              </>}
+                               {canManageShared && fullCat ? (
+                                 <div className="flex flex-wrap items-center justify-end gap-1">
+                                   <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(fullCat)}>
+                                     <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
+                                   </Button>
+                                   <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(fullCat)}>
+                                     <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
+                                   </Button>
+                                 </div>
+                               ) : null}
                             </div>
                           </div>
                           <div className="space-y-1.5">
@@ -1056,23 +1058,23 @@ export default function Budget() {
                     return (
                     <Card key={cat.id} className="border-none shadow-sm bg-card/60 hover:shadow-md transition-shadow opacity-70">
                       <CardContent className="p-5 space-y-4">
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-start gap-3">
+                         <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
+                           <div className="flex min-w-0 w-full items-start gap-3 sm:flex-1">
                             <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                               <CategoryIcon className="h-4 w-4" aria-hidden="true" />
                             </span>
-                            <div>
-                            <h3 className="font-semibold text-lg text-foreground">{cat.name}</h3>
-                            <p className="text-sm text-muted-foreground">Limit: {formatKes(cat.budgetAmount)} · No spending yet</p>
+                             <div className="min-w-0">
+                             <h3 className="break-words text-lg font-semibold leading-snug text-foreground">{cat.name}</h3>
+                             <p className="break-words text-sm text-muted-foreground">Limit: {formatKes(cat.budgetAmount)} · No spending yet</p>
                             </div>
                           </div>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(cat)}>
-                              <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(cat)}>
-                              <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
-                            </Button>
+                           <div className="flex w-full flex-wrap items-center justify-end gap-1 sm:w-auto sm:shrink-0">
+                             <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(cat)}>
+                               <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
+                             </Button>
+                             <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(cat)}>
+                               <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
+                             </Button>
                           </div>
                         </div>
                         <Progress value={0} className="h-2" />

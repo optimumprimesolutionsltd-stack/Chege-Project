@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/jamvi-website/"
+title = "Jamvi Website"
+description = "The public, pre-login Jamvi marketing website for people in Kenya who want a clear way to manage personal and shared money."
+version = "1.0.0"
+id = "artifacts/jamvi-website"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/jamvi-website/" ]
+localPort = 19839
+
+[services.development]
+run = "pnpm --filter @workspace/jamvi-website run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/jamvi-website", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/jamvi-website/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19839"
+BASE_PATH = "/jamvi-website/"
