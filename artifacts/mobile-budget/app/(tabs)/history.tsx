@@ -49,6 +49,7 @@ import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 import { getCategoryIcon } from '@/lib/categoryIcons';
+import { getExpenseEditHref } from '@/lib/expenseEditLink';
 
 const MONTH_PREF_KEY = 'expenses_month_pref';
 
@@ -224,6 +225,32 @@ export default function HistoryScreen() {
   const isContributionManager = group?.role === 'owner' || group?.role === 'admin'
     || currentMember?.role === 'owner' || currentMember?.role === 'admin';
   const isSharedMember = isSharedWorkspace && !isContributionManager;
+  const canEditExpenseRecord = (expense: Expense) => {
+    if (!user) return false;
+    if (isContributionManager) return true;
+    const hasBankFunding = expense.paidFromBank === true
+      || (expense.incomeSplits ?? []).some((split) => split.fromBank);
+    const personalPayerId = expense.paidById
+      ?? expense.incomeSplits?.find((split) => !split.fromBank)?.userId
+      ?? null;
+    const selfFunded = personalPayerId === user.id
+      && !hasBankFunding
+      && !expense.isRecurring
+      && (expense.incomeSplits ?? []).every(
+        (split) => !split.fromBank && (!split.userId || split.userId === user.id),
+      );
+    return !isSharedWorkspace
+      ? selfFunded
+      : expense.date.slice(0, 10) === todayIso() && selfFunded;
+  };
+  const canRemoveExpenseRecord = (expense: Expense) => {
+    if (!user) return false;
+    if (isContributionManager) return true;
+    const personalPayerId = expense.paidById
+      ?? expense.incomeSplits?.find((split) => !split.fromBank)?.userId
+      ?? null;
+    return !isSharedWorkspace && personalPayerId === user.id;
+  };
   const sharedHouseholdRows = useMemo(
     () => (monthlyActivity.data ?? []).filter((raw) => (raw as ActivityItem).type === 'household') as ActivityItem[],
     [monthlyActivity.data],
@@ -360,24 +387,7 @@ export default function HistoryScreen() {
   });
 
   const openEdit = (exp: Expense) => {
-    const paidFromBank = exp.paidFromBank === true || (exp.incomeSplits ?? []).some((split) => split.fromBank);
-    const hasPersonalFunding = (exp.incomeSplits ?? []).some((split) => !split.fromBank) || !paidFromBank;
-    setEditForm({
-      amount: String(exp.amount),
-      category: exp.category,
-      description: exp.description,
-      notes: exp.notes ?? '',
-      // Fall back to the logged-in user when paidById is missing on old expenses
-      paidById: hasPersonalFunding ? exp.paidById ?? user?.id ?? '' : null,
-      date: exp.date,
-    });
-    setEditPaidFromBank(paidFromBank);
-    setEditSelectedSources([]);
-    setEditSplitAmounts({});
-    setEditOtherLabel('');
-    setEditShowDatePicker(false);
-    setEditFundingHydratedForId(null);
-    setEditingExpense(exp);
+    router.push(getExpenseEditHref(exp) as never);
   };
 
   const closeEdit = () => { setEditingExpense(null); setSaving(false); };
@@ -812,8 +822,8 @@ export default function HistoryScreen() {
                     <ExpenseRow
                       expense={row.item}
                       colors={colors}
-                      onEdit={() => openEdit(row.item)}
-                      onDelete={() => handleDelete(row.item)}
+                      onEdit={canEditExpenseRecord(row.item) ? () => openEdit(row.item) : undefined}
+                      onDelete={canRemoveExpenseRecord(row.item) ? () => handleDelete(row.item) : undefined}
                     />
                   </View>
                 </View>
@@ -1367,8 +1377,8 @@ function ExpenseRow({
 }: {
   expense: Expense;
   colors: any;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const icon = getCategoryIcon(expense.category);
   return (
@@ -1388,14 +1398,14 @@ function ExpenseRow({
           −{expense.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
         </Text>
         <View style={styles.rowActions}>
-          <Pressable onPress={onEdit} hitSlop={6} style={styles.actionBtn} accessibilityRole="button" accessibilityLabel={`Edit ${expense.description}`}>
+          {onEdit ? <Pressable onPress={onEdit} hitSlop={6} style={styles.actionBtn} accessibilityRole="button" accessibilityLabel={`Edit ${expense.description}`}>
             <Feather name="edit-2" size={14} color={colors.mutedForeground} />
             <Text style={[styles.actionBtnText, { color: colors.mutedForeground }]}>Edit</Text>
-          </Pressable>
-          <Pressable onPress={onDelete} hitSlop={6} style={styles.actionBtn} accessibilityRole="button" accessibilityLabel={`Remove ${expense.description}`}>
+          </Pressable> : null}
+          {onDelete ? <Pressable onPress={onDelete} hitSlop={6} style={styles.actionBtn} accessibilityRole="button" accessibilityLabel={`Remove ${expense.description}`}>
             <Feather name="trash-2" size={14} color="#ef4444" />
             <Text style={[styles.actionBtnText, { color: '#ef4444' }]}>Remove</Text>
-          </Pressable>
+          </Pressable> : null}
         </View>
       </View>
     </View>

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -35,6 +36,7 @@ import {
 import { useAuth } from '@/lib/auth';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
+import { getLedgerExpenseEditHref } from '@/lib/expenseEditLink';
 
 type BudgetCategory = {
   id: number;
@@ -601,8 +603,25 @@ export default function BudgetScreen() {
                 </View>
               ) : (
                 <>
-                  {ledgerEntries.map(entry => (
-                    <View key={entry.id} style={[styles.ledgerExpense, { borderColor: colors.border, backgroundColor: colors.muted }]}>
+                  {ledgerEntries.map(entry => {
+                    const editHref = getLedgerExpenseEditHref(entry);
+                    return (
+                    <Pressable
+                      key={entry.id}
+                      disabled={!editHref}
+                      onPress={() => {
+                        if (!editHref) return;
+                        setLedgerCategory(null);
+                        router.push(editHref as never);
+                      }}
+                      accessibilityRole={editHref ? 'button' : undefined}
+                      accessibilityLabel={editHref ? `Edit ${entry.description}` : undefined}
+                      style={({ pressed }) => [
+                        styles.ledgerExpense,
+                        { borderColor: colors.border, backgroundColor: colors.muted },
+                        pressed && editHref ? { opacity: 0.75 } : null,
+                      ]}
+                    >
                       <View style={{ flex: 1, paddingRight: 10 }}>
                         <Text style={[styles.ledgerDescription, { color: colors.foreground }]} numberOfLines={2}>{entry.description}</Text>
                         <Text style={[styles.ledgerMeta, { color: colors.mutedForeground }]}>
@@ -611,10 +630,12 @@ export default function BudgetScreen() {
                           {!ledgerCategory?.isBudgeted ? ` · ${entry.category}` : ''}
                           {entry.source === 'bank_disbursement' ? ' · Joint bank disbursement' : ''}
                         </Text>
+                        {editHref ? <Text style={[styles.ledgerMeta, { color: colors.primary, marginTop: 3 }]}>Tap to edit expense</Text> : null}
                       </View>
                       <Text style={[styles.ledgerAmount, { color: colors.foreground }]}>KES {formatKES(entry.amount)}</Text>
-                    </View>
-                  ))}
+                      {editHref ? <Feather name="edit-2" size={14} color={colors.primary} /> : null}
+                    </Pressable>
+                  )})}
                   <View style={[styles.ledgerTotal, { borderTopColor: colors.border }]}>
                     <Text style={[styles.ledgerTotalLabel, { color: colors.mutedForeground }]}>Expense ledger total</Text>
                     <Text style={[styles.ledgerTotalValue, { color: colors.foreground }]}>KES {formatKES(ledgerTotal)}</Text>

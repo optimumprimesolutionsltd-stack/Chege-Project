@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -21,6 +21,9 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import {
   useCreateExpense,
+  useUpdateExpense,
+  useDeleteExpense,
+  useGetExpenses,
   useGetBudgetCategories,
   useCreateBudgetCategory,
   useGetMembers,
@@ -31,13 +34,39 @@ import {
   getGetDashboardSummaryQueryKey,
   getGetBudgetCategoriesQueryKey,
   getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardCategoryLedgerQueryKey,
+  getGetDashboardIncomeStreamsQueryKey,
+  getGetContributionsQueryKey,
   customFetch,
   ApiError,
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
+import {
+  buildSinglePayerFundingReplacement,
+  preserveExpenseSplitsForAmount,
+} from '@/lib/expenseFundingPreservation';
 
 const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
 type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
+type ExpenseRecord = {
+  id: number;
+  amount: number;
+  category: string;
+  description: string;
+  notes?: string | null;
+  paidById: string | null;
+  incomeSourceId?: number | null;
+  paidFromBank?: boolean;
+  incomeSplits?: {
+    userId?: string | null;
+    label?: string;
+    amount: number;
+    incomeSourceId?: number;
+    fromBank: boolean;
+  }[];
+  isRecurring: boolean;
+  date: string;
+};
 
 function getExpenseSaveError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -68,16 +97,43 @@ function formatDateDisplay(iso: string): string {
   return d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function incomeSourceKey(id: number): string {
+  return `source:${id}`;
+}
+
+function incomeSourceIdFromKey(key: string): number | null {
+  const match = /^source:(\d+)$/.exec(key);
+  return match ? Number(match[1]) : null;
+}
+
 export default function AddExpenseSheet() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{ edit?: string | string[]; month?: string | string[]; year?: string | string[] }>();
+  const editParam = Array.isArray(params.edit) ? params.edit[0] : params.edit;
+  const monthParam = Array.isArray(params.month) ? params.month[0] : params.month;
+  const yearParam = Array.isArray(params.year) ? params.year[0] : params.year;
+  const editId = editParam && /^\d+$/.test(editParam) ? Number(editParam) : null;
+  const editMonth = monthParam && /^(?:[1-9]|1[0-2])$/.test(monthParam)
+    ? Number(monthParam)
+    : new Date().getMonth() + 1;
+  const editYear = yearParam && /^\d{4}$/.test(yearParam)
+    ? Number(yearParam)
+    : new Date().getFullYear();
+  const isEditMode = editId !== null;
 
   const categoriesQuery = useGetBudgetCategories();
   const categories = categoriesQuery.data ?? [];
   const { data: members = [] } = useGetMembers();
   const { data: group } = useGetGroup();
+  const editExpensesQuery = useGetExpenses(
+    { month: editMonth, year: editYear },
+    { query: { queryKey: getGetExpensesQueryKey({ month: editMonth, year: editYear }), enabled: isEditMode } },
+  );
+  const editingExpense = ((editExpensesQuery.data ?? []) as ExpenseRecord[])
+    .find((expense) => expense.id === editId);
   const sharedTransactionsLocked =
     group?.canRecordSharedTransactions === false && members.length < 2;
   const canManageShared = members.some(
@@ -85,6 +141,24 @@ export default function AddExpenseSheet() {
       member.userId === user?.id &&
       (member.role === 'owner' || member.role === 'admin'),
   );
+  const isSharedWorkspace = group?.isPrivate === false;
+  const originalPersonalPayerId = editingExpense?.paidById
+    ?? editingExpense?.incomeSplits?.find((split) => !split.fromBank)?.userId
+    ?? null;
+  const originalHasBankFunding = editingExpense?.paidFromBank === true
+    || editingExpense?.incomeSplits?.some((split) => split.fromBank) === true;
+  const originalIsSelfFunded = !!user?.id
+    && originalPersonalPayerId === user.id
+    && !originalHasBankFunding
+    && editingExpense?.isRecurring !== true
+    && (editingExpense?.incomeSplits ?? []).every(
+      (split) => !split.fromBank && (!split.userId || split.userId === user.id),
+    );
+  const canEditExpense = !editingExpense
+    || canManageShared
+    || (isSharedWorkspace && editingExpense.date.slice(0, 10) === todayIso() && originalIsSelfFunded);
+  const canRemoveExpense = !!editingExpense
+    && (canManageShared || (!isSharedWorkspace && originalPersonalPayerId === user?.id));
   const canManageCategories = members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
   );
@@ -117,6 +191,9 @@ export default function AddExpenseSheet() {
   const [newCategoryBudget, setNewCategoryBudget] = useState('');
   const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
   const [newCategoryPriority, setNewCategoryPriority] = useState('3');
+  const [editHydratedForId, setEditHydratedForId] = useState<number | null>(null);
+  const [editFundingHydratedForId, setEditFundingHydratedForId] = useState<number | null>(null);
+  const [fundingDirty, setFundingDirty] = useState(false);
 
   // Load this payer's income sources from DB
   const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
@@ -144,13 +221,14 @@ export default function AddExpenseSheet() {
 
   // Reset funding selections whenever the payer changes
   useEffect(() => {
+    if (isEditMode) return;
     setPaidFromBank(false);
     setSelectedSources([]);
     setSplitAmounts({});
     setPayerIncomeSourceIds({});
     setNewSourcePayerId(null);
     setNewSourceName('');
-  }, [paidById]);
+  }, [isEditMode, paidById]);
 
   useEffect(() => {
     if (!canManageShared && user?.id) {
@@ -166,17 +244,117 @@ export default function AddExpenseSheet() {
     }
   }, [canManageShared, paidFromBank, payerIds.length, selectablePayers]);
 
+  useEffect(() => {
+    if (!editingExpense || editHydratedForId === editingExpense.id) return;
+
+    const storedSplits = editingExpense.incomeSplits ?? [];
+    const bankAmount = storedSplits
+      .filter((split) => split.fromBank)
+      .reduce((sum, split) => sum + split.amount, 0);
+    const personalAmounts: Record<string, string> = {};
+    const sourceIds: Record<string, number | null> = {};
+    for (const split of storedSplits) {
+      if (split.fromBank || !split.userId) continue;
+      personalAmounts[split.userId] = String(
+        (Number(personalAmounts[split.userId]) || 0) + split.amount,
+      );
+      if (split.incomeSourceId) sourceIds[split.userId] = split.incomeSourceId;
+    }
+
+    const personalPayerIds = [...new Set(
+      storedSplits
+        .filter((split) => !split.fromBank && split.userId)
+        .map((split) => split.userId as string),
+    )];
+    if (personalPayerIds.length === 0 && editingExpense.paidById) {
+      personalPayerIds.push(editingExpense.paidById);
+      personalAmounts[editingExpense.paidById] = String(editingExpense.amount);
+      sourceIds[editingExpense.paidById] = editingExpense.incomeSourceId ?? null;
+    }
+
+    const hasBankFunding = editingExpense.paidFromBank === true
+      || storedSplits.some((split) => split.fromBank);
+    setAmount(String(editingExpense.amount));
+    setCategory(editingExpense.category);
+    setDescription(editingExpense.description);
+    setNotes(editingExpense.notes ?? '');
+    setDate(editingExpense.date.slice(0, 10));
+    setIsRecurring(editingExpense.isRecurring);
+    setPayerIds(personalPayerIds);
+    setPaidFromBank(hasBankFunding);
+    setPayerAmounts({
+      ...personalAmounts,
+      ...(hasBankFunding ? { __joint_bank__: String(bankAmount || editingExpense.amount) } : {}),
+    });
+    setPayerIncomeSourceIds(sourceIds);
+    setSelectedSources([]);
+    setSplitAmounts({});
+    setEditFundingHydratedForId(null);
+    setFundingDirty(false);
+    setEditHydratedForId(editingExpense.id);
+  }, [editHydratedForId, editingExpense]);
+
+  useEffect(() => {
+    if (
+      !editingExpense
+      || editHydratedForId !== editingExpense.id
+      || editFundingHydratedForId === editingExpense.id
+    ) return;
+
+    const sourceCount = payerIds.length + (paidFromBank ? 1 : 0);
+    if (sourceCount > 1) {
+      setEditFundingHydratedForId(editingExpense.id);
+      return;
+    }
+    if (paidById && sourcesLoading) return;
+
+    const selected: string[] = [];
+    const amounts: Record<string, string> = {};
+    const personalSplits = (editingExpense.incomeSplits ?? []).filter((split) => !split.fromBank);
+
+    if (personalSplits.length === 0 && editingExpense.incomeSourceId) {
+      const key = incomeSourceKey(editingExpense.incomeSourceId);
+      selected.push(key);
+      amounts[key] = String(editingExpense.amount);
+    } else {
+      for (const [index, split] of personalSplits.entries()) {
+        const key = split.incomeSourceId
+          ? incomeSourceKey(split.incomeSourceId)
+          : `legacy:${index}:${split.label?.trim() || 'Personal funds'}`;
+        if (!selected.includes(key)) selected.push(key);
+        amounts[key] = String((Number(amounts[key]) || 0) + split.amount);
+      }
+    }
+
+    setSelectedSources(selected);
+    setSplitAmounts(amounts);
+    setEditFundingHydratedForId(editingExpense.id);
+  }, [
+    editFundingHydratedForId,
+    editHydratedForId,
+    editingExpense,
+    incomeSources,
+    paidById,
+    paidFromBank,
+    payerIds.length,
+    sourcesLoading,
+  ]);
+
   const { mutateAsync: createExpenseAsync } = useCreateExpense();
+  const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
   const createCategory = useCreateBudgetCategory();
   const [isPending, setIsPending] = useState(false);
 
   const invalidateExpenses = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
-    const now = new Date();
-    queryClient.invalidateQueries({
-      queryKey: getGetDashboardSummaryQueryKey({ month: now.getMonth() + 1, year: now.getFullYear() }),
-    });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryLedgerQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetContributionsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: ['member-breakdown'] });
   }, [queryClient]);
 
   const handleCreateIncomeSource = useCallback(async (userId: string) => {
@@ -199,7 +377,8 @@ export default function AddExpenseSheet() {
           ...previous.filter((item) => item.id !== source.id),
           source,
         ]);
-        setSelectedSources([source.name]);
+        setSelectedSources([incomeSourceKey(source.id)]);
+        if (isEditMode) setFundingDirty(true);
       } else {
         queryClient.setQueryData<Record<string, IncomeSource[]>>(
           ['income-sources', 'payers', payerSourceIds],
@@ -218,7 +397,7 @@ export default function AddExpenseSheet() {
     } finally {
       setIsCreatingSource(false);
     }
-  }, [newSourceName, paidById, payerSourceIds, queryClient]);
+  }, [isEditMode, newSourceName, paidById, payerSourceIds, queryClient]);
 
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();
@@ -279,7 +458,14 @@ export default function AddExpenseSheet() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (sharedTransactionsLocked) {
+    if (isEditMode && (!editingExpense || !canEditExpense)) {
+      Alert.alert(
+        'You cannot edit this expense',
+        'Members can edit only their own personal expenses dated today.',
+      );
+      return;
+    }
+    if (!isEditMode && sharedTransactionsLocked) {
       Alert.alert(
         'Invite one more member',
         'This new Shared budget needs two members before recording expenses. Bank activity and setup are still available.',
@@ -311,6 +497,44 @@ export default function AddExpenseSheet() {
       return;
     }
 
+    if (isEditMode && editingExpense && !fundingDirty) {
+      const preservedSplits = preserveExpenseSplitsForAmount(
+        editingExpense.incomeSplits ?? [],
+        parsed,
+      );
+      if (preservedSplits === null) {
+        Alert.alert(
+          'Amount is too small',
+          'The new amount cannot keep every existing funding portion. Update the funding selections or enter a larger amount.',
+        );
+        return;
+      }
+      setIsPending(true);
+      try {
+        const data = {
+          amount: parsed,
+          category,
+          description: description.trim(),
+          notes: notes.trim() || undefined,
+          paidById: editingExpense.paidById,
+          isRecurring: canManageShared ? isRecurring : editingExpense.isRecurring,
+          date,
+          paidFromBank: editingExpense.paidFromBank,
+          ...(preservedSplits.length > 0 ? { incomeSplits: preservedSplits } : {}),
+        } as Parameters<typeof updateExpense.mutateAsync>[0]['data'];
+        await updateExpense.mutateAsync({ id: editingExpense.id, data });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        invalidateExpenses();
+        router.dismiss();
+      } catch (error) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Could not save expense', getExpenseSaveError(error));
+      } finally {
+        setIsPending(false);
+      }
+      return;
+    }
+
     const sourceCount = effectivePayerIds.length + (effectivePaidFromBank ? 1 : 0);
     const isSplitPayment = sourceCount > 1;
 
@@ -334,7 +558,7 @@ export default function AddExpenseSheet() {
         return;
       }
     } else {
-      if (!effectivePaidFromBank && selectedSources.length === 0) {
+      if (!effectivePaidFromBank && selectedSources.length === 0 && (!isEditMode || fundingDirty)) {
         Alert.alert('Source required', 'Please choose where this money came from.');
         return;
       }
@@ -350,8 +574,7 @@ export default function AddExpenseSheet() {
     setIsPending(true);
     try {
       if (isSplitPayment) {
-        await createExpenseAsync({
-          data: {
+        const data = {
             amount: parsed, category, description: description.trim(), notes: notes.trim() || undefined,
             paidById: effectivePayerIds[0] ?? null, isRecurring: effectiveIsRecurring, date, paidFromBank: false,
             incomeSplits: [
@@ -362,23 +585,35 @@ export default function AddExpenseSheet() {
                 incomeSourceId: payerIncomeSourceIds[userId]!,
               })),
             ],
-          } as Parameters<typeof createExpenseAsync>[0]['data'],
-        });
+          } as Parameters<typeof createExpenseAsync>[0]['data'];
+        if (isEditMode && editId !== null) {
+          await updateExpense.mutateAsync({
+            id: editId,
+            data: data as Parameters<typeof updateExpense.mutateAsync>[0]['data'],
+          });
+        } else {
+          await createExpenseAsync({ data });
+        }
       } else {
         const isSplit = selectedSources.length > 1;
-        const incomeSplits = selectedSources.map(name => {
-          const source = incomeSources.find((item) => item.name === name);
-          return {
-            userId: paidById,
-            fromBank: false,
-            label: name,
-            amount: isSplit ? (parseFloat(splitAmounts[name] || '0') || 0) : parsed,
-            incomeSourceId: source!.id,
-          };
-        }).filter(s => s.amount > 0);
+        const selectedIncomeSources = selectedSources.flatMap(key => {
+          const sourceId = incomeSourceIdFromKey(key);
+          const source = sourceId ? incomeSources.find((item) => item.id === sourceId) : undefined;
+          if (!source) return [];
+          return [{
+            incomeSourceId: source.id,
+            label: source.name,
+            amount: isSplit ? (parseFloat(splitAmounts[key] || '0') || 0) : parsed,
+          }];
+        }).filter(source => source.amount > 0);
+        const incomeSplits = buildSinglePayerFundingReplacement({
+          amount: parsed,
+          paidFromBank: effectivePaidFromBank,
+          userId: effectivePayerIds[0],
+          sources: selectedIncomeSources,
+        });
 
-        await createExpenseAsync({
-          data: {
+        const data = {
             amount: parsed,
             category,
             description: description.trim(),
@@ -387,9 +622,16 @@ export default function AddExpenseSheet() {
             isRecurring: effectiveIsRecurring,
             date,
             paidFromBank: effectivePaidFromBank,
-            ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
-          } as Parameters<typeof createExpenseAsync>[0]['data'],
-        });
+            ...((incomeSplits.length > 0 || (isEditMode && fundingDirty)) ? { incomeSplits } : {}),
+          } as Parameters<typeof createExpenseAsync>[0]['data'];
+        if (isEditMode && editId !== null) {
+          await updateExpense.mutateAsync({
+            id: editId,
+            data: data as Parameters<typeof updateExpense.mutateAsync>[0]['data'],
+          });
+        } else {
+          await createExpenseAsync({ data });
+        }
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       invalidateExpenses();
@@ -400,11 +642,72 @@ export default function AddExpenseSheet() {
     } finally {
       setIsPending(false);
     }
-  }, [amount, category, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, members, canManageShared, user?.id, createExpenseAsync, invalidateExpenses, sharedTransactionsLocked]);
+  }, [amount, category, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, members, canManageShared, user?.id, createExpenseAsync, updateExpense, invalidateExpenses, sharedTransactionsLocked, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty]);
+
+  const handleRemove = useCallback(() => {
+    if (!editingExpense || !canRemoveExpense) return;
+    Alert.alert(
+      'Remove expense?',
+      `"${editingExpense.description}" and its effect on balances, reports, and activity will be removed. This cannot be undone.`,
+      [
+        { text: 'Keep expense', style: 'cancel' },
+        {
+          text: 'Remove expense',
+          style: 'destructive',
+          onPress: async () => {
+            setIsPending(true);
+            try {
+              await deleteExpense.mutateAsync({ id: editingExpense.id });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              invalidateExpenses();
+              router.dismiss();
+            } catch (error) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('Could not remove expense', getExpenseSaveError(error));
+            } finally {
+              setIsPending(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [canRemoveExpense, deleteExpense, editingExpense, invalidateExpenses]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
   const categoryList = categories.map((item) => item.name);
+
+  if (isEditMode && editExpensesQuery.isLoading) {
+    return (
+      <View style={[styles.container, styles.stateContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.stateTitle, { color: colors.foreground }]}>Loading expense…</Text>
+      </View>
+    );
+  }
+
+  if (isEditMode && (!editingExpense || !canEditExpense)) {
+    return (
+      <View style={[styles.container, styles.stateContainer, { backgroundColor: colors.background }]}>
+        <Feather
+          name={editingExpense ? 'lock' : 'alert-circle'}
+          size={30}
+          color={editingExpense ? colors.mutedForeground : colors.destructive}
+        />
+        <Text style={[styles.stateTitle, { color: colors.foreground }]}>
+          {editingExpense ? 'This expense cannot be edited' : 'Expense not found'}
+        </Text>
+        <Text style={[styles.stateText, { color: colors.mutedForeground }]}>
+          {editingExpense
+            ? 'Members can edit only their own personal expenses dated today. Owners and admins can manage shared records.'
+            : `The expense was not found in ${editMonth}/${editYear}. Return to the list and open it again.`}
+        </Text>
+        <Pressable onPress={() => router.dismiss()} style={[styles.stateButton, { backgroundColor: colors.primary }]}>
+          <Text style={styles.saveBtnText}>Go back</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -416,11 +719,11 @@ export default function AddExpenseSheet() {
         <Pressable onPress={() => router.dismiss()} style={styles.cancelBtn}>
           <Feather name="x" size={22} color={colors.mutedForeground} />
         </Pressable>
-        <Text style={[styles.title, { color: colors.foreground }]}>Log Expense</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>{isEditMode ? 'Edit Expense' : 'Log Expense'}</Text>
         <Pressable
           onPress={handleSubmit}
-          disabled={isPending || sharedTransactionsLocked}
-          style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isPending || sharedTransactionsLocked ? 0.7 : 1 }]}
+          disabled={isPending || (!isEditMode && sharedTransactionsLocked)}
+          style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isPending || (!isEditMode && sharedTransactionsLocked) ? 0.7 : 1 }]}
         >
           {isPending ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -642,13 +945,17 @@ export default function AddExpenseSheet() {
             <View style={styles.sourceChipsGrid}>
               {incomeSources.map((src, idx) => {
                 const color = PALETTE[idx % PALETTE.length];
-                const selected = selectedSources.includes(src.name);
+                const key = incomeSourceKey(src.id);
+                const selected = selectedSources.includes(key);
                 return (
                   <Pressable
                     key={src.id}
-                    onPress={() => setSelectedSources(prev =>
-                      prev.includes(src.name) ? prev.filter(k => k !== src.name) : [...prev, src.name]
-                    )}
+                    onPress={() => {
+                      if (isEditMode) setFundingDirty(true);
+                      setSelectedSources(prev =>
+                        prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+                      );
+                    }}
                     style={[styles.sourceChip, {
                       backgroundColor: selected ? color + '22' : colors.background,
                       borderColor: selected ? color : colors.border,
@@ -672,17 +979,21 @@ export default function AddExpenseSheet() {
               <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
                 How much from each source?
               </Text>
-              {selectedSources.map((name, idx) => {
+              {selectedSources.map((key, idx) => {
                 const color = PALETTE[idx % PALETTE.length];
+                const sourceId = incomeSourceIdFromKey(key);
+                const sourceName = sourceId
+                  ? incomeSources.find((source) => source.id === sourceId)?.name
+                  : key.split(':').slice(2).join(':');
                 return (
-                  <View key={name} style={[styles.splitAmountRow, {
+                  <View key={key} style={[styles.splitAmountRow, {
                     backgroundColor: colors.background,
                     borderColor: color + '44',
                     borderRadius: colors.radius,
                   }]}>
                      <Feather name="briefcase" size={14} color={color} />
                     <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
-                       {name}
+                       {sourceName || 'Personal funds'}
                     </Text>
                     <View style={styles.splitAmountInputBox}>
                       <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
@@ -691,8 +1002,11 @@ export default function AddExpenseSheet() {
                         placeholder="0"
                         placeholderTextColor={colors.mutedForeground}
                         keyboardType="numeric"
-                        value={splitAmounts[name] || ''}
-                        onChangeText={v => setSplitAmounts(prev => ({ ...prev, [name]: v }))}
+                        value={splitAmounts[key] || ''}
+                        onChangeText={v => {
+                          if (isEditMode) setFundingDirty(true);
+                          setSplitAmounts(prev => ({ ...prev, [key]: v }));
+                        }}
                       />
                     </View>
                   </View>
@@ -768,6 +1082,7 @@ export default function AddExpenseSheet() {
               {/* Joint-bank spending is restricted to group managers. */}
               {canManageShared && <Pressable
                 onPress={() => {
+                  if (isEditMode) setFundingDirty(true);
                   if (paidFromBank) {
                     setPaidFromBank(false);
                   } else setPaidFromBank(true);
@@ -790,6 +1105,7 @@ export default function AddExpenseSheet() {
                     key={m.userId}
                     onPress={() => {
                       if (!canManageShared) return;
+                      if (isEditMode) setFundingDirty(true);
                       setPayerIds(prev => {
                         const next = prev.includes(m.userId)
                           ? prev.filter(id => id !== m.userId)
@@ -859,7 +1175,10 @@ export default function AddExpenseSheet() {
                         style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted, paddingHorizontal: 12, fontSize: 16, color: colors.foreground, fontFamily: 'Inter_400Regular' }}
                         keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground}
                         value={payerAmounts.__joint_bank__ || ''}
-                        onChangeText={val => setPayerAmounts(prev => ({ ...prev, __joint_bank__: val }))}
+                        onChangeText={val => {
+                          if (isEditMode) setFundingDirty(true);
+                          setPayerAmounts(prev => ({ ...prev, __joint_bank__: val }));
+                        }}
                       />
                     </View>
                   )}
@@ -885,7 +1204,10 @@ export default function AddExpenseSheet() {
                             placeholder="KES 0"
                             placeholderTextColor={colors.mutedForeground}
                             value={payerAmounts[pid] || ''}
-                            onChangeText={val => setPayerAmounts(prev => ({ ...prev, [pid]: val }))}
+                            onChangeText={val => {
+                              if (isEditMode) setFundingDirty(true);
+                              setPayerAmounts(prev => ({ ...prev, [pid]: val }));
+                            }}
                           />
                         </View>
                         {payerSourcesLoading ? (
@@ -901,10 +1223,13 @@ export default function AddExpenseSheet() {
                               return (
                                 <Pressable
                                   key={source.id}
-                                  onPress={() => setPayerIncomeSourceIds(prev => ({
-                                    ...prev,
-                                    [pid]: selected ? null : source.id,
-                                  }))}
+                                  onPress={() => {
+                                    if (isEditMode) setFundingDirty(true);
+                                    setPayerIncomeSourceIds(prev => ({
+                                      ...prev,
+                                      [pid]: selected ? null : source.id,
+                                    }));
+                                  }}
                                   style={[styles.sourceChip, {
                                     backgroundColor: selected ? colors.primary + '20' : colors.background,
                                     borderColor: selected ? colors.primary : colors.border,
@@ -984,9 +1309,13 @@ export default function AddExpenseSheet() {
               <View style={styles.sourceChipsGrid}>
                 {incomeSources.map((src, idx) => {
                   const color = PALETTE[idx % PALETTE.length];
-                  const selected = selectedSources.includes(src.name);
+                  const key = incomeSourceKey(src.id);
+                  const selected = selectedSources.includes(key);
                   return (
-                    <Pressable key={src.id} onPress={() => setSelectedSources(prev => prev.includes(src.name) ? prev.filter(name => name !== src.name) : [...prev, src.name])}
+                    <Pressable key={src.id} onPress={() => {
+                      if (isEditMode) setFundingDirty(true);
+                      setSelectedSources(prev => prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key]);
+                    }}
                       style={[styles.sourceChip, { backgroundColor: selected ? color + '22' : colors.background, borderColor: selected ? color : colors.border, borderRadius: colors.radius }]}>
                       <Feather name="briefcase" size={13} color={selected ? color : colors.mutedForeground} />
                       <Text style={[styles.sourceChipText, { color: selected ? color : colors.foreground }]}>{src.name}</Text>
@@ -1031,13 +1360,21 @@ export default function AddExpenseSheet() {
             {selectedSources.length > 1 && (
               <View style={{ marginTop: 12, gap: 6 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>How much from each source?</Text>
-                {selectedSources.map((name, index) => (
-                  <View key={name} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: PALETTE[index % PALETTE.length] + '44', borderRadius: colors.radius }]}>
-                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]}>{name}</Text>
+                {selectedSources.map((key, index) => {
+                  const sourceId = incomeSourceIdFromKey(key);
+                  const sourceName = sourceId
+                    ? incomeSources.find((source) => source.id === sourceId)?.name
+                    : key.split(':').slice(2).join(':');
+                  return (
+                  <View key={key} style={[styles.splitAmountRow, { backgroundColor: colors.background, borderColor: PALETTE[index % PALETTE.length] + '44', borderRadius: colors.radius }]}>
+                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]}>{sourceName || 'Personal funds'}</Text>
                     <TextInput style={[styles.splitAmountInput, { color: colors.foreground }]} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground}
-                      value={splitAmounts[name] || ''} onChangeText={value => setSplitAmounts(prev => ({ ...prev, [name]: value }))} />
+                      value={splitAmounts[key] || ''} onChangeText={value => {
+                        if (isEditMode) setFundingDirty(true);
+                        setSplitAmounts(prev => ({ ...prev, [key]: value }));
+                      }} />
                   </View>
-                ))}
+                )})}
               </View>
             )}
           </View>
@@ -1109,6 +1446,18 @@ export default function AddExpenseSheet() {
             thumbColor="#fff"
           />
         </View>}
+        {isEditMode && canRemoveExpense ? (
+          <Pressable
+            onPress={handleRemove}
+            disabled={isPending}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${editingExpense?.description ?? 'expense'}`}
+            style={[styles.removeButton, { borderColor: colors.destructive, opacity: isPending ? 0.55 : 1 }]}
+          >
+            <Feather name="trash-2" size={16} color={colors.destructive} />
+            <Text style={[styles.removeButtonText, { color: colors.destructive }]}>Remove expense</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -1116,6 +1465,10 @@ export default function AddExpenseSheet() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  stateContainer: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
+  stateTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', textAlign: 'center' },
+  stateText: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', textAlign: 'center' },
+  stateButton: { minHeight: 44, borderRadius: 12, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   handle: {
     width: 36,
     height: 4,
@@ -1124,6 +1477,17 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 6,
   },
+  removeButton: {
+    minHeight: 48,
+    marginTop: 20,
+    borderWidth: 1,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  removeButtonText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

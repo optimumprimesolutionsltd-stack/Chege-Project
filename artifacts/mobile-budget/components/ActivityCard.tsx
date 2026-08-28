@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
+import { getExpenseActivityEditHref } from '@/lib/expenseEditLink';
 
 export interface ActivityItem {
   id: string;
@@ -11,6 +13,7 @@ export interface ActivityItem {
   userName: string | null;
   category?: string | null;
   date: string;
+  editTarget?: string;
 }
 
 interface Colors {
@@ -53,6 +56,7 @@ function formatDate(dateStr: string): string {
 export default function ActivityCard({ item, colors }: Props) {
   const isExpense = item.type === ACTIVITY_TYPE.EXPENSE;
   const isSavings = item.type === ACTIVITY_TYPE.SAVINGS;
+  const expenseEditHref = getExpenseActivityEditHref(item);
 
   const iconName: keyof typeof Feather.glyphMap =
     (item.category ? CATEGORY_ICONS[item.category] : undefined) ??
@@ -62,17 +66,8 @@ export default function ActivityCard({ item, colors }: Props) {
   const iconColor = isExpense ? colors.accentForeground : isSavings ? '#4ade80' : colors.primary;
   const amountColor = isExpense ? colors.foreground : isSavings ? '#4ade80' : colors.primary;
 
-  return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          borderRadius: colors.radius,
-        },
-      ]}
-    >
+  const content = (
+    <>
       <View
         style={[
           styles.iconWrap,
@@ -94,6 +89,7 @@ export default function ActivityCard({ item, colors }: Props) {
         </Text>
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
           {item.userName ?? (isExpense ? 'Joint bank' : 'Unknown')} · {formatDate(item.date)}
+          {expenseEditHref ? ' · Edit expense' : ''}
         </Text>
       </View>
 
@@ -101,6 +97,35 @@ export default function ActivityCard({ item, colors }: Props) {
         {isExpense ? '−' : '+'}
         {item.amount.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
       </Text>
+      {expenseEditHref ? <Feather name="edit-2" size={15} color={colors.primary} /> : null}
+    </>
+  );
+
+  const cardStyle = [
+    styles.card,
+    {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: colors.radius,
+    },
+  ];
+
+  return expenseEditHref ? (
+    <Pressable
+      onPress={() => router.push(expenseEditHref as never)}
+      accessibilityRole="button"
+      accessibilityLabel={`Edit ${item.description}`}
+      style={({ pressed }) => [cardStyle, pressed && styles.pressed]}
+    >
+      {content}
+    </Pressable>
+  ) : (
+    <View
+      style={[
+        ...cardStyle,
+      ]}
+    >
+      {content}
     </View>
   );
 }
@@ -136,4 +161,5 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     fontFamily: 'Inter_700Bold',
   },
+  pressed: { opacity: 0.78 },
 });

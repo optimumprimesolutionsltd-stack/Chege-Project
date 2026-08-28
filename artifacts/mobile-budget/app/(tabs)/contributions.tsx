@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -24,6 +25,7 @@ import {
   useGetGroup,
   customFetch,
 } from '@workspace/api-client-react';
+import { getExpenseEditHref } from '@/lib/expenseEditLink';
 
 const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -336,6 +338,12 @@ function BreakdownModal({
                     sub: e.category,
                     amount: e.amount,
                     date: e.date,
+                    onPress: e.date
+                      ? () => {
+                        onClose();
+                        router.push(getExpenseEditHref({ id: e.id, date: e.date! }) as never);
+                      }
+                      : undefined,
                   }))}
                 />
               )}
@@ -389,7 +397,7 @@ function Section({ title, total, accentColor, rows }: {
   title: string;
   total: number;
   accentColor: string;
-  rows: { key: string; label: string; sub?: string; amount: number; date: string | null }[];
+  rows: { key: string; label: string; sub?: string; amount: number; date: string | null; onPress?: () => void }[];
 }) {
   return (
     <View style={bStyles.section}>
@@ -398,18 +406,27 @@ function Section({ title, total, accentColor, rows }: {
         <Text style={[bStyles.sectionTotal, { color: accentColor }]}>KES {formatKES(total)}</Text>
       </View>
       {rows.map(row => (
-        <View key={row.key} style={bStyles.row}>
+        <Pressable
+          key={row.key}
+          disabled={!row.onPress}
+          onPress={row.onPress}
+          accessibilityRole={row.onPress ? 'button' : undefined}
+          accessibilityLabel={row.onPress ? `Edit ${row.label}` : undefined}
+          style={({ pressed }) => [bStyles.row, pressed && row.onPress ? { opacity: 0.72 } : null]}
+        >
           <View style={{ flex: 1 }}>
             <Text style={bStyles.rowLabel} numberOfLines={1}>{row.label}</Text>
             {row.sub && row.sub !== row.label && (
               <Text style={bStyles.rowSub} numberOfLines={1}>{row.sub}</Text>
             )}
+            {row.onPress ? <Text style={[bStyles.rowSub, { color: accentColor }]}>Tap to edit expense</Text> : null}
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={bStyles.rowAmount}>KES {formatKES(row.amount)}</Text>
             {row.date && <Text style={bStyles.rowDate}>{formatDate(row.date)}</Text>}
           </View>
-        </View>
+          {row.onPress ? <Feather name="edit-2" size={14} color={accentColor} /> : null}
+        </Pressable>
       ))}
     </View>
   );

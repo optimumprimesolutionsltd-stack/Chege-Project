@@ -49,8 +49,61 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
+import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
+
+type DashboardActivityItem = ActivityEditItem & {
+  type: string;
+  amount: number;
+  description: string;
+  userName?: string | null;
+};
+
+function DashboardActivityRow({
+  item,
+  compact = false,
+}: {
+  item: DashboardActivityItem;
+  compact?: boolean;
+}) {
+  const editLink = getActivityEditLink(item);
+  const rowClass = compact
+    ? "flex items-center justify-between border-b border-border/30 py-2 last:border-0"
+    : "flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1";
+  const content = (
+    <>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`${compact ? "h-1.5 w-1.5" : "h-2 w-2"} shrink-0 rounded-full ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/40" : "bg-primary"}`} />
+        <div className="min-w-0">
+          <p className="truncate text-sm text-foreground">{item.description}</p>
+          <p className="text-xs text-muted-foreground">
+            {item.userName ?? "Joint bank"} · {formatDate(item.date)}
+            {editLink?.label === "Edit expense" ? " · Edit expense" : ""}
+          </p>
+        </div>
+      </div>
+      <div className="ml-3 flex shrink-0 items-center gap-2">
+        <p className={`whitespace-nowrap text-sm font-semibold ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
+          {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
+        </p>
+        {editLink?.label === "Edit expense" ? <Receipt className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
+      </div>
+    </>
+  );
+
+  return editLink?.label === "Edit expense" ? (
+    <Link
+      href={editLink.href}
+      className={`${rowClass} rounded-md transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+      aria-label={`Edit ${item.description}`}
+    >
+      {content}
+    </Link>
+  ) : (
+    <div className={rowClass}>{content}</div>
+  );
+}
 
 function getQuickActionFromLocation(location: string): Exclude<QuickAction, "none"> | null {
   const locationSearch = location.includes("?") ? location.slice(location.indexOf("?")) : "";
@@ -1260,20 +1313,9 @@ export default function Dashboard() {
            </div>
            {activity.length > 0 ? (
              <div className="divide-y divide-border/50">
-               {activity.slice(0, 6).map((item) => (
-                 <div key={item.id} className="flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1">
-                   <div className="flex min-w-0 items-center gap-2.5">
-                     <span className={`h-2 w-2 shrink-0 rounded-full ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/50" : "bg-primary"}`} />
-                     <div className="min-w-0">
-                       <p className="truncate text-sm text-foreground">{item.description}</p>
-                       <p className="text-xs text-muted-foreground">{item.userName ?? "Joint bank"} · {formatDate(item.date)}</p>
-                     </div>
-                   </div>
-                   <p className={`ml-3 shrink-0 whitespace-nowrap text-sm font-semibold ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
-                     {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
-                   </p>
-                 </div>
-               ))}
+                {activity.slice(0, 6).map((item) => (
+                  <DashboardActivityRow key={item.id} item={item} />
+                ))}
              </div>
            ) : (
              <p className="py-4 text-center text-sm text-muted-foreground">No activity yet.</p>
@@ -1519,18 +1561,7 @@ export default function Dashboard() {
               {activity.length > 0 ? (
                 <div className="space-y-1">
                   {activity.slice(0, 6).map((item) => (
-                    <div key={item.id} className="flex items-center justify-between border-b border-border/30 py-2 last:border-0">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/40" : "bg-primary"}`} />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm text-foreground">{item.description}</p>
-                          <p className="text-xs text-muted-foreground">{item.userName} · {formatDate(item.date)}</p>
-                        </div>
-                      </div>
-                      <p className={`ml-3 whitespace-nowrap text-sm font-medium ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
-                        {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
-                      </p>
-                    </div>
+                    <DashboardActivityRow key={item.id} item={item} compact />
                   ))}
                 </div>
               ) : (

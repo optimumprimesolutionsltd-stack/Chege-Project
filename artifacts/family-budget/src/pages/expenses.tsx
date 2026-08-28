@@ -346,16 +346,20 @@ export default function Expenses() {
     if (!target) return;
 
     startEdit(target);
+  }, [expenses, editingId, expenseDeepLink.editId]);
+
+  const clearEditDeepLink = () => {
     const params = new URLSearchParams(window.location.search);
     params.delete("edit");
     const search = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
-  }, [expenses, editingId, expenseDeepLink.editId]);
+  };
 
   const cancelEdit = () => {
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setNewCategoryRecurring(true); setNewCategoryPriority("3");
     setEditingId(null);
+    clearEditDeepLink();
   };
 
   const handleQuickCreateCategory = async (form: ReturnType<typeof useExpenseForm>) => {
@@ -664,6 +668,7 @@ export default function Expenses() {
       });
       toast({ title: "Expense updated" });
       setEditingId(null);
+      clearEditDeepLink();
       invalidate();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to update expense." });
@@ -683,6 +688,10 @@ export default function Expenses() {
       await deleteExpense.mutateAsync({ id });
       toast({ title: "Expense deleted" });
       setDeleteTarget(null);
+      if (editingId === id) {
+        setEditingId(null);
+        clearEditDeepLink();
+      }
       invalidate();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete expense." });
