@@ -79,7 +79,7 @@ function DashboardActivityRow({
         <div className="min-w-0">
           <p className="truncate text-sm text-foreground">{item.description}</p>
           <p className="text-xs text-muted-foreground">
-            {item.userName ?? "Joint bank"} · {formatDate(item.date)}
+            {item.userName ?? "Joint bank"} · {formatDate(String(item.date))}
             {editLink?.label === "Edit expense" ? " · Edit expense" : ""}
           </p>
         </div>
@@ -1343,20 +1343,35 @@ export default function Dashboard() {
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl" />
           <CardContent className="p-5 sm:p-8 md:p-10">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-4 relative z-10">
-            <div className="space-y-2">
+            <Link
+              href="/budget"
+              className="group rounded-xl p-2 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              data-testid="dashboard-summary-budget"
+            >
               <p className="text-primary-foreground/80 font-medium">Total Budget</p>
-              <p className="text-lg font-medium text-primary-foreground/70 tracking-wide">{formatKes(summary.totalBudget)}</p>
-            </div>
-            <div className="space-y-2">
+              <p className="mt-2 text-lg font-medium text-primary-foreground/70 tracking-wide">{formatKes(summary.totalBudget)}</p>
+              <p className="mt-1 text-xs font-semibold text-primary-foreground/70 group-hover:text-primary-foreground">Open budget →</p>
+            </Link>
+            <Link
+              href={`/expenses?month=${month}&year=${year}#expense-ledger`}
+              className="group rounded-xl p-2 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              data-testid="dashboard-summary-spent"
+            >
               <p className="text-primary-foreground/80 font-medium">Total Spent</p>
-              <p className="text-lg font-medium text-primary-foreground/70 tracking-wide">{formatKes(summary.totalSpent)}</p>
-            </div>
-            <div className="space-y-2 md:text-right">
+              <p className="mt-2 text-lg font-medium text-primary-foreground/70 tracking-wide">{formatKes(summary.totalSpent)}</p>
+              <p className="mt-1 text-xs font-semibold text-primary-foreground/70 group-hover:text-primary-foreground">Open expense ledger →</p>
+            </Link>
+            <Link
+              href="/budget"
+              className="group rounded-xl p-2 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 md:text-right"
+              data-testid="dashboard-summary-remaining"
+            >
               <p className="text-primary-foreground/80 font-medium">Remaining</p>
-              <p className={`text-lg font-medium tracking-wide ${isOverBudget ? "text-destructive-foreground bg-destructive inline-block px-3 rounded-lg" : "text-primary-foreground/70"}`}>
+              <p className={`mt-2 text-lg font-medium tracking-wide ${isOverBudget ? "text-destructive-foreground bg-destructive inline-block px-3 rounded-lg" : "text-primary-foreground/70"}`}>
                 {formatKes(summary.remaining)}
               </p>
-            </div>
+              <p className="mt-1 text-xs font-semibold text-primary-foreground/70 group-hover:text-primary-foreground">Review budget →</p>
+            </Link>
           </div>
           <div className="mt-8">
             <div className="flex justify-between text-sm mb-2 text-primary-foreground/80 font-medium">
@@ -1381,9 +1396,14 @@ export default function Dashboard() {
               <CardDescription>Target vs contributed for this month</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 p-6">
-              {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(
-                ({ name, contributed, target }: {name: string; contributed: number; target: number | null}, index: number) => (
-                  <div key={`${name}-${index}`} className="space-y-3">
+              {((summary as any).memberContributions ?? [] as Array<{userId: string; name: string; contributed: number; target: number | null}>).map(
+                ({ userId, name, contributed, target }: {userId: string; name: string; contributed: number; target: number | null}, index: number) => (
+                  <Link
+                    key={userId}
+                    href={`/contributions?month=${month}&year=${year}#contribution-ledger`}
+                    className="block space-y-3 rounded-xl p-2 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    data-testid={`dashboard-contribution-summary-${userId}`}
+                  >
                     <div className="flex items-end justify-between">
                       <div>
                         <p className="text-lg font-semibold text-foreground">{name}</p>
@@ -1397,10 +1417,11 @@ export default function Dashboard() {
                         style={{ width: `${Math.min(target && target > 0 ? (contributed / target) * 100 : 0, 100)}%` }}
                       />
                     </div>
-                  </div>
+                    <p className="text-right text-xs font-semibold text-primary">Open contribution ledger →</p>
+                  </Link>
                 ),
               )}
-              <Link href="/contributions" className="block pt-2 text-sm font-medium text-primary hover:underline">
+              <Link href={`/contributions?month=${month}&year=${year}#contribution-ledger`} className="block pt-2 text-sm font-medium text-primary hover:underline">
                 View contribution history →
               </Link>
             </CardContent>
@@ -1431,12 +1452,24 @@ export default function Dashboard() {
                   </div>
                   <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1.5">
                     {chartData.map((entry) => (
-                      <div key={entry.name} className="flex items-center gap-1.5">
+                      <Link
+                        key={entry.name}
+                        href={`/expenses?month=${month}&year=${year}&category=${encodeURIComponent(entry.name)}#expense-ledger`}
+                        className="flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        data-testid={`dashboard-spending-category-${entry.name}`}
+                      >
                         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
                         <span className="text-xs text-muted-foreground">{entry.name}</span>
-                      </div>
+                      </Link>
                     ))}
                   </div>
+                  <Link
+                    href={`/expenses?month=${month}&year=${year}#expense-ledger`}
+                    className="mt-4 block text-sm font-semibold text-primary hover:underline"
+                    data-testid="dashboard-open-expense-ledger"
+                  >
+                    Open expense ledger →
+                  </Link>
                 </>
               ) : (
                 <div className="flex h-[220px] items-center justify-center">

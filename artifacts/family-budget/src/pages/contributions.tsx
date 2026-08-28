@@ -43,6 +43,18 @@ const MEMBER_ACCENT_COLORS = ["#08B7B0", "#FDBB0A", "#003383", "#3CDD62", "#6C9F
 
 const CONTRIBUTIONS_MONTH_KEY = "contributions-month-pref";
 
+function getContributionDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const month = Number(params.get("month"));
+  const year = Number(params.get("year"));
+  const editId = Number(params.get("edit"));
+  return {
+    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : null,
+    year: Number.isInteger(year) && year >= 2000 && year <= 2200 ? year : null,
+    editId: Number.isInteger(editId) && editId > 0 ? editId : null,
+  };
+}
+
 type ContributionEditor = {
   id: number;
   amount: string;
@@ -66,13 +78,14 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 }
 
 function MemberCard({
-  member, accentColor, incomeStreams, isIncomeStreamsLoading, incomeStreamsError,
+  member, accentColor, incomeStreams, isIncomeStreamsLoading, incomeStreamsError, onOpenLedger,
 }: {
   member: MemberContrib;
   accentColor: string;
   incomeStreams: IncomeStream[];
   isIncomeStreamsLoading: boolean;
   incomeStreamsError: boolean;
+  onOpenLedger: () => void;
 }) {
   const { userId, name, contributed, spent, net, target } = member;
   const pct = target && target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
@@ -193,6 +206,14 @@ function MemberCard({
             </>
           )}
         </div>
+        <button
+          type="button"
+          onClick={onOpenLedger}
+          className="text-sm font-semibold text-primary hover:underline"
+          data-testid={`open-contribution-ledger-${userId}`}
+        >
+          Open contribution ledger →
+        </button>
       </CardContent>
     </Card>
   );
@@ -206,7 +227,9 @@ export default function Contributions() {
   const { data: members } = useGetMembers();
   const isSharedWorkspace = group?.isPrivate === false;
   const now = new Date();
+  const contributionDeepLink = getContributionDeepLink();
   const [month, setMonth] = useState(() => {
+    if (contributionDeepLink.month != null && contributionDeepLink.year != null) return contributionDeepLink.month;
     try {
       const raw = localStorage.getItem(CONTRIBUTIONS_MONTH_KEY);
       if (raw) { const p = JSON.parse(raw); if (typeof p?.month === "number") return p.month; }
@@ -214,6 +237,7 @@ export default function Contributions() {
     return now.getMonth() + 1;
   });
   const [year, setYear] = useState(() => {
+    if (contributionDeepLink.month != null && contributionDeepLink.year != null) return contributionDeepLink.year;
     try {
       const raw = localStorage.getItem(CONTRIBUTIONS_MONTH_KEY);
       if (raw) { const p = JSON.parse(raw); if (typeof p?.year === "number") return p.year; }
@@ -240,6 +264,7 @@ export default function Contributions() {
   const deleteContribution = useDeleteContribution();
   const [editor, setEditor] = useState<ContributionEditor | null>(null);
   const [contributionToRemove, setContributionToRemove] = useState<Contribution | null>(null);
+  const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
 
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
@@ -248,10 +273,31 @@ export default function Contributions() {
   const currentMembership = members?.find((member) => member.userId === user?.id);
   const canManageContributions =
     group?.isPrivate === true ||
+    group?.role === "owner" || group?.role === "admin" ||
     currentMembership?.role === "owner" || currentMembership?.role === "admin";
   const canEditContribution = (contribution: Contribution) =>
     canManageContributions ||
     (contribution.userId === user?.id && wasCreatedToday(contribution.createdAt));
+
+  const clearContributionDeepLink = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.delete("edit");
+    const search = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`);
+  };
+
+  const openContributionLedger = () => {
+    document.getElementById("contribution-ledger")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  useEffect(() => {
+    if (!contributionDeepLink.editId || openedDeepLinkId === contributionDeepLink.editId || !contributions) return;
+    const target = contributions.find((contribution) => contribution.id === contributionDeepLink.editId);
+    if (!target || !canEditContribution(target)) return;
+    startEditContribution(target);
+    setOpenedDeepLinkId(target.id);
+    window.setTimeout(openContributionLedger, 0);
+  }, [contributionDeepLink.editId, contributions, openedDeepLinkId, canManageContributions, user?.id]);
 
   const invalidateContributionData = async () => {
     await Promise.all([
@@ -305,6 +351,7 @@ export default function Contributions() {
         },
       });
       setEditor(null);
+      clearContributionDeepLink();
       await invalidateContributionData();
       toast({ title: "Contribution updated" });
     } catch {
@@ -411,7 +458,7 @@ export default function Contributions() {
       </div>
 
       {/* Contribution records */}
-      <Card className="border-none shadow-md">
+      <Card id="contribution-ledger" className="scroll-mt-6 border-none shadow-md">
         <CardContent className="pt-5">
           <div className="flex flex-col gap-1 border-b border-border/60 pb-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -451,7 +498,7 @@ export default function Contributions() {
                     <form onSubmit={saveContribution} className="space-y-4">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="font-display font-bold text-foreground">Edit contribution</h3>
-                        <Button type="button" variant="ghost" onClick={() => setEditor(null)}>Cancel</Button>
+                        <Button type="button" variant="ghost" onClick={() => { setEditor(null); clearContributionDeepLink(); }}>Cancel</Button>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <label className="space-y-1.5 text-sm font-medium text-foreground">
@@ -588,6 +635,14 @@ export default function Contributions() {
                 </p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={openContributionLedger}
+              className="mt-4 text-sm font-semibold text-primary hover:underline"
+              data-testid="open-group-contribution-ledger"
+            >
+              Open contribution ledger →
+            </button>
           </CardContent>
         </Card>
       )}
@@ -616,6 +671,7 @@ export default function Contributions() {
               incomeStreams={streamsByMember.get(m.userId) ?? []}
               isIncomeStreamsLoading={isIncomeStreamsLoading}
               incomeStreamsError={incomeStreamsError}
+              onOpenLedger={openContributionLedger}
             />
           ))}
         </div>

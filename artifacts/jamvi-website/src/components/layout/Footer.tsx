@@ -43,9 +43,20 @@ export function Footer() {
         </div>
         
         <div className="border-t border-primary-foreground/10 mt-16 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-primary-foreground/60 text-sm font-medium">
-            © {new Date().getFullYear()} Jamvi Platform. All rights reserved.
-          </p>
+          <div className="flex flex-col gap-2 text-primary-foreground/60 text-sm font-medium">
+            <p>© {new Date().getFullYear()} Jamvi Platform. All rights reserved.</p>
+            <p className="text-xs">
+              A product by{" "}
+              <a
+                href="https://optimumprimesolutions.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-foreground/75 hover:text-accent transition-colors"
+              >
+                Optimum Prime Solutions
+              </a>
+            </p>
+          </div>
           <div className="flex items-center gap-2 text-primary-foreground/60 text-sm font-medium">
             <span className="w-2 h-2 rounded-full bg-accent inline-block"></span>
             Proudly built in Kenya

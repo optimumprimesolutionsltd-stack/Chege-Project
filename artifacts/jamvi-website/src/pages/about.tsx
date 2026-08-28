@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 export default function About() {
   useSeo({
     title: "About Us - The story behind the mat",
-    description: "Learn why we built Jamvi and our mission to bring trust and clarity to Kenyan finances.",
+    description: "Learn why Jamvi was built for Kenyan families, chamas, and groups that want clarity, warmth, and trust when managing money together.",
   });
 
   return (

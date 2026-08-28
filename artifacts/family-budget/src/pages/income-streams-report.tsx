@@ -15,11 +15,23 @@ import { Button } from "@/components/ui/button";
 import { dateInputValue, getPeriodRange, type PeriodView } from "@/lib/period-range";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { AlertTriangle, ArrowLeft, ArrowRight, Calendar, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Download, Landmark, Loader2, PiggyBank, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import { Link } from "wouter";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
   if (recordType === "deposit") return "Joint bank deposit";
   if (recordType === "savings") return "Savings addition";
   return "Personal expense";
+}
+
+function fundingEntryLedgerHref(
+  recordType: "expense" | "deposit" | "savings",
+  recordId: number,
+  month: number,
+  year: number,
+) {
+  if (recordType === "expense") return `/expenses?edit=${recordId}&month=${month}&year=${year}#expense-ledger`;
+  if (recordType === "deposit") return `/bank?edit=${recordId}`;
+  return "/savings-goals";
 }
 
 function displayPeriodDate(value: string): string {
@@ -244,12 +256,21 @@ export default function IncomeStreamsReport() {
           </div>
           {!progressLoading && !progressError && (
             <div className="grid gap-2 text-sm sm:grid-cols-3">
-              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+              <Link
+                href={`/expenses?month=${month}&year=${year}#expense-ledger`}
+                className="rounded-xl border border-border/60 bg-background/60 p-3 transition-colors hover:border-primary/40 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="report-open-expense-ledger"
+              >
                 <p className="text-xs text-muted-foreground">Spending</p>
                 <p className="mt-1 font-display text-lg font-bold">{formatKes(progressSpent)}</p>
                 <p className="text-xs text-muted-foreground">of {formatKes(progressBudget)} budget</p>
-              </div>
-              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                <p className="mt-2 text-xs font-semibold text-primary">Open expense ledger →</p>
+              </Link>
+              <Link
+                href={`/contributions?month=${month}&year=${year}#contribution-ledger`}
+                className="rounded-xl border border-border/60 bg-background/60 p-3 transition-colors hover:border-primary/40 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="report-open-contribution-ledger"
+              >
                 <p className="text-xs text-muted-foreground">Recorded funding</p>
                 <p className="mt-1 font-display text-lg font-bold">{formatKes(report?.totalFunding ?? 0)}</p>
                 <p className="text-xs text-muted-foreground">
@@ -259,12 +280,18 @@ export default function IncomeStreamsReport() {
                       : `${formatKes(Math.abs(progressFundingGap ?? 0))} above expected`
                     : "No expected-income target"}
                 </p>
-              </div>
-              <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                <p className="mt-2 text-xs font-semibold text-primary">Open contribution ledger →</p>
+              </Link>
+              <Link
+                href="/budget"
+                className="rounded-xl border border-border/60 bg-background/60 p-3 transition-colors hover:border-primary/40 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                data-testid="report-open-budget-ledger"
+              >
                 <p className="text-xs text-muted-foreground">Categories to watch</p>
                 <p className="mt-1 font-display text-lg font-bold">{progressOverCategoryNames.length}</p>
                 <p className="text-xs text-muted-foreground">{progressOverCategoryNames.length === 1 ? "over its budget" : "over their budgets"}</p>
-              </div>
+                <p className="mt-2 text-xs font-semibold text-primary">Open budget →</p>
+              </Link>
             </div>
           )}
         </CardContent>
@@ -526,13 +553,20 @@ export default function IncomeStreamsReport() {
                           ) : (
                             <div className="mt-3 divide-y divide-border/60 rounded-xl border border-border/70 px-3">
                               {stream.entries.map((entry) => (
-                                <div key={`${entry.recordType}-${entry.recordId}`} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                                <Link
+                                  key={`${entry.recordType}-${entry.recordId}`}
+                                  href={fundingEntryLedgerHref(entry.recordType, entry.recordId, month, year)}
+                                  className="group flex flex-col gap-1 py-3 text-sm transition-colors hover:bg-muted/40 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                                  data-testid={`report-entry-${entry.recordType}-${entry.recordId}`}
+                                >
                                   <div className="min-w-0">
                                     <p className="break-words font-medium">{entry.description}</p>
-                                    <p className="mt-0.5 text-xs text-muted-foreground">{fundingEntryLabel(entry.recordType)} · {formatDate(entry.date)}</p>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                      {fundingEntryLabel(entry.recordType)} · {formatDate(entry.date)} · <span className="font-semibold text-primary group-hover:underline">Open ledger</span>
+                                    </p>
                                   </div>
                                   <p className="font-semibold sm:shrink-0">{formatKes(entry.amount)}</p>
-                                </div>
+                                </Link>
                               ))}
                             </div>
                           )}

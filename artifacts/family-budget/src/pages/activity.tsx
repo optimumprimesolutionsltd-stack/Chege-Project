@@ -1,8 +1,15 @@
 import { useMemo, useState } from "react";
 import {
   getGetDashboardActivityQueryKey,
+  getGetDashboardCategoryBreakdownQueryKey,
   getGetDashboardIncomeStreamsQueryKey,
+  getGetDashboardPeriodTotalsQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetExpensesQueryKey,
+  getGetJointAccountQueryKey,
+  getGetJointAccountsQueryKey,
+  useDeleteExpense,
+  useDeleteJointAccountTransaction,
   useGetDashboardActivity,
   useGetDashboardIncomeStreams,
   useGetDashboardSummary,
@@ -10,11 +17,13 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { ArrowUpRight, ArrowDownRight, ChevronDown, ChevronUp, Loader2, Activity as ActivityIcon, Calendar, Pencil, TrendingUp } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, ChevronDown, ChevronUp, Loader2, Activity as ActivityIcon, Calendar, Pencil, Trash2, TrendingUp } from "lucide-react";
 import { ACTIVITY_TYPE } from "@/lib/activityTypes";
-import { getActivityEditLink } from "@/lib/activity-edit-utils";
+import { getActivityEditLink, getActivityRecordTarget } from "@/lib/activity-edit-utils";
 import { routePath } from "@/lib/base-path";
 import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 type ActivityTab = "all" | "expenses" | "contributions";
 type MemberContribution = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
@@ -35,7 +44,15 @@ function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
 
 export default function Activity() {
   const { data: group } = useGetGroup();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const deleteExpense = useDeleteExpense();
+  const deleteDeposit = useDeleteJointAccountTransaction();
   const isSharedWorkspace = group?.isPrivate === false;
+  const canManageRecords =
+    group?.isPrivate === true ||
+    group?.role === "owner" ||
+    group?.role === "admin";
   const now = new Date();
   const [tab, setTab] = useState<ActivityTab>(() =>
     routePath(window.location.pathname, import.meta.env.BASE_URL) === "/contributions" || window.location.search.includes("tab=contributions") ? "contributions" : "all",
@@ -112,6 +129,39 @@ export default function Activity() {
   const nextMonth = () => {
     setShowUnattributedRecords(false);
     if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1);
+  };
+  const removeActivityRecord = async (item: Parameters<typeof getActivityRecordTarget>[0]) => {
+    const record = getActivityRecordTarget(item);
+    if (!record || !canManageRecords) return;
+    const confirmed = window.confirm(
+      `${record.removeLabel}? This removes the source record from its ledger, summaries, reports, and activity. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      if (record.target === "expense") {
+        await deleteExpense.mutateAsync({ id: record.id });
+      } else {
+        await deleteDeposit.mutateAsync({ id: record.id });
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetDashboardPeriodTotalsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() }),
+      ]);
+      toast({ title: record.target === "expense" ? "Expense removed" : "Deposit removed" });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: `Could not ${record.removeLabel.toLowerCase()}`,
+        description: "Refresh the ledger and try again.",
+      });
+    }
   };
   return (
     <div className="min-w-0 overflow-x-hidden space-y-5 pb-12 sm:space-y-8">
@@ -274,6 +324,7 @@ export default function Activity() {
                   <div className="divide-y divide-border/50">
                     {group.items.map((item) => {
                       const edit = getActivityEditLink(item);
+                      const record = getActivityRecordTarget(item);
                       return (
                         <div key={item.id} className="flex items-start gap-3 p-3 transition-colors hover:bg-muted/10 sm:items-center sm:gap-5 sm:p-6">
                           <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
@@ -298,15 +349,31 @@ export default function Activity() {
                                 </span>
                               )}
                             </div>
-                            {edit && (
-                              <Link
-                                href={edit.href}
-                                className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80"
-                                data-testid={`activity-${item.editTarget}-edit-${item.id}`}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                                {edit.label}
-                              </Link>
+                            {(edit || (canManageRecords && record)) && (
+                              <div className="mt-2 flex flex-wrap items-center gap-3">
+                                {edit && (
+                                  <Link
+                                    href={edit.href}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80"
+                                    data-testid={`activity-${item.editTarget}-edit-${item.id}`}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    {edit.label}
+                                  </Link>
+                                )}
+                                {canManageRecords && record && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void removeActivityRecord(item)}
+                                    disabled={deleteExpense.isPending || deleteDeposit.isPending}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive hover:text-destructive/80 disabled:opacity-50"
+                                    data-testid={`activity-${record.target}-remove-${record.id}`}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    {record.removeLabel}
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>

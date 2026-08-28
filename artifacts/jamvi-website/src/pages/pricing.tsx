@@ -7,7 +7,7 @@ import { Link } from "wouter";
 export default function Pricing() {
   useSeo({
     title: "Pricing - Transparent and fair",
-    description: "Simple, honest pricing for individuals and groups. Start for free.",
+    description: "Start managing personal and group money with simple, honest Jamvi pricing. Begin for free and choose a clear plan as your chama or team grows.",
   });
 
   return (

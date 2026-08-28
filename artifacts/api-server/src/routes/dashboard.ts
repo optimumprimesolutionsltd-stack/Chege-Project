@@ -427,6 +427,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
     monthlyContributionItems = [
       ...expenseSplits.map((split) => ({
         id: `expense-funding-${split.expenseId}-${split.id}`,
+        editTarget: "expense" as const,
         type: split.fromBank ? "household" : "contribution",
         amount: Number(split.amount),
         description: `Expense paid: ${split.description}`,
@@ -436,6 +437,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       })),
       ...legacyExpenseRows.map((expense) => ({
         id: `expense-funding-${expense.id}`,
+        editTarget: "expense" as const,
         type: "contribution",
         amount: Number(expense.amount),
         description: `Expense paid: ${expense.description}`,
@@ -445,6 +447,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       })),
       ...depositSplits.map((split) => ({
         id: `deposit-contributor-${split.transactionId}-${split.id}`,
+        editTarget: "deposit" as const,
         type: "contribution",
         amount: Number(split.amount),
         description: `Bank deposit: ${split.description}`,
@@ -454,6 +457,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       })),
       ...legacyDepositRows.map((deposit) => ({
         id: `deposit-contributor-${deposit.id}`,
+        editTarget: "deposit" as const,
         type: deposit.madeById === null ? "household" : "contribution",
         amount: Number(deposit.amount),
         description: `Bank deposit: ${deposit.description}`,

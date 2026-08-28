@@ -60,7 +60,7 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Full activity feed screen",
     web: "done",
     mobile: "missing",
-    note: "Mobile shows a 5-item dashboard preview; full feed screen is a pending task",
+    note: "Web activity links each editable source to its ledger and lets managers remove eligible expenses / deposits; mobile shows a 5-item dashboard preview and its full feed is pending",
   },
   {
     category: "Core screens",

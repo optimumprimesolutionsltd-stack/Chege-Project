@@ -11,7 +11,7 @@ import { JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 export default function FAQ() {
   useSeo({
     title: "FAQ - Frequently Asked Questions",
-    description: "Got questions? We've got answers about how Jamvi handles your personal and group money.",
+    description: "Find answers about Jamvi personal budgets, shared group finances, permissions, security, pricing, currencies, and getting started in Kenya.",
   });
 
   const faqs = [

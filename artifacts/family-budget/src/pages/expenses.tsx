@@ -167,10 +167,14 @@ function getExpenseDeepLink() {
   const month = Number(params.get("month"));
   const year = Number(params.get("year"));
   const editId = Number(params.get("edit"));
+  const payerId = params.get("payer");
+  const category = params.get("category");
   return {
     month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : null,
     year: Number.isInteger(year) && year >= 2000 && year <= 2200 ? year : null,
     editId: Number.isInteger(editId) && editId > 0 ? editId : null,
+    payerId: payerId?.trim() || null,
+    category: category?.trim() || null,
   };
 }
 
@@ -202,6 +206,13 @@ export default function Expenses() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [ledgerFilter, setLedgerFilter] = useState<{
+    payerId: string | null;
+    category: string | null;
+  }>({
+    payerId: expenseDeepLink.payerId,
+    category: expenseDeepLink.category,
+  });
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [editHasMultipleFundingSplits, setEditHasMultipleFundingSplits] = useState(false);
   const [editHasBankFunding, setEditHasBankFunding] = useState(false);
@@ -241,6 +252,19 @@ export default function Expenses() {
   const canManageCategories = canManageExpenses;
   const canEditExpense = (expense: Expense) =>
     canManageExpenses || (expense.date === today && isSelfFundedPersonalExpense(expense, user?.id));
+  const visibleExpenses = expenses?.filter((expense) => {
+    if (ledgerFilter.payerId === "__joint__" && expense.paidById !== null) return false;
+    if (ledgerFilter.payerId && ledgerFilter.payerId !== "__joint__" && expense.paidById !== ledgerFilter.payerId) return false;
+    if (ledgerFilter.category && expense.category !== ledgerFilter.category) return false;
+    return true;
+  });
+  const selectedPayerName = ledgerFilter.payerId === "__joint__"
+    ? "Joint bank"
+    : members?.find((member) => member.userId === ledgerFilter.payerId)?.userName;
+  const ledgerFilterLabel = [
+    selectedPayerName ? `Paid by ${selectedPayerName}` : null,
+    ledgerFilter.category ? `Category: ${ledgerFilter.category}` : null,
+  ].filter(Boolean).join(" · ");
 
   useEffect(() => {
     if (!isAdding || canManageExpenses || !memberPayerId) return;
@@ -368,6 +392,25 @@ export default function Expenses() {
     params.delete("edit");
     const search = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+  };
+
+  const updateLedgerFilter = (next: { payerId?: string | null; category?: string | null }) => {
+    const filter = {
+      payerId: next.payerId ?? null,
+      category: next.category ?? null,
+    };
+    setLedgerFilter(filter);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("edit");
+    if (filter.payerId) params.set("payer", filter.payerId);
+    else params.delete("payer");
+    if (filter.category) params.set("category", filter.category);
+    else params.delete("category");
+    const search = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}#expense-ledger`);
+    window.setTimeout(() => {
+      document.getElementById("expense-ledger")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   };
 
   const cancelEdit = () => {
@@ -1262,13 +1305,19 @@ export default function Expenses() {
             {members && members.length > 0 && expenses && (
               <div className="space-y-3 pt-1 border-t border-border/40">
                 <span className="text-sm font-semibold text-foreground">Individual Ledgers</span>
-                {((summary as any).memberContributions ?? [] as Array<{name: string; contributed: number; target: number | null}>).map(({ name, contributed, target }: {name: string; contributed: number; target: number | null}) => {
-                  const myExpenses = expenses.filter(e => e.paidByName?.toLowerCase().startsWith(name.toLowerCase()));
+                {((summary as any).memberContributions ?? [] as Array<{userId: string; name: string; contributed: number; target: number | null}>).map(({ userId, name, contributed, target }: {userId: string; name: string; contributed: number; target: number | null}) => {
+                  const myExpenses = expenses.filter(e => e.paidById === userId);
                   const spent = myExpenses.reduce((s, e) => s + e.amount, 0);
                   const net = contributed - spent;
                   const overSpent = spent > contributed;
                   return (
-                    <div key={name} className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-2 sm:p-4">
+                    <button
+                      key={userId}
+                      type="button"
+                      onClick={() => updateLedgerFilter({ payerId: userId })}
+                      className="w-full rounded-xl border border-border/50 bg-muted/30 p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-4"
+                      data-testid={`expense-ledger-summary-member-${userId}`}
+                    >
                       <p className="text-sm font-semibold text-foreground">{name}</p>
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
@@ -1299,7 +1348,8 @@ export default function Expenses() {
                           style={{ width: `${Math.min(100, contributed > 0 ? (spent / contributed) * 100 : 0)}%` }}
                         />
                       </div>
-                    </div>
+                      <p className="text-right text-xs font-semibold text-primary">Open this ledger →</p>
+                    </button>
                   );
                 })}
                 {/* Joint / unattributed expenses */}
@@ -1308,13 +1358,19 @@ export default function Expenses() {
                   if (jointExpenses.length === 0) return null;
                   const jointTotal = jointExpenses.reduce((s, e) => s + e.amount, 0);
                   return (
-                    <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => updateLedgerFilter({ payerId: "__joint__" })}
+                      className="w-full rounded-xl border border-border/50 bg-muted/20 p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      data-testid="expense-ledger-summary-joint"
+                    >
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold text-foreground">Joint / Unattributed</p>
                         <p className="text-sm font-bold font-mono text-foreground">{formatKes(jointTotal)}</p>
                       </div>
                       <p className="text-xs text-muted-foreground">{jointExpenses.length} item{jointExpenses.length !== 1 ? "s" : ""} recorded without a payer</p>
-                    </div>
+                      <p className="mt-2 text-right text-xs font-semibold text-primary">Open this ledger →</p>
+                    </button>
                   );
                 })()}
               </div>
@@ -1329,7 +1385,13 @@ export default function Expenses() {
                     const over = cat.remaining < 0;
                     const pct = Math.min(100, cat.percentUsed);
                     return (
-                      <div key={cat.category} className="space-y-1">
+                      <button
+                        key={cat.category}
+                        type="button"
+                        onClick={() => updateLedgerFilter({ category: cat.category })}
+                        className="w-full space-y-1 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-primary/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        data-testid={`expense-ledger-summary-category-${cat.category}`}
+                      >
                       <div className="flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                           <span className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{cat.category}</span>
                           <span className="font-mono text-muted-foreground">
@@ -1346,7 +1408,8 @@ export default function Expenses() {
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                      </div>
+                        <p className="text-right text-[11px] font-semibold text-primary">Open ledger →</p>
+                      </button>
                     );
                   })}
                 </div>
@@ -1452,18 +1515,43 @@ export default function Expenses() {
       )}
 
       {/* Expense list */}
+      {(ledgerFilter.payerId || ledgerFilter.category) && (
+        <div id="expense-ledger" className="scroll-mt-6 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Filtered expense ledger</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{ledgerFilterLabel}</p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-2 text-primary sm:mt-0"
+            onClick={() => updateLedgerFilter({})}
+          >
+            Show all expenses
+          </Button>
+        </div>
+      )}
       {isLoading ? (
         <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>
-      ) : !expenses || expenses.length === 0 ? (
+      ) : !visibleExpenses || visibleExpenses.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <Calendar className="w-12 h-12 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">No expenses for {formatMonthYear(month, year)}</p>
-          <p className="text-sm mt-1">Click "Record Expense" to add the first one.</p>
+          <p className="text-lg font-medium">
+            {ledgerFilter.payerId || ledgerFilter.category
+              ? "No expenses match this ledger"
+              : `No expenses for ${formatMonthYear(month, year)}`}
+          </p>
+          <p className="text-sm mt-1">
+            {ledgerFilter.payerId || ledgerFilter.category
+              ? "Show all expenses or choose another summary."
+              : 'Click "Record Expense" to add the first one.'}
+          </p>
         </div>
       ) : (
-        <Card className="border-none shadow-md overflow-hidden">
+        <Card id={ledgerFilter.payerId || ledgerFilter.category ? undefined : "expense-ledger"} className="scroll-mt-6 border-none shadow-md overflow-hidden">
           <div className="divide-y divide-border/50">
-            {expenses.map((expense) => (
+            {visibleExpenses.map((expense) => (
               <div key={expense.id}>
                 <div className="p-4 hover:bg-muted/20 transition-colors sm:flex sm:items-start sm:justify-between sm:gap-4 sm:p-5">
                     <div className="flex items-start gap-4 min-w-0">
@@ -1530,8 +1618,8 @@ export default function Expenses() {
             ))}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/50 bg-muted/30 px-4 py-3 sm:px-5">
-            <span className="text-sm text-muted-foreground">{expenses.length} expense{expenses.length !== 1 ? "s" : ""}</span>
-            <span className="font-display font-bold text-primary">{formatKes(expenses.reduce((s, e) => s + e.amount, 0))}</span>
+            <span className="text-sm text-muted-foreground">{visibleExpenses.length} expense{visibleExpenses.length !== 1 ? "s" : ""}</span>
+            <span className="font-display font-bold text-primary">{formatKes(visibleExpenses.reduce((s, e) => s + e.amount, 0))}</span>
           </div>
         </Card>
       )}

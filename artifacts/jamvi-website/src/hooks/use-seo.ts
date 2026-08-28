@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { DEFAULT_OG_IMAGE, SITE_ORIGIN } from '@/lib/site-seo';
 
 interface SeoProps {
   title: string;
@@ -10,11 +11,12 @@ interface SeoProps {
 export function useSeo({ 
   title, 
   description, 
-  url = 'https://jamvi.co.ke',
-  image = 'https://jamvi.co.ke/branding/jamvi-mark.png'
+  url,
+  image = DEFAULT_OG_IMAGE
 }: SeoProps) {
   useEffect(() => {
     document.title = `${title} | Jamvi`;
+    const pageUrl = url ?? `${SITE_ORIGIN}${window.location.pathname === '/' ? '/' : window.location.pathname}`;
     
     const setMeta = (name: string, content: string, property = false) => {
       let element = document.querySelector(`meta[${property ? 'property' : 'name'}="${name}"]`);
@@ -29,7 +31,7 @@ export function useSeo({
     setMeta('description', description);
     setMeta('og:title', `${title} | Jamvi`, true);
     setMeta('og:description', description, true);
-    setMeta('og:url', url, true);
+    setMeta('og:url', pageUrl, true);
     setMeta('og:image', image, true);
     setMeta('og:type', 'website', true);
     setMeta('twitter:card', 'summary_large_image');

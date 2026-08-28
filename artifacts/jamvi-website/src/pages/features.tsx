@@ -14,7 +14,7 @@ import { JAMVI_APP_PATH } from "@/lib/site-links";
 export default function Features() {
   useSeo({
     title: "Features - Everything you need",
-    description: "Discover how Jamvi helps you track personal spending and manage group finances seamlessly.",
+    description: "Discover Jamvi features for personal budgets and shared group finances, including transparent history, savings goals, categories, and member permissions.",
   });
 
   const features = [

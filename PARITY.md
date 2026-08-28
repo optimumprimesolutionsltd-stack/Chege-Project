@@ -23,7 +23,7 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | Dashboard / Home | ✅ | ✅ | Web: charts & quick-action forms. Mobile: summary cards, bank balance, activity preview |
 | Budget chooser before Home | ✅ | ✅ | First authenticated entry lets users choose Personal or a member Shared budget before financial details load; returning users can continue directly |
 | Monthly budget overview | ✅ | ✅ | Web: pie chart + category cards. Mobile: budget tab with category cards |
-| Full activity feed screen | ✅ | ❌ | Mobile shows a 5-item dashboard preview; full feed screen is a pending task |
+| Full activity feed screen | ✅ | ❌ | Web activity links each editable source to its ledger and lets managers remove eligible expenses/deposits; mobile shows a 5-item dashboard preview and its full feed is pending |
 | Settings screen | ✅ | ✅ | Both platforms manage account and budget workspace settings |
 | Platform parity page | ✅ | ❌ | This page is web-only |
 | **Expenses** | | | |

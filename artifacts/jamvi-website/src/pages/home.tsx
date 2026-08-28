@@ -7,7 +7,7 @@ import { JAMVI_APP_PATH } from "@/lib/site-links";
 export default function Home() {
   useSeo({
     title: "Gather Around Your Money",
-    description: "Jamvi brings clarity, trust, and warmth to your finances. Track personal budgets or manage a chama with friends.",
+    description: "Jamvi brings clarity, trust, and warmth to personal budgets and shared money. Track everyday spending or manage a chama with confidence.",
   });
 
   const fadeUp: Variants = {

@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 export default function NotFound() {
   useSeo({
     title: "Page Not Found",
-    description: "The page you are looking for does not exist.",
+    description: "The Jamvi page you are looking for does not exist.",
   });
 
   return (
