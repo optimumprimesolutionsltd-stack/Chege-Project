@@ -60,7 +60,7 @@ export default function Pricing() {
                 {[
                   "Unlimited personal workspaces",
                   "1 shared group workspace",
-                  "Up to 5 members per group",
+                  "Up to 6 members per group",
                   "Basic expense categorization",
                   "Standard history log"
                 ].map((feature, i) => (
@@ -79,20 +79,17 @@ export default function Pricing() {
               transition={{ delay: 0.3 }}
               className="bg-primary text-white rounded-[2.5rem] p-8 md:p-10 border border-primary-border shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 right-0 p-6">
-                <span className="bg-accent text-accent-foreground text-xs font-bold uppercase tracking-wider py-1 px-3 rounded-full">
-                  Most Popular
-                </span>
-              </div>
-              
               <h3 className="text-2xl font-bold text-white mb-2">Chama Pro</h3>
               <p className="text-primary-foreground/70 mb-6">For investment groups, large chamas, and growing teams.</p>
               
-              <div className="mb-8 flex items-baseline">
+              <div className="mb-3 flex items-baseline">
                 <span className="text-2xl font-bold text-primary-foreground/80 mr-1">KES</span>
                 <span className="text-5xl font-bold text-white">500</span>
                 <span className="text-primary-foreground/60 font-medium ml-2">/ month</span>
               </div>
+              <p className="mb-8 text-sm leading-relaxed text-primary-foreground/70">
+                Current planned price — final pricing is subject to confirmation.
+              </p>
               
               <a href={JAMVI_APP_PATH} className="flex items-center justify-center w-full h-14 rounded-full bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-transform hover:scale-105 active:scale-95 mb-10 shadow-lg">
                 Upgrade to Pro
@@ -125,7 +122,7 @@ export default function Pricing() {
         <div className="container mx-auto px-4 text-center max-w-2xl">
           <h2 className="text-2xl font-bold text-primary mb-4 font-serif">Have questions about pricing?</h2>
           <p className="text-foreground/70 mb-6">
-            We're committed to making Jamvi accessible. Check out our FAQ for details on billing, refunds, and non-profit discounts.
+            We're committed to making Jamvi accessible. Check out our FAQ for details on billing, refunds, and pricing decisions still being confirmed.
           </p>
           <Link href="/faq" className="text-secondary font-bold hover:underline">
             Read the FAQ &rarr;

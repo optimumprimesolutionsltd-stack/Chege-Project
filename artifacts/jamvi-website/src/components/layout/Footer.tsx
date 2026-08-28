@@ -46,14 +46,14 @@ export function Footer() {
           <div className="flex flex-col gap-2 text-primary-foreground/60 text-sm font-medium">
             <p>© {new Date().getFullYear()} Jamvi Platform. All rights reserved.</p>
             <p className="text-xs">
-              A product by{" "}
+              Jamvi is a product of{" "}
               <a
-                href="https://optimumprimesolutions.com"
+                href="https://optimumprimesolutions.co.ke"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary-foreground/75 hover:text-accent transition-colors"
               >
-                Optimum Prime Solutions
+                Optimum Prime Solutions Ltd, Nairobi.
               </a>
             </p>
           </div>

@@ -1,27 +1,27 @@
 import { useSeo } from "@/hooks/use-seo";
-import { motion, type Variants } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { ArrowRight, CheckCircle2, Users, Wallet, Target } from "lucide-react";
 import { Link } from "wouter";
 import { JAMVI_APP_PATH } from "@/lib/site-links";
 
 export default function Home() {
+  const shouldReduceMotion = useReducedMotion();
+
   useSeo({
     title: "Gather Around Your Money",
     description: "Jamvi brings clarity, trust, and warmth to personal budgets and shared money. Track everyday spending or manage a chama with confidence.",
   });
 
   const fadeUp: Variants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
+    hidden: { opacity: 0.84, y: 8 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.28, ease: "easeOut" } }
   };
 
   const staggerContainer: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
+      transition: { staggerChildren: shouldReduceMotion ? 0 : 0.06 }
     }
   };
 
@@ -36,7 +36,7 @@ export default function Home() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 items-center">
             <motion.div 
-              initial="hidden"
+              initial={shouldReduceMotion ? false : "hidden"}
               animate="visible"
               variants={staggerContainer}
               className="max-w-2xl"
@@ -60,20 +60,15 @@ export default function Home() {
                 </a>
               </motion.div>
               
-              <motion.div variants={fadeUp} className="mt-10 flex items-center gap-4 text-sm font-medium text-foreground/60">
-                <div className="flex -space-x-2">
-                  <div className="w-8 h-8 rounded-full bg-primary/20 border-2 border-white flex items-center justify-center text-primary text-xs font-bold">K</div>
-                  <div className="w-8 h-8 rounded-full bg-secondary/20 border-2 border-white flex items-center justify-center text-secondary text-xs font-bold">S</div>
-                  <div className="w-8 h-8 rounded-full bg-accent/20 border-2 border-white flex items-center justify-center text-accent-foreground text-xs font-bold">M</div>
-                </div>
-                <p>Trusted by families & groups across Kenya</p>
-              </motion.div>
+              <motion.p variants={fadeUp} className="mt-10 text-sm font-medium text-foreground/60">
+                Built in Nairobi, for how Kenyans actually manage money.
+              </motion.p>
             </motion.div>
             
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={shouldReduceMotion ? false : { opacity: 0.94, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
+              transition={{ duration: shouldReduceMotion ? 0 : 0.45, delay: shouldReduceMotion ? 0 : 0.1 }}
               className="relative lg:h-[600px] flex items-center justify-center"
             >
               {/* Abstract decorative graphic representing the "mat" (Jamvi) and connection */}
@@ -207,7 +202,7 @@ export default function Home() {
                   "Clear chronological history of every transaction",
                   "Assign payers to expenses instantly",
                   "Leave explanatory notes on adjustments",
-                  "Syncs perfectly across all your devices"
+                  "Keep your records available across your devices"
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <CheckCircle2 className="w-6 h-6 text-accent flex-shrink-0" />
@@ -258,8 +253,11 @@ export default function Home() {
         <div className="container mx-auto px-4 max-w-4xl">
           <img src={`${import.meta.env.BASE_URL}branding/jamvi-mark.png`} alt="Jamvi Mark" className="w-20 h-20 mx-auto mb-8 drop-shadow-md" />
           <h2 className="text-4xl md:text-5xl font-bold text-primary mb-6">Take a seat on the mat.</h2>
-          <p className="text-xl text-foreground/70 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Join thousands of Kenyans managing their money with clarity and confidence. Setup takes less than two minutes.
+          <p className="text-xl text-foreground/70 mb-6 max-w-2xl mx-auto leading-relaxed">
+            Start managing your money with clarity and confidence. Setup takes less than two minutes.
+          </p>
+          <p className="mx-auto mb-10 max-w-2xl text-sm font-medium leading-relaxed text-foreground/60">
+            Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service.
           </p>
           <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-16 px-10 rounded-full bg-secondary text-white text-lg font-bold hover:bg-secondary/90 transition-transform hover:scale-105 active:scale-95 shadow-xl">
             Create your free account

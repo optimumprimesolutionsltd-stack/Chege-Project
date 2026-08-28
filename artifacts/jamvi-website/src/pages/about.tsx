@@ -42,6 +42,12 @@ export default function About() {
               But the tools we use to manage this shared money are broken.
             </p>
             <p>
+              Jamvi is built by{" "}
+              <a href="https://optimumprimesolutions.co.ke" target="_blank" rel="noopener noreferrer">Optimum Prime Solutions Ltd</a>,
+              {" "}a registered company in Nairobi, Kenya. The company is responsible for the product while Jamvi gives individuals and groups a clear place to record and understand their money. Company enquiries can be sent to{" "}
+              <a href="mailto:info@optimumprimesolutions.co.ke">info@optimumprimesolutions.co.ke</a>.
+            </p>
+            <p>
               We rely on chaotic WhatsApp groups where receipts get lost in the chat. We use fragile Excel spreadsheets that only the treasurer understands. This lack of clarity breeds suspicion, delays progress, and ultimately breaks down the very trust that these groups rely on.
             </p>
             

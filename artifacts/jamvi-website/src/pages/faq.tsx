@@ -17,7 +17,7 @@ export default function FAQ() {
   const faqs = [
     {
       question: "Is Jamvi a bank account?",
-      answer: "No, Jamvi is a tracking and management platform. We do not hold your money or process transactions directly. You still use M-Pesa or your bank to move the money; Jamvi is where you record, track, and share the history of those movements so everyone is on the same page."
+      answer: "No. Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service. You still use M-Pesa or your bank to move money; Jamvi is where you record, track, and share the history so everyone is on the same page."
     },
     {
       question: "Can I use Jamvi for just myself?",
@@ -36,8 +36,12 @@ export default function FAQ() {
       answer: "This depends on the permissions set by the group admin. By default, to maintain trust and an accurate audit log, modifying past transactions leaves a visible 'correction reason' so everyone knows why a change was made."
     },
     {
-      question: "What happens if our chama grows beyond 5 people?",
-      answer: "If you're on the Free tier, groups are limited to 5 members. If your chama grows larger, you'll need to upgrade the group workspace to Chama Pro, which allows unlimited members for a small flat monthly fee."
+      question: "What happens if our chama grows beyond 6 people?",
+      answer: "If you're on the Free tier, groups are limited to 6 members. If your chama grows larger, you'll need to upgrade the group workspace to Chama Pro, which allows unlimited members for a small flat monthly fee."
+    },
+    {
+      question: "Does Jamvi offer a non-profit discount?",
+      answer: "Non-profit discount details have not been confirmed yet. Contact us if your organisation would like to discuss eligibility."
     }
   ];
 
