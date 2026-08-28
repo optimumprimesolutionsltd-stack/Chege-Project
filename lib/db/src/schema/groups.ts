@@ -33,6 +33,16 @@ export const GROUP_KIND = {
 
 export type GroupKind = (typeof GROUP_KIND)[keyof typeof GROUP_KIND];
 
+// What a workspace is entitled to. Everything is free today; the column exists
+// now so that introducing a paid tier is a value change rather than a
+// migration against live financial data.
+export const GROUP_PLAN = {
+  FREE: "free",
+  PAID: "paid",
+} as const;
+
+export type GroupPlan = (typeof GROUP_PLAN)[keyof typeof GROUP_PLAN];
+
 // Shared budgets use a small, recognizable identity system rather than
 // unrestricted uploads or colours. Defaults keep every existing workspace
 // usable and visually consistent after the additive schema update.
@@ -76,6 +86,9 @@ export const groupsTable = pgTable(
     // Defaults to family so existing rows keep the free tier on migration.
     // ensurePrivateWorkspace overrides this to "personal".
     kind: text("kind").notNull().default(GROUP_KIND.FAMILY),
+    // Free until a paid tier exists. Member limits are only enforced on free
+    // workspaces, so flipping this to paid lifts them.
+    plan: text("plan").notNull().default(GROUP_PLAN.FREE),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
