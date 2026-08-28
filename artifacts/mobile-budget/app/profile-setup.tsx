@@ -70,7 +70,7 @@ export default function ProfileSetupScreen() {
             if (error) setError('');
           }}
           onSubmitEditing={submit}
-          placeholder="e.g. Chege"
+          placeholder="Your name"
           placeholderTextColor="#6f927b"
           returnKeyType="done"
           style={styles.input}

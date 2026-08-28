@@ -723,7 +723,7 @@ export default function SettingsScreen() {
                    testID="settings-display-name-input"
                    value={displayNameInput}
                    onChangeText={setDisplayNameInput}
-                   placeholder="e.g. Chege"
+                    placeholder="Your name"
                    placeholderTextColor={colors.mutedForeground}
                    autoCapitalize="words"
                    autoCorrect={false}

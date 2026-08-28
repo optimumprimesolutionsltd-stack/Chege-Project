@@ -648,7 +648,7 @@ export default function Settings() {
                 id="display-name"
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="e.g. Chege"
+                placeholder="Your name"
                 maxLength={40}
                 autoComplete="name"
                 aria-describedby="display-name-help"
