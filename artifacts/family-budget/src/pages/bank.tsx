@@ -17,6 +17,7 @@ import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, Trendin
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
+import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
 
 // "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
@@ -73,13 +74,8 @@ export default function Bank() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isSharedWorkspace = group?.isPrivate === false;
-  const isWorkspaceManager = members?.some(
-    (member) =>
-      member.userId === user?.id &&
-      (member.role === "owner" || member.role === "admin"),
-  ) ?? false;
-  const canManageShared = isSharedWorkspace && isWorkspaceManager;
-  const canManageAccount = group !== undefined && (!isSharedWorkspace || canManageShared);
+  const canManageAccount = canManageBankAccount(group);
+  const canManageShared = isSharedWorkspace && canManageAccount;
   const canEditTransaction = (tx: EditableTransaction) =>
     canManageAccount || (
       tx.type === "deposit" &&
@@ -129,11 +125,7 @@ export default function Bank() {
         savedId = Number.isInteger(value) && value > 0 ? value : null;
       } catch {}
     }
-    setSelectedAccountId((current) =>
-      accounts.some((item) => item.id === current)
-        ? current
-        : accounts.some((item) => item.id === savedId) ? savedId : accounts[0].id,
-    );
+    setSelectedAccountId((current) => resolveBankAccountSelection(accounts, current, savedId));
   }, [accounts, bankSelectionKey]);
 
   useEffect(() => {
@@ -623,7 +615,7 @@ export default function Bank() {
       </Card>
 
        {isSharedWorkspace && !canManageShared && (
-         <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          <div id="bank-manager-guidance" className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
             You can add and correct your own deposit today. An admin handles earlier records, withdrawals, transfers, and removals.
          </div>
        )}
@@ -717,27 +709,31 @@ export default function Bank() {
 
       {/* Action buttons / form */}
       {!mode ? (
-        <div className={`grid gap-3 ${canManageAccount ? "grid-cols-3" : "grid-cols-1"}`}>
-          {canManageAccount && <Button
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Button
             data-testid="button-deposit"
             onClick={() => openMode("deposit")}
             className="h-12 px-6 rounded-xl flex-1"
           >
             <ArrowDownLeft className="w-5 h-5 mr-2" /> Deposit
-          </Button>}
-          {canManageAccount && <Button
+          </Button>
+          <Button
             data-testid="button-withdraw"
             onClick={() => openMode("disbursement")}
             variant="outline"
             className="h-12 px-6 rounded-xl flex-1"
+            disabled={!canManageAccount}
+            aria-describedby={!canManageAccount ? "bank-manager-guidance" : undefined}
           >
             <ArrowUpRight className="w-5 h-5 mr-2" /> Withdraw
-          </Button>}
+          </Button>
           <Button
             data-testid="button-transfer"
             onClick={() => openMode("transfer")}
             variant="secondary"
             className="h-12 px-4 rounded-xl"
+            disabled={!canManageAccount}
+            aria-describedby={!canManageAccount ? "bank-manager-guidance" : undefined}
           >
             Transfer
           </Button>

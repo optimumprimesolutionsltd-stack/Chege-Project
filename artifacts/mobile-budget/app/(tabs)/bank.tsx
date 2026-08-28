@@ -50,6 +50,7 @@ import {
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
+import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -178,13 +179,8 @@ export default function BankScreen() {
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const isSharedWorkspace = group?.isPrivate === false;
-  const isWorkspaceManager = members.some(
-    (member) =>
-      member.userId === user?.id &&
-      (member.role === 'owner' || member.role === 'admin'),
-  );
-  const canManageShared = isSharedWorkspace && isWorkspaceManager;
-  const canManageAccount = group !== undefined && (!isSharedWorkspace || canManageShared);
+  const canManageAccount = canManageBankAccount(group);
+  const canManageShared = isSharedWorkspace && canManageAccount;
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId)
     ?? accounts[0];
 
@@ -193,10 +189,10 @@ export default function BankScreen() {
     let active = true;
     AsyncStorage.getItem(accountStorageKey).then((stored) => {
       const id = Number(stored);
-      if (active && Number.isInteger(id) && accounts.some((account) => account.id === id)) {
-        setSelectedAccountId(id);
-      } else if (active && accounts.length > 0) {
-        setSelectedAccountId(accounts[0].id);
+      if (active) {
+        setSelectedAccountId((current) =>
+          resolveBankAccountSelection(accounts, current, Number.isInteger(id) ? id : null),
+        );
       }
     }).catch(() => {});
     return () => { active = false; };
@@ -773,6 +769,11 @@ export default function BankScreen() {
             );
           })}
         </View>
+        {isSharedWorkspace && !canManageAccount && (
+          <Text style={styles.managerGuidance}>
+            You can add your own deposit today. An owner or admin handles withdrawals, transfers, and account changes.
+          </Text>
+        )}
         {isLoading ? (
           <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
         ) : (
@@ -812,26 +813,32 @@ export default function BankScreen() {
 
             {/* Action buttons inside header */}
             <View style={styles.actionRow}>
-              {canManageAccount && <TouchableOpacity
+              <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => openModal('deposit')}
                 activeOpacity={0.8}
+                testID="bank-deposit-action"
               >
                 <Feather name="arrow-down-left" size={16} color="#0a1a10" />
                 <Text style={styles.actionBtnText}>Deposit</Text>
-              </TouchableOpacity>}
-              {canManageAccount && <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnDisburse]}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnDisburse, !canManageAccount && styles.actionBtnDisabled]}
                 onPress={() => openModal('disbursement')}
                 activeOpacity={0.8}
+                disabled={!canManageAccount}
+                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can withdraw money.' : undefined}
+                testID="bank-withdraw-action"
               >
                 <Feather name="arrow-up-right" size={16} color="#f87171" />
                 <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
-              </TouchableOpacity>}
+              </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#164e63' }]}
+                style={[styles.actionBtn, { backgroundColor: '#164e63' }, !canManageAccount && styles.actionBtnDisabled]}
                 onPress={() => openModal('transfer')}
                 activeOpacity={0.8}
+                disabled={!canManageAccount}
+                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can transfer shared money.' : undefined}
                 testID="bank-transfer-action"
               >
                 <Feather name="repeat" size={16} color="#67e8f9" />
@@ -1908,6 +1915,16 @@ const styles = StyleSheet.create({
   },
   actionBtnTextDisburse: {
     color: '#f87171',
+  },
+  actionBtnDisabled: {
+    opacity: 0.45,
+  },
+  managerGuidance: {
+    marginTop: 10,
+    color: '#d1fae5',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
   },
   list: { paddingHorizontal: 16, paddingTop: 16 },
   listHeader: {
