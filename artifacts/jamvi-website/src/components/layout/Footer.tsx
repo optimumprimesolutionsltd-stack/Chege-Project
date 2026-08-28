@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { JAMVI_APP_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 
 export function Footer() {
   return (
@@ -19,7 +20,7 @@ export function Footer() {
             <ul className="space-y-4">
               <li><Link href="/features" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Features</Link></li>
               <li><Link href="/pricing" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Pricing</Link></li>
-              <li><a href="https://jamvi.app/register" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Sign up free</a></li>
+              <li><a href={JAMVI_APP_PATH} className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Sign up free</a></li>
             </ul>
           </div>
 
@@ -28,7 +29,7 @@ export function Footer() {
             <ul className="space-y-4">
               <li><Link href="/about" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Our Story</Link></li>
               <li><Link href="/faq" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">FAQ</Link></li>
-              <li><a href="mailto:hello@jamvi.app" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Contact</a></li>
+              <li><a href={`mailto:${JAMVI_SUPPORT_EMAIL}`} className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Contact</a></li>
             </ul>
           </div>
 

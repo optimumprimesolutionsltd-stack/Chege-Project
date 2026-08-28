@@ -1,15 +1,15 @@
 kind = "web"
-previewPath = "/jamvi-website/"
+previewPath = "/"
 title = "Jamvi Website"
-description = "The public, pre-login Jamvi marketing website for people in Kenya who want a clear way to manage personal and shared money."
+description = "The public Jamvi website for personal budgets and transparent shared money across families, chamas, churches, clubs, teams, and other groups."
 version = "1.0.0"
 id = "artifacts/jamvi-website"
 router = "path"
 
 [[services]]
 name = "web"
-paths = [ "/jamvi-website/" ]
-localPort = 19839
+paths = [ "/" ]
+localPort = 29056
 
 [services.development]
 run = "pnpm --filter @workspace/jamvi-website run dev"
@@ -24,5 +24,5 @@ from = "/*"
 to = "/index.html"
 
 [services.env]
-PORT = "19839"
-BASE_PATH = "/jamvi-website/"
+PORT = "29056"
+BASE_PATH = "/"

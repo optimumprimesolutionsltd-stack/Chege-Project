@@ -9,10 +9,10 @@ import { Copy, Link2, MessageCircle, RotateCcw, ShieldCheck, X } from "lucide-re
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { appPath } from "@/lib/base-path";
 
 function joinUrl(token: string) {
-  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  return new URL(`${base}/join/${token}`, window.location.origin).toString();
+  return new URL(appPath(`/join/${token}`, import.meta.env.BASE_URL), window.location.origin).toString();
 }
 
 export function GroupInviteLinks({ groupName }: { groupName?: string }) {

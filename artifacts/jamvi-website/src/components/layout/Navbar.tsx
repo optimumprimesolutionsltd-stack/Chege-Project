@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { JAMVI_APP_PATH } from "@/lib/site-links";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -43,13 +44,13 @@ export function Navbar() {
 
           <div className="hidden md:flex items-center gap-4">
             <a 
-              href="https://jamvi.app/login" 
+              href={JAMVI_APP_PATH}
               className="text-sm font-medium text-foreground hover:text-secondary transition-colors outline-none focus-visible:ring-2 focus-visible:ring-secondary rounded px-3 py-2"
             >
               Log in
             </a>
             <a 
-              href="https://jamvi.app/register" 
+              href={JAMVI_APP_PATH}
               className="inline-flex items-center justify-center h-10 px-6 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               Sign up
@@ -90,13 +91,13 @@ export function Navbar() {
               ))}
               <div className="pt-4 mt-2 flex flex-col gap-3 border-t border-border px-4">
                 <a 
-                  href="https://jamvi.app/login" 
+                  href={JAMVI_APP_PATH}
                   className="block text-center text-lg font-medium text-foreground py-3 rounded-xl border border-border hover:bg-muted transition-colors"
                 >
                   Log in
                 </a>
                 <a 
-                  href="https://jamvi.app/register" 
+                  href={JAMVI_APP_PATH}
                   className="block text-center text-lg font-medium bg-primary text-primary-foreground rounded-full py-3 hover:bg-primary/90 transition-colors shadow-sm"
                 >
                   Sign up

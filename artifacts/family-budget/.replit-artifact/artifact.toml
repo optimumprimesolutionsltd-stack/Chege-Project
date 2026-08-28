@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/"
+previewPath = "/app/"
 title = "Jamvi"
 description = "Jamvi — a personal and shared-money workspace for families, chamas, churches, clubs, teams, and other groups. Track budgets, expenses, contributions, savings goals, and pooled funds in separate workspaces."
 version = "1.0.0"
@@ -8,7 +8,7 @@ router = "path"
 
 [[services]]
 name = "web"
-paths = [ "/" ]
+paths = [ "/app/" ]
 localPort = 25043
 
 [services.development]
@@ -25,4 +25,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "25043"
-BASE_PATH = "/"
+BASE_PATH = "/app/"

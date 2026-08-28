@@ -2,6 +2,7 @@ import { useSeo } from "@/hooks/use-seo";
 import { motion, type Variants } from "framer-motion";
 import { ArrowRight, CheckCircle2, Users, Wallet, Target } from "lucide-react";
 import { Link } from "wouter";
+import { JAMVI_APP_PATH } from "@/lib/site-links";
 
 export default function Home() {
   useSeo({
@@ -51,7 +52,7 @@ export default function Home() {
                 Whether you're tracking your personal spending or pooling money for a chama, Jamvi brings clarity, trust, and warmth to everyday finances.
               </motion.p>
               <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-4">
-                <a href="https://jamvi.app/register" className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-primary text-white text-base font-semibold hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 shadow-lg">
+                <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-primary text-white text-base font-semibold hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 shadow-lg">
                   Start your journey <ArrowRight className="ml-2 h-5 w-5" />
                 </a>
                 <a href="#how-it-works" className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-white text-primary text-base font-semibold hover:bg-muted border border-border transition-colors">
@@ -260,7 +261,7 @@ export default function Home() {
           <p className="text-xl text-foreground/70 mb-10 max-w-2xl mx-auto leading-relaxed">
             Join thousands of Kenyans managing their money with clarity and confidence. Setup takes less than two minutes.
           </p>
-          <a href="https://jamvi.app/register" className="inline-flex items-center justify-center h-16 px-10 rounded-full bg-secondary text-white text-lg font-bold hover:bg-secondary/90 transition-transform hover:scale-105 active:scale-95 shadow-xl">
+          <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-16 px-10 rounded-full bg-secondary text-white text-lg font-bold hover:bg-secondary/90 transition-transform hover:scale-105 active:scale-95 shadow-xl">
             Create your free account
           </a>
         </div>

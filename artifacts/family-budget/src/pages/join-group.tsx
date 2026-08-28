@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useRoute } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Button } from "@/components/ui/button";
+import { appPath } from "@/lib/base-path";
 
 export default function JoinGroupPage() {
   const [, params] = useRoute("/join/:token");
@@ -22,8 +23,7 @@ export default function JoinGroupPage() {
     },
   });
   const acceptInvite = useAcceptGroupInviteLink();
-  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const joinPath = `${base}/join/${token}`;
+  const joinPath = appPath(`/join/${token}`, import.meta.env.BASE_URL);
 
   const signIn = () => {
     window.location.assign(`/api/login?returnTo=${encodeURIComponent(joinPath)}`);
@@ -68,7 +68,7 @@ export default function JoinGroupPage() {
             <p className="mt-3 leading-relaxed text-muted-foreground">
               You joined <strong className="text-foreground">{data.groupName}</strong>. The group is now selected in Jamvi.
             </p>
-            <Button className="mt-7 w-full" onClick={() => window.location.assign(base || "/")}>Open Jamvi</Button>
+            <Button className="mt-7 w-full" onClick={() => window.location.assign(appPath("/", import.meta.env.BASE_URL))}>Open Jamvi</Button>
           </>
         ) : (
           <>

@@ -9,6 +9,7 @@ import {
   Smartphone,
   CheckCircle
 } from "lucide-react";
+import { JAMVI_APP_PATH } from "@/lib/site-links";
 
 export default function Features() {
   useSeo({
@@ -132,7 +133,7 @@ export default function Features() {
                 Jamvi recognizes that the way you manage your own money is fundamentally different from how you manage a group's money. 
                 That's why we built tailored experiences for both, seamlessly integrated into one app.
               </p>
-              <a href="https://jamvi.app/register" className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-transform hover:scale-105 active:scale-95">
+              <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-transform hover:scale-105 active:scale-95">
                 Experience it now
               </a>
             </div>

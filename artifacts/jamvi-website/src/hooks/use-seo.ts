@@ -10,8 +10,8 @@ interface SeoProps {
 export function useSeo({ 
   title, 
   description, 
-  url = 'https://jamvi.app', 
-  image = 'https://jamvi.app/branding/jamvi-mark.png' 
+  url = 'https://jamvi.co.ke',
+  image = 'https://jamvi.co.ke/branding/jamvi-mark.png'
 }: SeoProps) {
   useEffect(() => {
     document.title = `${title} | Jamvi`;

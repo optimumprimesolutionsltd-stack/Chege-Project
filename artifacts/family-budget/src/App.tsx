@@ -25,6 +25,7 @@ import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal';
 import { BudgetChooser, hasCompletedBudgetChooser } from '@/components/budget-chooser';
 import { shouldShowBudgetChooser } from '@/lib/budget-chooser-routing';
 import { getGetWorkspacesQueryKey, useGetWorkspaces } from '@workspace/api-client-react';
+import { routePath } from '@/lib/base-path';
 
 const queryClient = new QueryClient();
 
@@ -180,17 +181,18 @@ function MainRouter() {
     retry: false,
   });
 
-  const publicPath = window.location.pathname.replace(/\/+$/, '');
-  if (publicPath.endsWith('/privacy')) {
+  const appRoute = routePath(window.location.pathname, import.meta.env.BASE_URL);
+  const publicPath = appRoute?.replace(/\/+$/, '') || '/';
+  if (publicPath === '/privacy') {
     return <PrivacyPolicyPage />;
   }
 
-  if (publicPath.endsWith('/terms')) {
+  if (publicPath === '/terms') {
     return <TermsOfServicePage />;
   }
 
   // Auth-done page must be reachable before auth state resolves (popup context).
-  if (window.location.pathname.endsWith('/auth-done')) {
+  if (publicPath === '/auth-done') {
     return <AuthDone />;
   }
 
@@ -198,11 +200,11 @@ function MainRouter() {
     return <AppLoading message="Checking your account…" />;
   }
 
-  if (/\/invite\/[^/]+$/.test(window.location.pathname)) {
+  if (appRoute && /^\/invite\/[^/]+\/?$/.test(appRoute)) {
     return <InvitePage />;
   }
 
-  if (/\/join\/[^/]+$/.test(window.location.pathname)) {
+  if (appRoute && /^\/join\/[^/]+\/?$/.test(appRoute)) {
     return <JoinGroupPage />;
   }
 

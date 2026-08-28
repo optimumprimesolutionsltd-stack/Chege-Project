@@ -4,6 +4,7 @@ import { useRoute } from "wouter";
 import { CheckCircle2, Mail, ShieldCheck, UsersRound } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Button } from "@/components/ui/button";
+import { appPath } from "@/lib/base-path";
 
 type InvitationPreview = {
   groupName: string;
@@ -32,8 +33,7 @@ export default function InvitePage() {
     retry: false,
   });
 
-  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const invitePath = `${base}/invite/${token}`;
+  const invitePath = appPath(`/invite/${token}`, import.meta.env.BASE_URL);
 
   const signIn = () => {
     window.location.assign(`/api/login?returnTo=${encodeURIComponent(invitePath)}`);
@@ -53,7 +53,7 @@ export default function InvitePage() {
   };
 
   const goToApp = () => {
-    window.location.assign(base || "/");
+    window.location.assign(appPath("/", import.meta.env.BASE_URL));
   };
 
   return (

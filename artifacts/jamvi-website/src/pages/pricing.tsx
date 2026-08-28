@@ -1,6 +1,7 @@
 import { useSeo } from "@/hooks/use-seo";
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
+import { JAMVI_APP_PATH } from "@/lib/site-links";
 import { Link } from "wouter";
 
 export default function Pricing() {
@@ -50,7 +51,7 @@ export default function Pricing() {
                 <span className="text-foreground/50 font-medium ml-2">forever</span>
               </div>
               
-              <a href="https://jamvi.app/register" className="flex items-center justify-center w-full h-14 rounded-full bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-colors mb-10">
+              <a href={JAMVI_APP_PATH} className="flex items-center justify-center w-full h-14 rounded-full bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-colors mb-10">
                 Get Started
               </a>
               
@@ -93,7 +94,7 @@ export default function Pricing() {
                 <span className="text-primary-foreground/60 font-medium ml-2">/ month</span>
               </div>
               
-              <a href="https://jamvi.app/register" className="flex items-center justify-center w-full h-14 rounded-full bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-transform hover:scale-105 active:scale-95 mb-10 shadow-lg">
+              <a href={JAMVI_APP_PATH} className="flex items-center justify-center w-full h-14 rounded-full bg-accent text-accent-foreground font-bold hover:bg-accent/90 transition-transform hover:scale-105 active:scale-95 mb-10 shadow-lg">
                 Upgrade to Pro
               </a>
               

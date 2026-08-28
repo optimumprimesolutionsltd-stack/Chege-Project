@@ -13,6 +13,8 @@ import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { ArrowUpRight, ArrowDownRight, ChevronDown, ChevronUp, Loader2, Activity as ActivityIcon, Calendar, Pencil, TrendingUp } from "lucide-react";
 import { ACTIVITY_TYPE } from "@/lib/activityTypes";
 import { getActivityEditLink } from "@/lib/activity-edit-utils";
+import { routePath } from "@/lib/base-path";
+import { Link } from "wouter";
 
 type ActivityTab = "all" | "expenses" | "contributions";
 type MemberContribution = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
@@ -36,7 +38,7 @@ export default function Activity() {
   const isSharedWorkspace = group?.isPrivate === false;
   const now = new Date();
   const [tab, setTab] = useState<ActivityTab>(() =>
-    window.location.pathname === "/contributions" || window.location.search.includes("tab=contributions") ? "contributions" : "all",
+    routePath(window.location.pathname, import.meta.env.BASE_URL) === "/contributions" || window.location.search.includes("tab=contributions") ? "contributions" : "all",
   );
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -297,14 +299,14 @@ export default function Activity() {
                               )}
                             </div>
                             {edit && (
-                              <a
+                              <Link
                                 href={edit.href}
                                 className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80"
                                 data-testid={`activity-${item.editTarget}-edit-${item.id}`}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                                 {edit.label}
-                              </a>
+                              </Link>
                             )}
                           </div>
                         </div>

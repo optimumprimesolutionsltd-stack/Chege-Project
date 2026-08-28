@@ -4,9 +4,10 @@ description: Production deployment shape and external-service constraints for Ja
 ---
 
 Jamvi production is intentionally one persistent Render Web Service that builds
-the Vite web app and serves it through the Express API process. Keep the SPA,
-API, cookie session, OAuth callback, and emailed links on one canonical HTTPS
-origin.
+both Jamvi Vite web builds and serves them through the Express API process.
+The public marketing site owns `/`, the authenticated user app owns `/app/`,
+and the API owns `/api`. Keep both SPAs, cookie sessions, OAuth callbacks, and
+emailed links on the `jamvi.co.ke` HTTPS origin.
 
 **Why:** Splitting the static web app and API would introduce cross-origin
 cookies, CORS, OAuth callback, and invite-link complexity without a product
@@ -14,6 +15,10 @@ benefit. Replit object storage is not available on Render, so production photos
 use an external S3-compatible private bucket instead.
 
 **How to apply:** Preserve same-origin `/api` routing and SPA fallback ordering.
+The shared Optimum operations panel remains at
+`optimumprimesolutions.co.ke/admin`; it may link to a future Jamvi Operations
+tool, but it must not receive direct access to Jamvi financial records. Jamvi
+group roles are product roles and are separate from platform operations access.
 The Render start command uses `pnpm --filter`, so the API script runs with the
 API package as its working directory rather than the repository root. Resolve
 sibling build outputs from a stable package/module location, never from

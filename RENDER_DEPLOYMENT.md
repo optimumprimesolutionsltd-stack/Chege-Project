@@ -1,9 +1,10 @@
 # Deploy Jamvi on Render
 
 Jamvi runs on Render as one Web Service per environment: Express serves the API
-at `/api` and the built web app at the same public HTTPS origin. This keeps
-browser sessions, OAuth callbacks, invite links, and API calls on one domain
-while allowing staging to be verified before production changes are released.
+at `/api`, the public Jamvi marketing site at `/`, and the authenticated family
+budget app at `/app/` on the same public HTTPS origin. This keeps browser
+sessions, OAuth callbacks, invite links, and API calls on one domain while
+allowing staging to be verified before production changes are released.
 
 ## 1. Connect the repository
 
@@ -119,8 +120,9 @@ Do not attach the final domain until the write run completes successfully.
 Before changing DNS, confirm:
 
 - The staging service's `/api/healthz` returns successfully.
-- Refreshing browser routes such as `/settings` and `/reports` still opens the
-  app rather than a 404 page.
+- Refreshing a marketing route and authenticated routes such as `/app/settings`
+  and `/app/reports` opens the correct SPA rather than a 404 page. Confirm
+  `/app` redirects to `/app/`.
 - Google sign-in completes and returns to the same staging origin.
 - Workspace data, invite emails, and monthly-digest sender settings work.
 - Private photo upload and viewing work without public bucket access.

@@ -29,6 +29,7 @@ import type { WorkspaceNameStyle } from "@workspace/api-client-react";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, groupKindPresentation, type SharedGroupKind } from "@/components/group-kind";
 import { applyAppearance, readAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
+import { appPath } from "@/lib/base-path";
 
 type GroupInvitation = {
   id: number;
@@ -505,7 +506,7 @@ export default function Settings() {
     try {
       await leaveGroup.mutateAsync();
       queryClient.clear();
-      window.location.assign(`${import.meta.env.BASE_URL}?left=1`);
+      window.location.assign(`${appPath("/", import.meta.env.BASE_URL)}?left=1`);
     } catch (error) {
       toast({
         variant: "destructive",

@@ -50,6 +50,7 @@ import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
 import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
+import { appPath, routePath } from "@/lib/base-path";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
@@ -138,17 +139,15 @@ function OpenInvitationLinkButton() {
     setError(null);
     try {
       const invitationUrl = new URL(link.trim(), window.location.origin);
-      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const appPath = base && invitationUrl.pathname.startsWith(`${base}/`)
-        ? invitationUrl.pathname.slice(base.length)
-        : invitationUrl.pathname;
+      const invitationRoute = routePath(invitationUrl.pathname, import.meta.env.BASE_URL);
       if (
         invitationUrl.origin !== window.location.origin ||
-        !/^\/(?:invite|join)\/[^/]+\/?$/.test(appPath)
+        !invitationRoute ||
+        !/^\/(?:invite|join)\/[^/]+\/?$/.test(invitationRoute)
       ) {
         throw new Error("Paste a Jamvi email invitation or private group link.");
       }
-      window.location.assign(`${invitationUrl.pathname}${invitationUrl.search}${invitationUrl.hash}`);
+      window.location.assign(`${appPath(invitationRoute, import.meta.env.BASE_URL)}${invitationUrl.search}${invitationUrl.hash}`);
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : "Could not open that invitation.");
     }
@@ -217,7 +216,7 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
     }
     try {
       await createSharedGroup.mutateAsync({ data: { name: name.trim(), kind: kind as GroupKind } });
-      window.location.assign("/");
+      window.location.assign(appPath("/", import.meta.env.BASE_URL));
     } catch (error) {
       toast({
         variant: "destructive",

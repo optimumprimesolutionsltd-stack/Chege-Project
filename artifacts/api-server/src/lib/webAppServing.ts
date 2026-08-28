@@ -5,7 +5,13 @@ import express, { type Express } from "express";
 
 export interface WebBuildServingOptions {
   enabled?: boolean;
+  /**
+   * Legacy single-build option. When supplied, this retains the former
+   * root-mounted SPA behavior for callers and tests that only have one build.
+   */
   buildDir?: string;
+  marketingBuildDir?: string;
+  appBuildDir?: string;
 }
 
 function apiServerPackageDir(): string {
@@ -43,41 +49,49 @@ export function defaultBuildDir(): string {
   const configured = process.env.WEB_DIST_DIR?.trim();
   return configured
     ? path.resolve(configured)
-    : path.resolve(
-        apiServerPackageDir(),
-        "..",
-        "family-budget",
-        "dist",
-        "public",
-      );
+    : defaultAppBuildDir();
 }
 
-/**
- * Mount the built Vite application on the API process for external hosting.
- * API routes are intentionally left to the router mounted after this handler.
- */
-export function attachWebBuild(
-  app: Express,
-  options: WebBuildServingOptions = {},
-): void {
-  const enabled = options.enabled ?? process.env.SERVE_WEB === "true";
-  if (!enabled) return;
+export function defaultAppBuildDir(): string {
+  return path.resolve(
+    apiServerPackageDir(),
+    "..",
+    "family-budget",
+    "dist",
+    "public",
+  );
+}
 
-  const buildDir = options.buildDir
-    ? path.resolve(options.buildDir)
-    : defaultBuildDir();
+export function defaultMarketingBuildDir(): string {
+  return path.resolve(
+    apiServerPackageDir(),
+    "..",
+    "jamvi-website",
+    "dist",
+    "public",
+  );
+}
+
+function requireIndexFile(buildDir: string, packageName: string): string {
   const indexFile = path.join(buildDir, "index.html");
 
   if (!existsSync(indexFile)) {
     throw new Error(
       `SERVE_WEB is enabled, but the web build was not found at "${indexFile}". ` +
-        "Build @workspace/family-budget before starting the API server.",
+        `Build ${packageName} before starting the API server.`,
     );
   }
 
-  // Static files are deliberately served before session lookup. Assets do not
-  // need a database-backed session refresh, and /api remains below the auth
-  // middleware as the only protected namespace.
+  return indexFile;
+}
+
+function isApiRequest(requestPath: string): boolean {
+  return requestPath === "/api" || requestPath.startsWith("/api/");
+}
+
+function attachSingleWebBuild(app: Express, buildDir: string): void {
+  const indexFile = requireIndexFile(buildDir, "@workspace/family-budget");
+
   app.use(
     express.static(buildDir, {
       index: false,
@@ -87,15 +101,91 @@ export function attachWebBuild(
   );
 
   app.get("/{*splat}", (req, res, next) => {
-    if (
-      req.path === "/api" ||
-      req.path.startsWith("/api/") ||
-      !req.accepts("html")
-    ) {
+    if (isApiRequest(req.path) || !req.accepts("html")) {
       next();
       return;
     }
 
     res.sendFile(indexFile);
   });
+}
+
+function attachDualWebBuilds(
+  app: Express,
+  marketingBuildDir: string,
+  appBuildDir: string,
+): void {
+  const marketingIndexFile = requireIndexFile(
+    marketingBuildDir,
+    "@workspace/jamvi-website",
+  );
+  const appIndexFile = requireIndexFile(
+    appBuildDir,
+    "@workspace/family-budget",
+  );
+
+  // Register the scoped application first so its /app assets cannot be
+  // shadowed by a similarly named marketing asset.
+  app.get("/app", (_req, res) => {
+    res.redirect(308, "/app/");
+  });
+  app.use(
+    "/app",
+    express.static(appBuildDir, {
+      index: false,
+      maxAge: "1y",
+      immutable: true,
+    }),
+  );
+  app.get("/app/{*splat}", (req, res, next) => {
+    if (!req.accepts("html")) {
+      next();
+      return;
+    }
+
+    res.sendFile(appIndexFile);
+  });
+
+  app.use(
+    express.static(marketingBuildDir, {
+      index: false,
+      maxAge: "1y",
+      immutable: true,
+    }),
+  );
+  app.get("/{*splat}", (req, res, next) => {
+    if (isApiRequest(req.path) || !req.accepts("html")) {
+      next();
+      return;
+    }
+
+    res.sendFile(marketingIndexFile);
+  });
+}
+
+/**
+ * Mount built marketing and authenticated application SPAs on the API process
+ * for same-origin external hosting. The API namespace remains untouched for
+ * the router mounted after this handler.
+ */
+export function attachWebBuild(
+  app: Express,
+  options: WebBuildServingOptions = {},
+): void {
+  const enabled = options.enabled ?? process.env.SERVE_WEB === "true";
+  if (!enabled) return;
+
+  if (options.buildDir) {
+    attachSingleWebBuild(app, path.resolve(options.buildDir));
+    return;
+  }
+
+  const marketingBuildDir = options.marketingBuildDir
+    ? path.resolve(options.marketingBuildDir)
+    : defaultMarketingBuildDir();
+  const appBuildDir = options.appBuildDir
+    ? path.resolve(options.appBuildDir)
+    : defaultBuildDir();
+
+  attachDualWebBuilds(app, marketingBuildDir, appBuildDir);
 }

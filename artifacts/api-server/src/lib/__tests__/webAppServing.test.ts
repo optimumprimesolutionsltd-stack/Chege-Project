@@ -9,12 +9,12 @@ import { attachWebBuild, defaultBuildDir } from "../webAppServing";
 const directories: string[] = [];
 const originalWorkingDirectory = process.cwd();
 
-async function buildFixture(): Promise<string> {
+async function buildFixture(title = "Jamvi"): Promise<string> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "jamvi-web-build-"));
   directories.push(directory);
   await writeFile(
     path.join(directory, "index.html"),
-    "<!doctype html><title>Jamvi</title>",
+    `<!doctype html><title>${title}</title>`,
   );
   await writeFile(path.join(directory, "asset.txt"), "private budget");
   return directory;
@@ -45,7 +45,7 @@ describe("attachWebBuild", () => {
     expect(defaultBuildDir()).toBe(expectedBuildDirectory);
   });
 
-  it("serves static files and the SPA shell for browser routes", async () => {
+  it("keeps the legacy single-build mounting behavior", async () => {
     const app = express();
     attachWebBuild(app, { enabled: true, buildDir: await buildFixture() });
 
@@ -61,9 +61,66 @@ describe("attachWebBuild", () => {
     });
   });
 
+  it(
+    "serves marketing at the root and the authenticated app under /app/",
+    async () => {
+      const app = express();
+      attachWebBuild(app, {
+        enabled: true,
+        marketingBuildDir: await buildFixture("Jamvi marketing"),
+        appBuildDir: await buildFixture("Jamvi budget"),
+      });
+
+      await expect(
+        request(app).get("/pricing").set("Accept", "text/html"),
+      ).resolves.toMatchObject({
+        status: 200,
+        text: expect.stringContaining("<title>Jamvi marketing</title>"),
+      });
+      await expect(request(app).get("/app")).resolves.toMatchObject({
+        status: 308,
+        headers: { location: "/app/" },
+      });
+      await expect(
+        request(app).get("/app/settings").set("Accept", "text/html"),
+      ).resolves.toMatchObject({
+        status: 200,
+        text: expect.stringContaining("<title>Jamvi budget</title>"),
+      });
+      await expect(
+        request(app).get("/app/asset.txt"),
+      ).resolves.toMatchObject({
+        status: 200,
+        text: "private budget",
+      });
+    },
+  );
+
   it("leaves API requests for the API router", async () => {
     const app = express();
     attachWebBuild(app, { enabled: true, buildDir: await buildFixture() });
+    app.get("/api/healthz", (_req, res) => res.json({ ok: true }));
+
+    await expect(
+      request(app).get("/api/healthz").set("Accept", "text/html"),
+    ).resolves.toMatchObject({
+      status: 200,
+      body: { ok: true },
+    });
+    await expect(
+      request(app).get("/api/not-found").set("Accept", "text/html"),
+    ).resolves.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("leaves API requests untouched with both builds mounted", async () => {
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir: await buildFixture("Jamvi marketing"),
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
     app.get("/api/healthz", (_req, res) => res.json({ ok: true }));
 
     await expect(

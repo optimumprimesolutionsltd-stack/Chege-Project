@@ -6,6 +6,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 
 export default function FAQ() {
   useSeo({
@@ -94,7 +95,7 @@ export default function FAQ() {
 
           <div className="mt-12 text-center">
             <p className="text-foreground/70 mb-4">Still have questions?</p>
-            <a href="mailto:support@jamvi.app" className="inline-flex items-center justify-center h-12 px-8 rounded-full bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-colors">
+            <a href={`mailto:${JAMVI_SUPPORT_EMAIL}`} className="inline-flex items-center justify-center h-12 px-8 rounded-full bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-colors">
               Contact Support
             </a>
           </div>
