@@ -34,6 +34,7 @@ import {
 } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 import { getCategoryIcon } from '@/lib/categoryIcons';
+import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 
 type BudgetCategory = {
   id: number;
@@ -635,6 +636,7 @@ export default function BudgetScreen() {
       >
         {/* Header */}
         <LinearGradient colors={[colors.brandNavy, '#05255E', colors.brandBlue]} style={[styles.header, { paddingTop: topPad + 16 }]}>
+          <WorkspaceIdentityRow group={group} />
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Budget</Text>
             <View style={styles.headerRight}>

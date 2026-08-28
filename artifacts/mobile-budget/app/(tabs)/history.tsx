@@ -46,6 +46,7 @@ import {
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
+import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 
@@ -647,6 +648,7 @@ export default function HistoryScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <WorkspaceIdentityRow group={group} tone="light" />
         {/* Title row */}
         <View style={styles.headerTitleRow}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>

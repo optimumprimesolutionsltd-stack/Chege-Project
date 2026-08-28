@@ -26,8 +26,10 @@ import {
   useGetDashboardSummary,
   useGetMembers,
   useGetSavingsGoals,
+  useGetGroup,
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
+import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -160,6 +162,7 @@ function BudgetRow({
 
 export default function ReportsScreen() {
   const colors = useColors();
+  const { data: group } = useGetGroup();
   const insets = useSafeAreaInsets();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -341,6 +344,7 @@ export default function ReportsScreen() {
         colors={[colors.brandNavy, colors.brandBlue]}
         style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'android' ? 12 : 8) }]}
       >
+        <WorkspaceIdentityRow group={group} />
         <Text style={styles.headerTitle}>Reports</Text>
           <View style={styles.headerControls}>
             <MonthPicker month={month} year={year} onChange={handleMonthChange} colors={colors} />

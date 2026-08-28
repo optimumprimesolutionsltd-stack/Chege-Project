@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Award, BriefcaseBusiness, Heart, Home, Star, Users } from "lucide-react";
 import { workspaceIdentityText, workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@workspace/replit-auth-web";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +33,7 @@ export function WorkspaceSwitcher({
   variant?: "sidebar" | "dashboard";
   showPendingLabel?: boolean;
 }) {
+  const { user } = useAuth();
   const { data: workspaces = [] } = useGetWorkspaces();
   const { data: activeGroup } = useGetGroup();
   const selectWorkspace = useSelectWorkspace();
@@ -48,6 +50,9 @@ export function WorkspaceSwitcher({
     award: Award,
     star: Star,
   }[activeBrandedBudget?.icon ?? "users"] ?? Users);
+  const photoForWorkspace = (workspace: Pick<Workspace, "isPrivate" | "photoUrl">) =>
+    workspace.isPrivate ? user?.profileImageUrl ?? null : workspace.photoUrl ?? null;
+  const activePhotoUrl = activeBrandedBudget ? photoForWorkspace(activeBrandedBudget) : null;
 
   const requestWorkspaceSwitch = (groupId: number) => {
     if (!groupId || groupId === activeWorkspaceId || selectWorkspace.isPending) return;
@@ -84,6 +89,7 @@ export function WorkspaceSwitcher({
             .map((workspace) => {
               const isActive = workspace.id === activeWorkspaceId;
               const accentColor = workspace.accentColor ?? "#003383";
+              const photoUrl = photoForWorkspace(workspace);
               const WIcon = {
                 users: Users,
                 home: Home,
@@ -118,9 +124,9 @@ export function WorkspaceSwitcher({
                       style={{ backgroundColor: accentColor }}
                     />
                   ) : null}
-                  {workspace.photoUrl ? (
+                  {photoUrl ? (
                     <img
-                      src={workspace.photoUrl}
+                      src={photoUrl}
                       alt=""
                       className="h-11 w-11 shrink-0 rounded-xl border-2 object-cover"
                       style={{ borderColor: accentColor, boxShadow: `0 0 0 3px ${accentColor}24` }}
@@ -161,9 +167,9 @@ export function WorkspaceSwitcher({
       ) : (
         <div className="flex min-w-0 items-center gap-2">
           {activeBrandedBudget ? (
-            activeBrandedBudget.photoUrl ? (
+            activePhotoUrl ? (
               <img
-                src={activeBrandedBudget.photoUrl}
+                src={activePhotoUrl}
                 alt=""
                 className="h-8 w-8 shrink-0 rounded-lg border-2 object-cover"
                 style={{ borderColor: activeBrandedBudget.accentColor }}

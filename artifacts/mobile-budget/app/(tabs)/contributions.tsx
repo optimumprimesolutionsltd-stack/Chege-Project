@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
+import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import {
   useGetDashboardSummary,
   useGetDashboardIncomeStreams,
@@ -517,6 +518,7 @@ export default function ContributionsScreen() {
         colors={['#0a1a10', '#0f2217', '#132a1c']}
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
+        <WorkspaceIdentityRow group={group} />
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>{isSharedWorkspace ? 'Group Contributions' : 'My Contributions'}</Text>
           <View style={styles.monthNav}>

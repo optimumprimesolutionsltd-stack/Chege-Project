@@ -33,7 +33,13 @@ function markBudgetChooserComplete(userId: string) {
   }
 }
 
-function WorkspaceIdentity({ workspace }: { workspace: Workspace }) {
+function WorkspaceIdentity({
+  workspace,
+  personalPhotoUrl,
+}: {
+  workspace: Workspace;
+  personalPhotoUrl?: string | null;
+}) {
   const Icon = ({
     users: Users,
     home: Home,
@@ -44,8 +50,9 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }) {
   }[workspace.icon] ?? Users);
   const accent = workspace.accentColor ?? "#003383";
 
-  if (workspace.photoUrl) {
-    return <img src={workspace.photoUrl} alt="" className="h-12 w-12 rounded-xl border-2 object-cover" style={{ borderColor: accent }} />;
+  const photoUrl = workspace.isPrivate ? personalPhotoUrl : workspace.photoUrl;
+  if (photoUrl) {
+    return <img src={photoUrl} alt="" className="h-12 w-12 rounded-xl border-2 object-cover" style={{ borderColor: accent }} />;
   }
   if (workspace.emoji) {
     return <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-xl border text-2xl" style={{ backgroundColor: `${accent}24`, borderColor: `${accent}66` }}>{workspace.emoji}</span>;
@@ -115,7 +122,7 @@ export function BudgetChooser({
 
                   <div className="mt-6 border-l-2 border-border pl-4">
                     <div className="mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-bold text-foreground">Personal budget</h3></div>
-                    {personal.length ? <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label="Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Your Personal budget is not ready yet. Try reloading your budgets.</p>}
+                    {personal.length ? <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} personalPhotoUrl={user.profileImageUrl} label="Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Your Personal budget is not ready yet. Try reloading your budgets.</p>}
                   </div>
 
                   <div className="mt-7 border-l-2 border-border pl-4">
@@ -149,6 +156,6 @@ export function BudgetChooser({
   );
 }
 
-function WorkspaceButton({ workspace, label, selected, pending, onChoose }: { workspace: Workspace; label: string; selected: boolean; pending: boolean; onChoose: (workspace: Workspace) => void }) {
-  return <button type="button" disabled={pending} aria-pressed={selected} aria-label={`Open ${workspace.isPrivate ? "Personal budget" : workspaceLabel(workspace)}`} onClick={() => onChoose(workspace)} className={`group flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70 ${selected ? "border-primary bg-primary/[0.06] ring-2 ring-primary/20" : "border-border bg-card hover:border-primary/50 hover:bg-primary/[0.03]"}`}><WorkspaceIdentity workspace={workspace} /><span className="min-w-0 flex-1"><span className={`block truncate text-base text-foreground ${workspace.isPrivate ? "" : workspaceNameClass(workspace.nameStyle)}`}>{workspace.isPrivate ? "Personal budget" : workspaceLabel(workspace)}</span><span className="mt-1 block text-xs font-medium text-muted-foreground">{label}</span></span><span className={`flex items-center gap-1 text-xs font-bold ${selected ? "text-primary" : "text-muted-foreground"}`}>{selected ? <><Check className="h-4 w-4" />Opening…</> : <><span className="hidden sm:inline">Open</span><ChevronRight className="h-4 w-4" /></>}</span></button>;
+function WorkspaceButton({ workspace, personalPhotoUrl, label, selected, pending, onChoose }: { workspace: Workspace; personalPhotoUrl?: string | null; label: string; selected: boolean; pending: boolean; onChoose: (workspace: Workspace) => void }) {
+  return <button type="button" disabled={pending} aria-pressed={selected} aria-label={`Open ${workspace.isPrivate ? "Personal budget" : workspaceLabel(workspace)}`} onClick={() => onChoose(workspace)} className={`group flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70 ${selected ? "border-primary bg-primary/[0.06] ring-2 ring-primary/20" : "border-border bg-card hover:border-primary/50 hover:bg-primary/[0.03]"}`}><WorkspaceIdentity workspace={workspace} personalPhotoUrl={personalPhotoUrl} /><span className="min-w-0 flex-1"><span className={`block truncate text-base text-foreground ${workspace.isPrivate ? "" : workspaceNameClass(workspace.nameStyle)}`}>{workspace.isPrivate ? "Personal budget" : workspaceLabel(workspace)}</span><span className="mt-1 block text-xs font-medium text-muted-foreground">{label}</span></span><span className={`flex items-center gap-1 text-xs font-bold ${selected ? "text-primary" : "text-muted-foreground"}`}>{selected ? <><Check className="h-4 w-4" />Opening…</> : <><span className="hidden sm:inline">Open</span><ChevronRight className="h-4 w-4" /></>}</span></button>;
 }

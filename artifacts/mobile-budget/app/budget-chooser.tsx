@@ -75,6 +75,7 @@ export default function BudgetChooserScreen() {
   };
   const workspaceRow = (workspace: Workspace, personal = false) => {
     const selected = selectedWorkspace?.id === workspace.id;
+    const photoUrl = personal ? user?.profileImageUrl : workspace.photoUrl;
     return (
     <Pressable
       key={workspace.id}
@@ -86,16 +87,16 @@ export default function BudgetChooserScreen() {
       onPress={() => { setError(null); setSelectedWorkspaceId(workspace.id); void chooseWorkspace(workspace); }}
       style={({ pressed }) => [styles.workspace, { backgroundColor: selected ? colors.accent : colors.card, borderColor: selected ? colors.primary : colors.border, borderWidth: selected ? 2 : 1 }, pressed && styles.pressed]}
     >
-      {personal ? (
-        <View style={[styles.workspaceIcon, { backgroundColor: colors.accent }]}>
-          <Feather name="lock" size={19} color={colors.accentForeground} />
-        </View>
-      ) : workspace.photoUrl ? (
+      {photoUrl ? (
         <Image
-          source={{ uri: workspace.photoUrl }}
+          source={{ uri: photoUrl }}
           accessibilityIgnoresInvertColors
           style={[styles.workspacePhoto, { borderColor: workspace.accentColor ?? colors.primary }]}
         />
+      ) : personal ? (
+        <View style={[styles.workspaceIcon, { backgroundColor: colors.accent }]}>
+          <Feather name="lock" size={19} color={colors.accentForeground} />
+        </View>
       ) : workspace.emoji ? (
         <View style={[styles.workspaceIcon, { backgroundColor: `${workspace.accentColor ?? colors.primary}20` }]}>
           <Text style={styles.workspaceEmoji}>{workspace.emoji}</Text>

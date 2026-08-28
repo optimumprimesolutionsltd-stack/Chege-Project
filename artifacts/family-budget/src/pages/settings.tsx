@@ -619,7 +619,7 @@ export default function Settings() {
             Your sign-in email is managed by your sign-in account and can’t be changed in Jamvi.
           </p>
           <p className="rounded-lg bg-muted/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            Your profile photo represents you wherever your name appears. It is separate from the photo used to identify a selected budget.
+            Your profile photo represents you wherever your name appears and is also used for your Personal budget. Shared budgets can keep their own group photo.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
@@ -778,7 +778,7 @@ export default function Settings() {
             <CardTitle>{isPrivateWorkspace ? "Personal budget identity" : "Shared budget identity"}</CardTitle>
             <CardDescription>
               {isPrivateWorkspace
-                ? "This identity belongs to your Personal budget, not to your profile. Your profile photo still represents you."
+                ? "Your Personal budget uses the same photo as your profile, so you only need to choose it once."
                 : "A photo, icon, and accent colour help members recognise this Shared budget when they switch budgets. It is separate from every member’s profile photo."}
             </CardDescription>
           </CardHeader>
@@ -786,8 +786,9 @@ export default function Settings() {
             <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/40 p-3">
               {(() => {
                 const Icon = SHARED_BUDGET_ICONS.find((option) => option.value === groupIcon)?.icon ?? Users;
-                return group?.photoUrl ? (
-                  <img src={group.photoUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+                const identityPhotoUrl = isPrivateWorkspace ? user?.profileImageUrl : group?.photoUrl;
+                return identityPhotoUrl ? (
+                  <img src={identityPhotoUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
                 ) : (
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: groupAccentColor }}>
                     <Icon className="h-5 w-5" aria-hidden="true" />
@@ -801,7 +802,7 @@ export default function Settings() {
                  {group?.slogan ? <p className="text-sm italic text-muted-foreground">{group.slogan}</p> : null}
                   <p className="text-xs text-muted-foreground">
                     {isPrivateWorkspace
-                       ? "Your profile photo represents you; this identity belongs only to your Personal budget."
+                       ? "This is your profile photo. Changing it updates both your profile and Personal budget."
                        : "This identity belongs to the group, not any one member or their profile."}
                   </p>
               </div>

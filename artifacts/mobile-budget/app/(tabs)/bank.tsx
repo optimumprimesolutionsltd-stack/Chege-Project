@@ -43,6 +43,7 @@ import {
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
+import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -617,6 +618,7 @@ export default function BankScreen() {
         colors={['#0a1a10', '#0f2217', '#132a1c']}
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
+        <WorkspaceIdentityRow group={group} />
         <Text style={styles.headerTitle}>{isSharedWorkspace ? 'Joint Account' : 'Personal Account'}</Text>
         {isLoading ? (
           <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />

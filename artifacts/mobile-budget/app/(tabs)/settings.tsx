@@ -700,7 +700,7 @@ export default function SettingsScreen() {
              ) : null}
              <Text style={[styles.lockedHint, { color: colors.mutedForeground }]}>Your sign-in email can’t be changed in Jamvi.</Text>
               <Text style={[styles.lockedHint, { color: colors.mutedForeground, marginTop: 4 }]}>
-                Your profile photo represents you. It is separate from the identity and photo of the selected budget.
+                Your profile photo represents you and is also used for your Personal budget. Shared budgets can keep their own group photo.
               </Text>
             <Pressable
               onPress={() => void handlePickProfilePhoto()}
@@ -804,6 +804,7 @@ export default function SettingsScreen() {
           {workspaces.map((workspace, index) => {
             const selected = workspace.id === group?.id;
             const label = workspaceIdentityText(workspace, workspace.isPrivate ? 'Personal budget' : 'Group');
+            const photoUrl = workspace.isPrivate ? user?.profileImageUrl : workspace.photoUrl;
             const detail = workspace.isPrivate
               ? 'Only you can access this budget'
               : `${workspace.name} · ${workspace.role === 'owner' ? 'Owner' : workspace.role === 'admin' ? 'Admin' : 'Member'}`;
@@ -818,9 +819,9 @@ export default function SettingsScreen() {
                   { borderBottomColor: colors.border, borderBottomWidth: index < workspaces.length - 1 ? StyleSheet.hairlineWidth : 0 },
                 ]}
               >
-                {workspace.photoUrl ? (
+                {photoUrl ? (
                   <Image
-                    source={{ uri: workspace.photoUrl }}
+                    source={{ uri: photoUrl }}
                     style={[styles.rowIcon, { borderRadius: 10, borderWidth: 2, borderColor: workspace.accentColor }]}
                   />
                  ) : workspace.emoji ? (
@@ -1055,8 +1056,8 @@ export default function SettingsScreen() {
          </Text>
          <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 14 }]}>
               <View style={styles.identityPreview}>
-                {group?.photoUrl ? (
-                   <Image source={{ uri: group.photoUrl }} style={[styles.identityIcon, { borderRadius: 12, borderWidth: 2, borderColor: groupAccentColor }]} />
+                {(group?.isPrivate ? user?.profileImageUrl : group?.photoUrl) ? (
+                   <Image source={{ uri: (group?.isPrivate ? user?.profileImageUrl : group?.photoUrl)! }} style={[styles.identityIcon, { borderRadius: 12, borderWidth: 2, borderColor: groupAccentColor }]} />
                 ) : (
                   <View style={[styles.identityIcon, { backgroundColor: groupAccentColor }]}>
                     <Feather name={getSharedBudgetIcon(groupIcon)} size={20} color="#fff" />
@@ -1069,7 +1070,7 @@ export default function SettingsScreen() {
                    {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic' }]}>{group.slogan}</Text> : null}
                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
                      {group?.isPrivate
-                        ? 'Your profile photo represents you; this identity belongs only to your Personal budget.'
+                        ? 'This is your profile photo. Changing it updates both your profile and Personal budget.'
                         : 'This identity belongs to the group, not any one member or their profile.'}
                    </Text>
                 </View>

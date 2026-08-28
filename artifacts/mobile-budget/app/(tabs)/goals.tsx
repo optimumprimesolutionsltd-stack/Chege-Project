@@ -29,6 +29,7 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { deriveContributorTotals, applyDateFilter, isCorrectionRow, MANUAL_ADJUSTMENT_NOTE } from '@/utils/contributorTotals';
+import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { buildCascadePreview, parseWholeKesAmount } from '@/utils/cascadePreview';
 import {
   useGetSavingsGoals,
@@ -1061,6 +1062,7 @@ export default function GoalsScreen() {
           colors={['#0a1a10', '#0f2217', '#132a1c']}
           style={[styles.header, { paddingTop: topPad + 16 }]}
         >
+          <WorkspaceIdentityRow group={group} />
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>{isSharedWorkspace ? 'Group Goals' : 'My Goals'}</Text>
             {canManageShared && <TouchableOpacity style={styles.newGoalBtn} onPress={openNewGoal} activeOpacity={0.8}>

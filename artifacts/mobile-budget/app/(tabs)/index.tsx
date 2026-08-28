@@ -180,6 +180,7 @@ export default function DashboardScreen() {
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
   const workspaceAccentColor = group?.accentColor ?? colors.brandBlue;
   const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
+  const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
   const shortcuts = isSharedWorkspace ? SHARED_SHORTCUTS : PERSONAL_SHORTCUTS;
   type MemberContribution = {
     userId: string;
@@ -297,9 +298,9 @@ export default function DashboardScreen() {
               },
             ]}
           >
-            {group?.photoUrl ? (
+            {workspacePhotoUrl ? (
               <Image
-                source={{ uri: group.photoUrl }}
+                source={{ uri: workspacePhotoUrl }}
                 style={[styles.workspaceIdentityIcon, { borderColor: workspaceAccentColor }]}
               />
             ) : (
