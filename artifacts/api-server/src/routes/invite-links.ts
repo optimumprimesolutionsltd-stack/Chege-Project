@@ -19,6 +19,7 @@ import {
   requireSharedGroupManager,
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
+import { hasMemberCapacity, memberLimitMessage } from "../lib/membership-limits";
 
 const INVITE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -137,6 +138,9 @@ publicInviteLinksRouter.post("/group-invite-links/accept/:token", async (req, re
         ))
         .limit(1);
       if (!existingMembership) {
+        if (!(await hasMemberCapacity(tx, group.id))) {
+          throw new Error("workspace-full");
+        }
         await tx.insert(groupMembershipsTable).values({
           groupId: group.id,
           userId: req.user!.id,
@@ -157,6 +161,10 @@ publicInviteLinksRouter.post("/group-invite-links/accept/:token", async (req, re
   } catch (error) {
     if (error instanceof Error && error.message === "unavailable-link") {
       res.status(410).json({ error: "This private join link is no longer available." });
+      return;
+    }
+    if (error instanceof Error && error.message === "workspace-full") {
+      res.status(409).json({ error: memberLimitMessage() });
       return;
     }
     req.log.error(error, "Could not accept private group join link");

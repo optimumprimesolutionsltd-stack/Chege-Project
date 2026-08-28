@@ -12,6 +12,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
 import { EmailNotConfiguredError, sendEmail } from "../lib/email";
+import { hasMemberCapacity, memberLimitMessage } from "../lib/membership-limits";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const inviteSchema = z.object({
@@ -341,6 +342,10 @@ publicInvitationsRouter.post("/group-invitations/accept/:token", async (req, res
         ))
         .limit(1);
       if (existingMembership) throw new InvitationError("You are already a member of this group.", 409);
+
+      if (!(await hasMemberCapacity(tx, invitation.groupId))) {
+        throw new InvitationError(memberLimitMessage(), 409);
+      }
 
       await tx.insert(groupMembershipsTable).values({
         groupId: invitation.groupId,
