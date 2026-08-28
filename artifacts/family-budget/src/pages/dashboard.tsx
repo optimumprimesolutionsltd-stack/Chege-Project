@@ -167,7 +167,7 @@ function OpenInvitationLinkButton() {
           </DialogHeader>
           <form onSubmit={openInvitation} className="space-y-5">
             <p className="text-sm leading-relaxed text-muted-foreground">
-               Paste the email invitation or private group link you received. It will add that Shared budget alongside your Personal budget after you accept.
+               Paste the email invitation or private group link you received. It will add that Shared budget alongside any other budgets you can access after you accept.
             </p>
             <div className="space-y-2">
               <label htmlFor="group-invitation-link" className="text-sm font-semibold text-foreground">Invitation link</label>

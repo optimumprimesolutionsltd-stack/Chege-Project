@@ -742,8 +742,6 @@ export default function GoalsScreen() {
   const { data: members = [] } = useGetMembers();
   const { data: group } = useGetGroup();
   const isSharedWorkspace = group?.isPrivate === false;
-  const sharedTransactionsLocked =
-    group?.canRecordSharedTransactions === false && members.length < 2;
   const canManageShared = members.some(
     (member) =>
       member.userId === user?.id &&
@@ -754,13 +752,6 @@ export default function GoalsScreen() {
     : members.filter((member) => member.userId === user?.id);
 
   const openCascade = () => {
-    if (sharedTransactionsLocked) {
-      Alert.alert(
-        'Invite one more member',
-        'This new Shared budget needs two members before recording goal contributions. You can still create goals and manage the group.',
-      );
-      return;
-    }
     if (!canManageShared) {
       Alert.alert('Admin access required', 'Ask a group owner or admin to distribute money across shared goals.');
       return;
@@ -868,13 +859,6 @@ export default function GoalsScreen() {
   const openContribute = (goal: SavingsGoal) => {
     if (goal.isCompleted || goal.currentAmount >= goal.targetAmount) {
       Alert.alert('Goal fully funded', 'This goal has reached its target, so contributions are locked.');
-      return;
-    }
-    if (sharedTransactionsLocked) {
-      Alert.alert(
-        'Invite one more member',
-        'This new Shared budget needs two members before recording goal contributions. You can still create goals and manage the group.',
-      );
       return;
     }
     setSelectedGoal(goal);

@@ -619,7 +619,7 @@ export default function Settings() {
             Your sign-in email is managed by your sign-in account and can’t be changed in Jamvi.
           </p>
           <p className="rounded-lg bg-muted/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            Your profile photo represents you wherever your name appears and is also used for your Personal budget. Shared budgets can keep their own group photo.
+            Your profile photo represents you wherever your name appears. If you have a Personal budget, it uses this photo too; Shared budgets can keep their own group photo.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">

@@ -9,8 +9,8 @@ export const SHARED_GROUP_KINDS: ReadonlyArray<{
 }> = [
   { value: "family", label: "Family or household", description: "For family members or housemates managing money together." },
   { value: "chama", label: "Chama", description: "For a savings group, merry-go-round, or investment circle." },
-  { value: "club", label: "Club", description: "For a club, association, or community group." },
-  { value: "team", label: "Team", description: "For a work, sports, or project team." },
+  { value: "club", label: "Club or church", description: "For a club, church, association, or community group." },
+  { value: "team", label: "Team, department, or project", description: "For a work, sports, department, or project team." },
   { value: "other", label: "Other group", description: "For any other shared goal or group." },
 ];
 

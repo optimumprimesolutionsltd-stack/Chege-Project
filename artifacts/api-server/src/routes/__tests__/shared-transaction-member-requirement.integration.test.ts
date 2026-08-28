@@ -46,7 +46,7 @@ function buildApp() {
   return app;
 }
 
-describe.skipIf(!hasDb)("shared groups need two members before recording money", () => {
+describe.skipIf(!hasDb)("standalone shared groups can record money immediately", () => {
   const app = buildApp();
 
   beforeAll(async () => {
@@ -133,7 +133,7 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
     await pool.end();
   });
 
-  it("blocks every new expense and contribution route before any record is written", async () => {
+  it("allows expense, contribution, and savings activity with one owner", async () => {
     const expense = await request(app).post("/expenses").send({
       amount: 500,
       category: "Food",
@@ -158,16 +158,11 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
       .post("/expenses/apply-recurring")
       .send({ month: 8, year: 2026 });
 
-    for (const response of [
-      expense,
-      monthlyContribution,
-      goalContribution,
-      cascadeContribution,
-      recurringCopy,
-    ]) {
-      expect(response.status, JSON.stringify(response.body)).toBe(409);
-      expect(response.body.error).toMatch(/invite at least one more member/i);
-    }
+    expect(expense.status, JSON.stringify(expense.body)).toBe(201);
+    expect(monthlyContribution.status, JSON.stringify(monthlyContribution.body)).toBe(201);
+    expect(goalContribution.status, JSON.stringify(goalContribution.body)).toBe(200);
+    expect(cascadeContribution.status, JSON.stringify(cascadeContribution.body)).toBe(200);
+    expect(recurringCopy.status, JSON.stringify(recurringCopy.body)).toBe(200);
 
     const [expenseCount] = await db.select({ count: sql<number>`count(*)` })
       .from(expensesTable)
@@ -182,13 +177,13 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
       .from(savingsGoalContributionsTable)
       .where(eq(savingsGoalContributionsTable.groupId, newSharedGroupId));
 
-    expect(Number(expenseCount.count)).toBe(0);
-    expect(Number(monthlyContributionCount.count)).toBe(0);
-    expect(goal.currentAmount).toBe(0);
-    expect(Number(goalContributionCount.count)).toBe(0);
+    expect(Number(expenseCount.count)).toBeGreaterThan(0);
+    expect(Number(monthlyContributionCount.count)).toBeGreaterThan(0);
+    expect(goal.currentAmount).toBeGreaterThan(0);
+    expect(Number(goalContributionCount.count)).toBeGreaterThan(0);
   });
 
-  it("blocks editing an existing contribution while a new shared group has only one member", async () => {
+  it("allows editing a contribution while a shared group has one member", async () => {
     activeGroupId = newSharedGroupId;
     activeGroupIsPrivate = false;
     const [existing] = await db.insert(contributionsTable).values({
@@ -204,13 +199,12 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
       .patch(`/contributions/${existing.id}`)
       .send({ amount: 900, month: 8, year: 2026, note: "Should not update" });
 
-    expect(response.status).toBe(409);
-    expect(response.body.error).toMatch(/invite at least one more member/i);
+    expect(response.status).toBe(200);
 
     const [unchanged] = await db.select({ amount: contributionsTable.amount })
       .from(contributionsTable)
       .where(eq(contributionsTable.id, existing.id));
-    expect(unchanged.amount).toBe(700);
+    expect(unchanged.amount).toBe(900);
   });
 
   it("does not update a contribution that belongs to another workspace", async () => {
@@ -249,7 +243,7 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
     expect(current.body).toMatchObject({
       id: newSharedGroupId,
       isPrivate: false,
-      canRecordSharedTransactions: false,
+      canRecordSharedTransactions: true,
     });
 
     const renamed = await request(app).patch("/group").send({
@@ -259,11 +253,11 @@ describe.skipIf(!hasDb)("shared groups need two members before recording money",
     expect(renamed.body).toMatchObject({
       id: newSharedGroupId,
       isPrivate: false,
-      canRecordSharedTransactions: false,
+      canRecordSharedTransactions: true,
     });
   });
 
-  it("unlocks expenses and contributions as soon as a second member joins", async () => {
+  it("remains usable after a second member joins", async () => {
     await db.insert(groupMembershipsTable).values({
       groupId: newSharedGroupId,
       userId: secondMemberId,

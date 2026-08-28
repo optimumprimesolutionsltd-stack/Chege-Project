@@ -3,6 +3,7 @@ import {
   ACTIVE_WORKSPACE_STORAGE_KEY,
   budgetChooserCompleteStorageKey,
   completeMobileBudgetChooser,
+  hasValidMobileWorkspaceSelection,
   isMobileBudgetChooserComplete,
   leaveMobileSharedWorkspace,
   mobileBudgetEntryRedirect,
@@ -72,7 +73,23 @@ describe("mobile workspace transitions", () => {
     expect(resetQueries).not.toHaveBeenCalled();
   });
 
-  it("returns to My Budget after leaving instead of ending the session", async () => {
+  it("accepts only a stored workspace that the current membership list verifies", async () => {
+    const storage = { getItem: vi.fn(async (): Promise<string | null> => "42") };
+
+    await expect(hasValidMobileWorkspaceSelection({
+      storage,
+      workspaces: [{ id: 42 }],
+    })).resolves.toBe(true);
+    await expect(hasValidMobileWorkspaceSelection({
+      storage,
+      workspaces: [{ id: 7 }],
+    })).resolves.toBe(false);
+
+    storage.getItem.mockResolvedValueOnce(null);
+    await expect(hasValidMobileWorkspaceSelection({ storage, workspaces: [{ id: 42 }] })).resolves.toBe(false);
+  });
+
+  it("clears the workspace selection after leaving so the chooser can resolve what remains", async () => {
     const steps: string[] = [];
     const leave = vi.fn(async () => {
       steps.push("leave");

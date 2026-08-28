@@ -138,8 +138,6 @@ export default function AddExpenseSheet() {
   );
   const editingExpense = ((editExpensesQuery.data ?? []) as ExpenseRecord[])
     .find((expense) => expense.id === editId);
-  const sharedTransactionsLocked =
-    group?.canRecordSharedTransactions === false && members.length < 2;
   const canManageShared = group?.isPrivate === true
     || group?.role === 'owner'
     || group?.role === 'admin'
@@ -479,13 +477,6 @@ export default function AddExpenseSheet() {
       );
       return;
     }
-    if (!isEditMode && sharedTransactionsLocked) {
-      Alert.alert(
-        'Invite one more member',
-        'This new Shared budget needs two members before recording expenses. Bank activity and setup are still available.',
-      );
-      return;
-    }
     const parsed = parseFloat(amount.replace(/,/g, ''));
     if (!parsed || parsed <= 0) {
       Alert.alert('Amount required', 'Please enter a valid amount.');
@@ -663,7 +654,7 @@ export default function AddExpenseSheet() {
     } finally {
       setIsPending(false);
     }
-  }, [amount, category, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, selectedBankAccountId, members, canManageShared, user?.id, createExpenseAsync, updateExpense, invalidateExpenses, sharedTransactionsLocked, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty]);
+  }, [amount, category, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, selectedBankAccountId, members, canManageShared, user?.id, createExpenseAsync, updateExpense, invalidateExpenses, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty]);
 
   const handleRemove = useCallback(() => {
     if (!editingExpense || !canRemoveExpense) return;
@@ -743,8 +734,8 @@ export default function AddExpenseSheet() {
         <Text style={[styles.title, { color: colors.foreground }]}>{isEditMode ? 'Edit Expense' : 'Log Expense'}</Text>
         <Pressable
           onPress={handleSubmit}
-          disabled={isPending || (!isEditMode && sharedTransactionsLocked)}
-          style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isPending || (!isEditMode && sharedTransactionsLocked) ? 0.7 : 1 }]}
+          disabled={isPending}
+          style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isPending ? 0.7 : 1 }]}
         >
           {isPending ? (
             <ActivityIndicator size="small" color="#fff" />

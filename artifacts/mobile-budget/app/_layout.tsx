@@ -18,11 +18,18 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
-import { setBaseUrl, setAuthTokenGetter, setWorkspaceIdGetter } from '@workspace/api-client-react';
+import {
+  getGetWorkspacesQueryKey,
+  setBaseUrl,
+  setAuthTokenGetter,
+  setWorkspaceIdGetter,
+  useGetWorkspaces,
+} from '@workspace/api-client-react';
 import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
 import {
   ACTIVE_WORKSPACE_STORAGE_KEY,
+  hasValidMobileWorkspaceSelection,
   isMobileBudgetChooserComplete,
   mobileBudgetEntryRedirect,
 } from '@/lib/workspace';
@@ -105,9 +112,17 @@ function RootLayoutNav() {
   const currentRoute = segments[0];
   const isTabsRoute = segments[0] === '(tabs)';
   const isTabsHome = isTabsRoute && segments.length === 1;
-  const resolvedChooserUserId = useRef<string | null>(null);
   const allowWebExitRef = useRef(false);
   const [checkingChooser, setCheckingChooser] = useState(true);
+  const {
+    data: workspaces = [],
+    isLoading: loadingWorkspaces,
+  } = useGetWorkspaces({
+    query: {
+      queryKey: getGetWorkspacesQueryKey(),
+      enabled: isAuthenticated && !!user?.id && !user?.needsDisplayName,
+    },
+  });
 
   // Keep Android's hardware back action inside Jamvi. A back press from a
   // tab returns to the beginning instead of closing the app unexpectedly;
@@ -186,7 +201,6 @@ function RootLayoutNav() {
       return () => { active = false; };
     }
     if (!isAuthenticated) {
-      resolvedChooserUserId.current = null;
       setCheckingChooser(false);
       router.replace('/login');
       return () => { active = false; };
@@ -197,24 +211,26 @@ function RootLayoutNav() {
       return () => { active = false; };
     }
     if (!user?.id) return () => { active = false; };
-    if (resolvedChooserUserId.current === user.id) {
-      setCheckingChooser(false);
-      return () => { active = false; };
-    }
 
     setCheckingChooser(true);
-    void isMobileBudgetChooserComplete({ userId: user.id, storage: AsyncStorage })
-      .then((complete) => {
+    if (loadingWorkspaces) return () => { active = false; };
+    void Promise.all([
+      isMobileBudgetChooserComplete({ userId: user.id, storage: AsyncStorage }),
+      hasValidMobileWorkspaceSelection({ storage: AsyncStorage, workspaces }),
+    ])
+      .then(([chooserComplete, hasValidSelection]) => {
         if (!active) return;
-        resolvedChooserUserId.current = user.id;
-        const destination = mobileBudgetEntryRedirect({ chooserComplete: complete, currentRoute });
+        const destination = mobileBudgetEntryRedirect({
+          chooserComplete: chooserComplete && hasValidSelection,
+          currentRoute,
+        });
         if (destination) router.replace(destination);
       })
       .finally(() => {
         if (active) setCheckingChooser(false);
       });
     return () => { active = false; };
-  }, [isLoading, isAuthenticated, user?.id, user?.needsDisplayName, currentRoute]);
+  }, [isLoading, isAuthenticated, user?.id, user?.needsDisplayName, currentRoute, loadingWorkspaces, workspaces]);
 
   if (isLoading || checkingChooser) {
     return (

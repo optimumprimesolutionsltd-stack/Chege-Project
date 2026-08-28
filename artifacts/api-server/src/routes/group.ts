@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   db,
+  bankAccountsTable,
   budgetCategoriesTable,
   groupMembershipsTable,
   groupsTable,
@@ -105,6 +106,11 @@ router.post("/groups", async (req, res): Promise<void> => {
       userId: req.user!.id,
       role: "owner",
       addedByUserId: req.user!.id,
+    });
+    await tx.insert(bankAccountsTable).values({
+      groupId: created.id,
+      name: "Main account",
+      openingBalance: 0,
     });
     await tx.insert(budgetCategoriesTable).values(categoryPackRows(created.id, created.kind));
     return created;

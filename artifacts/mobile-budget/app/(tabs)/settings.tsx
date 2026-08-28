@@ -626,15 +626,13 @@ export default function SettingsScreen() {
           onPress: async () => {
             setManagingMembers(true);
             try {
-               // A person always keeps their Personal budget, so leaving a shared group
-              // returns them there instead of ending their Jamvi session.
               await leaveMobileSharedWorkspace({
                 leave: () => customFetch('/api/members/me', { method: 'DELETE' }),
                 storage: AsyncStorage,
                 resetQueries: () => queryClient.resetQueries(),
               });
-              router.replace('/(tabs)');
-               Alert.alert('You left the group', 'You are now back in your Personal budget.');
+              router.replace('/budget-chooser');
+              Alert.alert('You left the group', 'Choose another budget to continue.');
             } catch (error) {
               Alert.alert('Could not leave group', error instanceof Error ? error.message : 'Please try again.');
             } finally {

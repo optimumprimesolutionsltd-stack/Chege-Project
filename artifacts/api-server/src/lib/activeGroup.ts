@@ -1,17 +1,16 @@
 import type { Request, Response } from "express";
-import { db, groupMembershipsTable, groupsTable } from "@workspace/db";
-import { count, eq } from "drizzle-orm";
 
-// Version this preference so existing seven-day cookies from before My Budget
-// became the web default cannot keep reopening a shared workspace.
+// Version this browser-session selection independently from the retired
+// persistent workspace cookie.
 export const ACTIVE_WORKSPACE_COOKIE = "active_workspace_v2";
 export const LEGACY_ACTIVE_WORKSPACE_COOKIE = "active_workspace";
 
 export function setActiveWorkspaceCookie(res: Response, groupId: number): void {
   // The cookie only remembers a preference. Every protected request verifies
   // membership again before using it as the active workspace. It deliberately
-  // lasts for this browser session only, so opening Jamvi in a later web
-  // session starts from the user's private My Budget workspace.
+  // lasts for this browser session only. A later sign-in deliberately begins
+  // with no selection, which also works for people who only have shared
+  // workspaces.
   res.cookie(ACTIVE_WORKSPACE_COOKIE, String(groupId), {
     httpOnly: true,
     secure: true,
@@ -36,7 +35,7 @@ export function getActiveGroupId(req: Request, res: Response): number | null {
   }
 
   if (!req.group) {
-    res.status(403).json({ error: "Forbidden" });
+    res.status(403).json({ error: "Select a budget workspace first." });
     return null;
   }
 
@@ -67,32 +66,15 @@ export function requireSharedGroupManager(req: Request, res: Response): boolean 
   return requireGroupManager(req, res);
 }
 
-export const SHARED_TRANSACTION_MEMBER_REQUIREMENT =
-  "Invite at least one more member before recording shared expenses or contributions.";
-
 /**
- * Private budgets are intentionally usable by one owner. Legacy groups keep
- * their existing financial workflow, while newly created shared groups need a
- * second confirmed membership before they can record shared money activity.
+ * A workspace owner can start recording immediately. A shared budget does not
+ * become a different kind of ledger while it has only one member.
  */
 export async function canRecordSharedTransactions(
-  groupId: number,
-  isPrivate: boolean,
+  _groupId: number,
+  _isPrivate: boolean,
 ): Promise<boolean> {
-  if (isPrivate) return true;
-
-  const [group] = await db
-    .select({
-      legacyKey: groupsTable.legacyKey,
-      membershipCount: count(groupMembershipsTable.userId),
-    })
-    .from(groupsTable)
-    .leftJoin(groupMembershipsTable, eq(groupMembershipsTable.groupId, groupsTable.id))
-    .where(eq(groupsTable.id, groupId))
-    .groupBy(groupsTable.id, groupsTable.legacyKey)
-    .limit(1);
-
-  return Boolean(group?.legacyKey) || Number(group?.membershipCount ?? 0) >= 2;
+  return true;
 }
 
 export async function requireSharedTransactionEligibility(
@@ -111,12 +93,7 @@ export async function requireSharedTransactionEligibility(
     return true;
   }
 
-  if (await canRecordSharedTransactions(req.group.id, req.group.isPrivate)) {
-    return true;
-  }
-
-  res.status(409).json({ error: SHARED_TRANSACTION_MEMBER_REQUIREMENT });
-  return false;
+  return canRecordSharedTransactions(req.group.id, req.group.isPrivate);
 }
 
 /**

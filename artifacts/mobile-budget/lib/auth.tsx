@@ -78,9 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await res.json();
       if (data.user) {
-        // A fresh app launch or sign-in must begin in My budget rather
-        // than restoring the Shared budget selected in a previous session.
-        await AsyncStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+        // Keep the last selection across cold starts. RootLayout verifies this
+        // preference against the freshly loaded membership list before any
+        // financial screen renders, while explicit logout clears it below.
         setUser(data.user as AuthUser);
       } else {
         await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);

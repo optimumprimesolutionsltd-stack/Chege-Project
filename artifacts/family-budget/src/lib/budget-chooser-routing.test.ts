@@ -27,4 +27,22 @@ describe("budget chooser routing", () => {
   it("allows every authenticated route after completion", () => {
     expect(shouldShowBudgetChooser({ pathname: "/expenses", basePath: "/", completed: true })).toBe(false);
   });
+
+  it("returns shared-only users to the chooser when their active workspace is stale", () => {
+    expect(shouldShowBudgetChooser({
+      pathname: "/expenses",
+      basePath: "/",
+      completed: true,
+      requiresSelection: true,
+    })).toBe(true);
+  });
+
+  it("does not interrupt an invitation while a workspace selection is needed", () => {
+    expect(shouldShowBudgetChooser({
+      pathname: "/join/private-token",
+      basePath: "/",
+      completed: true,
+      requiresSelection: true,
+    })).toBe(false);
+  });
 });

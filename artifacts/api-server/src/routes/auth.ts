@@ -393,8 +393,8 @@ router.get('/callback', async (req: Request, res: Response) => {
   };
 
   const sid = await createSession(sessionData);
-  // A person may have been looking at a Shared budget before signing out.
-  // A new web sign-in must always begin in their Personal budget.
+  // Selection is browser-session scoped. Do not assume a Personal workspace:
+  // shared-only people must select one after a new web sign-in.
   clearActiveWorkspaceCookie(res);
   setSessionCookie(res, sid);
   res.redirect(returnTo);

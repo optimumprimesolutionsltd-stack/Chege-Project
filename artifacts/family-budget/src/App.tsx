@@ -24,6 +24,7 @@ import JoinGroupPage from '@/pages/join-group';
 import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal';
 import { BudgetChooser, hasCompletedBudgetChooser } from '@/components/budget-chooser';
 import { shouldShowBudgetChooser } from '@/lib/budget-chooser-routing';
+import { getGetWorkspacesQueryKey, useGetWorkspaces } from '@workspace/api-client-react';
 
 const queryClient = new QueryClient();
 
@@ -153,6 +154,16 @@ function NoGroupAccess({ voluntarilyLeft }: { voluntarilyLeft: boolean }) {
 function MainRouter() {
   const { isAuthenticated, isLoading, error: authError, retry: retryAuth, user } = useAuth();
   const {
+    data: workspaces = [],
+    isLoading: areWorkspacesLoading,
+    isError: workspacesFailed,
+  } = useGetWorkspaces({
+    query: {
+      queryKey: getGetWorkspacesQueryKey(),
+      enabled: isAuthenticated,
+    },
+  });
+  const {
     data: hasGroupAccess,
     isLoading: isCheckingGroupAccess,
     isError: groupAccessError,
@@ -203,7 +214,22 @@ function MainRouter() {
     return <LoginPage />;
   }
 
-  if (isCheckingGroupAccess) {
+  const completedBudgetChooser = hasCompletedBudgetChooser(user?.id ?? '');
+  const chooserRoute = shouldShowBudgetChooser({
+    pathname: window.location.pathname,
+    basePath: import.meta.env.BASE_URL,
+    completed: completedBudgetChooser,
+    // The server never silently falls back to another workspace. Any missing
+    // or stale selection must return to the chooser, whether the available
+    // budgets are Personal, Shared, or the list is currently empty.
+    requiresSelection: hasGroupAccess === false && !workspacesFailed,
+  });
+
+  if (chooserRoute) {
+    return <BudgetChooser user={user ?? {}} />;
+  }
+
+  if (isCheckingGroupAccess || areWorkspacesLoading) {
     return <AppLoading message="Loading your budget…" />;
   }
 
@@ -229,14 +255,6 @@ function MainRouter() {
 
   if (hasGroupAccess === false) {
     return <NoGroupAccess voluntarilyLeft={new URLSearchParams(window.location.search).get('left') === '1'} />;
-  }
-
-  if (shouldShowBudgetChooser({
-    pathname: window.location.pathname,
-    basePath: import.meta.env.BASE_URL,
-    completed: hasCompletedBudgetChooser(user?.id ?? ''),
-  })) {
-    return <BudgetChooser user={user ?? {}} />;
   }
 
   return <AuthenticatedApp />;

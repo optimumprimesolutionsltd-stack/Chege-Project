@@ -66,9 +66,17 @@ function selectQuery(fields: Record<string, unknown>) {
       const matchingMemberships = typeof requestedGroupId === "number"
         ? userMemberships.filter((membership) => membership.groupId === requestedGroupId)
         : userMemberships;
+      const privateIds = [...privateWorkspaceIds.values()];
+      const rowsWithJoinedGroup = matchingMemberships.map((membership) => ({
+        ...membership,
+        // getWorkspaceMembership selects this value from its groups join.
+        // Mirror that joined column so this mock exercises the production
+        // Boolean(privateOwnerUserId) behavior rather than omitting it.
+        isPrivate: privateIds.includes(membership.groupId) ? "workspace-owner" : null,
+      }));
       return sharedOnly
-        ? matchingMemberships.filter((membership) => ![...privateWorkspaceIds.values()].includes(membership.groupId))
-        : matchingMemberships;
+        ? rowsWithJoinedGroup.filter((membership) => !privateIds.includes(membership.groupId))
+        : rowsWithJoinedGroup;
     }
     if (table === groupsTable) {
       return "count" in fields
@@ -240,7 +248,9 @@ function protectedApp(userId: string) {
     next();
   });
   app.use(requireMember);
-  app.get("/protected", (req, res) => res.status(200).json({ groupId: (req as any).group.id }));
+  app.get("/protected", (req, res) => req.group
+    ? res.status(200).json({ groupId: req.group.id })
+    : res.status(403).json({ error: "Select a budget workspace first." }));
   return app;
 }
 
@@ -255,19 +265,19 @@ describe("requireMember", () => {
     vi.clearAllMocks();
   });
 
-  it("adopts the first authenticated member into the initial shared group", async () => {
+  it("leaves a new authenticated person without a workspace", async () => {
     const req = authenticatedRequest("first-member");
     const next = vi.fn();
 
     await requireMember(req, response(), next);
 
     expect(next).toHaveBeenCalledOnce();
-    expect(legacyMemberIds.has("first-member")).toBe(true);
-    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
-    expect(privateWorkspaceIds.has("first-member")).toBe(true);
+    expect(legacyMemberIds.has("first-member")).toBe(false);
+    expect(req.group).toBeUndefined();
+    expect(privateWorkspaceIds.has("first-member")).toBe(false);
   });
 
-  it("persists a fresh authenticated user before creating their Personal budget", async () => {
+  it("persists a fresh authenticated user without provisioning a Personal budget", async () => {
     const req = authenticatedRequest("fresh-user");
     const next = vi.fn();
 
@@ -275,11 +285,8 @@ describe("requireMember", () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect(persistedUserIds.has("fresh-user")).toBe(true);
-    expect(privateWorkspaceIds.has("fresh-user")).toBe(true);
-    expect(memberships.get("fresh-user")).toContainEqual({
-      groupId: 2,
-      role: "owner",
-    });
+    expect(privateWorkspaceIds.has("fresh-user")).toBe(false);
+    expect(memberships.get("fresh-user")).toBeUndefined();
   });
 
   it("reuses an existing group membership without re-adopting the ledger", async () => {
@@ -289,11 +296,11 @@ describe("requireMember", () => {
 
     await requireMember(req, response(), vi.fn());
 
-    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
+    expect(req.group).toBeUndefined();
     expect(tx.update).not.toHaveBeenCalled();
   });
 
-  it("gives a removed member a private workspace without restoring shared membership", async () => {
+  it("does not restore a removed member or provision a private workspace", async () => {
     groupExists = true;
     legacyMemberIds.add("removed-member");
     const req = authenticatedRequest("removed-member");
@@ -302,19 +309,18 @@ describe("requireMember", () => {
     await requireMember(req, response(), next);
 
     expect(next).toHaveBeenCalledOnce();
-    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
-    expect(memberships.get("removed-member")).toEqual([{ groupId: 2, role: "owner" }]);
+    expect(req.group).toBeUndefined();
+    expect(memberships.get("removed-member")).toBeUndefined();
   });
 
-  it("allows a removed member into their private budget on the next protected request", async () => {
+  it("forbids financial routes for a removed member without a selected workspace", async () => {
     groupExists = true;
     legacyMemberIds.add("removed-member");
 
     const res = await request(protectedApp("removed-member")).get("/protected");
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ groupId: 2 });
-    expect(memberships.get("removed-member")).toEqual([{ groupId: 2, role: "owner" }]);
+    expect(res.status).toBe(403);
+    expect(memberships.get("removed-member")).toBeUndefined();
   });
 
   it("uses a selected shared workspace only when the signed-in person is still a member", async () => {
@@ -347,7 +353,34 @@ describe("requireMember", () => {
     expect(req.group).toEqual({ id: 7, role: "member", isPrivate: false });
   });
 
-  it("starts in My Budget instead of honoring the legacy persistent workspace cookie", async () => {
+  it("clears a stale browser selection instead of falling back to another workspace", async () => {
+    groupExists = true;
+    privateWorkspaceIds.set("member", 2);
+    memberships.set("member", [{ groupId: 2, role: "owner" }]);
+    const req = authenticatedRequest("member");
+    req.cookies = { [ACTIVE_WORKSPACE_COOKIE]: "999" };
+    const res = response();
+
+    await requireMember(req, res, vi.fn());
+
+    expect(req.group).toBeUndefined();
+    expect(res.clearCookie).toHaveBeenCalledWith(ACTIVE_WORKSPACE_COOKIE, { path: "/" });
+  });
+
+  it("keeps an existing Personal workspace available when it is explicitly selected", async () => {
+    groupExists = true;
+    privateWorkspaceIds.set("owner", 2);
+    memberships.set("owner", [{ groupId: 2, role: "owner" }]);
+    const req = authenticatedRequest("owner");
+    req.cookies = { [ACTIVE_WORKSPACE_COOKIE]: "2" };
+
+    await requireMember(req, response(), vi.fn());
+
+    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
+    expect(privateWorkspaceIds).toEqual(new Map([["owner", 2]]));
+  });
+
+  it("clears a legacy cookie without selecting a fallback workspace", async () => {
     groupExists = true;
     privateWorkspaceIds.set("member", 2);
     memberships.set("member", [
@@ -360,7 +393,7 @@ describe("requireMember", () => {
 
     await requireMember(req, res, vi.fn());
 
-    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
+    expect(req.group).toBeUndefined();
     expect(res.clearCookie).toHaveBeenCalledWith(LEGACY_ACTIVE_WORKSPACE_COOKIE, { path: "/" });
   });
 
@@ -380,7 +413,7 @@ describe("requireMember", () => {
     expect(req.group).toEqual({ id: 7, role: "member", isPrivate: false });
   });
 
-  it("falls back to My Budget when a mobile client sends a stale workspace id", async () => {
+  it("does not fall back when a mobile client sends a stale workspace id", async () => {
     groupExists = true;
     privateWorkspaceIds.set("member", 2);
     memberships.set("member", [{ groupId: 2, role: "owner" }]);
@@ -389,6 +422,6 @@ describe("requireMember", () => {
 
     await requireMember(req, response(), vi.fn());
 
-    expect(req.group).toEqual({ id: 2, role: "owner", isPrivate: true });
+    expect(req.group).toBeUndefined();
   });
 });

@@ -6,7 +6,6 @@ import {
   digestSendsTable,
   expenseIncomeSplitsTable,
   expensesTable,
-  GROUP_KIND,
   groupMembershipsTable,
   groupsTable,
   incomeSourcesTable,
@@ -42,7 +41,7 @@ async function ensureAuthenticatedUser(userId: string): Promise<void> {
 }
 
 /**
- * Resolves a signed-in person's private group before protected routes.
+ * Adopts the historic implicit ledger before protected routes.
  *
  * The app historically had one implicit shared ledger. On the first protected
  * request after the additive schema change, that ledger is adopted into one
@@ -72,6 +71,11 @@ async function adoptLegacyGroup(userId: string) {
       .where(eq(membersTable.userId, userId))
       .limit(1);
 
+    // Adoption is only for an actual pre-workspace ledger member. In an empty
+    // database, a newly authenticated user intentionally has no workspace
+    // until they create one or accept an invitation.
+    if (!legacyMember) return undefined;
+
     const [groupCount] = await tx
       .select({ count: sql<number>`COUNT(*)` })
       .from(groupsTable);
@@ -96,13 +100,6 @@ async function adoptLegacyGroup(userId: string) {
       .where(eq(groupsTable.legacyKey, LEGACY_GROUP_KEY))
       .limit(1);
     if (!group) throw new Error("Unable to establish the shared budget group.");
-
-    if (!legacyMember) {
-      await tx
-        .insert(membersTable)
-        .values({ userId, groupId: group.id, addedByUserId: null })
-        .onConflictDoNothing();
-    }
 
     await Promise.all([
       tx.update(membersTable).set({ groupId: group.id }).where(isNull(membersTable.groupId)),
@@ -168,51 +165,6 @@ async function adoptLegacyGroup(userId: string) {
   });
 }
 
-/**
- * Every signed-in person has one owner-only primary budget. This uses a unique
- * owner marker instead of a name so a renamed private budget cannot be
- * confused with a shared group.
- */
-async function ensurePrivateWorkspace(userId: string) {
-  return db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select({ id: groupsTable.id })
-      .from(groupsTable)
-      .where(eq(groupsTable.privateOwnerUserId, userId))
-      .limit(1);
-    if (existing) return existing.id;
-
-    await tx
-      .insert(groupsTable)
-      .values({
-        name: "My Budget",
-        createdByUserId: userId,
-        privateOwnerUserId: userId,
-        kind: GROUP_KIND.PERSONAL,
-      })
-      .onConflictDoNothing();
-
-    const [created] = await tx
-      .select({ id: groupsTable.id })
-      .from(groupsTable)
-      .where(eq(groupsTable.privateOwnerUserId, userId))
-      .limit(1);
-    if (!created) throw new Error("Unable to establish the private budget workspace.");
-
-    await tx
-      .insert(groupMembershipsTable)
-      .values({
-        groupId: created.id,
-        userId,
-        role: "owner",
-        addedByUserId: userId,
-      })
-      .onConflictDoNothing();
-
-    return created.id;
-  });
-}
-
 async function getWorkspaceMembership(userId: string, groupId: number) {
   const [membership] = await db
     .select({
@@ -246,7 +198,6 @@ export async function requireMember(
     const userId = req.user.id;
     await ensureAuthenticatedUser(userId);
     await adoptLegacyGroup(userId);
-    const privateWorkspaceId = await ensurePrivateWorkspace(userId);
     const headerWorkspaceId = typeof req.get === "function"
       ? req.get("x-jamvi-workspace")
       : undefined;
@@ -272,11 +223,10 @@ export async function requireMember(
       if (!headerWorkspaceId && typeof cookieWorkspaceId === "string") {
         clearActiveWorkspaceCookie(res);
       }
-      req.group = {
-        id: privateWorkspaceId,
-        role: "owner",
-        isPrivate: true,
-      };
+      // Never point an unselected or stale request at a different workspace.
+      // Discovery and creation routes can still run; financial routes require
+      // getActiveGroupId and reject the request until one is selected.
+      delete req.group;
     }
 
     next();

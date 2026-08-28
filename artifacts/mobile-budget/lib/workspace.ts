@@ -42,6 +42,26 @@ export async function isMobileBudgetChooserComplete({
   }
 }
 
+/**
+ * A stored workspace id is only a preference, never proof of access. Verify it
+ * against the signed-in person's current workspace list before opening tabs.
+ */
+export async function hasValidMobileWorkspaceSelection({
+  storage,
+  workspaces,
+}: {
+  storage: Pick<WorkspaceStorage, "getItem">;
+  workspaces: ReadonlyArray<{ id: number }>;
+}): Promise<boolean> {
+  try {
+    const storedId = await storage.getItem?.(ACTIVE_WORKSPACE_STORAGE_KEY);
+    if (!storedId || !/^\d+$/.test(storedId)) return false;
+    return workspaces.some((workspace) => workspace.id === Number(storedId));
+  } catch {
+    return false;
+  }
+}
+
 export async function completeMobileBudgetChooser({
   userId,
   storage,
@@ -85,10 +105,7 @@ export async function switchMobileWorkspace({
   await activateMobileWorkspace({ groupId, storage, resetQueries });
 }
 
-/**
- * A person who leaves a shared group still has My Budget. Removing the stale
- * preference lets the next verified request resolve that private workspace.
- */
+/** Remove the stale selection after leaving; the chooser resolves what remains. */
 export async function leaveMobileSharedWorkspace({
   leave,
   storage,

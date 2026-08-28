@@ -2,10 +2,14 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,6 +18,7 @@ import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useGetWorkspaces,
+  useCreateSharedGroup,
   useSelectWorkspace,
   type Workspace,
 } from '@workspace/api-client-react';
@@ -21,10 +26,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import {
+  activateMobileWorkspace,
   completeMobileBudgetChooser,
   switchMobileWorkspace,
 } from '@/lib/workspace';
-import { sharedGroupKindDetails } from '@/lib/groupKinds';
+import {
+  SHARED_GROUP_KINDS,
+  sharedGroupKindDetails,
+  type SharedGroupKind,
+} from '@/lib/groupKinds';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 
 function sharedWorkspaceIcon(icon?: string | null): keyof typeof Feather.glyphMap {
@@ -46,7 +56,11 @@ export default function BudgetChooserScreen() {
   const { user } = useAuth();
   const { data: workspaces = [], isLoading: loadingWorkspaces, error: workspaceError } = useGetWorkspaces();
   const selectWorkspace = useSelectWorkspace();
+  const createSharedGroup = useCreateSharedGroup();
   const [error, setError] = useState<string | null>(null);
+  const [createSharedOpen, setCreateSharedOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupKind, setNewGroupKind] = useState<SharedGroupKind | null>(null);
 
   const privateWorkspace = workspaces.find((workspace) => workspace.isPrivate);
   const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
@@ -71,6 +85,29 @@ export default function BudgetChooserScreen() {
       await finish();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not open this budget. Please try again.');
+    }
+  };
+  const createSharedBudget = async () => {
+    const name = newGroupName.trim();
+    if (name.length < 2) {
+      setError('Enter a Shared budget name with at least two characters.');
+      return;
+    }
+    if (!newGroupKind) {
+      setError('Choose what this Shared budget is for.');
+      return;
+    }
+    setError(null);
+    try {
+      const workspace = await createSharedGroup.mutateAsync({ data: { name, kind: newGroupKind } });
+      await activateMobileWorkspace({
+        groupId: workspace.id,
+        storage: AsyncStorage,
+        resetQueries: () => queryClient.resetQueries(),
+      });
+      await finish();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not create this Shared budget. Please try again.');
     }
   };
   const workspaceRow = (workspace: Workspace, personal = false) => {
@@ -158,7 +195,22 @@ export default function BudgetChooserScreen() {
             <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>Click a budget to open it.</Text>
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PERSONAL BUDGET</Text>
             {privateWorkspace ? workspaceRow(privateWorkspace, true) : (
-              <Text style={[styles.empty, { color: colors.mutedForeground }]}>Your personal budget is being prepared. Try again in a moment.</Text>
+              <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.createCardCopy}>
+                  <Text style={[styles.createTitle, { color: colors.foreground }]}>Start a Shared budget</Text>
+                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>Name it, choose its purpose, and start managing money right away.</Text>
+                </View>
+                <Pressable
+                  testID="create-shared-budget"
+                  accessibilityRole="button"
+                  accessibilityLabel="Create a Shared budget"
+                  onPress={() => { setError(null); setCreateSharedOpen(true); }}
+                  style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+                >
+                  <Feather name="plus" size={18} color={colors.primaryForeground} />
+                  <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared budget</Text>
+                </Pressable>
+              </View>
             )}
 
             <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGETS</Text></View>
@@ -167,10 +219,55 @@ export default function BudgetChooserScreen() {
           </>
         )}
       </ScrollView>
+      <Modal visible={createSharedOpen} transparent animationType="fade" onRequestClose={() => setCreateSharedOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.scrim}>
+          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+            <View style={[styles.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.modalHeader}>
+                <View style={styles.workspaceText}>
+                  <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
+                  <Text style={[styles.modalCopy, { color: colors.mutedForeground }]}>You can use expenses, contributions, goals, and bank activity as its owner—even before inviting anyone.</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel="Close Shared budget creation" hitSlop={10} onPress={() => setCreateSharedOpen(false)}>
+                  <Feather name="x" size={21} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+              <TextInput
+                testID="new-shared-budget-name"
+                autoFocus
+                maxLength={60}
+                value={newGroupName}
+                onChangeText={setNewGroupName}
+                placeholder="e.g. Mwangaza Chama"
+                placeholderTextColor={colors.mutedForeground}
+                accessibilityLabel="Shared budget name"
+                style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
+              />
+              <Text style={[styles.kindTitle, { color: colors.foreground }]}>What is this budget for?</Text>
+              {SHARED_GROUP_KINDS.map((choice) => {
+                const selected = newGroupKind === choice.value;
+                return <Pressable key={choice.value} testID={`shared-budget-kind-${choice.value}`}
+                  accessibilityRole="radio" accessibilityState={{ checked: selected }}
+                  accessibilityLabel={choice.label} onPress={() => setNewGroupKind(choice.value)}
+                  style={[styles.kind, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary + '12' : colors.background }]}>
+                  <View style={styles.workspaceText}><Text style={[styles.kindTitle, { color: selected ? colors.primary : colors.foreground }]}>{choice.label}</Text><Text style={[styles.kindDescription, { color: colors.mutedForeground }]}>{choice.description}</Text></View>
+                  {selected ? <Feather name="check-circle" size={20} color={colors.primary} /> : null}
+                </Pressable>;
+              })}
+              <Pressable testID="confirm-create-shared-budget" accessibilityRole="button"
+                accessibilityLabel="Create Shared budget" disabled={createSharedGroup.isPending}
+                onPress={() => void createSharedBudget()}
+                style={[styles.primaryButton, { backgroundColor: colors.primary }, createSharedGroup.isPending && styles.disabled]}>
+                {createSharedGroup.isPending ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={[styles.primaryText, { color: colors.primaryForeground }]}>Create and open Shared budget</Text>}
+              </Pressable>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1 }, content: { paddingHorizontal: 20, gap: 12 }, mark: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1 }, title: { fontSize: 27, fontWeight: '700' }, intro: { fontSize: 15, lineHeight: 22, marginBottom: 10 }, selectedPanel: { borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 8 }, selectedHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }, selectedIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, selectedLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1 }, selectedTitle: { fontSize: 20, fontWeight: '700', marginTop: 3 }, selectedDetail: { fontSize: 13, lineHeight: 19, marginTop: 5 }, openButton: { minHeight: 50, borderRadius: 12, paddingHorizontal: 15, marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, openButtonText: { fontSize: 15, fontWeight: '700' }, secondaryRow: { flexDirection: 'row', gap: 8, marginTop: 12 }, secondaryAction: { minHeight: 42, borderWidth: 1, borderRadius: 11, flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, secondaryText: { fontSize: 13, fontWeight: '600' }, sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: .9, marginTop: 8 }, sectionTitle: { fontSize: 23, fontWeight: '700', marginTop: -4 }, sectionDescription: { fontSize: 13, lineHeight: 19, marginTop: -5, marginBottom: 3 }, sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }, workspace: { minHeight: 72, borderRadius: 12, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 }, pressed: { opacity: .72 }, workspaceIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, workspacePhoto: { width: 40, height: 40, borderRadius: 12, borderWidth: 2 }, workspaceEmoji: { fontSize: 20 }, workspaceText: { flex: 1 }, workspaceTitle: { fontSize: 16, fontWeight: '600' }, workspaceDetail: { fontSize: 13, marginTop: 3 }, loader: { marginVertical: 22 }, empty: { fontSize: 14, lineHeight: 20, paddingVertical: 8 }, explanation: { flexDirection: 'row', gap: 10, borderRadius: 12, padding: 14, marginTop: 12 }, explanationText: { flex: 1, fontSize: 13, lineHeight: 19 }, error: { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 10 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' }, modal: { maxHeight: '88%', borderTopWidth: 1, borderRadius: 20, padding: 20, gap: 12 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 20, fontWeight: '700' }, modalCopy: { fontSize: 14, lineHeight: 20 }, input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, height: 48, fontSize: 16 }, kind: { borderWidth: 1, borderRadius: 10, padding: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, kindTitle: { fontSize: 14, fontWeight: '600' }, kindDescription: { fontSize: 12, lineHeight: 16, maxWidth: 265, marginTop: 2 }, primaryButton: { height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginTop: 4 }, primaryText: { fontSize: 16, fontWeight: '700' }, disabled: { opacity: .6 },
+  page: { flex: 1 }, content: { paddingHorizontal: 20, gap: 12 }, mark: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1 }, title: { fontSize: 27, fontWeight: '700' }, intro: { fontSize: 15, lineHeight: 22, marginBottom: 10 }, selectedPanel: { borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 8 }, selectedHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }, selectedIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, selectedLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1 }, selectedTitle: { fontSize: 20, fontWeight: '700', marginTop: 3 }, selectedDetail: { fontSize: 13, lineHeight: 19, marginTop: 5 }, openButton: { minHeight: 50, borderRadius: 12, paddingHorizontal: 15, marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, openButtonText: { fontSize: 15, fontWeight: '700' }, secondaryRow: { flexDirection: 'row', gap: 8, marginTop: 12 }, secondaryAction: { minHeight: 42, borderWidth: 1, borderRadius: 11, flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, secondaryText: { fontSize: 13, fontWeight: '600' }, sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: .9, marginTop: 8 }, sectionTitle: { fontSize: 23, fontWeight: '700', marginTop: -4 }, sectionDescription: { fontSize: 13, lineHeight: 19, marginTop: -5, marginBottom: 3 }, sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }, workspace: { minHeight: 72, borderRadius: 12, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 }, pressed: { opacity: .72 }, workspaceIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, workspacePhoto: { width: 40, height: 40, borderRadius: 12, borderWidth: 2 }, workspaceEmoji: { fontSize: 20 }, workspaceText: { flex: 1 }, workspaceTitle: { fontSize: 16, fontWeight: '600' }, workspaceDetail: { fontSize: 13, marginTop: 3 }, loader: { marginVertical: 22 }, empty: { fontSize: 14, lineHeight: 20, paddingVertical: 8 }, createCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12 }, createCardCopy: { gap: 4 }, createTitle: { fontSize: 16, fontWeight: '700' }, createText: { fontSize: 13, lineHeight: 19 }, createButton: { minHeight: 46, borderRadius: 11, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 }, createButtonText: { fontSize: 14, fontWeight: '700' }, explanation: { flexDirection: 'row', gap: 10, borderRadius: 12, padding: 14, marginTop: 12 }, explanationText: { flex: 1, fontSize: 13, lineHeight: 19 }, error: { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 10 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' }, modalScroll: { flexGrow: 1, justifyContent: 'flex-end' }, modal: { maxHeight: '88%', borderTopWidth: 1, borderRadius: 20, padding: 20, gap: 12 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 20, fontWeight: '700' }, modalCopy: { fontSize: 14, lineHeight: 20 }, input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, height: 48, fontSize: 16 }, kind: { borderWidth: 1, borderRadius: 10, padding: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, kindTitle: { fontSize: 14, fontWeight: '600' }, kindDescription: { fontSize: 12, lineHeight: 16, maxWidth: 265, marginTop: 2 }, primaryButton: { height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginTop: 4 }, primaryText: { fontSize: 16, fontWeight: '700' }, disabled: { opacity: .6 },
 });
