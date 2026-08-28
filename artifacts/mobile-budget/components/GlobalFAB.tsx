@@ -21,7 +21,7 @@ export function GlobalFAB() {
 
   const fabBottom  = Platform.OS === 'web' ? 100 : insets.bottom + 70;
   const menuBottom = Platform.OS === 'web' ? 166 : insets.bottom + 136;
-  const isTabHome = segments[0] === '(tabs)' && !segments[1];
+  const isTabHome = segments[0] === '(tabs)' && segments.length === 1;
   const goHome = () => {
     setOpen(false);
     router.replace('/(tabs)');

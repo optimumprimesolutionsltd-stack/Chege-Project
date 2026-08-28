@@ -104,7 +104,7 @@ function RootLayoutNav() {
   const segments = useSegments();
   const currentRoute = segments[0];
   const isTabsRoute = segments[0] === '(tabs)';
-  const isTabsHome = isTabsRoute && !segments[1];
+  const isTabsHome = isTabsRoute && segments.length === 1;
   const resolvedChooserUserId = useRef<string | null>(null);
   const allowWebExitRef = useRef(false);
   const [checkingChooser, setCheckingChooser] = useState(true);
