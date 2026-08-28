@@ -1,0 +1,118 @@
+Task: get the Jamvi marketing website into GitHub, then fix a specific list of
+problems on it. Do these in order — the push comes first and is not optional.
+
+Do not redesign anything. The design, layout and copy voice are good. These
+are targeted corrections.
+
+═══ PHASE 1: GET IT INTO VERSION CONTROL ═══
+
+The website exists only in this workspace. It is live, but no copy is in
+GitHub — main still has the old <title>Jamvi</title> with none of the
+marketing site. If this workspace is lost, the site is gone.
+
+1. Find where the site lives. Report the exact paths and how it is built and
+   served. Look, do not assume.
+
+2. Check the workspace against the remote BEFORE pushing:
+       git fetch origin
+       git rev-list --left-right --count origin/main...HEAD
+   Report BOTH numbers. This workspace has previously been 45 commits behind
+   and 25 ahead at the same time, with real work stranded on both sides. If
+   the second number is large, STOP and show me the difference rather than
+   pushing, merging or resetting.
+
+3. If the divergence is small or zero, commit and push the site to main.
+   Report the commit SHA.
+
+Do not proceed to Phase 2 until the site is on GitHub.
+
+═══ PHASE 2: THE FIXES ═══
+
+1. REMOVE THE FALSE SOCIAL PROOF — most important
+
+   The homepage says:
+     "Trusted by families & groups across Kenya"  (with three avatars)
+     "Join thousands of Kenyans managing their money with clarity and
+      confidence."
+
+   Jamvi has no users. Both claims are untrue. For a product asking people to
+   trust it with money, invented social proof is the wrong foundation, and in
+   Kenya it is the kind of claim consumer-protection rules take seriously.
+
+   Replace with something true, e.g. "Built in Nairobi, for how Kenyans
+   actually manage money". Remove the avatar cluster. Rewrite the closing call
+   to action so it makes no claim about user numbers.
+
+   Do not substitute another unverifiable claim. No testimonials, no counts,
+   no ratings, no company logos.
+
+2. THE MEMBER LIMIT IS WRONG — the site contradicts the app
+
+   Pricing says "Up to 5 members per group". The application enforces SIX.
+   A family of six would be told they must pay, then find they do not.
+
+   Change the site to 6 everywhere it appears, not just the pricing card.
+   Six is deliberate: it covers two parents and four children, while a chama
+   of 12 to 30 is clearly over.
+
+3. STATE THAT JAMVI DOES NOT MOVE MONEY
+
+   Nothing on the site says this. A chama treasurer will assume we hold funds
+   unless told otherwise, and that matters legally.
+
+   Jamvi RECORDS contributions, expenses and balances. It does not send,
+   receive or hold money, and is not a payment service.
+
+   Put it plainly in the FAQ and add a short line on the homepage. Do not
+   bury or soften it.
+
+4. ATTRIBUTE THE PRODUCT TO ITS COMPANY
+
+   You have no context on this, so here are the facts. Jamvi is built by
+   Optimum Prime Solutions Ltd, a registered company in Nairobi, Kenya.
+   Contact: info@optimumprimesolutions.co.ke. Website:
+   optimumprimesolutions.co.ke.
+
+   ADD: a footer line on every page — "Jamvi is a product of Optimum Prime
+   Solutions Ltd, Nairobi." — and a short paragraph on the About page naming
+   the company. CHECK THE ABOUT PAGE FIRST; it may already say this.
+
+   DO NOT put the company name in the logo, header, navigation, page titles,
+   meta titles, the hero, or social handles. Jamvi is the brand people meet;
+   Optimum is who they find when they look for who is accountable.
+
+5. PER-PAGE METADATA IS NOT IN THE HTML
+
+   Every route — /, /pricing, /about, /faq — serves the same <title>,
+   description and og:title. The real ones are set by JavaScript after load.
+
+   WhatsApp, Facebook and X read raw HTML and do not run JavaScript, so every
+   shared Jamvi link previews identically whatever page it points to. For a
+   Kenyan product shared through WhatsApp groups, that is the most important
+   surface on the site.
+
+   Each page needs its own title, description, og:title, og:description and
+   og:image in the initial HTML response.
+
+6. DROP THE OVERCLAIM
+
+   "Syncs perfectly across all your devices" — remove "perfectly". It is the
+   one claim a single bad sync disproves.
+
+7. FIX THE HERO ANIMATION
+
+   The headline fades in from near-invisible and is briefly unreadable. On a
+   mid-range phone on mobile data it is the first thing a visitor sees. Start
+   the text at full contrast or shorten the animation substantially, and
+   respect prefers-reduced-motion.
+
+8. CONFIRM TWO COMMITMENTS BEFORE THEY GO LIVE
+
+   The FAQ mentions "non-profit discounts" — only keep it if we intend to
+   offer them. The pricing page states KES 500/month publicly. Flag both to
+   me rather than deciding yourself.
+
+═══ WHEN DONE ═══
+
+Push. Report what you changed, the commit SHAs, and anything you were unsure
+about rather than guessing.
