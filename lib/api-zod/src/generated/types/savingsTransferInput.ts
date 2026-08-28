@@ -19,4 +19,6 @@ export interface SavingsTransferInput {
   date: Date;
   /** @nullable */
   madeById?: string | null;
+  /** @minimum 1 */
+  accountId?: number;
 }

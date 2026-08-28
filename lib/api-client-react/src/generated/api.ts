@@ -25,6 +25,9 @@ import type {
   ApplyRecurringInput,
   ApplyRecurringResult,
   AuthUserEnvelope,
+  BankAccount,
+  BankAccountInput,
+  BankAccountUpdate,
   BudgetCategory,
   BudgetCategoryInput,
   BudgetCategoryRecommendationApplyInput,
@@ -56,6 +59,7 @@ import type {
   GetDashboardTrendsParams,
   GetExpensesParams,
   GetIncomeSourcesParams,
+  GetJointAccountParams,
   Group,
   GroupInvitation,
   GroupInvitationContact,
@@ -2412,20 +2416,27 @@ export const useCreateSavingsGoal = <TError = ErrorType<unknown>,
       return useMutation(getCreateSavingsGoalMutationOptions(options));
     }
 
-export const getGetJointAccountUrl = () => {
+export const getGetJointAccountUrl = (params?: GetJointAccountParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/joint-account`
+  return stringifiedParams.length > 0 ? `/api/joint-account?${stringifiedParams}` : `/api/joint-account`
 }
 
 /**
- * @summary Get joint account balance and all transactions
+ * @summary Get one account when accountId is supplied, or aggregate all workspace accounts when omitted
  */
-export const getJointAccount = async ( options?: Parameters<typeof customFetch>[1]): Promise<JointAccountSummary> => {
+export const getJointAccount = async (params?: GetJointAccountParams, options?: Parameters<typeof customFetch>[1]): Promise<JointAccountSummary> => {
 
-  return customFetch<JointAccountSummary>(getGetJointAccountUrl(),
+  return customFetch<JointAccountSummary>(getGetJointAccountUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2438,23 +2449,23 @@ export const getJointAccount = async ( options?: Parameters<typeof customFetch>[
 
 
 
-export const getGetJointAccountQueryKey = () => {
+export const getGetJointAccountQueryKey = (params?: GetJointAccountParams,) => {
     return [
-    `/api/joint-account`
+    `/api/joint-account`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetJointAccountQueryOptions = <TData = Awaited<ReturnType<typeof getJointAccount>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJointAccount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetJointAccountQueryOptions = <TData = Awaited<ReturnType<typeof getJointAccount>>, TError = ErrorType<unknown>>(params?: GetJointAccountParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJointAccount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetJointAccountQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetJointAccountQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJointAccount>>> = ({ signal }) => getJointAccount({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJointAccount>>> = ({ signal }) => getJointAccount(params, { signal, ...requestOptions });
 
 
 
@@ -2468,15 +2479,15 @@ export type GetJointAccountQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Get joint account balance and all transactions
+ * @summary Get one account when accountId is supplied, or aggregate all workspace accounts when omitted
  */
 
 export function useGetJointAccount<TData = Awaited<ReturnType<typeof getJointAccount>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJointAccount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetJointAccountParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJointAccount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetJointAccountQueryOptions(options)
+  const queryOptions = getGetJointAccountQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -2985,6 +2996,297 @@ export const useDeleteJointAccountTransaction = <TError = ErrorType<ErrorRespons
         TContext
       > => {
       return useMutation(getDeleteJointAccountTransactionMutationOptions(options));
+    }
+
+export const getGetJointAccountsUrl = () => {
+
+
+
+
+  return `/api/joint-accounts`
+}
+
+/**
+ * @summary List bank accounts in the active workspace
+ */
+export const getJointAccounts = async ( options?: Parameters<typeof customFetch>[1]): Promise<BankAccount[]> => {
+
+  return customFetch<BankAccount[]>(getGetJointAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetJointAccountsQueryKey = () => {
+    return [
+    `/api/joint-accounts`
+    ] as const;
+    }
+
+
+export const getGetJointAccountsQueryOptions = <TData = Awaited<ReturnType<typeof getJointAccounts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJointAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetJointAccountsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJointAccounts>>> = ({ signal }) => getJointAccounts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getJointAccounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetJointAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof getJointAccounts>>>
+export type GetJointAccountsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List bank accounts in the active workspace
+ */
+
+export function useGetJointAccounts<TData = Awaited<ReturnType<typeof getJointAccounts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJointAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetJointAccountsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateJointAccountUrl = () => {
+
+
+
+
+  return `/api/joint-accounts`
+}
+
+/**
+ * @summary Create a workspace bank account
+ */
+export const createJointAccount = async (bankAccountInput: BankAccountInput, options?: Parameters<typeof customFetch>[1]): Promise<BankAccount> => {
+
+  return customFetch<BankAccount>(getCreateJointAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankAccountInput)
+  }
+);}
+
+
+
+
+
+export const getCreateJointAccountMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJointAccount>>, TError,{data: BodyType<BankAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createJointAccount>>, TError,{data: BodyType<BankAccountInput>}, TContext> => {
+
+const mutationKey = ['createJointAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createJointAccount>>, {data: BodyType<BankAccountInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createJointAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateJointAccountMutationResult = NonNullable<Awaited<ReturnType<typeof createJointAccount>>>
+    export type CreateJointAccountMutationBody = BodyType<BankAccountInput>
+    export type CreateJointAccountMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a workspace bank account
+ */
+export const useCreateJointAccount = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJointAccount>>, TError,{data: BodyType<BankAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createJointAccount>>,
+        TError,
+        {data: BodyType<BankAccountInput>},
+        TContext
+      > => {
+      return useMutation(getCreateJointAccountMutationOptions(options));
+    }
+
+export const getUpdateJointAccountUrl = (id: number,) => {
+
+
+
+
+  return `/api/joint-accounts/${id}`
+}
+
+/**
+ * @summary Rename a workspace bank account or update its opening balance
+ */
+export const updateJointAccount = async (id: number,
+    bankAccountUpdate: BankAccountUpdate, options?: Parameters<typeof customFetch>[1]): Promise<BankAccount> => {
+
+  return customFetch<BankAccount>(getUpdateJointAccountUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankAccountUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateJointAccountMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateJointAccount>>, TError,{id: number;data: BodyType<BankAccountUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateJointAccount>>, TError,{id: number;data: BodyType<BankAccountUpdate>}, TContext> => {
+
+const mutationKey = ['updateJointAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateJointAccount>>, {id: number;data: BodyType<BankAccountUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateJointAccount(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateJointAccountMutationResult = NonNullable<Awaited<ReturnType<typeof updateJointAccount>>>
+    export type UpdateJointAccountMutationBody = BodyType<BankAccountUpdate>
+    export type UpdateJointAccountMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Rename a workspace bank account or update its opening balance
+ */
+export const useUpdateJointAccount = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateJointAccount>>, TError,{id: number;data: BodyType<BankAccountUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateJointAccount>>,
+        TError,
+        {id: number;data: BodyType<BankAccountUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateJointAccountMutationOptions(options));
+    }
+
+export const getDeleteJointAccountUrl = (id: number,) => {
+
+
+
+
+  return `/api/joint-accounts/${id}`
+}
+
+/**
+ * @summary Delete a bank account with no transaction history
+ */
+export const deleteJointAccount = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteJointAccountUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteJointAccountMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteJointAccount>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteJointAccount>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteJointAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteJointAccount>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteJointAccount(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteJointAccountMutationResult = NonNullable<Awaited<ReturnType<typeof deleteJointAccount>>>
+
+    export type DeleteJointAccountMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a bank account with no transaction history
+ */
+export const useDeleteJointAccount = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteJointAccount>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteJointAccount>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteJointAccountMutationOptions(options));
     }
 
 export const getCascadeContributeUrl = () => {

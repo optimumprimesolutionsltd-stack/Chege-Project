@@ -20,6 +20,7 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { PageFlatList } from '@/components/PageScrollReset';
 import {
@@ -39,6 +40,11 @@ import {
   getGetSavingsGoalsQueryKey,
   useUpdateJointAccountOpeningBalance,
   useGetGroup,
+  useGetJointAccounts,
+  useCreateJointAccount,
+  useUpdateJointAccount,
+  useDeleteJointAccount,
+  getGetJointAccountsQueryKey,
   customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -97,15 +103,20 @@ export default function BankScreen() {
   const { shortcut } = useLocalSearchParams<{ shortcut?: string }>();
   const handledShortcut = useRef<string | null>(null);
 
-  const { data, isLoading, refetch } = useGetJointAccount();
   const { data: group } = useGetGroup();
+  const { data: accounts = [], refetch: refetchAccounts } = useGetJointAccounts();
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const accountStorageKey = group?.id && user?.id ? `bank-account:${group.id}:${user.id}` : null;
+  const { data, isLoading, refetch } = useGetJointAccount(
+    selectedAccountId ? { accountId: selectedAccountId } : undefined,
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), refetchAccounts()]);
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, refetchAccounts]);
 
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -123,6 +134,10 @@ export default function BankScreen() {
   const [openingBalanceModalVisible, setOpeningBalanceModalVisible] = useState(false);
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState('');
   const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
+  const [accountModalVisible, setAccountModalVisible] = useState(false);
+  const [accountNameDraft, setAccountNameDraft] = useState('');
+  const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
+  const [savingAccount, setSavingAccount] = useState(false);
 
   // ── Deposit payer state ────────────────────────────────────────────────────
   // depositorIds: [] = Joint bank (null madeById)
@@ -157,6 +172,9 @@ export default function BankScreen() {
   const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
   const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
   const { mutateAsync: updateOpeningBalance } = useUpdateJointAccountOpeningBalance();
+  const { mutateAsync: createAccount } = useCreateJointAccount();
+  const { mutateAsync: updateAccount } = useUpdateJointAccount();
+  const { mutateAsync: deleteAccount } = useDeleteJointAccount();
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const isSharedWorkspace = group?.isPrivate === false;
@@ -167,6 +185,27 @@ export default function BankScreen() {
   );
   const canManageShared = isSharedWorkspace && isWorkspaceManager;
   const canManageAccount = group !== undefined && (!isSharedWorkspace || canManageShared);
+  const selectedAccount = accounts.find((account) => account.id === selectedAccountId)
+    ?? accounts[0];
+
+  useEffect(() => {
+    if (!accountStorageKey) return;
+    let active = true;
+    AsyncStorage.getItem(accountStorageKey).then((stored) => {
+      const id = Number(stored);
+      if (active && Number.isInteger(id) && accounts.some((account) => account.id === id)) {
+        setSelectedAccountId(id);
+      } else if (active && accounts.length > 0) {
+        setSelectedAccountId(accounts[0].id);
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [accountStorageKey, accounts]);
+
+  const selectAccount = (accountId: number) => {
+    setSelectedAccountId(accountId);
+    if (accountStorageKey) AsyncStorage.setItem(accountStorageKey, String(accountId)).catch(() => {});
+  };
   const canEditTransaction = (tx: Tx) =>
     canManageAccount || (
       tx.type === 'deposit' &&
@@ -255,6 +294,65 @@ export default function BankScreen() {
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
   };
 
+  const invalidateAccounts = async () => {
+    await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+    await invalidateBalance();
+  };
+
+  const openAccountEditor = (accountId?: number) => {
+    const account = accounts.find((item) => item.id === accountId);
+    setEditingAccountId(account?.id ?? null);
+    setAccountNameDraft(account?.name ?? '');
+    setAccountModalVisible(true);
+  };
+
+  const saveAccount = async () => {
+    const name = accountNameDraft.trim();
+    if (!name) {
+      Alert.alert('Account name required', 'Enter a clear name for this bank account.');
+      return;
+    }
+    setSavingAccount(true);
+    try {
+      const account = editingAccountId
+        ? await updateAccount({ id: editingAccountId, data: { name } })
+        : await createAccount({ data: { name } });
+      selectAccount(account.id);
+      setAccountModalVisible(false);
+      await invalidateAccounts();
+    } catch (error: unknown) {
+      Alert.alert('Could not save account', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  const removeAccount = (accountId: number) => {
+    const account = accounts.find((item) => item.id === accountId);
+    Alert.alert('Remove bank account', `Remove "${account?.name ?? 'this account'}"? Accounts with transactions cannot be removed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteAccount({ id: accountId });
+            const next = accounts.find((item) => item.id !== accountId);
+            if (next) selectAccount(next.id);
+            await invalidateAccounts();
+          } catch (error: unknown) {
+            Alert.alert(
+              'Account cannot be removed',
+              error instanceof Error
+                ? error.message
+                : 'This account may have transaction history. Move or remove its transactions first.',
+            );
+          }
+        },
+      },
+    ]);
+  };
+
   const openOpeningBalanceEditor = () => {
     setOpeningBalanceDraft(String(data?.openingBalance ?? 0));
     setOpeningBalanceModalVisible(true);
@@ -273,7 +371,7 @@ export default function BankScreen() {
 
     setSavingOpeningBalance(true);
     try {
-      await updateOpeningBalance({ data: { openingBalance: value } });
+      await updateOpeningBalance({ data: { openingBalance: value, accountId: selectedAccountId ?? undefined } });
       setOpeningBalanceModalVisible(false);
       await invalidateBalance();
       Alert.alert('Opening balance saved', 'The current balance now includes this starting amount.');
@@ -445,6 +543,7 @@ export default function BankScreen() {
           narration: description.trim(),
           date,
           madeById: isSharedWorkspace ? null : user?.id,
+          accountId: selectedAccountId ?? undefined,
         };
         if (editingTransactionId !== null) {
           await updateTransaction({
@@ -521,6 +620,7 @@ export default function BankScreen() {
             ...(txType === 'deposit' && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
+            accountId: selectedAccountId ?? undefined,
           },
         });
       } else if (txType === 'deposit') {
@@ -561,6 +661,7 @@ export default function BankScreen() {
                 amount: parseFloat(depositorAmounts[userId] || '0') || 0,
               })),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              accountId: selectedAccountId ?? undefined,
             },
           });
         } else if (isJoint) {
@@ -573,6 +674,7 @@ export default function BankScreen() {
               madeById: null,
               ...(incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              accountId: selectedAccountId ?? undefined,
             },
           });
         } else {
@@ -586,6 +688,7 @@ export default function BankScreen() {
               madeById: singleId,
               ...(incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              accountId: selectedAccountId ?? undefined,
             },
           });
         }
@@ -599,6 +702,7 @@ export default function BankScreen() {
             expenseCategory,
             madeById: !isSharedWorkspace ? user?.id : withdrawerId ?? null,
             destinationKind: withdrawDest === 'other' ? 'other' : 'category',
+            accountId: selectedAccountId ?? undefined,
           },
         });
       }
@@ -641,7 +745,34 @@ export default function BankScreen() {
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
         <WorkspaceIdentityRow group={group} />
-        <Text style={styles.headerTitle}>{isSharedWorkspace ? 'Joint Account' : 'Personal Account'}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <Text style={styles.headerTitle}>{isSharedWorkspace ? 'Joint Account' : 'Personal Account'}</Text>
+          {canManageAccount && (
+            <TouchableOpacity onPress={() => openAccountEditor()} hitSlop={10} testID="bank-add-account">
+              <Feather name="plus-circle" size={24} color="#86efac" />
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+          {accounts.map((account) => {
+            const active = account.id === selectedAccount?.id;
+            return (
+              <TouchableOpacity
+                key={account.id}
+                onPress={() => selectAccount(account.id)}
+                style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: active ? '#dcfce7' : '#1f3a2b' }}
+                testID={`bank-account-${account.id}`}
+              >
+                <Text style={{ color: active ? '#14532d' : '#d1fae5', fontFamily: 'Inter_600SemiBold' }}>{account.name}</Text>
+                {canManageAccount && active && (
+                  <TouchableOpacity onPress={() => openAccountEditor(account.id)} hitSlop={8} testID={`bank-edit-account-${account.id}`}>
+                    <Feather name="edit-2" size={13} color="#14532d" />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         {isLoading ? (
           <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
         ) : (
@@ -773,6 +904,7 @@ export default function BankScreen() {
                     : dep
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
+                  {data?.accountName ? `${data.accountName} · ` : ''}
                   {formatDateTime(item.createdAt)}{canManageAccount ? ' · Edit or delete' : canEditTransaction(item) ? ' · Edit today' : ''}
                 </Text>
               </View>
@@ -803,6 +935,44 @@ export default function BankScreen() {
       />
 
       {/* Transaction modal */}
+      <Modal
+        visible={accountModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !savingAccount && setAccountModalVisible(false)}
+      >
+        <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
+              {editingAccountId ? 'Rename account' : 'Add bank account'}
+            </Text>
+            <TextInput
+              value={accountNameDraft}
+              onChangeText={setAccountNameDraft}
+              placeholder="e.g. M-Pesa, Family savings"
+              placeholderTextColor={colors.mutedForeground}
+              autoFocus
+              style={[styles.input, { color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
+              testID="bank-account-name"
+            />
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+              {editingAccountId !== null && (
+                <TouchableOpacity
+                  style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#7f1d1d' }}
+                  onPress={() => { setAccountModalVisible(false); removeAccount(editingAccountId); }}
+                  testID="bank-remove-account"
+                >
+                  <Text style={{ color: '#fee2e2', fontFamily: 'Inter_600SemiBold' }}>Remove</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={[styles.submitBtn, { flex: 1, opacity: savingAccount ? 0.6 : 1 }]} disabled={savingAccount} onPress={saveAccount} testID="bank-save-account">
+                <Text style={styles.submitText}>{savingAccount ? 'Saving…' : 'Save account'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <Modal
         visible={modalVisible}
         transparent

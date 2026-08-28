@@ -9,4 +9,5 @@
 export interface OpeningBalance {
   /** @minimum 0 */
   openingBalance: number;
+  accountId: number;
 }

@@ -766,7 +766,14 @@ paths:
     get:
       operationId: getJointAccount
       tags: [joint-account]
-      summary: Get joint account balance and all transactions
+      summary: Get one account when accountId is supplied, or aggregate all workspace accounts when omitted
+      parameters:
+        - name: accountId
+          in: query
+          description: Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.
+          schema:
+            type: number
+            minimum: 1
       responses:
         "200":
           description: Account summary
@@ -912,12 +919,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: deleteJointAccountTransaction
       tags: [joint-account]
@@ -942,6 +943,82 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /joint-accounts:
+    get:
+      operationId: getJointAccounts
+      tags: [joint-account]
+      summary: List bank accounts in the active workspace
+      responses:
+        "200":
+          description: Bank accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BankAccount"
+    post:
+      operationId: createJointAccount
+      tags: [joint-account]
+      summary: Create a workspace bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankAccountInput"
+      responses:
+        "201":
+          description: Created bank account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+  /joint-accounts/{id}:
+    patch:
+      operationId: updateJointAccount
+      tags: [joint-account]
+      summary: Rename a workspace bank account or update its opening balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankAccountUpdate"
+      responses:
+        "200":
+          description: Updated bank account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+    delete:
+      operationId: deleteJointAccount
+      tags: [joint-account]
+      summary: Delete a bank account with no transaction history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /savings-goals/cascade-contribute:
     post:
       operationId: cascadeContribute
@@ -1777,6 +1854,9 @@ components:
           type: ["string", "null"]
         paidFromBank:
           type: boolean
+        accountId:
+          type: ["number", "null"]
+          description: Bank account funding this expense when applicable.
         incomeSplits:
           type: array
           items:
@@ -1796,6 +1876,7 @@ components:
         - description
         - paidById
         - paidByName
+        - accountId
         - isRecurring
         - date
         - createdAt
@@ -1817,6 +1898,10 @@ components:
         paidFromBank:
           type: boolean
           description: Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment.
+        accountId:
+          type: number
+          minimum: 1
+          description: Selected bank account for Joint-bank funding. Omit to use Main account.
         incomeSourceId:
           type: number
           minimum: 1
@@ -1857,6 +1942,10 @@ components:
         fromBank:
           type: boolean
           description: True when this amount came from the shared Joint bank.
+        accountId:
+          type: number
+          minimum: 1
+          description: Bank account for this Joint-bank portion.
       required: [amount, fromBank]
 
     ApplyRecurringInput:
@@ -2734,6 +2823,8 @@ components:
       properties:
         id:
           type: number
+        accountId:
+          type: ["number", "null"]
         type:
           type: string
           description: deposit or disbursement
@@ -2788,6 +2879,10 @@ components:
         openingBalance:
           type: number
           description: Manually entered balance carried into the first recorded transaction
+        accountId:
+          type: number
+        accountName:
+          type: string
         balance:
           type: number
           description: Current balance after applying the opening balance and all transactions
@@ -2801,6 +2896,8 @@ components:
             $ref: "#/components/schemas/JointAccountTransaction"
       required:
         - openingBalance
+        - accountId
+        - accountName
         - balance
         - totalDeposits
         - totalDisbursements
@@ -2813,8 +2910,11 @@ components:
           type: number
           minimum: 0
           multipleOf: 1
+        accountId:
+          type: number
       required:
         - openingBalance
+        - accountId
 
     OpeningBalanceInput:
       type: object
@@ -2823,6 +2923,9 @@ components:
           type: number
           minimum: 0
           multipleOf: 1
+        accountId:
+          type: number
+          minimum: 1
           description: Manual starting balance in whole KES
       required:
         - openingBalance
@@ -2861,6 +2964,9 @@ components:
           description: Whole-KES household contributor portions that must equal amount exactly.
           items:
             $ref: "#/components/schemas/DepositContributorSplit"
+        accountId:
+          type: number
+          minimum: 1
       required:
         - amount
         - description
@@ -2907,6 +3013,9 @@ components:
           type: string
           enum: [category, other]
           description: Choose other only when the required description is a narration.
+        accountId:
+          type: number
+          minimum: 1
       required:
         - amount
         - date
@@ -2957,6 +3066,9 @@ components:
           minLength: 1
           maxLength: 200
           description: Required when editing a linked savings transfer
+        accountId:
+          type: number
+          minimum: 1
       required:
         - amount
         - date
@@ -2980,11 +3092,36 @@ components:
           format: date
         madeById:
           type: ["string", "null"]
+        accountId:
+          type: number
+          minimum: 1
       required:
         - amount
         - goalId
         - narration
         - date
+
+    BankAccount:
+      type: object
+      properties:
+        id: { type: number }
+        name: { type: string }
+        openingBalance: { type: number }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, openingBalance, createdAt]
+
+    BankAccountInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        openingBalance: { type: number, minimum: 0, multipleOf: 1 }
+      required: [name]
+
+    BankAccountUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        openingBalance: { type: number, minimum: 0, multipleOf: 1 }
 
     SavingsGoalInput:
       type: object

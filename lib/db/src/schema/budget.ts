@@ -1,6 +1,23 @@
 import { pgTable, serial, text, integer, boolean, date, timestamp, index, unique } from "drizzle-orm/pg-core";
 import { groupsTable } from "./groups";
 
+// Workspace-owned bank accounts. Every legacy workspace receives a "Main
+// account" during migration, so bank ledger history always has an account.
+export const bankAccountsTable = pgTable("bank_accounts", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
+  name: text("name").notNull(),
+  openingBalance: integer("opening_balance").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("bank_accounts_group_name_unique").on(table.groupId, table.name),
+  index("bank_accounts_group_id_idx").on(table.groupId),
+]);
+
+export const insertBankAccountSchema = createInsertSchema(bankAccountsTable).omit({ id: true, createdAt: true });
+export type InsertBankAccount = typeof bankAccountsTable.$inferInsert;
+export type BankAccount = typeof bankAccountsTable.$inferSelect;
+
 // Income sources — per-person named income streams (e.g. Lydiah–EISH, Chege–Salary)
 export const incomeSourcesTable = pgTable("income_sources", {
   id: serial("id").primaryKey(),
@@ -53,6 +70,9 @@ export const expensesTable = pgTable("expenses", {
   paidById: text("paid_by_id"),
   incomeSourceId: integer("income_source_id"),
   paidFromBank: boolean("paid_from_bank").notNull().default(false), // true = funded from joint account deposit (already counted as contribution)
+  // Required for newly created bank-funded expenses; legacy history is
+  // backfilled to the workspace Main account.
+  accountId: integer("account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   isRecurring: boolean("is_recurring").notNull().default(false),
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -76,6 +96,7 @@ export const expenseIncomeSplitsTable = pgTable("expense_income_splits", {
   amount: integer("amount").notNull(),  // in KES
   incomeSourceId: integer("income_source_id"),
   fromBank: boolean("from_bank").notNull().default(false), // true = this portion is funded by the shared Joint bank
+  accountId: integer("account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("expense_income_splits_group_expense_idx").on(table.groupId, table.expenseId),
@@ -111,6 +132,7 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   incomeSourceId: integer("income_source_id"), // which income source funded this deposit
   expenseCategory: text("expense_category"), // optional: which expense category this disbursement covers
   savingsGoalId: integer("savings_goal_id"), // set only for a linked bank <-> savings transfer
+  accountId: integer("account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   transferDirection: text("transfer_direction"), // 'to_savings' | 'from_savings' for linked transfers
   // Set for the Joint-bank portion of a single split-funded expense. The
   // expense route owns this ledger row so both records stay in sync.
@@ -203,6 +225,7 @@ export const savingsGoalContributionsTable = pgTable("savings_goal_contributions
   isBalanceCorrection: boolean("is_balance_correction").notNull().default(false),
   createdByUserId: text("created_by_user_id"),  // null = Joint bank (shared household); named = individual member
   bankTransactionId: integer("bank_transaction_id"), // links a bank <-> savings transfer for safe reversal
+  accountId: integer("account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("savings_goal_contributions_group_goal_idx").on(table.groupId, table.goalId),

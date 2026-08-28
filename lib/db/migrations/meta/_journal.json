@@ -29,6 +29,13 @@
       "when": 1787781405658,
       "tag": "0003_flashy_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787781500000,
+      "tag": "0004_multiple_bank_accounts",
+      "breakpoints": true
     }
   ]
 }

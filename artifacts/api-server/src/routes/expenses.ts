@@ -7,6 +7,7 @@ import {
   incomeSourcesTable,
   expenseIncomeSplitsTable,
   jointAccountTxTable,
+  bankAccountsTable,
 } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -33,6 +34,7 @@ const FundingSplitSchema = z.object({
   amount: z.number().int().positive(),
   incomeSourceId: z.number().int().positive().optional(),
   fromBank: z.boolean(),
+  accountId: z.number().int().positive().optional(),
 });
 
 type FundingSplit = z.infer<typeof FundingSplitSchema>;
@@ -47,6 +49,7 @@ type ExpenseRow = {
   paidByName: string | null;
   incomeSourceId: number | null;
   paidFromBank: boolean;
+  accountId: number | null;
   isRecurring: boolean;
   date: string | Date | null;
   createdAt: Date | string;
@@ -59,6 +62,7 @@ function formatExpense(e: ExpenseRow, incomeSplits: unknown[] = []) {
     paidById: e.paidById ?? null,
     paidByName: e.paidByName ?? null,
     paidFromBank: e.paidFromBank ?? false,
+    accountId: e.accountId ?? null,
     isRecurring: e.isRecurring ?? false,
     incomeSplits,
     date: typeof e.date === "string" ? e.date : e.date?.toISOString().split("T")[0],
@@ -113,6 +117,12 @@ async function validateFundingSplits(raw: unknown, amount: number, groupId: numb
       if (split.userId) return { error: "A Joint-bank portion cannot name a personal payer." };
       if (split.incomeSourceId !== undefined) {
         return { error: "A Joint-bank portion cannot use a personal income source." };
+      }
+      if (split.accountId !== undefined) {
+        const account = await db.query.bankAccountsTable.findFirst({
+          where: and(eq(bankAccountsTable.id, split.accountId), eq(bankAccountsTable.groupId, groupId)),
+        });
+        if (!account) return { error: "Bank account not found." };
       }
       continue;
     }
@@ -171,6 +181,7 @@ async function getExpenseSplits(expenseIds: number[], groupId: number) {
       amount: expenseIncomeSplitsTable.amount,
       incomeSourceId: expenseIncomeSplitsTable.incomeSourceId,
       fromBank: expenseIncomeSplitsTable.fromBank,
+      accountId: expenseIncomeSplitsTable.accountId,
     })
     .from(expenseIncomeSplitsTable)
     .where(and(
@@ -200,6 +211,7 @@ async function writeFundingSplits(
     amount: split.amount,
     incomeSourceId: split.incomeSourceId ?? null,
     fromBank: split.fromBank,
+    accountId: split.fromBank ? split.accountId ?? null : null,
   })));
 }
 
@@ -208,6 +220,7 @@ async function syncJointBankDisbursement(
   expense: { id: number; category: string; description: string; date: string | Date | null },
   bankAmount: number,
   groupId: number,
+  accountId: number | null,
 ) {
   const existing = await tx
     .select({ id: jointAccountTxTable.id })
@@ -223,7 +236,7 @@ async function syncJointBankDisbursement(
   }
   if (existing[0]) {
     await tx.update(jointAccountTxTable)
-      .set({ amount: bankAmount, description, expenseCategory: expense.category, date })
+      .set({ amount: bankAmount, description, expenseCategory: expense.category, date, accountId })
       .where(eq(jointAccountTxTable.id, existing[0].id));
     return;
   }
@@ -235,6 +248,7 @@ async function syncJointBankDisbursement(
     expenseCategory: expense.category,
     expenseId: expense.id,
     groupId,
+    accountId,
     date,
   });
 }
@@ -257,7 +271,7 @@ router.get("/expenses", async (req, res) => {
     id: expensesTable.id, amount: expensesTable.amount, category: expensesTable.category,
     description: expensesTable.description, notes: expensesTable.notes, paidById: expensesTable.paidById,
     paidByName: usersTable.firstName, incomeSourceId: expensesTable.incomeSourceId,
-    paidFromBank: expensesTable.paidFromBank, isRecurring: expensesTable.isRecurring,
+    paidFromBank: expensesTable.paidFromBank, accountId: expensesTable.accountId, isRecurring: expensesTable.isRecurring,
     date: expensesTable.date, createdAt: expensesTable.createdAt,
   }).from(expensesTable)
     .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
@@ -301,15 +315,6 @@ router.post("/expenses/apply-recurring", async (req, res) => {
       eq(expenseIncomeSplitsTable.groupId, groupId),
     ));
     recurringSplits.set(original.id, sourceSplits);
-    if (
-      req.group?.isPrivate &&
-      (original.paidFromBank || sourceSplits.some((split) => split.fromBank))
-    ) {
-      res.status(403).json({
-        error: `Cannot copy recurring expense "${original.description}": Joint-account funding is not available in a Personal budget.`,
-      });
-      return;
-    }
     if (sourceSplits.length > 0) {
       const splitResult = await validateFundingSplits(sourceSplits.map((split) => ({
         userId: split.userId,
@@ -351,19 +356,20 @@ router.post("/expenses/apply-recurring", async (req, res) => {
         groupId,
         amount: original.amount, category: original.category, description: original.description,
         notes: original.notes, paidById: original.paidById, incomeSourceId: original.incomeSourceId,
-        paidFromBank: original.paidFromBank, isRecurring: true, date: newDate,
+        paidFromBank: original.paidFromBank, accountId: original.accountId, isRecurring: true, date: newDate,
       }).returning();
       const sourceSplits = recurringSplits.get(original.id) ?? [];
       if (sourceSplits.length > 0) {
         await tx.insert(expenseIncomeSplitsTable).values(sourceSplits.map((split) => ({
           expenseId: created.id, groupId, userId: split.userId, label: split.label, amount: split.amount,
-          incomeSourceId: split.incomeSourceId, fromBank: split.fromBank,
+          incomeSourceId: split.incomeSourceId, fromBank: split.fromBank, accountId: split.accountId,
         })));
       }
       const bankAmount = sourceSplits.length > 0
         ? sourceSplits.filter((split) => split.fromBank).reduce((sum, split) => sum + split.amount, 0)
         : (created.paidFromBank ? created.amount : 0);
-      await syncJointBankDisbursement(tx, created, bankAmount, groupId);
+      const accountId = sourceSplits.find((split) => split.fromBank)?.accountId ?? created.accountId;
+      await syncJointBankDisbursement(tx, created, bankAmount, groupId, accountId);
     }
   });
   res.json({ copied: toInsert.length });
@@ -380,18 +386,33 @@ router.post("/expenses", async (req, res) => {
     res.status(400).json({ error: `Invalid ${field}: ${issue?.message ?? "check the entered value"}` });
     return;
   }
-  const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
+  const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits, accountId } = parsed.data;
   if (isReservedSetupCategory(category)) {
     res.status(400).json({ error: "Choose a specific category. Other is only used to start category setup." });
     return;
   }
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
-  if (
-    req.group?.isPrivate &&
-    (paidFromBank === true || splitResult.splits?.some((split) => split.fromBank))
-  ) {
-    res.status(403).json({ error: "Joint-account expense funding is not available in a Personal budget." });
+  const hasBankFunding = paidFromBank === true || splitResult.splits?.some((split) => split.fromBank);
+  const selectedBankAccountId = hasBankFunding
+    ? accountId ?? splitResult.splits?.find((split) => split.fromBank)?.accountId ??
+      (await db.select({ id: bankAccountsTable.id }).from(bankAccountsTable)
+        .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.id).limit(1))[0]?.id
+    : null;
+  if (hasBankFunding && !selectedBankAccountId) {
+    res.status(400).json({ error: "Choose a valid bank account for bank funding." });
+    return;
+  }
+  if (accountId && !(await db.query.bankAccountsTable.findFirst({
+    where: and(eq(bankAccountsTable.id, accountId), eq(bankAccountsTable.groupId, groupId)),
+  }))) {
+    res.status(400).json({ error: "Bank account not found." });
+    return;
+  }
+  if (selectedBankAccountId && splitResult.splits?.some(
+    (split) => split.fromBank && split.accountId !== undefined && split.accountId !== selectedBankAccountId,
+  )) {
+    res.status(400).json({ error: "All Joint-bank funding portions must use the expense's selected bank account." });
     return;
   }
   const isParticipatingMember = req.group?.role === "member";
@@ -434,17 +455,20 @@ router.post("/expenses", async (req, res) => {
     const splits = splitResult.splits;
     const namedPayer = splits?.find((split) => !split.fromBank)?.userId ?? paidById ?? null;
     const allBank = splits ? splits.every((split) => split.fromBank) : paidFromBank === true;
+    const selectedAccountId = selectedBankAccountId;
     const [created] = await tx.insert(expensesTable).values({
       groupId,
       amount, category, description, notes: notes ?? null, paidById: namedPayer,
       incomeSourceId: allBank ? null : incomeSourceId ?? null, paidFromBank: allBank,
       isRecurring: isRecurring ?? false, date: toDateString(date),
+      accountId: selectedAccountId,
     }).returning();
-    if (splits) await writeFundingSplits(tx, created.id, splits, groupId);
+    if (splits) await writeFundingSplits(tx, created.id, splits.map((split) => split.fromBank && split.accountId === undefined
+      ? { ...split, accountId: selectedAccountId ?? undefined } : split), groupId);
     const bankAmount = splits
       ? splits.filter((split) => split.fromBank).reduce((sum, split) => sum + split.amount, 0)
       : (allBank ? amount : 0);
-    await syncJointBankDisbursement(tx, created, bankAmount, groupId);
+    await syncJointBankDisbursement(tx, created, bankAmount, groupId, selectedAccountId ?? null);
     return created;
   });
   const payer = expense.paidById ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, expense.paidById) }) : null;
@@ -459,20 +483,13 @@ router.patch("/expenses/:id", async (req, res) => {
   const parsed = UpdateExpenseBody.safeParse(req.body);
   if (!idParsed.success || !parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const expenseId = idParsed.data.id;
-  const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits } = parsed.data;
+  const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits, accountId } = parsed.data;
   if (isReservedSetupCategory(category)) {
     res.status(400).json({ error: "Choose a specific category. Other is only used to start category setup." });
     return;
   }
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
-  if (
-    req.group?.isPrivate &&
-    (paidFromBank === true || splitResult.splits?.some((split) => split.fromBank))
-  ) {
-    res.status(403).json({ error: "Joint-account expense funding is not available in a Personal budget." });
-    return;
-  }
   const isParticipatingMember = req.group?.role === "member";
   if (isParticipatingMember) {
     if (!isCurrentExpenseDate(date)) {
@@ -513,9 +530,6 @@ router.patch("/expenses/:id", async (req, res) => {
       ? splitResult.splits.some((split) => split.fromBank)
       : (paidFromBank ?? existing.paidFromBank) ||
         previousSplits.some((split) => split.fromBank);
-    if (req.group?.isPrivate && keepsOrAddsBankFunding) {
-      return { forbidden: "personal-bank" as const };
-    }
     if (
       isParticipatingMember &&
       (
@@ -545,6 +559,23 @@ router.patch("/expenses/:id", async (req, res) => {
     const allBank = splits
       ? splits.every((split) => split.fromBank)
       : (paidFromBank ?? existing.paidFromBank);
+    const hasBankFunding = allBank || splits?.some((split) => split.fromBank) || previousSplits.some((split) => split.fromBank);
+    const selectedAccountId = hasBankFunding
+      ? accountId ?? splits?.find((split) => split.fromBank)?.accountId ?? existing.accountId ??
+        previousSplits.find((split) => split.fromBank)?.accountId ??
+        (await tx.select({ id: bankAccountsTable.id }).from(bankAccountsTable)
+          .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.id).limit(1))[0]?.id
+      : null;
+    if (hasBankFunding && !selectedAccountId) return { error: "Choose a valid bank account for bank funding." };
+    if (accountId) {
+      const [account] = await tx.select({ id: bankAccountsTable.id }).from(bankAccountsTable)
+        .where(and(eq(bankAccountsTable.id, accountId), eq(bankAccountsTable.groupId, groupId))).limit(1);
+      if (!account) return { error: "Bank account not found." };
+    }
+    const effectiveBankSplits = (splits ?? previousSplits).filter((split) => split.fromBank);
+    if (effectiveBankSplits.some((split) => split.accountId !== null && split.accountId !== undefined && split.accountId !== selectedAccountId)) {
+      return { error: "All Joint-bank funding portions must use the expense's selected bank account." };
+    }
     // An all-Joint-bank action has no personal payer. Explicitly clear the
     // legacy field instead of falling back to the expense's old attribution.
     const namedPayer = splits
@@ -569,23 +600,33 @@ router.patch("/expenses/:id", async (req, res) => {
       amount, category, description, notes: notes ?? null, paidById: namedPayer,
       incomeSourceId: allBank ? null : effectiveIncomeSourceId,
       paidFromBank: allBank,
-      isRecurring: isRecurring ?? false, date: toDateString(date),
+      isRecurring: isRecurring ?? false, date: toDateString(date), accountId: selectedAccountId,
     }).where(and(eq(expensesTable.id, expenseId), eq(expensesTable.groupId, groupId))).returning();
     if (splits) {
       await tx.delete(expenseIncomeSplitsTable).where(and(
         eq(expenseIncomeSplitsTable.expenseId, expenseId),
         eq(expenseIncomeSplitsTable.groupId, groupId),
       ));
-      await writeFundingSplits(tx, expenseId, splits, groupId);
+      await writeFundingSplits(tx, expenseId, splits.map((split) => split.fromBank && split.accountId === undefined
+        ? { ...split, accountId: selectedAccountId ?? undefined } : split), groupId);
+    } else if (hasBankFunding) {
+      // Backfilled/legacy splits may lack accountId. Preserve their funding
+      // amounts while binding them to the same account as the expense ledger.
+      await tx.update(expenseIncomeSplitsTable).set({ accountId: selectedAccountId })
+        .where(and(
+          eq(expenseIncomeSplitsTable.expenseId, expenseId),
+          eq(expenseIncomeSplitsTable.groupId, groupId),
+          eq(expenseIncomeSplitsTable.fromBank, true),
+        ));
     }
     const effectiveSplits = splits ?? previousSplits.map((split) => ({
       userId: split.userId, label: split.label, amount: split.amount,
-      incomeSourceId: split.incomeSourceId ?? undefined, fromBank: split.fromBank,
+      incomeSourceId: split.incomeSourceId ?? undefined, fromBank: split.fromBank, accountId: split.accountId ?? undefined,
     }));
     const bankAmount = effectiveSplits.length > 0
       ? effectiveSplits.filter((split) => split.fromBank).reduce((sum, split) => sum + split.amount, 0)
       : (allBank ? amount : 0);
-    await syncJointBankDisbursement(tx, updated, bankAmount, groupId);
+    await syncJointBankDisbursement(tx, updated, bankAmount, groupId, selectedAccountId);
     return { updated };
   });
   if (!result) { res.status(404).json({ error: "Not found" }); return; }
@@ -593,8 +634,6 @@ router.patch("/expenses/:id", async (req, res) => {
     res.status(403).json({
       error: result.forbidden === "past-expense"
         ? "Members can edit expenses dated today only. Ask an admin to correct a past expense."
-        : result.forbidden === "personal-bank"
-          ? "Joint-account expense funding is not available in a Personal budget."
         : "Members can edit only their own personal expenses.",
     });
     return;

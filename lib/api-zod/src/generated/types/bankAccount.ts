@@ -6,12 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface OpeningBalanceInput {
-  /** @minimum 0 */
+export interface BankAccount {
+  id: number;
+  name: string;
   openingBalance: number;
-  /**
-     * Manual starting balance in whole KES
-     * @minimum 1
-     */
-  accountId?: number;
+  createdAt: Date;
 }

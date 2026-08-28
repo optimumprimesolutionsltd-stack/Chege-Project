@@ -23,4 +23,9 @@ export interface ExpenseFundingSplit {
   incomeSourceId?: number;
   /** True when this amount came from the shared Joint bank. */
   fromBank: boolean;
+  /**
+     * Bank account for this Joint-bank portion.
+     * @minimum 1
+     */
+  accountId?: number;
 }

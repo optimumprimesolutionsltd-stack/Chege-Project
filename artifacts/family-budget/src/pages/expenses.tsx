@@ -35,7 +35,7 @@ import {
   useGetDashboardSummary, useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
   getGetBudgetCategoriesQueryKey, getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
-  type IncomeSource, ApiError,
+  type IncomeSource, ApiError, useGetJointAccounts,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -70,6 +70,7 @@ type Expense = {
   paidByName: string | null;
   incomeSourceId?: number | null;
   paidFromBank?: boolean;
+  accountId?: number | null;
   isRecurring: boolean;
   date: string;
   incomeSplits?: {
@@ -78,6 +79,7 @@ type Expense = {
     amount: number;
     incomeSourceId?: number;
     fromBank: boolean;
+    accountId?: number;
   }[];
 };
 
@@ -112,13 +114,14 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [otherIncomeSourceLabel, setOtherIncomeSourceLabel] = useState<string | null>(null);
   const [paidFromBank, setPaidFromBank] = useState(false);
+  const [accountId, setAccountId] = useState<number | null>(defaults?.accountId ?? null);
   const [isRecurring, setIsRecurring] = useState(defaults?.isRecurring ?? false);
   const [date, setDate] = useState(defaults?.date ?? localDateInputValue(today));
   return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes,
            paidById, setPaidById, payerIds, setPayerIds, payerAmounts, setPayerAmounts,
            payerIncomeSourceIds, setPayerIncomeSourceIds,
            incomeSourceId, setIncomeSourceId, otherIncomeSourceLabel, setOtherIncomeSourceLabel,
-           paidFromBank, setPaidFromBank, isRecurring, setIsRecurring, date, setDate };
+            paidFromBank, setPaidFromBank, accountId, setAccountId, isRecurring, setIsRecurring, date, setDate };
 }
 
 function useIncomeSources(userId: string) {
@@ -201,6 +204,7 @@ export default function Expenses() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [editHasMultipleFundingSplits, setEditHasMultipleFundingSplits] = useState(false);
+  const [editHasBankFunding, setEditHasBankFunding] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBudget, setNewCategoryBudget] = useState("");
@@ -214,6 +218,7 @@ export default function Expenses() {
   const { data: categories } = useGetBudgetCategories();
   const { data: members } = useGetMembers();
   const { data: group } = useGetGroup();
+  const { data: bankAccounts = [] } = useGetJointAccounts();
   const sharedTransactionsLocked =
     group?.canRecordSharedTransactions === false && (members?.length ?? 0) < 2;
   const { data: summary } = useGetDashboardSummary({ month, year });
@@ -285,6 +290,7 @@ export default function Expenses() {
     addForm.setAmount(""); addForm.setCategory(""); addForm.setDescription(""); addForm.setNotes("");
     addForm.setPaidById(""); addForm.setPayerIds([]); addForm.setPayerAmounts({}); addForm.setPayerIncomeSourceIds({});
     addForm.setIncomeSourceId(null); addForm.setOtherIncomeSourceLabel(null); addForm.setIsRecurring(false);
+    addForm.setAccountId(null);
     addForm.setDate(today);
     setAddNewSource(false); setNewSourceName("");
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
@@ -306,6 +312,8 @@ export default function Expenses() {
       ? expense.incomeSplits.every((split) => split.fromBank)
       : false;
     const paidFromBank = expense.paidFromBank === true || allFundingIsBank;
+    const bankSplit = expense.incomeSplits?.find((split) => split.fromBank);
+    const hasBankFunding = paidFromBank || !!bankSplit;
 
     editForm.setAmount(expense.amount.toString());
     editForm.setCategory(expense.category);
@@ -319,7 +327,9 @@ export default function Expenses() {
       !paidFromBank && personalSplit?.label ? personalSplit.label : null,
     );
     editForm.setPaidFromBank(paidFromBank);
+    editForm.setAccountId(expense.accountId ?? bankSplit?.accountId ?? null);
     setEditHasMultipleFundingSplits((expense.incomeSplits?.length ?? 0) > 1);
+    setEditHasBankFunding(hasBankFunding);
     editForm.setIsRecurring(expense.isRecurring);
     editForm.setDate(expense.date);
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
@@ -364,6 +374,7 @@ export default function Expenses() {
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setNewCategoryRecurring(true); setNewCategoryPriority("3");
     setEditingId(null);
+    setEditHasBankFunding(false);
     clearEditDeepLink();
   };
 
@@ -525,6 +536,14 @@ export default function Expenses() {
       });
       return;
     }
+    if (addForm.paidFromBank && !addForm.accountId) {
+      toast({
+        variant: "destructive",
+        title: "Choose a bank account",
+        description: "Select the account that funded the Joint-bank portion.",
+      });
+      return;
+    }
     if (!addForm.paidFromBank) {
       const missingSource = hasMissingPersonalFundingSource({
         payerIds,
@@ -564,7 +583,7 @@ export default function Expenses() {
     try {
       const incomeSplits = isSplitPayment
         ? [
-          ...(addForm.paidFromBank ? [{ amount: Number(addForm.payerAmounts.__joint_bank__ || 0), fromBank: true, userId: null, label: "Joint bank" }] : []),
+          ...(addForm.paidFromBank ? [{ amount: Number(addForm.payerAmounts.__joint_bank__ || 0), fromBank: true, userId: null, label: "Joint bank", accountId: addForm.accountId! }] : []),
           ...payerIds.map((userId) => ({
             userId, amount: Number(addForm.payerAmounts[userId] || 0), fromBank: false,
             label: (members ?? []).find((member) => member.userId === userId)?.userName?.split(" ")[0] ?? "Member",
@@ -578,6 +597,7 @@ export default function Expenses() {
           description: addForm.description, notes: addForm.notes || undefined,
           paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
           isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
+          ...(addForm.paidFromBank ? { accountId: addForm.accountId! } : {}),
           ...(addForm.incomeSourceId && !isSplitPayment ? { incomeSourceId: addForm.incomeSourceId } : {}),
           ...(incomeSplits ? { incomeSplits } : {}),
         } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
@@ -633,6 +653,14 @@ export default function Expenses() {
       });
       return;
     }
+    if ((editForm.paidFromBank || editHasBankFunding) && !editForm.accountId) {
+      toast({
+        variant: "destructive",
+        title: "Choose a bank account",
+        description: "Select the account that funded this Joint-bank expense.",
+      });
+      return;
+    }
     if (!editForm.paidFromBank && !editHasMultipleFundingSplits && !editForm.incomeSourceId) {
       toast({
         variant: "destructive",
@@ -643,7 +671,7 @@ export default function Expenses() {
     }
     const selectedSource = editFormSources?.find((source) => source.id === editForm.incomeSourceId);
     const fundingSplits = editForm.paidFromBank
-      ? [{ userId: null, label: "Joint bank", amount, fromBank: true }]
+      ? [{ userId: null, label: "Joint bank", amount, fromBank: true, accountId: editForm.accountId! }]
       : !editHasMultipleFundingSplits && editForm.incomeSourceId
         ? [{
           userId: editForm.paidById,
@@ -665,6 +693,7 @@ export default function Expenses() {
           isRecurring: editForm.isRecurring,
           date: editForm.date,
           paidFromBank: editForm.paidFromBank,
+          ...(editForm.paidFromBank || editHasBankFunding ? { accountId: editForm.accountId! } : {}),
           ...(!editHasMultipleFundingSplits && editForm.incomeSourceId
             ? { incomeSourceId: editForm.incomeSourceId }
             : {}),
@@ -673,6 +702,7 @@ export default function Expenses() {
       });
       toast({ title: "Expense updated" });
       setEditingId(null);
+      setEditHasBankFunding(false);
       clearEditDeepLink();
       invalidate();
     } catch {
@@ -948,6 +978,24 @@ export default function Expenses() {
               );
             })}
           </div>
+          {(form.paidFromBank || (mode === "edit" && editHasBankFunding)) && (
+            <div className="mt-3 space-y-2">
+              <label className="text-sm font-semibold text-foreground">
+                Bank account <span className="text-destructive">*</span>
+              </label>
+              <select
+                data-testid={`select-expense-bank-account-${mode}`}
+                value={form.accountId?.toString() ?? ""}
+                onChange={(event) => form.setAccountId(event.target.value ? Number(event.target.value) : null)}
+                required
+                className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+              >
+                <option value="" disabled>{bankAccounts.length ? "Choose the account used..." : "No bank accounts available"}</option>
+                {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              </select>
+              {bankAccounts.length === 0 && <p className="text-xs text-destructive">A budget manager must add a bank account before this expense can be bank-funded.</p>}
+            </div>
+          )}
           {mode === "add" && form.payerIds.length === 0 && !form.paidFromBank && (
             <p className="text-xs text-muted-foreground">
               {canManageExpenses ? "Choose who paid, or select Joint bank account." : "Choose yourself to record this expense."}

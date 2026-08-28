@@ -9,6 +9,8 @@ import type { DepositContributorSplit } from './depositContributorSplit';
 
 export interface JointAccountTransaction {
   id: number;
+  /** @nullable */
+  accountId?: number | null;
   /** deposit or disbursement */
   type: string;
   amount: number;

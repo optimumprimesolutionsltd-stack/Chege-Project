@@ -42,4 +42,6 @@ export interface UpdateJointAccountTransactionInput {
      * @maxLength 200
      */
   narration?: string;
+  /** @minimum 1 */
+  accountId?: number;
 }

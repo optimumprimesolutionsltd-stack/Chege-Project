@@ -5,6 +5,8 @@ import {
   useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank, useGetGroup,
   getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
   getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey, useUpdateJointAccountOpeningBalance,
+  useGetJointAccounts, useCreateJointAccount, useUpdateJointAccount, useDeleteJointAccount,
+  getGetJointAccountsQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,6 +33,7 @@ type MemberIncomeSource = {
 
 type EditableTransaction = {
   id: number;
+  accountId?: number | null;
   type: string;
   amount: number;
   description: string;
@@ -46,8 +49,13 @@ type EditableTransaction = {
 
 export default function Bank() {
   const bankEditId = getBankEditDeepLink();
-  const { data: account, isLoading } = useGetJointAccount();
   const { data: group } = useGetGroup();
+  const bankSelectionKey = group?.id ? `jamvi:bank-account:${group.id}` : null;
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const { data: accounts = [], isLoading: accountsLoading } = useGetJointAccounts();
+  const { data: account, isLoading } = useGetJointAccount(
+    selectedAccountId ? { accountId: selectedAccountId } : undefined,
+  );
   const { data: members } = useGetMembers();
   const { data: categories } = useGetBudgetCategories();
   const createDeposit = useCreateDeposit();
@@ -57,6 +65,9 @@ export default function Bank() {
   const transferToSavings = useTransferBankToSavings();
   const transferFromSavings = useTransferSavingsToBank();
   const updateOpeningBalance = useUpdateJointAccountOpeningBalance();
+  const createAccount = useCreateJointAccount();
+  const updateAccount = useUpdateJointAccount();
+  const deleteAccount = useDeleteJointAccount();
   const { data: savingsGoals = [] } = useGetSavingsGoals();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -103,6 +114,32 @@ export default function Bank() {
   const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState("");
   const [editingOpeningBalance, setEditingOpeningBalance] = useState(false);
+  const [accountNameDraft, setAccountNameDraft] = useState("");
+  const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!accounts.length) {
+      setSelectedAccountId(null);
+      return;
+    }
+    let savedId: number | null = null;
+    if (bankSelectionKey) {
+      try {
+        const value = Number(localStorage.getItem(bankSelectionKey));
+        savedId = Number.isInteger(value) && value > 0 ? value : null;
+      } catch {}
+    }
+    setSelectedAccountId((current) =>
+      accounts.some((item) => item.id === current)
+        ? current
+        : accounts.some((item) => item.id === savedId) ? savedId : accounts[0].id,
+    );
+  }, [accounts, bankSelectionKey]);
+
+  useEffect(() => {
+    if (!bankSelectionKey || !selectedAccountId) return;
+    try { localStorage.setItem(bankSelectionKey, String(selectedAccountId)); } catch {}
+  }, [bankSelectionKey, selectedAccountId]);
 
   // Income sources — only fetch when exactly one named depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
@@ -120,6 +157,7 @@ export default function Bank() {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
@@ -143,7 +181,8 @@ export default function Bank() {
       return;
     }
     try {
-      await updateOpeningBalance.mutateAsync({ data: { openingBalance: value } });
+      if (!selectedAccountId) throw new Error("No bank account selected");
+      await updateOpeningBalance.mutateAsync({ data: { openingBalance: value, accountId: selectedAccountId } });
       setEditingOpeningBalance(false);
       toast({
         title: "Opening balance saved",
@@ -156,6 +195,38 @@ export default function Bank() {
         title: "Could not save opening balance",
         description: "Please try again.",
       });
+    }
+  };
+
+  const handleAccountSave = async () => {
+    const name = accountNameDraft.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Account name required", description: "Enter a name for this bank account." });
+      return;
+    }
+    try {
+      const saved = editingAccountId
+        ? await updateAccount.mutateAsync({ id: editingAccountId, data: { name } })
+        : await createAccount.mutateAsync({ data: { name } });
+      setSelectedAccountId(saved.id);
+      setAccountNameDraft("");
+      setEditingAccountId(null);
+      invalidate();
+      toast({ title: editingAccountId ? "Account renamed" : "Account added" });
+    } catch {
+      toast({ variant: "destructive", title: "Could not save account", description: "Check the name and try again." });
+    }
+  };
+
+  const handleAccountDelete = async (id: number) => {
+    if (!confirm("Remove this bank account? Accounts with transaction history cannot be removed.")) return;
+    try {
+      await deleteAccount.mutateAsync({ id });
+      if (selectedAccountId === id) setSelectedAccountId(null);
+      invalidate();
+      toast({ title: "Account removed" });
+    } catch {
+      toast({ variant: "destructive", title: "Could not remove account", description: "Accounts with transaction history must be kept." });
     }
   };
 
@@ -335,6 +406,14 @@ export default function Bank() {
       });
       return;
     }
+    if (!selectedAccountId) {
+      toast({
+        variant: "destructive",
+        title: "Choose a bank account",
+        description: "Add or select an account before recording a transaction.",
+      });
+      return;
+    }
 
     const isMultiDepositor = depositorIds.length > 1;
 
@@ -369,11 +448,11 @@ export default function Bank() {
           });
           return;
         }
-        const data = { amount: total, goalId: transferGoalId, narration: description.trim(), date, madeById: isSharedWorkspace ? null : user?.id };
+        const data = { amount: total, goalId: transferGoalId, narration: description.trim(), date, madeById: isSharedWorkspace ? null : user?.id, accountId: selectedAccountId };
         if (editingTransaction) {
           await updateTx.mutateAsync({
             id: editingTransaction.id,
-            data: { ...data, transferDirection },
+            data: { ...data, transferDirection, accountId: editingTransaction.accountId ?? selectedAccountId },
           });
           toast({ title: "Transfer updated" });
           resetForm();
@@ -417,6 +496,7 @@ export default function Bank() {
             ...(mode === "deposit" && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(mode === "deposit" && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(mode === "disbursement" ? { expenseCategory, destinationKind: withdrawalDestinationKind } : {}),
+            accountId: editingTransaction.accountId ?? selectedAccountId ?? undefined,
           },
         });
         toast({ title: "Transaction updated" });
@@ -433,6 +513,7 @@ export default function Bank() {
                 amount: Number(depositorAmounts[userId] || 0),
               })),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              accountId: selectedAccountId ?? undefined,
             },
           });
         } else {
@@ -446,6 +527,7 @@ export default function Bank() {
               madeById,
               ...(madeById && incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              accountId: selectedAccountId ?? undefined,
             },
           });
         }
@@ -459,6 +541,7 @@ export default function Bank() {
             expenseCategory,
             madeById: !isSharedWorkspace ? user?.id : withdrawerId,
             destinationKind: withdrawalDestinationKind,
+            accountId: selectedAccountId ?? undefined,
           },
         });
         toast({ title: "Disbursement recorded" });
@@ -502,7 +585,7 @@ export default function Bank() {
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">
-          {isSharedWorkspace ? "Joint Account" : "Personal Account"}
+          {isSharedWorkspace ? "Joint Account" : "Personal Account"}{account?.accountName ? ` · ${account.accountName}` : ""}
         </h1>
         <p className="text-muted-foreground mt-1">
           {isSharedWorkspace
@@ -510,6 +593,34 @@ export default function Bank() {
             : "Track money going in and out of your Personal budget."}
         </p>
       </div>
+
+      <Card className="border-none shadow-sm">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">Bank account</p>
+              <p className="text-sm text-muted-foreground">Choose the account whose balance and transactions you want to view.</p>
+            </div>
+            <select data-testid="select-bank-account" value={selectedAccountId?.toString() ?? ""} onChange={(event) => setSelectedAccountId(event.target.value ? Number(event.target.value) : null)} disabled={accountsLoading || accounts.length === 0} className="h-10 min-w-48 rounded-md border border-input bg-card px-3 text-sm">
+              {accounts.length === 0 ? <option value="">No accounts yet</option> : accounts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </div>
+          {canManageAccount && (
+            <div className="border-t border-border/60 pt-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manager controls</p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={editingAccountId ? "New account name" : "e.g. Family M-Pesa"} maxLength={80} />
+                <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{editingAccountId ? "Rename" : "Add account"}</Button>
+                {editingAccountId && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={() => { setEditingAccountId(null); setAccountNameDraft(""); }}>Cancel</Button>}
+              </div>
+              {selectedAccountId && <div className="mt-2 flex gap-2">
+                <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={() => { const item = accounts.find((candidate) => candidate.id === selectedAccountId); setEditingAccountId(selectedAccountId); setAccountNameDraft(item?.name ?? ""); }}>Rename selected</Button>
+                <Button type="button" size="sm" variant="destructive" data-testid="button-remove-bank-account" onClick={() => handleAccountDelete(selectedAccountId)} disabled={deleteAccount.isPending}>Remove selected</Button>
+              </div>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
        {isSharedWorkspace && !canManageShared && (
          <div className="rounded-xl border border-border/60 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
@@ -1020,7 +1131,7 @@ export default function Bank() {
                           : isDeposit
                             ? `Deposited by ${attribution} · ${tx.description}`
                             : `Withdrawn by ${attribution}${tx.expenseCategory && tx.description !== tx.expenseCategory ? ` · ${tx.description}` : ""}`}
-                        {" · "}{formatDate(tx.date)}
+                        {" · "}{formatDate(tx.date)}{account.accountName ? ` · ${account.accountName}` : ""}
                       </p>
                     </div>
                   </div>

@@ -108,6 +108,11 @@ export interface ExpenseFundingSplit {
   incomeSourceId?: number;
   /** True when this amount came from the shared Joint bank. */
   fromBank: boolean;
+  /**
+     * Bank account for this Joint-bank portion.
+     * @minimum 1
+     */
+  accountId?: number;
 }
 
 export interface Expense {
@@ -126,6 +131,11 @@ export interface Expense {
   /** @nullable */
   paidByName: string | null;
   paidFromBank?: boolean;
+  /**
+     * Bank account funding this expense when applicable.
+     * @nullable
+     */
+  accountId: number | null;
   incomeSplits?: ExpenseFundingSplit[];
   isRecurring: boolean;
   date: string;
@@ -144,6 +154,11 @@ export interface ExpenseInput {
   paidById?: string | null;
   /** Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment. */
   paidFromBank?: boolean;
+  /**
+     * Selected bank account for Joint-bank funding. Omit to use Main account.
+     * @minimum 1
+     */
+  accountId?: number;
   /**
      * Required for a personal expense unless paidFromBank is true. Must belong to paidById.
      * @minimum 1
@@ -910,6 +925,8 @@ export interface DepositContributorSplit {
 
 export interface JointAccountTransaction {
   id: number;
+  /** @nullable */
+  accountId?: number | null;
   /** deposit or disbursement */
   type: string;
   amount: number;
@@ -951,6 +968,8 @@ export interface JointAccountTransaction {
 export interface JointAccountSummary {
   /** Manually entered balance carried into the first recorded transaction */
   openingBalance: number;
+  accountId: number;
+  accountName: string;
   /** Current balance after applying the opening balance and all transactions */
   balance: number;
   totalDeposits: number;
@@ -961,14 +980,17 @@ export interface JointAccountSummary {
 export interface OpeningBalance {
   /** @minimum 0 */
   openingBalance: number;
+  accountId: number;
 }
 
 export interface OpeningBalanceInput {
+  /** @minimum 0 */
+  openingBalance: number;
   /**
      * Manual starting balance in whole KES
-     * @minimum 0
+     * @minimum 1
      */
-  openingBalance: number;
+  accountId?: number;
 }
 
 /**
@@ -1004,6 +1026,8 @@ export interface DepositInput {
   sourceKind?: DepositInputSourceKind;
   /** Whole-KES household contributor portions that must equal amount exactly. */
   contributorSplits?: DepositContributorSplit[];
+  /** @minimum 1 */
+  accountId?: number;
 }
 
 /**
@@ -1034,6 +1058,8 @@ export interface DisbursementInput {
   expenseCategory: string;
   /** Choose other only when the required description is a narration. */
   destinationKind?: DisbursementInputDestinationKind;
+  /** @minimum 1 */
+  accountId?: number;
 }
 
 export type UpdateJointAccountTransactionInputSourceKind = typeof UpdateJointAccountTransactionInputSourceKind[keyof typeof UpdateJointAccountTransactionInputSourceKind];
@@ -1095,6 +1121,8 @@ export interface UpdateJointAccountTransactionInput {
      * @maxLength 200
      */
   narration?: string;
+  /** @minimum 1 */
+  accountId?: number;
 }
 
 export interface SavingsTransferInput {
@@ -1110,6 +1138,35 @@ export interface SavingsTransferInput {
   date: string;
   /** @nullable */
   madeById?: string | null;
+  /** @minimum 1 */
+  accountId?: number;
+}
+
+export interface BankAccount {
+  id: number;
+  name: string;
+  openingBalance: number;
+  createdAt: string;
+}
+
+export interface BankAccountInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  /** @minimum 0 */
+  openingBalance?: number;
+}
+
+export interface BankAccountUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name?: string;
+  /** @minimum 0 */
+  openingBalance?: number;
 }
 
 export interface SavingsGoalInput {
@@ -1283,6 +1340,14 @@ year?: number;
 
 export type GetDashboardTrendsParams = {
 months?: number;
+};
+
+export type GetJointAccountParams = {
+/**
+ * Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.
+ * @minimum 1
+ */
+accountId?: number;
 };
 
 export type GetIncomeSourcesParams = {

@@ -30,4 +30,6 @@ export interface DepositInput {
   sourceKind?: DepositInputSourceKind;
   /** Whole-KES household contributor portions that must equal amount exactly. */
   contributorSplits?: DepositContributorSplit[];
+  /** @minimum 1 */
+  accountId?: number;
 }

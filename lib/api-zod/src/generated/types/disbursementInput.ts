@@ -24,4 +24,6 @@ export interface DisbursementInput {
   expenseCategory: string;
   /** Choose other only when the required description is a narration. */
   destinationKind?: DisbursementInputDestinationKind;
+  /** @minimum 1 */
+  accountId?: number;
 }

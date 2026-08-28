@@ -20,6 +20,11 @@ export interface ExpenseInput {
   /** Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment. */
   paidFromBank?: boolean;
   /**
+     * Selected bank account for Joint-bank funding. Omit to use Main account.
+     * @minimum 1
+     */
+  accountId?: number;
+  /**
      * Required for a personal expense unless paidFromBank is true. Must belong to paidById.
      * @minimum 1
      */

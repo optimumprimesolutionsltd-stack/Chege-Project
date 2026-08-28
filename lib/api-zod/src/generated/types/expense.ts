@@ -23,6 +23,11 @@ export interface Expense {
   /** @nullable */
   paidByName: string | null;
   paidFromBank?: boolean;
+  /**
+     * Bank account funding this expense when applicable.
+     * @nullable
+     */
+  accountId: number | null;
   incomeSplits?: ExpenseFundingSplit[];
   isRecurring: boolean;
   date: Date;

@@ -28,6 +28,7 @@ import {
   useCreateBudgetCategory,
   useGetMembers,
   useGetGroup,
+  useGetJointAccounts,
   useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey,
   getGetDashboardActivityQueryKey,
@@ -57,12 +58,14 @@ type ExpenseRecord = {
   paidById: string | null;
   incomeSourceId?: number | null;
   paidFromBank?: boolean;
+  accountId?: number | null;
   incomeSplits?: {
     userId?: string | null;
     label?: string;
     amount: number;
     incomeSourceId?: number;
     fromBank: boolean;
+    accountId?: number;
   }[];
   isRecurring: boolean;
   date: string;
@@ -128,6 +131,7 @@ export default function AddExpenseSheet() {
   const categories = categoriesQuery.data ?? [];
   const { data: members = [] } = useGetMembers();
   const { data: group } = useGetGroup();
+  const { data: bankAccounts = [] } = useGetJointAccounts();
   const editExpensesQuery = useGetExpenses(
     { month: editMonth, year: editYear },
     { query: { queryKey: getGetExpensesQueryKey({ month: editMonth, year: editYear }), enabled: isEditMode } },
@@ -182,6 +186,7 @@ export default function AddExpenseSheet() {
   const [isRecurring, setIsRecurring] = useState(false);
   // Funding — joint bank toggle + personal income sources from DB
   const [paidFromBank, setPaidFromBank] = useState(false);
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | null>(null);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
   const [newSourcePayerId, setNewSourcePayerId] = useState<string | null>(null);
@@ -226,6 +231,7 @@ export default function AddExpenseSheet() {
   useEffect(() => {
     if (isEditMode) return;
     setPaidFromBank(false);
+    setSelectedBankAccountId(null);
     setSelectedSources([]);
     setSplitAmounts({});
     setPayerIncomeSourceIds({});
@@ -285,6 +291,11 @@ export default function AddExpenseSheet() {
     setIsRecurring(editingExpense.isRecurring);
     setPayerIds(personalPayerIds);
     setPaidFromBank(hasBankFunding);
+    setSelectedBankAccountId(
+      editingExpense.accountId
+      ?? storedSplits.find((split) => split.fromBank)?.accountId
+      ?? null,
+    );
     setPayerAmounts({
       ...personalAmounts,
       ...(hasBankFunding ? { __joint_bank__: String(bankAmount || editingExpense.amount) } : {}),
@@ -495,6 +506,10 @@ export default function AddExpenseSheet() {
       Alert.alert('Paid by required', 'Please choose who paid.');
       return;
     }
+    if (effectivePaidFromBank && !selectedBankAccountId) {
+      Alert.alert('Bank account required', 'Choose the bank account that funded this expense.');
+      return;
+    }
     if (date > todayIso()) {
       Alert.alert('Future date not allowed', 'This records actual spending — please use today or an earlier date.');
       return;
@@ -523,6 +538,7 @@ export default function AddExpenseSheet() {
           isRecurring: canManageShared ? isRecurring : editingExpense.isRecurring,
           date,
           paidFromBank: editingExpense.paidFromBank,
+          ...(editingExpense.paidFromBank ? { accountId: selectedBankAccountId! } : {}),
           ...(preservedSplits.length > 0 ? { incomeSplits: preservedSplits } : {}),
         } as Parameters<typeof updateExpense.mutateAsync>[0]['data'];
         await updateExpense.mutateAsync({ id: editingExpense.id, data });
@@ -580,8 +596,9 @@ export default function AddExpenseSheet() {
         const data = {
             amount: parsed, category, description: description.trim(), notes: notes.trim() || undefined,
             paidById: effectivePayerIds[0] ?? null, isRecurring: effectiveIsRecurring, date, paidFromBank: false,
+            ...(effectivePaidFromBank ? { accountId: selectedBankAccountId! } : {}),
             incomeSplits: [
-              ...(effectivePaidFromBank ? [{ userId: null, label: 'Joint bank', amount: parseFloat(payerAmounts.__joint_bank__ || '0') || 0, fromBank: true }] : []),
+              ...(effectivePaidFromBank ? [{ userId: null, label: 'Joint bank', amount: parseFloat(payerAmounts.__joint_bank__ || '0') || 0, fromBank: true, accountId: selectedBankAccountId! }] : []),
               ...effectivePayerIds.map((userId) => ({
                 userId, label: members.find((member) => member.userId === userId)?.userName ?? 'Member',
                 amount: parseFloat(payerAmounts[userId] || '0') || 0, fromBank: false,
@@ -614,7 +631,7 @@ export default function AddExpenseSheet() {
           paidFromBank: effectivePaidFromBank,
           userId: effectivePayerIds[0],
           sources: selectedIncomeSources,
-        });
+        }).map((split) => split.fromBank ? { ...split, accountId: selectedBankAccountId! } : split);
 
         const data = {
             amount: parsed,
@@ -625,6 +642,7 @@ export default function AddExpenseSheet() {
             isRecurring: effectiveIsRecurring,
             date,
             paidFromBank: effectivePaidFromBank,
+            ...(effectivePaidFromBank ? { accountId: selectedBankAccountId! } : {}),
             ...((incomeSplits.length > 0 || (isEditMode && fundingDirty)) ? { incomeSplits } : {}),
           } as Parameters<typeof createExpenseAsync>[0]['data'];
         if (isEditMode && editId !== null) {
@@ -645,7 +663,7 @@ export default function AddExpenseSheet() {
     } finally {
       setIsPending(false);
     }
-  }, [amount, category, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, members, canManageShared, user?.id, createExpenseAsync, updateExpense, invalidateExpenses, sharedTransactionsLocked, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty]);
+  }, [amount, category, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, selectedBankAccountId, members, canManageShared, user?.id, createExpenseAsync, updateExpense, invalidateExpenses, sharedTransactionsLocked, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty]);
 
   const handleRemove = useCallback(() => {
     if (!editingExpense || !canRemoveExpense) return;
@@ -1149,6 +1167,28 @@ export default function AddExpenseSheet() {
                 );
               })}
             </View>
+            {paidFromBank && (
+              <View style={{ marginTop: 10, gap: 7 }}>
+                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>BANK ACCOUNT <Text style={{ color: '#ef4444' }}>*</Text></Text>
+                <View style={styles.paidByRow}>
+                  {bankAccounts.map((account) => {
+                    const selected = selectedBankAccountId === account.id;
+                    return (
+                      <Pressable
+                        key={account.id}
+                        onPress={() => { setSelectedBankAccountId(account.id); if (isEditMode) setFundingDirty(true); }}
+                        style={[styles.paidByPill, { backgroundColor: selected ? 'rgba(56,189,248,0.15)' : colors.muted, borderColor: selected ? '#38bdf8' : colors.border, borderRadius: colors.radius }]}
+                        testID={`expense-bank-account-${account.id}`}
+                      >
+                        <Feather name="credit-card" size={14} color={selected ? '#38bdf8' : colors.mutedForeground} />
+                        <Text style={[styles.paidByText, { color: selected ? '#38bdf8' : colors.foreground }]}>{account.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {bankAccounts.length === 0 && <Text style={[styles.hintText, { color: '#ef4444' }]}>Add a bank account from the Bank tab before using bank funds.</Text>}
+              </View>
+            )}
               {!canManageShared && (
                 <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
                   This expense is recorded in your name.

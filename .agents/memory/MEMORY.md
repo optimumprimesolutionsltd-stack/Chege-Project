@@ -39,3 +39,4 @@
 - [Domain cutover buffer](domain-cutover-buffer.md) — keep the current production domain live until a replacement domain is verified on Render.
 - [Group-aware category packs](group-aware-category-packs.md) — group type selects starter expenses; later type changes never rewrite categories, and recommendations only add missing names.
 - [Post-landing budget choice](post-landing-budget-choice.md) — the page after marketing should move directly into choosing a budget, not repeat the landing-page story.
+- [Multiple bank accounts](multiple-bank-accounts.md) — accounts are workspace-scoped; bank views select one, while dashboards/reports aggregate all exactly once.

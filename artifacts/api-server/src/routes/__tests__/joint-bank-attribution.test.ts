@@ -31,6 +31,7 @@ vi.mock("@workspace/db", () => {
 
   return {
     jointAccountTxTable: makeTable("joint_account_transactions"),
+    bankAccountsTable: makeTable("bank_accounts"),
     jointAccountDepositSplitsTable: makeTable("joint_account_deposit_splits"),
     budgetCategoriesTable: makeTable("budget_categories"),
     savingsGoalsTable: makeTable("savings_goals"),
@@ -159,7 +160,7 @@ const UNKNOWN_MEMBER_ID = "member-ghost-xyz";
 /** Wire up db.select to return a member row for VALID_MEMBER_ID, empty for others. */
 function wireValidMemberSelect() {
   mockedDb.select.mockImplementation(() =>
-    makeSelectChainWith([{ userId: VALID_MEMBER_ID }]),
+    makeSelectChainWith([{ id: 1, userId: VALID_MEMBER_ID }]),
   );
 }
 
@@ -177,6 +178,32 @@ beforeEach(() => {
   mockedDb.select.mockImplementation(() => makeSelectChainWith([{ id: 1 }]));
   // Default: enrich query finds no user (madeByName = null)
   mockedDb.query.usersTable.findFirst.mockResolvedValue(undefined);
+});
+
+describe("multiple-account legacy fallback", () => {
+  it("keeps an omitted account selection workspace-wide after the first account is renamed", async () => {
+    mockedDb.select
+      .mockImplementationOnce(() => makeSelectChainWith([
+        { id: 7, name: "Everyday", openingBalance: 100 },
+        { id: 8, name: "Savings buffer", openingBalance: 250 },
+      ]))
+      .mockImplementationOnce(() => makeSelectChainWith([
+        { id: 1, groupId: 1, accountId: 7, type: "deposit", amount: 60, description: "Deposit", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() },
+        { id: 2, groupId: 1, accountId: 8, type: "disbursement", amount: 40, description: "Spend", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() },
+      ]));
+
+    const res = await request(jointApp).get("/joint-account");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      accountId: 7,
+      accountName: "All accounts",
+      openingBalance: 350,
+      totalDeposits: 60,
+      totalDisbursements: 40,
+      balance: 370,
+    });
+  });
 });
 
 // ===========================================================================
@@ -214,9 +241,8 @@ describe("POST /joint-account/deposit — madeById attribution", () => {
   it("stores null (Joint bank) when madeById is omitted — does NOT fall back to req.user", async () => {
     const captured: { current: unknown } = { current: undefined };
 
-    // First select call = member validation (only reached if madeById is non-null → skipped here)
-    // But insert is called
-    mockedDb.select.mockImplementation(() => makeSelectChainWith([])); // shouldn't be called
+    // Omitted account IDs now resolve to the deterministic first account.
+    mockedDb.select.mockImplementation(() => makeSelectChainWith([{ id: 1 }]));
     mockedDb.insert = makeInsertMock(captured);
 
     const res = await request(jointApp)
