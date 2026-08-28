@@ -7,7 +7,7 @@ import { useColors } from '@/hooks/useColors';
 
 const FAB_ACTIONS = [
   { icon: 'plus-circle' as const, label: 'Expense',  color: '#4ade80', bg: '#1a3320', route: '/add-expense'         },
-  { icon: 'credit-card' as const, label: 'Deposit',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank?shortcut=deposit' },
+  { icon: 'credit-card' as const, label: 'Deposit / Withdraw',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank' },
   { icon: 'target'      as const, label: 'Save to Goal', color: '#f472b6', bg: '#2a0a1a', route: '/(tabs)/goals?shortcut=contribute' },
 ];
 
