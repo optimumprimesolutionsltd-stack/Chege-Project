@@ -345,12 +345,10 @@ export default function HistoryScreen() {
         dateLabel = d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' });
       }
       result.push({ _kind: 'exp-header', date, dateLabel, items, total, count: items.length });
-      if (expandedGroups.has(date)) {
-        for (const item of items) result.push({ _kind: 'exp-child', groupDate: date, item });
-      }
+      for (const item of items) result.push({ _kind: 'exp-child', groupDate: date, item });
     }
     return result;
-  }, [expenses, expandedGroups]);
+  }, [expenses]);
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -791,10 +789,8 @@ export default function HistoryScreen() {
             }
             renderItem={({ item: row }) => {
               if (row._kind === 'exp-header') {
-                const expanded = expandedGroups.has(row.date);
                 return (
-                  <Pressable
-                    onPress={() => toggleGroup(row.date)}
+                  <View
                     style={[styles.groupHeader, { backgroundColor: colors.card, borderColor: colors.border }]}
                   >
                     <View style={styles.groupHeaderLeft}>
@@ -807,13 +803,8 @@ export default function HistoryScreen() {
                       <Text style={[styles.groupExpenseTotal, { color: colors.foreground }]}>
                         −{row.total.toLocaleString('en-KE', { maximumFractionDigits: 0 })}
                       </Text>
-                      <Feather
-                        name={expanded ? 'chevron-down' : 'chevron-right'}
-                        size={16}
-                        color={colors.mutedForeground}
-                      />
                     </View>
-                  </Pressable>
+                  </View>
                 );
               }
               return (
