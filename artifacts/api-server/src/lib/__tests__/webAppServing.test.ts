@@ -234,4 +234,37 @@ describe("attachWebBuild", () => {
 
     expect(response.text).toContain("Jamvi budget");
   });
+
+  it("does not redirect /app/ to itself", async () => {
+    // Express does not distinguish "/app" from "/app/", so the route that adds
+    // the trailing slash also matches the path that already has one. Left
+    // alone it answers /app/ with a redirect to /app/, and the browser stops
+    // with ERR_TOO_MANY_REDIRECTS. Every deeper path keeps working, so the app
+    // looks fine from the outside while its front door is unreachable.
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir: await buildFixture("Jamvi marketing"),
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const response = await request(app).get("/app/");
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain("Jamvi budget");
+  });
+
+  it("still adds the trailing slash to /app", async () => {
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir: await buildFixture("Jamvi marketing"),
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const response = await request(app).get("/app");
+
+    expect(response.status).toBe(308);
+    expect(response.headers.location).toBe("/app/");
+  });
 });

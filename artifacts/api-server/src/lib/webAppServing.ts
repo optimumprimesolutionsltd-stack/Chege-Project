@@ -126,7 +126,16 @@ function attachDualWebBuilds(
 
   // Register the scoped application first so its /app assets cannot be
   // shadowed by a similarly named marketing asset.
-  app.get("/app", (_req, res) => {
+  // Express does not distinguish "/app" from "/app/" by default, so this route
+  // matches both. Redirecting "/app/" to "/app/" is an infinite loop, and the
+  // browser gives up with ERR_TOO_MANY_REDIRECTS — the app is unreachable at
+  // its own front door while every deeper path still works, which is what makes
+  // it easy to miss.
+  app.get("/app", (req, res, next) => {
+    if (req.path.endsWith("/")) {
+      next();
+      return;
+    }
     res.redirect(308, "/app/");
   });
   app.use(
