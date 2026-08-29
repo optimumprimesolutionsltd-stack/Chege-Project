@@ -1016,8 +1016,8 @@ function ExpenseForm({
              </div>
            )}
            {incomeSourceId && fundingMode === "direct" && (
-             <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-               Amount from this source
+              <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                Type the amount from this source to confirm
                <Input
                  type="number"
                  min="1"
@@ -1026,7 +1026,11 @@ function ExpenseForm({
                  onChange={(event) => setDirectPortion(event.target.value)}
                  placeholder="KES 0"
                  className="h-11 bg-card"
+                  required
                />
+                <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
+                  Enter this manually, even when it equals the expense total. If more than one source paid, choose Both and enter each portion.
+                </span>
              </label>
            )}
            <p className="text-xs text-muted-foreground">
@@ -1126,8 +1130,11 @@ function ExpenseForm({
               )}
               {fundingMode === "bank" && (
                 <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-                  Amount from this account
-                  <Input type="number" min="1" step="1" value={bankPortion} onChange={(event) => setBankPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" />
+                  Type the amount from this account to confirm
+                  <Input type="number" min="1" step="1" value={bankPortion} onChange={(event) => setBankPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" required />
+                  <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
+                    Enter this manually to confirm which amount should reduce the selected account.
+                  </span>
                 </label>
               )}
             </div>
@@ -1135,15 +1142,15 @@ function ExpenseForm({
           {allowMixedFunding && (
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1.5 text-sm font-semibold text-foreground">
-                Bank-deposit portion
-                <Input type="number" min="1" step="1" value={bankPortion} onChange={(event) => setBankPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" />
+                Type the bank-deposit amount
+                <Input type="number" min="1" step="1" value={bankPortion} onChange={(event) => setBankPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" required />
               </label>
               <label className="space-y-1.5 text-sm font-semibold text-foreground">
-                Direct-payment portion
-                <Input type="number" min="1" step="1" value={directPortion} onChange={(event) => setDirectPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" />
+                Type the direct-payment amount
+                <Input type="number" min="1" step="1" value={directPortion} onChange={(event) => setDirectPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" required />
               </label>
               <p className="text-xs leading-relaxed text-muted-foreground sm:col-span-2">
-                Only the bank-deposit portion reduces the selected account. The direct portion is reported against {isSharedWorkspace ? "the selected person" : "you"} and the income source above.
+                Type both amounts manually so a forgotten second funding source is caught before saving. They must add up to the expense total. Only the bank-deposit amount reduces the selected account.
               </p>
             </div>
           )}

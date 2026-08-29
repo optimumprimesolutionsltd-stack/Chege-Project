@@ -1251,7 +1251,7 @@ export default function Expenses() {
               ))}
               {mode === "add" && form.paidFromBank && form.payerIds.length === 0 && (
                 <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-                  Amount from this account
+                  Type the amount from this account to confirm
                   <Input
                     type="number"
                     min="1"
@@ -1260,7 +1260,11 @@ export default function Expenses() {
                     onChange={(event) => form.setPayerAmounts((previous) => ({ ...previous, __joint_bank__: event.target.value }))}
                     placeholder="KES 0"
                     className="h-10 bg-card"
+                    required
                   />
+                  <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
+                    Enter this manually to confirm how much should reduce the selected account.
+                  </span>
                 </label>
               )}
               <p className="text-xs leading-relaxed text-muted-foreground">
@@ -1315,7 +1319,7 @@ export default function Expenses() {
             return (
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Enter how much each person paid{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ""}:
+                  Type each funding amount manually{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ""} so you can catch a forgotten second source:
                 </p>
                  {form.paidFromBank && (
                    <div className="flex items-center gap-3">
@@ -1323,6 +1327,7 @@ export default function Expenses() {
                      <input type="number" placeholder="0" min="0" step="1"
                        value={form.payerAmounts.__joint_bank__ ?? ""}
                        onChange={e => form.setPayerAmounts(prev => ({ ...prev, __joint_bank__: e.target.value }))}
+                        required
                        className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
                    </div>
                  )}
@@ -1341,6 +1346,7 @@ export default function Expenses() {
                            step="1"
                            value={form.payerAmounts[pid] ?? ""}
                            onChange={e => form.setPayerAmounts(prev => ({ ...prev, [pid]: e.target.value }))}
+                            required
                            className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                          />
                        </div>
@@ -1413,7 +1419,7 @@ export default function Expenses() {
             </select>
              {mode === "add" && form.payerIds.length === 1 && !form.paidFromBank && form.incomeSourceId && (
                <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-                 Amount from this source
+                  Type the amount from this source to confirm
                  <Input
                    type="number"
                    min="1"
@@ -1422,7 +1428,11 @@ export default function Expenses() {
                    onChange={(event) => form.setPayerAmounts((previous) => ({ ...previous, [form.payerIds[0]]: event.target.value }))}
                    placeholder="KES 0"
                    className="h-10 bg-card"
+                    required
                  />
+                  <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
+                    Enter this manually, even when it equals the expense total. If more than one source paid, select another payer or the bank account and enter both portions.
+                  </span>
                </label>
              )}
             {mode === "edit" && editHasMultipleFundingSplits && (

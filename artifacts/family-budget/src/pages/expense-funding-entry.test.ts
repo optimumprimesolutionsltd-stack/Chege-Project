@@ -10,22 +10,26 @@ const mobileSource = readFileSync(
 
 describe("expense funding amount entry", () => {
   it("requires an amount for one direct or bank source in dashboard quick log", () => {
-    expect(dashboardSource).toContain("Amount from this source");
-    expect(dashboardSource).toContain("Amount from this account");
+    expect(dashboardSource).toContain("Type the amount from this source to confirm");
+    expect(dashboardSource).toContain("Type the amount from this account to confirm");
+    expect(dashboardSource).toContain("Enter this manually");
     expect(dashboardSource).toContain('title: remaining > 0 ? "Add another funding source"');
   });
 
   it("requires an amount for one source in the full web expense form", () => {
     expect(expensesSource).toContain("sourceCount === 1");
-    expect(expensesSource).toContain("Amount from this source");
-    expect(expensesSource).toContain("Amount from this account");
+    expect(expensesSource).toContain("Type the amount from this source to confirm");
+    expect(expensesSource).toContain("Type the amount from this account to confirm");
+    expect(expensesSource).toContain("Type each funding amount manually");
     expect(expensesSource).toContain('title: remaining > 0 ? "Add another funding source"');
   });
 
   it("requires selected mobile sources to account for the full expense", () => {
     expect(mobileSource).toContain("selectedSources.length > 0");
     expect(mobileSource).toContain("'Add another funding source'");
-    expect(mobileSource).toContain("How much from this source?");
+    expect(mobileSource).toContain("Type the amount from this source to confirm");
+    expect(mobileSource).toContain("TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM");
+    expect(mobileSource).toContain("Type each funding amount manually");
   });
 });
 

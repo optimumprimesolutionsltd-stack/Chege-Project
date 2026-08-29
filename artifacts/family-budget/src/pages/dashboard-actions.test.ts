@@ -32,7 +32,7 @@ describe("dashboard quick actions", () => {
     expect(dashboardSource).toContain('"Personal bank deposits"');
     expect(dashboardSource).toContain('"Both"');
     expect(dashboardSource).toContain("selectedBankAccountId");
-    expect(dashboardSource).toContain("Only the bank-deposit portion reduces the selected account.");
+     expect(dashboardSource).toContain("Only the bank-deposit amount reduces the selected account.");
   });
 
   it("does not ask a Personal budget owner who paid", () => {

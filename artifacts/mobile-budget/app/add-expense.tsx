@@ -1292,7 +1292,7 @@ export default function AddExpenseSheet() {
                 ))}
                 {payerIds.length === 0 && (
                   <View style={styles.singleFundingAmount}>
-                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>AMOUNT FROM THIS ACCOUNT</Text>
+                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM</Text>
                     <TextInput
                       style={[styles.newSourceInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
                       keyboardType="numeric"
@@ -1301,6 +1301,9 @@ export default function AddExpenseSheet() {
                       value={payerAmounts.__joint_bank__ || ''}
                       onChangeText={(value) => setPayerAmounts((previous) => ({ ...previous, __joint_bank__: value }))}
                     />
+                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 4 }]}>
+                      Enter this manually to confirm how much should reduce the selected account.
+                    </Text>
                   </View>
                 )}
                 <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
@@ -1350,7 +1353,7 @@ export default function AddExpenseSheet() {
               return (
                 <View style={{ marginTop: 10, gap: 8 }}>
                   <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                    How much did each person pay?{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
+                    Type each funding amount manually{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''} so you can catch a forgotten second source.
                   </Text>
                   {paidFromBank && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -1548,7 +1551,9 @@ export default function AddExpenseSheet() {
             {!paidFromBank && selectedSources.length > 0 && (
               <View style={{ marginTop: 12, gap: 6 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
-                  {selectedSources.length === 1 ? 'How much from this source?' : 'How much from each source?'}
+                  {selectedSources.length === 1
+                    ? 'Type the amount from this source to confirm'
+                    : 'Type the amount from each source to confirm'}
                 </Text>
                 {selectedSources.map((key, index) => {
                   const sourceId = incomeSourceIdFromKey(key);
