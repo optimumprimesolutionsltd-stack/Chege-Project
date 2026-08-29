@@ -77,6 +77,44 @@ describe("expense funding controls", () => {
     })).toEqual({ primary: "650", second: "350" });
   });
 
+  it("supports either bank/direct selection order without inventing a third source", () => {
+    expect(addFundingSourceWithRemainder({
+      total: 1000,
+      selectedSourceIds: ["income:salary"],
+      newSourceId: "__joint_bank__",
+      amounts: { "income:salary": "650" },
+    })).toEqual({ "income:salary": "650", "__joint_bank__": "350" });
+
+    expect(addFundingSourceWithRemainder({
+      total: 1000,
+      selectedSourceIds: ["__joint_bank__"],
+      newSourceId: "income:salary",
+      amounts: { "__joint_bank__": "650" },
+    })).toEqual({ "__joint_bank__": "650", "income:salary": "350" });
+
+    expect(addFundingSourceWithRemainder({
+      total: 1000,
+      selectedSourceIds: ["primary", "second"],
+      newSourceId: "third",
+      amounts: { primary: "650", second: "350" },
+    })).toEqual({ primary: "650", second: "350" });
+  });
+
+  it("does not create a positive remainder for an exact or overfunded primary", () => {
+    expect(addFundingSourceWithRemainder({
+      total: 1000,
+      selectedSourceIds: ["primary"],
+      newSourceId: "second",
+      amounts: { primary: "1000" },
+    })).toEqual({ primary: "1000" });
+    expect(addFundingSourceWithRemainder({
+      total: 1000,
+      selectedSourceIds: ["primary"],
+      newSourceId: "second",
+      amounts: { primary: "1200" },
+    })).toEqual({ primary: "1200" });
+  });
+
   it("keeps a named category unbudgeted unless a manager explicitly adds it", () => {
     expect(getNewExpenseCategoryMode({ addToBudget: false, canManageCategories: true })).toBe("unbudgeted");
     expect(getNewExpenseCategoryMode({ addToBudget: true, canManageCategories: false })).toBe("unbudgeted");
