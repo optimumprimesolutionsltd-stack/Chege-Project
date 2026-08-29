@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { canManageBankAccount, resolveBankAccountSelection } from "../bankAccess";
 
 describe("bank workspace access", () => {
+  it("lets a Personal budget owner manage accounts, withdrawals, and categories", () => {
+    expect(canManageBankAccount({ isPrivate: true, role: "owner" })).toBe(true);
+  });
+
   it.each(["owner", "admin"] as const)(
     "lets a shared-budget %s manage withdrawals",
     (role) => {

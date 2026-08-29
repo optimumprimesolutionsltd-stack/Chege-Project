@@ -472,8 +472,13 @@ export default function BankScreen() {
   };
 
   const handleCreateCategory = async () => {
-    if (!canManageShared) {
-      Alert.alert('Admin access required', 'Ask a group owner or admin to add a shared category.');
+    if (!canManageAccount) {
+      Alert.alert(
+        'Admin access required',
+        isSharedWorkspace
+          ? 'Ask a group owner or admin to add a shared category.'
+          : 'Only the Personal budget owner can add a category.',
+      );
       return;
     }
     const name = newCategoryName.trim();

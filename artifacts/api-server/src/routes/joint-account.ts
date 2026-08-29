@@ -11,7 +11,7 @@ import {
   incomeSourcesTable,
   bankAccountsTable,
 } from "@workspace/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   getActiveGroupId,
@@ -142,6 +142,31 @@ async function resolveAccountId(accountId: number | undefined, groupId: number):
   return accounts[0]?.id ?? null;
 }
 
+async function listWorkspaceAccounts(groupId: number) {
+  let accounts = await db.select().from(bankAccountsTable)
+    .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.createdAt);
+  if (accounts.length > 0) return accounts;
+
+  await db.insert(bankAccountsTable).values({
+    groupId,
+    name: "Main account",
+    openingBalance: 0,
+  }).onConflictDoNothing();
+
+  accounts = await db.select().from(bankAccountsTable)
+    .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.createdAt);
+  const mainAccount = accounts[0];
+  if (mainAccount) {
+    await db.update(jointAccountTxTable)
+      .set({ accountId: mainAccount.id })
+      .where(and(
+        eq(jointAccountTxTable.groupId, groupId),
+        isNull(jointAccountTxTable.accountId),
+      ));
+  }
+  return accounts;
+}
+
 async function requireAccountId(accountId: number | undefined, groupId: number, res: Response): Promise<number | null> {
   const resolved = await resolveAccountId(accountId, groupId);
   if (resolved === null) res.status(400).json({ error: "Bank account not found." });
@@ -224,8 +249,7 @@ async function validateMemberId(id: string, groupId: number): Promise<string | n
 router.get("/joint-accounts", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  const accounts = await db.select().from(bankAccountsTable)
-    .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.createdAt);
+  const accounts = await listWorkspaceAccounts(groupId);
   res.json(accounts.map((account) => ({
     ...account,
     createdAt: account.createdAt instanceof Date ? account.createdAt.toISOString() : account.createdAt,
@@ -286,8 +310,7 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   if (groupId === null) return;
   const query = AccountQuery.safeParse(req.query);
   if (!query.success) { res.status(400).json({ error: "Invalid account id." }); return; }
-  const accounts = await db.select().from(bankAccountsTable)
-    .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.id);
+  const accounts = await listWorkspaceAccounts(groupId);
   const selectedAccount = query.data.accountId === undefined
     ? accounts[0]
     : accounts.find((account) => account.id === query.data.accountId);
