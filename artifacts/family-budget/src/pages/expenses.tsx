@@ -35,8 +35,9 @@ import {
   useGetDashboardSummary, useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
   getGetBudgetCategoriesQueryKey, getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
-  type IncomeSource, ApiError, useGetJointAccounts, useCreateJointAccount, getGetJointAccountsQueryKey,
+  type IncomeSource, ApiError, useGetJointAccount, useGetJointAccounts, useCreateJointAccount, getGetJointAccountsQueryKey,
 } from "@workspace/api-client-react";
+import { Flag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent } from "@/components/ui/card";
@@ -243,6 +244,14 @@ export default function Expenses() {
   const { data: members } = useGetMembers();
   const { data: group } = useGetGroup();
   const { data: bankAccounts = [] } = useGetJointAccounts();
+  const activeExpenseBankAccountId = isAdding
+    ? addForm.accountId
+    : editingId !== null
+      ? editForm.accountId
+      : null;
+  const { data: activeExpenseBankAccount } = useGetJointAccount(
+    activeExpenseBankAccountId ? { accountId: activeExpenseBankAccountId } : undefined,
+  );
   const sharedTransactionsLocked =
     group?.canRecordSharedTransactions === false && (members?.length ?? 0) < 2;
   const { data: summary } = useGetDashboardSummary({ month, year });
@@ -1309,6 +1318,23 @@ export default function Expenses() {
                   </span>
                 </label>
               )}
+              {(() => {
+                const bankAmount = Number(form.payerAmounts.__joint_bank__ || 0);
+                const originalExpense = mode === "edit"
+                  ? expenses?.find((expense) => expense.id === editingId)
+                  : undefined;
+                const originalBankAmount = originalExpense?.incomeSplits?.find((split) => split.fromBank)?.amount
+                  ?? (originalExpense?.paidFromBank ? originalExpense.amount : 0);
+                const projected = activeExpenseBankAccount && bankAmount > 0
+                  ? activeExpenseBankAccount.balance + originalBankAmount - bankAmount
+                  : null;
+                return projected !== null && projected < 0 ? (
+                  <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100" role="alert" data-testid={`expense-negative-bank-warning-${mode}`}>
+                    <span className="flex items-center gap-1.5 font-semibold"><Flag className="h-3.5 w-3.5 fill-current" /> This will take the account below zero.</span>{" "}
+                    Projected closing balance: {formatKes(projected)}. Jamvi will still save the expense.
+                  </div>
+                ) : null;
+              })()}
               <p className="text-xs leading-relaxed text-muted-foreground">
                 This uses money already recorded in the selected account as an opening balance or deposit.
               </p>

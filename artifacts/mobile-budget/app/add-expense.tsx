@@ -29,6 +29,7 @@ import {
   useGetMembers,
   useGetGroup,
   useGetJointAccounts,
+  useGetJointAccount,
   useCreateJointAccount,
   useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey,
@@ -213,6 +214,17 @@ export default function AddExpenseSheet() {
   const [editHydratedForId, setEditHydratedForId] = useState<number | null>(null);
   const [editFundingHydratedForId, setEditFundingHydratedForId] = useState<number | null>(null);
   const [fundingDirty, setFundingDirty] = useState(false);
+  const { data: selectedBankAccount } = useGetJointAccount(
+    selectedBankAccountId ? { accountId: selectedBankAccountId } : undefined,
+  );
+  const enteredBankAmount = parseFloat(payerAmounts.__joint_bank__ || '0') || 0;
+  const originalBankAmount = editingExpense?.incomeSplits?.find((split) => split.fromBank)?.amount
+    ?? (editingExpense?.paidFromBank ? editingExpense.amount : 0);
+  const projectedExpenseBankBalance = paidFromBank &&
+    selectedBankAccount &&
+    enteredBankAmount > 0
+    ? selectedBankAccount.balance + originalBankAmount - enteredBankAmount
+    : null;
 
   // Load this payer's income sources from DB
   const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
@@ -1347,6 +1359,17 @@ export default function AddExpenseSheet() {
                 <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
                   This uses money already recorded in the selected account as an opening balance or deposit.
                 </Text>
+                {projectedExpenseBankBalance !== null && projectedExpenseBankBalance < 0 && (
+                  <View style={styles.negativeBankWarning} accessibilityRole="alert" testID="expense-negative-bank-warning">
+                    <View style={styles.negativeBankWarningHeader}>
+                      <Feather name="flag" size={15} color="#ef4444" />
+                      <Text style={styles.negativeBankWarningTitle}>This will take the account below zero.</Text>
+                    </View>
+                    <Text style={styles.negativeBankWarningText}>
+                      Projected closing balance: KES {projectedExpenseBankBalance.toLocaleString()}. Jamvi will still save the expense.
+                    </Text>
+                  </View>
+                )}
                 {getExpenseFundingControlState({
                   paidFromBank,
                   hasPersonalFunding: payerIds.length > 0,
@@ -2020,6 +2043,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     flex: 1,
+  },
+  negativeBankWarning: {
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    padding: 12,
+    gap: 4,
+  },
+  negativeBankWarningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  negativeBankWarningTitle: {
+    color: '#ef4444',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+  },
+  negativeBankWarningText: {
+    color: '#d6b36a',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
   },
   hintText: {
     fontSize: 12,

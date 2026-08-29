@@ -51,6 +51,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
+import { getProjectedBalanceAfterOutgoing } from '@/lib/bankBalance';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -727,6 +728,23 @@ export default function BankScreen() {
   const isDeposit = txType === 'deposit';
   const isWithdrawal = txType === 'disbursement';
   const isTransfer = txType === 'transfer';
+  const parsedOutgoingAmount = Number(amount.replace(/,/g, ''));
+  const editingTransaction = editingTransactionId === null
+    ? null
+    : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
+  const isOutgoingTransaction = isWithdrawal || (isTransfer && transferDirection === 'to_savings');
+  const projectedBalance = isOutgoingTransaction &&
+    data &&
+    Number.isInteger(parsedOutgoingAmount) &&
+    parsedOutgoingAmount > 0
+    ? getProjectedBalanceAfterOutgoing(
+        data.balance,
+        parsedOutgoingAmount,
+        editingTransaction
+          ? { amount: editingTransaction.amount, type: editingTransaction.type }
+          : null,
+      )
+    : null;
 
   // Derive a display label for a transaction in the list
   const txPayerLabel = (tx: Tx): string => {
@@ -1097,6 +1115,21 @@ export default function BankScreen() {
               returnKeyType="next"
               testID="bank-amount-input"
             />
+            {projectedBalance !== null && projectedBalance < 0 && (
+              <View
+                style={styles.negativeBalanceWarning}
+                accessibilityRole="alert"
+                testID="bank-negative-balance-warning"
+              >
+                <View style={styles.negativeBalanceWarningHeader}>
+                  <Feather name="flag" size={15} color="#ef4444" />
+                  <Text style={styles.negativeBalanceWarningTitle}>This will take the account below zero.</Text>
+                </View>
+                <Text style={styles.negativeBalanceWarningText}>
+                  The projected closing balance is KES {formatKES(projectedBalance)}. Jamvi will still save the record because it tracks what happened.
+                </Text>
+              </View>
+            )}
 
             {/* Deposits require a description. Withdrawal details come after the required category. */}
             {isDeposit && (
@@ -1852,6 +1885,31 @@ const styles = StyleSheet.create({
     color: '#f7faf6',
     fontFamily: 'Inter_700Bold',
     marginBottom: 20,
+  },
+  negativeBalanceWarning: {
+    marginTop: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    gap: 4,
+  },
+  negativeBalanceWarningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  negativeBalanceWarningTitle: {
+    color: '#ef4444',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+  },
+  negativeBalanceWarningText: {
+    color: '#d6b36a',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
   },
   statsRow: {
     flexDirection: 'row',

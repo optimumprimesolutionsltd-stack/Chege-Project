@@ -12,4 +12,10 @@ describe("mobile bank transaction display", () => {
     expect(bankScreenSource).toContain("formatDateTime(item.date)");
     expect(bankScreenSource).not.toContain("formatDateTime(item.createdAt)");
   });
+
+  it("shows a visible warning before an outgoing transaction makes the balance negative", () => {
+    expect(bankScreenSource).toContain('testID="bank-negative-balance-warning"');
+    expect(bankScreenSource).toContain("This will take the account below zero.");
+    expect(bankScreenSource).toContain("getProjectedBalanceAfterOutgoing");
+  });
 });

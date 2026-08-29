@@ -38,7 +38,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home,
+   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -519,6 +519,9 @@ function ExpenseForm({
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const { data: bankAccounts = [] } = useGetJointAccounts();
+  const { data: selectedBankAccount } = useGetJointAccount(
+    selectedBankAccountId ? { accountId: selectedBankAccountId } : undefined,
+  );
   const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? "");
   const payerId = directPayerId;
   const { data: incomeSources = [], isLoading: isIncomeSourcesLoading } = useGetIncomeSources(
@@ -542,6 +545,14 @@ function ExpenseForm({
   const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
   const bankLabel = isSharedWorkspace ? "Shared bank deposits" : "Personal bank deposits";
   const isOtherCategory = category.trim().toLocaleLowerCase() === "other";
+  const enteredBankAmount = Number(bankPortion);
+  const projectedExpenseBankBalance = paidFromBank &&
+    selectedBankAccountId &&
+    selectedBankAccount &&
+    Number.isInteger(enteredBankAmount) &&
+    enteredBankAmount > 0
+    ? selectedBankAccount.balance - enteredBankAmount
+    : null;
 
   useEffect(() => {
     if (!paidFromBank || !allowMixedFunding) return;
@@ -1141,6 +1152,12 @@ function ExpenseForm({
                      Enter this manually to confirm which amount should reduce the selected account. If it is less than the expense, choose a direct source and Jamvi will fill the remainder.
                   </span>
                 </label>
+              )}
+              {projectedExpenseBankBalance !== null && projectedExpenseBankBalance < 0 && (
+                <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100" role="alert" data-testid="quick-expense-negative-bank-warning">
+                  <span className="flex items-center gap-1.5 font-semibold"><Flag className="h-3.5 w-3.5 fill-current" /> This will take the account below zero.</span>{" "}
+                  Projected closing balance: {formatKes(projectedExpenseBankBalance)}. Jamvi will still save the expense.
+                </div>
               )}
                {paidFromBank && !allowMixedFunding && (
                  <button

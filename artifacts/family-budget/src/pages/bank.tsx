@@ -13,11 +13,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKes, formatDate } from "@/lib/utils";
-import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus } from "lucide-react";
+import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
+import { getProjectedBalanceAfterOutgoing } from "@/lib/bank-balance-utils";
 
 // "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
@@ -582,6 +583,21 @@ export default function Bank() {
 
   const isPending = createDeposit.isPending || createDisbursement.isPending || updateTx.isPending ||
     transferToSavings.isPending || transferFromSavings.isPending || addingCategory;
+  const outgoingAmount = Number(amount);
+  const isOutgoingTransaction = mode === "disbursement" ||
+    (mode === "transfer" && transferDirection === "to_savings");
+  const projectedBalance = isOutgoingTransaction &&
+    account &&
+    Number.isInteger(outgoingAmount) &&
+    outgoingAmount > 0
+    ? getProjectedBalanceAfterOutgoing(
+        account.balance,
+        outgoingAmount,
+        editingTransaction
+          ? { amount: editingTransaction.amount, type: editingTransaction.type }
+          : null,
+      )
+    : null;
 
   // Helpers for attribution labels in transaction list
   const madeByLabel = (madeByName: string | null | undefined, type: string) => {
@@ -805,6 +821,18 @@ export default function Bank() {
                     </p>
                   )}
                 </div>
+                {projectedBalance !== null && projectedBalance < 0 && (
+                  <div
+                    className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950 sm:col-span-2 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
+                    data-testid="bank-negative-balance-warning"
+                    role="alert"
+                  >
+                    <p className="flex items-center gap-2 font-semibold"><Flag className="h-4 w-4 fill-current" /> This will take the account below zero.</p>
+                    <p className="mt-1">
+                      The projected closing balance is {formatKes(projectedBalance)}. Jamvi will still save the record because it tracks what happened.
+                    </p>
+                  </div>
+                )}
                 {mode === "disbursement" && (
                   <div className="space-y-2 sm:col-span-2">
                     <label className="text-sm font-semibold text-foreground">
