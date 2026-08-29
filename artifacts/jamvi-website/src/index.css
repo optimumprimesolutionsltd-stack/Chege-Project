@@ -165,7 +165,12 @@
     @apply border-border;
   }
   body {
-    @apply font-sans antialiased bg-background text-foreground selection:bg-secondary/30 selection:text-foreground;
+    /* Deliberately not `antialiased`. That sets -webkit-font-smoothing to
+       antialiased, which switches Windows off ClearType-style subpixel
+       rendering and makes text visibly thinner and softer — the look reads as
+       "blurry" on the LCD screens most Kenyan users are on. The browser
+       default renders the same type crisply. */
+    @apply font-sans bg-background text-foreground selection:bg-secondary/30 selection:text-foreground;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif tracking-tight text-foreground;
