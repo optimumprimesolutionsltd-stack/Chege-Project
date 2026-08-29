@@ -1,5 +1,16 @@
 # Jamvi
 
+> **Always `git pull` before editing. Every session, before the first change.**
+>
+> This workspace goes stale. Pushing from here has failed before and fallen
+> back to a route that recreates commits with new hashes, so a push from an
+> old copy builds parallel history instead of fast-forwarding — and lands as
+> newer work being silently reverted. It has happened repeatedly, at one point
+> with the workspace 45 commits behind and 25 ahead, real work on both sides.
+>
+> Pull first, and if a push is rejected, pull and rebase. Never force-push
+> `main`.
+
 A household budget tracker for families, couples, or individuals. Any number of household members can sign in, track expenses, record contributions, set savings goals, and monitor spending — all together in one place.
 
 ## Run & Operate

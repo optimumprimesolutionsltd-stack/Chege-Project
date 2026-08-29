@@ -44,7 +44,7 @@ export function Footer() {
         
         <div className="border-t border-primary-foreground/10 mt-16 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-col gap-2 text-primary-foreground/60 text-sm font-medium">
-            <p>© {new Date().getFullYear()} Jamvi Platform. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Optimum Prime Solutions Ltd. All rights reserved.</p>
             <p className="text-xs">
               Jamvi is a product of{" "}
               <a
