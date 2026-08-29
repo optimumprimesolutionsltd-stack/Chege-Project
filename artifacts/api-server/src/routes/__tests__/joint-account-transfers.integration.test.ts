@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import express from "express";
 import request from "supertest";
 import {
+  bankAccountsTable,
   db,
   pool,
   groupMembershipsTable,
@@ -24,6 +25,8 @@ const hasDb = !!process.env.DATABASE_URL;
 const TEST_USER_ID = "transfer-integration-user";
 const TEST_MEMBER_ID = "transfer-integration-member";
 let testGroupId: number;
+let sourceAccountId: number;
+let destinationAccountId: number;
 
 function buildApp() {
   const app = express();
@@ -101,6 +104,12 @@ describe.skipIf(!hasDb)("linked bank and savings transfers (integration)", () =>
       expectedMonthlyAmount: 1_000,
     }).returning();
     ownerIncomeSourceId = incomeSource.id;
+    const [sourceAccount, destinationAccount] = await db.insert(bankAccountsTable).values([
+      { groupId: testGroupId, name: `Transfer source ${Date.now()}`, openingBalance: 1_000 },
+      { groupId: testGroupId, name: `Transfer destination ${Date.now()}`, openingBalance: 500 },
+    ]).returning();
+    sourceAccountId = sourceAccount.id;
+    destinationAccountId = destinationAccount.id;
   });
 
   afterAll(async () => {
@@ -108,6 +117,7 @@ describe.skipIf(!hasDb)("linked bank and savings transfers (integration)", () =>
       await db.delete(jointAccountDepositSplitsTable).where(eq(jointAccountDepositSplitsTable.groupId, testGroupId));
       await db.delete(savingsGoalContributionsTable).where(eq(savingsGoalContributionsTable.groupId, testGroupId));
       await db.delete(jointAccountTxTable).where(eq(jointAccountTxTable.groupId, testGroupId));
+      await db.delete(bankAccountsTable).where(eq(bankAccountsTable.groupId, testGroupId));
       await db.delete(incomeSourcesTable).where(eq(incomeSourcesTable.groupId, testGroupId));
       await db.delete(savingsGoalsTable).where(eq(savingsGoalsTable.groupId, testGroupId));
     }
@@ -145,6 +155,98 @@ describe.skipIf(!hasDb)("linked bank and savings transfers (integration)", () =>
       .from(savingsGoalsTable)
       .where(eq(savingsGoalsTable.id, goalId));
     expect(goal.currentAmount).toBe(1_000);
+  });
+
+  it("creates exactly two linked bank records and deleting either side removes the pair", async () => {
+    const created = await request(app)
+      .post("/joint-account/transfers/bank-to-bank")
+      .send({
+        sourceAccountId,
+        destinationAccountId,
+        amount: 225,
+        narration: "Move reserve",
+        date: "2026-08-19",
+      });
+    expect(created.status).toBe(201);
+    expect(created.body.outgoing.type).toBe("disbursement");
+    expect(created.body.incoming.type).toBe("deposit");
+    expect(created.body.outgoing.bankTransferId).toBe(created.body.transferId);
+    expect(created.body.incoming.bankTransferId).toBe(created.body.transferId);
+
+    const linked = await db
+      .select()
+      .from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.bankTransferId, created.body.transferId));
+    expect(linked).toHaveLength(2);
+    expect(linked.map((row) => row.accountId).sort()).toEqual(
+      [sourceAccountId, destinationAccountId].sort(),
+    );
+
+    expect((await request(app).delete(`/joint-account/${created.body.incoming.id}`)).status).toBe(200);
+    expect(
+      await db.select().from(jointAccountTxTable)
+        .where(eq(jointAccountTxTable.bankTransferId, created.body.transferId)),
+    ).toHaveLength(0);
+  });
+
+  it("rejects an account from another workspace without creating either ledger side", async () => {
+    const [otherGroup] = await db.insert(groupsTable).values({
+      name: `Other bank transfer group ${Date.now()}`,
+      legacyKey: `other-bank-transfer-${Date.now()}`,
+      createdByUserId: TEST_USER_ID,
+    }).returning();
+    const [foreignAccount] = await db.insert(bankAccountsTable).values({
+      groupId: otherGroup.id,
+      name: "Foreign account",
+      openingBalance: 0,
+    }).returning();
+    try {
+      const before = await db.select().from(jointAccountTxTable)
+        .where(eq(jointAccountTxTable.groupId, testGroupId));
+      const response = await request(app)
+        .post("/joint-account/transfers/bank-to-bank")
+        .send({
+          sourceAccountId,
+          destinationAccountId: foreignAccount.id,
+          amount: 100,
+          narration: "Must stay isolated",
+          date: "2026-08-19",
+        });
+      expect(response.status).toBe(400);
+      const after = await db.select().from(jointAccountTxTable)
+        .where(eq(jointAccountTxTable.groupId, testGroupId));
+      expect(after).toHaveLength(before.length);
+    } finally {
+      await db.delete(bankAccountsTable).where(eq(bankAccountsTable.id, foreignAccount.id));
+      await db.delete(groupsTable).where(eq(groupsTable.id, otherGroup.id));
+    }
+  });
+
+  it("rolls back the outgoing side when the incoming insert fails", async () => {
+    const constraintName = `reject_incoming_transfer_${Date.now()}`;
+    const narration = `Rollback ${Date.now()}`;
+    await pool.query(
+      `ALTER TABLE joint_account_transactions ADD CONSTRAINT "${constraintName}" CHECK (NOT (type = 'deposit' AND description = '${narration}'))`,
+    );
+    try {
+      const response = await request(app)
+        .post("/joint-account/transfers/bank-to-bank")
+        .send({
+          sourceAccountId,
+          destinationAccountId,
+          amount: 75,
+          narration,
+          date: "2026-08-19",
+        });
+      expect(response.status).toBe(500);
+      const rows = await db.select().from(jointAccountTxTable)
+        .where(eq(jointAccountTxTable.description, narration));
+      expect(rows).toHaveLength(0);
+    } finally {
+      await pool.query(
+        `ALTER TABLE joint_account_transactions DROP CONSTRAINT IF EXISTS "${constraintName}"`,
+      );
+    }
   });
 
   it("serializes concurrent deletion so the goal is reversed exactly once", async () => {

@@ -42,6 +42,18 @@ export interface JointAccountTransaction {
      */
   transferDirection?: string | null;
   /**
+     * Shared identifier for the two sides of an internal bank-to-bank transfer
+     * @nullable
+     */
+  bankTransferId?: string | null;
+  /**
+     * Counterparty bank account for an internal transfer
+     * @nullable
+     */
+  bankTransferAccountId?: number | null;
+  /** @nullable */
+  bankTransferAccountName?: string | null;
+  /**
      * Expense that owns this linked Joint-bank funding disbursement.
      * @nullable
      */

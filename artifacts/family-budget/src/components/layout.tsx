@@ -88,7 +88,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My budget', icon: PieChart },
     { href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity },
     { href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target },
-    { href: '/bank', label: isSharedWorkspace ? 'Joint Account' : 'My Account', icon: Landmark },
+    { href: '/bank', label: 'Bank accounts', icon: Landmark },
     { href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];

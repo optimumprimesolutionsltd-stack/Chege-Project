@@ -7,12 +7,19 @@ const mobileSource = readFileSync(
   new URL("../../../mobile-budget/app/add-expense.tsx", import.meta.url),
   "utf8",
 );
+const budgetSource = readFileSync(new URL("./budget.tsx", import.meta.url), "utf8");
+const mobileBudgetSource = readFileSync(
+  new URL("../../../mobile-budget/app/(tabs)/budget.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("expense funding amount entry", () => {
   it("requires an amount for one direct or bank source in dashboard quick log", () => {
     expect(dashboardSource).toContain("Type the amount from this source to confirm");
     expect(dashboardSource).toContain("Type the amount from this account to confirm");
-    expect(dashboardSource).toContain("Enter this manually");
+    expect(dashboardSource).toContain("Keep adding funding sources until the remaining amount reaches zero");
+    expect(dashboardSource).toContain('data-testid="quick-expense-funding-remainder"');
+    expect(dashboardSource).toContain("additionalDirectPortions");
     expect(dashboardSource).toContain('title: remaining > 0 ? "Choose another funding source"');
     expect(dashboardSource).toContain("getFundingRemainder(total, direct)");
     expect(dashboardSource).not.toContain('["mixed", "Both"');
@@ -27,17 +34,22 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("addFundingSourceWithRemainder({");
     expect(expensesSource).toContain("selectedSourceIds: form.payerIds");
     expect(expensesSource).toContain('title: remaining > 0 ? "Add another funding source"');
+    expect(expensesSource).toContain("Add another income source...");
+    expect(expensesSource).toContain("as many times as needed until the expense is fully funded");
+    expect(expensesSource).toContain('data-testid="expense-funding-remainder"');
   });
 
   it("requires selected mobile sources to account for the full expense", () => {
     expect(mobileSource).toContain("selectedSources.length > 0");
     expect(mobileSource).toContain("'Add another funding source'");
-    expect(mobileSource).toContain("Type the amount from this source to confirm");
+    expect(mobileSource).toContain("Type each amount. Jamvi fills the current remainder");
     expect(mobileSource).toContain("TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM");
     expect(mobileSource).toContain("Jamvi fills the remaining amount into the other selected source");
     expect(mobileSource).toContain("getFundingRemainder(parseFloat(amount.replace");
     expect(mobileSource).toContain("selectedSourceIds: previous");
     expect(mobileSource).toContain("newSourceId: key");
+    expect(mobileSource).toContain('testID="expense-funding-remainder"');
+    expect(mobileSource).not.toContain("if (previous.length >= 2)");
   });
 });
 
@@ -47,5 +59,26 @@ describe("inline expense bank-account creation", () => {
     expect(expensesSource).toContain("+ New bank account");
     expect(mobileSource).toContain("New bank account");
     expect(mobileSource).toContain("handleCreateBankAccount");
+  });
+});
+
+describe("recurring expense budget setup", () => {
+  it("uses the Budget tab to collect the web average monthly amount without losing the expense draft", () => {
+    expect(expensesSource).toContain('RECURRING_EXPENSE_DRAFT_KEY');
+    expect(expensesSource).toContain('recurringSetup=1');
+    expect(expensesSource).toContain('params.get("resumeRecurring") !== "1"');
+    expect(budgetSource).toContain('Set average monthly amount');
+    expect(budgetSource).toContain('Average monthly amount (KES)');
+    expect(budgetSource).toContain('recurringMonthlyBudget: String(change?.budgetAmount ?? 0)');
+  });
+
+  it("uses the Budget tab to collect the mobile average monthly amount and returns it to the expense", () => {
+    expect(mobileSource).toContain('RECURRING_BUDGET_HANDOFF_KEY');
+    expect(mobileSource).toContain("pathname: '/(tabs)/budget'");
+    expect(mobileSource).toContain("recurringSetup: '1'");
+    expect(mobileSource).toContain('setRecurringMonthlyBudget(result.monthlyBudget)');
+    expect(mobileBudgetSource).toContain('Set average monthly amount');
+    expect(mobileBudgetSource).toContain('AVERAGE MONTHLY AMOUNT (KES)');
+    expect(mobileBudgetSource).toContain('JSON.stringify({ monthlyBudget: String(amt) })');
   });
 });

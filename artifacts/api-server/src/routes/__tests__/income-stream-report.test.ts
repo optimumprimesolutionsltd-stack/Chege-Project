@@ -14,6 +14,7 @@ vi.mock("@workspace/db", () => {
       select: vi.fn(),
     },
     expensesTable: table,
+    expenseCategoryAllocationsTable: table,
     expenseIncomeSplitsTable: table,
     budgetCategoriesTable: table,
     usersTable: table,
@@ -31,6 +32,7 @@ vi.mock("drizzle-orm", () => ({
   sql: sqlMock,
   eq: vi.fn(),
   and: vi.fn(),
+  inArray: vi.fn(),
 }));
 
 import { db } from "@workspace/db";
@@ -196,6 +198,7 @@ describe("GET /dashboard/income-streams", () => {
     expect(statementText).toContain("split.from_bank = false");
     expect(statementText).toContain("expense.paid_from_bank = false");
     expect(statementText).toContain("joint_account_deposit_splits");
+    expect(statementText).toContain("deposit.bank_transfer_id IS NULL");
     expect(statementText).toContain("deposit.transfer_direction IS DISTINCT FROM 'from_savings'");
     expect(statementText).toContain("savings_goal_contributions");
     expect(statementText).toContain("NOT EXISTS");
@@ -364,35 +367,22 @@ describe("GET /dashboard/summary — joint-bank expense attribution", () => {
       [{ total: "800" }], // spending
       [{ count: "2" }], // expense count
       [{ total: "0" }], // categorized bank disbursements
-      [], // savings-goal contributions
       [{ userId: "member-a", firstName: "Amina", monthlyTarget: 1000 }], // members
     ];
     let selectCall = 0;
     mockedDb.select.mockImplementation(() => {
       const rows = selectRows[selectCall++] ?? [];
-      if (selectCall === 5) {
-        return {
-          from: () => ({
-            where: () => ({
-              groupBy: () => Promise.resolve(rows),
-            }),
-          }),
-        };
-      }
-      if (selectCall === 6) {
-        return {
-          from: () => ({
-            leftJoin: () => ({
-              where: () => Promise.resolve(rows),
-            }),
-          }),
-        };
-      }
-      return {
-        from: () => ({
-          where: () => Promise.resolve(rows),
-        }),
+      const result: any = {
+        from: () => result,
+        leftJoin: () => result,
+        where: () => result,
+        groupBy: () => result,
+        then: <TResult1 = unknown[], TResult2 = never>(
+          onfulfilled?: ((value: unknown[]) => TResult1 | PromiseLike<TResult1>) | null,
+          onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+        ) => Promise.resolve(rows).then(onfulfilled, onrejected),
       };
+      return result;
     });
 
     let executeCall = 0;
@@ -420,7 +410,6 @@ describe("GET /dashboard/summary — joint-bank expense attribution", () => {
     });
 
     const response = await request(buildApp()).get("/dashboard/summary?month=5&year=2026");
-
     expect(response.status).toBe(200);
     expect(response.body.memberContributions).toEqual([
       {

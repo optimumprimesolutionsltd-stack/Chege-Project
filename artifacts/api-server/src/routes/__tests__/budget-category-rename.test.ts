@@ -5,6 +5,7 @@ import request from "supertest";
 const tables = vi.hoisted(() => ({
   budgetCategoriesTable: { id: "category.id", groupId: "category.groupId", name: "category.name" },
   expensesTable: { groupId: "expense.groupId", category: "expense.category" },
+  expenseCategoryAllocationsTable: { groupId: "allocation.groupId", category: "allocation.category" },
   jointAccountTxTable: { groupId: "bank.groupId", expenseCategory: "bank.expenseCategory" },
 }));
 
@@ -16,6 +17,7 @@ vi.mock("@workspace/db", () => ({
   },
   budgetCategoriesTable: tables.budgetCategoriesTable,
   expensesTable: tables.expensesTable,
+  expenseCategoryAllocationsTable: tables.expenseCategoryAllocationsTable,
   jointAccountTxTable: tables.jointAccountTxTable,
 }));
 
@@ -68,12 +70,16 @@ describe("PUT /budget-categories/:id", () => {
     });
     mockedDb.query.budgetCategoriesTable.findFirst.mockResolvedValue(undefined);
 
+    const allocationWhere = vi.fn().mockResolvedValue(undefined);
     const update = vi.fn()
       .mockReturnValueOnce({
         set: vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([updated]) })) })),
       })
       .mockReturnValueOnce({
         set: vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) })),
+      })
+      .mockReturnValueOnce({
+        set: vi.fn(() => ({ where: allocationWhere })),
       })
       .mockReturnValueOnce({
         set: vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) })),
@@ -86,8 +92,15 @@ describe("PUT /budget-categories/:id", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.name).toBe("Housekeeping");
-    expect(update).toHaveBeenCalledTimes(3);
+    expect(update).toHaveBeenCalledTimes(4);
     expect(update.mock.results[1]?.value.set).toHaveBeenCalledWith({ category: "Housekeeping" });
-    expect(update.mock.results[2]?.value.set).toHaveBeenCalledWith({ expenseCategory: "Housekeeping" });
+    expect(update.mock.results[2]?.value.set).toHaveBeenCalledWith({ category: "Housekeeping" });
+    expect(update.mock.results[3]?.value.set).toHaveBeenCalledWith({ expenseCategory: "Housekeeping" });
+    // The allocation update is independent of position: it renames every
+    // matching primary or secondary portion, scoped to the active group.
+    expect(allocationWhere).toHaveBeenCalledWith([
+      { column: "allocation.groupId", value: 1 },
+      { column: "allocation.category", value: "Nanny" },
+    ]);
   });
 });

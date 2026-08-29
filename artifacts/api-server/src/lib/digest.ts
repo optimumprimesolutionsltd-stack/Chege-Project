@@ -283,13 +283,32 @@ export async function sendMonthlyDigest(
       .from(budgetCategoriesTable)
       .where(eq(budgetCategoriesTable.groupId, groupId))
       .orderBy(budgetCategoriesTable.priority),
-    db
-      .select({ category: expensesTable.category, total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
-      .from(expensesTable)
-      .where(
-        sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`,
-      )
-      .groupBy(expensesTable.category),
+    // Allocation rows replace the parent category for allocated expenses.
+    // The NOT EXISTS branch retains pre-allocation expenses without
+    // double-counting their parent amount.
+    db.execute(sql`
+      SELECT category, COALESCE(SUM(amount), 0) AS total FROM (
+        SELECT allocation.category, allocation.amount
+        FROM expense_category_allocations allocation
+        INNER JOIN expenses expense
+          ON expense.id = allocation.expense_id AND expense.group_id = allocation.group_id
+        WHERE allocation.group_id = ${groupId}
+          AND EXTRACT(MONTH FROM expense.date) = ${month}
+          AND EXTRACT(YEAR FROM expense.date) = ${year}
+        UNION ALL
+        SELECT expense.category, expense.amount
+        FROM expenses expense
+        WHERE expense.group_id = ${groupId}
+          AND EXTRACT(MONTH FROM expense.date) = ${month}
+          AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND NOT EXISTS (
+            SELECT 1 FROM expense_category_allocations allocation
+            WHERE allocation.expense_id = expense.id AND allocation.group_id = ${groupId}
+          )
+      ) allocated
+      GROUP BY category
+    `).then((result) => (result.rows as { category: string; total: string | number }[])
+      .map((row) => ({ category: row.category, total: Number(row.total) }))),
     db
       .select({
         description: expensesTable.description,

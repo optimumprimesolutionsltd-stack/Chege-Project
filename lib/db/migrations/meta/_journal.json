@@ -57,6 +57,27 @@
       "when": 1788008129405,
       "tag": "0007_deep_preak",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788008129406,
+      "tag": "0008_expense_category_allocations",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788008129407,
+      "tag": "0009_expense_category_allocation_positions",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788008129408,
+      "tag": "0010_bank_to_bank_transfers",
+      "breakpoints": true
     }
   ]
 }

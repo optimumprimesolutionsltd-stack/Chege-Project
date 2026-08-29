@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { budgetCategoriesTable, expensesTable, groupsTable, jointAccountTxTable } from "@workspace/db";
+import { budgetCategoriesTable, expensesTable, expenseCategoryAllocationsTable, groupsTable, jointAccountTxTable } from "@workspace/db";
 import { and, asc, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -204,6 +204,15 @@ router.put("/budget-categories/:id", async (req, res) => {
         await tx.update(expensesTable)
           .set({ category: updated.name })
           .where(and(eq(expensesTable.groupId, groupId), eq(expensesTable.category, existing.name)));
+        // Allocation rows are the category-reporting source for split
+        // expenses. Update them in the same rename transaction; primary
+        // parent categories above stay equal to their position-zero portion.
+        await tx.update(expenseCategoryAllocationsTable)
+          .set({ category: updated.name })
+          .where(and(
+            eq(expenseCategoryAllocationsTable.groupId, groupId),
+            eq(expenseCategoryAllocationsTable.category, existing.name),
+          ));
         await tx.update(jointAccountTxTable)
           .set({ expenseCategory: updated.name })
           .where(and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.expenseCategory, existing.name)));

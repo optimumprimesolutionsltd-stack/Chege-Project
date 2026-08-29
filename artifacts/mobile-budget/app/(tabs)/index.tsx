@@ -68,12 +68,14 @@ type Shortcut = {
 const PERSONAL_SHORTCUTS: Shortcut[] = [
   { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
   { icon: 'credit-card', label: 'Deposit / Withdraw', color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank' },
+  { icon: 'repeat', label: 'Bank transfer', color: '#67E8F9', bg: '#164E63', route: '/(tabs)/bank?shortcut=bank-transfer' },
   { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
 ];
 
 const SHARED_SHORTCUTS: Shortcut[] = [
   { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
   { icon: 'credit-card', label: 'Deposit / Withdraw', color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank' },
+  { icon: 'repeat', label: 'Bank transfer', color: '#67E8F9', bg: '#164E63', route: '/(tabs)/bank?shortcut=bank-transfer' },
   { icon: 'pie-chart',   label: 'Reports',  color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports'         },
   { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
 ];
@@ -485,8 +487,8 @@ export default function DashboardScreen() {
               <Feather name="credit-card" size={18} color={colors.brandTeal} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.bankCardTitle, { color: colors.foreground }]}>{isSharedWorkspace ? 'Joint Account' : 'Personal Account'}</Text>
-              <Text style={[styles.bankCardSub, { color: colors.mutedForeground }]}>{isSharedWorkspace ? 'Shared budget funds' : 'Personal budget funds'}</Text>
+              <Text style={[styles.bankCardTitle, { color: colors.foreground }]}>Bank accounts</Text>
+              <Text style={[styles.bankCardSub, { color: colors.mutedForeground }]}>Your personalized accounts</Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
           </View>

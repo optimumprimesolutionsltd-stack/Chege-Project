@@ -1,190 +1,24 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  ActivityIndicator,
-  Pressable,
-  Platform,
-  Alert,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
-  Switch,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useColors } from '@/hooks/useColors';
-import { PageScrollView } from '@/components/PageScrollReset';
-import {
-  getGetDashboardCategoryBreakdownQueryKey,
-  getGetDashboardCategoryLedgerQueryKey,
-  getGetDashboardSummaryQueryKey,
-  getGetDashboardActivityQueryKey,
-  getGetExpensesQueryKey,
-  getGetBudgetCategoriesQueryKey,
-  useGetDashboardCategoryBreakdown,
-  useGetDashboardCategoryLedger,
-  useGetGroup,
-  customFetch,
-} from '@workspace/api-client-react';
-import { useAuth } from '@/lib/auth';
-import { getCategoryIcon } from '@/lib/categoryIcons';
-import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
-import { getLedgerExpenseEditHref } from '@/lib/expenseEditLink';
-
-type BudgetCategory = {
-  id: number;
-  name: string;
-  budgetAmount: number;
-  priority: number;
-  color: string;
-  isRecurring: boolean;
-  activeMonth?: number | null;
-  activeYear?: number | null;
-};
-type IncomeSource = { id: number; userId: string; name: string; isMain: boolean; expectedMonthlyAmount: number };
-type Member = { userId: string; userName?: string | null; role?: 'owner' | 'admin' | 'member' };
-type LedgerTarget = { category: string; isBudgeted: boolean };
-
-const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-const PRIORITY_LABELS: Record<number, string> = {
-  1: 'Survival Essentials',
-  2: 'Health & Education',
-  3: 'Essentials',
-  4: 'Connectivity & Grooming',
-  5: 'Discretionary',
-  999: 'Needs a budget',
-};
-
-const PRIORITY_GUIDE: Record<number, string> = {
-  1: 'Must-pay basics: food, housing, and core utilities.',
-  2: 'Protect health, learning, and costs that should not wait.',
-  3: 'Keep the household running: transport and everyday supplies.',
-  4: 'Stay connected and cared for: data, grooming, and similar costs.',
-  5: 'Flexible spending that can wait when money is tight.',
-  999: 'Spending recorded without a matching budget category yet.',
-};
-
-function formatKES(n?: number | null): string {
-  if (n === undefined || n === null) return '—';
-  return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
-}
-
-export default function BudgetScreen() {
-  const colors = useColors();
-  const { user } = useAuth();
-  const insets = useSafeAreaInsets();
-  const qc = useQueryClient();
-  const topPad = Platform.OS === 'web' ? 67 : insets.top;
-
-  const now = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
-
-  const {
-    data: breakdown = [],
-    isLoading: breakdownLoading,
-    isFetching: breakdownFetching,
-    refetch: refetchBreakdown,
-  } =
-    useGetDashboardCategoryBreakdown({ month, year });
-  const { data: allCategories = [], refetch: refetchCats } = useQuery<BudgetCategory[]>({
-    queryKey: ['budget-categories-full'],
-    queryFn: () => customFetch<BudgetCategory[]>('/api/budget-categories'),
-    staleTime: 30_000,
-  });
-  const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', 'budget-report'],
-    queryFn: () => customFetch<IncomeSource[]>('/api/income-sources'),
-    staleTime: 30_000,
-  });
-  const { data: members = [], refetch: refetchMembers } = useQuery<Member[]>({
-    queryKey: ['members', 'budget-report'],
-    queryFn: () => customFetch<Member[]>('/api/members'),
-    staleTime: 30_000,
-  });
-  const { data: group } = useGetGroup();
-
-  const [refreshing, setRefreshing] = useState(false);
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([refetchBreakdown(), refetchCats(), refetchIncomeSources(), refetchMembers()]);
-    setRefreshing(false);
-  }, [refetchBreakdown, refetchCats, refetchIncomeSources, refetchMembers]);
-
-  // Add / Edit modal state
-  const [editTarget, setEditTarget] = useState<BudgetCategory | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(false);
-  const [managePriority, setManagePriority] = useState<number | null>(null);
-  const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formAmount, setFormAmount] = useState('');
-  const [formPriority, setFormPriority] = useState('1');
-  const [formIsRecurring, setFormIsRecurring] = useState(true);
-  const [formActiveMonth, setFormActiveMonth] = useState(month);
-  const [formActiveYear, setFormActiveYear] = useState(year);
-  const [saving, setSaving] = useState(false);
-  const [newIncomeSource, setNewIncomeSource] = useState('');
-  const [newIncomeExpected, setNewIncomeExpected] = useState('');
-  const [addingIncomeSource, setAddingIncomeSource] = useState(false);
-  const [editingIncomeSourceId, setEditingIncomeSourceId] = useState<number | null>(null);
-  const [editingIncomeSourceName, setEditingIncomeSourceName] = useState('');
-  const [savingIncomeSourceId, setSavingIncomeSourceId] = useState<number | null>(null);
-  const {
-    data: ledger,
-    isLoading: ledgerLoading,
-    isError: ledgerError,
-    refetch: refetchLedger,
-  } = useGetDashboardCategoryLedger(
-    {
-      month,
-      year,
-      category: ledgerCategory?.category ?? '',
-      isBudgeted: ledgerCategory?.isBudgeted ?? true,
-    },
-    {
-      query: {
-        queryKey: getGetDashboardCategoryLedgerQueryKey({
-          month,
-          year,
-          category: ledgerCategory?.category ?? '',
-          isBudgeted: ledgerCategory?.isBudgeted ?? true,
-        }),
-        enabled: !!ledgerCategory,
-      },
-    },
-  );
-
-  const openAdd = (priority = 1) => {
+s.recurringSetup[0] : params.recurringSetup;
+    if (setup !== '1' || recurringSetupHandled || categoriesLoading) return;
+    const requestedCategory = (Array.isArray(params.category) ? params.category[0] : params.category)?.trim() ?? '';
+    const existing = allCategories.find(
+      item => item.name.trim().toLocaleLowerCase() === requestedCategory.toLocaleLowerCase(),
+    );
+    setRecurringSetupActive(true);
+    setRecurringSetupHandled(true);
+    if (existing) {
+      openEdit(existing);
+      return;
+    }
     setEditTarget(null);
-    setFormName(''); setFormAmount(''); setFormPriority(priority.toString());
-    setFormIsRecurring(true); setFormActiveMonth(month); setFormActiveYear(year);
+    setFormName(requestedCategory);
+    setFormAmount('');
+    setFormPriority('3');
+    setFormIsRecurring(true);
+    setFormActiveMonth(month);
+    setFormActiveYear(year);
     setAddOpen(true);
-  };
-  const openEdit = (cat: BudgetCategory) => {
-    setManageOpen(false);
-    setEditTarget(cat);
-    setFormName(cat.name);
-    setFormAmount(cat.budgetAmount.toString());
-    setFormPriority(cat.priority.toString());
-    setFormIsRecurring(cat.isRecurring);
-    setFormActiveMonth(cat.activeMonth ?? month);
-    setFormActiveYear(cat.activeYear ?? year);
-    setAddOpen(true);
-  };
-  const openManage = (priority: number | null = null) => {
-    setManagePriority(priority);
-    setManageOpen(true);
-  };
-  const closeModal = () => { setAddOpen(false); setEditTarget(null); };
+  }, [allCategories, categoriesLoading, month, params.category, params.recurringSetup, recurringSetupHandled, year]);
 
   const refreshAll = async () => {
     qc.removeQueries({
@@ -339,6 +173,12 @@ export default function BudgetScreen() {
         }),
       });
       await refreshAll();
+      if (recurringSetupActive) {
+        await AsyncStorage.setItem(
+          RECURRING_BUDGET_HANDOFF_KEY,
+          JSON.stringify({ monthlyBudget: String(amt) }),
+        );
+      }
       closeModal();
     } catch {
       Alert.alert('Error', 'Could not save category.');
@@ -428,7 +268,7 @@ export default function BudgetScreen() {
               <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-                  {editTarget ? 'Edit category' : 'Add category'}
+                  {recurringSetupActive ? 'Set average monthly amount' : editTarget ? 'Edit category' : 'Add category'}
                 </Text>
                 <Pressable onPress={closeModal} hitSlop={8}>
                   <Feather name="x" size={22} color={colors.mutedForeground} />
@@ -449,7 +289,14 @@ export default function BudgetScreen() {
                     Renaming keeps existing expenses and tagged bank payments under the new name.
                   </Text>
                 ) : null}
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>BUDGET AMOUNT (KES)</Text>
+                {recurringSetupActive ? (
+                  <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
+                    Enter the average amount you expect to spend each month. Jamvi will use it as this recurring expense&apos;s monthly budget.
+                  </Text>
+                ) : null}
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  {recurringSetupActive ? 'AVERAGE MONTHLY AMOUNT (KES)' : 'BUDGET AMOUNT (KES)'}
+                </Text>
                 <TextInput
                   style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
                   value={formAmount}

@@ -12,6 +12,7 @@ import {
   bankAccountsTable,
 } from "@workspace/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   getActiveGroupId,
@@ -127,6 +128,13 @@ const SavingsTransferInput = z.object({
   madeById: z.string().nullable().optional(),
   accountId: z.number().int().positive().optional(),
 });
+const BankToBankTransferInput = z.object({
+  sourceAccountId: z.number().int().positive(),
+  destinationAccountId: z.number().int().positive(),
+  amount: z.number().int().positive(),
+  narration: z.string().trim().min(1).max(200),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
 const AccountInput = z.object({
   name: z.string().trim().min(1).max(80),
   accountNumber: z.string().trim().min(1).max(40).optional(),
@@ -159,7 +167,7 @@ async function listWorkspaceAccounts(groupId: number) {
 
   await db.insert(bankAccountsTable).values({
     groupId,
-    name: "Main account",
+    name: "Bank account",
     openingBalance: 0,
   }).onConflictDoNothing();
 
@@ -187,7 +195,7 @@ async function enrichTx(
   tx: typeof jointAccountTxTable.$inferSelect,
   groupId: number,
 ) {
-  const [user, savingsGoal, contributorSplits] = await Promise.all([
+  const [user, savingsGoal, contributorSplits, bankTransferAccount] = await Promise.all([
     tx.madeById
       ? db.select({ firstName: usersTable.firstName })
           .from(groupMembershipsTable)
@@ -220,6 +228,14 @@ async function enrichTx(
           eq(jointAccountDepositSplitsTable.groupId, groupId),
         ))
       : Promise.resolve([]),
+    tx.bankTransferAccountId
+      ? db.query.bankAccountsTable.findFirst({
+          where: and(
+            eq(bankAccountsTable.id, tx.bankTransferAccountId),
+            eq(bankAccountsTable.groupId, groupId),
+          ),
+        })
+      : null,
   ]);
   const madeByName = contributorSplits.length === 1
     ? (contributorSplits[0].userName ?? "Member")
@@ -235,6 +251,9 @@ async function enrichTx(
     savingsGoalId: tx.savingsGoalId ?? null,
     savingsGoalName: savingsGoal?.name ?? null,
     transferDirection: tx.transferDirection ?? null,
+    bankTransferId: tx.bankTransferId ?? null,
+    bankTransferAccountId: tx.bankTransferAccountId ?? null,
+    bankTransferAccountName: bankTransferAccount?.name ?? null,
     expenseId: tx.expenseId ?? null,
     contributorSplits: contributorSplits.map((split) => ({
       userId: split.userId,
@@ -340,12 +359,14 @@ router.get("/joint-account", async (req, res): Promise<void> => {
 
   const enriched = await Promise.all(txs.map((tx) => enrichTx(tx, groupId)));
 
-  const totalDeposits = txs.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
-  const totalDisbursements = txs.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
+  const ledgerDeposits = txs.filter(t => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
+  const ledgerDisbursements = txs.filter(t => t.type === "disbursement").reduce((s, t) => s + t.amount, 0);
+  const totalDeposits = txs.filter(t => t.type === "deposit" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
+  const totalDisbursements = txs.filter(t => t.type === "disbursement" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
   const openingBalance = isAggregate
     ? accounts.reduce((sum, account) => sum + account.openingBalance, 0)
     : selectedAccount.openingBalance;
-  const balance = openingBalance + totalDeposits - totalDisbursements;
+  const balance = openingBalance + ledgerDeposits - ledgerDisbursements;
 
   res.json({
     accountId: selectedAccount.id,
@@ -646,6 +667,59 @@ router.post("/joint-account/transfers/from-savings", async (req, res): Promise<v
   await createSavingsTransfer(req, res, "from_savings");
 });
 
+router.post("/joint-account/transfers/bank-to-bank", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const parsed = BankToBankTransferInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter two different bank accounts, a positive whole-KES amount, date, and narration." });
+    return;
+  }
+  const { sourceAccountId, destinationAccountId, amount, narration, date } = parsed.data;
+  if (sourceAccountId === destinationAccountId) {
+    res.status(400).json({ error: "Choose two different bank accounts." });
+    return;
+  }
+
+  const transferId = randomUUID();
+  const result = await db.transaction(async (tx) => {
+    const accountIds = [sourceAccountId, destinationAccountId].sort((a, b) => a - b);
+    const lockedAccounts = await tx.select().from(bankAccountsTable)
+      .where(and(eq(bankAccountsTable.groupId, groupId), inArray(bankAccountsTable.id, accountIds)))
+      .orderBy(bankAccountsTable.id)
+      .for("update");
+    if (lockedAccounts.length !== 2) return null;
+    const source = lockedAccounts.find((account) => account.id === sourceAccountId)!;
+    const destination = lockedAccounts.find((account) => account.id === destinationAccountId)!;
+    const [outgoing, incoming] = await tx.insert(jointAccountTxTable).values([
+      {
+        groupId, accountId: source.id, type: "disbursement", amount,
+        description: narration, date, madeById: null, incomeSourceId: null,
+        expenseCategory: null, bankTransferId: transferId,
+        bankTransferAccountId: destination.id,
+      },
+      {
+        groupId, accountId: destination.id, type: "deposit", amount,
+        description: narration, date, madeById: null, incomeSourceId: null,
+        expenseCategory: null, bankTransferId: transferId,
+        bankTransferAccountId: source.id,
+      },
+    ]).returning();
+    return { outgoing, incoming };
+  });
+  if (!result) {
+    res.status(400).json({ error: "Both bank accounts must belong to the active workspace." });
+    return;
+  }
+  res.status(201).json({
+    transferId,
+    outgoing: await enrichTx(result.outgoing, groupId),
+    incoming: await enrichTx(result.incoming, groupId),
+  });
+});
+
 // PUT /joint-account/:id — edit a transaction without changing its type.
 router.put("/joint-account/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
@@ -661,6 +735,10 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     .where(and(eq(jointAccountTxTable.id, params.data.id), eq(jointAccountTxTable.groupId, groupId)))
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  if (existing.bankTransferId !== null) {
+    res.status(409).json({ error: "Bank-to-bank transfers cannot be edited. Delete the transfer pair and record a corrected transfer." });
+    return;
+  }
   const requestedAccountId = parsed.data.accountId === undefined ? existing.accountId : parsed.data.accountId;
   const accountId = await requireAccountId(requestedAccountId ?? undefined, groupId, res);
   if (accountId === null) return;
@@ -1034,6 +1112,15 @@ router.delete("/joint-account/:id", async (req, res): Promise<void> => {
     }
     if (existing.expenseId !== null) {
       return { linkedExpense: true };
+    }
+    if (existing.bankTransferId !== null) {
+      const removed = await tx.delete(jointAccountTxTable)
+        .where(and(
+          eq(jointAccountTxTable.groupId, groupId),
+          eq(jointAccountTxTable.bankTransferId, existing.bankTransferId),
+        ))
+        .returning();
+      return { deleted: removed[0] };
     }
 
     const [removed] = await tx

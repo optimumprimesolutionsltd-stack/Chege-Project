@@ -13,15 +13,17 @@ describe("Personal budget expense controls", () => {
     expect(expensesSource).toContain("addForm.setPayerIds([memberPayerId]);");
   });
 
-  it("uses Personal bank language instead of Joint-bank language", () => {
-    expect(expensesSource).toContain('{isPersonalBudget ? "Personal bank account" : "Shared bank account"}');
-    expect(expensesSource).toContain('label: isPersonalBudget ? "Personal bank" : "Shared bank"');
+  it("uses neutral bank-account language and preserves personalized names", () => {
+    expect(expensesSource).toContain("🏦 Bank account");
+    expect(expensesSource).toContain('bankAccounts.find((account) => account.id === addForm.accountId)?.name ?? "Bank account"');
+    expect(expensesSource).not.toContain("Personal bank account");
+    expect(expensesSource).not.toContain("Main account");
   });
 
   it("keeps Shared payer controls while giving Personal budgets a distinct path", () => {
     expect(expensesSource).toContain('{!isPersonalBudget && (canManageExpenses ? (members ?? []) : (members ?? []).filter((member) => member.userId === user?.id)).map((m) => {');
-    expect(expensesSource).toContain('{isPersonalBudget ? "Personal bank" : "Shared bank"}');
-    expect(expensesSource).toContain('isPersonalBudget ? "Choose an income source below." : canManageExpenses ? "Choose who paid, or select Shared bank account."');
+    expect(expensesSource).toContain('bankAccounts.find((account) => account.id === form.accountId)?.name ?? "Bank account"');
+    expect(expensesSource).toContain('isPersonalBudget ? "Choose an income source below." : canManageExpenses ? "Choose who paid, or select a bank account."');
     expect(expensesSource).toContain('paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined)');
   });
 });

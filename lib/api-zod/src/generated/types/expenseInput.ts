@@ -5,22 +5,26 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { ExpenseCategoryAllocation } from './expenseCategoryAllocation';
 import type { ExpenseFundingSplit } from './expenseFundingSplit';
 
 export interface ExpenseInput {
   amount: number;
+  /** Compatibility/display primary category. Must match the first categoryAllocations item when allocations are supplied. */
   category: string;
+  /** Optional whole-KES category portions. Amounts must total amount exactly and each category can appear once. */
+  categoryAllocations?: ExpenseCategoryAllocation[];
   description: string;
   notes?: string;
   /**
-     * Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.
+     * Legacy single-payer attribution. Omit for split-funded or bank-account expenses.
      * @nullable
      */
   paidById?: string | null;
-  /** Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment. */
+  /** Legacy single-source bank-account flag. Use incomeSplits for a mixed payment. */
   paidFromBank?: boolean;
   /**
-     * Selected bank account for Joint-bank funding. Omit to use Main account.
+     * Selected bank account for bank funding. Omit to use the workspace's first account.
      * @minimum 1
      */
   accountId?: number;
@@ -29,7 +33,7 @@ export interface ExpenseInput {
      * @minimum 1
      */
   incomeSourceId?: number;
-  /** Whole-KES funding portions. Their amounts must equal amount exactly. Every personal portion requires incomeSourceId; Joint-bank portions must not include one. */
+  /** Whole-KES funding portions. Their amounts must equal amount exactly. Every direct portion requires incomeSourceId; bank-account portions must not include one. */
   incomeSplits?: ExpenseFundingSplit[];
   isRecurring?: boolean;
   date: Date;

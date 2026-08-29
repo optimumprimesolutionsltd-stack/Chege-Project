@@ -1,946 +1,4 @@
-import { useEffect, useState } from "react";
-import {
-  useGetDashboardSummary,
-  useGetDashboardActivity,
-  useGetDashboardCategoryBreakdown,
-  useGetDashboardTrends,
-  useGetSavingsGoals,
-  useGetBudgetCategories,
-  useGetMembers,
-  useCreateExpense,
-  useCreateDeposit,
-  useContributeToSavingsGoal,
-  useCascadeContribute,
-  useGetJointAccount,
-  useGetJointAccounts,
-  useCreateJointAccount,
-  useGetGroup,
-   useGetIncomeSources,
-   useGetWorkspaces,
-   useCreateBudgetCategory,
-  useCreateSharedGroup,
-  getGetDashboardSummaryQueryKey,
-  getGetDashboardActivityQueryKey,
-  getGetDashboardCategoryBreakdownQueryKey,
-  getGetDashboardTrendsQueryKey,
-  getGetSavingsGoalsQueryKey,
-  getGetJointAccountQueryKey,
-  getGetJointAccountsQueryKey,
-  getGetExpensesQueryKey,
-  getGetBudgetCategoriesQueryKey,
-   getGetIncomeSourcesQueryKey,
-  type SavingsGoal,
-  type IncomeSource,
-  type GroupKind,
-} from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { formatKes, formatDate } from "@/lib/utils";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import {
-   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ACTIVITY_TYPE } from "@/lib/activityTypes";
-import { Link, useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@workspace/replit-auth-web";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
-import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
-import { ProfileAvatar } from "@/components/profile-avatar";
-import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
-import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
-import { appPath, routePath } from "@/lib/base-path";
-import { canManageBankAccount } from "@/lib/bank-access";
-import { getFundingRemainder } from "@/lib/expense-funding-utils";
-
-type QuickAction = "none" | "income" | "expense" | "goal";
-
-type DashboardActivityItem = ActivityEditItem & {
-  type: string;
-  amount: number;
-  description: string;
-  userName?: string | null;
-};
-
-function DashboardActivityRow({
-  item,
-  compact = false,
-  bankLabel = "Shared bank",
-}: {
-  item: DashboardActivityItem;
-  compact?: boolean;
-  bankLabel?: string;
-}) {
-  const editLink = getActivityEditLink(item);
-  const rowClass = compact
-    ? "flex items-center justify-between border-b border-border/30 py-2 last:border-0"
-    : "flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1";
-  const content = (
-    <>
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span className={`${compact ? "h-1.5 w-1.5" : "h-2 w-2"} shrink-0 rounded-full ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/40" : "bg-primary"}`} />
-        <div className="min-w-0">
-          <p className="truncate text-sm text-foreground">{item.description}</p>
-          <p className="text-xs text-muted-foreground">
-            {item.userName ?? bankLabel} · {formatDate(String(item.date))}
-            {editLink?.label === "Edit expense" ? " · Edit expense" : ""}
-          </p>
-        </div>
-      </div>
-      <div className="ml-3 flex shrink-0 items-center gap-2">
-        <p className={`whitespace-nowrap text-sm font-semibold ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
-          {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
-        </p>
-        {editLink?.label === "Edit expense" ? <Receipt className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
-      </div>
-    </>
-  );
-
-  return editLink?.label === "Edit expense" ? (
-    <Link
-      href={editLink.href}
-      className={`${rowClass} rounded-md transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-      aria-label={`Edit ${item.description}`}
-    >
-      {content}
-    </Link>
-  ) : (
-    <div className={rowClass}>{content}</div>
-  );
-}
-
-function getQuickActionFromLocation(location: string): Exclude<QuickAction, "none"> | null {
-  const locationSearch = location.includes("?") ? location.slice(location.indexOf("?")) : "";
-  const search = locationSearch || window.location.search;
-  const action = new URLSearchParams(search).get("quick");
-  return action === "income" || action === "expense" || action === "goal" ? action : null;
-}
-
-function localDateInputValue(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-const SHARED_OVERVIEW_SHORTCUTS = [
-  { href: "/budget", label: "Budget", description: "Plan spending", icon: Wallet },
-  { href: "/contributions", label: "Contributions", description: "See money in", icon: TrendingUp },
-  { href: "/expenses", label: "Expenses", description: "Review spending", icon: Receipt },
-  { href: "/savings-goals", label: "Goals", description: "Track targets", icon: Target },
-  { href: "/bank", label: "Bank", description: "Manage funds", icon: Landmark },
-  { href: "/reports", label: "Reports", description: "Understand trends", icon: BarChart3 },
-];
-
-function OpenInvitationLinkButton() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [link, setLink] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const openInvitation = (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    try {
-      const invitationUrl = new URL(link.trim(), window.location.origin);
-      const invitationRoute = routePath(invitationUrl.pathname, import.meta.env.BASE_URL);
-      if (
-        invitationUrl.origin !== window.location.origin ||
-        !invitationRoute ||
-        !/^\/(?:invite|join)\/[^/]+\/?$/.test(invitationRoute)
-      ) {
-        throw new Error("Paste a Jamvi email invitation or private group link.");
-      }
-      window.location.assign(`${appPath(invitationRoute, import.meta.env.BASE_URL)}${invitationUrl.search}${invitationUrl.hash}`);
-    } catch (inviteError) {
-      setError(inviteError instanceof Error ? inviteError.message : "Could not open that invitation.");
-    }
-  };
-
-  return (
-    <>
-      <Button type="button" variant="outline" className="h-11 shrink-0 rounded-xl px-5" onClick={() => setIsOpen(true)}>
-        <Link2 className="mr-2 h-4 w-4" />
-        I have an invitation link
-      </Button>
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-         <DialogTitle>Join a Shared budget</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={openInvitation} className="space-y-5">
-            <p className="text-sm leading-relaxed text-muted-foreground">
-               Paste the email invitation or private group link you received. It will add that Shared budget alongside any other budgets you can access after you accept.
-            </p>
-            <div className="space-y-2">
-              <label htmlFor="group-invitation-link" className="text-sm font-semibold text-foreground">Invitation link</label>
-              <Input
-                id="group-invitation-link"
-                autoFocus
-                placeholder="https://…/invite/…"
-                value={link}
-                onChange={(event) => setLink(event.target.value)}
-              />
-            </div>
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            <Button type="submit" className="w-full">
-              Open invitation
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistingSharedBudget?: boolean }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<SharedGroupKind | null>(null);
-  const createSharedGroup = useCreateSharedGroup();
-  const { toast } = useToast();
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (name.trim().length < 2) {
-      toast({
-        variant: "destructive",
-        title: "Group name required",
-               description: "Enter at least two characters before creating a Shared budget.",
-      });
-      return;
-    }
-    if (!kind) {
-      toast({
-        variant: "destructive",
-        title: "Choose a group type",
-        description: "Choose what this Shared budget is for before creating it.",
-      });
-      return;
-    }
-    try {
-      await createSharedGroup.mutateAsync({ data: { name: name.trim(), kind: kind as GroupKind } });
-      window.location.assign(appPath("/", import.meta.env.BASE_URL));
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not create group",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
-    }
-  };
-
-  return (
-    <>
-      <Card className="overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/[0.08] to-card shadow-sm">
-        <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div className="max-w-2xl">
-             <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Your Personal budget is private</p>
-            <h2 className="mt-1 font-display text-xl font-bold text-foreground">
-              {hasExistingSharedBudget ? "Need another Shared budget?" : "Need to budget with other people?"}
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-               {hasExistingSharedBudget
-                 ? "Create a separate Shared budget for another family, chama, club, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
-                 : "Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
-            </p>
-             <p className="mt-2 text-xs font-medium text-foreground/70">
-               Name it, create it, then invite the people who should share it.
-             </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <OpenInvitationLinkButton />
-             <Button data-testid="create-shared-budget-cta" className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              {hasExistingSharedBudget ? "Create another Shared budget" : "Create a Shared budget"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Dialog open={isOpen} onOpenChange={(open) => {
-        setIsOpen(open);
-        if (!open) setKind(null);
-      }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-             <DialogTitle>Create a Shared budget</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={submit} className="space-y-5">
-            <p className="text-sm leading-relaxed text-muted-foreground">
-               You will be the owner. Personal budget records will stay private and will not be copied into this Shared budget.
-            </p>
-            <div className="space-y-2">
-              <label htmlFor="shared-group-name" className="text-sm font-semibold text-foreground">Group name</label>
-              <Input
-                id="shared-group-name"
-                autoFocus
-                maxLength={60}
-                placeholder="e.g. Mwangaza Chama"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-semibold text-foreground">What kind of group is this?</legend>
-              <p className="text-xs text-muted-foreground">Choose one to tailor category recommendations for this Shared budget.</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {SHARED_GROUP_KINDS.map((option) => {
-                  const selected = kind === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => setKind(option.value)}
-                      className={`rounded-lg border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border hover:border-primary/50 hover:bg-muted/50"}`}
-                    >
-                      <span className="block text-sm font-semibold text-foreground">{option.label}</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{option.description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </fieldset>
-            <Button type="submit" className="w-full" disabled={createSharedGroup.isPending}>
-               {createSharedGroup.isPending ? "Creating…" : "Create Shared budget"}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-function SharedGroupsFooter() {
-  const { data: workspaces = [], isLoading } = useGetWorkspaces();
-  const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
-
-  if (isLoading) return null;
-  return <CreateSharedGroupCard hasExistingSharedBudget={sharedWorkspaces.length > 0} />;
-}
-
-// ── Quick Action: Bank Deposit ────────────────────────────────────────────────
-function IncomeForm({
-  onDone,
-  currentUserId,
-  canManageShared,
-  isSharedWorkspace,
-}: {
-  onDone: () => void;
-  currentUserId?: string;
-  canManageShared: boolean;
-  isSharedWorkspace: boolean;
-}) {
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [madeById, setMadeById] = useState<string>("");
-  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
-  const { data: members = [] } = useGetMembers();
-  const selectedDepositorId = canManageShared ? madeById : currentUserId ?? "";
-  const createDeposit = useCreateDeposit();
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const now = new Date();
-
-  const { data: incomeSources } = useQuery<IncomeSource[]>({
-    queryKey: ["income-sources", selectedDepositorId],
-    queryFn: async () => {
-      const res = await fetch(`/api/income-sources?userId=${selectedDepositorId}`, { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!selectedDepositorId,
-    staleTime: 60_000,
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = Number(amount);
-    if (!amt || amt <= 0) {
-      toast({
-        variant: "destructive",
-        title: "Enter a valid amount",
-        description: "Add a deposit amount greater than zero before recording it.",
-      });
-      return;
-    }
-    if (!Number.isInteger(amt)) {
-      toast({
-        variant: "destructive",
-        title: "Enter a whole KES amount",
-        description: "Deposits are recorded in whole shillings.",
-      });
-      return;
-    }
-    if (!selectedDepositorId) {
-      toast({
-        variant: "destructive",
-        title: "Choose who is depositing",
-        description: isSharedWorkspace
-          ? "Select a group member before recording this deposit."
-          : "Your account is still loading. Please try again.",
-      });
-      return;
-    }
-    try {
-      await createDeposit.mutateAsync({
-        data: {
-          amount: amt,
-          description: description.trim() || "Deposit",
-          date: now.toISOString().split("T")[0],
-          madeById: selectedDepositorId,
-          ...(incomeSourceId ? { incomeSourceId } : {}),
-        } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
-      });
-      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-      qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
-      qc.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
-       const who = members.find(m => m.userId === selectedDepositorId)?.userName?.split(" ")[0] ?? (isSharedWorkspace ? "Member" : "You");
-      toast({ title: "Deposit recorded", description: `${who} · ${formatKes(amt)} added to this month.` });
-      onDone();
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not record deposit",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {canManageShared ? (
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
-          <div className="grid grid-cols-2 gap-2">
-            {members.map((m) => {
-            const name = m.userName?.split(" ")[0] ?? "Member";
-            return (
-              <button key={m.userId} type="button" onClick={() => { setMadeById(m.userId); setIncomeSourceId(null); }}
-                className={`py-3 rounded-xl border text-sm font-semibold transition-colors ${madeById === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}>
-                {name}
-              </button>
-            );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">
-            {isSharedWorkspace ? "Depositing in your own name" : "Personal account deposit"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isSharedWorkspace
-              ? "This deposit will be added under your membership."
-              : "This money will be recorded only in your Personal budget."}
-          </p>
-        </div>
-      )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
-          <Input type="number" placeholder="e.g. 50000" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-12 bg-card text-base" autoFocus />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Description <span className="text-muted-foreground font-normal">(optional)</span></label>
-          <Input placeholder="e.g. Salary, rental income…" value={description} onChange={e => setDescription(e.target.value)} className="h-12 bg-card" />
-        </div>
-      </div>
-      {/* Income source */}
-      {incomeSources && incomeSources.length > 0 && (
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Income source <span className="text-muted-foreground font-normal">(optional)</span></label>
-          <div className="flex flex-wrap gap-2">
-            {incomeSources.map(src => (
-              <button key={src.id} type="button"
-                onClick={() => setIncomeSourceId(incomeSourceId === src.id ? null : src.id)}
-                className={`px-3 h-9 rounded-lg text-sm border transition-colors ${incomeSourceId === src.id ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}>
-                {src.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="flex gap-3">
-        <Button type="submit" className="h-12 flex-1 rounded-xl bg-success px-6 text-base text-success-foreground hover:bg-success/90" disabled={createDeposit.isPending}>
-          {createDeposit.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-          Record Deposit
-        </Button>
-        <Button type="button" variant="ghost" className="h-12" onClick={onDone}>Cancel</Button>
-      </div>
-    </form>
-  );
-}
-
-// ── Quick Action: Log Expense ────────────────────────────────────────────────
-function ExpenseForm({
-  onDone,
-  currentUserId,
-  canManageShared,
-  canManageCategories,
-  canUseBankFunding,
-  isSharedWorkspace,
-}: {
-  onDone: () => void;
-  currentUserId?: string;
-  canManageShared: boolean;
-  canManageCategories: boolean;
-  canUseBankFunding: boolean;
-  isSharedWorkspace: boolean;
-}) {
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
-  const [category, setCategory] = useState("");
-  const [paidBy, setPaidBy] = useState("");
-  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
-  const [isAddingSource, setIsAddingSource] = useState(false);
-  const [newSourceName, setNewSourceName] = useState("");
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryBudget, setNewCategoryBudget] = useState("");
-  const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
-  const [paidFromBank, setPaidFromBank] = useState(false);
-  const [allowMixedFunding, setAllowMixedFunding] = useState(false);
-  const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | null>(null);
-  const [bankPortion, setBankPortion] = useState("");
-  const [directPortion, setDirectPortion] = useState("");
-  const [remainderAnchor, setRemainderAnchor] = useState<"direct" | "bank" | null>(null);
-  const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
-  const [newBankAccountName, setNewBankAccountName] = useState("");
-  const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
-  const [newBankOpeningBalance, setNewBankOpeningBalance] = useState("");
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [date, setDate] = useState(localDateInputValue());
-  const { data: categories = [] } = useGetBudgetCategories();
-  const { data: members = [] } = useGetMembers();
-  const { data: bankAccounts = [] } = useGetJointAccounts();
-  const { data: selectedBankAccount } = useGetJointAccount(
-    selectedBankAccountId ? { accountId: selectedBankAccountId } : undefined,
-  );
-  const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? "");
-  const payerId = directPayerId;
-  const { data: incomeSources = [], isLoading: isIncomeSourcesLoading } = useGetIncomeSources(
-    { userId: payerId },
-    {
-      query: {
-        enabled: Boolean(payerId),
-        queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }),
-      },
-    },
-  );
-  const selectableMembers = canManageShared
-    ? members
-    : members.filter((member) => member.userId === currentUserId);
-  const createExpense = useCreateExpense();
-  const createCategory = useCreateBudgetCategory();
-  const createBankAccount = useCreateJointAccount();
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const today = localDateInputValue();
-  const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
-  const bankLabel = isSharedWorkspace ? "Shared bank deposits" : "Personal bank deposits";
-  const isOtherCategory = category.trim().toLocaleLowerCase() === "other";
-  const enteredBankAmount = Number(bankPortion);
-  const projectedExpenseBankBalance = paidFromBank &&
-    selectedBankAccountId &&
-    selectedBankAccount &&
-    Number.isInteger(enteredBankAmount) &&
-    enteredBankAmount > 0
-    ? selectedBankAccount.balance - enteredBankAmount
-    : null;
-
-  useEffect(() => {
-    if (!paidFromBank || !allowMixedFunding) return;
-    const total = Number(amount);
-    const direct = Number(directPortion);
-    const bank = Number(bankPortion);
-    if (!Number.isInteger(total) || total <= 0) return;
-
-    if (remainderAnchor === "direct" && Number.isInteger(direct) && direct > 0) {
-      const remainder = getFundingRemainder(total, direct);
-      setBankPortion(remainder > 0 ? String(remainder) : "");
-      return;
-    }
-    if (remainderAnchor === "bank" && Number.isInteger(bank) && bank > 0) {
-      const remainder = getFundingRemainder(total, bank);
-      setDirectPortion(remainder > 0 ? String(remainder) : "");
-    }
-  }, [allowMixedFunding, amount, bankPortion, directPortion, paidFromBank, remainderAnchor]);
-
-  const handleAddBankAccount = async () => {
-    const name = newBankAccountName.trim();
-    const accountNumber = newBankAccountNumber.trim();
-    const openingBalance = Number(newBankOpeningBalance || 0);
-    if (!name) {
-      toast({ variant: "destructive", title: "Account name required", description: "Enter a name for this bank account." });
-      return;
-    }
-    try {
-      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("Opening balance must be zero or more whole shillings.");
-      const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
-      setSelectedBankAccountId(created.id);
-      setNewBankAccountName("");
-      setNewBankAccountNumber("");
-      setNewBankOpeningBalance("");
-      setIsAddingBankAccount(false);
-      await qc.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
-      toast({ title: "Bank account added", description: `${created.name} is selected for this expense.` });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not add bank account",
-        description: error instanceof Error ? error.message : "Check the account name and try again.",
-      });
-    }
-  };
-
-  const handleAddCategory = async () => {
-    const name = newCategoryName.trim();
-    const budgetAmount = Number(newCategoryBudget);
-    if (!name || !Number.isInteger(budgetAmount) || budgetAmount < 0) {
-      toast({
-        variant: "destructive",
-        title: "Add a category name and monthly budget",
-        description: "The monthly budget must be a whole number of KES or zero.",
-      });
-      return;
-    }
-    try {
-      const created = await createCategory.mutateAsync({
-        data: { name, budgetAmount, priority: 1, isRecurring: true },
-      });
-      setCategory(created.name);
-      setNewCategoryName("");
-      setNewCategoryBudget("");
-      setIsAddingCategory(false);
-      await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
-      toast({ title: "Category added", description: `${created.name} is selected for this expense.` });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not add category",
-        description: error instanceof Error ? error.message : "Check the name and try again.",
-      });
-    }
-  };
-
-  const handleAddSource = async () => {
-    const name = newSourceName.trim();
-    if (!payerId) return;
-    if (!name) {
-      toast({
-        variant: "destructive",
-        title: "Source name required",
-        description: "Enter a name before adding the income source.",
-      });
-      return;
-    }
-    try {
-      const response = await fetch("/api/income-sources", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: payerId, name, isMain: false }),
-      });
-      if (!response.ok) {
-        throw new Error("Could not create source");
-      }
-      const source: IncomeSource = await response.json();
-      setIncomeSourceId(source.id);
-      setNewSourceName("");
-      setIsAddingSource(false);
-      await qc.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }) });
-      toast({ title: "Income source added", description: `${source.name} is selected for this expense.` });
-    } catch {
-      toast({
-        variant: "destructive",
-        title: "Could not add income source",
-        description: "Check the name and try again.",
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (isSharedWorkspace && !paidBy && selectableMembers.length === 1) {
-      setPaidBy(selectableMembers[0].userId);
-    }
-  }, [isSharedWorkspace, paidBy, selectableMembers]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = Number(amount);
-    const bankAmount = Number(bankPortion);
-    const directAmount = Number(directPortion);
-    if (!amt || amt <= 0) {
-      toast({
-        variant: "destructive",
-        title: "Enter a valid amount",
-        description: "Add an expense amount greater than zero before logging it.",
-      });
-      return;
-    }
-    if (!Number.isInteger(amt)) {
-      toast({
-        variant: "destructive",
-        title: "Enter a whole KES amount",
-        description: "Expenses are recorded in whole shillings.",
-      });
-      return;
-    }
-    if (isOtherCategory && notes.trim().length < 3) {
-      toast({
-        variant: "destructive",
-        title: "Note required",
-        description: "Add a note explaining what this Other expense was for.",
-      });
-      return;
-    }
-    if (!description.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Description required",
-        description: "Explain what the expense was for before logging it.",
-      });
-      return;
-    }
-    if (!category) {
-      toast({
-        variant: "destructive",
-        title: "Choose a category",
-        description: "Select a category before logging this expense.",
-      });
-      return;
-    }
-    if (directAmount > 0 && !directPayerId) {
-      toast({
-        variant: "destructive",
-        title: "Choose who paid",
-        description: "Select the person whose income paid the direct portion.",
-      });
-      return;
-    }
-    if (directAmount > 0 && !incomeSourceId) {
-      toast({
-        variant: "destructive",
-        title: "Income source required",
-        description: "Choose the saved income stream that funded the direct portion.",
-      });
-      return;
-    }
-    if (bankAmount > 0 && !selectedBankAccountId) {
-      toast({
-        variant: "destructive",
-        title: "Choose a bank account",
-        description: "Select the account whose recorded deposits funded this expense.",
-      });
-      return;
-    }
-    const fundingTotal = (Number.isInteger(bankAmount) && bankAmount > 0 ? bankAmount : 0)
-      + (Number.isInteger(directAmount) && directAmount > 0 ? directAmount : 0);
-    if (!Number.isInteger(bankAmount) || !Number.isInteger(directAmount) || fundingTotal <= 0) {
-      toast({
-        variant: "destructive",
-        title: "Enter the funding amount",
-        description: "Type the amount from the selected source. If it is less than the expense, add another source so Jamvi can fill the remainder.",
-      });
-      return;
-    }
-    if (fundingTotal !== amt) {
-      const remaining = amt - fundingTotal;
-      toast({
-        variant: "destructive",
-        title: remaining > 0 ? "Choose another funding source" : "Funding exceeds the expense",
-        description: remaining > 0
-          ? `${formatKes(remaining)} is still unfunded. Select another source or enter the full amount.`
-          : `Reduce the funding amount by ${formatKes(Math.abs(remaining))}.`,
-      });
-      return;
-    }
-    if (date > today) {
-      toast({
-        variant: "destructive",
-        title: "Future date not allowed",
-        description: "Use today or an earlier date for an expense.",
-      });
-      return;
-    }
-    let expenseCategory = category;
-    try {
-      if (isOtherCategory && saveOtherAsCategory) {
-        const existingCategory = categories.find(
-          (item) => item.name.trim().toLocaleLowerCase() === description.trim().toLocaleLowerCase(),
-        );
-        if (existingCategory) {
-          expenseCategory = existingCategory.name;
-        } else {
-          const createdCategory = await createCategory.mutateAsync({
-            data: { name: description.trim(), budgetAmount: 0, priority: 3, isRecurring: true },
-          });
-          expenseCategory = createdCategory.name;
-          await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
-        }
-      }
-      const payerName = isSharedWorkspace
-        ? selectableMembers.find((member) => member.userId === directPayerId)?.userName?.split(" ")[0] ?? "Member"
-        : "Personal funds";
-      await createExpense.mutateAsync({
-        data: {
-          amount: amt,
-          description,
-           category: expenseCategory,
-          notes: notes.trim() || undefined,
-           paidById: directAmount > 0 ? directPayerId : undefined,
-           paidFromBank: bankAmount > 0 && directAmount <= 0,
-          isRecurring,
-          date,
-           ...(bankAmount > 0 ? { accountId: selectedBankAccountId! } : {}),
-           ...(incomeSourceId && directAmount > 0 ? { incomeSourceId } : {}),
-           ...(bankAmount > 0 && directAmount > 0 ? {
-            incomeSplits: [
-              {
-                userId: null,
-                label: isSharedWorkspace ? "Shared bank" : "Personal bank",
-                amount: bankAmount,
-                fromBank: true,
-                accountId: selectedBankAccountId!,
-              },
-              {
-                userId: directPayerId,
-                label: payerName,
-                amount: directAmount,
-                fromBank: false,
-                incomeSourceId: incomeSourceId!,
-              },
-            ],
-           } : {}),
-        } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
-      });
-      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-      qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
-      qc.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
-      toast({ title: "Expense logged", description: `${formatKes(amt)} — ${description}` });
-      onDone();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not log expense." });
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
-          <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-11 bg-card text-base" autoFocus />
-        </div>
-        <div className="space-y-1.5 lg:col-span-1">
-           <label className="text-sm font-semibold text-foreground">
-             {isOtherCategory ? "Brief description" : "Description"}
-           </label>
-             <Input
-             placeholder={isOtherCategory ? "Briefly describe this expense" : "What was it for?"}
-             value={description}
-             onChange={e => setDescription(e.target.value)}
-             required
-             maxLength={isOtherCategory ? 120 : undefined}
-             className="h-11 bg-card"
-           />
-           {isOtherCategory && canManageCategories && (
-             <p className="text-xs text-muted-foreground">Briefly explain what this Other expense covered.</p>
-           )}
-           {isOtherCategory && (
-             <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-               <input
-                 type="checkbox"
-                 checked={saveOtherAsCategory}
-                 onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
-                 className="mt-0.5 h-4 w-4 accent-primary"
-               />
-               <span>
-                 <span className="font-semibold">Save this as a category for future expenses</span>
-                 <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
-               </span>
-             </label>
-           )}
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Category <span className="text-destructive">*</span></label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-             <select
-               value={category}
-               onChange={e => {
-                 setCategory(e.target.value);
-                 if (e.target.value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
-               }}
-               className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-             >
-              <option value="">Pick a category</option>
-              {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-               {!categories.some(c => c.name.trim().toLocaleLowerCase() === "other") && <option value="Other">Other</option>}
-            </select>
-            {canManageCategories && (
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 shrink-0"
-                onClick={() => setIsAddingCategory((open) => !open)}
-                aria-expanded={isAddingCategory}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Create category
-              </Button>
-            )}
-          </div>
-          {canManageCategories && isAddingCategory && (
-            <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Create a category</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">It will be saved to this budget and selected here.</p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
-                <Input
-                  value={newCategoryName}
-                  onChange={(event) => setNewCategoryName(event.target.value)}
-                  placeholder="e.g. Transport"
-                  maxLength={60}
-                  className="h-10 bg-card"
-                />
-                <Input
-                  value={newCategoryBudget}
-                  onChange={(event) => setNewCategoryBudget(event.target.value)}
-                  placeholder="Monthly KES"
-                  type="number"
-                  min="0"
-                  step="1"
-                  className="h-10 bg-card"
-                />
-                <Button type="button" className="h-10" disabled={createCategory.isPending} onClick={() => void handleAddCategory()}>
-                  {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-        {isSharedWorkspace && !paidFromBank && <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">
-            Paid by <span className="text-destructive">*</span>
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-             {selectableMembers.map((m) => {
-              const name = m.userName?.split(" ")[0] ?? "Member";
-              return (
-                <button
-                  key={m.userId}
-                  type="button"
-                  onClick={() => {
-                    setPaidBy(m.userId);
-                    setIncomeSourceId(null);
-                  }}
-                  className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
+-muted/40"}`}>
                   {name}
                 </button>
               );
@@ -950,18 +8,19 @@ function ExpenseForm({
         </div>}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-           <label className="text-sm font-semibold text-foreground">
-             Notes <span className="text-destructive">{isOtherCategory ? "*" : <span className="font-normal text-muted-foreground">(optional)</span>}</span>
-           </label>
-          <Input
-            placeholder={isOtherCategory ? "Explain what this Other expense was for" : "Any extra details…"}
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            required={isOtherCategory}
-            className="h-11 bg-card"
-          />
-        </div>
+         {!isOtherCategory && (
+           <div className="space-y-1.5">
+             <label className="text-sm font-semibold text-foreground">
+               Notes <span className="font-normal text-muted-foreground">(optional)</span>
+             </label>
+             <Input
+               placeholder="Any extra details…"
+               value={notes}
+               onChange={e => setNotes(e.target.value)}
+               className="h-11 bg-card"
+             />
+           </div>
+         )}
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Date <span className="text-destructive">*</span></label>
           <Input
@@ -974,87 +33,6 @@ function ExpenseForm({
           {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
         </div>
       </div>
-      {!paidFromBank && (
-        <div className="space-y-1.5">
-           <label className="text-sm font-semibold text-foreground">
-             Financed by <span className="text-destructive">*</span>
-          </label>
-          {!payerId ? (
-            <p className="text-xs text-muted-foreground">
-              {isSharedWorkspace ? "Choose who paid above to see their income streams." : "Your Personal budget owner account is still loading."}
-            </p>
-          ) : isIncomeSourcesLoading ? (
-            <p className="text-xs text-muted-foreground">Loading income sources…</p>
-          ) : incomeSources.length > 0 ? (
-            <select
-              value={incomeSourceId?.toString() ?? ""}
-               onChange={e => {
-                 setIncomeSourceId(e.target.value ? Number(e.target.value) : null);
-               }}
-              className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-               <option value="">Select an income source...</option>
-              {incomeSources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
-            </select>
-          ) : (
-            <p className="text-xs text-muted-foreground">No income sources set up yet. Add one from Budget.</p>
-          )}
-           {payerId && (
-             <div className="flex flex-wrap items-center gap-2">
-               {isAddingSource ? (
-                 <>
-                   <Input
-                     autoFocus
-                     placeholder="e.g. Freelance work"
-                     value={newSourceName}
-                     onChange={e => setNewSourceName(e.target.value)}
-                     onKeyDown={e => {
-                       if (e.key === "Enter") {
-                         e.preventDefault();
-                         void handleAddSource();
-                       }
-                     }}
-                     className="h-10 w-52 bg-card"
-                   />
-                   <Button type="button" size="sm" className="h-10" onClick={() => void handleAddSource()}>
-                     Save source
-                   </Button>
-                   <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingSource(false); setNewSourceName(""); }}>
-                     Cancel
-                   </Button>
-                 </>
-               ) : (
-                 <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingSource(true)}>
-                   + New source
-                 </Button>
-               )}
-             </div>
-           )}
-           {incomeSourceId && !paidFromBank && (
-              <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-                Type the amount from this source to confirm
-               <Input
-                 type="number"
-                 min="1"
-                 step="1"
-                 value={directPortion}
-                 onChange={(event) => {
-                   setRemainderAnchor("direct");
-                   setDirectPortion(event.target.value);
-                 }}
-                 placeholder="KES 0"
-                 className="h-11 bg-card"
-               />
-                <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                   Enter this manually, even when it equals the expense total. If it is less, select another source and Jamvi will fill the remainder there.
-                </span>
-             </label>
-           )}
-           <p className="text-xs text-muted-foreground">
-             Paid directly means this expense is linked to the selected income source and does not reduce any Jamvi bank-account balance.
-           </p>
-        </div>
-      )}
       {canUseBankFunding && (
         <div className="space-y-4 rounded-xl border border-border/50 bg-card p-4">
           <div>
@@ -1064,12 +42,17 @@ function ExpenseForm({
              </p>
           </div>
            <div className="grid gap-2 sm:grid-cols-2">
-            {([
-              ["direct", "Paid directly", "No bank balance changes"],
-              ["bank", bankLabel, "Reduces one selected account"],
-            ] as const).map(([mode, label, detail]) => (
-              <button
-                key={mode}
+             {([
+               ["direct", "Paid directly", "No bank balance changes"],
+               ["bank", bankLabel, "Reduces one selected account"],
+             ] as const).map(([mode, label, detail]) => (
+               <div
+                 key={mode}
+                 className={mode === "direct" ? `overflow-hidden rounded-xl border ${
+                   !paidFromBank ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-input bg-background"
+                 }` : undefined}
+               >
+               <button
                 type="button"
                  aria-pressed={mode === "bank" ? paidFromBank : !paidFromBank}
                 onClick={() => {
@@ -1085,19 +68,175 @@ function ExpenseForm({
                      setPaidBy("");
                      setIncomeSourceId(null);
                      setDirectPortion("");
+                     setAdditionalDirectPortions([]);
                      setBankPortion(amount);
                      setRemainderAnchor("bank");
                    }
                 }}
-                className={`rounded-xl border p-3 text-left transition-colors ${
+                 className={`w-full p-3 text-left transition-colors ${
+                   mode === "direct" ? "rounded-none border-0" : "rounded-xl border"
+                 } ${
                   (mode === "bank" ? paidFromBank : !paidFromBank)
-                    ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                     ? mode === "direct" ? "bg-primary/10 text-foreground" : "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
                     : "border-input bg-background text-foreground hover:border-primary/50"
                 }`}
               >
                 <span className="block text-sm font-semibold">{label}</span>
                 <span className="mt-1 block text-xs text-muted-foreground">{detail}</span>
-              </button>
+               </button>
+               {mode === "direct" && !paidFromBank && (
+                  <div className="space-y-2 border-t border-primary/25 bg-primary/5 p-3">
+                   <label className="text-sm font-semibold text-foreground">
+                     Financed by <span className="text-destructive">*</span>
+                   </label>
+                   {!payerId ? (
+                     <p className="text-xs text-muted-foreground">
+                       {isSharedWorkspace ? "Choose who paid above to see their income streams." : "Your Personal budget owner account is still loading."}
+                     </p>
+                   ) : isIncomeSourcesLoading ? (
+                     <p className="text-xs text-muted-foreground">Loading income sources…</p>
+                   ) : incomeSources.length > 0 ? (
+                     <select
+                       value={incomeSourceId?.toString() ?? ""}
+                        onChange={e => {
+                          setIncomeSourceId(e.target.value ? Number(e.target.value) : null);
+                          setDirectPortion("");
+                          setAdditionalDirectPortions([]);
+                        }}
+                       className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                     >
+                       <option value="">Select an income source...</option>
+                       {incomeSources.map(source => <option key={source.id} value={source.id}>{source.name}</option>)}
+                     </select>
+                   ) : (
+                     <p className="text-xs text-muted-foreground">No income sources set up yet. Add one from Budget.</p>
+                   )}
+                   {payerId && (
+                     <div className="flex flex-wrap items-center gap-2">
+                       {isAddingSource ? (
+                         <>
+                           <Input
+                             autoFocus
+                             placeholder="e.g. Freelance work"
+                             value={newSourceName}
+                             onChange={e => setNewSourceName(e.target.value)}
+                             onKeyDown={e => {
+                               if (e.key === "Enter") {
+                                 e.preventDefault();
+                                 void handleAddSource();
+                               }
+                             }}
+                             className="h-10 w-52 bg-card"
+                           />
+                           <Button type="button" size="sm" className="h-10" onClick={() => void handleAddSource()}>
+                             Save source
+                           </Button>
+                           <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingSource(false); setNewSourceName(""); }}>
+                             Cancel
+                           </Button>
+                         </>
+                       ) : (
+                         <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingSource(true)}>
+                           + New source
+                         </Button>
+                       )}
+                     </div>
+                   )}
+                   {incomeSourceId && (
+                      <div className="space-y-2">
+                        <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                          Type the amount from this source to confirm
+                          <Input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={directPortion}
+                            onChange={(event) => {
+                              setRemainderAnchor("direct");
+                              setDirectPortion(event.target.value);
+                            }}
+                            placeholder="KES 0"
+                            className="h-11 bg-card"
+                          />
+                        </label>
+                        {additionalDirectPortions.map((portion, index) => {
+                          const source = incomeSources.find((item) => item.id === portion.sourceId);
+                          return (
+                            <div key={portion.sourceId} className="flex items-center gap-2 rounded-lg border border-border/60 bg-card p-2">
+                              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{source?.name ?? "Income source"}</span>
+                              <Input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={portion.amount}
+                                onChange={(event) => setAdditionalDirectPortions((previous) => previous.map((item, itemIndex) =>
+                                  itemIndex === index ? { ...item, amount: event.target.value } : item,
+                                ))}
+                                className="h-10 w-32 bg-card"
+                              />
+                              <Button type="button" size="sm" variant="ghost" onClick={() => setAdditionalDirectPortions((previous) => previous.filter((_, itemIndex) => itemIndex !== index))}>
+                                Remove
+                              </Button>
+                            </div>
+                          );
+                        })}
+                        {(() => {
+                          const total = Number(amount) || 0;
+                          const assigned = (Number(directPortion) || 0)
+                            + additionalDirectPortions.reduce((sum, portion) => sum + (Number(portion.amount) || 0), 0)
+                            + (Number(bankPortion) || 0);
+                          const difference = total - assigned;
+                          const availableSources = incomeSources.filter((source) =>
+                            source.id !== incomeSourceId
+                            && !additionalDirectPortions.some((portion) => portion.sourceId === source.id),
+                          );
+                          return total > 0 ? (
+                            <div className="space-y-2">
+                              <div
+                                role="status"
+                                data-testid="quick-expense-funding-remainder"
+                                className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                                  difference > 0
+                                    ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                                    : difference < 0
+                                      ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                                      : "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                                }`}
+                              >
+                                {difference > 0
+                                  ? `${formatKes(difference)} remaining`
+                                  : difference < 0
+                                    ? `Overfunded by ${formatKes(Math.abs(difference))}`
+                                    : "Fully funded"}
+                              </div>
+                              {difference > 0 && availableSources.length > 0 && (
+                                <select
+                                  value=""
+                                  onChange={(event) => {
+                                    const sourceId = Number(event.target.value);
+                                    if (!sourceId) return;
+                                    setAdditionalDirectPortions((previous) => [...previous, { sourceId, amount: String(difference) }]);
+                                  }}
+                                  className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+                                >
+                                  <option value="" disabled>Add another income source...</option>
+                                  {availableSources.map((source) => <option key={source.id} value={source.id}>{source.name}</option>)}
+                                </select>
+                              )}
+                              <p className="text-xs font-normal leading-relaxed text-muted-foreground">
+                                Keep adding funding sources until the remaining amount reaches zero.
+                              </p>
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                   )}
+                   <p className="text-xs text-muted-foreground">
+                     Paid directly means this expense is linked to the selected income source and does not reduce any Jamvi bank-account balance.
+                   </p>
+                 </div>
+               )}
+             </div>
             ))}
           </div>
           {paidFromBank && (
@@ -1125,7 +264,7 @@ function ExpenseForm({
                     autoFocus
                     value={newBankAccountName}
                     onChange={(event) => setNewBankAccountName(event.target.value)}
-                    placeholder="e.g. M-Pesa Till or Main account"
+                    placeholder="e.g. M-Pesa wallet or KCB account"
                     className="h-10 bg-card"
                   />
                   <Input value={newBankAccountNumber} onChange={(event) => setNewBankAccountNumber(event.target.value)} placeholder="Account number (optional)" className="h-10 bg-card" />
@@ -1173,13 +312,30 @@ function ExpenseForm({
           )}
           <div className="flex justify-end">
           <label className="flex items-start gap-2 text-sm text-foreground">
-            <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
+            <input type="checkbox" checked={isRecurring} onChange={e => {
+              if (!e.target.checked) {
+                setIsRecurring(false);
+                setRecurringMonthlyBudget("");
+                return;
+              }
+              if (window.confirm("Make this a recurring expense? Jamvi will take you to Budget to ask for the average monthly amount.")) {
+                openRecurringBudgetSetup();
+                if (isOtherCategory) setSaveOtherAsCategory(true);
+              }
+            }} className="mt-0.5 h-4 w-4 accent-primary" />
             <span>
               <span className="font-semibold">Recurring expense</span>
               <span className="block text-xs text-muted-foreground">Remind me to apply this next month.</span>
             </span>
           </label>
           </div>
+          {isRecurring && (
+            <label className="block space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm font-semibold text-foreground">
+              Monthly budget (KES) <span className="text-destructive">*</span>
+              <Input type="number" min="1" step="1" value={recurringMonthlyBudget} onChange={(event) => setRecurringMonthlyBudget(event.target.value)} placeholder="e.g. 15000" required className="h-11 bg-card" data-testid="recurring-monthly-budget" />
+              <span className="block text-xs font-normal text-muted-foreground">This becomes the recurring monthly budget for the selected category.</span>
+            </label>
+          )}
         </div>
       )}
       <div className="flex gap-3">
@@ -1579,7 +735,7 @@ export default function Dashboard() {
         <Card id="dashboard-quick-actions" className="scroll-mt-6 overflow-hidden border-none shadow-md">
         <CardContent className="p-0">
           {/* Action buttons row */}
-          <div className="grid grid-cols-2 divide-x divide-y divide-border/50 sm:grid-cols-5 sm:divide-y-0">
+          <div className="grid grid-cols-2 divide-x divide-y divide-border/50 sm:grid-cols-6 sm:divide-y-0">
             {[
                { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: Building2, active: "bg-success/10", text: "text-success" },
                { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: Receipt, active: "bg-warning/10", text: "text-warning" },
@@ -1609,6 +765,17 @@ export default function Dashboard() {
               <TrendingDown className="h-5 w-5" aria-hidden="true" />
               <span className="block sm:hidden">Withdraw</span>
               <span className="hidden max-w-full break-words sm:block">Bank Withdrawal</span>
+            </Link>
+            <Link
+              href="/bank?shortcut=bank-transfer"
+              data-testid="dashboard-bank-transfer-cta"
+              aria-disabled={!canManageBank}
+              onClick={(event) => { if (!canManageBank) event.preventDefault(); }}
+              className={`flex min-w-0 flex-col items-center justify-center gap-1.5 px-1 py-5 text-center text-xs font-medium transition-colors sm:px-3 sm:text-sm ${canManageBank ? "text-foreground hover:bg-muted/40" : "cursor-not-allowed text-foreground opacity-45"}`}
+            >
+              <ArrowRightLeft className="h-5 w-5" aria-hidden="true" />
+              <span className="block sm:hidden">Transfer</span>
+              <span className="hidden max-w-full break-words sm:block">Bank Transfer</span>
             </Link>
             <Link
               href="/budget"
@@ -1652,7 +819,7 @@ export default function Dashboard() {
            {activity.length > 0 ? (
              <div className="divide-y divide-border/50">
                 {activity.slice(0, 6).map((item) => (
-                  <DashboardActivityRow key={item.id} item={item} bankLabel={isSharedWorkspace ? "Shared bank" : "Personal bank"} />
+                  <DashboardActivityRow key={item.id} item={item} bankLabel="Bank account" />
                 ))}
              </div>
            ) : (
@@ -1830,7 +997,7 @@ export default function Dashboard() {
                   <Building2 className="w-5 h-5 text-sky-600 dark:text-sky-400" />
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">{isSharedWorkspace ? "Joint Account" : "Personal Account"}</p>
+                  <p className="font-semibold text-foreground">Bank accounts</p>
                   <p className="text-xs text-muted-foreground">{isSharedWorkspace ? "Shared budget funds" : "Personal budget funds"}</p>
                 </div>
               </div>
@@ -1932,7 +1099,7 @@ export default function Dashboard() {
               {activity.length > 0 ? (
                 <div className="space-y-1">
                   {activity.slice(0, 6).map((item) => (
-                    <DashboardActivityRow key={item.id} item={item} compact bankLabel={isSharedWorkspace ? "Shared bank" : "Personal bank"} />
+                    <DashboardActivityRow key={item.id} item={item} compact bankLabel="Bank account" />
                   ))}
                 </div>
               ) : (

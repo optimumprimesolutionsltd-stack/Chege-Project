@@ -101,8 +101,12 @@ export function addFundingSourceWithRemainder({
   newSourceId: string;
   amounts: Record<string, string>;
 }): Record<string, string> {
-  if (selectedSourceIds.includes(newSourceId) || selectedSourceIds.length !== 1) return amounts;
-  const remainder = getFundingRemainder(total, Number(amounts[selectedSourceIds[0]]));
+  if (selectedSourceIds.includes(newSourceId)) return amounts;
+  const assigned = selectedSourceIds.reduce(
+    (sum, sourceId) => sum + (Number(amounts[sourceId]) || 0),
+    0,
+  );
+  const remainder = getFundingRemainder(total, assigned);
   return remainder > 0 ? { ...amounts, [newSourceId]: String(remainder) } : amounts;
 }
 
@@ -114,4 +118,36 @@ export function getNewExpenseCategoryMode({
   canManageCategories: boolean;
 }) {
   return addToBudget && canManageCategories ? 'budgeted' as const : 'unbudgeted' as const;
+}
+
+export function getCategoryAllocationStatus(
+  expenseAmount: number,
+  allocations: Array<{ category: string; amount: number }>,
+) {
+  const hasInvalidAllocation = allocations.length === 0 || allocations.some(
+    (allocation) => !allocation.category.trim() || !Number.isInteger(allocation.amount) || allocation.amount <= 0,
+  );
+  const total = allocations.reduce((sum, allocation) => sum + (Number.isFinite(allocation.amount) ? allocation.amount : 0), 0);
+  return {
+    total,
+    difference: expenseAmount - total,
+    isExact: Number.isInteger(expenseAmount) && expenseAmount > 0 && !hasInvalidAllocation && total === expenseAmount,
+    hasInvalidAllocation,
+  };
+}
+
+/** Keeps the legacy primary category while accepting allocation-aware expenses. */
+export function hydrateCategoryAllocations(
+  category: string,
+  amount: number,
+  allocations?: Array<{ category: string; amount: number }>,
+) {
+  const stored = allocations?.filter(
+    (allocation) => allocation.category.trim() && Number.isInteger(allocation.amount) && allocation.amount > 0,
+  ) ?? [];
+  return stored.length > 0 ? stored : [{ category, amount }];
+}
+
+export function hasOtherCategoryAllocation(allocations: Array<{ category: string }>) {
+  return allocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
 }

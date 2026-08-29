@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   expensesTable,
+  expenseCategoryAllocationsTable,
   expenseIncomeSplitsTable,
   budgetCategoriesTable,
   usersTable,
@@ -13,7 +14,7 @@ import {
   groupsTable,
   incomeSourcesTable,
 } from "@workspace/db";
-import { sql, eq, and } from "drizzle-orm";
+import { sql, eq, and, inArray, isNull } from "drizzle-orm";
 import {
   GetDashboardSummaryQueryParams,
   GetDashboardCategoryBreakdownQueryParams,
@@ -69,7 +70,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const [categorisedDisbursementsRow] = await db
     .select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
     .from(jointAccountTxTable)
-    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
 
   // Contributions = expenses paid + bank deposits + savings goal contributions
   //
@@ -102,6 +103,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       LEFT JOIN joint_account_deposit_splits s ON s.transaction_id = t.id
       WHERE t.group_id = ${groupId}
         AND t.type = 'deposit'
+        AND t.bank_transfer_id IS NULL
         AND EXTRACT(MONTH FROM t.date) = ${month}
         AND EXTRACT(YEAR FROM t.date) = ${year}
       GROUP BY COALESCE(s.user_id, t.made_by_id)
@@ -226,6 +228,7 @@ router.get("/dashboard/member-breakdown", async (req, res): Promise<void> => {
     .from(jointAccountTxTable)
     .where(sql`${jointAccountTxTable.groupId} = ${groupId}
            AND ${jointAccountTxTable.type} = 'deposit'
+           AND ${jointAccountTxTable.bankTransferId} IS NULL
            AND ${jointAccountTxTable.madeById} = ${userId}
            AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
            AND EXTRACT(YEAR  FROM ${jointAccountTxTable.date}) = ${year}`)
@@ -287,6 +290,21 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       : sql`${expensesTable.groupId} = ${groupId}`)
     .orderBy(sql`${expensesTable.createdAt} DESC`)
     .limit(monthlyLimit);
+  const expenseAllocations = expenses.length === 0 ? [] : await db.select({
+    expenseId: expenseCategoryAllocationsTable.expenseId,
+    category: expenseCategoryAllocationsTable.category,
+    amount: expenseCategoryAllocationsTable.amount,
+    position: expenseCategoryAllocationsTable.position,
+  }).from(expenseCategoryAllocationsTable).where(and(
+    eq(expenseCategoryAllocationsTable.groupId, groupId),
+    inArray(expenseCategoryAllocationsTable.expenseId, expenses.map((expense) => expense.id)),
+  )).orderBy(expenseCategoryAllocationsTable.position);
+  const allocationsByExpense = expenseAllocations.reduce((map, allocation) => {
+    const portions = map.get(allocation.expenseId) ?? [];
+    portions.push({ category: allocation.category, amount: allocation.amount });
+    map.set(allocation.expenseId, portions);
+    return map;
+  }, new Map<number, Array<{ category: string; amount: number }>>());
 
   // Show recent deposits as contribution items in the activity feed
   const deposits = await db
@@ -299,6 +317,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       date: jointAccountTxTable.date,
       createdAt: jointAccountTxTable.createdAt,
       savingsGoalId: jointAccountTxTable.savingsGoalId,
+      bankTransferId: jointAccountTxTable.bankTransferId,
       hasContributorSplits: sql<boolean>`EXISTS (
         SELECT 1
         FROM ${jointAccountDepositSplitsTable}
@@ -309,8 +328,8 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
     .from(jointAccountTxTable)
     .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
     .where(isMonthlyReport
-      ? sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'deposit' AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`
-      : and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.type, "deposit")))
+      ? sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.bankTransferId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`
+      : and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.type, "deposit"), isNull(jointAccountTxTable.bankTransferId)))
     .orderBy(sql`${jointAccountTxTable.createdAt} DESC`)
     .limit(monthlyLimit);
 
@@ -398,6 +417,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
         .where(sql`
           ${jointAccountDepositSplitsTable.groupId} = ${groupId}
           AND ${jointAccountTxTable.type} = 'deposit'
+          AND ${jointAccountTxTable.bankTransferId} IS NULL
           AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
           AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}
         `),
@@ -414,6 +434,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
         .where(sql`
           ${jointAccountTxTable.groupId} = ${groupId}
           AND ${jointAccountTxTable.type} = 'deposit'
+          AND ${jointAccountTxTable.bankTransferId} IS NULL
           AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
           AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}
           AND NOT EXISTS (
@@ -486,6 +507,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       description: e.description,
       userName: e.paidById === null ? "Joint bank" : (e.paidByName ?? "Unknown"),
       category: e.category,
+      categoryAllocations: allocationsByExpense.get(e.id) ?? [{ category: e.category, amount: e.amount }],
       // The feed's visible date must match the month used to include the expense.
       date: String(e.date),
     })),
@@ -535,11 +557,24 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
     .from(budgetCategoriesTable)
     .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`)
     .orderBy(budgetCategoriesTable.priority);
-  const spentByCategory = await db
-    .select({ category: expensesTable.category, total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
-    .from(expensesTable)
-    .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
-    .groupBy(expensesTable.category);
+  // Child allocations replace the legacy category only when they exist, so
+  // historical rows remain visible without a data rewrite and totals remain
+  // one expense amount per transaction.
+  const spentByCategory = await db.execute(sql`
+    SELECT category, COALESCE(SUM(amount), 0) AS total FROM (
+      SELECT allocation.category, allocation.amount
+      FROM expense_category_allocations allocation
+      INNER JOIN expenses expense ON expense.id = allocation.expense_id AND expense.group_id = allocation.group_id
+      WHERE allocation.group_id = ${groupId}
+        AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+      UNION ALL
+      SELECT expense.category, expense.amount
+      FROM expenses expense
+      WHERE expense.group_id = ${groupId}
+        AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+        AND NOT EXISTS (SELECT 1 FROM expense_category_allocations allocation WHERE allocation.expense_id = expense.id AND allocation.group_id = ${groupId})
+    ) allocated GROUP BY category
+  `).then((result) => (result.rows as { category: string; total: string }[]).map((row) => ({ category: row.category, total: Number(row.total) })));
 
   // Also count disbursements that are tagged to an expense category
   const disbursementsByCategory = await db
@@ -548,10 +583,10 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
       total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`,
     })
     .from(jointAccountTxTable)
-    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
     .groupBy(jointAccountTxTable.expenseCategory);
 
-  const spentMap = new Map(spentByCategory.map((s) => [s.category, Number(s.total)]));
+  const spentMap = new Map(spentByCategory.map((s) => [s.category, s.total]));
   const disbursementMap = new Map(disbursementsByCategory.map((d) => [d.category, Number(d.total)]));
 
   const breakdown = categories.map((cat) => {
@@ -613,7 +648,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
   const { category } = parsed.data;
   const isBudgeted = rawIsBudgeted === "true";
 
-  const [activeCategories, expenses, disbursements] = await Promise.all([
+  const [activeCategories, expenses, disbursements, allocations] = await Promise.all([
     db
       .select({ name: budgetCategoriesTable.name })
       .from(budgetCategoriesTable)
@@ -642,7 +677,19 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
       })
       .from(jointAccountTxTable)
       .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`),
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`),
+    db.select({
+      expenseId: expenseCategoryAllocationsTable.expenseId,
+      category: expenseCategoryAllocationsTable.category,
+      amount: expenseCategoryAllocationsTable.amount,
+      position: expenseCategoryAllocationsTable.position,
+    }).from(expenseCategoryAllocationsTable)
+      .innerJoin(expensesTable, and(
+        eq(expenseCategoryAllocationsTable.expenseId, expensesTable.id),
+        eq(expenseCategoryAllocationsTable.groupId, expensesTable.groupId),
+      ))
+      .where(sql`${expenseCategoryAllocationsTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
+      .orderBy(expenseCategoryAllocationsTable.position),
   ]);
 
   const activeCategoryNames = new Set(activeCategories.map((item) => item.name));
@@ -650,17 +697,19 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
     isBudgeted ? entryCategory === category : !activeCategoryNames.has(entryCategory)
   );
   const entries = [
-    ...expenses
-      .filter((expense) => isIncluded(expense.category))
-      .map((expense) => ({
-        id: `expense-${expense.id}`,
+    ...expenses.flatMap((expense) => {
+      const expenseAllocations = allocations.filter((allocation) => allocation.expenseId === expense.id);
+      const portions = expenseAllocations.length > 0 ? expenseAllocations : [{ category: expense.category, amount: expense.amount }];
+      return portions.filter((portion) => isIncluded(portion.category)).map((portion) => ({
+        id: `expense-${expense.id}-${portion.category}`,
         source: "expense" as const,
-        category: expense.category,
+        category: portion.category,
         description: expense.description,
-        amount: expense.amount,
+        amount: portion.amount,
         payerName: expense.payerName ?? (expense.paidFromBank ? "Joint bank" : "Payer not recorded"),
         date: String(expense.date),
-      })),
+      }));
+    }),
     ...disbursements
       .filter((disbursement) => isIncluded(disbursement.category ?? ""))
       .map((disbursement) => ({
@@ -735,6 +784,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
         ON deposit.id = split.transaction_id AND deposit.group_id = ${groupId}
       WHERE split.group_id = ${groupId}
         AND deposit.type = 'deposit'
+          AND deposit.bank_transfer_id IS NULL
         AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
         AND EXTRACT(MONTH FROM deposit.date) = ${month}
         AND EXTRACT(YEAR FROM deposit.date) = ${year}
@@ -747,6 +797,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       FROM joint_account_transactions deposit
       WHERE deposit.group_id = ${groupId}
         AND deposit.type = 'deposit'
+        AND deposit.bank_transfer_id IS NULL
         AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
         AND EXTRACT(MONTH FROM deposit.date) = ${month}
         AND EXTRACT(YEAR FROM deposit.date) = ${year}
@@ -988,21 +1039,30 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
       SELECT
         COALESCE(SUM(CASE
           WHEN bank_tx.type = 'deposit'
+            AND bank_tx.bank_transfer_id IS NULL
             AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
           THEN bank_tx.amount
           ELSE 0
         END), 0) AS bank_deposit_total,
         COUNT(*) FILTER (
           WHERE bank_tx.type = 'deposit'
+            AND bank_tx.bank_transfer_id IS NULL
             AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
         ) AS bank_deposit_count,
         COALESCE(SUM(CASE
-          WHEN bank_tx.type = 'disbursement' AND bank_tx.bank_charge = false THEN bank_tx.amount
+          WHEN bank_tx.type = 'disbursement'
+            AND bank_tx.bank_transfer_id IS NULL
+            AND bank_tx.bank_charge = false THEN bank_tx.amount
           ELSE 0
         END), 0) AS bank_disbursement_total,
-        COUNT(*) FILTER (WHERE bank_tx.type = 'disbursement' AND bank_tx.bank_charge = false) AS bank_disbursement_count,
+        COUNT(*) FILTER (
+          WHERE bank_tx.type = 'disbursement'
+            AND bank_tx.bank_transfer_id IS NULL
+            AND bank_tx.bank_charge = false
+        ) AS bank_disbursement_count,
         COALESCE(SUM(CASE
           WHEN bank_tx.type = 'disbursement'
+            AND bank_tx.bank_transfer_id IS NULL
             AND bank_tx.expense_id IS NULL
             AND bank_tx.expense_category IS NOT NULL
           THEN bank_tx.amount
@@ -1091,15 +1151,25 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
       .from(budgetCategoriesTable)
       .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`)
       .orderBy(budgetCategoriesTable.priority),
-    db
-      .select({ category: expensesTable.category, total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
-      .from(expensesTable)
-      .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
-      .groupBy(expensesTable.category),
+    db.execute(sql`
+      SELECT category, COALESCE(SUM(amount), 0) AS total FROM (
+        SELECT allocation.category, allocation.amount
+        FROM expense_category_allocations allocation
+        INNER JOIN expenses expense ON expense.id = allocation.expense_id AND expense.group_id = allocation.group_id
+        WHERE allocation.group_id = ${groupId}
+          AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+        UNION ALL
+        SELECT expense.category, expense.amount
+        FROM expenses expense
+        WHERE expense.group_id = ${groupId}
+          AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND NOT EXISTS (SELECT 1 FROM expense_category_allocations allocation WHERE allocation.expense_id = expense.id AND allocation.group_id = ${groupId})
+      ) allocated GROUP BY category
+    `).then((result) => (result.rows as { category: string; total: string }[]).map((row) => ({ category: row.category, total: Number(row.total) }))),
     db
       .select({ category: jointAccountTxTable.expenseCategory, total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
       .from(jointAccountTxTable)
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
       .groupBy(jointAccountTxTable.expenseCategory),
     db
       .select({ count: sql<number>`COUNT(*)` })
@@ -1123,12 +1193,14 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         FROM joint_account_deposit_splits split
         INNER JOIN joint_account_transactions deposit ON deposit.id = split.transaction_id AND deposit.group_id = ${groupId}
         WHERE split.group_id = ${groupId} AND deposit.type = 'deposit'
+          AND deposit.bank_transfer_id IS NULL
           AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
           AND EXTRACT(MONTH FROM deposit.date) = ${month} AND EXTRACT(YEAR FROM deposit.date) = ${year}
         UNION ALL
         SELECT deposit.income_source_id, deposit.amount, 'deposit'::text, deposit.id
         FROM joint_account_transactions deposit
         WHERE deposit.group_id = ${groupId} AND deposit.type = 'deposit'
+          AND deposit.bank_transfer_id IS NULL
           AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
           AND EXTRACT(MONTH FROM deposit.date) = ${month} AND EXTRACT(YEAR FROM deposit.date) = ${year}
           AND NOT EXISTS (SELECT 1 FROM joint_account_deposit_splits split WHERE split.transaction_id = deposit.id AND split.group_id = ${groupId})
@@ -1155,7 +1227,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     `),
   ]);
 
-  const spentMap = new Map(spentByCategory.map((item) => [item.category, Number(item.total)]));
+  const spentMap = new Map(spentByCategory.map((item) => [item.category, item.total]));
   const disbursementMap = new Map(disbursementsByCategory.map((item) => [item.category, Number(item.total)]));
   const categoryRows = categories.map((category) => {
     const spentAmount = (spentMap.get(category.name) ?? 0) + (disbursementMap.get(category.name) ?? 0);

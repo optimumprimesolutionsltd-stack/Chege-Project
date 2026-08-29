@@ -40,3 +40,5 @@
 - [Group-aware category packs](group-aware-category-packs.md) — group type selects starter expenses; later type changes never rewrite categories, and recommendations only add missing names.
 - [Post-landing budget choice](post-landing-budget-choice.md) — the page after marketing should move directly into choosing a budget, not repeat the landing-page story.
 - [Multiple bank accounts](multiple-bank-accounts.md) — accounts are workspace-scoped; bank views select one, while dashboards/reports aggregate all exactly once.
+- [Iterative expense funding](iterative-expense-funding.md) — expense funding is not capped at two portions; keep accepting sources and showing the live remainder until fully funded.
+- [Recurring expense budget handoff](recurring-expense-budget-handoff.md) — marking a new expense recurring opens Budget to collect the average monthly amount, then restores the draft.

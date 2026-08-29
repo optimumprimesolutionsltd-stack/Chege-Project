@@ -10,9 +10,20 @@ const routeSource = readFileSync(
 describe("bank balance contract", () => {
   it("calculates closing balance from opening balance, deposits, and disbursements", () => {
     expect(routeSource).toContain(
-      "const balance = openingBalance + totalDeposits - totalDisbursements;",
+      "const balance = openingBalance + ledgerDeposits - ledgerDisbursements;",
     );
     expect(routeSource).toContain("closingBalance: balance");
+  });
+
+  it("keeps internal transfers in account balances but out of ordinary in/out totals", () => {
+    expect(routeSource).toContain('t.type === "deposit" && t.bankTransferId == null');
+    expect(routeSource).toContain('t.type === "disbursement" && t.bankTransferId == null');
+  });
+
+  it("creates and removes bank-to-bank transfer pairs atomically", () => {
+    expect(routeSource).toContain('router.post("/joint-account/transfers/bank-to-bank"');
+    expect(routeSource).toContain("const transferId = randomUUID();");
+    expect(routeSource).toContain("eq(jointAccountTxTable.bankTransferId, existing.bankTransferId)");
   });
 
   it("keeps the existing member attribution when an ordinary disbursement edit omits madeById", () => {

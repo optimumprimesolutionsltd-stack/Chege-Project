@@ -23,6 +23,7 @@ import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus,
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { getCategoryIcon } from "@/lib/category-icons";
+import { appPath } from "@/lib/base-path";
 
 type BudgetCategory = {
   id: number;
@@ -239,18 +240,22 @@ const priorityGuide: Record<number, string> = {
 
 function CategoryDialog({
   open, onClose, initial, onSaved, reportMonth, reportYear, defaultPriority = 1,
+  recurringSetup = false, defaultName = "", defaultAmount = "",
 }: {
   open: boolean;
   onClose: () => void;
   initial?: BudgetCategory | null;
-  onSaved: () => void | Promise<void>;
+  onSaved: (change?: PendingCategoryChange) => void | Promise<void>;
   reportMonth: number;
   reportYear: number;
   defaultPriority?: number;
+  recurringSetup?: boolean;
+  defaultName?: string;
+  defaultAmount?: string;
 }) {
   const { toast } = useToast();
-  const [name, setName] = useState(initial?.name ?? "");
-  const [amount, setAmount] = useState(initial?.budgetAmount?.toString() ?? "");
+  const [name, setName] = useState(initial?.name ?? defaultName);
+  const [amount, setAmount] = useState(initial?.budgetAmount?.toString() ?? defaultAmount);
   const [priority, setPriority] = useState(initial?.priority?.toString() ?? defaultPriority.toString());
   const [isRecurring, setIsRecurring] = useState(initial?.isRecurring ?? true);
   const [activeMonth, setActiveMonth] = useState(initial?.activeMonth ?? reportMonth);
@@ -259,13 +264,13 @@ function CategoryDialog({
   const [pendingChange, setPendingChange] = useState<PendingCategoryChange | null>(null);
 
   useEffect(() => {
-    setName(initial?.name ?? "");
-    setAmount(initial?.budgetAmount?.toString() ?? "");
+    setName(initial?.name ?? defaultName);
+    setAmount(initial?.budgetAmount?.toString() ?? defaultAmount);
     setPriority(initial?.priority?.toString() ?? defaultPriority.toString());
     setIsRecurring(initial?.isRecurring ?? true);
     setActiveMonth(initial?.activeMonth ?? reportMonth);
     setActiveYear(initial?.activeYear ?? reportYear);
-  }, [initial, open, reportMonth, reportYear, defaultPriority]);
+  }, [initial, open, reportMonth, reportYear, defaultPriority, defaultName, defaultAmount]);
 
   const parsedAmount = parseInt(amount, 10);
 
@@ -305,7 +310,7 @@ function CategoryDialog({
       });
       if (!res.ok) throw new Error("Failed");
       toast({ title: initial ? "Category updated" : "Category added" });
-      await onSaved();
+      await onSaved(change);
       setPendingChange(null);
       onClose();
     } catch {
@@ -320,7 +325,12 @@ function CategoryDialog({
       <Dialog open={open} onOpenChange={v => !v && onClose()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{initial ? "Edit category" : "Add category"}</DialogTitle>
+            <DialogTitle>{recurringSetup ? "Set average monthly amount" : initial ? "Edit category" : "Add category"}</DialogTitle>
+            {recurringSetup ? (
+              <p className="text-sm text-muted-foreground">
+                Enter the average amount you expect to spend each month. Jamvi will use it as this recurring expense’s monthly budget.
+              </p>
+            ) : null}
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -333,7 +343,7 @@ function CategoryDialog({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">Budget amount (KES)</label>
+              <label className="text-sm font-semibold">{recurringSetup ? "Average monthly amount (KES)" : "Budget amount (KES)"}</label>
               <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} disabled={saving} />
             </div>
             <div className="space-y-1.5">
@@ -438,7 +448,7 @@ export default function Budget() {
     { month, year },
     { request: { cache: "no-store" } },
   );
-  const { data: allCategories = [], refetch: refetchCats } = useQuery<BudgetCategory[]>({
+  const { data: allCategories = [], isLoading: allCategoriesLoading, refetch: refetchCats } = useQuery<BudgetCategory[]>({
     queryKey: ["budget-categories-full"],
     queryFn: async () => {
       const res = await fetch("/api/budget-categories", { credentials: "include" });
@@ -449,6 +459,8 @@ export default function Budget() {
     },
     staleTime: 30_000,
   });
+  const [recurringSetup, setRecurringSetup] = useState<{ category: string; expenseAmount: string; returnTo: "expenses" | "dashboard" } | null>(null);
+  const [recurringSetupHandled, setRecurringSetupHandled] = useState(false);
   const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
     queryKey: ["income-sources", "budget-report"],
     queryFn: async () => {
@@ -521,6 +533,71 @@ export default function Budget() {
       qc.invalidateQueries({ queryKey: ["budget-categories-full"] }),
     ]);
     await qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+  };
+
+  useEffect(() => {
+    if (recurringSetupHandled || allCategoriesLoading) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("recurringSetup") !== "1") return;
+    if (!allCategories) return;
+
+    const handoff = {
+      category: params.get("category")?.trim() ?? "",
+      expenseAmount: params.get("expenseAmount") ?? "",
+      returnTo: params.get("returnTo") === "dashboard" ? "dashboard" as const : "expenses" as const,
+    };
+    const existing = allCategories.find(
+      (category) => category.name.trim().toLocaleLowerCase() === handoff.category.toLocaleLowerCase(),
+    );
+    setRecurringSetup(handoff);
+    if (existing) {
+      setEditTarget(existing);
+      setAddOpen(false);
+    } else {
+      setEditTarget(null);
+      setAddPriority(3);
+      setAddOpen(true);
+    }
+    setRecurringSetupHandled(true);
+    params.delete("recurringSetup");
+    params.delete("category");
+    params.delete("expenseAmount");
+    params.delete("returnTo");
+    const search = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+  }, [allCategories, allCategoriesLoading, recurringSetupHandled]);
+
+  const handleCategoryDialogClose = () => {
+    if (recurringSetup) {
+      const route = recurringSetup.returnTo === "dashboard"
+        ? "/?quick=expense&resumeRecurring=1"
+        : "/expenses?resumeRecurring=1";
+      window.location.assign(appPath(route, import.meta.env.BASE_URL));
+      return;
+    }
+    setAddOpen(false);
+    setEditTarget(null);
+  };
+
+  const handleCategorySaved = async (change?: PendingCategoryChange) => {
+    await refreshAll();
+    if (recurringSetup) {
+      try {
+        const draftKey = recurringSetup.returnTo === "dashboard"
+          ? "jamvi-recurring-dashboard-draft"
+          : "jamvi-recurring-expense-draft";
+        const rawDraft = sessionStorage.getItem(draftKey);
+        if (rawDraft) {
+          const draft = JSON.parse(rawDraft) as Record<string, unknown>;
+          sessionStorage.setItem(draftKey, JSON.stringify({
+            ...draft,
+            recurringMonthlyBudget: String(change?.budgetAmount ?? 0),
+          }));
+        }
+      } catch {
+        // The expense page will explain that the draft could not be restored.
+      }
+    }
   };
 
   const openAddForPriority = (priority: number) => {
@@ -687,12 +764,15 @@ export default function Budget() {
     <div className="space-y-8 pb-12">
       <CategoryDialog
         open={addOpen || !!editTarget}
-        onClose={() => { setAddOpen(false); setEditTarget(null); }}
+        onClose={handleCategoryDialogClose}
         initial={editTarget}
-        onSaved={refreshAll}
+        onSaved={handleCategorySaved}
         reportMonth={month}
         reportYear={year}
         defaultPriority={addPriority}
+        recurringSetup={!!recurringSetup}
+        defaultName={recurringSetup?.category ?? ""}
+        defaultAmount={recurringSetup?.category ? "" : recurringSetup?.expenseAmount ?? ""}
       />
       <Dialog open={manageOpen} onOpenChange={(open) => { setManageOpen(open); if (!open) setManagePriority(null); }}>
         <DialogContent className="sm:max-w-md">

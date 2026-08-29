@@ -52,8 +52,12 @@ export function addFundingSourceWithRemainder({
   newSourceId: string;
   amounts: Record<string, string>;
 }): Record<string, string> {
-  if (selectedSourceIds.includes(newSourceId) || selectedSourceIds.length !== 1) return amounts;
-  const remainder = getFundingRemainder(total, Number(amounts[selectedSourceIds[0]]));
+  if (selectedSourceIds.includes(newSourceId)) return amounts;
+  const assigned = selectedSourceIds.reduce(
+    (sum, sourceId) => sum + (Number(amounts[sourceId]) || 0),
+    0,
+  );
+  const remainder = getFundingRemainder(total, assigned);
   return remainder > 0 ? { ...amounts, [newSourceId]: String(remainder) } : amounts;
 }
 

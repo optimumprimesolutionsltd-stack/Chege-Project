@@ -91,6 +91,13 @@ export interface AuthUserEnvelope {
   user: AuthUser | null;
 }
 
+export interface ExpenseCategoryAllocation {
+  /** @minLength 1 */
+  category: string;
+  /** @minimum 1 */
+  amount: number;
+}
+
 export interface ExpenseFundingSplit {
   /**
      * Household member who funded this portion. Null only for Joint bank.
@@ -119,7 +126,10 @@ export interface Expense {
   id: number;
   /** Amount in KES */
   amount: number;
+  /** Compatibility/display primary category. For allocated expenses this is the first allocation category. */
   category: string;
+  /** Category portions. Legacy expenses without stored portions are returned as one portion using category and amount. */
+  categoryAllocations: ExpenseCategoryAllocation[];
   description: string;
   /**
      * Optional extra notes
@@ -144,18 +154,21 @@ export interface Expense {
 
 export interface ExpenseInput {
   amount: number;
+  /** Compatibility/display primary category. Must match the first categoryAllocations item when allocations are supplied. */
   category: string;
+  /** Optional whole-KES category portions. Amounts must total amount exactly and each category can appear once. */
+  categoryAllocations?: ExpenseCategoryAllocation[];
   description: string;
   notes?: string;
   /**
-     * Legacy single-payer attribution. Omit for split-funded or Joint-bank expenses.
+     * Legacy single-payer attribution. Omit for split-funded or bank-account expenses.
      * @nullable
      */
   paidById?: string | null;
-  /** Legacy single-source Joint-bank flag. Use incomeSplits for a mixed payment. */
+  /** Legacy single-source bank-account flag. Use incomeSplits for a mixed payment. */
   paidFromBank?: boolean;
   /**
-     * Selected bank account for Joint-bank funding. Omit to use Main account.
+     * Selected bank account for bank funding. Omit to use the workspace's first account.
      * @minimum 1
      */
   accountId?: number;
@@ -164,7 +177,7 @@ export interface ExpenseInput {
      * @minimum 1
      */
   incomeSourceId?: number;
-  /** Whole-KES funding portions. Their amounts must equal amount exactly. Every personal portion requires incomeSourceId; Joint-bank portions must not include one. */
+  /** Whole-KES funding portions. Their amounts must equal amount exactly. Every direct portion requires incomeSourceId; bank-account portions must not include one. */
   incomeSplits?: ExpenseFundingSplit[];
   isRecurring?: boolean;
   date: string;
@@ -352,6 +365,8 @@ export interface ActivityItem {
   userName: string;
   /** @nullable */
   category?: string | null;
+  /** Category portions for an expense activity item. Legacy expenses return one portion. */
+  categoryAllocations?: ExpenseCategoryAllocation[];
   date: string;
 }
 
@@ -455,7 +470,7 @@ export interface PeriodTotalsReport {
   spendingTotal: number;
   /** Personal expense funding, qualifying bank deposits, and personal savings additions */
   contributionTotal: number;
-  /** External deposits into the joint account, excluding transfers from savings */
+  /** External deposits into bank accounts, excluding transfers from savings */
   bankDepositTotal: number;
   /** Bank disbursements recorded in the period, excluding bank charges */
   bankDisbursementTotal: number;
@@ -970,6 +985,18 @@ export interface JointAccountTransaction {
      */
   transferDirection?: string | null;
   /**
+     * Shared identifier for the two sides of an internal bank-to-bank transfer
+     * @nullable
+     */
+  bankTransferId?: string | null;
+  /**
+     * Counterparty bank account for an internal transfer
+     * @nullable
+     */
+  bankTransferAccountId?: number | null;
+  /** @nullable */
+  bankTransferAccountName?: string | null;
+  /**
      * Expense that owns this linked Joint-bank funding disbursement.
      * @nullable
      */
@@ -1174,6 +1201,27 @@ export interface SavingsTransferInput {
   madeById?: string | null;
   /** @minimum 1 */
   accountId?: number;
+}
+
+export interface BankToBankTransferInput {
+  /** @minimum 1 */
+  sourceAccountId: number;
+  /** @minimum 1 */
+  destinationAccountId: number;
+  /** @minimum 1 */
+  amount: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  narration: string;
+  date: string;
+}
+
+export interface BankToBankTransferResult {
+  transferId: string;
+  outgoing: JointAccountTransaction;
+  incoming: JointAccountTransaction;
 }
 
 export interface BankAccount {

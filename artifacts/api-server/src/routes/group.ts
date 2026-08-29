@@ -112,7 +112,7 @@ router.post("/groups", async (req, res): Promise<void> => {
     });
     await tx.insert(bankAccountsTable).values({
       groupId: created.id,
-      name: "Main account",
+      name: "Bank account",
       openingBalance: 0,
     });
     await tx.insert(budgetCategoriesTable).values(categoryPackRows(created.id, created.kind));

@@ -1,8 +1,8 @@
-import { pgTable, serial, text, integer, boolean, date, timestamp, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, date, timestamp, index, unique, foreignKey } from "drizzle-orm/pg-core";
 import { groupsTable } from "./groups";
 
-// Workspace-owned bank accounts. Every legacy workspace receives a "Main
-// account" during migration, so bank ledger history always has an account.
+// Workspace-owned bank accounts. Legacy ledger history is attached to a
+// workspace account during migration, while users can personalize its name.
 export const bankAccountsTable = pgTable("bank_accounts", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
@@ -72,18 +72,42 @@ export const expensesTable = pgTable("expenses", {
   incomeSourceId: integer("income_source_id"),
   paidFromBank: boolean("paid_from_bank").notNull().default(false), // true = funded from joint account deposit (already counted as contribution)
   // Required for newly created bank-funded expenses; legacy history is
-  // backfilled to the workspace Main account.
+  // backfilled to the workspace bank account.
   accountId: integer("account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   isRecurring: boolean("is_recurring").notNull().default(false),
   date: date("date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("expenses_group_date_idx").on(table.groupId, table.date),
+  unique("expenses_id_group_unique").on(table.id, table.groupId),
 ]);
 
 export const insertExpenseSchema = createInsertSchema(expensesTable).omit({ id: true, createdAt: true });
 export type InsertExpense = typeof expensesTable.$inferInsert;
 export type Expense = typeof expensesTable.$inferSelect;
+
+// Category portions for a single expense. The parent expense keeps its
+// original category as the compatibility/display primary category; this table
+// is the source of truth when an expense is allocated across categories.
+export const expenseCategoryAllocationsTable = pgTable("expense_category_allocations", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
+  expenseId: integer("expense_id").notNull(),
+  category: text("category").notNull(),
+  amount: integer("amount").notNull(), // in KES
+  position: integer("position").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("expense_category_allocations_expense_position_unique").on(table.expenseId, table.position),
+  index("expense_category_allocations_group_expense_idx").on(table.groupId, table.expenseId),
+  index("expense_category_allocations_group_category_idx").on(table.groupId, table.category),
+  foreignKey({
+    columns: [table.expenseId, table.groupId],
+    foreignColumns: [expensesTable.id, expensesTable.groupId],
+    name: "expense_category_allocations_expense_group_fk",
+  }).onDelete("cascade"),
+]);
+export type ExpenseCategoryAllocation = typeof expenseCategoryAllocationsTable.$inferSelect;
 
 // Per-expense funding splits — when money comes from multiple sources for one payment
 export const expenseIncomeSplitsTable = pgTable("expense_income_splits", {
@@ -136,6 +160,10 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   savingsGoalId: integer("savings_goal_id"), // set only for a linked bank <-> savings transfer
   accountId: integer("account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   transferDirection: text("transfer_direction"), // 'to_savings' | 'from_savings' for linked transfers
+  // Two rows share this token for an internal bank-to-bank transfer. The
+  // counterparty account makes each account history understandable on its own.
+  bankTransferId: text("bank_transfer_id"),
+  bankTransferAccountId: integer("bank_transfer_account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   // Set for the Joint-bank portion of a single split-funded expense. The
   // expense route owns this ledger row so both records stay in sync.
   expenseId: integer("expense_id").references(() => expensesTable.id, { onDelete: "cascade" }),
@@ -143,6 +171,7 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("joint_account_transactions_group_date_idx").on(table.groupId, table.date),
+  index("joint_account_transactions_bank_transfer_idx").on(table.groupId, table.bankTransferId),
 ]);
 
 export const insertJointAccountTxSchema = createInsertSchema(jointAccountTxTable).omit({ id: true, createdAt: true });

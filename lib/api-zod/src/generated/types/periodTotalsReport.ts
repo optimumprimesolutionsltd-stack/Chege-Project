@@ -15,7 +15,7 @@ export interface PeriodTotalsReport {
   spendingTotal: number;
   /** Personal expense funding, qualifying bank deposits, and personal savings additions */
   contributionTotal: number;
-  /** External deposits into the joint account, excluding transfers from savings */
+  /** External deposits into bank accounts, excluding transfers from savings */
   bankDepositTotal: number;
   /** Bank disbursements recorded in the period, excluding bank charges */
   bankDisbursementTotal: number;

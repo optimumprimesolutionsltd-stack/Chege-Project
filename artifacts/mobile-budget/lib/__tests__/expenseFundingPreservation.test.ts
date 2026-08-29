@@ -85,7 +85,7 @@ describe('expense funding preservation', () => {
     })).toEqual({ primary: '650', second: '350' });
   });
 
-  it('supports either bank/direct selection order without inventing a third source', () => {
+  it('supports either bank/direct selection order and keeps filling later remainders', () => {
     expect(addFundingSourceWithRemainder({
       total: 1000,
       selectedSourceIds: ['income:salary'],
@@ -106,6 +106,13 @@ describe('expense funding preservation', () => {
       newSourceId: 'third',
       amounts: { primary: '650', second: '350' },
     })).toEqual({ primary: '650', second: '350' });
+
+    expect(addFundingSourceWithRemainder({
+      total: 1000,
+      selectedSourceIds: ['primary', 'second'],
+      newSourceId: 'third',
+      amounts: { primary: '250', second: '300' },
+    })).toEqual({ primary: '250', second: '300', third: '450' });
   });
 
   it('does not create a positive remainder for an exact or overfunded primary', () => {

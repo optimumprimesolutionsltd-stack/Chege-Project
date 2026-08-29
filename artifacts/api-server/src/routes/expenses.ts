@@ -6,6 +6,7 @@ import {
   usersTable,
   incomeSourcesTable,
   expenseIncomeSplitsTable,
+  expenseCategoryAllocationsTable,
   jointAccountTxTable,
   bankAccountsTable,
 } from "@workspace/db";
@@ -39,6 +40,12 @@ const FundingSplitSchema = z.object({
 
 type FundingSplit = z.infer<typeof FundingSplitSchema>;
 
+const CategoryAllocationSchema = z.object({
+  category: z.string().trim().min(1),
+  amount: z.number().int().positive(),
+});
+type CategoryAllocation = z.infer<typeof CategoryAllocationSchema>;
+
 type ExpenseRow = {
   id: number;
   amount: number;
@@ -55,7 +62,7 @@ type ExpenseRow = {
   createdAt: Date | string;
 };
 
-function formatExpense(e: ExpenseRow, incomeSplits: unknown[] = []) {
+function formatExpense(e: ExpenseRow, incomeSplits: unknown[] = [], categoryAllocations: CategoryAllocation[] = [{ category: e.category, amount: e.amount }]) {
   return {
     ...e,
     notes: e.notes ?? null,
@@ -65,9 +72,37 @@ function formatExpense(e: ExpenseRow, incomeSplits: unknown[] = []) {
     accountId: e.accountId ?? null,
     isRecurring: e.isRecurring ?? false,
     incomeSplits,
+    categoryAllocations,
     date: typeof e.date === "string" ? e.date : e.date?.toISOString().split("T")[0],
     createdAt: e.createdAt instanceof Date ? e.createdAt.toISOString() : e.createdAt,
   };
+}
+
+async function validateCategoryAllocations(
+  raw: unknown,
+  amount: number,
+  category: string,
+  groupId: number,
+): Promise<{ allocations?: CategoryAllocation[]; error?: string }> {
+  // A singular category predates allocation support and remains deliberately
+  // permissive: groups can have meaningful unbudgeted expense labels.
+  if (raw === undefined) return {};
+  const parsed = z.array(CategoryAllocationSchema).min(1).safeParse(raw);
+  if (!parsed.success) return { error: "Each category allocation needs a category and a positive whole-KES amount." };
+  const allocations = parsed.data;
+  if (allocations.reduce((sum, allocation) => sum + allocation.amount, 0) !== amount) {
+    return { error: "Category allocations must equal the expense total exactly." };
+  }
+  if (allocations[0].category !== category) {
+    return { error: "The expense category must match the first category allocation." };
+  }
+  const seen = new Set<string>();
+  for (const allocation of allocations) {
+    const key = allocation.category.toLocaleLowerCase();
+    if (seen.has(key)) return { error: "Each category can be allocated only once." };
+    seen.add(key);
+  }
+  return { allocations };
 }
 
 async function validateMemberId(id: string, groupId: number): Promise<string | null> {
@@ -198,6 +233,34 @@ async function getExpenseSplits(expenseIds: number[], groupId: number) {
   }, new Map<number, unknown[]>());
 }
 
+async function getExpenseCategoryAllocations(expenses: Array<Pick<ExpenseRow, "id" | "category" | "amount">>, groupId: number) {
+  if (expenses.length === 0) return new Map<number, CategoryAllocation[]>();
+  const rows = await db.select({
+    expenseId: expenseCategoryAllocationsTable.expenseId,
+    category: expenseCategoryAllocationsTable.category,
+    amount: expenseCategoryAllocationsTable.amount,
+  }).from(expenseCategoryAllocationsTable).where(and(
+    eq(expenseCategoryAllocationsTable.groupId, groupId),
+    inArray(expenseCategoryAllocationsTable.expenseId, expenses.map((expense) => expense.id)),
+  )).orderBy(expenseCategoryAllocationsTable.position);
+  const byExpense = rows.reduce((map, row) => {
+    const values = map.get(row.expenseId) ?? [];
+    values.push({ category: row.category, amount: row.amount });
+    map.set(row.expenseId, values);
+    return map;
+  }, new Map<number, CategoryAllocation[]>());
+  for (const expense of expenses) {
+    if (!byExpense.has(expense.id)) byExpense.set(expense.id, [{ category: expense.category, amount: expense.amount }]);
+  }
+  return byExpense;
+}
+
+async function writeCategoryAllocations(tx: any, expenseId: number, allocations: CategoryAllocation[], groupId: number) {
+  await tx.insert(expenseCategoryAllocationsTable).values(allocations.map((allocation, position) => ({
+    groupId, expenseId, category: allocation.category, amount: allocation.amount, position,
+  })));
+}
+
 async function writeFundingSplits(
   tx: any,
   expenseId: number,
@@ -261,13 +324,21 @@ router.get("/expenses", async (req, res) => {
   const parsed = GetExpensesQueryParams.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: "Invalid query" }); return; }
   const { month, year, category } = parsed.data;
-  const conditions: ReturnType<typeof eq>[] = [eq(expensesTable.groupId, groupId)];
+  const conditions: any[] = [eq(expensesTable.groupId, groupId)];
   if (month !== undefined && year !== undefined) {
     conditions.push(sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month}`, sql`EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`);
   } else if (year !== undefined) {
     conditions.push(sql`EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`);
   }
-  if (category) conditions.push(eq(expensesTable.category, category));
+  if (category) conditions.push(sql`(
+    ${expensesTable.category} = ${category}
+    OR EXISTS (
+      SELECT 1 FROM expense_category_allocations allocation
+      WHERE allocation.expense_id = ${expensesTable.id}
+        AND allocation.group_id = ${groupId}
+        AND allocation.category = ${category}
+    )
+  )`);
 
   const expenses = await db.select({
     id: expensesTable.id, amount: expensesTable.amount, category: expensesTable.category,
@@ -281,7 +352,8 @@ router.get("/expenses", async (req, res) => {
     .orderBy(sql`${expensesTable.date} DESC, ${expensesTable.createdAt} DESC`);
 
   const splitsByExpense = await getExpenseSplits(expenses.map((expense) => expense.id), groupId);
-  res.json(expenses.map((expense) => formatExpense(expense, splitsByExpense.get(expense.id) ?? [])));
+  const allocationsByExpense = await getExpenseCategoryAllocations(expenses, groupId);
+  res.json(expenses.map((expense) => formatExpense(expense, splitsByExpense.get(expense.id) ?? [], allocationsByExpense.get(expense.id))));
 });
 
 // POST /expenses/apply-recurring — must be before /:id route
@@ -310,6 +382,7 @@ router.post("/expenses/apply-recurring", async (req, res) => {
   const toInsert = recurring.filter((expense) => !existingKeys.has(`${expense.category}||${expense.description}`));
   const newDate = `${year}-${String(month).padStart(2, "0")}-01`;
   const recurringSplits = new Map<number, Array<typeof expenseIncomeSplitsTable.$inferSelect>>();
+  const recurringAllocations = new Map<number, CategoryAllocation[]>();
 
   for (const original of toInsert) {
     const sourceSplits = await db.select().from(expenseIncomeSplitsTable).where(and(
@@ -317,6 +390,24 @@ router.post("/expenses/apply-recurring", async (req, res) => {
       eq(expenseIncomeSplitsTable.groupId, groupId),
     ));
     recurringSplits.set(original.id, sourceSplits);
+    const sourceAllocations = await db.select({
+      category: expenseCategoryAllocationsTable.category,
+      amount: expenseCategoryAllocationsTable.amount,
+    }).from(expenseCategoryAllocationsTable).where(and(
+      eq(expenseCategoryAllocationsTable.expenseId, original.id),
+      eq(expenseCategoryAllocationsTable.groupId, groupId),
+    )).orderBy(expenseCategoryAllocationsTable.position);
+    if (sourceAllocations.length > 0) recurringAllocations.set(original.id, sourceAllocations);
+    const allocationValidation = await validateCategoryAllocations(
+      sourceAllocations.length > 0 ? sourceAllocations : undefined,
+      original.amount,
+      original.category,
+      groupId,
+    );
+    if (allocationValidation.error) {
+      res.status(400).json({ error: `Cannot copy recurring expense "${original.description}": ${allocationValidation.error}` });
+      return;
+    }
     if (sourceSplits.length > 0) {
       const splitResult = await validateFundingSplits(sourceSplits.map((split) => ({
         userId: split.userId,
@@ -361,6 +452,8 @@ router.post("/expenses/apply-recurring", async (req, res) => {
         paidFromBank: original.paidFromBank, accountId: original.accountId, isRecurring: true, date: newDate,
       }).returning();
       const sourceSplits = recurringSplits.get(original.id) ?? [];
+      const sourceAllocations = recurringAllocations.get(original.id);
+      if (sourceAllocations) await writeCategoryAllocations(tx, created.id, sourceAllocations, groupId);
       if (sourceSplits.length > 0) {
         await tx.insert(expenseIncomeSplitsTable).values(sourceSplits.map((split) => ({
           expenseId: created.id, groupId, userId: split.userId, label: split.label, amount: split.amount,
@@ -388,8 +481,15 @@ router.post("/expenses", async (req, res) => {
     res.status(400).json({ error: `Invalid ${field}: ${issue?.message ?? "check the entered value"}` });
     return;
   }
-  const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits, accountId } = parsed.data;
-   const otherNotesError = validateOtherExpenseNotes(category, notes);
+  const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits, categoryAllocations, accountId } = parsed.data;
+   const categoryResult = await validateCategoryAllocations(categoryAllocations, amount, category, groupId);
+   if (categoryResult.error) { res.status(400).json({ error: categoryResult.error }); return; }
+   if (isRecurring && (categoryResult.allocations?.length ?? 1) > 1) {
+     res.status(400).json({ error: "Recurring expenses can have only one category allocation." });
+     return;
+   }
+   const otherNotesError = (categoryResult.allocations ?? [{ category, amount }])
+     .map((allocation) => validateOtherExpenseNotes(allocation.category, notes)).find(Boolean);
    if (otherNotesError) {
      res.status(400).json({ error: otherNotesError });
     return;
@@ -464,6 +564,7 @@ router.post("/expenses", async (req, res) => {
       isRecurring: isRecurring ?? false, date: toDateString(date),
       accountId: selectedAccountId,
     }).returning();
+    if (categoryResult.allocations) await writeCategoryAllocations(tx, created.id, categoryResult.allocations, groupId);
     if (splits) await writeFundingSplits(tx, created.id, splits.map((split) => split.fromBank && split.accountId === undefined
       ? { ...split, accountId: selectedAccountId ?? undefined } : split), groupId);
     const bankAmount = splits
@@ -474,7 +575,8 @@ router.post("/expenses", async (req, res) => {
   });
   const payer = expense.paidById ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, expense.paidById) }) : null;
   const splits = await getExpenseSplits([expense.id], groupId);
-  res.status(201).json(formatExpense({ ...expense, paidByName: payer?.firstName ?? null }, splits.get(expense.id) ?? []));
+  const allocations = await getExpenseCategoryAllocations([expense], groupId);
+  res.status(201).json(formatExpense({ ...expense, paidByName: payer?.firstName ?? null }, splits.get(expense.id) ?? [], allocations.get(expense.id)));
 });
 
 router.patch("/expenses/:id", async (req, res) => {
@@ -484,12 +586,10 @@ router.patch("/expenses/:id", async (req, res) => {
   const parsed = UpdateExpenseBody.safeParse(req.body);
   if (!idParsed.success || !parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const expenseId = idParsed.data.id;
-  const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits, accountId } = parsed.data;
-   const otherNotesError = validateOtherExpenseNotes(category, notes);
-   if (otherNotesError) {
-     res.status(400).json({ error: otherNotesError });
-    return;
-  }
+  const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits, categoryAllocations, accountId } = parsed.data;
+   // Ownership is checked in the transaction below before validation so a
+   // caller cannot distinguish or receive validation details for another
+   // workspace's expense.
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
   const isParticipatingMember = req.group?.role === "member";
@@ -523,11 +623,31 @@ router.patch("/expenses/:id", async (req, res) => {
       .where(and(eq(expensesTable.id, expenseId), eq(expensesTable.groupId, groupId)))
       .for("update");
     if (!existing) return null;
+    const categoryResult = await validateCategoryAllocations(categoryAllocations, amount, category, groupId);
+    if (categoryResult.error) return { error: categoryResult.error };
+    const otherNotesError = (categoryResult.allocations ?? [{ category, amount }])
+      .map((allocation) => validateOtherExpenseNotes(allocation.category, notes)).find(Boolean);
+    if (otherNotesError) return { error: otherNotesError };
     const previousSplits = await tx.select().from(expenseIncomeSplitsTable)
       .where(and(
         eq(expenseIncomeSplitsTable.expenseId, expenseId),
         eq(expenseIncomeSplitsTable.groupId, groupId),
       ));
+    const previousAllocations = await tx.select().from(expenseCategoryAllocationsTable)
+      .where(and(
+        eq(expenseCategoryAllocationsTable.expenseId, expenseId),
+        eq(expenseCategoryAllocationsTable.groupId, groupId),
+      )).orderBy(expenseCategoryAllocationsTable.position);
+    const effectiveAllocations = categoryResult.allocations
+      ?? (previousAllocations.length > 0 ? previousAllocations : [{ category: existing.category, amount: existing.amount }]);
+    if ((isRecurring ?? existing.isRecurring) && effectiveAllocations.length > 1) {
+      return { error: "Recurring expenses can have only one category allocation." };
+    }
+    if (!categoryResult.allocations && previousAllocations.length > 0 && (
+      previousAllocations[0].category !== category || amount !== existing.amount
+    )) {
+      return { error: "Provide updated category allocations when changing an allocated expense's primary category or total." };
+    }
     const keepsOrAddsBankFunding = splitResult.splits
       ? splitResult.splits.some((split) => split.fromBank)
       : (paidFromBank ?? existing.paidFromBank) ||
@@ -621,6 +741,13 @@ router.patch("/expenses/:id", async (req, res) => {
           eq(expenseIncomeSplitsTable.fromBank, true),
         ));
     }
+    if (categoryResult.allocations) {
+      await tx.delete(expenseCategoryAllocationsTable).where(and(
+        eq(expenseCategoryAllocationsTable.expenseId, expenseId),
+        eq(expenseCategoryAllocationsTable.groupId, groupId),
+      ));
+      await writeCategoryAllocations(tx, expenseId, categoryResult.allocations, groupId);
+    }
     const effectiveSplits = splits ?? previousSplits.map((split) => ({
       userId: split.userId, label: split.label, amount: split.amount,
       incomeSourceId: split.incomeSourceId ?? undefined, fromBank: split.fromBank, accountId: split.accountId ?? undefined,
@@ -643,7 +770,8 @@ router.patch("/expenses/:id", async (req, res) => {
   if ("error" in result) { res.status(400).json({ error: result.error }); return; }
   const payer = result.updated.paidById ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, result.updated.paidById) }) : null;
   const splits = await getExpenseSplits([expenseId], groupId);
-  res.json(formatExpense({ ...result.updated, paidByName: payer?.firstName ?? null }, splits.get(expenseId) ?? []));
+  const allocations = await getExpenseCategoryAllocations([result.updated], groupId);
+  res.json(formatExpense({ ...result.updated, paidByName: payer?.firstName ?? null }, splits.get(expenseId) ?? [], allocations.get(expenseId)));
 });
 
 router.delete("/expenses/:id", async (req, res) => {

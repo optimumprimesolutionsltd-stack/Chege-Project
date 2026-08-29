@@ -5,13 +5,17 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+import type { ExpenseCategoryAllocation } from './expenseCategoryAllocation';
 import type { ExpenseFundingSplit } from './expenseFundingSplit';
 
 export interface Expense {
   id: number;
   /** Amount in KES */
   amount: number;
+  /** Compatibility/display primary category. For allocated expenses this is the first allocation category. */
   category: string;
+  /** Category portions. Legacy expenses without stored portions are returned as one portion using category and amount. */
+  categoryAllocations: ExpenseCategoryAllocation[];
   description: string;
   /**
      * Optional extra notes

@@ -21,7 +21,7 @@ describe("dashboard quick actions", () => {
 
   it("keeps category creation visible for Personal budget owners", () => {
     expect(dashboardSource).toContain("canManageCategories={canManageCategories}");
-    expect(dashboardSource).toContain("{canManageCategories && (");
+    expect(dashboardSource).toContain("{canManageCategories && !isOtherCategory && (");
     expect(dashboardSource).toContain("const canManageCategories = group?.isPrivate === true || canManageShared;");
   });
 
@@ -29,7 +29,7 @@ describe("dashboard quick actions", () => {
     expect(dashboardSource).toContain("canUseBankFunding={canManageBank}");
     expect(dashboardSource).toContain("const { data: bankAccounts = [] } = useGetJointAccounts();");
     expect(dashboardSource).toContain('"Paid directly"');
-    expect(dashboardSource).toContain('"Personal bank deposits"');
+    expect(dashboardSource).toContain('const bankLabel = "Bank account";');
     expect(dashboardSource).not.toContain('["mixed", "Both"');
     expect(dashboardSource).toContain("selectedBankAccountId");
     expect(expenseFormSource).toContain("setIncomeSourceId(null);");
@@ -43,14 +43,23 @@ describe("dashboard quick actions", () => {
     expect(expenseFormSource).toContain('{isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}');
   });
 
-  it("keeps the payer selector and Shared bank variant available only in Shared quick log", () => {
+  it("keeps the payer selector and named bank accounts available in Shared quick log", () => {
     expect(expenseFormSource).toMatch(
       /\{isSharedWorkspace && !paidFromBank && <div className="space-y-1\.5">[\s\S]*?Paid by/,
     );
-    expect(expenseFormSource).toContain("{!paidFromBank && (");
     expect(expenseFormSource).toContain("Financed by");
-    expect(expenseFormSource).toContain('const bankLabel = isSharedWorkspace ? "Shared bank deposits" : "Personal bank deposits";');
-    expect(expenseFormSource).toContain('label: isSharedWorkspace ? "Shared bank" : "Personal bank"');
+    expect(expenseFormSource).toContain('mode === "direct" && !paidFromBank');
+    expect(expenseFormSource).toContain('const bankLabel = "Bank account";');
+    expect(expenseFormSource).toContain('bankAccounts.find((account) => account.id === selectedBankAccountId)?.name ?? "Bank account"');
     expect(expenseFormSource).not.toContain('canManageShared && fundingMode !== "bank"');
+  });
+
+  it("sends recurring quick expenses to Budget and restores the draft afterward", () => {
+    expect(expenseFormSource).toContain('RECURRING_DASHBOARD_DRAFT_KEY');
+    expect(expenseFormSource).toContain('returnTo=dashboard');
+    expect(expenseFormSource).toContain('recurringSetup=1');
+    expect(expenseFormSource).toContain('params.get("resumeRecurring") !== "1"');
+    expect(expenseFormSource).toContain('setRecurringMonthlyBudget(draft.recurringMonthlyBudget ?? "")');
+    expect(expenseFormSource).toContain('Jamvi will take you to Budget to ask for the average monthly amount.');
   });
 });

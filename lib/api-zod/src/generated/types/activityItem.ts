@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActivityItemEditTarget } from './activityItemEditTarget';
+import type { ExpenseCategoryAllocation } from './expenseCategoryAllocation';
 
 export interface ActivityItem {
   id: string;
@@ -19,5 +20,7 @@ export interface ActivityItem {
   userName: string;
   /** @nullable */
   category?: string | null;
+  /** Category portions for an expense activity item. Legacy expenses return one portion. */
+  categoryAllocations?: ExpenseCategoryAllocation[];
   date: Date;
 }

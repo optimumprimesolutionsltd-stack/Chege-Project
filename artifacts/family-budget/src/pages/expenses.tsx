@@ -1,1141 +1,41 @@
-import { useState, useEffect } from "react";
-
-// Expense priority tiers from the budget document
-const EXPENSE_TIERS = [
-  {
-    tier: 1, label: "Survival Essentials",
-    bar: "bg-red-500", badge: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
-    categories: ["Rent", "Food", "School fees", "Nanny salary", "Water & electricity"],
-  },
-  {
-    tier: 2, label: "Health & Education",
-    bar: "bg-warning", badge: "bg-warning/10 text-warning",
-    categories: ["Medical outpatient", "Medical insurance", "Uniform replenishment"],
-  },
-  {
-    tier: 3, label: "Daily Household",
-    bar: "bg-brand-gold", badge: "bg-brand-gold/15 text-[#8A6200] dark:text-brand-gold",
-    categories: ["Household supplies", "Kids clothes"],
-  },
-  {
-    tier: 4, label: "Connectivity & Care",
-    bar: "bg-brand-teal", badge: "bg-brand-teal/10 text-[#087F8C] dark:text-brand-teal",
-    categories: ["Wifi/data", "Grooming"],
-  },
-  {
-    tier: 5, label: "Discretionary",
-    bar: "bg-muted-foreground/50", badge: "bg-muted text-muted-foreground",
-    categories: ["Entertainment", "Pocket money"],
-  },
-];
-
-import {
-  useGetExpenses, useGetBudgetCategories, useGetMembers, useGetGroup,
-  useCreateExpense, useCreateBudgetCategory, useDeleteExpense, useUpdateExpense, useApplyRecurringExpenses,
-  useGetDashboardSummary, useGetDashboardCategoryBreakdown,
-  getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
-  getGetBudgetCategoriesQueryKey, getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
-  type IncomeSource, ApiError, useGetJointAccount, useGetJointAccounts, useCreateJointAccount, getGetJointAccountsQueryKey,
-} from "@workspace/api-client-react";
-import { Flag } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@workspace/replit-auth-web";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  addFundingSourceWithRemainder,
-  getExpenseFundingControlState,
-  getFundingRemainder,
-  getNewExpenseCategoryMode,
-  hasMissingPersonalFundingSource,
-} from "@/lib/expense-funding-utils";
-
-type Expense = {
-  id: number;
-  amount: number;
-  category: string;
-  description: string;
-  notes?: string | null;
-  paidById: string | null;
-  paidByName: string | null;
-  incomeSourceId?: number | null;
-  paidFromBank?: boolean;
-  accountId?: number | null;
-  isRecurring: boolean;
-  date: string;
-  incomeSplits?: {
-    userId?: string | null;
-    label?: string;
-    amount: number;
-    incomeSourceId?: number;
-    fromBank: boolean;
-    accountId?: number;
-  }[];
-};
-
-function localDateInputValue(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function isSelfFundedPersonalExpense(expense: Expense, userId: string | undefined) {
-  if (!userId || expense.paidById !== userId || expense.paidFromBank || expense.isRecurring) {
-    return false;
-  }
-
-  return !expense.incomeSplits?.some(
-    (split) => split.fromBank || split.userId !== userId,
-  );
-}
-
-function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
-  const today = now ?? new Date();
-  const [amount, setAmount] = useState(defaults?.amount?.toString() ?? "");
-  const [category, setCategory] = useState(defaults?.category ?? "");
-  const [description, setDescription] = useState(defaults?.description ?? "");
-  const [notes, setNotes] = useState(defaults?.notes ?? "");
-  const [paidById, setPaidById] = useState(defaults?.paidById ?? "");
-  // Multi-payer support (add form only; edit uses single paidById)
-  const [payerIds, setPayerIds] = useState<string[]>(defaults?.paidById ? [defaults.paidById] : []);
-  const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
-  const [payerIncomeSourceIds, setPayerIncomeSourceIds] = useState<Record<string, number | null>>({});
-  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
-  const [otherIncomeSourceLabel, setOtherIncomeSourceLabel] = useState<string | null>(null);
-  const [paidFromBank, setPaidFromBank] = useState(false);
-  const [accountId, setAccountId] = useState<number | null>(defaults?.accountId ?? null);
-  const [isRecurring, setIsRecurring] = useState(defaults?.isRecurring ?? false);
-  const [date, setDate] = useState(defaults?.date ?? localDateInputValue(today));
-  return { amount, setAmount, category, setCategory, description, setDescription, notes, setNotes,
-           paidById, setPaidById, payerIds, setPayerIds, payerAmounts, setPayerAmounts,
-           payerIncomeSourceIds, setPayerIncomeSourceIds,
-           incomeSourceId, setIncomeSourceId, otherIncomeSourceLabel, setOtherIncomeSourceLabel,
-            paidFromBank, setPaidFromBank, accountId, setAccountId, isRecurring, setIsRecurring, date, setDate };
-}
-
-function useIncomeSources(userId: string) {
-  return useQuery<IncomeSource[]>({
-    queryKey: ["income-sources", userId],
-    queryFn: async () => {
-      if (!userId) return [];
-      const res = await fetch(`/api/income-sources?userId=${userId}`, { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!userId,
-    // Sources can be added from the mobile Settings screen. Always refresh
-    // when this picker is mounted for a person so the web form does not retain
-    // an earlier empty result.
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
-}
-
-function useIncomeSourcesForUsers(userIds: string[]) {
-  const ids = [...new Set(userIds)].sort();
-  return useQuery<Record<string, IncomeSource[]>>({
-    queryKey: ["income-sources", "payers", ids],
-    queryFn: async () => {
-      const entries = await Promise.all(ids.map(async (userId) => {
-        const res = await fetch(`/api/income-sources?userId=${encodeURIComponent(userId)}`, { credentials: "include" });
-        if (!res.ok) return [userId, []] as const;
-        return [userId, await res.json() as IncomeSource[]] as const;
-      }));
-      return Object.fromEntries(entries);
-    },
-    enabled: ids.length > 0,
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
-}
-
-const EXPENSES_MONTH_KEY = "expenses-month-pref";
-
-function getExpenseDeepLink() {
-  const params = new URLSearchParams(window.location.search);
-  const month = Number(params.get("month"));
-  const year = Number(params.get("year"));
-  const editId = Number(params.get("edit"));
-  const payerId = params.get("payer");
-  const category = params.get("category");
-  return {
-    month: Number.isInteger(month) && month >= 1 && month <= 12 ? month : null,
-    year: Number.isInteger(year) && year >= 2000 && year <= 2200 ? year : null,
-    editId: Number.isInteger(editId) && editId > 0 ? editId : null,
-    payerId: payerId?.trim() || null,
-    category: category?.trim() || null,
-  };
-}
-
-export default function Expenses() {
-  const now = new Date();
-  const today = localDateInputValue(now);
-  const { user } = useAuth();
-  const expenseDeepLink = getExpenseDeepLink();
-  const [month, setMonth] = useState(() => {
-    if (expenseDeepLink.month != null && expenseDeepLink.year != null) return expenseDeepLink.month;
-    try {
-      const raw = localStorage.getItem(EXPENSES_MONTH_KEY);
-      if (raw) { const p = JSON.parse(raw); if (typeof p?.month === "number") return p.month; }
-    } catch {}
-    return now.getMonth() + 1;
-  });
-  const [year, setYear] = useState(() => {
-    if (expenseDeepLink.month != null && expenseDeepLink.year != null) return expenseDeepLink.year;
-    try {
-      const raw = localStorage.getItem(EXPENSES_MONTH_KEY);
-      if (raw) { const p = JSON.parse(raw); if (typeof p?.year === "number") return p.year; }
-    } catch {}
-    return now.getFullYear();
-  });
-
-  useEffect(() => {
-    try { localStorage.setItem(EXPENSES_MONTH_KEY, JSON.stringify({ month, year })); } catch {}
-  }, [month, year]);
-
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [ledgerFilter, setLedgerFilter] = useState<{
-    payerId: string | null;
-    category: string | null;
-  }>({
-    payerId: expenseDeepLink.payerId,
-    category: expenseDeepLink.category,
-  });
-  const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
-  const [editHasMultipleFundingSplits, setEditHasMultipleFundingSplits] = useState(false);
-  const [editHasBankFunding, setEditHasBankFunding] = useState(false);
-  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryBudget, setNewCategoryBudget] = useState("");
-  const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
-  const [newCategoryPriority, setNewCategoryPriority] = useState("3");
-  const [newCategoryAddToBudget, setNewCategoryAddToBudget] = useState(false);
-  const [allowMixedFunding, setAllowMixedFunding] = useState(false);
-  const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
-  const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
-  const [newBankAccountName, setNewBankAccountName] = useState("");
-  const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
-  const [newBankOpeningBalance, setNewBankOpeningBalance] = useState("");
-
-  const addForm = useExpenseForm(undefined, now);
-  const editForm = useExpenseForm();
-
-  const { data: expenses, isLoading } = useGetExpenses({ month, year });
-  const { data: categories } = useGetBudgetCategories();
-  const { data: members } = useGetMembers();
-  const { data: group } = useGetGroup();
-  const { data: bankAccounts = [] } = useGetJointAccounts();
-  const activeExpenseBankAccountId = isAdding
-    ? addForm.accountId
-    : editingId !== null
-      ? editForm.accountId
-      : null;
-  const { data: activeExpenseBankAccount } = useGetJointAccount(
-    activeExpenseBankAccountId ? { accountId: activeExpenseBankAccountId } : undefined,
-  );
-  const sharedTransactionsLocked =
-    group?.canRecordSharedTransactions === false && (members?.length ?? 0) < 2;
-  const { data: summary } = useGetDashboardSummary({ month, year });
-  const { data: breakdown } = useGetDashboardCategoryBreakdown({ month, year });
-  const createExpense = useCreateExpense();
-  const createCategory = useCreateBudgetCategory();
-  const createBankAccount = useCreateJointAccount();
-  const updateExpense = useUpdateExpense();
-  const deleteExpense = useDeleteExpense();
-  const applyRecurring = useApplyRecurringExpenses();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const currentMembership = members?.find((member) => member.userId === user?.id);
-  const isPersonalBudget = group?.isPrivate === true;
-  const canManageExpenses =
-    group?.isPrivate === true ||
-    group?.role === "owner" ||
-    group?.role === "admin" ||
-    currentMembership?.role === "owner" ||
-    currentMembership?.role === "admin";
-  const memberPayerId = isPersonalBudget ? user?.id : (canManageExpenses ? undefined : currentMembership?.userId);
-  const canManageCategories = canManageExpenses;
-  const canEditExpense = (expense: Expense) =>
-    canManageExpenses || (expense.date === today && isSelfFundedPersonalExpense(expense, user?.id));
-  const visibleExpenses = expenses?.filter((expense) => {
-    if (ledgerFilter.payerId === "__joint__" && expense.paidById !== null) return false;
-    if (ledgerFilter.payerId && ledgerFilter.payerId !== "__joint__" && expense.paidById !== ledgerFilter.payerId) return false;
-    if (ledgerFilter.category && expense.category !== ledgerFilter.category) return false;
-    return true;
-  });
-  const selectedPayerName = ledgerFilter.payerId === "__joint__"
-    ? (isPersonalBudget ? "Personal bank" : "Shared bank")
-    : members?.find((member) => member.userId === ledgerFilter.payerId)?.userName;
-  const ledgerFilterLabel = [
-    selectedPayerName ? `Paid by ${selectedPayerName}` : null,
-    ledgerFilter.category ? `Category: ${ledgerFilter.category}` : null,
-  ].filter(Boolean).join(" · ");
-
-  useEffect(() => {
-    if (!isAdding || !memberPayerId || addForm.paidFromBank) return;
-    if (!isPersonalBudget && canManageExpenses) return;
-    if (
-      addForm.payerIds.length === 1 &&
-      addForm.payerIds[0] === memberPayerId &&
-      addForm.paidById === memberPayerId &&
-      !addForm.paidFromBank
-    ) return;
-
-    addForm.setPayerIds([memberPayerId]);
-    addForm.setPaidById(memberPayerId);
-  }, [
-    isAdding,
-    canManageExpenses,
-    isPersonalBudget,
-    memberPayerId,
-    addForm.payerIds,
-    addForm.paidById,
-    addForm.paidFromBank,
-  ]);
-
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
-  const { data: prevExpenses } = useGetExpenses({ month: prevMonth, year: prevYear });
-  const recurringFromPrev = (prevExpenses ?? []).filter(e => e.isRecurring);
-  const alreadyApplied = (expenses ?? []).some(e => e.isRecurring);
-  const showRecurringBanner = recurringFromPrev.length > 0 && !alreadyApplied;
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey({ month, year }) });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
-  };
-
-  const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
-  const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
-
-  const [addNewSource, setAddNewSource] = useState(false);
-  const [newSourceName, setNewSourceName] = useState("");
-  const { data: addFormSources, refetch: refetchAddSources } = useIncomeSources(addForm.payerIds[0] ?? addForm.paidById);
-  const { data: addPayerSources = {} } = useIncomeSourcesForUsers(addForm.payerIds);
-  const { data: editFormSources } = useIncomeSources(editForm.paidById);
-
-  const resetAdd = () => {
-    addForm.setAmount(""); addForm.setCategory(""); addForm.setDescription(""); addForm.setNotes("");
-    addForm.setPaidById(""); addForm.setPayerIds([]); addForm.setPayerAmounts({}); addForm.setPayerIncomeSourceIds({});
-    addForm.setIncomeSourceId(null); addForm.setOtherIncomeSourceLabel(null); addForm.setIsRecurring(false);
-    addForm.setAccountId(null);
-    addForm.setDate(today);
-    setAddNewSource(false); setNewSourceName("");
-    setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
-    setNewCategoryRecurring(true); setNewCategoryPriority("3"); setNewCategoryAddToBudget(false);
-    setAllowMixedFunding(false);
-    setSaveOtherAsCategory(false);
-    setIsAddingBankAccount(false); setNewBankAccountName("");
-    setIsAdding(false);
-  };
-
-  const startEdit = (expense: Expense) => {
-    if (!canEditExpense(expense)) {
-      toast({
-        variant: "destructive",
-        title: "You cannot edit this expense",
-        description: "Members can edit only their own personal expenses dated today.",
-      });
-      return;
-    }
-    const personalSplit = expense.incomeSplits?.find((split) => !split.fromBank);
-    const allFundingIsBank = expense.incomeSplits?.length
-      ? expense.incomeSplits.every((split) => split.fromBank)
-      : false;
-    const paidFromBank = expense.paidFromBank === true || allFundingIsBank;
-    const bankSplit = expense.incomeSplits?.find((split) => split.fromBank);
-    const hasBankFunding = paidFromBank || !!bankSplit;
-
-    editForm.setAmount(expense.amount.toString());
-    editForm.setCategory(expense.category);
-    editForm.setDescription(expense.description);
-    editForm.setNotes(expense.notes ?? "");
-    editForm.setPaidById(paidFromBank ? "" : (expense.paidById ?? personalSplit?.userId ?? ""));
-    editForm.setIncomeSourceId(
-      paidFromBank ? null : (personalSplit?.incomeSourceId ?? expense.incomeSourceId ?? null),
-    );
-    editForm.setOtherIncomeSourceLabel(
-      !paidFromBank && personalSplit?.label ? personalSplit.label : null,
-    );
-    editForm.setPaidFromBank(paidFromBank);
-    editForm.setAccountId(expense.accountId ?? bankSplit?.accountId ?? null);
-    setEditHasMultipleFundingSplits((expense.incomeSplits?.length ?? 0) > 1);
-    setEditHasBankFunding(hasBankFunding);
-    editForm.setIsRecurring(expense.isRecurring);
-    editForm.setDate(expense.date);
-    setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
-    setNewCategoryRecurring(true); setNewCategoryPriority("3"); setNewCategoryAddToBudget(false);
-    setAllowMixedFunding(false);
-    setSaveOtherAsCategory(false);
-    setEditingId(expense.id);
-    setIsAdding(false);
-  };
-
-  useEffect(() => {
-    if (editingId === null || !editForm.otherIncomeSourceLabel || !editFormSources) return;
-
-    const matchingSource = editFormSources.find(
-      (source) => source.id === editForm.incomeSourceId,
-    ) ?? editFormSources.find(
-      (source) => source.name === editForm.otherIncomeSourceLabel,
-    );
-    if (!matchingSource) {
-      editForm.setIncomeSourceId(null);
-      return;
-    }
-
-    editForm.setIncomeSourceId(matchingSource.id);
-    editForm.setOtherIncomeSourceLabel(null);
-  }, [editingId, editForm.incomeSourceId, editForm.otherIncomeSourceLabel, editFormSources]);
-
-  useEffect(() => {
-    if (!expenseDeepLink.editId || !expenses || editingId === expenseDeepLink.editId) return;
-    const target = expenses.find((expense) => expense.id === expenseDeepLink.editId);
-    if (!target) return;
-
-    startEdit(target);
-  }, [expenses, editingId, expenseDeepLink.editId]);
-
-  const clearEditDeepLink = () => {
-    const params = new URLSearchParams(window.location.search);
-    params.delete("edit");
-    const search = params.toString();
-    window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
-  };
-
-  const updateLedgerFilter = (next: { payerId?: string | null; category?: string | null }) => {
-    const filter = {
-      payerId: next.payerId ?? null,
-      category: next.category ?? null,
-    };
-    setLedgerFilter(filter);
-    const params = new URLSearchParams(window.location.search);
-    params.delete("edit");
-    if (filter.payerId) params.set("payer", filter.payerId);
-    else params.delete("payer");
-    if (filter.category) params.set("category", filter.category);
-    else params.delete("category");
-    const search = params.toString();
-    window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}#expense-ledger`);
-    window.setTimeout(() => {
-      document.getElementById("expense-ledger")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
-  };
-
-  const cancelEdit = () => {
-    setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
-    setNewCategoryRecurring(true); setNewCategoryPriority("3"); setNewCategoryAddToBudget(false);
-    setAllowMixedFunding(false);
-    setEditingId(null);
-    setEditHasBankFunding(false);
-    clearEditDeepLink();
-  };
-
-  const handleQuickCreateCategory = async (form: ReturnType<typeof useExpenseForm>) => {
-    const name = newCategoryName.trim();
-    if (!name) {
-      toast({
-        variant: "destructive",
-        title: "Category name required",
-        description: "Give this spending a clear name, such as Transport or Childcare.",
-      });
-      return;
-    }
-    if ((categories ?? []).some((category) => category.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
-      toast({
-        variant: "destructive",
-        title: "Category already exists",
-        description: "Select the existing category from the list instead.",
-      });
-      return;
-    }
-    if (getNewExpenseCategoryMode({
-      addToBudget: newCategoryAddToBudget,
-      canManageCategories,
-    }) === "unbudgeted") {
-      form.setCategory(name);
-      setIsCreatingCategory(false);
-      setNewCategoryName("");
-      setNewCategoryBudget("");
-      setNewCategoryRecurring(true);
-      setNewCategoryPriority("3");
-      setNewCategoryAddToBudget(false);
-      toast({
-        title: "Unbudgeted category selected",
-        description: `${name} will be recorded without changing the monthly budget.`,
-      });
-      return;
-    }
-
-    const budgetAmount = Number(newCategoryBudget);
-    const priority = Number(newCategoryPriority);
-    const [expenseYear, expenseMonth] = form.date.split("-").map(Number);
-    if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
-      toast({ variant: "destructive", title: "Enter a valid monthly budget", description: "Use a whole number of KES or zero." });
-      return;
-    }
-    if (!Number.isInteger(priority) || priority < 1 || priority > 5) {
-      toast({ variant: "destructive", title: "Choose a valid priority", description: "Select a priority from 1 (must-pay) to 5 (flexible)." });
-      return;
-    }
-
-    try {
-      const category = await createCategory.mutateAsync({
-        data: {
-          name: newCategoryName.trim(),
-          budgetAmount,
-          priority,
-          isRecurring: newCategoryRecurring,
-          activeMonth: newCategoryRecurring ? null : expenseMonth,
-          activeYear: newCategoryRecurring ? null : expenseYear,
-        },
-      });
-      form.setCategory(category.name);
-      setIsCreatingCategory(false);
-      setNewCategoryName("");
-      setNewCategoryBudget("");
-      setNewCategoryRecurring(true);
-      setNewCategoryPriority("3");
-      setNewCategoryAddToBudget(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: ["budget-categories-full"] }),
-      ]);
-      toast({ title: "Category created", description: `${category.name} is ready to use.` });
-    } catch (error) {
-      const duplicate = error instanceof ApiError && error.status === 409;
-      toast({
-        variant: "destructive",
-        title: duplicate ? "Category name already used" : "Could not create category",
-        description: duplicate
-          ? "Choose a different name or select the existing category from the list."
-          : "Check the category details and try again.",
-      });
-    }
-  };
-
-  const chooseCategory = (form: ReturnType<typeof useExpenseForm>, value: string) => {
-    form.setCategory(value);
-    if (value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
-    if (!canManageCategories) {
-      setIsCreatingCategory(false);
-      return;
-    }
-    if (value !== "Other") {
-      setIsCreatingCategory(false);
-      return;
-    }
-    setIsCreatingCategory(false);
-    setNewCategoryName("");
-    setNewCategoryBudget("");
-    setNewCategoryRecurring(true);
-    setNewCategoryPriority("3");
-    setNewCategoryAddToBudget(false);
-    setIsCreatingCategory(true);
-  };
-
-  const handleAddBankAccount = async (form: ReturnType<typeof useExpenseForm>) => {
-    const name = newBankAccountName.trim();
-    const accountNumber = newBankAccountNumber.trim();
-    const openingBalance = Number(newBankOpeningBalance || 0);
-    if (!name) {
-      toast({ variant: "destructive", title: "Account name required", description: "Enter a name for this bank account." });
-      return;
-    }
-    try {
-      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("Opening balance must be zero or more whole shillings.");
-      const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
-      form.setAccountId(created.id);
-      setNewBankAccountName("");
-      setNewBankAccountNumber("");
-      setNewBankOpeningBalance("");
-      setIsAddingBankAccount(false);
-      await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
-      toast({ title: "Bank account added", description: `${created.name} is selected for this expense.` });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Could not add bank account",
-        description: error instanceof Error ? error.message : "Check the account name and try again.",
-      });
-    }
-  };
-
-  const handleAddNewSource = async (paidById: string) => {
-    if (!newSourceName.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Source name required",
-        description: "Enter a name before adding the income source.",
-      });
-      return;
-    }
-    try {
-      const res = await fetch("/api/income-sources", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: paidById, name: newSourceName.trim(), isMain: false }),
-      });
-      if (res.ok) {
-        const src: IncomeSource = await res.json();
-        addForm.setIncomeSourceId(src.id);
-        addForm.setPayerIncomeSourceIds(prev => ({ ...prev, [paidById]: src.id }));
-        setNewSourceName("");
-        setAddNewSource(false);
-        refetchAddSources();
-        toast({ title: "Income source added" });
-      }
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not add income source." });
-    }
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const payerIds = addForm.payerIds.length > 0
-      ? addForm.payerIds
-      : (memberPayerId ? [memberPayerId] : []);
-    const sourceCount = payerIds.length + (addForm.paidFromBank ? 1 : 0);
-    const isSplitPayment = sourceCount > 1;
-    const effectivePaidById = payerIds[0] ?? addForm.paidById;
-    if (!addForm.amount) {
-      toast({
-        variant: "destructive",
-        title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
-      });
-      return;
-    }
-    const amount = Number(addForm.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast({
-        variant: "destructive",
-        title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
-      });
-      return;
-    }
-    if (!Number.isInteger(amount)) {
-      toast({
-        variant: "destructive",
-        title: "Enter a whole KES amount",
-        description: "Expenses are recorded in whole shillings.",
-      });
-      return;
-    }
-    if (
-      addForm.category.trim().toLocaleLowerCase() === "other" &&
-      addForm.notes.trim().length < 3
-    ) {
-      toast({
-        variant: "destructive",
-        title: "Note required",
-        description: "Add a note explaining what this Other expense was for.",
-      });
-      return;
-    }
-    if (!addForm.category || !addForm.description || !addForm.date) {
-      toast({
-        variant: "destructive",
-        title: "Complete the expense details",
-        description: "Add an amount, category, description, and date before saving.",
-      });
-      return;
-    }
-    if (!effectivePaidById && !addForm.paidFromBank) {
-      toast({
-        variant: "destructive",
-        title: "Choose who paid",
-        description: "Select a payer before saving this expense.",
-      });
-      return;
-    }
-    if (addForm.paidFromBank && !addForm.accountId) {
-      toast({
-        variant: "destructive",
-        title: "Choose a bank account",
-        description: "Select the account whose recorded deposits funded the bank portion.",
-      });
-      return;
-    }
-    if (!addForm.paidFromBank) {
-      const missingSource = hasMissingPersonalFundingSource({
-        payerIds,
-        isSplitPayment,
-        incomeSourceId: addForm.incomeSourceId,
-        payerIncomeSourceIds: addForm.payerIncomeSourceIds,
-      });
-      if (missingSource) {
-        toast({
-          variant: "destructive",
-          title: "Income source required",
-          description: "Choose the saved income stream that funded every direct-payment portion.",
-        });
-        return;
-      }
-    }
-    if (sourceCount === 1) {
-      const sourceAmount = Number(
-        addForm.paidFromBank
-          ? addForm.payerAmounts.__joint_bank__
-          : addForm.payerAmounts[payerIds[0]],
-      );
-      if (!Number.isInteger(sourceAmount) || sourceAmount <= 0) {
-        toast({
-          variant: "destructive",
-          title: "Enter the funding amount",
-          description: "Enter how much came from the selected funding source.",
-        });
-        return;
-      }
-      if (sourceAmount !== amount) {
-        const remaining = amount - sourceAmount;
-        toast({
-          variant: "destructive",
-          title: remaining > 0 ? "Add another funding source" : "Funding exceeds the expense",
-          description: remaining > 0
-            ? `${formatKes(remaining)} is still unfunded. Select another payer or add a bank-account portion.`
-            : `Reduce the funding amount by ${formatKes(Math.abs(remaining))}.`,
-        });
-        return;
-      }
-    }
-    if (isSplitPayment) {
-      const total = amount;
-      if (
-        payerIds.some((id) => Number(addForm.payerAmounts[id] || 0) <= 0) ||
-        (addForm.paidFromBank && Number(addForm.payerAmounts.__joint_bank__ || 0) <= 0)
-      ) {
-        toast({
-          variant: "destructive",
-          title: "Enter every funding portion",
-          description: "Each direct-payment and bank-deposit portion must be greater than zero.",
-        });
-        return;
-      }
-      const splitTotal = payerIds.reduce((s, id) => s + Number(addForm.payerAmounts[id] || 0), 0)
-        + (addForm.paidFromBank ? Number(addForm.payerAmounts.__joint_bank__ || 0) : 0);
-      if (!Number.isInteger(total) || splitTotal !== total) {
-        toast({ variant: "destructive", title: "Amounts don't add up", description: `Portions total ${splitTotal} but expense is ${total}.` });
-        return;
-      }
-    }
-    let expenseCategory = addForm.category;
-    try {
-      if (addForm.category.trim().toLocaleLowerCase() === "other" && saveOtherAsCategory) {
-        const existingCategory = (categories ?? []).find(
-          (item) => item.name.trim().toLocaleLowerCase() === addForm.description.trim().toLocaleLowerCase(),
-        );
-        if (existingCategory) {
-          expenseCategory = existingCategory.name;
-        } else {
-          const createdCategory = await createCategory.mutateAsync({
-            data: { name: addForm.description.trim(), budgetAmount: 0, priority: 3, isRecurring: true },
-          });
-          expenseCategory = createdCategory.name;
-          await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
-        }
-      }
-      const incomeSplits = isSplitPayment
-        ? [
-          ...(addForm.paidFromBank ? [{ amount: Number(addForm.payerAmounts.__joint_bank__ || 0), fromBank: true, userId: null, label: isPersonalBudget ? "Personal bank" : "Shared bank", accountId: addForm.accountId! }] : []),
-          ...payerIds.map((userId) => ({
-            userId, amount: Number(addForm.payerAmounts[userId] || 0), fromBank: false,
-            label: (members ?? []).find((member) => member.userId === userId)?.userName?.split(" ")[0] ?? "Member",
-            incomeSourceId: addForm.payerIncomeSourceIds[userId]!,
-          })),
-        ]
-        : undefined;
-      await createExpense.mutateAsync({
-        data: {
-           amount, category: expenseCategory,
-          description: addForm.description, notes: addForm.notes || undefined,
-          paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
-          isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
-          ...(addForm.paidFromBank ? { accountId: addForm.accountId! } : {}),
-          ...(addForm.incomeSourceId && !isSplitPayment ? { incomeSourceId: addForm.incomeSourceId } : {}),
-          ...(incomeSplits ? { incomeSplits } : {}),
-        } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
-      });
-      toast({ title: "Expense recorded" });
-      resetAdd();
-      invalidate();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Failed to record expense." });
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent, id: number) => {
-    e.preventDefault();
-    if (!editForm.amount) {
-      toast({
-        variant: "destructive",
-        title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
-      });
-      return;
-    }
-    const amount = Number(editForm.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast({
-        variant: "destructive",
-        title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
-      });
-      return;
-    }
-    if (!Number.isInteger(amount)) {
-      toast({
-        variant: "destructive",
-        title: "Enter a whole KES amount",
-        description: "Expenses are recorded in whole shillings.",
-      });
-      return;
-    }
-    if (
-      editForm.category.trim().toLocaleLowerCase() === "other" &&
-      editForm.notes.trim().length < 3
-    ) {
-      toast({
-        variant: "destructive",
-        title: "Note required",
-        description: "Add a note explaining what this Other expense was for.",
-      });
-      return;
-    }
-    if (!editForm.category || !editForm.description || !editForm.date) {
-      toast({
-        variant: "destructive",
-        title: "Complete the expense details",
-        description: "Add an amount, category, description, and date before saving.",
-      });
-      return;
-    }
-    if (!editForm.paidById && !editForm.paidFromBank) {
-      toast({
-        variant: "destructive",
-        title: "Choose who paid",
-        description: isPersonalBudget
-          ? "Choose how this Personal expense was funded."
-          : "Select a payer or Shared bank before saving this expense.",
-      });
-      return;
-    }
-    if ((editForm.paidFromBank || editHasBankFunding) && !editForm.accountId) {
-      toast({
-        variant: "destructive",
-        title: "Choose a bank account",
-        description: "Select the account that funded this Joint-bank expense.",
-      });
-      return;
-    }
-    if (!editForm.paidFromBank && !editHasMultipleFundingSplits && !editForm.incomeSourceId) {
-      toast({
-        variant: "destructive",
-        title: "Income source required",
-        description: "Choose a saved income source before saving this personal expense.",
-      });
-      return;
-    }
-    const selectedSource = editFormSources?.find((source) => source.id === editForm.incomeSourceId);
-    const fundingSplits = editForm.paidFromBank
-      ? [{ userId: null, label: isPersonalBudget ? "Personal bank" : "Shared bank", amount, fromBank: true, accountId: editForm.accountId! }]
-      : !editHasMultipleFundingSplits && editForm.incomeSourceId
-        ? [{
-          userId: editForm.paidById,
-          label: selectedSource?.name || "Household member",
-          amount,
-          fromBank: false,
-          incomeSourceId: editForm.incomeSourceId,
-        }]
-        : undefined;
-    try {
-      await updateExpense.mutateAsync({
-        id,
-        data: {
-          amount,
-          category: editForm.category,
-          description: editForm.description,
-          notes: editForm.notes || undefined,
-          paidById: editForm.paidById || undefined,
-          isRecurring: editForm.isRecurring,
-          date: editForm.date,
-          paidFromBank: editForm.paidFromBank,
-          ...(editForm.paidFromBank || editHasBankFunding ? { accountId: editForm.accountId! } : {}),
-          ...(!editHasMultipleFundingSplits && editForm.incomeSourceId
-            ? { incomeSourceId: editForm.incomeSourceId }
-            : {}),
-          ...(fundingSplits ? { incomeSplits: fundingSplits } : {}),
-        } as Parameters<typeof updateExpense.mutateAsync>[0]["data"]
-      });
-      toast({ title: "Expense updated" });
-      setEditingId(null);
-      setEditHasBankFunding(false);
-      clearEditDeepLink();
-      invalidate();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Failed to update expense." });
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!canManageExpenses) {
-      toast({
-        variant: "destructive",
-        title: "Only admins can delete expenses",
-        description: "Ask an admin or owner to remove this expense.",
-      });
-      return;
-    }
-    try {
-      await deleteExpense.mutateAsync({ id });
-      toast({ title: "Expense deleted" });
-      setDeleteTarget(null);
-      if (editingId === id) {
-        setEditingId(null);
-        clearEditDeepLink();
-      }
-      invalidate();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete expense." });
-    }
-  };
-
-  const handleApplyRecurring = async () => {
-    try {
-      const result = await applyRecurring.mutateAsync({ data: { month, year } });
-      toast({ title: `${result.copied} recurring expense${result.copied === 1 ? "" : "s"} applied` });
-      invalidate();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not apply recurring expenses." });
-    }
-  };
-
-  const expenseFormFields = (
-    form: ReturnType<typeof useExpenseForm>,
-    isPending: boolean,
-    onSubmit: (e: React.FormEvent) => void,
-    onCancel: () => void,
-    title: string,
-    submitLabel: string,
-    mode: "add" | "edit",
-  ) => (
-    <form onSubmit={onSubmit} noValidate className="space-y-5 sm:space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-4">
-        <h3 className="text-lg sm:text-xl font-bold font-display text-foreground">{title}</h3>
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
-          <Input type="number" placeholder="e.g. 5000" value={form.amount} onChange={e => form.setAmount(e.target.value)}
-            required min="1" className="h-12 text-lg bg-card" />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Category</label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <select
-              className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-              aria-label="Expense category"
-              value={form.category}
-              onChange={e => chooseCategory(form, e.target.value)}
-              required
-            >
-              <option value="" disabled>Select category...</option>
-               {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-               {!(categories ?? []).some(c => c.name.trim().toLocaleLowerCase() === "other") && <option value="Other">Other</option>}
-            </select>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-12 w-full shrink-0 border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
-              onClick={() => {
-                form.setCategory("");
-                setIsCreatingCategory((open) => !open);
-                setNewCategoryAddToBudget(false);
-              }}
-              aria-expanded={isCreatingCategory}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add category
-            </Button>
-          </div>
-          {isCreatingCategory && (
-            <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-foreground">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Name this expense category</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Emergencies and one-off spending can stay unbudgeted. You can also add the category to the monthly budget.</p>
-              </div>
-              <Input
-                placeholder="e.g. Emergency repair"
-                value={newCategoryName}
-                onChange={(event) => setNewCategoryName(event.target.value)}
-                aria-label="New category name"
-                className="h-10 border-input bg-card text-foreground placeholder:text-muted-foreground"
-              />
-              {canManageCategories ? (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">Add this category to the budget?</p>
-                    <p className="text-xs text-muted-foreground">
-                      {newCategoryAddToBudget ? "Set its budget details below." : "No — record it as unbudgeted spending."}
-                    </p>
-                  </div>
-                  <Switch checked={newCategoryAddToBudget} onCheckedChange={setNewCategoryAddToBudget} aria-label="Add category to budget" />
-                </div>
-              ) : (
-                <p className="rounded-lg border border-border/70 bg-card px-3 py-2 text-xs text-muted-foreground">
-                  This will be recorded without changing the Shared budget. An owner or admin can add it to the budget later.
-                </p>
-              )}
-              {newCategoryAddToBudget && canManageCategories && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="Monthly KES"
-                  value={newCategoryBudget}
-                  onChange={(event) => setNewCategoryBudget(event.target.value)}
-                  aria-label="New category monthly budget in KES"
-                  className="h-10 border-input bg-card text-foreground placeholder:text-muted-foreground"
-                />
-                <label className="space-y-1 text-xs font-semibold text-foreground">
-                  Priority
-                  <select
-                    value={newCategoryPriority}
-                    onChange={(event) => setNewCategoryPriority(event.target.value)}
-                    aria-label="New category priority"
-                    className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground"
-                  >
-                    <option value="1">1 · Must-pay</option>
-                    <option value="2">2 · Important</option>
-                    <option value="3">3 · Everyday</option>
-                    <option value="4">4 · Lower priority</option>
-                    <option value="5">5 · Flexible</option>
-                  </select>
-                </label>
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-foreground">Recurring</p>
-                    <p className="text-xs text-muted-foreground">
-                      {newCategoryRecurring
-                        ? "Available every month"
-                        : `Only for ${formatMonthYear(Number(form.date.slice(5, 7)), Number(form.date.slice(0, 4)))}`}
-                    </p>
-                  </div>
-                  <Switch checked={newCategoryRecurring} onCheckedChange={setNewCategoryRecurring} aria-label="New category recurring" />
-                </div>
-                </div>
-              )}
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-10 w-full sm:w-auto"
-                  onClick={() => handleQuickCreateCategory(form)}
-                  disabled={createCategory.isPending}
-                >
-                  {createCategory.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {newCategoryAddToBudget && canManageCategories ? "Add to budget" : "Use without budget"}
-                </Button>
-                <button
-                type="button"
-                onClick={() => {
-                  form.setCategory("");
-                  setIsCreatingCategory(false);
-                  setNewCategoryName("");
-                  setNewCategoryBudget("");
-                  setNewCategoryRecurring(true);
-                  setNewCategoryPriority("3");
-                  setNewCategoryAddToBudget(false);
-                }}
-                className="h-10 rounded-md px-3 text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                Cancel
-              </button>
-              </div>
+  aria-label={`Allocation amount ${index + 1}`} className="h-10 w-28" />
+                 {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>}
+               </div>
+             ))}
+             {(() => {
+               const allocated = form.categoryAllocations.reduce((total, allocation) => total + (Number(allocation.amount) || 0), 0);
+               const difference = (Number(form.amount) || 0) - allocated;
+               return <p className={`text-xs ${difference === 0 && allocated > 0 ? "text-primary" : "text-muted-foreground"}`} data-testid={`category-allocation-total-${mode}`}>
+                 Allocated: {formatKes(allocated)} · {difference === 0 && allocated > 0 ? "Exactly allocated" : difference > 0 ? `${formatKes(difference)} remaining` : `${formatKes(Math.abs(difference))} excess`}
+               </p>;
+              })()}
             </div>
-          )}
-          {form.category && (() => {
-            const cat = breakdown?.find(b => b.category === form.category);
-            return cat ? (
-              <p className="flex flex-col gap-0.5 text-xs text-muted-foreground pt-1 sm:block">
-                Spent this month: <span className="font-semibold text-foreground">{formatKes(cat.spentAmount)}</span>
-                <span className="hidden mx-1 sm:inline">·</span>
-                <span className={cat.spentAmount >= cat.budgetAmount ? "text-destructive font-semibold" : ""}>
-                  {formatKes(Math.max(0, cat.budgetAmount - cat.spentAmount))} remaining of {formatKes(cat.budgetAmount)}
-                </span>
-              </p>
-            ) : null;
-          })()}
-        </div>
+            )}
+         </div>
 
-        <div className="space-y-2 md:col-span-2">
-           <label className="text-sm font-semibold text-foreground">
-             {form.category.trim().toLocaleLowerCase() === "other" ? "Brief description" : "Description"}
-           </label>
-           <Input value={form.description}
-             onChange={e => form.setDescription(e.target.value)}
-             placeholder={form.category.trim().toLocaleLowerCase() === "other" ? "Briefly describe this expense" : "e.g. Nathan's Term 2 school fees"}
-             maxLength={form.category.trim().toLocaleLowerCase() === "other" ? 120 : undefined}
-             required className="h-12 bg-card" />
-           {form.category.trim().toLocaleLowerCase() === "other" && (
-             <p className="text-xs text-muted-foreground">Briefly explain what this Other expense covered.</p>
-           )}
-           {mode === "add" && canManageCategories && form.category.trim().toLocaleLowerCase() === "other" && (
-             <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-               <input
-                 type="checkbox"
-                 checked={saveOtherAsCategory}
-                 onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
-                 className="mt-0.5 h-4 w-4 accent-primary"
-               />
-               <span>
-                 <span className="font-semibold">Save this as a category for future expenses</span>
-                 <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
-               </span>
+          {!form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (
+           <div className="space-y-2 md:col-span-2">
+             <label className="text-sm font-semibold text-foreground">Description</label>
+             <Input value={form.description}
+               onChange={e => form.setDescription(e.target.value)}
+               placeholder="e.g. Nathan's Term 2 school fees"
+               required className="h-12 bg-card" />
+           </div>
+         )}
+
+          {!form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (
+           <div className="space-y-2 md:col-span-2">
+             <label className="text-sm font-semibold text-foreground">
+               Notes <span className="font-normal text-muted-foreground">(optional)</span>
              </label>
-           )}
-        </div>
-
-        <div className="space-y-2 md:col-span-2">
-           <label className="text-sm font-semibold text-foreground">
-             Notes <span className={form.category.trim().toLocaleLowerCase() === "other" ? "text-destructive" : "font-normal text-muted-foreground"}>
-               {form.category.trim().toLocaleLowerCase() === "other" ? "*" : "(optional)"}
-             </span>
-           </label>
-          <Input placeholder="Any extra details..." value={form.notes ?? ""}
-             onChange={e => form.setNotes(e.target.value)}
-             required={form.category.trim().toLocaleLowerCase() === "other"}
-             className="h-12 bg-card" />
-        </div>
+             <Input
+               placeholder="Any extra details..."
+               value={form.notes ?? ""}
+               onChange={e => form.setNotes(e.target.value)}
+               className="h-12 bg-card"
+             />
+           </div>
+         )}
 
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">Date</label>
@@ -1185,19 +85,17 @@ export default function Expenses() {
               }}
               className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
             >
-              🏦 {isPersonalBudget ? "Personal bank account" : "Shared bank account"}
+              🏦 Bank account
             </button>
             )}
             {!isPersonalBudget && (canManageExpenses ? (members ?? []) : (members ?? []).filter((member) => member.userId === user?.id)).map((m) => {
               const name = m.userName?.split(" ")[0] ?? "Member";
               const isMultiEnabled = mode === "add";
               const selected = isMultiEnabled ? form.payerIds.includes(m.userId) : form.paidById === m.userId;
-              const sourceLimitReached = !selected
-                && form.payerIds.length >= (form.paidFromBank ? 1 : 2);
               return (
                 <button
                   key={m.userId} type="button"
-                  disabled={sourceLimitReached || getExpenseFundingControlState({
+                  disabled={getExpenseFundingControlState({
                     paidFromBank: form.paidFromBank,
                     hasPersonalFunding: form.payerIds.length > 0,
                     allowMixedFunding,
@@ -1206,7 +104,6 @@ export default function Expenses() {
                     form.setIncomeSourceId(null);
                     form.setOtherIncomeSourceLabel(null);
                     if (isMultiEnabled) {
-                      if (sourceLimitReached) return;
                       if (!selected) {
                         form.setPayerAmounts((previous) => addFundingSourceWithRemainder({
                           total: Number(form.amount),
@@ -1275,7 +172,7 @@ export default function Expenses() {
                     autoFocus
                     value={newBankAccountName}
                     onChange={(event) => setNewBankAccountName(event.target.value)}
-                    placeholder="e.g. M-Pesa Till or Main account"
+                    placeholder="e.g. M-Pesa wallet or KCB account"
                     className="h-10 bg-card"
                   />
                   <Input value={newBankAccountNumber} onChange={(event) => setNewBankAccountNumber(event.target.value)} placeholder="Account number (optional)" className="h-10 bg-card" />
@@ -1339,8 +236,8 @@ export default function Expenses() {
               <p className="text-xs leading-relaxed text-muted-foreground">
                 This uses money already recorded in the selected account as an opening balance or deposit.
               </p>
-            </div>
-          )}
+             </div>
+           )}
           {getExpenseFundingControlState({
             paidFromBank: form.paidFromBank,
             hasPersonalFunding: form.payerIds.length > 0,
@@ -1372,7 +269,7 @@ export default function Expenses() {
           )}
           {mode === "add" && form.payerIds.length === 0 && !form.paidFromBank && (
             <p className="text-xs text-muted-foreground">
-              {isPersonalBudget ? "Choose an income source below." : canManageExpenses ? "Choose who paid, or select Shared bank account." : "Choose yourself to record this expense."}
+              {isPersonalBudget ? "Choose an income source below." : canManageExpenses ? "Choose who paid, or select a bank account." : "Choose yourself to record this expense."}
             </p>
           )}
           {mode === "edit" && !form.paidById && !form.paidFromBank && (
@@ -1392,7 +289,9 @@ export default function Expenses() {
                 </p>
                  {form.paidFromBank && (
                    <div className="flex items-center gap-3">
-                     <span className="text-sm font-semibold w-20 shrink-0">{isPersonalBudget ? "Personal bank" : "Shared bank"}</span>
+                     <span className="text-sm font-semibold w-20 shrink-0">
+                       {bankAccounts.find((account) => account.id === form.accountId)?.name ?? "Bank account"}
+                     </span>
                      <input type="number" placeholder="0" min="0" step="1"
                        value={form.payerAmounts.__joint_bank__ ?? ""}
                        onChange={e => {
@@ -1469,24 +368,39 @@ export default function Expenses() {
           })()}
         </div>
 
-        {/* Income source picker — shown when a single named payer is chosen */}
+          {/* Financed by — only shown inside the paid-directly path */}
          {getExpenseFundingControlState({
            paidFromBank: form.paidFromBank,
            hasPersonalFunding: mode === "add" ? form.payerIds.length === 1 : !!form.paidById,
            allowMixedFunding,
          }).showPersonalIncomeSources && (
-          <div className="md:col-span-2 space-y-2">
-            <label className="text-sm font-semibold text-foreground">
-              Paid from <span className="text-destructive">*</span>
-            </label>
+           <div className="md:col-span-2 space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+             <div>
+               <p className="text-sm font-semibold text-foreground">Paid directly</p>
+               <p className="mt-1 text-xs text-muted-foreground">This expense does not reduce a bank-account balance.</p>
+             </div>
+             <label className="text-sm font-semibold text-foreground">
+               Financed by <span className="text-destructive">*</span>
+             </label>
             <select
               disabled={mode === "edit" && editHasMultipleFundingSplits}
               className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              value={form.otherIncomeSourceLabel !== null ? "legacy" : (form.incomeSourceId?.toString() ?? "")}
+               value={mode === "add" && isPersonalBudget ? "" : (form.otherIncomeSourceLabel !== null ? "legacy" : (form.incomeSourceId?.toString() ?? ""))}
               onChange={e => {
                 const value = e.target.value;
-                form.setIncomeSourceId(value ? Number(value) : null);
+                 const sourceId = value ? Number(value) : null;
+                 form.setIncomeSourceId(sourceId);
                 form.setOtherIncomeSourceLabel(null);
+                 if (mode === "add" && isPersonalBudget && sourceId && !addDirectSourceIds.includes(sourceId)) {
+                   const key = String(sourceId);
+                   setAddDirectSourceAmounts((previous) => addFundingSourceWithRemainder({
+                     total: Number(form.amount),
+                     selectedSourceIds: addDirectSourceIds.map(String),
+                     newSourceId: key,
+                     amounts: previous,
+                   }));
+                   setAddDirectSourceIds((previous) => [...previous, sourceId]);
+                 }
                 if (mode === "add" && form.payerIds[0]) {
                   form.setPayerIncomeSourceIds(prev => ({
                     ...prev,
@@ -1496,17 +410,89 @@ export default function Expenses() {
               }}
               required
             >
-              <option value="" disabled>Select an income source...</option>
+               <option value="" disabled>{mode === "add" && isPersonalBudget && addDirectSourceIds.length > 0 ? "Add another income source..." : "Select an income source..."}</option>
               {mode === "edit" && form.otherIncomeSourceLabel !== null && (
                 <option value="legacy" disabled>
                   Historical source: {form.otherIncomeSourceLabel || "choose a saved source"}
                 </option>
               )}
-              {(mode === "add" ? addFormSources : editFormSources)?.map(src => (
-                <option key={src.id} value={src.id}>{src.name}</option>
+               {(mode === "add" ? addFormSources : editFormSources)?.map(src => (
+                 <option key={src.id} value={src.id} disabled={mode === "add" && isPersonalBudget && addDirectSourceIds.includes(src.id)}>
+                   {src.name}{mode === "add" && isPersonalBudget && addDirectSourceIds.includes(src.id) ? " — added" : ""}
+                 </option>
               ))}
             </select>
-             {mode === "add" && form.payerIds.length === 1 && !form.paidFromBank && form.incomeSourceId && (
+              {mode === "add" && isPersonalBudget && form.payerIds.length === 1 && !form.paidFromBank && addDirectSourceIds.length > 0 && (
+                <div className="space-y-2" data-testid="expense-direct-funding-portions">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Enter each portion. Add another income source as many times as needed until the expense is fully funded.
+                  </p>
+                  {addDirectSourceIds.map((sourceId) => {
+                    const source = addFormSources?.find((item) => item.id === sourceId);
+                    return (
+                      <div key={sourceId} className="flex items-center gap-2 rounded-lg border border-border/60 bg-card p-2">
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{source?.name ?? "Income source"}</span>
+                        <Input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={addDirectSourceAmounts[String(sourceId)] ?? ""}
+                          onChange={(event) => setAddDirectSourceAmounts((previous) => ({
+                            ...previous,
+                            [String(sourceId)]: event.target.value,
+                          }))}
+                          placeholder="KES 0"
+                          className="h-10 w-36 bg-card"
+                          required
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setAddDirectSourceIds((previous) => previous.filter((id) => id !== sourceId));
+                            setAddDirectSourceAmounts((previous) => {
+                              const next = { ...previous };
+                              delete next[String(sourceId)];
+                              return next;
+                            });
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const total = Number(form.amount) || 0;
+                    const assigned = addDirectSourceIds.reduce(
+                      (sum, sourceId) => sum + (Number(addDirectSourceAmounts[String(sourceId)]) || 0),
+                      0,
+                    );
+                    const difference = total - assigned;
+                    return total > 0 ? (
+                      <div
+                        role="status"
+                        data-testid="expense-funding-remainder"
+                        className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                          difference > 0
+                            ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                            : difference < 0
+                              ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                              : "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                        }`}
+                      >
+                        {difference > 0
+                          ? `${formatKes(difference)} remaining — choose another income source to continue.`
+                          : difference < 0
+                            ? `Overfunded by ${formatKes(Math.abs(difference))}.`
+                            : "Fully funded."}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+              {mode === "add" && !isPersonalBudget && form.payerIds.length === 1 && !form.paidFromBank && form.incomeSourceId && (
                <label className="block space-y-1.5 text-sm font-semibold text-foreground">
                   Type the amount from this source to confirm
                  <Input
@@ -1520,7 +506,7 @@ export default function Expenses() {
                     required
                  />
                   <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                   Enter this manually, even when it equals the expense total. If it is less, select another payer or bank account and Jamvi will fill the remainder.
+                   Type the amount from this source to confirm. If it is less, keep adding funding sources until the expense is fully funded.
                   </span>
                </label>
              )}
@@ -1556,7 +542,17 @@ export default function Expenses() {
 
         {canManageExpenses && (
         <div className="md:col-span-2 flex items-center gap-3 bg-card rounded-xl p-4 border border-border/50">
-          <input type="checkbox" id={`isRecurring-${title}`} checked={form.isRecurring} onChange={e => form.setIsRecurring(e.target.checked)}
+          <input type="checkbox" id={`isRecurring-${title}`} checked={form.isRecurring} onChange={e => {
+            if (!e.target.checked) {
+              form.setIsRecurring(false);
+              form.setRecurringMonthlyBudget("");
+              return;
+            }
+            if (window.confirm("Make this a recurring expense? Jamvi will take you to Budget to ask for the average monthly amount.")) {
+              openRecurringBudgetSetup(form, mode);
+              if (form.category.trim().toLocaleLowerCase() === "other") setSaveOtherAsCategory(true);
+            }
+          }}
             className="w-5 h-5 accent-primary rounded" />
           <div>
             <label htmlFor={`isRecurring-${title}`} className="text-sm font-semibold text-foreground cursor-pointer flex items-center gap-2">
@@ -1565,6 +561,13 @@ export default function Expenses() {
             <p className="text-xs text-muted-foreground mt-0.5">Mark to get a reminder to apply it next month (rent, fees, salaries…)</p>
           </div>
         </div>
+        )}
+        {canManageExpenses && form.isRecurring && (
+          <label className="md:col-span-2 block space-y-1.5 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm font-semibold text-foreground">
+            Monthly budget (KES) <span className="text-destructive">*</span>
+            <Input type="number" min="1" step="1" value={form.recurringMonthlyBudget} onChange={(event) => form.setRecurringMonthlyBudget(event.target.value)} placeholder="e.g. 15000" required className="h-12 bg-card" data-testid="recurring-monthly-budget" />
+            <span className="block text-xs font-normal text-muted-foreground">This becomes the recurring monthly budget for the selected category.</span>
+          </label>
         )}
       </div>
 
@@ -1946,16 +949,21 @@ export default function Expenses() {
                           <p className="text-sm text-muted-foreground mt-0.5 italic">"{expense.notes}"</p>
                         )}
                         <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                          <span className="px-2 py-0.5 bg-muted rounded text-xs font-medium">{expense.category}</span>
+                           <span className="px-2 py-0.5 bg-muted rounded text-xs font-medium">{expense.category}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
-                          <span>{expense.paidByName ?? `🏦 ${isPersonalBudget ? "Personal bank" : "Shared bank"}`}</span>
+                          <span>{expense.paidByName ?? `🏦 ${bankAccounts.find((account) => account.id === expense.accountId)?.name ?? "Bank account"}`}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
                           <span>{formatDate(expense.date)}</span>
                         </p>
+                         {expense.categoryAllocations && expense.categoryAllocations.length > 1 && (
+                           <p className="mt-1 text-xs text-muted-foreground" data-testid={`expense-category-breakdown-${expense.id}`}>
+                             Categories: {expense.categoryAllocations.map((allocation) => `${allocation.category}: ${formatKes(allocation.amount)}`).join(" · ")}
+                           </p>
+                         )}
                         {expense.incomeSplits && expense.incomeSplits.length > 0 && (
                           <p className="text-xs text-muted-foreground mt-1">
                             Funded by {expense.incomeSplits.map((split) =>
-                              `${split.fromBank ? (isPersonalBudget ? "Personal bank" : "Shared bank") : split.label}: ${formatKes(split.amount)}`
+                              `${split.fromBank ? (bankAccounts.find((account) => account.id === split.accountId)?.name ?? "Bank account") : split.label}: ${formatKes(split.amount)}`
                             ).join(" · ")}
                           </p>
                         )}

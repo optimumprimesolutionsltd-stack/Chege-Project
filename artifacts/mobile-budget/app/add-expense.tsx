@@ -1,965 +1,91 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  Switch,
-  ScrollView,
-  ActivityIndicator,
-  Platform,
-  Alert,
-} from 'react-native';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
-import * as Haptics from 'expo-haptics';
-import { useColors } from '@/hooks/useColors';
-import { useAuth } from '@/lib/auth';
-import {
-  useCreateExpense,
-  useUpdateExpense,
-  useDeleteExpense,
-  useGetExpenses,
-  useGetBudgetCategories,
-  useCreateBudgetCategory,
-  useGetMembers,
-  useGetGroup,
-  useGetJointAccounts,
-  useGetJointAccount,
-  useCreateJointAccount,
-  useGetDashboardCategoryBreakdown,
-  getGetExpensesQueryKey,
-  getGetDashboardActivityQueryKey,
-  getGetDashboardSummaryQueryKey,
-  getGetBudgetCategoriesQueryKey,
-  getGetJointAccountsQueryKey,
-  getGetDashboardCategoryBreakdownQueryKey,
-  getGetDashboardCategoryLedgerQueryKey,
-  getGetDashboardIncomeStreamsQueryKey,
-  getGetContributionsQueryKey,
-  customFetch,
-  ApiError,
-} from '@workspace/api-client-react';
-import { getCategoryIcon } from '@/lib/categoryIcons';
-import {
-  addFundingSourceWithRemainder,
-  buildSinglePayerFundingReplacement,
-  getExpenseFundingControlState,
-  getFundingRemainder,
-  getNewExpenseCategoryMode,
-  preserveExpenseSplitsForAmount,
-} from '@/lib/expenseFundingPreservation';
-
-const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
-type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
-type ExpenseRecord = {
-  id: number;
-  amount: number;
-  category: string;
-  description: string;
-  notes?: string | null;
-  paidById: string | null;
-  incomeSourceId?: number | null;
-  paidFromBank?: boolean;
-  accountId?: number | null;
-  incomeSplits?: {
-    userId?: string | null;
-    label?: string;
-    amount: number;
-    incomeSourceId?: number;
-    fromBank: boolean;
-    accountId?: number;
-  }[];
-  isRecurring: boolean;
-  date: string;
-};
-
-function getExpenseSaveError(error: unknown): string {
-  if (error instanceof ApiError) {
-    const responseError = error.data;
-    if (
-      responseError &&
-      typeof responseError === 'object' &&
-      'error' in responseError &&
-      typeof responseError.error === 'string'
-    ) {
-      return responseError.error;
-    }
-    if (error.status === 400) {
-      return 'The expense details were not accepted. Check the amount, payer, and funding source.';
-    }
-  }
-  return 'Failed to save expense. Please check your connection and try again.';
-}
-
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-
-function formatDateDisplay(iso: string): string {
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function incomeSourceKey(id: number): string {
-  return `source:${id}`;
-}
-
-function incomeSourceIdFromKey(key: string): number | null {
-  const match = /^source:(\d+)$/.exec(key);
-  return match ? Number(match[1]) : null;
-}
-
-export default function AddExpenseSheet() {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ edit?: string | string[]; month?: string | string[]; year?: string | string[] }>();
-  const editParam = Array.isArray(params.edit) ? params.edit[0] : params.edit;
-  const monthParam = Array.isArray(params.month) ? params.month[0] : params.month;
-  const yearParam = Array.isArray(params.year) ? params.year[0] : params.year;
-  const editId = editParam && /^\d+$/.test(editParam) ? Number(editParam) : null;
-  const editMonth = monthParam && /^(?:[1-9]|1[0-2])$/.test(monthParam)
-    ? Number(monthParam)
-    : new Date().getMonth() + 1;
-  const editYear = yearParam && /^\d{4}$/.test(yearParam)
-    ? Number(yearParam)
-    : new Date().getFullYear();
-  const isEditMode = editId !== null;
-
-  const categoriesQuery = useGetBudgetCategories();
-  const categories = categoriesQuery.data ?? [];
-  const { data: members = [] } = useGetMembers();
-  const { data: group } = useGetGroup();
-  const { data: bankAccounts = [] } = useGetJointAccounts();
-  const editExpensesQuery = useGetExpenses(
-    { month: editMonth, year: editYear },
-    { query: { queryKey: getGetExpensesQueryKey({ month: editMonth, year: editYear }), enabled: isEditMode } },
-  );
-  const editingExpense = ((editExpensesQuery.data ?? []) as ExpenseRecord[])
-    .find((expense) => expense.id === editId);
-  const canManageShared = group?.isPrivate === true
-    || group?.role === 'owner'
-    || group?.role === 'admin'
-    || members.some(
-      (member) =>
-        member.userId === user?.id &&
-        (member.role === 'owner' || member.role === 'admin'),
-    );
-  const isSharedWorkspace = group?.isPrivate === false;
-  const originalPersonalPayerId = editingExpense?.paidById
-    ?? editingExpense?.incomeSplits?.find((split) => !split.fromBank)?.userId
-    ?? null;
-  const originalHasBankFunding = editingExpense?.paidFromBank === true
-    || editingExpense?.incomeSplits?.some((split) => split.fromBank) === true;
-  const originalIsSelfFunded = !!user?.id
-    && originalPersonalPayerId === user.id
-    && !originalHasBankFunding
-    && editingExpense?.isRecurring !== true
-    && (editingExpense?.incomeSplits ?? []).every(
-      (split) => !split.fromBank && (!split.userId || split.userId === user.id),
-    );
-  const canEditExpense = !editingExpense
-    || canManageShared
-    || (isSharedWorkspace && editingExpense.date.slice(0, 10) === todayIso() && originalIsSelfFunded);
-  const canRemoveExpense = !!editingExpense
-    && (canManageShared || (!isSharedWorkspace && originalPersonalPayerId === user?.id));
-  const canManageCategories = members.some(
-    (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
-  );
-  const selectablePayers = canManageShared
-    ? members
-    : members.filter((member) => member.userId === user?.id);
-  const now = new Date();
-  const { data: breakdown } = useGetDashboardCategoryBreakdown({ month: now.getMonth() + 1, year: now.getFullYear() });
-
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [description, setDescription] = useState('');
-  const [notes, setNotes] = useState('');
-  const [payerIds, setPayerIds] = useState<string[]>([]);
-  const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
-  const [payerIncomeSourceIds, setPayerIncomeSourceIds] = useState<Record<string, number | null>>({});
-  const paidById = payerIds.length === 1 ? payerIds[0] : '';
-  const [isRecurring, setIsRecurring] = useState(false);
-  // Funding — joint bank toggle + personal income sources from DB
-  const [paidFromBank, setPaidFromBank] = useState(false);
-  const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | null>(null);
-  const [selectedSources, setSelectedSources] = useState<string[]>([]);
-  const [splitAmounts, setSplitAmounts] = useState<Record<string, string>>({});
-  const [newSourcePayerId, setNewSourcePayerId] = useState<string | null>(null);
-  const [newSourceName, setNewSourceName] = useState('');
-  const [isCreatingSource, setIsCreatingSource] = useState(false);
-  const [date, setDate] = useState(todayIso());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryBudget, setNewCategoryBudget] = useState('');
-  const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
-  const [newCategoryPriority, setNewCategoryPriority] = useState('3');
-  const [newCategoryAddToBudget, setNewCategoryAddToBudget] = useState(false);
-  const [allowMixedFunding, setAllowMixedFunding] = useState(false);
-  const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
-  const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
-  const [newBankAccountName, setNewBankAccountName] = useState('');
-  const [newBankAccountNumber, setNewBankAccountNumber] = useState('');
-  const [newBankOpeningBalance, setNewBankOpeningBalance] = useState('');
-  const [editHydratedForId, setEditHydratedForId] = useState<number | null>(null);
-  const [editFundingHydratedForId, setEditFundingHydratedForId] = useState<number | null>(null);
-  const [fundingDirty, setFundingDirty] = useState(false);
-  const { data: selectedBankAccount } = useGetJointAccount(
-    selectedBankAccountId ? { accountId: selectedBankAccountId } : undefined,
-  );
-  const enteredBankAmount = parseFloat(payerAmounts.__joint_bank__ || '0') || 0;
-  const originalBankAmount = editingExpense?.incomeSplits?.find((split) => split.fromBank)?.amount
-    ?? (editingExpense?.paidFromBank ? editingExpense.amount : 0);
-  const projectedExpenseBankBalance = paidFromBank &&
-    selectedBankAccount &&
-    enteredBankAmount > 0
-    ? selectedBankAccount.balance + originalBankAmount - enteredBankAmount
-    : null;
-
-  // Load this payer's income sources from DB
-  const { data: incomeSources = [], isLoading: sourcesLoading } = useQuery<IncomeSource[]>({
-    queryKey: ['income-sources', paidById],
-    queryFn: async () => {
-      if (!paidById) return [];
-      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${paidById}`);
-    },
-    enabled: !!paidById,
-    staleTime: 60_000,
-  });
-  const payerSourceIds = [...new Set(payerIds)].sort();
-  const { data: payerIncomeSources = {}, isLoading: payerSourcesLoading } = useQuery<Record<string, IncomeSource[]>>({
-    queryKey: ['income-sources', 'payers', payerSourceIds],
-    queryFn: async () => {
-      const entries = await Promise.all(payerSourceIds.map(async (userId) => {
-        const sources = await customFetch<IncomeSource[]>(`/api/income-sources?userId=${encodeURIComponent(userId)}`);
-        return [userId, sources] as const;
-      }));
-      return Object.fromEntries(entries);
-    },
-    enabled: payerSourceIds.length > 0,
-    staleTime: 60_000,
-  });
-
-  // Reset funding selections whenever the payer changes
-  useEffect(() => {
-    if (isEditMode) return;
-    if (!paidById) return;
-    setPaidFromBank(false);
-    setAllowMixedFunding(false);
-    setSelectedBankAccountId(null);
-    setSelectedSources([]);
-    setSplitAmounts({});
-    setPayerIncomeSourceIds({});
-    setNewSourcePayerId(null);
-    setNewSourceName('');
-  }, [isEditMode, paidById]);
-
-  useEffect(() => {
-    if (!canManageShared && user?.id) {
-      setPayerIds([user.id]);
-      setPaidFromBank(false);
-      setAllowMixedFunding(false);
-      setIsRecurring(false);
-    }
-  }, [canManageShared, user?.id]);
-
-  useEffect(() => {
-    if (canManageShared && !paidFromBank && payerIds.length === 0 && selectablePayers.length === 1) {
-      setPayerIds([selectablePayers[0].userId]);
-    }
-  }, [canManageShared, paidFromBank, payerIds.length, selectablePayers]);
-
-  useEffect(() => {
-    if (!editingExpense || editHydratedForId === editingExpense.id) return;
-
-    const storedSplits = editingExpense.incomeSplits ?? [];
-    const bankAmount = storedSplits
-      .filter((split) => split.fromBank)
-      .reduce((sum, split) => sum + split.amount, 0);
-    const personalAmounts: Record<string, string> = {};
-    const sourceIds: Record<string, number | null> = {};
-    for (const split of storedSplits) {
-      if (split.fromBank || !split.userId) continue;
-      personalAmounts[split.userId] = String(
-        (Number(personalAmounts[split.userId]) || 0) + split.amount,
-      );
-      if (split.incomeSourceId) sourceIds[split.userId] = split.incomeSourceId;
-    }
-
-    const personalPayerIds = [...new Set(
-      storedSplits
-        .filter((split) => !split.fromBank && split.userId)
-        .map((split) => split.userId as string),
-    )];
-    if (personalPayerIds.length === 0 && editingExpense.paidById) {
-      personalPayerIds.push(editingExpense.paidById);
-      personalAmounts[editingExpense.paidById] = String(editingExpense.amount);
-      sourceIds[editingExpense.paidById] = editingExpense.incomeSourceId ?? null;
-    }
-
-    const hasBankFunding = editingExpense.paidFromBank === true
-      || storedSplits.some((split) => split.fromBank);
-    setAmount(String(editingExpense.amount));
-    setCategory(editingExpense.category);
-    setDescription(editingExpense.description);
-    setNotes(editingExpense.notes ?? '');
-    setDate(editingExpense.date.slice(0, 10));
-    setIsRecurring(editingExpense.isRecurring);
-    setPayerIds(personalPayerIds);
-    setPaidFromBank(hasBankFunding);
-    setAllowMixedFunding(false);
-    setSelectedBankAccountId(
-      editingExpense.accountId
-      ?? storedSplits.find((split) => split.fromBank)?.accountId
-      ?? null,
-    );
-    setPayerAmounts({
-      ...personalAmounts,
-      ...(hasBankFunding ? { __joint_bank__: String(bankAmount || editingExpense.amount) } : {}),
-    });
-    setPayerIncomeSourceIds(sourceIds);
-    setSelectedSources([]);
-    setSplitAmounts({});
-    setEditFundingHydratedForId(null);
-    setFundingDirty(false);
-    setEditHydratedForId(editingExpense.id);
-  }, [editHydratedForId, editingExpense]);
-
-  useEffect(() => {
-    if (
-      !editingExpense
-      || editHydratedForId !== editingExpense.id
-      || editFundingHydratedForId === editingExpense.id
-    ) return;
-
-    const sourceCount = payerIds.length + (paidFromBank ? 1 : 0);
-    if (sourceCount > 1) {
-      setEditFundingHydratedForId(editingExpense.id);
-      return;
-    }
-    if (paidById && sourcesLoading) return;
-
-    const selected: string[] = [];
-    const amounts: Record<string, string> = {};
-    const personalSplits = (editingExpense.incomeSplits ?? []).filter((split) => !split.fromBank);
-
-    if (personalSplits.length === 0 && editingExpense.incomeSourceId) {
-      const key = incomeSourceKey(editingExpense.incomeSourceId);
-      selected.push(key);
-      amounts[key] = String(editingExpense.amount);
-    } else {
-      for (const [index, split] of personalSplits.entries()) {
-        const key = split.incomeSourceId
-          ? incomeSourceKey(split.incomeSourceId)
-          : `legacy:${index}:${split.label?.trim() || 'Personal funds'}`;
-        if (!selected.includes(key)) selected.push(key);
-        amounts[key] = String((Number(amounts[key]) || 0) + split.amount);
-      }
-    }
-
-    setSelectedSources(selected);
-    setSplitAmounts(amounts);
-    setEditFundingHydratedForId(editingExpense.id);
-  }, [
-    editFundingHydratedForId,
-    editHydratedForId,
-    editingExpense,
-    incomeSources,
-    paidById,
-    paidFromBank,
-    payerIds.length,
-    sourcesLoading,
-  ]);
-
-  const { mutateAsync: createExpenseAsync } = useCreateExpense();
-  const updateExpense = useUpdateExpense();
-  const deleteExpense = useDeleteExpense();
-  const createCategory = useCreateBudgetCategory();
-  const createBankAccount = useCreateJointAccount();
-  const [isPending, setIsPending] = useState(false);
-
-  const invalidateExpenses = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryLedgerQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetContributionsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: ['member-breakdown'] });
-  }, [queryClient]);
-
-  const handleCreateIncomeSource = useCallback(async (userId: string) => {
-    const name = newSourceName.trim();
-    if (!name) {
-      Alert.alert('Source name required', 'Enter a name before adding the income source.');
-      return;
-    }
-    setIsCreatingSource(true);
-    try {
-      const source = await customFetch<IncomeSource>('/api/income-sources', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, name, isMain: false }),
-      });
-      queryClient.invalidateQueries({ queryKey: ['income-sources', userId] });
-      queryClient.invalidateQueries({ queryKey: ['income-sources', 'payers'] });
-      if (userId === paidById) {
-        queryClient.setQueryData<IncomeSource[]>(['income-sources', paidById], (previous = []) => [
-          ...previous.filter((item) => item.id !== source.id),
-          source,
-        ]);
-        setSelectedSources([incomeSourceKey(source.id)]);
-        if (isEditMode) setFundingDirty(true);
-      } else {
-        queryClient.setQueryData<Record<string, IncomeSource[]>>(
-          ['income-sources', 'payers', payerSourceIds],
-          (previous = {}) => ({
-            ...previous,
-            [userId]: [...(previous[userId] ?? []).filter((item) => item.id !== source.id), source],
-          }),
-        );
-      }
-      setPayerIncomeSourceIds((previous) => ({ ...previous, [userId]: source.id }));
-      setNewSourceName('');
-      setNewSourcePayerId(null);
-      Alert.alert('Income source added', `${source.name} is ready to use for this expense.`);
-    } catch (error) {
-      Alert.alert('Could not add income source', getExpenseSaveError(error));
-    } finally {
-      setIsCreatingSource(false);
-    }
-  }, [isEditMode, newSourceName, paidById, payerSourceIds, queryClient]);
-
-  const handleCreateCategory = useCallback(async () => {
-    const name = newCategoryName.trim();
-    if (!name) {
-      Alert.alert('Category name required', 'Give this spending a clear name, such as Transport or Childcare.');
-      return;
-    }
-    if (categories.some((category) => category.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
-      Alert.alert('Category already exists', 'Select the existing category from the list instead.');
-      return;
-    }
-    if (getNewExpenseCategoryMode({
-      addToBudget: newCategoryAddToBudget,
-      canManageCategories,
-    }) === 'unbudgeted') {
-      setCategory(name);
-      setNewCategoryName('');
-      setNewCategoryBudget('');
-      setNewCategoryRecurring(true);
-      setNewCategoryPriority('3');
-      setNewCategoryAddToBudget(false);
-      setIsCreatingCategory(false);
-      Alert.alert('Unbudgeted category selected', `${name} will be recorded without changing the monthly budget.`);
-      return;
-    }
-
-    const budgetAmount = Number(newCategoryBudget);
-    const priority = Number(newCategoryPriority);
-    const [expenseYear, expenseMonth] = date.split('-').map(Number);
-    if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
-      Alert.alert('Enter a valid monthly budget', 'Use a whole number of KES or zero.');
-      return;
-    }
-    if (!Number.isInteger(priority) || priority < 1 || priority > 5) {
-      Alert.alert('Choose a valid priority', 'Select a priority from 1 (must-pay) to 5 (flexible).');
-      return;
-    }
-
-    try {
-      const created = await createCategory.mutateAsync({
-        data: {
-          name,
-          budgetAmount,
-          priority,
-          isRecurring: newCategoryRecurring,
-          activeMonth: newCategoryRecurring ? null : expenseMonth,
-          activeYear: newCategoryRecurring ? null : expenseYear,
-        },
-      });
-      setCategory(created.name);
-      setNewCategoryName('');
-      setNewCategoryBudget('');
-      setNewCategoryRecurring(true);
-      setNewCategoryPriority('3');
-      setNewCategoryAddToBudget(false);
-      setIsCreatingCategory(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: ['budget-categories-full'] }),
-        queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
-      ]);
-      Alert.alert('Category added', `${created.name} is selected for this expense.`);
-    } catch (error) {
-      const duplicate = error instanceof ApiError && error.status === 409;
-      Alert.alert(
-        duplicate ? 'Category name already used' : 'Could not add category',
-        duplicate
-          ? 'Choose a different name or select the existing category from the list.'
-          : error instanceof Error ? error.message : 'Check the category details and try again.',
-      );
-    }
-  }, [canManageCategories, categories, createCategory, date, newCategoryAddToBudget, newCategoryBudget, newCategoryName, newCategoryPriority, newCategoryRecurring, queryClient]);
-
-  const handleCreateBankAccount = useCallback(async () => {
-    const name = newBankAccountName.trim();
-    const accountNumber = newBankAccountNumber.trim();
-    const openingBalance = Number(newBankOpeningBalance || 0);
-    if (!name) {
-      Alert.alert('Account name required', 'Enter a name for this bank account.');
-      return;
-    }
-    try {
-      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error('Opening balance must be zero or more whole shillings.');
-      const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
-      setSelectedBankAccountId(created.id);
-      setNewBankAccountName('');
-      setNewBankAccountNumber('');
-      setNewBankOpeningBalance('');
-      setIsAddingBankAccount(false);
-      await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
-      Alert.alert('Bank account added', `${created.name} is selected for this expense.`);
-    } catch (error) {
-      Alert.alert('Could not add bank account', error instanceof Error ? error.message : 'Check the account name and try again.');
-    }
-  }, [createBankAccount, newBankAccountName, newBankAccountNumber, newBankOpeningBalance, queryClient]);
-
-  const chooseCategory = useCallback((name: string) => {
-    setCategory(name);
-    if (name.trim().toLocaleLowerCase() !== 'other') setSaveOtherAsCategory(false);
-    setIsCreatingCategory(false);
-  }, []);
-
-  const handleSubmit = useCallback(async () => {
-    if (isEditMode && (!editingExpense || !canEditExpense)) {
-      Alert.alert(
-        'You cannot edit this expense',
-        'Members can edit only their own personal expenses dated today.',
-      );
-      return;
-    }
-    const parsed = parseFloat(amount.replace(/,/g, ''));
-    if (!parsed || parsed <= 0) {
-      Alert.alert('Amount required', 'Please enter a valid amount.');
-      return;
-    }
-    if (!category) {
-      Alert.alert('Category required', 'Please choose a category.');
-      return;
-    }
-    if (category.trim().toLocaleLowerCase() === 'other' && notes.trim().length < 3) {
-      Alert.alert('Note required', 'Add a note explaining what this Other expense was for.');
-      return;
-    }
-    if (!description.trim()) {
-      Alert.alert('Description required', 'Please add a description.');
-      return;
-    }
-    const effectivePayerIds = canManageShared ? payerIds : user?.id ? [user.id] : [];
-    const effectivePaidFromBank = canManageShared ? paidFromBank : false;
-    const effectiveIsRecurring = canManageShared ? isRecurring : false;
-    if (effectivePayerIds.length === 0 && !effectivePaidFromBank) {
-      Alert.alert('Paid by required', 'Please choose who paid.');
-      return;
-    }
-    if (effectivePaidFromBank && !selectedBankAccountId) {
-      Alert.alert('Bank account required', 'Choose the bank account that funded this expense.');
-      return;
-    }
-    if (date > todayIso()) {
-      Alert.alert('Future date not allowed', 'This records actual spending — please use today or an earlier date.');
-      return;
-    }
-
-    if (isEditMode && editingExpense && !fundingDirty) {
-      const preservedSplits = preserveExpenseSplitsForAmount(
-        editingExpense.incomeSplits ?? [],
-        parsed,
-      );
-      if (preservedSplits === null) {
-        Alert.alert(
-          'Amount is too small',
-          'The new amount cannot keep every existing funding portion. Update the funding selections or enter a larger amount.',
-        );
-        return;
-      }
-      setIsPending(true);
-      try {
-        const data = {
-          amount: parsed,
-          category,
-          description: description.trim(),
-          notes: notes.trim() || undefined,
-          paidById: editingExpense.paidById,
-          isRecurring: canManageShared ? isRecurring : editingExpense.isRecurring,
-          date,
-          paidFromBank: editingExpense.paidFromBank,
-          ...(editingExpense.paidFromBank ? { accountId: selectedBankAccountId! } : {}),
-          ...(preservedSplits.length > 0 ? { incomeSplits: preservedSplits } : {}),
-        } as Parameters<typeof updateExpense.mutateAsync>[0]['data'];
-        await updateExpense.mutateAsync({ id: editingExpense.id, data });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        invalidateExpenses();
-        router.dismiss();
-      } catch (error) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert('Could not save expense', getExpenseSaveError(error));
-      } finally {
-        setIsPending(false);
-      }
-      return;
-    }
-
-    const sourceCount = effectivePayerIds.length + (effectivePaidFromBank ? 1 : 0);
-    const isSplitPayment = sourceCount > 1;
-
-    if (isSplitPayment) {
-      if (
-        effectivePayerIds.some((id) => (parseFloat(payerAmounts[id] || '0') || 0) <= 0) ||
-        (effectivePaidFromBank && (parseFloat(payerAmounts.__joint_bank__ || '0') || 0) <= 0)
-      ) {
-        Alert.alert('Enter every funding portion', 'Each direct-payment and bank-deposit portion must be greater than zero.');
-        return;
-      }
-      const missingSourcePayer = effectivePayerIds.find((id) => !payerIncomeSourceIds[id]);
-      if (missingSourcePayer) {
-        Alert.alert('Income source required', 'Choose the saved income stream that funded every direct-payment portion.');
-        return;
-      }
-      const splitTotal = effectivePayerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)
-        + (effectivePaidFromBank ? parseFloat(payerAmounts.__joint_bank__ || '0') || 0 : 0);
-      if (!Number.isInteger(parsed) || splitTotal !== parsed) {
-        Alert.alert("Amounts don't add up", `Payer portions total KES ${splitTotal.toLocaleString()} but the expense is KES ${parsed.toLocaleString()}.`);
-        return;
-      }
-    } else {
-      if (effectivePaidFromBank) {
-        const bankAmount = parseFloat(payerAmounts.__joint_bank__ || '0') || 0;
-        if (!Number.isInteger(bankAmount) || bankAmount <= 0) {
-          Alert.alert('Enter the funding amount', 'Enter how much came from the selected bank account.');
-          return;
-        }
-        if (bankAmount !== parsed) {
-          const remaining = parsed - bankAmount;
-          Alert.alert(
-            remaining > 0 ? 'Add another funding source' : 'Funding exceeds the expense',
-            remaining > 0
-              ? `KES ${remaining.toLocaleString()} is still unfunded. Add a direct-payment portion.`
-              : `Reduce the bank funding by KES ${Math.abs(remaining).toLocaleString()}.`,
-          );
-          return;
-        }
-      }
-      if (!effectivePaidFromBank && selectedSources.length === 0 && (!isEditMode || fundingDirty)) {
-        Alert.alert('Source required', 'Please choose where this money came from.');
-        return;
-      }
-      if (!effectivePaidFromBank && selectedSources.length > 0) {
-        if (selectedSources.some((key) => (parseFloat(splitAmounts[key] || '0') || 0) <= 0)) {
-          Alert.alert('Enter the funding amount', 'Enter how much came from every selected income source.');
-          return;
-        }
-        const splitsTotal = selectedSources.reduce((s, k) => s + (parseFloat(splitAmounts[k] || '0') || 0), 0);
-        if (Math.abs(splitsTotal - parsed) >= 1) {
-          const remaining = parsed - splitsTotal;
-          Alert.alert(
-            remaining > 0 ? 'Add another funding source' : 'Funding exceeds the expense',
-            remaining > 0
-              ? `KES ${remaining.toLocaleString()} is still unfunded. Select another income source.`
-              : `Reduce the funding amounts by KES ${Math.abs(remaining).toLocaleString()}.`,
-          );
-          return;
-        }
-      }
-    }
-
-    setIsPending(true);
-    try {
-      let expenseCategory = category;
-      if (!isEditMode && category.trim().toLocaleLowerCase() === 'other' && saveOtherAsCategory) {
-        const existingCategory = categories.find(
-          (item) => item.name.trim().toLocaleLowerCase() === description.trim().toLocaleLowerCase(),
-        );
-        if (existingCategory) {
-          expenseCategory = existingCategory.name;
-        } else {
-          const createdCategory = await createCategory.mutateAsync({
-            data: {
-              name: description.trim(),
-              budgetAmount: 0,
-              priority: 3,
-              isRecurring: true,
-            },
-          });
-          expenseCategory = createdCategory.name;
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
-            queryClient.invalidateQueries({ queryKey: ['budget-categories-full'] }),
-          ]);
-        }
-      }
-      if (isSplitPayment) {
-        const data = {
-            amount: parsed, category: expenseCategory, description: description.trim(), notes: notes.trim() || undefined,
-            paidById: effectivePayerIds[0] ?? null, isRecurring: effectiveIsRecurring, date, paidFromBank: false,
-            ...(effectivePaidFromBank ? { accountId: selectedBankAccountId! } : {}),
-            incomeSplits: [
-              ...(effectivePaidFromBank ? [{ userId: null, label: 'Joint bank', amount: parseFloat(payerAmounts.__joint_bank__ || '0') || 0, fromBank: true, accountId: selectedBankAccountId! }] : []),
-              ...effectivePayerIds.map((userId) => ({
-                userId, label: members.find((member) => member.userId === userId)?.userName ?? 'Member',
-                amount: parseFloat(payerAmounts[userId] || '0') || 0, fromBank: false,
-                incomeSourceId: payerIncomeSourceIds[userId]!,
-              })),
-            ],
-          } as Parameters<typeof createExpenseAsync>[0]['data'];
-        if (isEditMode && editId !== null) {
-          await updateExpense.mutateAsync({
-            id: editId,
-            data: data as Parameters<typeof updateExpense.mutateAsync>[0]['data'],
-          });
-        } else {
-          await createExpenseAsync({ data });
-        }
-      } else {
-        const isSplit = selectedSources.length > 1;
-        const selectedIncomeSources = selectedSources.flatMap(key => {
-          const sourceId = incomeSourceIdFromKey(key);
-          const source = sourceId ? incomeSources.find((item) => item.id === sourceId) : undefined;
-          if (!source) return [];
-          return [{
-            incomeSourceId: source.id,
-            label: source.name,
-            amount: isSplit ? (parseFloat(splitAmounts[key] || '0') || 0) : parsed,
-          }];
-        }).filter(source => source.amount > 0);
-        const incomeSplits = buildSinglePayerFundingReplacement({
-          amount: parsed,
-          paidFromBank: effectivePaidFromBank,
-          userId: effectivePayerIds[0],
-          sources: selectedIncomeSources,
-        }).map((split) => split.fromBank ? { ...split, accountId: selectedBankAccountId! } : split);
-
-        const data = {
-            amount: parsed,
-            category: expenseCategory,
-            description: description.trim(),
-            notes: notes.trim() || undefined,
-            paidById: effectivePaidFromBank ? undefined : effectivePayerIds[0],
-            isRecurring: effectiveIsRecurring,
-            date,
-            paidFromBank: effectivePaidFromBank,
-            ...(effectivePaidFromBank ? { accountId: selectedBankAccountId! } : {}),
-            ...((incomeSplits.length > 0 || (isEditMode && fundingDirty)) ? { incomeSplits } : {}),
-          } as Parameters<typeof createExpenseAsync>[0]['data'];
-        if (isEditMode && editId !== null) {
-          await updateExpense.mutateAsync({
-            id: editId,
-            data: data as Parameters<typeof updateExpense.mutateAsync>[0]['data'],
-          });
-        } else {
-          await createExpenseAsync({ data });
-        }
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      invalidateExpenses();
-      router.dismiss();
-    } catch (error) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Could not save expense', getExpenseSaveError(error));
-    } finally {
-      setIsPending(false);
-    }
-  }, [amount, category, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, selectedBankAccountId, members, canManageShared, user?.id, createExpenseAsync, createCategory, categories, queryClient, saveOtherAsCategory, updateExpense, invalidateExpenses, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty]);
-
-  const handleRemove = useCallback(() => {
-    if (!editingExpense || !canRemoveExpense) return;
-    Alert.alert(
-      'Remove expense?',
-      `"${editingExpense.description}" and its effect on balances, reports, and activity will be removed. This cannot be undone.`,
-      [
-        { text: 'Keep expense', style: 'cancel' },
-        {
-          text: 'Remove expense',
-          style: 'destructive',
-          onPress: async () => {
-            setIsPending(true);
-            try {
-              await deleteExpense.mutateAsync({ id: editingExpense.id });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              invalidateExpenses();
-              router.dismiss();
-            } catch (error) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              Alert.alert('Could not remove expense', getExpenseSaveError(error));
-            } finally {
-              setIsPending(false);
-            }
-          },
-        },
-      ],
-    );
-  }, [canRemoveExpense, deleteExpense, editingExpense, invalidateExpenses]);
-
-  const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
-
-  const categoryList = [
-    ...categories.map((item) => item.name),
-    ...(categories.some((item) => item.name.trim().toLocaleLowerCase() === 'other') ? [] : ['Other']),
-  ];
-
-  if (isEditMode && editExpensesQuery.isLoading) {
-    return (
-      <View style={[styles.container, styles.stateContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.stateTitle, { color: colors.foreground }]}>Loading expense…</Text>
-      </View>
-    );
-  }
-
-  if (isEditMode && (!editingExpense || !canEditExpense)) {
-    return (
-      <View style={[styles.container, styles.stateContainer, { backgroundColor: colors.background }]}>
-        <Feather
-          name={editingExpense ? 'lock' : 'alert-circle'}
-          size={30}
-          color={editingExpense ? colors.mutedForeground : colors.destructive}
-        />
-        <Text style={[styles.stateTitle, { color: colors.foreground }]}>
-          {editingExpense ? 'This expense cannot be edited' : 'Expense not found'}
-        </Text>
-        <Text style={[styles.stateText, { color: colors.mutedForeground }]}>
-          {editingExpense
-            ? 'Members can edit only their own personal expenses dated today. Owners and admins can manage shared records.'
-            : `The expense was not found in ${editMonth}/${editYear}. Return to the list and open it again.`}
-        </Text>
-        <Pressable onPress={() => router.dismiss()} style={[styles.stateButton, { backgroundColor: colors.primary }]}>
-          <Text style={styles.saveBtnText}>Go back</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Handle bar */}
-      <View style={[styles.handle, { backgroundColor: colors.border }]} />
-
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.dismiss()} style={styles.cancelBtn}>
-          <Feather name="x" size={22} color={colors.mutedForeground} />
-        </Pressable>
-        <Text style={[styles.title, { color: colors.foreground }]}>{isEditMode ? 'Edit Expense' : 'Log Expense'}</Text>
-        <Pressable
-          onPress={handleSubmit}
-          disabled={isPending}
-          style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isPending ? 0.7 : 1 }]}
-        >
-          {isPending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.saveBtnText}>Save</Text>
-          )}
-        </Pressable>
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.content, { paddingBottom: botPad + 24 }]}
-      >
-        {/* Amount */}
-        <View style={styles.amountSection}>
-          <Text style={[styles.currencyLabel, { color: colors.mutedForeground }]}>KES</Text>
-          <TextInput
-            style={[styles.amountInput, { color: colors.foreground }]}
-            placeholder="0"
-            placeholderTextColor={colors.mutedForeground}
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-            autoFocus
-          />
-        </View>
-
-        {/* Category */}
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>CATEGORY</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryScroll}
-          contentContainerStyle={styles.categoryScrollContent}
-        >
-          {categoriesQuery.isLoading ? (
-            <View style={styles.categoryStatus}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>Loading categories…</Text>
-            </View>
-          ) : categoriesQuery.isError ? (
-            <Pressable onPress={() => void categoriesQuery.refetch()} style={styles.categoryStatus}>
-              <Text style={[styles.categoryStatusText, { color: colors.primary }]}>Couldn’t load categories. Tap to retry.</Text>
-            </Pressable>
-          ) : categoryList.length === 0 ? (
-            <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>
-              {canManageCategories ? 'No categories yet. Create one to continue.' : 'No categories are available. Ask a budget manager to add one.'}
-            </Text>
-          ) : categoryList.map((cat) => {
-            const icon = getCategoryIcon(cat);
-            const selected = category === cat;
-            return (
-              <Pressable
-                key={cat}
-                onPress={() => chooseCategory(cat)}
-                style={[
-                  styles.categoryChip,
-                  {
-                    backgroundColor: selected ? colors.primary : colors.muted,
-                    borderColor: selected ? colors.primary : colors.border,
-                    borderRadius: colors.radius,
-                  },
-                ]}
-              >
-                <Feather name={icon} size={14} color={selected ? '#fff' : colors.mutedForeground} />
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    { color: selected ? '#fff' : colors.foreground },
-                  ]}
-                >
-                  {cat}
-                </Text>
-              </Pressable>
-            );
-          })}
-          <Pressable
-            onPress={() => {
-              setCategory('');
-              setIsCreatingCategory((open) => !open);
-              setNewCategoryAddToBudget(false);
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: isCreatingCategory }}
-            style={[styles.categoryChip, { backgroundColor: isCreatingCategory ? colors.primary + '12' : colors.background, borderColor: colors.primary, borderRadius: colors.radius }]}
+ what this Other expense was for"
+              placeholderTextColor={colors.mutedForeground}
+              value={notes}
+              onChangeText={setNotes}
+              accessibilityLabel="Other expense notes"
+              testID="other-expense-notes"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+            {!isEditMode && canManageCategories && (
+              <View style={[styles.otherCategoryPrompt, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <View style={styles.otherCategoryPromptCopy}>
+                  <Text style={[styles.otherCategoryPromptTitle, { color: colors.foreground }]}>
+                    Save as a category if this repeats?
+                  </Text>
+                  <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                    Your brief description will be used as the category name.
+                  </Text>
+                </View>
+                <Switch
+                  value={saveOtherAsCategory}
+                  onValueChange={setSaveOtherAsCategory}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Save brief description as an expense category"
+                />
+              </View>
+            )}
+          </View>
+        )}
+        {categoryAllocations.length > 0 && !(hasOtherCategorySelected && categoryAllocations.length === 1) && (
+          <View
+            testID="category-allocation-card"
+            style={[styles.allocationCard, { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: colors.radius }]}
           >
-            <Feather name="plus" size={14} color={colors.primary} />
-            <Text style={[styles.categoryChipText, { color: colors.primary }]}>Add category</Text>
-          </Pressable>
-        </ScrollView>
-        {isCreatingCategory ? (
-          <View style={[styles.categoryCreateCard, { backgroundColor: colors.muted, borderColor: colors.primary + '45' }]}>
+            <View style={styles.allocationHeader}>
+              <View>
+                <Text style={[styles.allocationTitle, { color: colors.foreground }]}>CATEGORY ALLOCATION</Text>
+                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>Choose category tabs above to add another row.</Text>
+              </View>
+              <Text style={[styles.allocationTotal, { color: colors.foreground }]}>
+                KES {categoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0).toLocaleString()}
+              </Text>
+            </View>
+            {categoryAllocations.map((allocation) => (
+              <View key={allocation.category} style={styles.allocationRow}>
+                <Text style={[styles.allocationCategory, { color: colors.foreground }]} numberOfLines={1}>{allocation.category}</Text>
+                <TextInput
+                  style={[styles.allocationInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background, borderRadius: colors.radius }]}
+                  value={allocation.amount}
+                  onChangeText={(value) => updateAllocationAmount(allocation.category, value)}
+                  keyboardType="numeric"
+                  placeholder="KES"
+                  placeholderTextColor={colors.mutedForeground}
+                  testID={`category-allocation-${allocation.category}`}
+                />
+                <Pressable
+                  onPress={() => removeAllocation(allocation.category)}
+                  accessibilityLabel={`Remove ${allocation.category} allocation`}
+                  testID={`remove-category-allocation-${allocation.category}`}
+                  style={styles.allocationRemove}
+                >
+                  <Feather name="x" size={18} color={colors.destructive} />
+                </Pressable>
+              </View>
+            ))}
+            {(() => {
+              const total = categoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0);
+              const expenseTotal = Number(amount.replace(/,/g, '')) || 0;
+              const difference = expenseTotal - total;
+              return (
+                <Text style={[styles.allocationStatus, { color: difference === 0 && expenseTotal > 0 ? colors.primary : difference < 0 ? colors.destructive : colors.mutedForeground }]}>
+                  {difference === 0 && expenseTotal > 0
+                    ? 'Allocated exactly.'
+                    : difference > 0
+                      ? `KES ${difference.toLocaleString()} remaining to allocate`
+                      : `KES ${Math.abs(difference).toLocaleString()} over allocated`}
+                </Text>
+              );
+            })()}
+          </View>
+        )}
+        {isCreatingCategory && !hasOtherCategorySelected ? (
+          <View
+            testID="create-category-form"
+            style={[styles.categoryCreateCard, { backgroundColor: colors.muted, borderColor: colors.primary + '45' }]}
+          >
             <View>
               <Text style={[styles.categoryCreateTitle, { color: colors.foreground }]}>Name this expense category</Text>
               <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>Emergencies and one-off spending can stay unbudgeted. You can also add the category to the monthly budget.</Text>
@@ -1083,77 +209,55 @@ export default function AddExpenseSheet() {
             </View>
           );
         })() : null}
+         {/* Description */}
+          {!categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && (
+           <>
+             <Text style={[styles.label, { color: colors.mutedForeground }]}>DESCRIPTION</Text>
+             <TextInput
+               style={[
+                 styles.textInput,
+                 {
+                   backgroundColor: colors.muted,
+                   borderColor: colors.border,
+                   color: colors.foreground,
+                   borderRadius: colors.radius,
+                 },
+               ]}
+               placeholder="What was this for?"
+               placeholderTextColor={colors.mutedForeground}
+               value={description}
+               onChangeText={setDescription}
+               returnKeyType="next"
+             />
+           </>
+         )}
 
-        {/* Description */}
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>
-          {category.trim().toLocaleLowerCase() === 'other' ? 'BRIEF DESCRIPTION' : 'DESCRIPTION'}
-        </Text>
-        <TextInput
-          style={[
-            styles.textInput,
-            {
-              backgroundColor: colors.muted,
-              borderColor: colors.border,
-              color: colors.foreground,
-              borderRadius: colors.radius,
-            },
-          ]}
-          placeholder={category.trim().toLocaleLowerCase() === 'other' ? 'Briefly describe this expense' : 'What was this for?'}
-          placeholderTextColor={colors.mutedForeground}
-          value={description}
-          onChangeText={setDescription}
-          maxLength={category.trim().toLocaleLowerCase() === 'other' ? 120 : undefined}
-          returnKeyType="next"
-        />
-        {category.trim().toLocaleLowerCase() === 'other' && (
-          <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-            Briefly explain what this Other expense covered.
-          </Text>
-        )}
-        {!isEditMode && canManageCategories && category.trim().toLocaleLowerCase() === 'other' && (
-          <View style={[styles.otherCategoryPrompt, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-            <View style={styles.otherCategoryPromptCopy}>
-              <Text style={[styles.otherCategoryPromptTitle, { color: colors.foreground }]}>
-                Save this as a category for future expenses?
-              </Text>
-              <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-                Your brief description will be used as the category name.
-              </Text>
-            </View>
-            <Switch
-              value={saveOtherAsCategory}
-              onValueChange={setSaveOtherAsCategory}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor="#ffffff"
-              accessibilityLabel="Save brief description as an expense category"
-            />
-          </View>
-        )}
-
-        {/* Notes */}
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>
-          NOTES {category.trim().toLocaleLowerCase() === 'other' ? <Text style={{ color: '#ef4444' }}>*</Text> : '(optional)'}
-        </Text>
-        <TextInput
-          style={[
-            styles.textInput,
-            styles.notesInput,
-            {
-              backgroundColor: colors.muted,
-              borderColor: colors.border,
-              color: colors.foreground,
-              borderRadius: colors.radius,
-            },
-          ]}
-          placeholder={category.trim().toLocaleLowerCase() === 'other' ? 'Explain what this Other expense was for' : 'Any extra details…'}
-          placeholderTextColor={colors.mutedForeground}
-          value={notes}
-          onChangeText={setNotes}
-          accessibilityLabel={category.trim().toLocaleLowerCase() === 'other' ? 'Note required' : 'Notes'}
-          multiline
-          numberOfLines={3}
-          textAlignVertical="top"
-        />
+         {/* Notes */}
+          {!categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && (
+           <>
+             <Text style={[styles.label, { color: colors.mutedForeground }]}>NOTES (optional)</Text>
+             <TextInput
+               style={[
+                 styles.textInput,
+                 styles.notesInput,
+                 {
+                   backgroundColor: colors.muted,
+                   borderColor: colors.border,
+                   color: colors.foreground,
+                   borderRadius: colors.radius,
+                 },
+               ]}
+               placeholder="Any extra details…"
+               placeholderTextColor={colors.mutedForeground}
+               value={notes}
+               onChangeText={setNotes}
+               accessibilityLabel="Notes"
+               multiline
+               numberOfLines={3}
+               textAlignVertical="top"
+             />
+           </>
+         )}
 
         {/* Who paid */}
         {members.length > 0 && (
@@ -1192,12 +296,10 @@ export default function AddExpenseSheet() {
               </Pressable>}
               {selectablePayers.map((m) => {
                 const selected = payerIds.includes(m.userId);
-                const sourceLimitReached = !selected
-                  && payerIds.length >= (paidFromBank ? 1 : 2);
                 return (
                   <Pressable
                     key={m.userId}
-                    disabled={sourceLimitReached || getExpenseFundingControlState({
+                    disabled={getExpenseFundingControlState({
                       paidFromBank,
                       hasPersonalFunding: payerIds.length > 0,
                       allowMixedFunding,
@@ -1206,7 +308,6 @@ export default function AddExpenseSheet() {
                       if (!canManageShared) return;
                       if (isEditMode) setFundingDirty(true);
                       setPayerIds(prev => {
-                        if (sourceLimitReached) return prev;
                         if (!prev.includes(m.userId)) {
                           setPayerAmounts((previous) => addFundingSourceWithRemainder({
                             total: parseFloat(amount.replace(/,/g, '')),
@@ -1245,7 +346,7 @@ export default function AddExpenseSheet() {
                         backgroundColor: selected ? colors.primary : colors.muted,
                         borderColor: selected ? colors.primary : colors.border,
                         borderRadius: colors.radius,
-                        opacity: sourceLimitReached || (paidFromBank && payerIds.length === 0 && !allowMixedFunding) ? 0.4 : 1,
+                        opacity: paidFromBank && payerIds.length === 0 && !allowMixedFunding ? 0.4 : 1,
                       },
                     ]}
                   >
@@ -1291,7 +392,7 @@ export default function AddExpenseSheet() {
                     <TextInput
                       autoFocus
                       style={[styles.newSourceInput, { flex: 1, backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                      placeholder="e.g. Main account"
+                      placeholder="e.g. M-Pesa wallet or KCB account"
                       placeholderTextColor={colors.mutedForeground}
                       value={newBankAccountName}
                       onChangeText={setNewBankAccountName}
@@ -1545,16 +646,17 @@ export default function AddExpenseSheet() {
           </>
         )}
 
-        {/* Keep sources directly below the person who paid, not above the choice. */}
+         {/* Financed by is only shown inside the paid-directly path. */}
         {getExpenseFundingControlState({
           paidFromBank,
           hasPersonalFunding: payerIds.length === 1,
           allowMixedFunding,
         }).showPersonalIncomeSources && (
-          <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
+           <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
+             <Text style={[styles.fundingCardTitle, { color: colors.foreground }]}>PAID DIRECTLY</Text>
             <View style={styles.fundingCardHeader}>
               <Feather name="layers" size={14} color={colors.primary} />
-              <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FUNDED FROM</Text>
+               <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FINANCED BY</Text>
               <Text style={styles.fundingRequired}>* Required</Text>
             </View>
             {sourcesLoading ? (
@@ -1579,7 +681,6 @@ export default function AddExpenseSheet() {
                           });
                           return previous.filter((item) => item !== key);
                         }
-                        if (previous.length >= 2) return previous;
                         setSplitAmounts((amounts) => addFundingSourceWithRemainder({
                           total: parseFloat(amount.replace(/,/g, '')),
                           selectedSourceIds: previous,
@@ -1633,9 +734,7 @@ export default function AddExpenseSheet() {
             {!paidFromBank && selectedSources.length > 0 && (
               <View style={{ marginTop: 12, gap: 6 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
-                    {selectedSources.length === 1
-                      ? 'Type the amount from this source to confirm'
-                      : 'Type the primary amount; Jamvi fills the second source with the remainder'}
+                    Type each amount. Jamvi fills the current remainder when you add another source.
                 </Text>
                 {selectedSources.map((key, index) => {
                   const sourceId = incomeSourceIdFromKey(key);
@@ -1649,22 +748,37 @@ export default function AddExpenseSheet() {
                       value={splitAmounts[key] || ''} onChangeText={value => {
                         if (isEditMode) setFundingDirty(true);
                         setSplitAmounts((previous) => {
-                          const next = { ...previous, [key]: value };
-                          if (selectedSources.length === 2) {
-                            const otherKey = selectedSources.find((item) => item !== key);
-                            if (otherKey) {
-                              const remainder = getFundingRemainder(
-                                parseFloat(amount.replace(/,/g, '')),
-                                parseFloat(value || '0'),
-                              );
-                              next[otherKey] = remainder > 0 ? String(remainder) : '';
-                            }
-                          }
-                          return next;
+                          return { ...previous, [key]: value };
                         });
                       }} />
                   </View>
                 )})}
+                {(() => {
+                  const total = parseFloat(amount.replace(/,/g, '')) || 0;
+                  const assigned = selectedSources.reduce(
+                    (sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0),
+                    0,
+                  );
+                  const difference = total - assigned;
+                  if (total <= 0 || difference === 0) {
+                    return total > 0 ? (
+                      <Text style={{ fontSize: 13, color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
+                        Fully funded
+                      </Text>
+                    ) : null;
+                  }
+                  return (
+                    <Text
+                      accessibilityRole="alert"
+                      testID="expense-funding-remainder"
+                      style={{ fontSize: 13, color: difference > 0 ? '#f59e0b' : '#f87171', fontFamily: 'Inter_600SemiBold' }}
+                    >
+                      {difference > 0
+                        ? `KES ${difference.toLocaleString()} remaining — choose another source to continue`
+                        : `Overfunded by KES ${Math.abs(difference).toLocaleString()}`}
+                    </Text>
+                  );
+                })()}
               </View>
             )}
           </View>
@@ -1731,11 +845,66 @@ export default function AddExpenseSheet() {
           </View>
           <Switch
             value={isRecurring}
-            onValueChange={setIsRecurring}
+            onValueChange={(next) => {
+              if (!next) {
+                setIsRecurring(false);
+                setRecurringMonthlyBudget('');
+                return;
+              }
+              Alert.alert(
+                'Make this recurring?',
+                'Jamvi will remind you to apply it next month. You will also need to confirm its monthly category budget.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Yes, make recurring',
+                    onPress: async () => {
+                      if (!category.trim()) {
+                        Alert.alert('Choose a category first', 'A recurring expense needs a category before Jamvi can set its average monthly budget.');
+                        return;
+                      }
+                      if (category.trim().toLocaleLowerCase() === 'other' && !description.trim()) {
+                        Alert.alert('Describe this expense first', 'Jamvi will use the description as the recurring budget category name.');
+                        return;
+                      }
+                      setIsRecurring(true);
+                      if (category.trim().toLocaleLowerCase() === 'other') setSaveOtherAsCategory(true);
+                      await AsyncStorage.removeItem(RECURRING_BUDGET_HANDOFF_KEY);
+                      router.push({
+                        pathname: '/(tabs)/budget',
+                        params: {
+                          recurringSetup: '1',
+                          category: category.trim().toLocaleLowerCase() === 'other' ? description.trim() : category.trim(),
+                          expenseAmount: amount,
+                        },
+                      });
+                    },
+                  },
+                ],
+              );
+            }}
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor="#fff"
           />
         </View>}
+        {canManageShared && isRecurring && (
+          <View style={[styles.recurringBudgetCard, { backgroundColor: colors.muted, borderColor: colors.primary + '45', borderRadius: colors.radius }]}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>
+              MONTHLY BUDGET (KES) <Text style={{ color: '#ef4444' }}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground, borderRadius: colors.radius }]}
+              value={recurringMonthlyBudget}
+              onChangeText={setRecurringMonthlyBudget}
+              placeholder="e.g. 15000"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="numeric"
+              accessibilityLabel="Recurring monthly budget"
+              testID="recurring-monthly-budget"
+            />
+            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>This becomes the recurring monthly budget for the selected category.</Text>
+          </View>
+        )}
         {isEditMode && canRemoveExpense ? (
           <Pressable
             onPress={handleRemove}
@@ -1778,6 +947,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   removeButtonText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  recurringBudgetCard: { borderWidth: 1, padding: 12, gap: 6, marginTop: 8 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1937,6 +1107,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_600SemiBold',
   },
+  allocationCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    padding: 12,
+    gap: 9,
+  },
+  allocationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  allocationTitle: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1 },
+  allocationTotal: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  allocationRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  allocationCategory: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium' },
+  allocationInput: {
+    width: 92,
+    height: 40,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+  },
+  allocationRemove: { width: 32, height: 40, alignItems: 'center', justifyContent: 'center' },
+  allocationStatus: { fontSize: 12, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
   textInput: {
     paddingHorizontal: 14,
     paddingVertical: 13,
@@ -2096,6 +1292,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     gap: 10,
+  },
+  fundingCardTitle: {
+    fontSize: 12,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1,
   },
   fundingCardHeader: {
     flexDirection: 'row',

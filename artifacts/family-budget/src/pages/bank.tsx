@@ -1,106 +1,4 @@
-import { useEffect, useState } from "react";
-import {
-  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
-  useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
-  useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank, useGetGroup,
-  getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
-  getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey, useUpdateJointAccountOpeningBalance,
-  useGetJointAccounts, useCreateJointAccount, useUpdateJointAccount, useDeleteJointAccount,
-  getGetJointAccountsQueryKey,
-} from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { formatKes, formatDate } from "@/lib/utils";
-import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@workspace/replit-auth-web";
-import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
-import { getProjectedBalanceAfterOutgoing } from "@/lib/bank-balance-utils";
-
-// "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
-const JOINT_BANK_ID = null as null;
-
-function getBankEditDeepLink() {
-  const editId = Number(new URLSearchParams(window.location.search).get("edit"));
-  return Number.isInteger(editId) && editId > 0 ? editId : null;
-}
-
-type MemberIncomeSource = {
-  id: number;
-  name: string;
-};
-
-type EditableTransaction = {
-  id: number;
-  accountId?: number | null;
-  type: string;
-  amount: number;
-  description: string;
-  date: string;
-  madeById?: string | null;
-  incomeSourceId?: number | null;
-  expenseCategory?: string | null;
-  bankCharge?: boolean;
-  savingsGoalId?: number | null;
-  savingsGoalName?: string | null;
-  transferDirection?: string | null;
-  contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
-};
-
-export default function Bank() {
-  const bankEditId = getBankEditDeepLink();
-  const { data: group } = useGetGroup();
-  const bankSelectionKey = group?.id ? `jamvi:bank-account:${group.id}` : null;
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
-  const { data: accounts = [], isLoading: accountsLoading } = useGetJointAccounts();
-  const { data: account, isLoading } = useGetJointAccount(
-    selectedAccountId ? { accountId: selectedAccountId } : undefined,
-  );
-  const { data: members } = useGetMembers();
-  const { data: categories } = useGetBudgetCategories();
-  const createDeposit = useCreateDeposit();
-  const createDisbursement = useCreateDisbursement();
-  const createBankCharge = useCreateBankCharge();
-  const updateTx = useUpdateJointAccountTransaction();
-  const deleteTx = useDeleteJointAccountTransaction();
-  const transferToSavings = useTransferBankToSavings();
-  const transferFromSavings = useTransferSavingsToBank();
-  const updateOpeningBalance = useUpdateJointAccountOpeningBalance();
-  const createAccount = useCreateJointAccount();
-  const updateAccount = useUpdateJointAccount();
-  const deleteAccount = useDeleteJointAccount();
-  const { data: savingsGoals = [] } = useGetSavingsGoals();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const isSharedWorkspace = group?.isPrivate === false;
-  const canManageAccount = canManageBankAccount(group);
-  const canManageShared = isSharedWorkspace && canManageAccount;
-  const canEditTransaction = (tx: EditableTransaction) =>
-    canManageAccount || (
-      tx.type === "deposit" &&
-      tx.madeById === user?.id &&
-      tx.date === new Date().toISOString().split("T")[0] &&
-      !tx.savingsGoalId &&
-      (tx.contributorSplits?.length ?? 0) === 0
-    );
-
-  const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | "bank_charge" | null>(null);
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-
-  // Deposit attribution — null = Joint bank, string[] = named member IDs
-  // Default: Joint bank (empty array = no named depositors selected)
-  const [depositorIds, setDepositorIds] = useState<string[]>([]);
-  const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
-  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
-  const [depositSourceKind, setDepositSourceKind] = useState<"income_source" | "other" | null>(null);
-
-  // Withdrawal attribution — null = Joint bank, string = named member ID
+t bank, string = named member ID
   // Default: Joint bank
   const [withdrawerId, setWithdrawerId] = useState<string | null>(JOINT_BANK_ID);
   const [expenseCategory, setExpenseCategory] = useState("");
@@ -111,6 +9,7 @@ export default function Bank() {
   const [editingTransaction, setEditingTransaction] = useState<EditableTransaction | null>(null);
   const [transferDirection, setTransferDirection] = useState<"to_savings" | "from_savings">("to_savings");
   const [transferGoalId, setTransferGoalId] = useState<number | null>(null);
+  const [bankTransferDestinationId, setBankTransferDestinationId] = useState<number | null>(null);
   const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState("");
   const [editingOpeningBalance, setEditingOpeningBalance] = useState(false);
@@ -290,13 +189,14 @@ export default function Bank() {
     setWithdrawalDestinationKind("category");
     setTransferDirection("to_savings");
     setTransferGoalId(null);
+    setBankTransferDestinationId(null);
     setNewCategoryName("");
     setShowCategoryCreator(false);
     setEditingTransaction(null);
     setMode(null);
   };
 
-  const openMode = (m: "deposit" | "disbursement" | "transfer" | "bank_charge") => {
+  const openMode = (m: "deposit" | "disbursement" | "transfer" | "bank_transfer" | "bank_charge") => {
     if (!canManageAccount && m !== "deposit") {
       toast({
         variant: "destructive",
@@ -317,6 +217,7 @@ export default function Bank() {
     setWithdrawalDestinationKind("category");
     setTransferDirection("to_savings");
     setTransferGoalId(null);
+    setBankTransferDestinationId(accounts.find((candidate) => candidate.id !== selectedAccountId)?.id ?? null);
     setNewCategoryName("");
     setShowCategoryCreator(false);
     setEditingTransaction(null);
@@ -325,8 +226,8 @@ export default function Bank() {
 
   useEffect(() => {
     const shortcut = new URLSearchParams(window.location.search).get("shortcut");
-    if (shortcut !== "withdraw" || !canManageAccount) return;
-    openMode("disbursement");
+    if (!canManageAccount || (shortcut !== "withdraw" && shortcut !== "bank-transfer")) return;
+    openMode(shortcut === "bank-transfer" ? "bank_transfer" : "disbursement");
     const url = new URL(window.location.href);
     url.searchParams.delete("shortcut");
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
@@ -383,7 +284,7 @@ export default function Bank() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer" || mode === "bank_charge") && !description.trim())) {
+    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer" || mode === "bank_transfer" || mode === "bank_charge") && !description.trim())) {
       toast({
         variant: "destructive",
         title: "Complete transaction details",
@@ -477,6 +378,25 @@ export default function Bank() {
           await transferFromSavings.mutateAsync({ data });
           toast({ title: "Moved to bank" });
         }
+        resetForm();
+        invalidate();
+        return;
+      }
+      if (mode === "bank_transfer") {
+        if (!bankTransferDestinationId || bankTransferDestinationId === selectedAccountId) {
+          toast({ variant: "destructive", title: "Choose another account", description: "Source and destination bank accounts must be different." });
+          return;
+        }
+        await transferBankToBank.mutateAsync({
+          data: {
+            sourceAccountId: selectedAccountId,
+            destinationAccountId: bankTransferDestinationId,
+            amount: total,
+            narration: description.trim(),
+            date,
+          },
+        });
+        toast({ title: "Bank transfer recorded", description: "Both account balances were updated." });
         resetForm();
         invalidate();
         return;
@@ -595,10 +515,10 @@ export default function Bank() {
   };
 
   const isPending = createDeposit.isPending || createDisbursement.isPending || createBankCharge.isPending || updateTx.isPending ||
-    transferToSavings.isPending || transferFromSavings.isPending || addingCategory;
+    transferToSavings.isPending || transferFromSavings.isPending || transferBankToBank.isPending || addingCategory;
   const outgoingAmount = Number(amount);
   const isOutgoingTransaction = mode === "disbursement" || mode === "bank_charge" ||
-    (mode === "transfer" && transferDirection === "to_savings");
+    mode === "bank_transfer" || (mode === "transfer" && transferDirection === "to_savings");
   const projectedBalance = isOutgoingTransaction &&
     account &&
     Number.isInteger(outgoingAmount) &&
@@ -614,7 +534,7 @@ export default function Bank() {
 
   // Helpers for attribution labels in transaction list
   const madeByLabel = (madeByName: string | null | undefined, type: string) => {
-    if (!madeByName) return isSharedWorkspace ? "Joint bank" : "Personal account";
+    if (!madeByName) return account?.accountName ?? "Bank account";
     return madeByName;
   };
 
@@ -622,7 +542,7 @@ export default function Bank() {
     <div className="space-y-8 pb-12 max-w-2xl">
       <div>
         <h1 className="text-3xl font-display font-bold text-foreground">
-          {isSharedWorkspace ? "Joint Account" : "Personal Account"}{account?.accountName ? ` · ${account.accountName}` : ""}
+          Bank accounts{account?.accountName ? ` · ${account.accountName}` : ""}
         </h1>
         <p className="text-muted-foreground mt-1">
           {isSharedWorkspace
@@ -644,15 +564,16 @@ export default function Bank() {
           </div>
           {canManageAccount && (
             <div className="border-t border-border/60 pt-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isSharedWorkspace ? "Manager controls" : "Personal controls"}</p>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Personalize bank accounts</p>
+              <p className="mb-3 text-xs text-muted-foreground">Give each account a name you recognize, such as M-Pesa wallet, KCB salary, or Savings.</p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={editingAccountId ? "New account name" : "e.g. Family M-Pesa"} maxLength={80} />
                 <Input data-testid="input-bank-account-number" value={accountNumberDraft} onChange={(event) => setAccountNumberDraft(event.target.value)} placeholder="Account number (optional)" maxLength={40} />
-                <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{editingAccountId ? "Rename" : "Add account"}</Button>
+                <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{editingAccountId ? "Save changes" : "Add account"}</Button>
                 {editingAccountId && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={() => { setEditingAccountId(null); setAccountNameDraft(""); setAccountNumberDraft(""); }}>Cancel</Button>}
               </div>
               {selectedAccountId && <div className="mt-2 flex gap-2">
-                <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={() => { const item = accounts.find((candidate) => candidate.id === selectedAccountId); setEditingAccountId(selectedAccountId); setAccountNameDraft(item?.name ?? ""); setAccountNumberDraft(item?.accountNumber ?? ""); }}>Edit selected</Button>
+                <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={() => { const item = accounts.find((candidate) => candidate.id === selectedAccountId); setEditingAccountId(selectedAccountId); setAccountNameDraft(item?.name ?? ""); setAccountNumberDraft(item?.accountNumber ?? ""); }}>Personalize selected</Button>
                 <Button type="button" size="sm" variant="destructive" data-testid="button-remove-bank-account" onClick={() => handleAccountDelete(selectedAccountId)} disabled={deleteAccount.isPending}>Remove selected</Button>
               </div>}
             </div>
@@ -714,7 +635,7 @@ export default function Bank() {
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">Set starting balance</CardTitle>
             <CardDescription>
-              Enter the money already in this {isSharedWorkspace ? "Shared budget’s Joint account" : "Personal account"} before the transactions shown below.
+              Enter the money already in {account?.accountName ?? "this bank account"} before the transactions shown below.
               This is a workspace-level value and does not create a transaction.
             </CardDescription>
           </CardHeader>
@@ -755,7 +676,7 @@ export default function Bank() {
 
       {/* Action buttons / form */}
       {!mode ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
           <Button
             data-testid="button-deposit"
             onClick={() => openMode("deposit")}
@@ -784,6 +705,15 @@ export default function Bank() {
             Transfer
           </Button>
           <Button
+            data-testid="button-bank-transfer"
+            onClick={() => openMode("bank_transfer")}
+            variant="secondary"
+            className="h-12 px-4 rounded-xl"
+            disabled={!canManageAccount || accounts.length < 2}
+          >
+            Bank → Bank
+          </Button>
+          <Button
             data-testid="button-bank-charge"
             onClick={() => openMode("bank_charge")}
             variant="outline"
@@ -800,16 +730,18 @@ export default function Bank() {
             <CardTitle className="text-xl font-display">
               {editingTransaction
                 ? `Edit ${mode === "deposit" ? "Deposit" : mode === "transfer" ? "Transfer" : mode === "bank_charge" ? "Bank Charge" : "Withdrawal"}`
-                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : mode === "bank_charge" ? "Record Bank Charge" : "Take Money Out"}
+                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : mode === "bank_transfer" ? "Move Money Between Bank Accounts" : mode === "bank_charge" ? "Record Bank Charge" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
               {mode === "deposit"
-                ? `Money going into your ${isSharedWorkspace ? "Joint account" : "Personal account"}.`
+                ? `Money going into ${account?.accountName ?? "this bank account"}.`
                 : mode === "transfer"
                   ? `Move ${isSharedWorkspace ? "Shared budget" : "Personal budget"} funds between this account and a savings goal.`
+                  : mode === "bank_transfer"
+                    ? "Record an internal move. It changes only these two bank balances and is not income or spending."
                   : mode === "bank_charge"
                     ? "Record a fee from the bank statement. It reduces this account but is not counted as household spending."
-                  : `Money going out of your ${isSharedWorkspace ? "Joint account" : "Personal account"}.`}
+                  : `Money going out of ${account?.accountName ?? "this bank account"}.`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -924,7 +856,7 @@ export default function Bank() {
                     </p>
                   </div>
                 )}
-                {mode !== "transfer" && <div className="space-y-2 sm:col-span-2">
+                {mode !== "transfer" && mode !== "bank_transfer" && <div className="space-y-2 sm:col-span-2">
                   <label className="text-sm font-semibold text-foreground">
                     {mode === "deposit"
                       ? depositSourceKind === "other" ? "Other source narration" : "Description"
@@ -970,13 +902,39 @@ export default function Bank() {
                     <Input data-testid="input-transfer-narration" value={description} onChange={e => setDescription(e.target.value)} placeholder="e.g. Set aside for school fees" required className="h-12 bg-card" />
                   </div>
                 </div>}
+                {mode === "bank_transfer" && <div className="space-y-4 sm:col-span-2">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">From account</label>
+                      <div className="flex h-12 items-center rounded-md border bg-muted/40 px-3">{account?.accountName ?? "Selected account"}</div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">To account <span className="text-destructive">*</span></label>
+                      <select data-testid="select-bank-transfer-destination" value={bankTransferDestinationId?.toString() ?? ""} onChange={(e) => setBankTransferDestinationId(e.target.value ? Number(e.target.value) : null)} className="flex h-12 w-full rounded-md border border-input bg-card px-3 text-base">
+                        <option value="" disabled>Choose destination...</option>
+                        {accounts.filter((candidate) => candidate.id !== selectedAccountId).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold">Narration <span className="text-destructive">*</span></label>
+                    <Input data-testid="input-bank-transfer-narration" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Move operating funds" maxLength={200} />
+                  </div>
+                  {account && bankTransferDestinationId && Number.isInteger(outgoingAmount) && outgoingAmount > 0 && (
+                    <div className="rounded-lg border bg-card p-3 text-sm" data-testid="bank-transfer-preview">
+                      <strong>{account.accountName}</strong>: {formatKes(account.balance)} → {formatKes(account.balance - outgoingAmount)}
+                      <br />
+                      <strong>{accounts.find((candidate) => candidate.id === bankTransferDestinationId)?.name}</strong> receives {formatKes(outgoingAmount)}.
+                    </div>
+                  )}
+                </div>}
 
                 {/* ── DEPOSIT: who is depositing ── */}
                 {mode === "deposit" && (
                   <>
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">
-                        {isSharedWorkspace ? "Who is depositing?" : "Personal account"}
+                        {isSharedWorkspace ? "Who is depositing?" : "Deposited by"}
                         {canManageShared && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
                       </label>
                       {!isSharedWorkspace ? (
@@ -1194,6 +1152,7 @@ export default function Bank() {
             {account.transactions.map((tx) => {
               const isDeposit = tx.type === "deposit";
               const isTransfer = !!tx.savingsGoalId;
+              const isBankTransfer = !!tx.bankTransferId;
               const isBankCharge = tx.bankCharge === true;
               const attribution = madeByLabel(tx.madeByName, tx.type);
               return (
@@ -1210,13 +1169,17 @@ export default function Bank() {
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-foreground truncate">
-                        {isTransfer
+                        {isBankTransfer
+                          ? `${isDeposit ? "From" : "To"} ${tx.bankTransferAccountName ?? "bank account"}`
+                          : isTransfer
                           ? `${tx.transferDirection === "to_savings" ? "Bank → Savings" : "Savings → Bank"}: ${tx.savingsGoalName ?? "Savings goal"}`
                           : isBankCharge ? `Bank charge: ${tx.description}`
                           : !isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5" data-testid={`tx-meta-${tx.id}`}>
-                        {isTransfer
+                        {isBankTransfer
+                          ? `Internal bank transfer · ${tx.description}`
+                          : isTransfer
                           ? tx.description
                           : isBankCharge
                             ? "Excluded from household spending and reports"
@@ -1231,7 +1194,7 @@ export default function Bank() {
                     <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
                       {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
                     </p>
-                    {canEditTransaction(tx) && <Button
+                    {canEditTransaction(tx) && !isBankTransfer && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-edit-tx-${tx.id}`}

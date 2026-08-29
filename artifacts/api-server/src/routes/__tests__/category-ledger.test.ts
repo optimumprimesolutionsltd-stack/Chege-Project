@@ -11,6 +11,7 @@ vi.mock("@workspace/db", () => {
   return {
     db: { select: vi.fn(), execute: vi.fn() },
     expensesTable: table,
+    expenseCategoryAllocationsTable: table,
     expenseIncomeSplitsTable: table,
     budgetCategoriesTable: table,
     usersTable: table,
@@ -27,6 +28,7 @@ vi.mock("drizzle-orm", () => ({
   sql: sqlMock,
   eq: vi.fn(),
   and: vi.fn(),
+  inArray: vi.fn(),
 }));
 
 import { db } from "@workspace/db";
@@ -50,6 +52,7 @@ function queueLedgerQueries(
   activeCategories: { name: string }[],
   expenses: unknown[],
   disbursements: unknown[],
+  allocations: unknown[] = [],
 ) {
   mockedDb.select
     .mockReturnValueOnce({
@@ -60,6 +63,9 @@ function queueLedgerQueries(
     })
     .mockReturnValueOnce({
       from: () => ({ leftJoin: () => ({ where: () => Promise.resolve(disbursements) }) }),
+    })
+    .mockReturnValueOnce({
+      from: () => ({ innerJoin: () => ({ where: () => ({ orderBy: () => Promise.resolve(allocations) }) }) }),
     });
 }
 
@@ -99,7 +105,7 @@ describe("GET /dashboard/category-ledger", () => {
       total: 1000,
       entries: [
         expect.objectContaining({
-          id: "expense-11",
+          id: "expense-11-Transport",
           source: "expense",
           category: "Transport",
           amount: 200,
@@ -147,5 +153,36 @@ describe("GET /dashboard/category-ledger", () => {
         }),
       ],
     });
+  });
+
+  it("uses ordered allocation portions rather than the legacy primary category", async () => {
+    queueLedgerQueries(
+      [{ name: "Food" }, { name: "Transport" }],
+      [{
+        id: 12,
+        category: "Food",
+        description: "Supermarket basket",
+        amount: 1000,
+        paidFromBank: false,
+        payerName: "Amina",
+        date: "2026-08-20",
+      }],
+      [],
+      [
+        { expenseId: 12, category: "Food", amount: 600, position: 0 },
+        { expenseId: 12, category: "Transport", amount: 400, position: 1 },
+      ],
+    );
+
+    const response = await request(buildApp())
+      .get("/dashboard/category-ledger?month=8&year=2026&category=Transport&isBudgeted=true");
+
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBe(400);
+    expect(response.body.entries).toMatchObject([{
+      id: "expense-12-Transport",
+      category: "Transport",
+      amount: 400,
+    }]);
   });
 });
