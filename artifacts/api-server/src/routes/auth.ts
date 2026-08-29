@@ -51,6 +51,7 @@ import {
 } from '../lib/auth';
 import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
 import { resolvePhotoUrl } from '../lib/photoStorage';
+import { resolveOrigin } from '../lib/requestOrigin.js';
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 
@@ -83,18 +84,7 @@ async function authUserPayload(user: {
 }
 
 function getOrigin(req: Request): string {
-  // When the browser talks to a separate frontend host that proxies /api here,
-  // request headers describe this server, not the address the user is on. The
-  // OAuth callback and the session cookie must both belong to the origin the
-  // user actually loaded, because Google redirects the browser straight to the
-  // callback without passing back through the proxy. APP_ORIGIN pins it.
-  const configured = process.env.APP_ORIGIN;
-  if (configured) return configured.replace(/\/+$/, '');
-
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  const host =
-    req.headers['x-forwarded-host'] || req.headers['host'] || 'localhost';
-  return `${proto}://${host}`;
+  return resolveOrigin(req.headers);
 }
 
 function setSessionCookie(res: Response, sid: string) {
