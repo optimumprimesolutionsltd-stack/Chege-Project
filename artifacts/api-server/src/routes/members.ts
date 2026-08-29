@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
 import { hasMemberCapacity, memberLimitMessage } from "../lib/membership-limits";
+import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 
 const router = Router();
 
@@ -78,6 +79,7 @@ router.post("/members", async (req, res): Promise<void> => {
       userId,
       role,
       addedByUserId: req.user!.id,
+      monthlyTarget: await inheritedMonthlyTarget(tx, groupId),
     });
     return "added" as const;
   });

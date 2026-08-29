@@ -2637,6 +2637,13 @@ components:
         kind:
           $ref: "#/components/schemas/GroupKind"
           default: family
+        defaultMonthlyTarget:
+          description: >-
+            What each member is expected to contribute per month, in KES.
+            Members who join inherit it as their own target. Null means the
+            group does not work to a fixed amount.
+          type: ["number", "null"]
+          minimum: 0
       required: [name]
 
     WorkspaceSelectionInput:

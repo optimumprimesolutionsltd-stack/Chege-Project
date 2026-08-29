@@ -21,4 +21,10 @@ export interface SharedGroupInput {
   emoji?: string | null;
   nameStyle?: SharedGroupInputNameStyle;
   kind?: GroupKind;
+  /**
+     * What each member is expected to contribute per month, in KES. Members who join inherit it as their own target. Null means the group does not work to a fixed amount.
+     * @minimum 0
+     * @nullable
+     */
+  defaultMonthlyTarget?: number | null;
 }

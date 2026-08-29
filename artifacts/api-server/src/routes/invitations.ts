@@ -13,6 +13,7 @@ import { z } from "zod";
 import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
 import { EmailNotConfiguredError, sendEmail } from "../lib/email";
 import { hasMemberCapacity, memberLimitMessage } from "../lib/membership-limits";
+import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const inviteSchema = z.object({
@@ -355,6 +356,7 @@ publicInvitationsRouter.post("/group-invitations/accept/:token", async (req, res
         userId: req.user!.id,
         role: invitation.role,
         addedByUserId: invitation.createdByUserId,
+        monthlyTarget: await inheritedMonthlyTarget(tx, invitation.groupId),
       });
       await tx
         .update(groupInvitationsTable)

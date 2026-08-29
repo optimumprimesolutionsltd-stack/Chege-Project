@@ -20,6 +20,7 @@ import {
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
 import { hasMemberCapacity, memberLimitMessage } from "../lib/membership-limits";
+import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 
 const INVITE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -146,6 +147,7 @@ publicInviteLinksRouter.post("/group-invite-links/accept/:token", async (req, re
           userId: req.user!.id,
           role: "member",
           addedByUserId: link.createdByUserId,
+          monthlyTarget: await inheritedMonthlyTarget(tx, group.id),
         });
       }
 

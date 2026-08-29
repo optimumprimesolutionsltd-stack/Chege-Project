@@ -87,6 +87,7 @@ router.post("/groups", async (req, res): Promise<void> => {
         emoji: normalizedEmoji(parsed.data.emoji),
         nameStyle: parsed.data.nameStyle,
         kind: parsed.data.kind,
+        defaultMonthlyTarget: parsed.data.defaultMonthlyTarget ?? null,
         createdByUserId: req.user!.id,
       })
       .returning({
@@ -106,6 +107,8 @@ router.post("/groups", async (req, res): Promise<void> => {
       userId: req.user!.id,
       role: "owner",
       addedByUserId: req.user!.id,
+      // The owner is held to the same figure as everyone else.
+      monthlyTarget: parsed.data.defaultMonthlyTarget ?? null,
     });
     await tx.insert(bankAccountsTable).values({
       groupId: created.id,

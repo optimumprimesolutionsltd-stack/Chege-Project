@@ -1462,12 +1462,16 @@ export const createSharedGroupBodyNameMax = 60;
 export const createSharedGroupBodyEmojiMax = 16;
 
 export const createSharedGroupBodyKindDefault = `family`;
+export const createSharedGroupBodyDefaultMonthlyTargetMin = 0;
+
+
 
 export const CreateSharedGroupBody = zod.object({
   "name": zod.string().min(createSharedGroupBodyNameMin).max(createSharedGroupBodyNameMax),
   "emoji": zod.string().max(createSharedGroupBodyEmojiMax).nullish(),
   "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']).optional(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']).default(createSharedGroupBodyKindDefault)
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']).default(createSharedGroupBodyKindDefault),
+  "defaultMonthlyTarget": zod.number().min(createSharedGroupBodyDefaultMonthlyTargetMin).nullish().describe('What each member is expected to contribute per month, in KES. Members who join inherit it as their own target. Null means the group does not work to a fixed amount.')
 })
 
 export const createSharedGroupResponseEmojiMax = 16;

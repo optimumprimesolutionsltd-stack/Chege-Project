@@ -89,6 +89,15 @@ export const groupsTable = pgTable(
     // Free until a paid tier exists. Member limits are only enforced on free
     // workspaces, so flipping this to paid lifts them.
     plan: text("plan").notNull().default(GROUP_PLAN.FREE),
+    // What each member is expected to contribute per month, in KES. A chama
+    // sets this when the workspace is created and every member who joins
+    // inherits it as their own monthlyTarget.
+    //
+    // The dashboard and the monthly digest already show target against
+    // contributed, but nothing ever set a target, so that comparison was
+    // always empty. Null means the group does not work to a fixed amount -
+    // families and one-off groups usually do not.
+    defaultMonthlyTarget: integer("default_monthly_target"),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
