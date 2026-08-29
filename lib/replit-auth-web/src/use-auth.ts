@@ -19,9 +19,19 @@ function getBasePath() {
   return import.meta.env.BASE_URL.replace(/\/+$/, '') || '/';
 }
 
+export const PUBLIC_HOME_PATH = '/';
+
 export function getAuthDonePath(basePath: string): string {
   const base = basePath.replace(/\/+$/, '');
   return base ? `${base}/auth-done` : '/auth-done';
+}
+
+export function getLogoutReturnPath(): string {
+  return PUBLIC_HOME_PATH;
+}
+
+export function getLogoutUrl(): string {
+  return `/api/logout?returnTo=${encodeURIComponent(getLogoutReturnPath())}`;
 }
 
 let authRequest: Promise<AuthUser | null> | null = null;
@@ -117,8 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     // Leaving the authenticated app should take the person back to Jamvi's
     // public homepage, not reopen the last in-app screen.
-    const url = `/api/logout?returnTo=${encodeURIComponent('/')}`;
-    (window.top ?? window).location.href = url;
+    (window.top ?? window).location.href = getLogoutUrl();
   }, []);
 
   const retry = useCallback(() => {
