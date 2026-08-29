@@ -36,6 +36,13 @@
       "when": 1787781500000,
       "tag": "0004_multiple_bank_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787984634463,
+      "tag": "0005_group_plan",
+      "breakpoints": true
     }
   ]
 }
