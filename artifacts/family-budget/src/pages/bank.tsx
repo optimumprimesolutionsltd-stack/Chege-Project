@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatKes, formatDate } from "@/lib/utils";
-import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown } from "lucide-react";
+import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -103,6 +103,7 @@ export default function Bank() {
   const [expenseCategory, setExpenseCategory] = useState("");
   const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other">("category");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [showCategoryCreator, setShowCategoryCreator] = useState(false);
   const [addingCategory, setAddingCategory] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<EditableTransaction | null>(null);
   const [transferDirection, setTransferDirection] = useState<"to_savings" | "from_savings">("to_savings");
@@ -260,6 +261,7 @@ export default function Bank() {
       const category = await response.json();
       setExpenseCategory(category.name);
       setNewCategoryName("");
+      setShowCategoryCreator(false);
       queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
       toast({ title: "Category added", description: `${category.name} is ready to use.` });
     } catch {
@@ -283,6 +285,7 @@ export default function Bank() {
     setTransferDirection("to_savings");
     setTransferGoalId(null);
     setNewCategoryName("");
+    setShowCategoryCreator(false);
     setEditingTransaction(null);
     setMode(null);
   };
@@ -309,9 +312,19 @@ export default function Bank() {
     setTransferDirection("to_savings");
     setTransferGoalId(null);
     setNewCategoryName("");
+    setShowCategoryCreator(false);
     setEditingTransaction(null);
     setMode(m);
   };
+
+  useEffect(() => {
+    const shortcut = new URLSearchParams(window.location.search).get("shortcut");
+    if (shortcut !== "withdraw" || !canManageAccount) return;
+    openMode("disbursement");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("shortcut");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [canManageAccount]);
 
   const openEdit = (tx: EditableTransaction) => {
     if (!canEditTransaction(tx)) {
@@ -798,36 +811,57 @@ export default function Bank() {
                       required
                       className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       value={expenseCategory}
-                      onChange={e => setExpenseCategory(e.target.value)}
+                      onChange={e => {
+                        if (e.target.value === "__add_category__") {
+                          setExpenseCategory("");
+                          setShowCategoryCreator(true);
+                        } else {
+                          setExpenseCategory(e.target.value);
+                        }
+                      }}
                     >
                       <option value="" disabled>Choose a category...</option>
                       {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      <option value="__add_category__">+ Add new category</option>
                     </select>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        data-testid="input-new-expense-category"
-                        value={newCategoryName}
-                        onChange={e => setNewCategoryName(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            void handleCreateCategory();
-                          }
-                        }}
-                        placeholder="Can't find it? Add a category, e.g. Transport"
-                        className="h-10 bg-card"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={addingCategory}
-                        onClick={() => void handleCreateCategory()}
-                        className="h-10 shrink-0"
-                        data-testid="button-add-expense-category"
-                      >
-                        {addingCategory ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add category"}
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10"
+                      data-testid="button-show-withdrawal-category-creator"
+                      onClick={() => setShowCategoryCreator((open) => !open)}
+                      aria-expanded={showCategoryCreator}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      {showCategoryCreator ? "Close category creator" : "Add category"}
+                    </Button>
+                    {showCategoryCreator && (
+                      <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 sm:flex-row">
+                        <Input
+                          data-testid="input-new-expense-category"
+                          value={newCategoryName}
+                          onChange={e => setNewCategoryName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleCreateCategory();
+                            }
+                          }}
+                          placeholder="e.g. Transport"
+                          className="h-10 bg-card"
+                          autoFocus
+                        />
+                        <Button
+                          type="button"
+                          disabled={addingCategory}
+                          onClick={() => void handleCreateCategory()}
+                          className="h-10 shrink-0"
+                          data-testid="button-add-expense-category"
+                        >
+                          {addingCategory ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save category"}
+                        </Button>
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       Categories make bank withdrawals appear accurately in expense and savings reports.
                     </p>

@@ -35,7 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-   Wallet, Plus, TrendingUp, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home,
+   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,7 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
 import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
 import { appPath, routePath } from "@/lib/base-path";
+import { canManageBankAccount } from "@/lib/bank-access";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
@@ -1064,6 +1065,7 @@ export default function Dashboard() {
       (member.role === "owner" || member.role === "admin"),
   );
   const canManageShared = isSharedWorkspace && canManageSetup;
+  const canManageBank = canManageBankAccount(group);
 
   // Compute this-month totals from the transactions array
   const monthlyDeposited = bankAccount?.transactions
@@ -1253,7 +1255,7 @@ export default function Dashboard() {
         <Card id="dashboard-quick-actions" className="scroll-mt-6 overflow-hidden border-none shadow-md">
         <CardContent className="p-0">
           {/* Action buttons row */}
-          <div className="grid grid-cols-4 divide-x divide-border/50">
+          <div className="grid grid-cols-2 divide-x divide-y divide-border/50 sm:grid-cols-5 sm:divide-y-0">
             {[
                { key: "income" as const, label: "Bank Deposit", shortLabel: "Deposit",  icon: Building2, active: "bg-success/10", text: "text-success" },
                { key: "expense" as const, label: "Log Expense",  shortLabel: "Expense",  icon: Receipt, active: "bg-warning/10", text: "text-warning" },
@@ -1271,6 +1273,19 @@ export default function Dashboard() {
                 {activeAction === key && <X className="w-3.5 h-3.5 mt-0.5 opacity-60" />}
               </button>
             ))}
+            <Link
+              href="/bank?shortcut=withdraw"
+              data-testid="dashboard-withdraw-cta"
+              aria-disabled={!canManageBank}
+              onClick={(event) => {
+                if (!canManageBank) event.preventDefault();
+              }}
+              className={`flex min-w-0 flex-col items-center justify-center gap-1.5 px-1 py-5 text-center text-xs font-medium transition-colors sm:px-3 sm:text-sm ${canManageBank ? "text-foreground hover:bg-muted/40" : "cursor-not-allowed text-foreground opacity-45"}`}
+            >
+              <TrendingDown className="h-5 w-5" aria-hidden="true" />
+              <span className="block sm:hidden">Withdraw</span>
+              <span className="hidden max-w-full break-words sm:block">Bank Withdrawal</span>
+            </Link>
             <Link
               href="/budget"
               data-testid="dashboard-create-budget-cta"
