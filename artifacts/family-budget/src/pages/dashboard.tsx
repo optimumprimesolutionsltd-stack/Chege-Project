@@ -475,10 +475,12 @@ function ExpenseForm({
   onDone,
   currentUserId,
   canManageShared,
+  canManageCategories,
 }: {
   onDone: () => void;
   currentUserId?: string;
   canManageShared: boolean;
+  canManageCategories: boolean;
 }) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -694,7 +696,7 @@ function ExpenseForm({
               <option value="">Pick a category</option>
               {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
-            {canManageShared && (
+            {canManageCategories && (
               <Button
                 type="button"
                 variant="outline"
@@ -707,7 +709,7 @@ function ExpenseForm({
               </Button>
             )}
           </div>
-          {canManageShared && isAddingCategory && (
+          {canManageCategories && isAddingCategory && (
             <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
               <div>
                 <p className="text-sm font-semibold text-foreground">Create a category</p>
@@ -1065,6 +1067,7 @@ export default function Dashboard() {
       (member.role === "owner" || member.role === "admin"),
   );
   const canManageShared = isSharedWorkspace && canManageSetup;
+  const canManageCategories = group?.isPrivate === true || canManageShared;
   const canManageBank = canManageBankAccount(group);
 
   // Compute this-month totals from the transactions array
@@ -1308,7 +1311,7 @@ export default function Dashboard() {
           {activeAction !== "none" && (
             <div className="border-t border-border/50 p-6 bg-muted/20">
               {activeAction === "income"  && <IncomeForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageShared} isSharedWorkspace={isSharedWorkspace} />}
-              {activeAction === "expense" && <ExpenseForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageShared} />}
+              {activeAction === "expense" && <ExpenseForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageShared} canManageCategories={canManageCategories} />}
               {activeAction === "goal"    && <GoalForm goals={goals} onDone={() => setActiveAction("none")} memberUserId={canManageShared ? undefined : user?.id} />}
             </div>
           )}

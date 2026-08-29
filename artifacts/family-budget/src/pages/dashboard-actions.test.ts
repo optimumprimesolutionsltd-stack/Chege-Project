@@ -14,4 +14,10 @@ describe("dashboard quick actions", () => {
   it("attributes Personal budget goal saves to the signed-in user", () => {
     expect(dashboardSource).toContain("memberUserId={canManageShared ? undefined : user?.id}");
   });
+
+  it("keeps category creation visible for Personal budget owners", () => {
+    expect(dashboardSource).toContain("canManageCategories={canManageCategories}");
+    expect(dashboardSource).toContain("{canManageCategories && (");
+    expect(dashboardSource).toContain("const canManageCategories = group?.isPrivate === true || canManageShared;");
+  });
 });
