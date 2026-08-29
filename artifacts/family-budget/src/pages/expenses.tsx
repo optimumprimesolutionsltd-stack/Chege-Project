@@ -35,7 +35,7 @@ import {
   useGetDashboardSummary, useGetDashboardCategoryBreakdown,
   getGetExpensesQueryKey, getGetDashboardSummaryQueryKey,
   getGetBudgetCategoriesQueryKey, getGetDashboardCategoryBreakdownQueryKey, getGetDashboardActivityQueryKey,
-  type IncomeSource, ApiError, useGetJointAccounts,
+  type IncomeSource, ApiError, useGetJointAccounts, useCreateJointAccount, getGetJointAccountsQueryKey,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -227,6 +227,11 @@ export default function Expenses() {
   const [newCategoryPriority, setNewCategoryPriority] = useState("3");
   const [newCategoryAddToBudget, setNewCategoryAddToBudget] = useState(false);
   const [allowMixedFunding, setAllowMixedFunding] = useState(false);
+  const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
+  const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
+  const [newBankAccountName, setNewBankAccountName] = useState("");
+  const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
+  const [newBankOpeningBalance, setNewBankOpeningBalance] = useState("");
 
   const addForm = useExpenseForm(undefined, now);
   const editForm = useExpenseForm();
@@ -242,6 +247,7 @@ export default function Expenses() {
   const { data: breakdown } = useGetDashboardCategoryBreakdown({ month, year });
   const createExpense = useCreateExpense();
   const createCategory = useCreateBudgetCategory();
+  const createBankAccount = useCreateJointAccount();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
   const applyRecurring = useApplyRecurringExpenses();
@@ -328,6 +334,8 @@ export default function Expenses() {
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setNewCategoryRecurring(true); setNewCategoryPriority("3"); setNewCategoryAddToBudget(false);
     setAllowMixedFunding(false);
+    setSaveOtherAsCategory(false);
+    setIsAddingBankAccount(false); setNewBankAccountName("");
     setIsAdding(false);
   };
 
@@ -368,6 +376,7 @@ export default function Expenses() {
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
     setNewCategoryRecurring(true); setNewCategoryPriority("3"); setNewCategoryAddToBudget(false);
     setAllowMixedFunding(false);
+    setSaveOtherAsCategory(false);
     setEditingId(expense.id);
     setIsAdding(false);
   };
@@ -518,26 +527,50 @@ export default function Expenses() {
   };
 
   const chooseCategory = (form: ReturnType<typeof useExpenseForm>, value: string) => {
-    if (value !== "Other") {
-      form.setCategory(value);
+    form.setCategory(value);
+    if (value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
+    if (!canManageCategories) {
       setIsCreatingCategory(false);
       return;
     }
-    form.setCategory("");
-    if (!canManageCategories) {
-      toast({
-        variant: "destructive",
-        title: "Ask a budget manager to add this category",
-        description: "Members can use existing categories, while owners and admins manage the shared budget setup.",
-      });
+    if (value !== "Other") {
+      setIsCreatingCategory(false);
       return;
     }
+    setIsCreatingCategory(false);
     setNewCategoryName("");
     setNewCategoryBudget("");
     setNewCategoryRecurring(true);
     setNewCategoryPriority("3");
     setNewCategoryAddToBudget(false);
     setIsCreatingCategory(true);
+  };
+
+  const handleAddBankAccount = async (form: ReturnType<typeof useExpenseForm>) => {
+    const name = newBankAccountName.trim();
+    const accountNumber = newBankAccountNumber.trim();
+    const openingBalance = Number(newBankOpeningBalance || 0);
+    if (!name) {
+      toast({ variant: "destructive", title: "Account name required", description: "Enter a name for this bank account." });
+      return;
+    }
+    try {
+      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("Opening balance must be zero or more whole shillings.");
+      const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
+      form.setAccountId(created.id);
+      setNewBankAccountName("");
+      setNewBankAccountNumber("");
+      setNewBankOpeningBalance("");
+      setIsAddingBankAccount(false);
+      await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+      toast({ title: "Bank account added", description: `${created.name} is selected for this expense.` });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add bank account",
+        description: error instanceof Error ? error.message : "Check the account name and try again.",
+      });
+    }
   };
 
   const handleAddNewSource = async (paidById: string) => {
@@ -603,6 +636,17 @@ export default function Expenses() {
       });
       return;
     }
+    if (
+      addForm.category.trim().toLocaleLowerCase() === "other" &&
+      addForm.description.trim().length < 3
+    ) {
+      toast({
+        variant: "destructive",
+        title: "Brief description required",
+        description: "Briefly describe what this Other expense was for.",
+      });
+      return;
+    }
     if (!addForm.category || !addForm.description || !addForm.date) {
       toast({
         variant: "destructive",
@@ -643,6 +687,32 @@ export default function Expenses() {
         return;
       }
     }
+    if (sourceCount === 1) {
+      const sourceAmount = Number(
+        addForm.paidFromBank
+          ? addForm.payerAmounts.__joint_bank__
+          : addForm.payerAmounts[payerIds[0]],
+      );
+      if (!Number.isInteger(sourceAmount) || sourceAmount <= 0) {
+        toast({
+          variant: "destructive",
+          title: "Enter the funding amount",
+          description: "Enter how much came from the selected funding source.",
+        });
+        return;
+      }
+      if (sourceAmount !== amount) {
+        const remaining = amount - sourceAmount;
+        toast({
+          variant: "destructive",
+          title: remaining > 0 ? "Add another funding source" : "Funding exceeds the expense",
+          description: remaining > 0
+            ? `${formatKes(remaining)} is still unfunded. Select another payer or add a bank-account portion.`
+            : `Reduce the funding amount by ${formatKes(Math.abs(remaining))}.`,
+        });
+        return;
+      }
+    }
     if (isSplitPayment) {
       const total = amount;
       if (
@@ -663,7 +733,22 @@ export default function Expenses() {
         return;
       }
     }
+    let expenseCategory = addForm.category;
     try {
+      if (addForm.category.trim().toLocaleLowerCase() === "other" && saveOtherAsCategory) {
+        const existingCategory = (categories ?? []).find(
+          (item) => item.name.trim().toLocaleLowerCase() === addForm.description.trim().toLocaleLowerCase(),
+        );
+        if (existingCategory) {
+          expenseCategory = existingCategory.name;
+        } else {
+          const createdCategory = await createCategory.mutateAsync({
+            data: { name: addForm.description.trim(), budgetAmount: 0, priority: 3, isRecurring: true },
+          });
+          expenseCategory = createdCategory.name;
+          await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+        }
+      }
       const incomeSplits = isSplitPayment
         ? [
           ...(addForm.paidFromBank ? [{ amount: Number(addForm.payerAmounts.__joint_bank__ || 0), fromBank: true, userId: null, label: isPersonalBudget ? "Personal bank" : "Shared bank", accountId: addForm.accountId! }] : []),
@@ -676,7 +761,7 @@ export default function Expenses() {
         : undefined;
       await createExpense.mutateAsync({
         data: {
-          amount, category: addForm.category,
+           amount, category: expenseCategory,
           description: addForm.description, notes: addForm.notes || undefined,
           paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
           isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
@@ -717,6 +802,17 @@ export default function Expenses() {
         variant: "destructive",
         title: "Enter a whole KES amount",
         description: "Expenses are recorded in whole shillings.",
+      });
+      return;
+    }
+    if (
+      editForm.category.trim().toLocaleLowerCase() === "other" &&
+      editForm.description.trim().length < 3
+    ) {
+      toast({
+        variant: "destructive",
+        title: "Brief description required",
+        description: "Briefly describe what this Other expense was for.",
       });
       return;
     }
@@ -861,7 +957,8 @@ export default function Expenses() {
               required
             >
               <option value="" disabled>Select category...</option>
-              {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+               {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+               {!(categories ?? []).some(c => c.name.trim().toLocaleLowerCase() === "other") && <option value="Other">Other</option>}
             </select>
             <Button
               type="button"
@@ -990,9 +1087,31 @@ export default function Expenses() {
         </div>
 
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-semibold text-foreground">Description</label>
-          <Input placeholder="e.g. Nathan's Term 2 school fees" value={form.description}
-            onChange={e => form.setDescription(e.target.value)} required className="h-12 bg-card" />
+           <label className="text-sm font-semibold text-foreground">
+             {form.category.trim().toLocaleLowerCase() === "other" ? "Brief description" : "Description"}
+           </label>
+           <Input value={form.description}
+             onChange={e => form.setDescription(e.target.value)}
+             placeholder={form.category.trim().toLocaleLowerCase() === "other" ? "Briefly describe this expense" : "e.g. Nathan's Term 2 school fees"}
+             maxLength={form.category.trim().toLocaleLowerCase() === "other" ? 120 : undefined}
+             required className="h-12 bg-card" />
+           {form.category.trim().toLocaleLowerCase() === "other" && (
+             <p className="text-xs text-muted-foreground">Briefly explain what this Other expense covered.</p>
+           )}
+           {mode === "add" && canManageCategories && form.category.trim().toLocaleLowerCase() === "other" && (
+             <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+               <input
+                 type="checkbox"
+                 checked={saveOtherAsCategory}
+                 onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
+                 className="mt-0.5 h-4 w-4 accent-primary"
+               />
+               <span>
+                 <span className="font-semibold">Save this as a category for future expenses</span>
+                 <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
+               </span>
+             </label>
+           )}
         </div>
 
         <div className="space-y-2 md:col-span-2">
@@ -1106,9 +1225,43 @@ export default function Expenses() {
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
               {bankAccounts.length === 0 && (
-                <p className="text-xs text-destructive">
-                  {isPersonalBudget ? "Add a Personal bank account before using bank funds." : "A budget manager must add a bank account before this expense can be bank-funded."}
-                </p>
+                <p className="text-xs text-muted-foreground">Create a bank account here to continue without leaving this expense.</p>
+              )}
+              {canManageExpenses && (isAddingBankAccount ? (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Input
+                    autoFocus
+                    value={newBankAccountName}
+                    onChange={(event) => setNewBankAccountName(event.target.value)}
+                    placeholder="e.g. M-Pesa Till or Main account"
+                    className="h-10 bg-card"
+                  />
+                  <Input value={newBankAccountNumber} onChange={(event) => setNewBankAccountNumber(event.target.value)} placeholder="Account number (optional)" className="h-10 bg-card" />
+                  <Input type="number" min="0" step="1" value={newBankOpeningBalance} onChange={(event) => setNewBankOpeningBalance(event.target.value)} placeholder="Opening balance (KES)" className="h-10 bg-card" />
+                  <Button type="button" size="sm" className="h-10" onClick={() => void handleAddBankAccount(form)} disabled={createBankAccount.isPending}>
+                    {createBankAccount.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Add account
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingBankAccount(false); setNewBankAccountName(""); setNewBankAccountNumber(""); setNewBankOpeningBalance(""); }}>Cancel</Button>
+                </div>
+              ) : (
+                <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)}>
+                  + New bank account
+                </Button>
+              ))}
+              {mode === "add" && form.paidFromBank && form.payerIds.length === 0 && (
+                <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                  Amount from this account
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.payerAmounts.__joint_bank__ ?? ""}
+                    onChange={(event) => form.setPayerAmounts((previous) => ({ ...previous, __joint_bank__: event.target.value }))}
+                    placeholder="KES 0"
+                    className="h-10 bg-card"
+                  />
+                </label>
               )}
               <p className="text-xs leading-relaxed text-muted-foreground">
                 This uses money already recorded in the selected account as an opening balance or deposit.
@@ -1258,6 +1411,20 @@ export default function Expenses() {
                 <option key={src.id} value={src.id}>{src.name}</option>
               ))}
             </select>
+             {mode === "add" && form.payerIds.length === 1 && !form.paidFromBank && form.incomeSourceId && (
+               <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                 Amount from this source
+                 <Input
+                   type="number"
+                   min="1"
+                   step="1"
+                   value={form.payerAmounts[form.payerIds[0]] ?? ""}
+                   onChange={(event) => form.setPayerAmounts((previous) => ({ ...previous, [form.payerIds[0]]: event.target.value }))}
+                   placeholder="KES 0"
+                   className="h-10 bg-card"
+                 />
+               </label>
+             )}
             {mode === "edit" && editHasMultipleFundingSplits && (
               <p className="text-xs text-muted-foreground">
                 This expense has multiple funding portions. They’ll be preserved while you edit the expense details here.

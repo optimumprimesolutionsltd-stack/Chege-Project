@@ -112,6 +112,7 @@ export default function Bank() {
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState("");
   const [editingOpeningBalance, setEditingOpeningBalance] = useState(false);
   const [accountNameDraft, setAccountNameDraft] = useState("");
+  const [accountNumberDraft, setAccountNumberDraft] = useState("");
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -193,16 +194,18 @@ export default function Bank() {
 
   const handleAccountSave = async () => {
     const name = accountNameDraft.trim();
+    const accountNumber = accountNumberDraft.trim();
     if (!name) {
       toast({ variant: "destructive", title: "Account name required", description: "Enter a name for this bank account." });
       return;
     }
     try {
       const saved = editingAccountId
-        ? await updateAccount.mutateAsync({ id: editingAccountId, data: { name } })
-        : await createAccount.mutateAsync({ data: { name } });
+        ? await updateAccount.mutateAsync({ id: editingAccountId, data: { name, accountNumber: accountNumber || null } })
+        : await createAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined } });
       setSelectedAccountId(saved.id);
       setAccountNameDraft("");
+      setAccountNumberDraft("");
       setEditingAccountId(null);
       invalidate();
       toast({ title: editingAccountId ? "Account renamed" : "Account added" });
@@ -612,14 +615,15 @@ export default function Bank() {
           </div>
           {canManageAccount && (
             <div className="border-t border-border/60 pt-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manager controls</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isSharedWorkspace ? "Manager controls" : "Personal controls"}</p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={editingAccountId ? "New account name" : "e.g. Family M-Pesa"} maxLength={80} />
+                <Input data-testid="input-bank-account-number" value={accountNumberDraft} onChange={(event) => setAccountNumberDraft(event.target.value)} placeholder="Account number (optional)" maxLength={40} />
                 <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{editingAccountId ? "Rename" : "Add account"}</Button>
-                {editingAccountId && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={() => { setEditingAccountId(null); setAccountNameDraft(""); }}>Cancel</Button>}
+                {editingAccountId && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={() => { setEditingAccountId(null); setAccountNameDraft(""); setAccountNumberDraft(""); }}>Cancel</Button>}
               </div>
               {selectedAccountId && <div className="mt-2 flex gap-2">
-                <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={() => { const item = accounts.find((candidate) => candidate.id === selectedAccountId); setEditingAccountId(selectedAccountId); setAccountNameDraft(item?.name ?? ""); }}>Rename selected</Button>
+                <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={() => { const item = accounts.find((candidate) => candidate.id === selectedAccountId); setEditingAccountId(selectedAccountId); setAccountNameDraft(item?.name ?? ""); setAccountNumberDraft(item?.accountNumber ?? ""); }}>Edit selected</Button>
                 <Button type="button" size="sm" variant="destructive" data-testid="button-remove-bank-account" onClick={() => handleAccountDelete(selectedAccountId)} disabled={deleteAccount.isPending}>Remove selected</Button>
               </div>}
             </div>
@@ -642,7 +646,7 @@ export default function Bank() {
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <Landmark className="w-6 h-6 opacity-80" />
-                <p className="text-sm font-medium opacity-80">Running Balance</p>
+                <p className="text-sm font-medium opacity-80">Closing balance</p>
               </div>
                 <p className="text-4xl font-display font-bold" data-testid="bank-balance">{formatKes(account?.balance ?? 0)}</p>
                 <div className="flex items-center justify-between gap-3 text-sm">

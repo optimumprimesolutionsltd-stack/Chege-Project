@@ -9,6 +9,8 @@
 export interface BankAccount {
   id: number;
   name: string;
+  /** @nullable */
+  accountNumber: string | null;
   openingBalance: number;
   createdAt: Date;
 }

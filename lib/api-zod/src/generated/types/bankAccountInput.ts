@@ -12,6 +12,11 @@ export interface BankAccountInput {
      * @maxLength 80
      */
   name: string;
+  /**
+     * @minLength 1
+     * @maxLength 40
+     */
+  accountNumber?: string;
   /** @minimum 0 */
   openingBalance?: number;
 }

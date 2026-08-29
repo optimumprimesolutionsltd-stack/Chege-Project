@@ -25,6 +25,7 @@ vi.mock("@workspace/db", () => {
 vi.mock("drizzle-orm", () => ({ eq: vi.fn(), and: vi.fn(), sql: vi.fn() }));
 
 import expensesRouter from "../expenses.js";
+import { validateOtherExpenseDescription } from "../expenses.js";
 
 function app(role: "owner" | "admin" | "member" = "owner") {
   const server = express();
@@ -40,17 +41,22 @@ function app(role: "owner" | "admin" | "member" = "owner") {
 }
 
 describe("expense funding request contract", () => {
-  it("rejects Other as a final expense category", async () => {
+  it("requires a brief description when Other is selected", async () => {
     const response = await request(app()).post("/expenses").send({
       amount: 1000,
       category: "Other",
-      description: "Unclassified spending",
+      description: "  ",
       paidFromBank: true,
       date: "2026-08-19",
     });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain("specific category");
+    expect(response.body.error).toContain("Briefly describe");
+  });
+
+  it("accepts a brief description for Other instead of treating it as a setup sentinel", () => {
+    expect(validateOtherExpenseDescription("Other", "Unclassified spending")).toBeNull();
+    expect(validateOtherExpenseDescription("Food", "")).toBeNull();
   });
 
   it("requires the explicitly selected account for a bank-funded expense", async () => {
@@ -80,17 +86,17 @@ describe("expense funding request contract", () => {
     expect(response.body.error).not.toContain("specific category");
   });
 
-  it("rejects changing an expense category to Other", async () => {
+  it("requires a brief description when changing an expense category to Other", async () => {
     const response = await request(app()).patch("/expenses/1").send({
       amount: 1000,
       category: " other ",
-      description: "Unclassified spending",
+      description: " ",
       paidFromBank: true,
       date: "2026-08-19",
     });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain("specific category");
+    expect(response.body.error).toContain("Briefly describe");
   });
 
   it("explains which malformed field prevented an expense from being saved", async () => {

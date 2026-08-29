@@ -137,6 +137,7 @@ export default function BankScreen() {
   const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [accountNameDraft, setAccountNameDraft] = useState('');
+  const [accountNumberDraft, setAccountNumberDraft] = useState('');
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
   const [savingAccount, setSavingAccount] = useState(false);
 
@@ -299,11 +300,13 @@ export default function BankScreen() {
     const account = accounts.find((item) => item.id === accountId);
     setEditingAccountId(account?.id ?? null);
     setAccountNameDraft(account?.name ?? '');
+    setAccountNumberDraft(account?.accountNumber ?? '');
     setAccountModalVisible(true);
   };
 
   const saveAccount = async () => {
     const name = accountNameDraft.trim();
+    const accountNumber = accountNumberDraft.trim();
     if (!name) {
       Alert.alert('Account name required', 'Enter a clear name for this bank account.');
       return;
@@ -311,8 +314,8 @@ export default function BankScreen() {
     setSavingAccount(true);
     try {
       const account = editingAccountId
-        ? await updateAccount({ id: editingAccountId, data: { name } })
-        : await createAccount({ data: { name } });
+        ? await updateAccount({ id: editingAccountId, data: { name, accountNumber: accountNumber || null } })
+        : await createAccount({ data: { name, accountNumber: accountNumber || undefined } });
       selectAccount(account.id);
       setAccountModalVisible(false);
       await invalidateAccounts();
@@ -783,7 +786,7 @@ export default function BankScreen() {
           <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
         ) : (
           <>
-            <Text style={styles.balanceLabel}>Current Balance</Text>
+            <Text style={styles.balanceLabel}>Closing balance</Text>
             <Text style={styles.balance}>KES {formatKES(data?.balance)}</Text>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
@@ -976,6 +979,14 @@ export default function BankScreen() {
               autoFocus
               style={[styles.input, { color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
               testID="bank-account-name"
+            />
+            <TextInput
+              value={accountNumberDraft}
+              onChangeText={setAccountNumberDraft}
+              placeholder="Account number (optional)"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.input, { marginTop: 12, color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
+              testID="bank-account-number"
             />
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
               {editingAccountId !== null && (

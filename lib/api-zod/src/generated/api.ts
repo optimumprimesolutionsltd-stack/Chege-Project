@@ -800,7 +800,9 @@ export const GetJointAccountResponse = zod.object({
   "openingBalance": zod.number().describe('Manually entered balance carried into the first recorded transaction'),
   "accountId": zod.number(),
   "accountName": zod.string(),
+  "accountNumber": zod.string().nullable(),
   "balance": zod.number().describe('Current balance after applying the opening balance and all transactions'),
+  "closingBalance": zod.number().describe('Opening balance plus deposits minus withdrawals'),
   "totalDeposits": zod.number(),
   "totalDisbursements": zod.number(),
   "transactions": zod.array(zod.object({
@@ -1139,6 +1141,7 @@ export const DeleteJointAccountTransactionResponse = zod.object({
 export const GetJointAccountsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
   "createdAt": zod.coerce.date()
 })
@@ -1150,6 +1153,8 @@ export const GetJointAccountsResponse = zod.array(GetJointAccountsResponseItem)
  */
 export const createJointAccountBodyNameMax = 80;
 
+export const createJointAccountBodyAccountNumberMax = 40;
+
 export const createJointAccountBodyOpeningBalanceMin = 0;
 export const createJointAccountBodyOpeningBalanceMultipleOf = 1;
 
@@ -1157,12 +1162,14 @@ export const createJointAccountBodyOpeningBalanceMultipleOf = 1;
 
 export const CreateJointAccountBody = zod.object({
   "name": zod.string().min(1).max(createJointAccountBodyNameMax),
+  "accountNumber": zod.string().min(1).max(createJointAccountBodyAccountNumberMax).optional(),
   "openingBalance": zod.number().min(createJointAccountBodyOpeningBalanceMin).multipleOf(createJointAccountBodyOpeningBalanceMultipleOf).optional()
 })
 
 export const CreateJointAccountResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
   "createdAt": zod.coerce.date()
 })
@@ -1177,6 +1184,8 @@ export const UpdateJointAccountParams = zod.object({
 
 export const updateJointAccountBodyNameMax = 80;
 
+export const updateJointAccountBodyAccountNumberMax = 40;
+
 export const updateJointAccountBodyOpeningBalanceMin = 0;
 export const updateJointAccountBodyOpeningBalanceMultipleOf = 1;
 
@@ -1184,12 +1193,14 @@ export const updateJointAccountBodyOpeningBalanceMultipleOf = 1;
 
 export const UpdateJointAccountBody = zod.object({
   "name": zod.string().min(1).max(updateJointAccountBodyNameMax).optional(),
+  "accountNumber": zod.string().min(1).max(updateJointAccountBodyAccountNumberMax).nullish(),
   "openingBalance": zod.number().min(updateJointAccountBodyOpeningBalanceMin).multipleOf(updateJointAccountBodyOpeningBalanceMultipleOf).optional()
 })
 
 export const UpdateJointAccountResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
   "createdAt": zod.coerce.date()
 })

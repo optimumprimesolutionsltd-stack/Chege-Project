@@ -12,8 +12,12 @@ export interface JointAccountSummary {
   openingBalance: number;
   accountId: number;
   accountName: string;
+  /** @nullable */
+  accountNumber: string | null;
   /** Current balance after applying the opening balance and all transactions */
   balance: number;
+  /** Opening balance plus deposits minus withdrawals */
+  closingBalance: number;
   totalDeposits: number;
   totalDisbursements: number;
   transactions: JointAccountTransaction[];

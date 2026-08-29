@@ -976,8 +976,12 @@ export interface JointAccountSummary {
   openingBalance: number;
   accountId: number;
   accountName: string;
+  /** @nullable */
+  accountNumber: string | null;
   /** Current balance after applying the opening balance and all transactions */
   balance: number;
+  /** Opening balance plus deposits minus withdrawals */
+  closingBalance: number;
   totalDeposits: number;
   totalDisbursements: number;
   transactions: JointAccountTransaction[];
@@ -1151,6 +1155,8 @@ export interface SavingsTransferInput {
 export interface BankAccount {
   id: number;
   name: string;
+  /** @nullable */
+  accountNumber: string | null;
   openingBalance: number;
   createdAt: string;
 }
@@ -1161,6 +1167,11 @@ export interface BankAccountInput {
      * @maxLength 80
      */
   name: string;
+  /**
+     * @minLength 1
+     * @maxLength 40
+     */
+  accountNumber?: string;
   /** @minimum 0 */
   openingBalance?: number;
 }
@@ -1171,6 +1182,12 @@ export interface BankAccountUpdate {
      * @maxLength 80
      */
   name?: string;
+  /**
+     * @minLength 1
+     * @maxLength 40
+     * @nullable
+     */
+  accountNumber?: string | null;
   /** @minimum 0 */
   openingBalance?: number;
 }

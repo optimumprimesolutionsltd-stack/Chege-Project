@@ -2890,9 +2890,14 @@ components:
           type: number
         accountName:
           type: string
+        accountNumber:
+          type: ["string", "null"]
         balance:
           type: number
           description: Current balance after applying the opening balance and all transactions
+        closingBalance:
+          type: number
+          description: Opening balance plus deposits minus withdrawals
         totalDeposits:
           type: number
         totalDisbursements:
@@ -2905,7 +2910,9 @@ components:
         - openingBalance
         - accountId
         - accountName
+        - accountNumber
         - balance
+        - closingBalance
         - totalDeposits
         - totalDisbursements
         - transactions
@@ -3113,14 +3120,16 @@ components:
       properties:
         id: { type: number }
         name: { type: string }
+        accountNumber: { type: ["string", "null"] }
         openingBalance: { type: number }
         createdAt: { type: string, format: date-time }
-      required: [id, name, openingBalance, createdAt]
+      required: [id, name, accountNumber, openingBalance, createdAt]
 
     BankAccountInput:
       type: object
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
+        accountNumber: { type: string, minLength: 1, maxLength: 40 }
         openingBalance: { type: number, minimum: 0, multipleOf: 1 }
       required: [name]
 
@@ -3128,6 +3137,7 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
+        accountNumber: { type: ["string", "null"], minLength: 1, maxLength: 40 }
         openingBalance: { type: number, minimum: 0, multipleOf: 1 }
 
     SavingsGoalInput:

@@ -13,6 +13,7 @@ import {
   useCascadeContribute,
   useGetJointAccount,
   useGetJointAccounts,
+  useCreateJointAccount,
   useGetGroup,
    useGetIncomeSources,
    useGetWorkspaces,
@@ -24,6 +25,7 @@ import {
   getGetDashboardTrendsQueryKey,
   getGetSavingsGoalsQueryKey,
   getGetJointAccountQueryKey,
+  getGetJointAccountsQueryKey,
   getGetExpensesQueryKey,
   getGetBudgetCategoriesQueryKey,
    getGetIncomeSourcesQueryKey,
@@ -500,11 +502,16 @@ function ExpenseForm({
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBudget, setNewCategoryBudget] = useState("");
+  const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
   const [paidFromBank, setPaidFromBank] = useState(false);
   const [allowMixedFunding, setAllowMixedFunding] = useState(false);
   const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | null>(null);
   const [bankPortion, setBankPortion] = useState("");
   const [directPortion, setDirectPortion] = useState("");
+  const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
+  const [newBankAccountName, setNewBankAccountName] = useState("");
+  const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
+  const [newBankOpeningBalance, setNewBankOpeningBalance] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [date, setDate] = useState(localDateInputValue());
   const { data: categories = [] } = useGetBudgetCategories();
@@ -526,11 +533,40 @@ function ExpenseForm({
     : members.filter((member) => member.userId === currentUserId);
   const createExpense = useCreateExpense();
   const createCategory = useCreateBudgetCategory();
+  const createBankAccount = useCreateJointAccount();
   const qc = useQueryClient();
   const { toast } = useToast();
   const today = localDateInputValue();
   const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
   const bankLabel = isSharedWorkspace ? "Shared bank deposits" : "Personal bank deposits";
+  const isOtherCategory = category.trim().toLocaleLowerCase() === "other";
+
+  const handleAddBankAccount = async () => {
+    const name = newBankAccountName.trim();
+    const accountNumber = newBankAccountNumber.trim();
+    const openingBalance = Number(newBankOpeningBalance || 0);
+    if (!name) {
+      toast({ variant: "destructive", title: "Account name required", description: "Enter a name for this bank account." });
+      return;
+    }
+    try {
+      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("Opening balance must be zero or more whole shillings.");
+      const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
+      setSelectedBankAccountId(created.id);
+      setNewBankAccountName("");
+      setNewBankAccountNumber("");
+      setNewBankOpeningBalance("");
+      setIsAddingBankAccount(false);
+      await qc.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+      toast({ title: "Bank account added", description: `${created.name} is selected for this expense.` });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add bank account",
+        description: error instanceof Error ? error.message : "Check the account name and try again.",
+      });
+    }
+  };
 
   const handleAddCategory = async () => {
     const name = newCategoryName.trim();
@@ -623,6 +659,14 @@ function ExpenseForm({
       });
       return;
     }
+    if (isOtherCategory && description.trim().length < 3) {
+      toast({
+        variant: "destructive",
+        title: "Brief description required",
+        description: "Briefly describe what this Other expense was for.",
+      });
+      return;
+    }
     if (!description.trim()) {
       toast({
         variant: "destructive",
@@ -663,6 +707,28 @@ function ExpenseForm({
       });
       return;
     }
+    if (!allowMixedFunding) {
+      const sourceAmount = Number(paidFromBank ? bankPortion : directPortion);
+      if (!Number.isInteger(sourceAmount) || sourceAmount <= 0) {
+        toast({
+          variant: "destructive",
+          title: "Enter the funding amount",
+          description: `Enter how much came from the selected ${paidFromBank ? "bank account" : "income source"}.`,
+        });
+        return;
+      }
+      if (sourceAmount !== amt) {
+        const remaining = amt - sourceAmount;
+        toast({
+          variant: "destructive",
+          title: remaining > 0 ? "Add another funding source" : "Funding exceeds the expense",
+          description: remaining > 0
+            ? `${formatKes(remaining)} is still unfunded. Choose Both or add another source.`
+            : `Reduce the funding amount by ${formatKes(Math.abs(remaining))}.`,
+        });
+        return;
+      }
+    }
     if (allowMixedFunding) {
       const bankAmount = Number(bankPortion);
       const directAmount = Number(directPortion);
@@ -696,7 +762,22 @@ function ExpenseForm({
       });
       return;
     }
+    let expenseCategory = category;
     try {
+      if (isOtherCategory && saveOtherAsCategory) {
+        const existingCategory = categories.find(
+          (item) => item.name.trim().toLocaleLowerCase() === description.trim().toLocaleLowerCase(),
+        );
+        if (existingCategory) {
+          expenseCategory = existingCategory.name;
+        } else {
+          const createdCategory = await createCategory.mutateAsync({
+            data: { name: description.trim(), budgetAmount: 0, priority: 3, isRecurring: true },
+          });
+          expenseCategory = createdCategory.name;
+          await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+        }
+      }
       const bankAmount = Number(bankPortion);
       const directAmount = Number(directPortion);
       const payerName = isSharedWorkspace
@@ -706,7 +787,7 @@ function ExpenseForm({
         data: {
           amount: amt,
           description,
-          category: category,
+           category: expenseCategory,
           notes: notes.trim() || undefined,
           paidById: paidFromBank && !allowMixedFunding ? undefined : directPayerId,
           paidFromBank: paidFromBank && !allowMixedFunding,
@@ -752,15 +833,49 @@ function ExpenseForm({
           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-11 bg-card text-base" autoFocus />
         </div>
         <div className="space-y-1.5 lg:col-span-1">
-          <label className="text-sm font-semibold text-foreground">Description</label>
-          <Input placeholder="What was it for?" value={description} onChange={e => setDescription(e.target.value)} required className="h-11 bg-card" />
+           <label className="text-sm font-semibold text-foreground">
+             {isOtherCategory ? "Brief description" : "Description"}
+           </label>
+             <Input
+             placeholder={isOtherCategory ? "Briefly describe this expense" : "What was it for?"}
+             value={description}
+             onChange={e => setDescription(e.target.value)}
+             required
+             maxLength={isOtherCategory ? 120 : undefined}
+             className="h-11 bg-card"
+           />
+           {isOtherCategory && canManageCategories && (
+             <p className="text-xs text-muted-foreground">Briefly explain what this Other expense covered.</p>
+           )}
+           {isOtherCategory && (
+             <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+               <input
+                 type="checkbox"
+                 checked={saveOtherAsCategory}
+                 onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
+                 className="mt-0.5 h-4 w-4 accent-primary"
+               />
+               <span>
+                 <span className="font-semibold">Save this as a category for future expenses</span>
+                 <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
+               </span>
+             </label>
+           )}
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Category <span className="text-destructive">*</span></label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+             <select
+               value={category}
+               onChange={e => {
+                 setCategory(e.target.value);
+                 if (e.target.value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
+               }}
+               className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+             >
               <option value="">Pick a category</option>
               {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+               {!categories.some(c => c.name.trim().toLocaleLowerCase() === "other") && <option value="Other">Other</option>}
             </select>
             {canManageCategories && (
               <Button
@@ -900,6 +1015,20 @@ function ExpenseForm({
                )}
              </div>
            )}
+           {incomeSourceId && fundingMode === "direct" && (
+             <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+               Amount from this source
+               <Input
+                 type="number"
+                 min="1"
+                 step="1"
+                 value={directPortion}
+                 onChange={(event) => setDirectPortion(event.target.value)}
+                 placeholder="KES 0"
+                 className="h-11 bg-card"
+               />
+             </label>
+           )}
            <p className="text-xs text-muted-foreground">
              Paid directly means this expense is linked to the selected income source and does not reduce any Jamvi bank-account balance.
            </p>
@@ -969,7 +1098,37 @@ function ExpenseForm({
                 Jamvi will record a withdrawal from this account. The money should already exist there as an opening balance or recorded deposit.
               </p>
               {bankAccounts.length === 0 && (
-                <p className="text-xs font-medium text-destructive">Add a bank account from the Bank section before using deposited money.</p>
+                <p className="text-xs font-medium text-muted-foreground">Create a bank account here to continue without leaving this expense.</p>
+              )}
+              {isAddingBankAccount ? (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Input
+                    autoFocus
+                    value={newBankAccountName}
+                    onChange={(event) => setNewBankAccountName(event.target.value)}
+                    placeholder="e.g. M-Pesa Till or Main account"
+                    className="h-10 bg-card"
+                  />
+                  <Input value={newBankAccountNumber} onChange={(event) => setNewBankAccountNumber(event.target.value)} placeholder="Account number (optional)" className="h-10 bg-card" />
+                  <Input type="number" min="0" step="1" value={newBankOpeningBalance} onChange={(event) => setNewBankOpeningBalance(event.target.value)} placeholder="Opening balance (KES)" className="h-10 bg-card" />
+                  <Button type="button" size="sm" className="h-10" onClick={() => void handleAddBankAccount()} disabled={createBankAccount.isPending}>
+                    {createBankAccount.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Add account
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingBankAccount(false); setNewBankAccountName(""); setNewBankAccountNumber(""); setNewBankOpeningBalance(""); }}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)}>
+                  + New bank account
+                </Button>
+              )}
+              {fundingMode === "bank" && (
+                <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                  Amount from this account
+                  <Input type="number" min="1" step="1" value={bankPortion} onChange={(event) => setBankPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" />
+                </label>
               )}
             </div>
           )}

@@ -7,6 +7,7 @@ export const bankAccountsTable = pgTable("bank_accounts", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
+  accountNumber: text("account_number"),
   openingBalance: integer("opening_balance").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [

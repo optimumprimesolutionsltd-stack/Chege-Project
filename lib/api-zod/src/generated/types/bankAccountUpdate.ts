@@ -12,6 +12,12 @@ export interface BankAccountUpdate {
      * @maxLength 80
      */
   name?: string;
+  /**
+     * @minLength 1
+     * @maxLength 40
+     * @nullable
+     */
+  accountNumber?: string | null;
   /** @minimum 0 */
   openingBalance?: number;
 }

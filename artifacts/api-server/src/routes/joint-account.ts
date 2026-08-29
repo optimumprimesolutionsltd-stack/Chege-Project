@@ -121,13 +121,15 @@ const SavingsTransferInput = z.object({
 });
 const AccountInput = z.object({
   name: z.string().trim().min(1).max(80),
+  accountNumber: z.string().trim().min(1).max(40).optional(),
   openingBalance: z.number().int().nonnegative().optional(),
 });
 const AccountUpdateInput = z.object({
   name: z.string().trim().min(1).max(80).optional(),
+  accountNumber: z.string().trim().min(1).max(40).nullable().optional(),
   openingBalance: z.number().int().nonnegative().optional(),
-}).refine((value) => value.name !== undefined || value.openingBalance !== undefined, {
-  message: "Provide a name or opening balance.",
+}).refine((value) => value.name !== undefined || value.accountNumber !== undefined || value.openingBalance !== undefined, {
+  message: "Provide a name, account number, or opening balance.",
 });
 const AccountQuery = z.object({ accountId: z.coerce.number().int().positive().optional() });
 
@@ -263,7 +265,10 @@ router.post("/joint-accounts", async (req, res): Promise<void> => {
   const parsed = AccountInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid account details." }); return; }
   const [account] = await db.insert(bankAccountsTable).values({
-    groupId, name: parsed.data.name, openingBalance: parsed.data.openingBalance ?? 0,
+    groupId,
+    name: parsed.data.name,
+    accountNumber: parsed.data.accountNumber,
+    openingBalance: parsed.data.openingBalance ?? 0,
   }).onConflictDoNothing().returning();
   if (!account) { res.status(409).json({ error: "An account with this name already exists." }); return; }
   res.status(201).json({ ...account, createdAt: account.createdAt instanceof Date ? account.createdAt.toISOString() : account.createdAt });
@@ -336,8 +341,10 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   res.json({
     accountId: selectedAccount.id,
     accountName: isAggregate ? "All accounts" : selectedAccount.name,
+    accountNumber: isAggregate ? null : selectedAccount.accountNumber,
     openingBalance,
     balance,
+    closingBalance: balance,
     totalDeposits,
     totalDisbursements,
     transactions: enriched,
