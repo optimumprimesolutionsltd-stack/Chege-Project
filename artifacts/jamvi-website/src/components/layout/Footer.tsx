@@ -36,8 +36,8 @@ export function Footer() {
           <div>
             <h4 className="font-serif text-lg mb-6 text-white font-medium">Legal</h4>
             <ul className="space-y-4">
-              <li><a href="#" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Terms of Service</a></li>
-              <li><a href="#" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Privacy Policy</a></li>
+              <li><Link href="/terms" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Terms of Service</Link></li>
+              <li><Link href="/privacy" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Privacy Policy</Link></li>
             </ul>
           </div>
         </div>

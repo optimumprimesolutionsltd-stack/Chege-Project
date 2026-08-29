@@ -34,6 +34,19 @@ const pages = {
     description:
       "Find answers about Jamvi personal budgets, shared group finances, permissions, security, pricing, currencies, and getting started in Kenya.",
   },
+  // The legal pages are listed so they carry their own canonical URL. Without
+  // an entry each would inherit the shell's, and tell search engines it was
+  // the home page.
+  "/terms": {
+    title: "Terms of Service",
+    description:
+      "The terms on which Jamvi is provided: what the service does, what it deliberately does not do, and the responsibilities of everyone using it.",
+  },
+  "/privacy": {
+    title: "Privacy Policy",
+    description:
+      "What personal data Jamvi collects, why, who processes it, where it is stored, and the rights you have over it under Kenya's Data Protection Act.",
+  },
 };
 
 const shell = await readFile(shellPath, "utf8");

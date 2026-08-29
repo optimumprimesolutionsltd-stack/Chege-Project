@@ -15,6 +15,8 @@ import Features from '@/pages/features';
 import Pricing from '@/pages/pricing';
 import About from '@/pages/about';
 import FAQ from '@/pages/faq';
+import Terms from '@/pages/terms';
+import Privacy from '@/pages/privacy';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
@@ -31,6 +33,8 @@ function Router() {
             <Route path="/pricing" component={Pricing} />
             <Route path="/about" component={About} />
             <Route path="/faq" component={FAQ} />
+            <Route path="/terms" component={Terms} />
+            <Route path="/privacy" component={Privacy} />
             <Route component={NotFound} />
           </Switch>
         </RoutedErrorBoundary>
