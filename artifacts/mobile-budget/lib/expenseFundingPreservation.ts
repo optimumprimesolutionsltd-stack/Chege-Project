@@ -64,3 +64,31 @@ export function buildSinglePayerFundingReplacement({
     fromBank: false,
   }));
 }
+
+export function getExpenseFundingControlState({
+  paidFromBank,
+  hasPersonalFunding,
+  allowMixedFunding,
+}: {
+  paidFromBank: boolean;
+  hasPersonalFunding: boolean;
+  allowMixedFunding: boolean;
+}) {
+  const bankOnly = paidFromBank && !hasPersonalFunding;
+  return {
+    requiresBankAccount: paidFromBank,
+    personalPayersDisabled: bankOnly && !allowMixedFunding,
+    showBankOnlyExplanation: bankOnly,
+    showPersonalIncomeSources: !paidFromBank && hasPersonalFunding,
+  };
+}
+
+export function getNewExpenseCategoryMode({
+  addToBudget,
+  canManageCategories,
+}: {
+  addToBudget: boolean;
+  canManageCategories: boolean;
+}) {
+  return addToBudget && canManageCategories ? 'budgeted' as const : 'unbudgeted' as const;
+}

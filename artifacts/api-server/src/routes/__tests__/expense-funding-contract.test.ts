@@ -17,6 +17,7 @@ vi.mock("@workspace/db", () => {
       },
     },
     expensesTable: table, usersTable: table, membersTable: table,
+    bankAccountsTable: table,
     groupMembershipsTable: table,
     incomeSourcesTable: table, expenseIncomeSplitsTable: table, jointAccountTxTable: table,
   };
@@ -50,6 +51,33 @@ describe("expense funding request contract", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toContain("specific category");
+  });
+
+  it("requires the explicitly selected account for a bank-funded expense", async () => {
+    const response = await request(app()).post("/expenses").send({
+      amount: 1000,
+      category: "Emergency repair",
+      description: "Replace broken lock",
+      paidFromBank: true,
+      date: "2026-08-19",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("Choose a valid bank account");
+  });
+
+  it("accepts a meaningful unbudgeted category name without requiring a budget row", async () => {
+    const response = await request(app()).post("/expenses").send({
+      amount: 1000,
+      category: "Emergency repair",
+      description: "Replace broken lock",
+      paidFromBank: false,
+      date: "2026-08-19",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain("income source");
+    expect(response.body.error).not.toContain("specific category");
   });
 
   it("rejects changing an expense category to Other", async () => {

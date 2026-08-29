@@ -44,6 +44,8 @@ import {
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import {
   buildSinglePayerFundingReplacement,
+  getExpenseFundingControlState,
+  getNewExpenseCategoryMode,
   preserveExpenseSplitsForAmount,
 } from '@/lib/expenseFundingPreservation';
 
@@ -426,7 +428,10 @@ export default function AddExpenseSheet() {
       Alert.alert('Category already exists', 'Select the existing category from the list instead.');
       return;
     }
-    if (!newCategoryAddToBudget || !canManageCategories) {
+    if (getNewExpenseCategoryMode({
+      addToBudget: newCategoryAddToBudget,
+      canManageCategories,
+    }) === 'unbudgeted') {
       setCategory(name);
       setNewCategoryName('');
       setNewCategoryBudget('');
@@ -1056,7 +1061,11 @@ export default function AddExpenseSheet() {
                 return (
                   <Pressable
                     key={m.userId}
-                    disabled={paidFromBank && payerIds.length === 0 && !allowMixedFunding}
+                    disabled={getExpenseFundingControlState({
+                      paidFromBank,
+                      hasPersonalFunding: payerIds.length > 0,
+                      allowMixedFunding,
+                    }).personalPayersDisabled}
                     onPress={() => {
                       if (!canManageShared) return;
                       if (isEditMode) setFundingDirty(true);
@@ -1121,7 +1130,11 @@ export default function AddExpenseSheet() {
                   })}
                 </View>
                 {bankAccounts.length === 0 && <Text style={[styles.hintText, { color: '#ef4444' }]}>Add a bank account from the Bank tab before using bank funds.</Text>}
-                {payerIds.length === 0 && (
+                {getExpenseFundingControlState({
+                  paidFromBank,
+                  hasPersonalFunding: payerIds.length > 0,
+                  allowMixedFunding,
+                }).showBankOnlyExplanation && (
                   <View>
                     <Text style={[styles.hintText, { color: '#38bdf8' }]}>
                       Paid from this bank account. Personal payer and income-source fields are not needed.
@@ -1289,7 +1302,11 @@ export default function AddExpenseSheet() {
         )}
 
         {/* Keep sources directly below the person who paid, not above the choice. */}
-        {!paidFromBank && payerIds.length === 1 && (
+        {getExpenseFundingControlState({
+          paidFromBank,
+          hasPersonalFunding: payerIds.length === 1,
+          allowMixedFunding,
+        }).showPersonalIncomeSources && (
           <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
             <View style={styles.fundingCardHeader}>
               <Feather name="layers" size={14} color={colors.primary} />

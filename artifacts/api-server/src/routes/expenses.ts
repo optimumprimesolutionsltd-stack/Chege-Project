@@ -395,9 +395,7 @@ router.post("/expenses", async (req, res) => {
   if (splitResult.error) { res.status(400).json({ error: splitResult.error }); return; }
   const hasBankFunding = paidFromBank === true || splitResult.splits?.some((split) => split.fromBank);
   const selectedBankAccountId = hasBankFunding
-    ? accountId ?? splitResult.splits?.find((split) => split.fromBank)?.accountId ??
-      (await db.select({ id: bankAccountsTable.id }).from(bankAccountsTable)
-        .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.id).limit(1))[0]?.id
+    ? accountId ?? splitResult.splits?.find((split) => split.fromBank)?.accountId
     : null;
   if (hasBankFunding && !selectedBankAccountId) {
     res.status(400).json({ error: "Choose a valid bank account for bank funding." });

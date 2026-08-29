@@ -58,7 +58,11 @@ import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { hasMissingPersonalFundingSource } from "@/lib/expense-funding-utils";
+import {
+  getExpenseFundingControlState,
+  getNewExpenseCategoryMode,
+  hasMissingPersonalFundingSource,
+} from "@/lib/expense-funding-utils";
 
 type Expense = {
   id: number;
@@ -444,7 +448,10 @@ export default function Expenses() {
       });
       return;
     }
-    if (!newCategoryAddToBudget || !canManageCategories) {
+    if (getNewExpenseCategoryMode({
+      addToBudget: newCategoryAddToBudget,
+      canManageCategories,
+    }) === "unbudgeted") {
       form.setCategory(name);
       setIsCreatingCategory(false);
       setNewCategoryName("");
@@ -1045,7 +1052,11 @@ export default function Expenses() {
               return (
                 <button
                   key={m.userId} type="button"
-                  disabled={form.paidFromBank && form.payerIds.length === 0 && !allowMixedFunding}
+                  disabled={getExpenseFundingControlState({
+                    paidFromBank: form.paidFromBank,
+                    hasPersonalFunding: form.payerIds.length > 0,
+                    allowMixedFunding,
+                  }).personalPayersDisabled}
                   onClick={() => {
                     form.setIncomeSourceId(null);
                     form.setOtherIncomeSourceLabel(null);
@@ -1093,7 +1104,11 @@ export default function Expenses() {
               {bankAccounts.length === 0 && <p className="text-xs text-destructive">A budget manager must add a bank account before this expense can be bank-funded.</p>}
             </div>
           )}
-          {form.paidFromBank && form.payerIds.length === 0 && (
+          {getExpenseFundingControlState({
+            paidFromBank: form.paidFromBank,
+            hasPersonalFunding: form.payerIds.length > 0,
+            allowMixedFunding,
+          }).showBankOnlyExplanation && (
             <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:bg-sky-950 dark:text-sky-300">
               <p>This expense is paid from the selected bank account. Personal payer and income-source fields are not needed.</p>
               {!allowMixedFunding && canManageExpenses && (
@@ -1188,7 +1203,11 @@ export default function Expenses() {
         </div>
 
         {/* Income source picker — shown when a single named payer is chosen */}
-         {!form.paidFromBank && (mode === "add" ? form.payerIds.length === 1 : !!form.paidById) && (
+         {getExpenseFundingControlState({
+           paidFromBank: form.paidFromBank,
+           hasPersonalFunding: mode === "add" ? form.payerIds.length === 1 : !!form.paidById,
+           allowMixedFunding,
+         }).showPersonalIncomeSources && (
           <div className="md:col-span-2 space-y-2">
             <label className="text-sm font-semibold text-foreground">
               Paid from <span className="text-destructive">*</span>
