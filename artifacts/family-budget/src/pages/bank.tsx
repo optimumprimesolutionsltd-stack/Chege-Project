@@ -1,4 +1,110 @@
-t bank, string = named member ID
+import { useEffect, useState } from "react";
+import {
+  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
+  useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
+  useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank, useGetGroup,
+  getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
+  getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey, useUpdateJointAccountOpeningBalance,
+  useGetJointAccounts, useCreateJointAccount, useUpdateJointAccount, useDeleteJointAccount,
+  getGetJointAccountsQueryKey, useTransferBankToBank,
+} from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { formatKes, formatDate } from "@/lib/utils";
+import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@workspace/replit-auth-web";
+import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
+import { getProjectedBalanceAfterOutgoing } from "@/lib/bank-balance-utils";
+
+// "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
+const JOINT_BANK_ID = null as null;
+
+function getBankEditDeepLink() {
+  const editId = Number(new URLSearchParams(window.location.search).get("edit"));
+  return Number.isInteger(editId) && editId > 0 ? editId : null;
+}
+
+type MemberIncomeSource = {
+  id: number;
+  name: string;
+};
+
+type EditableTransaction = {
+  id: number;
+  accountId?: number | null;
+  type: string;
+  amount: number;
+  description: string;
+  date: string;
+  madeById?: string | null;
+  incomeSourceId?: number | null;
+  expenseCategory?: string | null;
+  bankCharge?: boolean;
+  bankTransferId?: string | null;
+  bankTransferAccountId?: number | null;
+  bankTransferAccountName?: string | null;
+  savingsGoalId?: number | null;
+  savingsGoalName?: string | null;
+  transferDirection?: string | null;
+  contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
+};
+
+export default function Bank() {
+  const bankEditId = getBankEditDeepLink();
+  const { data: group } = useGetGroup();
+  const bankSelectionKey = group?.id ? `jamvi:bank-account:${group.id}` : null;
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const { data: accounts = [], isLoading: accountsLoading } = useGetJointAccounts();
+  const { data: account, isLoading } = useGetJointAccount(
+    selectedAccountId ? { accountId: selectedAccountId } : undefined,
+  );
+  const { data: members } = useGetMembers();
+  const { data: categories } = useGetBudgetCategories();
+  const createDeposit = useCreateDeposit();
+  const createDisbursement = useCreateDisbursement();
+  const createBankCharge = useCreateBankCharge();
+  const updateTx = useUpdateJointAccountTransaction();
+  const deleteTx = useDeleteJointAccountTransaction();
+  const transferToSavings = useTransferBankToSavings();
+  const transferFromSavings = useTransferSavingsToBank();
+  const updateOpeningBalance = useUpdateJointAccountOpeningBalance();
+  const createAccount = useCreateJointAccount();
+  const updateAccount = useUpdateJointAccount();
+  const deleteAccount = useDeleteJointAccount();
+  const transferBankToBank = useTransferBankToBank();
+  const { data: savingsGoals = [] } = useGetSavingsGoals();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isSharedWorkspace = group?.isPrivate === false;
+  const canManageAccount = canManageBankAccount(group);
+  const canManageShared = isSharedWorkspace && canManageAccount;
+  const canEditTransaction = (tx: EditableTransaction) =>
+    canManageAccount || (
+      tx.type === "deposit" &&
+      tx.madeById === user?.id &&
+      tx.date === new Date().toISOString().split("T")[0] &&
+      !tx.savingsGoalId &&
+      (tx.contributorSplits?.length ?? 0) === 0
+    );
+
+  const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | "bank_transfer" | "bank_charge" | null>(null);
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+
+  // Deposit attribution — null = Joint bank, string[] = named member IDs
+  // Default: Joint bank (empty array = no named depositors selected)
+  const [depositorIds, setDepositorIds] = useState<string[]>([]);
+  const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [depositSourceKind, setDepositSourceKind] = useState<"income_source" | "other" | null>(null);
+
+  // Withdrawal attribution — null = Joint bank, string = named member ID
   // Default: Joint bank
   const [withdrawerId, setWithdrawerId] = useState<string | null>(JOINT_BANK_ID);
   const [expenseCategory, setExpenseCategory] = useState("");

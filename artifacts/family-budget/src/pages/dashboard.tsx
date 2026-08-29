@@ -1,4 +1,1174 @@
--muted/40"}`}>
+import { useEffect, useState } from "react";
+import {
+  useGetDashboardSummary,
+  useGetDashboardActivity,
+  useGetDashboardCategoryBreakdown,
+  useGetDashboardTrends,
+  useGetSavingsGoals,
+  useGetBudgetCategories,
+  useGetMembers,
+  useCreateExpense,
+  useCreateDeposit,
+  useContributeToSavingsGoal,
+  useCascadeContribute,
+  useGetJointAccount,
+  useGetJointAccounts,
+  useCreateJointAccount,
+  useGetGroup,
+   useGetIncomeSources,
+   useGetWorkspaces,
+   useCreateBudgetCategory,
+   useUpdateBudgetCategory,
+  useCreateSharedGroup,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardActivityQueryKey,
+  getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardTrendsQueryKey,
+  getGetSavingsGoalsQueryKey,
+  getGetJointAccountQueryKey,
+  getGetJointAccountsQueryKey,
+  getGetExpensesQueryKey,
+  getGetBudgetCategoriesQueryKey,
+   getGetIncomeSourcesQueryKey,
+  type SavingsGoal,
+  type IncomeSource,
+  type GroupKind,
+} from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { formatKes, formatDate } from "@/lib/utils";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag,
+  ArrowRightLeft,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ACTIVITY_TYPE } from "@/lib/activityTypes";
+import { Link, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@workspace/replit-auth-web";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
+import { ProfileAvatar } from "@/components/profile-avatar";
+import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
+import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
+import { appPath, routePath } from "@/lib/base-path";
+import { canManageBankAccount } from "@/lib/bank-access";
+import { getFundingRemainder } from "@/lib/expense-funding-utils";
+
+type QuickAction = "none" | "income" | "expense" | "goal";
+const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";
+
+type DashboardActivityItem = ActivityEditItem & {
+  type: string;
+  amount: number;
+  description: string;
+  userName?: string | null;
+  categoryAllocations?: { category: string; amount: number }[];
+};
+
+function DashboardActivityRow({
+  item,
+  compact = false,
+  bankLabel = "Shared bank",
+}: {
+  item: DashboardActivityItem;
+  compact?: boolean;
+  bankLabel?: string;
+}) {
+  const editLink = getActivityEditLink(item);
+  const rowClass = compact
+    ? "flex items-center justify-between border-b border-border/30 py-2 last:border-0"
+    : "flex items-center justify-between gap-3 py-3 first:pt-1 last:pb-1";
+  const content = (
+    <>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`${compact ? "h-1.5 w-1.5" : "h-2 w-2"} shrink-0 rounded-full ${item.type === ACTIVITY_TYPE.EXPENSE ? "bg-muted-foreground/40" : "bg-primary"}`} />
+        <div className="min-w-0">
+          <p className="truncate text-sm text-foreground">{item.description}</p>
+          <p className="text-xs text-muted-foreground">
+            {item.userName ?? bankLabel} · {formatDate(String(item.date))}
+            {editLink?.label === "Edit expense" ? " · Edit expense" : ""}
+          </p>
+          {item.categoryAllocations && item.categoryAllocations.length > 1 && (
+            <p className="text-xs text-muted-foreground" data-testid={`activity-category-breakdown-${item.id}`}>
+              {item.categoryAllocations.map((allocation) => `${allocation.category}: ${formatKes(allocation.amount)}`).join(" · ")}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="ml-3 flex shrink-0 items-center gap-2">
+        <p className={`whitespace-nowrap text-sm font-semibold ${item.type === ACTIVITY_TYPE.EXPENSE ? "text-foreground/70" : "text-primary"}`}>
+          {item.type === ACTIVITY_TYPE.EXPENSE ? "-" : "+"}{formatKes(item.amount)}
+        </p>
+        {editLink?.label === "Edit expense" ? <Receipt className="h-4 w-4 text-primary" aria-hidden="true" /> : null}
+      </div>
+    </>
+  );
+
+  return editLink?.label === "Edit expense" ? (
+    <Link
+      href={editLink.href}
+      className={`${rowClass} rounded-md transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+      aria-label={`Edit ${item.description}`}
+    >
+      {content}
+    </Link>
+  ) : (
+    <div className={rowClass}>{content}</div>
+  );
+}
+
+function getQuickActionFromLocation(location: string): Exclude<QuickAction, "none"> | null {
+  const locationSearch = location.includes("?") ? location.slice(location.indexOf("?")) : "";
+  const search = locationSearch || window.location.search;
+  const action = new URLSearchParams(search).get("quick");
+  return action === "income" || action === "expense" || action === "goal" ? action : null;
+}
+
+function localDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+const SHARED_OVERVIEW_SHORTCUTS = [
+  { href: "/budget", label: "Budget", description: "Plan spending", icon: Wallet },
+  { href: "/contributions", label: "Contributions", description: "See money in", icon: TrendingUp },
+  { href: "/expenses", label: "Expenses", description: "Review spending", icon: Receipt },
+  { href: "/savings-goals", label: "Goals", description: "Track targets", icon: Target },
+  { href: "/bank", label: "Bank", description: "Manage funds", icon: Landmark },
+  { href: "/reports", label: "Reports", description: "Understand trends", icon: BarChart3 },
+];
+
+function OpenInvitationLinkButton() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [link, setLink] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const openInvitation = (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    try {
+      const invitationUrl = new URL(link.trim(), window.location.origin);
+      const invitationRoute = routePath(invitationUrl.pathname, import.meta.env.BASE_URL);
+      if (
+        invitationUrl.origin !== window.location.origin ||
+        !invitationRoute ||
+        !/^\/(?:invite|join)\/[^/]+\/?$/.test(invitationRoute)
+      ) {
+        throw new Error("Paste a Jamvi email invitation or private group link.");
+      }
+      window.location.assign(`${appPath(invitationRoute, import.meta.env.BASE_URL)}${invitationUrl.search}${invitationUrl.hash}`);
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : "Could not open that invitation.");
+    }
+  };
+
+  return (
+    <>
+      <Button type="button" variant="outline" className="h-11 shrink-0 rounded-xl px-5" onClick={() => setIsOpen(true)}>
+        <Link2 className="mr-2 h-4 w-4" />
+        I have an invitation link
+      </Button>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+         <DialogTitle>Join a Shared budget</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={openInvitation} className="space-y-5">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+               Paste the email invitation or private group link you received. It will add that Shared budget alongside any other budgets you can access after you accept.
+            </p>
+            <div className="space-y-2">
+              <label htmlFor="group-invitation-link" className="text-sm font-semibold text-foreground">Invitation link</label>
+              <Input
+                id="group-invitation-link"
+                autoFocus
+                placeholder="https://…/invite/…"
+                value={link}
+                onChange={(event) => setLink(event.target.value)}
+              />
+            </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            <Button type="submit" className="w-full">
+              Open invitation
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistingSharedBudget?: boolean }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<SharedGroupKind | null>(null);
+  const createSharedGroup = useCreateSharedGroup();
+  const { toast } = useToast();
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (name.trim().length < 2) {
+      toast({
+        variant: "destructive",
+        title: "Group name required",
+               description: "Enter at least two characters before creating a Shared budget.",
+      });
+      return;
+    }
+    if (!kind) {
+      toast({
+        variant: "destructive",
+        title: "Choose a group type",
+        description: "Choose what this Shared budget is for before creating it.",
+      });
+      return;
+    }
+    try {
+      await createSharedGroup.mutateAsync({ data: { name: name.trim(), kind: kind as GroupKind } });
+      window.location.assign(appPath("/", import.meta.env.BASE_URL));
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not create group",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    }
+  };
+
+  return (
+    <>
+      <Card className="overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/[0.08] to-card shadow-sm">
+        <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="max-w-2xl">
+             <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Your Personal budget is private</p>
+            <h2 className="mt-1 font-display text-xl font-bold text-foreground">
+              {hasExistingSharedBudget ? "Need another Shared budget?" : "Need to budget with other people?"}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+               {hasExistingSharedBudget
+                 ? "Create a separate Shared budget for another family, chama, club, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
+                 : "Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
+            </p>
+             <p className="mt-2 text-xs font-medium text-foreground/70">
+               Name it, create it, then invite the people who should share it.
+             </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <OpenInvitationLinkButton />
+             <Button data-testid="create-shared-budget-cta" className="h-11 rounded-xl px-5" onClick={() => setIsOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              {hasExistingSharedBudget ? "Create another Shared budget" : "Create a Shared budget"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) setKind(null);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+             <DialogTitle>Create a Shared budget</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={submit} className="space-y-5">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+               You will be the owner. Personal budget records will stay private and will not be copied into this Shared budget.
+            </p>
+            <div className="space-y-2">
+              <label htmlFor="shared-group-name" className="text-sm font-semibold text-foreground">Group name</label>
+              <Input
+                id="shared-group-name"
+                autoFocus
+                maxLength={60}
+                placeholder="e.g. Mwangaza Chama"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold text-foreground">What kind of group is this?</legend>
+              <p className="text-xs text-muted-foreground">Choose one to tailor category recommendations for this Shared budget.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {SHARED_GROUP_KINDS.map((option) => {
+                  const selected = kind === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setKind(option.value)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${selected ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border hover:border-primary/50 hover:bg-muted/50"}`}
+                    >
+                      <span className="block text-sm font-semibold text-foreground">{option.label}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+            <Button type="submit" className="w-full" disabled={createSharedGroup.isPending}>
+               {createSharedGroup.isPending ? "Creating…" : "Create Shared budget"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function SharedGroupsFooter() {
+  const { data: workspaces = [], isLoading } = useGetWorkspaces();
+  const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
+
+  if (isLoading) return null;
+  return <CreateSharedGroupCard hasExistingSharedBudget={sharedWorkspaces.length > 0} />;
+}
+
+// ── Quick Action: Bank Deposit ────────────────────────────────────────────────
+function IncomeForm({
+  onDone,
+  currentUserId,
+  canManageShared,
+  isSharedWorkspace,
+}: {
+  onDone: () => void;
+  currentUserId?: string;
+  canManageShared: boolean;
+  isSharedWorkspace: boolean;
+}) {
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [madeById, setMadeById] = useState<string>("");
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const { data: members = [] } = useGetMembers();
+  const selectedDepositorId = canManageShared ? madeById : currentUserId ?? "";
+  const createDeposit = useCreateDeposit();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const now = new Date();
+
+  const { data: incomeSources } = useQuery<IncomeSource[]>({
+    queryKey: ["income-sources", selectedDepositorId],
+    queryFn: async () => {
+      const res = await fetch(`/api/income-sources?userId=${selectedDepositorId}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedDepositorId,
+    staleTime: 60_000,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Add a deposit amount greater than zero before recording it.",
+      });
+      return;
+    }
+    if (!Number.isInteger(amt)) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Deposits are recorded in whole shillings.",
+      });
+      return;
+    }
+    if (!selectedDepositorId) {
+      toast({
+        variant: "destructive",
+        title: "Choose who is depositing",
+        description: isSharedWorkspace
+          ? "Select a group member before recording this deposit."
+          : "Your account is still loading. Please try again.",
+      });
+      return;
+    }
+    try {
+      await createDeposit.mutateAsync({
+        data: {
+          amount: amt,
+          description: description.trim() || "Deposit",
+          date: now.toISOString().split("T")[0],
+          madeById: selectedDepositorId,
+          ...(incomeSourceId ? { incomeSourceId } : {}),
+        } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
+      });
+      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+       const who = members.find(m => m.userId === selectedDepositorId)?.userName?.split(" ")[0] ?? (isSharedWorkspace ? "Member" : "You");
+      toast({ title: "Deposit recorded", description: `${who} · ${formatKes(amt)} added to this month.` });
+      onDone();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not record deposit",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      {canManageShared ? (
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {members.map((m) => {
+            const name = m.userName?.split(" ")[0] ?? "Member";
+            return (
+              <button key={m.userId} type="button" onClick={() => { setMadeById(m.userId); setIncomeSourceId(null); }}
+                className={`py-3 rounded-xl border text-sm font-semibold transition-colors ${madeById === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:bg-muted/40"}`}>
+                {name}
+              </button>
+            );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">
+            Depositing in your own name
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isSharedWorkspace
+              ? "This deposit will be added under your membership."
+              : "This money will be recorded only in your Personal budget."}
+          </p>
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
+          <Input type="number" placeholder="e.g. 50000" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-12 bg-card text-base" autoFocus />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Description <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <Input placeholder="e.g. Salary, rental income…" value={description} onChange={e => setDescription(e.target.value)} className="h-12 bg-card" />
+        </div>
+      </div>
+      {/* Income source */}
+      {incomeSources && incomeSources.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Income source <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <div className="flex flex-wrap gap-2">
+            {incomeSources.map(src => (
+              <button key={src.id} type="button"
+                onClick={() => setIncomeSourceId(incomeSourceId === src.id ? null : src.id)}
+                className={`px-3 h-9 rounded-lg text-sm border transition-colors ${incomeSourceId === src.id ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}>
+                {src.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex gap-3">
+        <Button type="submit" className="h-12 flex-1 rounded-xl bg-success px-6 text-base text-success-foreground hover:bg-success/90" disabled={createDeposit.isPending}>
+          {createDeposit.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          Record Deposit
+        </Button>
+        <Button type="button" variant="ghost" className="h-12" onClick={onDone}>Cancel</Button>
+      </div>
+    </form>
+  );
+}
+
+// ── Quick Action: Log Expense ────────────────────────────────────────────────
+function ExpenseForm({
+  onDone,
+  currentUserId,
+  canManageShared,
+  canManageCategories,
+  canUseBankFunding,
+  isSharedWorkspace,
+}: {
+  onDone: () => void;
+  currentUserId?: string;
+  canManageShared: boolean;
+  canManageCategories: boolean;
+  canUseBankFunding: boolean;
+  isSharedWorkspace: boolean;
+}) {
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
+  const [category, setCategory] = useState("");
+  const [categoryAllocations, setCategoryAllocations] = useState([{ category: "", amount: "" }]);
+  const [paidBy, setPaidBy] = useState("");
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const [newSourceName, setNewSourceName] = useState("");
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryBudget, setNewCategoryBudget] = useState("");
+  const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
+  const [paidFromBank, setPaidFromBank] = useState(false);
+  const [allowMixedFunding, setAllowMixedFunding] = useState(false);
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | null>(null);
+  const [bankPortion, setBankPortion] = useState("");
+  const [directPortion, setDirectPortion] = useState("");
+  const [additionalDirectPortions, setAdditionalDirectPortions] = useState<Array<{ sourceId: number; amount: string }>>([]);
+  const [remainderAnchor, setRemainderAnchor] = useState<"direct" | "bank" | null>(null);
+  const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
+  const [newBankAccountName, setNewBankAccountName] = useState("");
+  const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
+  const [newBankOpeningBalance, setNewBankOpeningBalance] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringMonthlyBudget, setRecurringMonthlyBudget] = useState("");
+  const [date, setDate] = useState(localDateInputValue());
+  const { data: categories = [] } = useGetBudgetCategories();
+  const { data: members = [] } = useGetMembers();
+  const { data: bankAccounts = [] } = useGetJointAccounts();
+  const { data: selectedBankAccount } = useGetJointAccount(
+    selectedBankAccountId ? { accountId: selectedBankAccountId } : undefined,
+  );
+  const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? "");
+  const payerId = directPayerId;
+  const { data: incomeSources = [], isLoading: isIncomeSourcesLoading } = useGetIncomeSources(
+    { userId: payerId },
+    {
+      query: {
+        enabled: Boolean(payerId),
+        queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }),
+      },
+    },
+  );
+  const selectableMembers = canManageShared
+    ? members
+    : members.filter((member) => member.userId === currentUserId);
+  const createExpense = useCreateExpense();
+  const createCategory = useCreateBudgetCategory();
+  const updateCategory = useUpdateBudgetCategory();
+  const createBankAccount = useCreateJointAccount();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const today = localDateInputValue();
+  const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
+  const bankLabel = "Bank account";
+  const isOtherCategory = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+  const enteredBankAmount = Number(bankPortion);
+  const projectedExpenseBankBalance = paidFromBank &&
+    selectedBankAccountId &&
+    selectedBankAccount &&
+    Number.isInteger(enteredBankAmount) &&
+    enteredBankAmount > 0
+    ? selectedBankAccount.balance - enteredBankAmount
+    : null;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("resumeRecurring") !== "1") return;
+    try {
+      const rawDraft = sessionStorage.getItem(RECURRING_DASHBOARD_DRAFT_KEY);
+      if (!rawDraft) return;
+      const draft = JSON.parse(rawDraft) as {
+        amount?: string;
+        description?: string;
+        notes?: string;
+        category?: string;
+        categoryAllocations?: Array<{ category: string; amount: string }>;
+        paidBy?: string;
+        incomeSourceId?: number | null;
+        paidFromBank?: boolean;
+        allowMixedFunding?: boolean;
+        selectedBankAccountId?: number | null;
+        bankPortion?: string;
+        directPortion?: string;
+        additionalDirectPortions?: Array<{ sourceId: number; amount: string }>;
+        saveOtherAsCategory?: boolean;
+        date?: string;
+        recurringMonthlyBudget?: string;
+      };
+      setAmount(draft.amount ?? "");
+      setDescription(draft.description ?? "");
+      setNotes(draft.notes ?? "");
+      setCategory(draft.category ?? "");
+      setCategoryAllocations(draft.categoryAllocations?.length ? draft.categoryAllocations : [{ category: "", amount: "" }]);
+      setPaidBy(draft.paidBy ?? "");
+      setIncomeSourceId(draft.incomeSourceId ?? null);
+      setPaidFromBank(draft.paidFromBank ?? false);
+      setAllowMixedFunding(draft.allowMixedFunding ?? false);
+      setSelectedBankAccountId(draft.selectedBankAccountId ?? null);
+      setBankPortion(draft.bankPortion ?? "");
+      setDirectPortion(draft.directPortion ?? "");
+      setAdditionalDirectPortions(draft.additionalDirectPortions ?? []);
+      setSaveOtherAsCategory(draft.saveOtherAsCategory ?? false);
+      setDate(draft.date ?? localDateInputValue());
+      setIsRecurring(true);
+      setRecurringMonthlyBudget(draft.recurringMonthlyBudget ?? "");
+      sessionStorage.removeItem(RECURRING_DASHBOARD_DRAFT_KEY);
+    } catch {
+      sessionStorage.removeItem(RECURRING_DASHBOARD_DRAFT_KEY);
+    }
+    params.delete("resumeRecurring");
+    const search = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+  }, []);
+
+  const openRecurringBudgetSetup = () => {
+    if (!category.trim()) {
+      toast({ variant: "destructive", title: "Choose a category first", description: "A recurring expense needs a category before Jamvi can set its average monthly budget." });
+      return;
+    }
+    if (isOtherCategory && !description.trim()) {
+      toast({ variant: "destructive", title: "Describe this expense first", description: "Jamvi will use the description as the recurring budget category name." });
+      return;
+    }
+    try {
+      sessionStorage.setItem(RECURRING_DASHBOARD_DRAFT_KEY, JSON.stringify({
+        amount,
+        description,
+        notes,
+        category,
+        categoryAllocations,
+        paidBy,
+        incomeSourceId,
+        paidFromBank,
+        allowMixedFunding,
+        selectedBankAccountId,
+        bankPortion,
+        directPortion,
+        additionalDirectPortions,
+        saveOtherAsCategory: isOtherCategory,
+        date,
+      }));
+    } catch {
+      toast({ variant: "destructive", title: "Could not open Budget", description: "Your quick expense could not be kept while opening the monthly budget setup." });
+      return;
+    }
+    const recurringCategory = isOtherCategory ? description.trim() : category.trim();
+    const url = `${appPath("/budget", import.meta.env.BASE_URL)}?recurringSetup=1&returnTo=dashboard&category=${encodeURIComponent(recurringCategory)}&expenseAmount=${encodeURIComponent(amount)}`;
+    window.location.assign(url);
+  };
+
+  useEffect(() => {
+    if (!paidFromBank || !allowMixedFunding) return;
+    const total = Number(amount);
+    const direct = Number(directPortion);
+    const bank = Number(bankPortion);
+    if (!Number.isInteger(total) || total <= 0) return;
+
+    if (remainderAnchor === "direct" && Number.isInteger(direct) && direct > 0) {
+      const remainder = getFundingRemainder(total, direct);
+      setBankPortion(remainder > 0 ? String(remainder) : "");
+      return;
+    }
+    if (remainderAnchor === "bank" && Number.isInteger(bank) && bank > 0) {
+      const remainder = getFundingRemainder(total, bank);
+      setDirectPortion(remainder > 0 ? String(remainder) : "");
+    }
+  }, [allowMixedFunding, amount, bankPortion, directPortion, paidFromBank, remainderAnchor]);
+
+  const handleAddBankAccount = async () => {
+    const name = newBankAccountName.trim();
+    const accountNumber = newBankAccountNumber.trim();
+    const openingBalance = Number(newBankOpeningBalance || 0);
+    if (!name) {
+      toast({ variant: "destructive", title: "Account name required", description: "Enter a name for this bank account." });
+      return;
+    }
+    try {
+      if (!Number.isInteger(openingBalance) || openingBalance < 0) throw new Error("Opening balance must be zero or more whole shillings.");
+      const created = await createBankAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined, openingBalance } });
+      setSelectedBankAccountId(created.id);
+      setNewBankAccountName("");
+      setNewBankAccountNumber("");
+      setNewBankOpeningBalance("");
+      setIsAddingBankAccount(false);
+      await qc.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+      toast({ title: "Bank account added", description: `${created.name} is selected for this expense.` });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add bank account",
+        description: error instanceof Error ? error.message : "Check the account name and try again.",
+      });
+    }
+  };
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    const budgetAmount = Number(newCategoryBudget);
+    if (!name || !Number.isInteger(budgetAmount) || budgetAmount < 0) {
+      toast({
+        variant: "destructive",
+        title: "Add a category name and monthly budget",
+        description: "The monthly budget must be a whole number of KES or zero.",
+      });
+      return;
+    }
+    try {
+      const created = await createCategory.mutateAsync({
+        data: { name, budgetAmount, priority: 1, isRecurring: true },
+      });
+      setCategory(created.name);
+      setNewCategoryName("");
+      setNewCategoryBudget("");
+      setIsAddingCategory(false);
+      await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      toast({ title: "Category added", description: `${created.name} is selected for this expense.` });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add category",
+        description: error instanceof Error ? error.message : "Check the name and try again.",
+      });
+    }
+  };
+
+  const handleAddSource = async () => {
+    const name = newSourceName.trim();
+    if (!payerId) return;
+    if (!name) {
+      toast({
+        variant: "destructive",
+        title: "Source name required",
+        description: "Enter a name before adding the income source.",
+      });
+      return;
+    }
+    try {
+      const response = await fetch("/api/income-sources", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: payerId, name, isMain: false }),
+      });
+      if (!response.ok) {
+        throw new Error("Could not create source");
+      }
+      const source: IncomeSource = await response.json();
+      setIncomeSourceId(source.id);
+      setNewSourceName("");
+      setIsAddingSource(false);
+      await qc.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }) });
+      toast({ title: "Income source added", description: `${source.name} is selected for this expense.` });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Could not add income source",
+        description: "Check the name and try again.",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isSharedWorkspace && !paidBy && selectableMembers.length === 1) {
+      setPaidBy(selectableMembers[0].userId);
+    }
+  }, [isSharedWorkspace, paidBy, selectableMembers]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(amount);
+    const bankAmount = Number(bankPortion);
+    const directAmount = Number(directPortion);
+    if (!amt || amt <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a valid amount",
+        description: "Add an expense amount greater than zero before logging it.",
+      });
+      return;
+    }
+    if (!Number.isInteger(amt)) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "Expenses are recorded in whole shillings.",
+      });
+      return;
+    }
+    const allocations = categoryAllocations.map((allocation) => ({ category: allocation.category.trim(), amount: Number(allocation.amount) }));
+    const allocationTotal = allocations.reduce((total, allocation) => total + allocation.amount, 0);
+    if (allocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
+      new Set(allocations.map((allocation) => allocation.category.toLocaleLowerCase())).size !== allocations.length ||
+      allocationTotal !== amt) {
+      toast({ variant: "destructive", title: "Category allocations don't add up", description: "Choose distinct categories with positive whole-KES amounts that total the expense." });
+      return;
+    }
+    if (isOtherCategory && notes.trim().length < 3) {
+      toast({
+        variant: "destructive",
+        title: "Note required",
+        description: "Add a note explaining what this Other expense was for.",
+      });
+      return;
+    }
+    if (!description.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Description required",
+        description: "Explain what the expense was for before logging it.",
+      });
+      return;
+    }
+    if (!category) {
+      toast({
+        variant: "destructive",
+        title: "Choose a category",
+        description: "Select a category before logging this expense.",
+      });
+      return;
+    }
+    if (directAmount > 0 && !directPayerId) {
+      toast({
+        variant: "destructive",
+        title: "Choose who paid",
+        description: "Select the person whose income paid the direct portion.",
+      });
+      return;
+    }
+    if (directAmount > 0 && !incomeSourceId) {
+      toast({
+        variant: "destructive",
+        title: "Income source required",
+        description: "Choose the saved income stream that funded the direct portion.",
+      });
+      return;
+    }
+    if (bankAmount > 0 && !selectedBankAccountId) {
+      toast({
+        variant: "destructive",
+        title: "Choose a bank account",
+        description: "Select the account whose recorded deposits funded this expense.",
+      });
+      return;
+    }
+    const additionalDirectAmount = additionalDirectPortions.reduce(
+      (sum, portion) => sum + (Number(portion.amount) || 0),
+      0,
+    );
+    const fundingTotal = (Number.isInteger(bankAmount) && bankAmount > 0 ? bankAmount : 0)
+      + (Number.isInteger(directAmount) && directAmount > 0 ? directAmount : 0)
+      + additionalDirectAmount;
+    if (
+      !Number.isInteger(bankAmount)
+      || !Number.isInteger(directAmount)
+      || additionalDirectPortions.some((portion) => !Number.isInteger(Number(portion.amount)) || Number(portion.amount) <= 0)
+      || fundingTotal <= 0
+    ) {
+      toast({
+        variant: "destructive",
+        title: "Enter the funding amount",
+        description: "Type the amount from the selected source. If it is less than the expense, add another source so Jamvi can fill the remainder.",
+      });
+      return;
+    }
+    if (fundingTotal !== amt) {
+      const remaining = amt - fundingTotal;
+      toast({
+        variant: "destructive",
+        title: remaining > 0 ? "Choose another funding source" : "Funding exceeds the expense",
+        description: remaining > 0
+          ? `${formatKes(remaining)} is still unfunded. Select another source or enter the full amount.`
+          : `Reduce the funding amount by ${formatKes(Math.abs(remaining))}.`,
+      });
+      return;
+    }
+    if (date > today) {
+      toast({
+        variant: "destructive",
+        title: "Future date not allowed",
+        description: "Use today or an earlier date for an expense.",
+      });
+      return;
+    }
+    const monthlyBudget = Number(recurringMonthlyBudget);
+    if (isRecurring && (!Number.isInteger(monthlyBudget) || monthlyBudget <= 0)) {
+      toast({ variant: "destructive", title: "Monthly budget required", description: "Enter a whole KES amount greater than zero for this recurring expense." });
+      return;
+    }
+    if (isRecurring && allocations.length > 1) {
+      toast({ variant: "destructive", title: "Recurring split expenses are not supported", description: "A recurring expense needs one category so Jamvi can update the correct monthly budget." });
+      return;
+    }
+    if (isRecurring && isOtherCategory && !saveOtherAsCategory) {
+      toast({ variant: "destructive", title: "Save this recurring expense as a category", description: "Use the brief description as a category so its monthly budget can be tracked." });
+      return;
+    }
+    let expenseCategory = allocations[0]?.category ?? category;
+    let normalizedOtherCategory: string | null = null;
+    try {
+      if (isOtherCategory && saveOtherAsCategory) {
+        const existingCategory = categories.find(
+          (item) => item.name.trim().toLocaleLowerCase() === description.trim().toLocaleLowerCase(),
+        );
+        if (existingCategory) {
+          normalizedOtherCategory = existingCategory.name;
+          expenseCategory = allocations[0]?.category.toLocaleLowerCase() === "other"
+            ? existingCategory.name
+            : allocations[0]?.category ?? category;
+        } else {
+          const createdCategory = await createCategory.mutateAsync({
+            data: { name: description.trim(), budgetAmount: isRecurring ? monthlyBudget : 0, priority: 3, isRecurring: true },
+          });
+          normalizedOtherCategory = createdCategory.name;
+          expenseCategory = allocations[0]?.category.toLocaleLowerCase() === "other"
+            ? createdCategory.name
+            : allocations[0]?.category ?? category;
+          await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+        }
+      }
+      if (isRecurring) {
+        const recurringCategory = categories.find(
+          (item) => item.name.trim().toLocaleLowerCase() === expenseCategory.trim().toLocaleLowerCase(),
+        );
+        if (recurringCategory) {
+          await updateCategory.mutateAsync({
+            id: recurringCategory.id,
+            data: { budgetAmount: monthlyBudget, isRecurring: true, activeMonth: null, activeYear: null },
+          });
+          await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+        }
+      }
+      const payerName = isSharedWorkspace
+        ? selectableMembers.find((member) => member.userId === directPayerId)?.userName?.split(" ")[0] ?? "Member"
+        : "Personal funds";
+      const directFundingSplits = [
+        ...(incomeSourceId && directAmount > 0 ? [{
+          userId: directPayerId,
+          label: incomeSources.find((source) => source.id === incomeSourceId)?.name ?? payerName,
+          amount: directAmount,
+          fromBank: false,
+          incomeSourceId,
+        }] : []),
+        ...additionalDirectPortions.map((portion) => ({
+          userId: directPayerId,
+          label: incomeSources.find((source) => source.id === portion.sourceId)?.name ?? payerName,
+          amount: Number(portion.amount),
+          fromBank: false,
+          incomeSourceId: portion.sourceId,
+        })),
+      ];
+      const bankFundingSplits = bankAmount > 0 ? [{
+        userId: null,
+        label: bankAccounts.find((account) => account.id === selectedBankAccountId)?.name ?? "Bank account",
+        amount: bankAmount,
+        fromBank: true,
+        accountId: selectedBankAccountId!,
+      }] : [];
+      const allFundingSplits = [...bankFundingSplits, ...directFundingSplits];
+      await createExpense.mutateAsync({
+        data: {
+          amount: amt,
+          description,
+           category: expenseCategory,
+           categoryAllocations: allocations.map((allocation) =>
+             allocation.category.toLocaleLowerCase() === "other"
+               ? { ...allocation, category: normalizedOtherCategory ?? allocation.category }
+               : allocation,
+           ),
+          notes: notes.trim() || undefined,
+           paidById: directAmount > 0 ? directPayerId : undefined,
+           paidFromBank: bankAmount > 0 && directAmount <= 0,
+          isRecurring,
+          date,
+           ...(bankAmount > 0 ? { accountId: selectedBankAccountId! } : {}),
+           ...(incomeSourceId && directAmount > 0 && allFundingSplits.length === 1 ? { incomeSourceId } : {}),
+           ...(allFundingSplits.length > 1 ? { incomeSplits: allFundingSplits } : {}),
+        } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
+      });
+      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
+      toast({ title: "Expense logged", description: `${formatKes(amt)} — ${description}` });
+      onDone();
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Could not log expense." });
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
+          <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => { setAmount(e.target.value); setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }] : current); }} min="1" required className="h-11 bg-card text-base" autoFocus />
+        </div>
+         {!isOtherCategory && (
+           <div className="space-y-1.5 lg:col-span-1">
+             <label className="text-sm font-semibold text-foreground">Description</label>
+             <Input
+               placeholder="What was it for?"
+               value={description}
+               onChange={e => setDescription(e.target.value)}
+               required
+               className="h-11 bg-card"
+             />
+           </div>
+         )}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">Category <span className="text-destructive">*</span></label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+             <select
+               value={isOtherCategory ? "" : category}
+               onChange={e => {
+                 setCategory(e.target.value);
+                  setCategoryAllocations(current => current.map((allocation, index) => index === 0 ? { ...allocation, category: e.target.value } : allocation));
+                 if (e.target.value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
+               }}
+               className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+             >
+              <option value="">Pick a category</option>
+               {categories
+                 .filter(c => c.name.trim().toLocaleLowerCase() !== "other")
+                 .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+             <Button
+               type="button"
+               variant={isOtherCategory ? "default" : "outline"}
+               className="h-11 shrink-0"
+               onClick={() => {
+                  setCategory(isOtherCategory ? "" : "Other");
+                  setCategoryAllocations(current => current.map((allocation, index) => index === 0 ? { ...allocation, category: isOtherCategory ? "" : "Other" } : allocation));
+                  if (isOtherCategory) setSaveOtherAsCategory(false);
+                 setIsAddingCategory(false);
+               }}
+                role="tab"
+                aria-controls="dashboard-other-expense-panel"
+                 aria-selected={isOtherCategory}
+               aria-pressed={isOtherCategory}
+             >
+               Other
+             </Button>
+          </div>
+            {isOtherCategory && (
+              <div id="dashboard-other-expense-panel" role="tabpanel" className="mt-3 space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                <label className="text-sm font-semibold text-foreground">Brief description</label>
+                <Input
+                  placeholder="Briefly describe this expense"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  required
+                  maxLength={120}
+                  className="h-11 bg-card"
+                  data-testid="other-brief-description"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
+                </p>
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-sm font-semibold text-foreground">
+                    Notes <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    placeholder="Explain what this Other expense was for"
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    required
+                    className="h-11 bg-card"
+                    data-testid="other-expense-notes"
+                  />
+                </div>
+                <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={saveOtherAsCategory}
+                    onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <span>
+                    <span className="font-semibold">Save as a category if this repeats</span>
+                    <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
+                  </span>
+                </label>
+              </div>
+            )}
+            {!(isOtherCategory && categoryAllocations.length === 1) && (
+            <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+             <div className="flex items-center justify-between">
+               <p className="text-sm font-semibold">Category allocations</p>
+               <Button type="button" size="sm" variant="outline" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard"><Plus className="mr-1 h-3.5 w-3.5" /> Add category</Button>
+             </div>
+             {categoryAllocations.map((allocation, index) => (
+               <div className="flex gap-2" key={index}>
+                 <select value={allocation.category.trim().toLocaleLowerCase() === "other" ? "" : allocation.category}
+                   onChange={(event) => { setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item)); if (index === 0) setCategory(event.target.value); }}
+                   aria-label={`Allocation category ${index + 1}`} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm">
+                   <option value="" disabled>Pick a category</option>
+                   {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index && selected.category === item.name)}>{item.name}</option>)}
+                 </select>
+                 <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"} onClick={() => { const value = allocation.category.trim().toLocaleLowerCase() === "other" ? "" : "Other"; setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: value } : item)); if (index === 0) setCategory(value); }} aria-label={`Other allocation ${index + 1}`}>Other</Button>
+                 <Input type="number" min="1" step="1" value={allocation.amount} onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} aria-label={`Allocation amount ${index + 1}`} className="h-10 w-24" />
+                 {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><X className="h-4 w-4" /></Button>}
+               </div>
+             ))}
+             {(() => { const allocated = categoryAllocations.reduce((total, allocation) => total + (Number(allocation.amount) || 0), 0); const difference = (Number(amount) || 0) - allocated; return <p className={`text-xs ${difference === 0 && allocated > 0 ? "text-primary" : "text-muted-foreground"}`} data-testid="category-allocation-total-dashboard">Allocated: {formatKes(allocated)} · {difference === 0 && allocated > 0 ? "Exactly allocated" : difference > 0 ? `${formatKes(difference)} remaining` : `${formatKes(Math.abs(difference))} excess`}</p>; })()}
+            </div>
+            )}
+             {canManageCategories && !isOtherCategory && isAddingCategory && (
+             <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
+               <div>
+                 <p className="text-sm font-semibold text-foreground">Create a category</p>
+                 <p className="mt-0.5 text-xs text-muted-foreground">It will be saved to this budget and selected here.</p>
+               </div>
+               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
+                 <Input
+                   value={newCategoryName}
+                   onChange={(event) => setNewCategoryName(event.target.value)}
+                   placeholder="e.g. Transport"
+                   maxLength={60}
+                   className="h-10 bg-card"
+                 />
+                 <Input
+                   value={newCategoryBudget}
+                   onChange={(event) => setNewCategoryBudget(event.target.value)}
+                   placeholder="Monthly KES"
+                   type="number"
+                   min="0"
+                   step="1"
+                   className="h-10 bg-card"
+                 />
+                 <Button type="button" className="h-10" disabled={createCategory.isPending} onClick={() => void handleAddCategory()}>
+                   {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                 </Button>
+               </div>
+             </div>
+           )}
+             {canManageCategories && !isOtherCategory && (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2 h-11"
+                onClick={() => setIsAddingCategory((open) => !open)}
+                aria-expanded={isAddingCategory}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create category
+              </Button>
+            )}
+        </div>
+        {isSharedWorkspace && !paidFromBank && <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">
+            Paid by <span className="text-destructive">*</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+             {selectableMembers.map((m) => {
+              const name = m.userName?.split(" ")[0] ?? "Member";
+              return (
+                <button
+                  key={m.userId}
+                  type="button"
+                  onClick={() => {
+                    setPaidBy(m.userId);
+                    setIncomeSourceId(null);
+                    setDirectPortion("");
+                    setAdditionalDirectPortions([]);
+                  }}
+                  className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
                   {name}
                 </button>
               );

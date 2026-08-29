@@ -1,4 +1,1208 @@
-quired: true
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Jamvi API — personal and group money management
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: expenses
+    description: Expense tracking
+  - name: contributions
+    description: Monthly contributions
+  - name: budget-categories
+    description: Budget categories
+  - name: dashboard
+    description: Dashboard summaries and activity
+  - name: members
+    description: App access members
+  - name: workspaces
+    description: Private and shared budget workspace selection
+  - name: savings-goals
+    description: Savings goals tracking
+  - name: joint-account
+    description: Joint bank account deposits and disbursements
+  - name: income-sources
+    description: Income source presets per household member
+  - name: storage
+    description: Private photo upload operations
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      operationId: getAuthUser
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/display-name:
+    put:
+      operationId: updateDisplayName
+      tags: [auth]
+      summary: Save the authenticated user's preferred display name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisplayNameInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          description: Invalid name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/profile-photo:
+    put:
+      operationId: updateProfilePhoto
+      tags: [auth]
+      summary: Save or remove the authenticated user's custom profile photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfilePhotoInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+        "400":
+          description: Invalid photo path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /storage/photos/upload-url:
+    post:
+      operationId: requestPhotoUpload
+      tags: [storage]
+      summary: Request a private signed upload URL for a profile or group photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestPhotoUploadInput"
+      responses:
+        "200":
+          description: Signed upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoUploadUrlResponse"
+        "400":
+          description: Unsupported or oversized image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /expenses:
+    get:
+      operationId: getExpenses
+      tags: [expenses]
+      summary: List expenses
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of expenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Expense"
+    post:
+      operationId: createExpense
+      tags: [expenses]
+      summary: Create a new expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseInput"
+      responses:
+        "201":
+          description: Created expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+
+  /expenses/{id}:
+    patch:
+      operationId: updateExpense
+      tags: [expenses]
+      summary: Update an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseInput"
+      responses:
+        "200":
+          description: Updated expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteExpense
+      tags: [expenses]
+      summary: Delete an expense
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /expenses/apply-recurring:
+    post:
+      operationId: applyRecurringExpenses
+      tags: [expenses]
+      summary: Copy recurring expenses from the previous month into the current month
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyRecurringInput"
+      responses:
+        "200":
+          description: Number of expenses copied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplyRecurringResult"
+
+  /budget-categories:
+    get:
+      operationId: getBudgetCategories
+      tags: [budget-categories]
+      summary: List all budget categories with amounts
+      responses:
+        "200":
+          description: Budget categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BudgetCategory"
+    post:
+      operationId: createBudgetCategory
+      tags: [budget-categories]
+      summary: Create a budget category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetCategoryInput"
+      responses:
+        "201":
+          description: Created budget category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetCategory"
+        "400":
+          description: Invalid category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A category with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /budget-categories/recommendations:
+    get:
+      operationId: getBudgetCategoryRecommendations
+      tags: [budget-categories]
+      summary: Preview category recommendations for the active workspace
+      responses:
+        "200":
+          description: Existing and missing recommended expense categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetCategoryRecommendations"
+  /budget-categories/recommendations/apply:
+    post:
+      operationId: applyBudgetCategoryRecommendations
+      tags: [budget-categories]
+      summary: Add missing recommended categories to the active workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetCategoryRecommendationApplyInput"
+      responses:
+        "200":
+          description: Recommendations applied without changing existing categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetCategoryRecommendations"
+
+  /budget-categories/{id}:
+    put:
+      operationId: updateBudgetCategory
+      tags: [budget-categories]
+      summary: Update a budget category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetCategoryUpdateInput"
+      responses:
+        "200":
+          description: Updated budget category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BudgetCategory"
+        "400":
+          description: Invalid category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A category with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBudgetCategory
+      tags: [budget-categories]
+      summary: Delete a budget category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /contributions/{id}:
+    patch:
+      operationId: updateContribution
+      tags: [contributions]
+      summary: Update a contribution by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContributionInput"
+      responses:
+        "200":
+          description: Updated contribution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contribution"
+        "403":
+          description: Not allowed to update this contribution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteContribution
+      tags: [contributions]
+      summary: Delete a contribution by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /contributions:
+    get:
+      operationId: getContributions
+      tags: [contributions]
+      summary: List contributions
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Contributions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contribution"
+    post:
+      operationId: createContribution
+      tags: [contributions]
+      summary: Record a contribution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContributionInput"
+      responses:
+        "201":
+          description: Created contribution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contribution"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Monthly budget summary — total budget, total spent, remaining, per-category spent
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/activity:
+    get:
+      operationId: getDashboardActivity
+      tags: [dashboard]
+      summary: Household activity feed — latest items or all activity for a selected month
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Recent activity items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /dashboard/category-breakdown:
+    get:
+      operationId: getDashboardCategoryBreakdown
+      tags: [dashboard]
+      summary: Spending breakdown per category for a given month
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+        - name: year
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Category breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryBreakdown"
+
+  /dashboard/category-ledger:
+    get:
+      operationId: getDashboardCategoryLedger
+      tags: [dashboard]
+      summary: Expense and bank-disbursement entries behind a category breakdown row
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: number
+        - name: category
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: isBudgeted
+          in: query
+          required: true
+          description: Whether this is an active budget category or the synthetic Unbudgeted spending row
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Category ledger for the selected report row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryLedger"
+
+  /dashboard/income-streams:
+    get:
+      operationId: getDashboardIncomeStreams
+      tags: [dashboard]
+      summary: Income-stream funding totals for the active group and selected month
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: number
+            minimum: 2000
+            maximum: 2200
+      responses:
+        "200":
+          description: Monthly income-stream funding report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeStreamReport"
+
+  /dashboard/period-totals:
+    get:
+      operationId: getDashboardPeriodTotals
+      tags: [dashboard]
+      summary: Workspace totals across an inclusive date range
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Spending, funding, bank, and savings totals for the selected period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodTotalsReport"
+        "400":
+          description: Invalid date range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dashboard/monthly-report.pdf:
+    get:
+      operationId: getDashboardMonthlyReportPdf
+      tags: [dashboard]
+      summary: Download a monthly report PDF for the active group
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: number
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: number
+            minimum: 2000
+            maximum: 2200
+      responses:
+        "200":
+          description: Downloadable monthly report PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /dashboard/trends:
+    get:
+      operationId: getDashboardTrends
+      tags: [dashboard]
+      summary: Month-over-month spending totals for the last N months
+      parameters:
+        - name: months
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Monthly trend data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthTrend"
+
+  /savings-goals:
+    get:
+      operationId: getSavingsGoals
+      tags: [savings-goals]
+      summary: List all savings goals
+      responses:
+        "200":
+          description: List of savings goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavingsGoal"
+    post:
+      operationId: createSavingsGoal
+      tags: [savings-goals]
+      summary: Create a new savings goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsGoalInput"
+      responses:
+        "201":
+          description: Created savings goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsGoal"
+
+  /joint-account:
+    get:
+      operationId: getJointAccount
+      tags: [joint-account]
+      summary: Get one account when accountId is supplied, or aggregate all workspace accounts when omitted
+      parameters:
+        - name: accountId
+          in: query
+          description: Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.
+          schema:
+            type: number
+            minimum: 1
+      responses:
+        "200":
+          description: Account summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountSummary"
+
+  /joint-account/opening-balance:
+    patch:
+      operationId: updateJointAccountOpeningBalance
+      tags: [joint-account]
+      summary: Set the manual opening balance for a bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpeningBalanceInput"
+      responses:
+        "200":
+          description: Updated opening balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpeningBalance"
+        "400":
+          description: Invalid opening balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only a group owner or admin can change the opening balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /joint-account/deposit:
+    post:
+      operationId: createDeposit
+      tags: [joint-account]
+      summary: Deposit money into a bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepositInput"
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+
+  /joint-account/disbursement:
+    post:
+      operationId: createDisbursement
+      tags: [joint-account]
+      summary: Withdraw money from a bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisbursementInput"
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+
+  /joint-account/bank-charge:
+    post:
+      operationId: createBankCharge
+      tags: [joint-account]
+      summary: Record a bank fee or charge against the selected account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankChargeInput"
+      responses:
+        "201":
+          description: Created bank-charge transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+        "400":
+          description: Invalid bank charge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only a group owner or admin can record a shared bank charge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /joint-account/transfers/to-savings:
+    post:
+      operationId: transferBankToSavings
+      tags: [joint-account]
+      summary: Move money from the joint bank account into a savings goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsTransferInput"
+      responses:
+        "201":
+          description: Linked bank and savings transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+
+  /joint-account/transfers/from-savings:
+    post:
+      operationId: transferSavingsToBank
+      tags: [joint-account]
+      summary: Move money from a savings goal into the joint bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsTransferInput"
+      responses:
+        "201":
+          description: Linked savings and bank transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+
+  /joint-account/transfers/bank-to-bank:
+    post:
+      operationId: transferBankToBank
+      tags: [joint-account]
+      summary: Move money between two bank accounts in the active workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankToBankTransferInput"
+      responses:
+        "201":
+          description: Atomic linked bank transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankToBankTransferResult"
+        "400":
+          description: Invalid accounts or transfer details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only a group owner or admin can transfer shared money
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /joint-account/{id}:
+    put:
+      operationId: updateJointAccountTransaction
+      tags: [joint-account]
+      summary: Edit a bank account transaction without changing its type
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJointAccountTransactionInput"
+      responses:
+        "200":
+          description: Updated transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JointAccountTransaction"
+        "400":
+          description: Invalid transaction details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteJointAccountTransaction
+      tags: [joint-account]
+      summary: Delete a bank account transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /joint-accounts:
+    get:
+      operationId: getJointAccounts
+      tags: [joint-account]
+      summary: List bank accounts in the active workspace
+      responses:
+        "200":
+          description: Bank accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BankAccount"
+    post:
+      operationId: createJointAccount
+      tags: [joint-account]
+      summary: Create a workspace bank account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankAccountInput"
+      responses:
+        "201":
+          description: Created bank account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+  /joint-accounts/{id}:
+    patch:
+      operationId: updateJointAccount
+      tags: [joint-account]
+      summary: Rename a workspace bank account or update its opening balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankAccountUpdate"
+      responses:
+        "200":
+          description: Updated bank account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+    delete:
+      operationId: deleteJointAccount
+      tags: [joint-account]
+      summary: Delete a bank account with no transaction history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: number }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /savings-goals/cascade-contribute:
+    post:
+      operationId: cascadeContribute
+      tags: [savings-goals]
+      summary: Distribute a payment waterfall-style across multiple savings goals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CascadeContributeInput"
+      responses:
+        "200":
+          description: Allocation breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CascadeContributeResult"
+
+  /savings-goals/{id}/contributions:
+    get:
+      operationId: getSavingsGoalContributions
+      tags: [savings-goals]
+      summary: List contribution history for a savings goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: List of contributions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavingsGoalContribution"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /savings-goals/{id}/contributions/{contributionId}:
+    delete:
+      operationId: deleteSavingsGoalContribution
+      tags: [savings-goals]
+      summary: Delete a manually recorded savings contribution and reverse its effect on the goal balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+        - name: contributionId
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: The contribution cannot be removed directly
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /savings-goals/{id}/contribute:
+    post:
+      operationId: contributeToSavingsGoal
+      tags: [savings-goals]
+      summary: Atomically add an amount to a savings goal's current balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsGoalContributeInput"
+      responses:
+        "200":
+          description: Updated savings goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsGoal"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /savings-goals/{id}:
+    patch:
+      operationId: updateSavingsGoal
+      tags: [savings-goals]
+      summary: Update a savings goal (name, target, deadline, currentAmount, isCompleted)
+      parameters:
+        - name: id
+          in: path
+          required: true
           schema:
             type: number
       requestBody:
