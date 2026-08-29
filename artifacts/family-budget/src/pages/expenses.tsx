@@ -621,7 +621,7 @@ export default function Expenses() {
       toast({
         variant: "destructive",
         title: "Choose a bank account",
-        description: "Select the account that funded the Joint-bank portion.",
+        description: "Select the account whose recorded deposits funded the bank portion.",
       });
       return;
     }
@@ -636,7 +636,7 @@ export default function Expenses() {
         toast({
           variant: "destructive",
           title: "Income source required",
-          description: "Choose the saved income stream that funded every personal portion, or select Joint bank.",
+          description: "Choose the saved income stream that funded every direct-payment portion.",
         });
         return;
       }
@@ -650,7 +650,7 @@ export default function Expenses() {
         toast({
           variant: "destructive",
           title: "Enter every funding portion",
-          description: "Each selected payer and Joint-bank portion must be greater than zero.",
+          description: "Each direct-payment and bank-deposit portion must be greater than zero.",
         });
         return;
       }
@@ -1102,6 +1102,9 @@ export default function Expenses() {
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
               {bankAccounts.length === 0 && <p className="text-xs text-destructive">A budget manager must add a bank account before this expense can be bank-funded.</p>}
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                This uses money already recorded in the selected account as an opening balance or deposit.
+              </p>
             </div>
           )}
           {getExpenseFundingControlState({
@@ -1110,18 +1113,18 @@ export default function Expenses() {
             allowMixedFunding,
           }).showBankOnlyExplanation && (
             <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:bg-sky-950 dark:text-sky-300">
-              <p>This expense is paid from the selected bank account. Personal payer and income-source fields are not needed.</p>
+              <p>This expense reduces the selected bank-account balance. Direct payer and income-source fields are not needed.</p>
               {!allowMixedFunding && canManageExpenses && (
                 <button
                   type="button"
                   className="mt-2 font-semibold underline underline-offset-2"
                   onClick={() => setAllowMixedFunding(true)}
                 >
-                  Add a personal portion
+                  Add a direct-payment portion
                 </button>
               )}
               {allowMixedFunding && (
-                <p className="mt-2">Choose one or more people above to combine their funds with the bank account.</p>
+                <p className="mt-2">Choose one or more people above. Only the bank portion reduces the selected account.</p>
               )}
             </div>
           )}

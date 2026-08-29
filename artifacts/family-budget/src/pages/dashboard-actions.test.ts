@@ -20,4 +20,14 @@ describe("dashboard quick actions", () => {
     expect(dashboardSource).toContain("{canManageCategories && (");
     expect(dashboardSource).toContain("const canManageCategories = group?.isPrivate === true || canManageShared;");
   });
+
+  it("keeps workspace bank funding visible for Personal budget owners", () => {
+    expect(dashboardSource).toContain("canUseBankFunding={canManageBank}");
+    expect(dashboardSource).toContain("const { data: bankAccounts = [] } = useGetJointAccounts();");
+    expect(dashboardSource).toContain('"Paid directly"');
+    expect(dashboardSource).toContain('"Personal bank deposits"');
+    expect(dashboardSource).toContain('"Both"');
+    expect(dashboardSource).toContain("selectedBankAccountId");
+    expect(dashboardSource).toContain("Only the bank-deposit portion reduces the selected account.");
+  });
 });

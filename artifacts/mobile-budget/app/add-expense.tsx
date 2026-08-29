@@ -580,12 +580,12 @@ export default function AddExpenseSheet() {
         effectivePayerIds.some((id) => (parseFloat(payerAmounts[id] || '0') || 0) <= 0) ||
         (effectivePaidFromBank && (parseFloat(payerAmounts.__joint_bank__ || '0') || 0) <= 0)
       ) {
-        Alert.alert('Enter every funding portion', 'Each selected payer and Joint-bank portion must be greater than zero.');
+        Alert.alert('Enter every funding portion', 'Each direct-payment and bank-deposit portion must be greater than zero.');
         return;
       }
       const missingSourcePayer = effectivePayerIds.find((id) => !payerIncomeSourceIds[id]);
       if (missingSourcePayer) {
-        Alert.alert('Income source required', 'Choose the saved income stream that funded every personal portion.');
+        Alert.alert('Income source required', 'Choose the saved income stream that funded every direct-payment portion.');
         return;
       }
       const splitTotal = effectivePayerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)
@@ -1130,6 +1130,9 @@ export default function AddExpenseSheet() {
                   })}
                 </View>
                 {bankAccounts.length === 0 && <Text style={[styles.hintText, { color: '#ef4444' }]}>Add a bank account from the Bank tab before using bank funds.</Text>}
+                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                  This uses money already recorded in the selected account as an opening balance or deposit.
+                </Text>
                 {getExpenseFundingControlState({
                   paidFromBank,
                   hasPersonalFunding: payerIds.length > 0,
@@ -1137,17 +1140,17 @@ export default function AddExpenseSheet() {
                 }).showBankOnlyExplanation && (
                   <View>
                     <Text style={[styles.hintText, { color: '#38bdf8' }]}>
-                      Paid from this bank account. Personal payer and income-source fields are not needed.
+                      This expense reduces the selected bank-account balance. Direct payer and income-source fields are not needed.
                     </Text>
                     {!allowMixedFunding && canManageShared ? (
                       <Pressable onPress={() => setAllowMixedFunding(true)} style={{ marginTop: 6 }}>
                         <Text style={{ color: '#38bdf8', fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' }}>
-                          Add a personal portion
+                          Add a direct-payment portion
                         </Text>
                       </Pressable>
                     ) : allowMixedFunding ? (
                       <Text style={[styles.hintText, { color: '#38bdf8', marginTop: 6 }]}>
-                        Choose one or more people above to combine their funds with the bank account.
+                        Choose one or more people above. Only the bank portion reduces the selected account.
                       </Text>
                     ) : null}
                   </View>

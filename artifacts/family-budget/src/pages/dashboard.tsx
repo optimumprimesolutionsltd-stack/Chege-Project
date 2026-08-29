@@ -12,6 +12,7 @@ import {
   useContributeToSavingsGoal,
   useCascadeContribute,
   useGetJointAccount,
+  useGetJointAccounts,
   useGetGroup,
    useGetIncomeSources,
    useGetWorkspaces,
@@ -476,11 +477,15 @@ function ExpenseForm({
   currentUserId,
   canManageShared,
   canManageCategories,
+  canUseBankFunding,
+  isSharedWorkspace,
 }: {
   onDone: () => void;
   currentUserId?: string;
   canManageShared: boolean;
   canManageCategories: boolean;
+  canUseBankFunding: boolean;
+  isSharedWorkspace: boolean;
 }) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -494,10 +499,15 @@ function ExpenseForm({
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryBudget, setNewCategoryBudget] = useState("");
   const [paidFromBank, setPaidFromBank] = useState(false);
+  const [allowMixedFunding, setAllowMixedFunding] = useState(false);
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | null>(null);
+  const [bankPortion, setBankPortion] = useState("");
+  const [directPortion, setDirectPortion] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [date, setDate] = useState(localDateInputValue());
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
+  const { data: bankAccounts = [] } = useGetJointAccounts();
   const payerId = paidBy || (!canManageShared ? currentUserId : "");
   const { data: incomeSources = [], isLoading: isIncomeSourcesLoading } = useGetIncomeSources(
     { userId: payerId },
@@ -516,6 +526,8 @@ function ExpenseForm({
   const qc = useQueryClient();
   const { toast } = useToast();
   const today = localDateInputValue();
+  const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
+  const bankLabel = isSharedWorkspace ? "Shared bank deposits" : "Personal bank deposits";
 
   const handleAddCategory = async () => {
     const name = newCategoryName.trim();
@@ -630,21 +642,54 @@ function ExpenseForm({
       });
       return;
     }
-    if (!paidBy && !paidFromBank) {
+    if ((!paidFromBank || allowMixedFunding) && !paidBy) {
       toast({
         variant: "destructive",
         title: "Choose who paid",
-        description: "Select the person who paid, or choose the joint bank account.",
+        description: "Select the person whose income paid the direct portion.",
       });
       return;
     }
-    if (!paidFromBank && !incomeSourceId) {
+    if ((!paidFromBank || allowMixedFunding) && !incomeSourceId) {
       toast({
         variant: "destructive",
         title: "Income source required",
-        description: "Choose the saved income stream that funded this expense, or select the joint bank account.",
+        description: "Choose the saved income stream that funded the direct portion.",
       });
       return;
+    }
+    if (paidFromBank && !selectedBankAccountId) {
+      toast({
+        variant: "destructive",
+        title: "Choose a bank account",
+        description: "Select the account whose recorded deposits funded this expense.",
+      });
+      return;
+    }
+    if (allowMixedFunding) {
+      const bankAmount = Number(bankPortion);
+      const directAmount = Number(directPortion);
+      if (
+        !Number.isInteger(bankAmount) ||
+        !Number.isInteger(directAmount) ||
+        bankAmount <= 0 ||
+        directAmount <= 0
+      ) {
+        toast({
+          variant: "destructive",
+          title: "Enter both funding portions",
+          description: "Bank deposits and direct payment must each be a positive whole-KES amount.",
+        });
+        return;
+      }
+      if (bankAmount + directAmount !== amt) {
+        toast({
+          variant: "destructive",
+          title: "Amounts do not add up",
+          description: `The portions total ${formatKes(bankAmount + directAmount)}, but the expense is ${formatKes(amt)}.`,
+        });
+        return;
+      }
     }
     if (date > today) {
       toast({
@@ -655,18 +700,40 @@ function ExpenseForm({
       return;
     }
     try {
+      const bankAmount = Number(bankPortion);
+      const directAmount = Number(directPortion);
+      const payerName = selectableMembers.find((member) => member.userId === paidBy)?.userName?.split(" ")[0] ?? "Personal funds";
       await createExpense.mutateAsync({
         data: {
           amount: amt,
           description,
           category: category,
           notes: notes.trim() || undefined,
-          paidById: paidFromBank ? undefined : (paidBy || currentUserId),
-          paidFromBank,
+          paidById: paidFromBank && !allowMixedFunding ? undefined : (paidBy || currentUserId),
+          paidFromBank: paidFromBank && !allowMixedFunding,
           isRecurring,
           date,
+          ...(paidFromBank ? { accountId: selectedBankAccountId! } : {}),
           ...(incomeSourceId && !paidFromBank ? { incomeSourceId } : {}),
-        },
+          ...(allowMixedFunding ? {
+            incomeSplits: [
+              {
+                userId: null,
+                label: isSharedWorkspace ? "Shared bank" : "Personal bank",
+                amount: bankAmount,
+                fromBank: true,
+                accountId: selectedBankAccountId!,
+              },
+              {
+                userId: paidBy || currentUserId,
+                label: payerName,
+                amount: directAmount,
+                fromBank: false,
+                incomeSourceId: incomeSourceId!,
+              },
+            ],
+          } : {}),
+        } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
@@ -739,7 +806,7 @@ function ExpenseForm({
             </div>
           )}
         </div>
-        <div className="space-y-1.5">
+        {fundingMode !== "bank" && <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">
             Paid by <span className="text-destructive">*</span>
           </label>
@@ -752,7 +819,6 @@ function ExpenseForm({
                   type="button"
                   onClick={() => {
                     setPaidBy(m.userId);
-                    setPaidFromBank(false);
                     setIncomeSourceId(null);
                   }}
                   className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
@@ -762,7 +828,7 @@ function ExpenseForm({
             })}
           </div>
           {!paidBy && !paidFromBank && <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>}
-        </div>
+        </div>}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
@@ -781,7 +847,7 @@ function ExpenseForm({
           {!canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
         </div>
       </div>
-      {!paidFromBank && (
+      {fundingMode !== "bank" && (
         <div className="space-y-1.5">
            <label className="text-sm font-semibold text-foreground">
              Financed by <span className="text-destructive">*</span>
@@ -833,25 +899,95 @@ function ExpenseForm({
                )}
              </div>
            )}
-          <p className="text-xs text-muted-foreground">Choosing a source helps Jamvi track where this spending was funded from.</p>
+           <p className="text-xs text-muted-foreground">
+             Paid directly means this expense is linked to the selected income source and does not reduce any Jamvi bank-account balance.
+           </p>
         </div>
       )}
-      {canManageShared && (
-        <div className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-          <button
-            type="button"
-            onClick={() => {
-              const nextPaidFromBank = !paidFromBank;
-              setPaidFromBank(nextPaidFromBank);
-              if (nextPaidFromBank) {
-                setPaidBy("");
-                setIncomeSourceId(null);
-              }
-            }}
-            className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors sm:shrink-0 ${paidFromBank ? "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-300" : "border-input bg-card text-foreground hover:bg-muted/40"}`}
-          >
-            🏦 Joint bank account
-          </button>
+      {canUseBankFunding && (
+        <div className="space-y-4 rounded-xl border border-border/50 bg-card p-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground">How was this expense funded?</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Choose whether the money had already been recorded as a bank deposit, was paid directly from income, or used both.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {([
+              ["direct", "Paid directly", "No bank balance changes"],
+              ["bank", bankLabel, "Reduces one selected account"],
+              ["mixed", "Both", "Only the bank portion reduces the account"],
+            ] as const).map(([mode, label, detail]) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={fundingMode === mode}
+                onClick={() => {
+                  if (mode === "direct") {
+                    setPaidFromBank(false);
+                    setAllowMixedFunding(false);
+                    setSelectedBankAccountId(null);
+                    setBankPortion("");
+                  } else if (mode === "bank") {
+                    setPaidFromBank(true);
+                    setAllowMixedFunding(false);
+                    setPaidBy("");
+                    setIncomeSourceId(null);
+                    setDirectPortion("");
+                  } else {
+                    setPaidFromBank(true);
+                    setAllowMixedFunding(true);
+                    if (!paidBy && currentUserId && !canManageShared) setPaidBy(currentUserId);
+                  }
+                }}
+                className={`rounded-xl border p-3 text-left transition-colors ${
+                  fundingMode === mode
+                    ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                    : "border-input bg-background text-foreground hover:border-primary/50"
+                }`}
+              >
+                <span className="block text-sm font-semibold">{label}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{detail}</span>
+              </button>
+            ))}
+          </div>
+          {paidFromBank && (
+            <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/70 p-3 dark:border-sky-900 dark:bg-sky-950/40">
+              <label className="text-sm font-semibold text-foreground">
+                Bank account <span className="text-destructive">*</span>
+              </label>
+              <select
+                value={selectedBankAccountId?.toString() ?? ""}
+                onChange={(event) => setSelectedBankAccountId(event.target.value ? Number(event.target.value) : null)}
+                className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">{bankAccounts.length ? "Choose the account used" : "No bank accounts available"}</option>
+                {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              </select>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Jamvi will record a withdrawal from this account. The money should already exist there as an opening balance or recorded deposit.
+              </p>
+              {bankAccounts.length === 0 && (
+                <p className="text-xs font-medium text-destructive">Add a bank account from the Bank section before using deposited money.</p>
+              )}
+            </div>
+          )}
+          {allowMixedFunding && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5 text-sm font-semibold text-foreground">
+                Bank-deposit portion
+                <Input type="number" min="1" step="1" value={bankPortion} onChange={(event) => setBankPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" />
+              </label>
+              <label className="space-y-1.5 text-sm font-semibold text-foreground">
+                Direct-payment portion
+                <Input type="number" min="1" step="1" value={directPortion} onChange={(event) => setDirectPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" />
+              </label>
+              <p className="text-xs leading-relaxed text-muted-foreground sm:col-span-2">
+                Only the bank-deposit portion reduces the selected account. The direct portion is reported against the person and income source above.
+              </p>
+            </div>
+          )}
+          <div className="flex justify-end">
           <label className="flex items-start gap-2 text-sm text-foreground">
             <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />
             <span>
@@ -859,6 +995,7 @@ function ExpenseForm({
               <span className="block text-xs text-muted-foreground">Remind me to apply this next month.</span>
             </span>
           </label>
+          </div>
         </div>
       )}
       <div className="flex gap-3">
@@ -1311,7 +1448,7 @@ export default function Dashboard() {
           {activeAction !== "none" && (
             <div className="border-t border-border/50 p-6 bg-muted/20">
               {activeAction === "income"  && <IncomeForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageShared} isSharedWorkspace={isSharedWorkspace} />}
-              {activeAction === "expense" && <ExpenseForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageShared} canManageCategories={canManageCategories} />}
+              {activeAction === "expense" && <ExpenseForm onDone={() => setActiveAction("none")} currentUserId={user?.id} canManageShared={canManageShared} canManageCategories={canManageCategories} canUseBankFunding={canManageBank} isSharedWorkspace={isSharedWorkspace} />}
               {activeAction === "goal"    && <GoalForm goals={goals} onDone={() => setActiveAction("none")} memberUserId={canManageShared ? undefined : user?.id} />}
             </div>
           )}
