@@ -2777,6 +2777,13 @@ components:
           maxLength: 120
         kind:
           $ref: "#/components/schemas/GroupKind"
+        defaultMonthlyTarget:
+          description: >-
+            What each member is expected to contribute per month, in KES.
+            Changing it does not alter targets already set on existing
+            members; it applies to whoever joins next.
+          type: ["number", "null"]
+          minimum: 0
       required: [name]
 
     GroupKind:
