@@ -49,7 +49,7 @@ export default function Home() {
                 Gather around <br/><span className="text-secondary">your money.</span>
               </motion.h1>
               <motion.p variants={fadeUp} className="text-lg sm:text-xl text-foreground/70 mb-8 leading-relaxed max-w-lg">
-                Whether you're tracking your personal spending or pooling money for a chama, Jamvi brings clarity, trust, and warmth to everyday finances.
+                Whether you're tracking your personal spending or keeping a chama's contributions straight, Jamvi brings clarity, trust, and warmth to everyday finances.
               </motion.p>
               <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-4">
                 <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-primary text-white text-base font-semibold hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 shadow-lg">
@@ -257,7 +257,7 @@ export default function Home() {
             Start managing your money with clarity and confidence. Setup takes less than two minutes.
           </p>
           <p className="mx-auto mb-10 max-w-2xl text-sm font-medium leading-relaxed text-foreground/60">
-            Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service.
+            Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service. Money moves through M-Pesa or your bank, exactly as it does now.
           </p>
           <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-16 px-10 rounded-full bg-secondary text-white text-lg font-bold hover:bg-secondary/90 transition-transform hover:scale-105 active:scale-95 shadow-xl">
             Create your free account
