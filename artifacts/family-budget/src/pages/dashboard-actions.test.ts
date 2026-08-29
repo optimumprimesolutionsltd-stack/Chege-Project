@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const dashboardSource = readFileSync(new URL("./dashboard.tsx", import.meta.url), "utf8");
+const expenseFormSource = dashboardSource.slice(
+  dashboardSource.indexOf("function ExpenseForm("),
+  dashboardSource.indexOf("export default function Dashboard"),
+);
 
 describe("dashboard quick actions", () => {
   it("keeps a responsive budget action beside the money actions", () => {
@@ -32,9 +36,18 @@ describe("dashboard quick actions", () => {
   });
 
   it("does not ask a Personal budget owner who paid", () => {
-    expect(dashboardSource).toContain("const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? \"\");");
-    expect(dashboardSource).toContain('{isSharedWorkspace && fundingMode !== "bank" && <div className="space-y-1.5">');
-    expect(dashboardSource).toContain("max={isSharedWorkspace && !canManageShared ? today : undefined}");
-    expect(dashboardSource).toContain('{isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}');
+    expect(expenseFormSource).toContain("const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? \"\");");
+    expect(expenseFormSource).toContain('{isSharedWorkspace && fundingMode !== "bank" && <div className="space-y-1.5">');
+    expect(expenseFormSource).toContain("max={isSharedWorkspace && !canManageShared ? today : undefined}");
+    expect(expenseFormSource).toContain('{isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}');
+  });
+
+  it("keeps the payer selector and Shared bank variant available only in Shared quick log", () => {
+    expect(expenseFormSource).toMatch(
+      /\{isSharedWorkspace && fundingMode !== "bank" && <div className="space-y-1\.5">[\s\S]*?Paid by/,
+    );
+    expect(expenseFormSource).toContain('const bankLabel = isSharedWorkspace ? "Shared bank deposits" : "Personal bank deposits";');
+    expect(expenseFormSource).toContain('label: isSharedWorkspace ? "Shared bank" : "Personal bank"');
+    expect(expenseFormSource).not.toContain('canManageShared && fundingMode !== "bank"');
   });
 });
