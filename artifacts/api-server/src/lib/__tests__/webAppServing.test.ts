@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import express from "express";
@@ -18,6 +18,23 @@ async function buildFixture(title = "Jamvi"): Promise<string> {
   );
   await writeFile(path.join(directory, "asset.txt"), "private budget");
   return directory;
+}
+
+/**
+ * Writes a prerendered route the way generate-seo-pages.mjs does: a directory
+ * named for the route, holding an index.html with that page's own metadata.
+ */
+async function writePrerenderedRoute(
+  buildDirectory: string,
+  route: string,
+  title: string,
+): Promise<void> {
+  const routeDirectory = path.join(buildDirectory, route);
+  await mkdir(routeDirectory, { recursive: true });
+  await writeFile(
+    path.join(routeDirectory, "index.html"),
+    `<!doctype html><title>${title}</title>`,
+  );
 }
 
 afterEach(async () => {
@@ -144,5 +161,77 @@ describe("attachWebBuild", () => {
         buildDir: path.join(os.tmpdir(), "jamvi-web-build-missing"),
       }),
     ).toThrow("Build @workspace/family-budget before starting the API server.");
+  });
+
+  it("serves a prerendered page's own metadata rather than the home page", async () => {
+    // Each public route is generated with its own title, description, and
+    // canonical URL. Serving the root shell instead makes every page claim to
+    // be the home page, which is invisible in the browser and wrong to a
+    // crawler — the failure this test exists to catch.
+    const marketingBuildDir = await buildFixture("Jamvi marketing");
+    await writePrerenderedRoute(marketingBuildDir, "faq", "FAQ | Jamvi");
+
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir,
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const response = await request(app).get("/faq/");
+
+    expect(response.text).toContain("FAQ | Jamvi");
+    expect(response.text).not.toContain("Jamvi marketing");
+  });
+
+  it("still falls back to the shell for a route with no prerendered file", async () => {
+    const marketingBuildDir = await buildFixture("Jamvi marketing");
+
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir,
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    // The client router owns this one, including the 404 page.
+    const response = await request(app).get("/nothing-prerendered-here");
+
+    expect(response.text).toContain("Jamvi marketing");
+  });
+
+  it("does not let a browser cache HTML for a year", async () => {
+    // index.html names the current asset hashes. Cached immutably, a returning
+    // visitor stays on whatever was deployed the day they first arrived.
+    const marketingBuildDir = await buildFixture("Jamvi marketing");
+    await writePrerenderedRoute(marketingBuildDir, "pricing", "Pricing | Jamvi");
+
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir,
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const html = await request(app).get("/pricing/");
+    expect(html.headers["cache-control"]).toContain("no-cache");
+
+    const asset = await request(app).get("/asset.txt");
+    expect(asset.headers["cache-control"]).toContain("immutable");
+  });
+
+  it("keeps the authenticated app a single-page app", async () => {
+    // family-budget is a real SPA with no prerendered routes; every path must
+    // still reach its shell so the client router can handle it.
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir: await buildFixture("Jamvi marketing"),
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const response = await request(app).get("/app/groups/7/expenses");
+
+    expect(response.text).toContain("Jamvi budget");
   });
 });

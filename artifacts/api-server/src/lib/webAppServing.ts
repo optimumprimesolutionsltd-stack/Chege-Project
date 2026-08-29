@@ -148,11 +148,28 @@ function attachDualWebBuilds(
 
   app.use(
     express.static(marketingBuildDir, {
-      index: false,
+      // The marketing build is prerendered: every public route is written as a
+      // directory with its own index.html carrying that page's title,
+      // description, and canonical URL. `index: false` made all of them
+      // unreachable — a request for /faq/ fell through to the catch-all below
+      // and was answered with the root index, so each page claimed to be the
+      // home page. Serving them is the entire reason they are generated.
+      index: "index.html",
       maxAge: "1y",
       immutable: true,
+      setHeaders(res, filePath) {
+        // Assets carry a content hash and can be cached forever. HTML cannot:
+        // it is the file that names the current asset hashes, so caching it
+        // immutably for a year leaves a returning visitor pinned to whatever
+        // was deployed the day they first arrived.
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
     }),
   );
+  // Anything with no prerendered file is a client-side route, so the shell
+  // answers and the router decides — including the 404 page.
   app.get("/{*splat}", (req, res, next) => {
     if (isApiRequest(req.path) || !req.accepts("html")) {
       next();
