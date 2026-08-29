@@ -914,7 +914,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
   }
   const [updated] = await db
     .update(jointAccountTxTable)
-    .set({ amount, date, madeById, description, expenseCategory, accountId })
+    .set({ amount, date, madeById: requestedMadeById, description, expenseCategory, accountId })
     .where(and(eq(jointAccountTxTable.id, existing.id), eq(jointAccountTxTable.groupId, groupId)))
     .returning();
   res.json(await enrichTx(updated, groupId));

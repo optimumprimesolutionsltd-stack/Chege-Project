@@ -202,6 +202,32 @@ describe("multiple-account legacy fallback", () => {
       totalDeposits: 60,
       totalDisbursements: 40,
       balance: 370,
+      closingBalance: 370,
+    });
+  });
+
+  it("isolates opening balance and transactions to the selected account", async () => {
+    mockedDb.select
+      .mockImplementationOnce(() => makeSelectChainWith([
+        { id: 7, name: "Everyday", openingBalance: 100 },
+        { id: 8, name: "Savings buffer", openingBalance: 250 },
+      ]))
+      .mockImplementationOnce(() => makeSelectChainWith([
+        { id: 2, groupId: 1, accountId: 8, type: "deposit", amount: 80, description: "Deposit", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() },
+        { id: 3, groupId: 1, accountId: 8, type: "disbursement", amount: 30, description: "Spend", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-02", createdAt: new Date() },
+      ]));
+
+    const res = await request(jointApp).get("/joint-account?accountId=8");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      accountId: 8,
+      accountName: "Savings buffer",
+      openingBalance: 250,
+      totalDeposits: 80,
+      totalDisbursements: 30,
+      balance: 300,
+      closingBalance: 300,
     });
   });
 });
