@@ -1,0 +1,58 @@
+Task: repair the Drizzle migration snapshots. They have drifted from the
+migrations, which makes drizzle-kit generate unsafe on this repository.
+
+THE PROBLEM
+
+lib/db/migrations/meta/ has snapshots for 0000 through 0003 only. Two later
+migrations were hand-written and registered in _journal.json without
+snapshots:
+
+  0004_multiple_bank_accounts   creates bank_accounts, adds account_id to
+                                four tables
+  0005_group_plan               adds groups.plan
+
+drizzle-kit generate diffs the schema against the LATEST snapshot. Since that
+is still 0003, a generate today would try to recreate the bank_accounts table
+and re-add every account_id column, on top of whatever is genuinely new. Every
+migration since has had to be written by hand because of this.
+
+WHAT IS NEEDED
+
+A snapshot reflecting the CURRENT schema, so future generates diff correctly.
+
+STEPS
+
+1. Confirm the current state first and report it:
+       ls lib/db/migrations/meta/
+       cat lib/db/migrations/meta/_journal.json
+
+2. Run:
+       pnpm --filter @workspace/db run generate
+
+3. Look at what it produced BEFORE committing anything. It will write a new
+   snapshot, and probably a migration SQL file too.
+
+   If that SQL contains CREATE TABLE "bank_accounts", or ALTER TABLE ... ADD
+   COLUMN "account_id", or ADD COLUMN "plan" — those changes are ALREADY
+   APPLIED to the database. Running them would fail.
+
+   In that case: DELETE the generated .sql file, REMOVE its entry from
+   _journal.json, but KEEP the generated snapshot. The snapshot is the thing
+   we need; the SQL is a duplicate of work already done.
+
+   If it produced only a snapshot and no SQL, nothing to remove.
+
+4. Verify the repair: run generate again. It should now report no changes. If
+   it still wants to create bank_accounts, stop and show me.
+
+5. Commit and push the snapshot (and the journal, if you edited it).
+
+DO NOT
+
+- Do not run drizzle-kit migrate or drizzle-kit push against any database.
+  This task only writes files.
+- Do not delete or edit any existing migration .sql file.
+- Do not modify the schema in lib/db/src/schema/.
+
+Report: what generate produced, what you removed, and whether a second
+generate came back clean.

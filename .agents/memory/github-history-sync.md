@@ -7,4 +7,4 @@ When the workspace's `git push` reports missing or invalid GitHub credentials, a
 
 **Why:** A shell push can fail even though the Replit GitHub connection has repository write permission.
 
-**How to apply:** Preserve the commit chain by recreating local blobs, trees, and commits through the Git data API in parent order. Pass the commit message exactly as stored, including its trailing newline, or GitHub creates a different SHA. Verify every recreated SHA matches locally, then advance the remote branch without force and refresh the local remote-tracking ref.
+**How to apply:** Read the live remote ref first; the local tracking ref may be stale. Recreate local blobs, trees, and commits through the Git data API in parent order. If the remote advanced, merge both histories and never force-update it. Verify trees exactly. GitHub may normalize commit metadata and produce different commit SHAs; API-native commits are acceptable when their trees match and the final commit is a fast-forward merge containing the live remote head.
