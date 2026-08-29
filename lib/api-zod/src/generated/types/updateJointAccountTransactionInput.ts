@@ -25,6 +25,8 @@ export interface UpdateJointAccountTransactionInput {
   incomeSourceId?: number | null;
   /** Required for withdrawals; deposits ignore this field */
   expenseCategory?: string;
+  /** True only while editing an existing bank-charge transaction */
+  bankCharge?: boolean;
   sourceKind?: UpdateJointAccountTransactionInputSourceKind;
   destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
   /** Replacement contributor portions for a deposit. Send an empty array to remove existing splits. */

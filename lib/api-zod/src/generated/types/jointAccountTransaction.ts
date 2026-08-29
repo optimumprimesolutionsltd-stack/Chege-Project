@@ -27,6 +27,8 @@ export interface JointAccountTransaction {
      * @nullable
      */
   expenseCategory?: string | null;
+  /** True when this disbursement is a bank fee excluded from household spending reports */
+  bankCharge: boolean;
   /**
      * Linked savings goal for a bank transfer
      * @nullable

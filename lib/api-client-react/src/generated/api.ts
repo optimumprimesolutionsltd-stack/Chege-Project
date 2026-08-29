@@ -28,6 +28,7 @@ import type {
   BankAccount,
   BankAccountInput,
   BankAccountUpdate,
+  BankChargeInput,
   BudgetCategory,
   BudgetCategoryInput,
   BudgetCategoryRecommendationApplyInput,
@@ -2711,6 +2712,77 @@ export const useCreateDisbursement = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateDisbursementMutationOptions(options));
+    }
+
+export const getCreateBankChargeUrl = () => {
+
+
+
+
+  return `/api/joint-account/bank-charge`
+}
+
+/**
+ * @summary Record a bank fee or charge against the selected account
+ */
+export const createBankCharge = async (bankChargeInput: BankChargeInput, options?: Parameters<typeof customFetch>[1]): Promise<JointAccountTransaction> => {
+
+  return customFetch<JointAccountTransaction>(getCreateBankChargeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankChargeInput)
+  }
+);}
+
+
+
+
+
+export const getCreateBankChargeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankCharge>>, TError,{data: BodyType<BankChargeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createBankCharge>>, TError,{data: BodyType<BankChargeInput>}, TContext> => {
+
+const mutationKey = ['createBankCharge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createBankCharge>>, {data: BodyType<BankChargeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createBankCharge(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateBankChargeMutationResult = NonNullable<Awaited<ReturnType<typeof createBankCharge>>>
+    export type CreateBankChargeMutationBody = BodyType<BankChargeInput>
+    export type CreateBankChargeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Record a bank fee or charge against the selected account
+ */
+export const useCreateBankCharge = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBankCharge>>, TError,{data: BodyType<BankChargeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createBankCharge>>,
+        TError,
+        {data: BodyType<BankChargeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateBankChargeMutationOptions(options));
     }
 
 export const getTransferBankToSavingsUrl = () => {

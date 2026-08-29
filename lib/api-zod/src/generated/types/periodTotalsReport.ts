@@ -17,7 +17,7 @@ export interface PeriodTotalsReport {
   contributionTotal: number;
   /** External deposits into the joint account, excluding transfers from savings */
   bankDepositTotal: number;
-  /** All bank disbursements recorded in the period */
+  /** Bank disbursements recorded in the period, excluding bank charges */
   bankDisbursementTotal: number;
   /** Personal additions to savings goals */
   savingsTotal: number;

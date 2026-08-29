@@ -35,4 +35,10 @@ export interface UpdateGroupInput {
      */
   slogan?: string | null;
   kind?: GroupKind;
+  /**
+     * What each member is expected to contribute per month, in KES. Changing it does not alter targets already set on existing members; it applies to whoever joins next.
+     * @minimum 0
+     * @nullable
+     */
+  defaultMonthlyTarget?: number | null;
 }

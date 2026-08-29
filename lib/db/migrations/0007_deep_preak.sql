@@ -1,0 +1,1 @@
+ALTER TABLE "joint_account_transactions" ADD COLUMN "bank_charge" boolean DEFAULT false NOT NULL;

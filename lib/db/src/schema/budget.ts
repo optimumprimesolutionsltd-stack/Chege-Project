@@ -132,6 +132,7 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   madeById: text("made_by_id"), // userId for deposits; null ok for disbursements
   incomeSourceId: integer("income_source_id"), // which income source funded this deposit
   expenseCategory: text("expense_category"), // optional: which expense category this disbursement covers
+  bankCharge: boolean("bank_charge").notNull().default(false), // true for a bank fee/charge, excluded from household spending reports
   savingsGoalId: integer("savings_goal_id"), // set only for a linked bank <-> savings transfer
   accountId: integer("account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   transferDirection: text("transfer_direction"), // 'to_savings' | 'from_savings' for linked transfers

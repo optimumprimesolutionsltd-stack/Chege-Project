@@ -27,6 +27,7 @@ import {
   useGetJointAccount,
   useCreateDeposit,
   useCreateDisbursement,
+  useCreateBankCharge,
   useUpdateJointAccountTransaction,
   useDeleteJointAccountTransaction,
   useGetBudgetCategories,
@@ -77,6 +78,7 @@ type Tx = {
   madeByName?: string | null;
   incomeSourceId?: number | null;
   expenseCategory?: string | null;
+  bankCharge?: boolean;
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
   transferDirection?: string | null;
@@ -85,7 +87,7 @@ type Tx = {
   createdAt?: string | null;
 };
 
-type TxType = 'deposit' | 'disbursement' | 'transfer';
+type TxType = 'deposit' | 'disbursement' | 'transfer' | 'bank_charge';
 
 type MemberIncomeSource = {
   id: number;
@@ -170,6 +172,7 @@ export default function BankScreen() {
 
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
+  const { mutateAsync: createBankCharge } = useCreateBankCharge();
   const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
   const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
@@ -413,7 +416,7 @@ export default function BankScreen() {
     }
     const type: TxType = tx.savingsGoalId
       ? 'transfer'
-      : tx.type === 'deposit' ? 'deposit' : 'disbursement';
+      : tx.bankCharge ? 'bank_charge' : tx.type === 'deposit' ? 'deposit' : 'disbursement';
     setTxType(type);
     setEditingTransactionId(tx.id);
     setAmount(String(tx.amount));
@@ -527,6 +530,10 @@ export default function BankScreen() {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
       return;
     }
+    if (txType === 'bank_charge' && !description.trim()) {
+      Alert.alert('Narration required', 'Add the bank statement narration for this charge.');
+      return;
+    }
     if (txType === 'disbursement' && withdrawDest === 'other' && !description.trim()) {
       Alert.alert('Narration required', 'Explain where the money is going when you choose Other.');
       return;
@@ -625,6 +632,7 @@ export default function BankScreen() {
             ...(txType === 'deposit' && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
+            ...(txType === 'bank_charge' ? { bankCharge: true } : {}),
             accountId: selectedAccountId ?? undefined,
           },
         });
@@ -697,6 +705,15 @@ export default function BankScreen() {
             },
           });
         }
+      } else if (txType === 'bank_charge') {
+        await createBankCharge({
+          data: {
+            amount: parsed,
+            narration: description.trim(),
+            date,
+            accountId: selectedAccountId ?? undefined,
+          },
+        });
       } else {
         // Disbursement — include madeById: null for Joint bank or the selected member
         await createDisbursement({
@@ -728,11 +745,12 @@ export default function BankScreen() {
   const isDeposit = txType === 'deposit';
   const isWithdrawal = txType === 'disbursement';
   const isTransfer = txType === 'transfer';
+  const isBankCharge = txType === 'bank_charge';
   const parsedOutgoingAmount = Number(amount.replace(/,/g, ''));
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
-  const isOutgoingTransaction = isWithdrawal || (isTransfer && transferDirection === 'to_savings');
+  const isOutgoingTransaction = isWithdrawal || isBankCharge || (isTransfer && transferDirection === 'to_savings');
   const projectedBalance = isOutgoingTransaction &&
     data &&
     Number.isInteger(parsedOutgoingAmount) &&
@@ -870,6 +888,17 @@ export default function BankScreen() {
                 <Feather name="repeat" size={16} color="#67e8f9" />
                 <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Transfer</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#78350f' }, !canManageAccount && styles.actionBtnDisabled]}
+                onPress={() => openModal('bank_charge')}
+                activeOpacity={0.8}
+                disabled={!canManageAccount}
+                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can record a bank charge.' : undefined}
+                testID="bank-charge-action"
+              >
+                <Feather name="file-minus" size={16} color="#fde68a" />
+                <Text style={[styles.actionBtnText, { color: '#fde68a' }]}>Charge</Text>
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -921,6 +950,7 @@ export default function BankScreen() {
         renderItem={({ item }) => {
           const dep = item.type === 'deposit';
           const payerLabel = txPayerLabel(item);
+          const bankCharge = item.bankCharge === true;
           return (
             <Pressable
               style={({ pressed }) => [
@@ -939,11 +969,14 @@ export default function BankScreen() {
                 <Text style={[styles.txDesc, { color: colors.foreground }]} numberOfLines={1}>
                   {item.savingsGoalId
                     ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
+                    : bankCharge ? `Bank charge: ${item.description}`
                     : !dep && item.expenseCategory ? item.expenseCategory : item.description}
                 </Text>
                 <Text style={[styles.txMeta, { color: colors.mutedForeground }]}>
                   {item.savingsGoalId
                     ? `${item.description} · `
+                    : bankCharge
+                      ? 'Excluded from household spending and reports · '
                     : dep
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
@@ -1087,13 +1120,20 @@ export default function BankScreen() {
               >
                 <Text style={[styles.toggleText, { color: txType === 'transfer' ? '#fff' : colors.mutedForeground }]}>Transfer</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.toggleOption, txType === 'bank_charge' && styles.toggleActiveDisburse]}
+                onPress={() => setTxType('bank_charge')}
+                testID="bank-toggle-charge"
+              >
+                <Text style={[styles.toggleText, { color: txType === 'bank_charge' ? '#fff' : colors.mutedForeground }]}>Charge</Text>
+              </TouchableOpacity>
             </View>
             ) : null}
 
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
               {editingTransactionId !== null
-                ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Transfer' : 'Withdrawal'}`
-                : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : 'Take Money Out'}
+                ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Transfer' : isBankCharge ? 'Bank Charge' : 'Withdrawal'}`
+                : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankCharge ? 'Record Bank Charge' : 'Take Money Out'}
             </Text>
 
             {/* Amount */}
@@ -1132,9 +1172,11 @@ export default function BankScreen() {
             )}
 
             {/* Deposits require a description. Withdrawal details come after the required category. */}
-            {isDeposit && (
+            {(isDeposit || isBankCharge) && (
               <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Description</Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  {isBankCharge ? 'Narration *' : 'Description'}
+                </Text>
                 <TextInput
                   style={[
                     styles.input,
@@ -1144,7 +1186,7 @@ export default function BankScreen() {
                       backgroundColor: colors.muted,
                     },
                   ]}
-                  placeholder="e.g. Monthly contribution"
+                  placeholder={isBankCharge ? 'e.g. Monthly account maintenance fee' : 'e.g. Monthly contribution'}
                   placeholderTextColor={colors.mutedForeground}
                   value={description}
                   onChangeText={setDescription}

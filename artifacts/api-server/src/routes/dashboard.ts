@@ -997,10 +997,10 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
             AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
         ) AS bank_deposit_count,
         COALESCE(SUM(CASE
-          WHEN bank_tx.type = 'disbursement' THEN bank_tx.amount
+          WHEN bank_tx.type = 'disbursement' AND bank_tx.bank_charge = false THEN bank_tx.amount
           ELSE 0
         END), 0) AS bank_disbursement_total,
-        COUNT(*) FILTER (WHERE bank_tx.type = 'disbursement') AS bank_disbursement_count,
+        COUNT(*) FILTER (WHERE bank_tx.type = 'disbursement' AND bank_tx.bank_charge = false) AS bank_disbursement_count,
         COALESCE(SUM(CASE
           WHEN bank_tx.type = 'disbursement'
             AND bank_tx.expense_id IS NULL

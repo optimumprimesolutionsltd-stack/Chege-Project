@@ -457,7 +457,7 @@ export interface PeriodTotalsReport {
   contributionTotal: number;
   /** External deposits into the joint account, excluding transfers from savings */
   bankDepositTotal: number;
-  /** All bank disbursements recorded in the period */
+  /** Bank disbursements recorded in the period, excluding bank charges */
   bankDisbursementTotal: number;
   /** Personal additions to savings goals */
   savingsTotal: number;
@@ -889,6 +889,12 @@ export interface UpdateGroupInput {
      */
   slogan?: string | null;
   kind?: GroupKind;
+  /**
+     * What each member is expected to contribute per month, in KES. Changing it does not alter targets already set on existing members; it applies to whoever joins next.
+     * @minimum 0
+     * @nullable
+     */
+  defaultMonthlyTarget?: number | null;
 }
 
 export type UpdateMemberRoleInputRole = typeof UpdateMemberRoleInputRole[keyof typeof UpdateMemberRoleInputRole];
@@ -949,6 +955,8 @@ export interface JointAccountTransaction {
      * @nullable
      */
   expenseCategory?: string | null;
+  /** True when this disbursement is a bank fee excluded from household spending reports */
+  bankCharge: boolean;
   /**
      * Linked savings goal for a bank transfer
      * @nullable
@@ -1072,6 +1080,20 @@ export interface DisbursementInput {
   accountId?: number;
 }
 
+export interface BankChargeInput {
+  /** @minimum 1 */
+  amount: number;
+  /**
+     * Required explanation from the bank statement, for example monthly account fee
+     * @minLength 1
+     * @maxLength 200
+     */
+  narration: string;
+  date: string;
+  /** @minimum 1 */
+  accountId?: number;
+}
+
 export type UpdateJointAccountTransactionInputSourceKind = typeof UpdateJointAccountTransactionInputSourceKind[keyof typeof UpdateJointAccountTransactionInputSourceKind];
 
 
@@ -1114,6 +1136,8 @@ export interface UpdateJointAccountTransactionInput {
   incomeSourceId?: number | null;
   /** Required for withdrawals; deposits ignore this field */
   expenseCategory?: string;
+  /** True only while editing an existing bank-charge transaction */
+  bankCharge?: boolean;
   sourceKind?: UpdateJointAccountTransactionInputSourceKind;
   destinationKind?: UpdateJointAccountTransactionInputDestinationKind;
   /** Replacement contributor portions for a deposit. Send an empty array to remove existing splits. */

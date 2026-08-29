@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
+  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
   useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank, useGetGroup,
   getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
@@ -43,6 +43,7 @@ type EditableTransaction = {
   madeById?: string | null;
   incomeSourceId?: number | null;
   expenseCategory?: string | null;
+  bankCharge?: boolean;
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
   transferDirection?: string | null;
@@ -62,6 +63,7 @@ export default function Bank() {
   const { data: categories } = useGetBudgetCategories();
   const createDeposit = useCreateDeposit();
   const createDisbursement = useCreateDisbursement();
+  const createBankCharge = useCreateBankCharge();
   const updateTx = useUpdateJointAccountTransaction();
   const deleteTx = useDeleteJointAccountTransaction();
   const transferToSavings = useTransferBankToSavings();
@@ -86,7 +88,7 @@ export default function Bank() {
       (tx.contributorSplits?.length ?? 0) === 0
     );
 
-  const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | null>(null);
+  const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | "bank_charge" | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -294,7 +296,7 @@ export default function Bank() {
     setMode(null);
   };
 
-  const openMode = (m: "deposit" | "disbursement" | "transfer") => {
+  const openMode = (m: "deposit" | "disbursement" | "transfer" | "bank_charge") => {
     if (!canManageAccount && m !== "deposit") {
       toast({
         variant: "destructive",
@@ -341,7 +343,7 @@ export default function Bank() {
     }
     const transactionMode = tx.savingsGoalId
       ? "transfer"
-      : tx.type === "deposit" ? "deposit" : "disbursement";
+      : tx.bankCharge ? "bank_charge" : tx.type === "deposit" ? "deposit" : "disbursement";
     setEditingTransaction(tx);
     setMode(transactionMode);
     setAmount(String(tx.amount));
@@ -381,11 +383,11 @@ export default function Bank() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer") && !description.trim())) {
+    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer" || mode === "bank_charge") && !description.trim())) {
       toast({
         variant: "destructive",
         title: "Complete transaction details",
-        description: "Enter an amount and date; deposits and transfers also need a description.",
+        description: "Enter an amount and date; deposits, transfers, and bank charges also need a narration.",
       });
       return;
     }
@@ -505,6 +507,7 @@ export default function Bank() {
             ...(mode === "deposit" && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(mode === "deposit" && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(mode === "disbursement" ? { expenseCategory, destinationKind: withdrawalDestinationKind } : {}),
+            ...(mode === "bank_charge" ? { bankCharge: true } : {}),
             accountId: editingTransaction.accountId ?? selectedAccountId ?? undefined,
           },
         });
@@ -541,6 +544,16 @@ export default function Bank() {
           });
         }
         toast({ title: "Deposit recorded" });
+      } else if (mode === "bank_charge") {
+        await createBankCharge.mutateAsync({
+          data: {
+            amount: total,
+            narration: description.trim(),
+            date,
+            accountId: selectedAccountId ?? undefined,
+          },
+        });
+        toast({ title: "Bank charge recorded" });
       } else {
         await createDisbursement.mutateAsync({
           data: {
@@ -581,10 +594,10 @@ export default function Bank() {
     }
   };
 
-  const isPending = createDeposit.isPending || createDisbursement.isPending || updateTx.isPending ||
+  const isPending = createDeposit.isPending || createDisbursement.isPending || createBankCharge.isPending || updateTx.isPending ||
     transferToSavings.isPending || transferFromSavings.isPending || addingCategory;
   const outgoingAmount = Number(amount);
-  const isOutgoingTransaction = mode === "disbursement" ||
+  const isOutgoingTransaction = mode === "disbursement" || mode === "bank_charge" ||
     (mode === "transfer" && transferDirection === "to_savings");
   const projectedBalance = isOutgoingTransaction &&
     account &&
@@ -742,7 +755,7 @@ export default function Bank() {
 
       {/* Action buttons / form */}
       {!mode ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Button
             data-testid="button-deposit"
             onClick={() => openMode("deposit")}
@@ -770,20 +783,32 @@ export default function Bank() {
           >
             Transfer
           </Button>
+          <Button
+            data-testid="button-bank-charge"
+            onClick={() => openMode("bank_charge")}
+            variant="outline"
+            className="h-12 px-4 rounded-xl"
+            disabled={!canManageAccount}
+            aria-describedby={!canManageAccount ? "bank-manager-guidance" : undefined}
+          >
+            Bank charge
+          </Button>
         </div>
       ) : (
         <Card className="border-none shadow-md bg-accent/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">
               {editingTransaction
-                ? `Edit ${mode === "deposit" ? "Deposit" : mode === "transfer" ? "Transfer" : "Withdrawal"}`
-                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : "Take Money Out"}
+                ? `Edit ${mode === "deposit" ? "Deposit" : mode === "transfer" ? "Transfer" : mode === "bank_charge" ? "Bank Charge" : "Withdrawal"}`
+                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : mode === "bank_charge" ? "Record Bank Charge" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
               {mode === "deposit"
                 ? `Money going into your ${isSharedWorkspace ? "Joint account" : "Personal account"}.`
                 : mode === "transfer"
                   ? `Move ${isSharedWorkspace ? "Shared budget" : "Personal budget"} funds between this account and a savings goal.`
+                  : mode === "bank_charge"
+                    ? "Record a fee from the bank statement. It reduces this account but is not counted as household spending."
                   : `Money going out of your ${isSharedWorkspace ? "Joint account" : "Personal account"}.`}
             </CardDescription>
           </CardHeader>
@@ -903,17 +928,18 @@ export default function Bank() {
                   <label className="text-sm font-semibold text-foreground">
                     {mode === "deposit"
                       ? depositSourceKind === "other" ? "Other source narration" : "Description"
-                      : withdrawalDestinationKind === "other" ? "Other destination narration" : "Details"}
+                      : mode === "bank_charge" ? "Narration" : withdrawalDestinationKind === "other" ? "Other destination narration" : "Details"}
                     {mode === "disbursement" && withdrawalDestinationKind !== "other" && <span className="font-normal text-muted-foreground"> (optional)</span>}
+                    {mode === "bank_charge" && <span className="text-destructive"> *</span>}
                   </label>
                   <Input
                     data-testid="input-description"
                     placeholder={mode === "deposit"
                       ? depositSourceKind === "other" ? "e.g. Group gift from a friend" : "e.g. Salary deposit"
-                      : withdrawalDestinationKind === "other" ? "e.g. Emergency cash support" : "e.g. Paid school fees for term two"}
+                      : mode === "bank_charge" ? "e.g. Monthly account maintenance fee" : withdrawalDestinationKind === "other" ? "e.g. Emergency cash support" : "e.g. Paid school fees for term two"}
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    required={mode === "deposit" || withdrawalDestinationKind === "other"}
+                    required={mode === "deposit" || mode === "bank_charge" || withdrawalDestinationKind === "other"}
                     className="h-12 bg-card"
                   />
                 </div>}
@@ -1168,6 +1194,7 @@ export default function Bank() {
             {account.transactions.map((tx) => {
               const isDeposit = tx.type === "deposit";
               const isTransfer = !!tx.savingsGoalId;
+              const isBankCharge = tx.bankCharge === true;
               const attribution = madeByLabel(tx.madeByName, tx.type);
               return (
                 <div
@@ -1185,11 +1212,14 @@ export default function Bank() {
                       <p className="font-semibold text-foreground truncate">
                         {isTransfer
                           ? `${tx.transferDirection === "to_savings" ? "Bank → Savings" : "Savings → Bank"}: ${tx.savingsGoalName ?? "Savings goal"}`
+                          : isBankCharge ? `Bank charge: ${tx.description}`
                           : !isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5" data-testid={`tx-meta-${tx.id}`}>
                         {isTransfer
                           ? tx.description
+                          : isBankCharge
+                            ? "Excluded from household spending and reports"
                           : isDeposit
                             ? `Deposited by ${attribution} · ${tx.description}`
                             : `Withdrawn by ${attribution}${tx.expenseCategory && tx.description !== tx.expenseCategory ? ` · ${tx.description}` : ""}`}
