@@ -221,4 +221,33 @@ describe("group invitation management", () => {
     expect(response.status).toBe(403);
     expect(db.transaction).not.toHaveBeenCalled();
   });
+
+  it("prompts immediately instead of sending an invitation when a free workspace is full", async () => {
+    const txSelectResults = [
+      [{ id: 7, name: "Growing group" }],
+      [],
+      [],
+      [{ plan: "free" }],
+      [{ count: 6 }],
+    ];
+    const insert = vi.fn();
+    const tx = {
+      select: vi.fn().mockImplementation(() => selectChain(txSelectResults.shift() ?? [])),
+      insert,
+    };
+    (db.transaction as Mock).mockImplementation((callback: (transaction: typeof tx) => unknown) => callback(tx));
+
+    const response = await request(managerApp({
+      id: 7,
+      role: "owner",
+      isPrivate: false,
+    })).post("/group-invitations").send({
+      email: "seventh@example.com",
+      role: "member",
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toMatch(/free workspaces hold up to 6 people/i);
+    expect(insert).not.toHaveBeenCalled();
+  });
 });

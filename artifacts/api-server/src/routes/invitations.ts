@@ -220,6 +220,9 @@ async function createAndSendInvitation(params: {
       ))
       .limit(1);
     if (existingInvitationRows[0]) throw new InvitationError("There is already a pending invitation for this email.", 409);
+    if (!(await hasMemberCapacity(tx, params.groupId))) {
+      throw new InvitationError(memberLimitMessage(), 409);
+    }
 
     const [invitation] = await tx
       .insert(groupInvitationsTable)
@@ -474,6 +477,9 @@ invitationsRouter.post("/group-invitations/:id/resend", async (req, res): Promis
         .for("update");
       if (!invitation || invitation.acceptedAt || invitation.cancelledAt || invitation.expiresAt.getTime() <= Date.now()) {
         throw new InvitationError("Pending invitation not found.", 404);
+      }
+      if (!(await hasMemberCapacity(tx, groupId))) {
+        throw new InvitationError(memberLimitMessage(), 409);
       }
       const [updated] = await tx
         .update(groupInvitationsTable)

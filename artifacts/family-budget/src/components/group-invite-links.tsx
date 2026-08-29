@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { appPath } from "@/lib/base-path";
+import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from "@/lib/member-limit";
 
 function joinUrl(token: string) {
   return new URL(appPath(`/join/${token}`, import.meta.env.BASE_URL), window.location.origin).toString();
@@ -52,9 +53,13 @@ export function GroupInviteLinks({ groupName }: { groupName?: string }) {
       });
     } catch (error) {
       toast({
-        variant: "destructive",
-        title: "Could not create link",
-        description: error instanceof Error ? error.message : "Please try again.",
+        ...(isMemberLimitError(error)
+          ? MEMBER_LIMIT_PROMPT
+          : {
+              variant: "destructive" as const,
+              title: "Could not create link",
+              description: error instanceof Error ? error.message : "Please try again.",
+            }),
       });
     }
   };

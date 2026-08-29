@@ -50,6 +50,7 @@ import {
 } from '@/lib/workspace';
 import { WORKSPACE_NAME_STYLES, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { SHARED_GROUP_KINDS, sharedGroupKindDetails, type SharedGroupKind } from '@/lib/groupKinds';
+import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from '@/lib/memberLimit';
 
 type GroupMember = {
   userId: string;
@@ -283,7 +284,10 @@ export default function SettingsScreen() {
         await Share.share({ title: 'Share Jamvi invitation', message });
       }
     } catch (error) {
-      Alert.alert('Could not create invite link', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.title : 'Could not create invite link',
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.message : error instanceof Error ? error.message : 'Please try again.',
+      );
     } finally {
       setSharingInvite(false);
     }
@@ -526,12 +530,16 @@ export default function SettingsScreen() {
       const failureNote = result.failed.length > 0
         ? ` ${result.failed.length} could not be sent: ${result.failed.map((item) => `${item.email} (${item.error})`).join(', ')}`
         : '';
+      const limitFailure = result.failed.find((item) => isMemberLimitError(new Error(item.error)));
       Alert.alert(
-        result.sent.length === 1 ? 'Invitation sent' : `${result.sent.length} invitations sent`,
-        `${result.sent.map((item) => item.email).join(', ')} can sign in and accept.${failureNote}`,
+        limitFailure ? MEMBER_LIMIT_PROMPT.title : result.sent.length === 1 ? 'Invitation sent' : `${result.sent.length} invitations sent`,
+        limitFailure ? `${MEMBER_LIMIT_PROMPT.message}${result.sent.length > 0 ? ' Some other invitations were sent successfully.' : ''}` : `${result.sent.map((item) => item.email).join(', ')} can sign in and accept.${failureNote}`,
       );
     } catch (error) {
-      Alert.alert('Could not send invitation', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.title : 'Could not send invitation',
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.message : error instanceof Error ? error.message : 'Please try again.',
+      );
     } finally {
       setManagingMembers(false);
     }
@@ -547,7 +555,10 @@ export default function SettingsScreen() {
       queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
       Alert.alert('Invitation sent', `${contact.name} can sign in and accept the invitation.`);
     } catch (error) {
-      Alert.alert('Could not send invitation', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.title : 'Could not send invitation',
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.message : error instanceof Error ? error.message : 'Please try again.',
+      );
     } finally {
       setManagingMembers(false);
     }

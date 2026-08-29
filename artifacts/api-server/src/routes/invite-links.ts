@@ -192,38 +192,48 @@ inviteLinksRouter.post("/group-invite-links", async (req, res): Promise<void> =>
 
   const token = createToken();
   const expiresAt = new Date(Date.now() + INVITE_LINK_TTL_MS);
-  const link = await db.transaction(async (tx) => {
-    const [group] = await tx
-      .select({ id: groupsTable.id, privateOwnerUserId: groupsTable.privateOwnerUserId })
-      .from(groupsTable)
-      .where(eq(groupsTable.id, groupId))
-      .for("update")
-      .limit(1);
-    if (!group || group.privateOwnerUserId) throw new Error("missing-shared-group");
+  let link;
+  try {
+    link = await db.transaction(async (tx) => {
+      const [group] = await tx
+        .select({ id: groupsTable.id, privateOwnerUserId: groupsTable.privateOwnerUserId })
+        .from(groupsTable)
+        .where(eq(groupsTable.id, groupId))
+        .for("update")
+        .limit(1);
+      if (!group || group.privateOwnerUserId) throw new Error("missing-shared-group");
+      if (!(await hasMemberCapacity(tx, groupId))) throw new Error("workspace-full");
 
-    // A group has one active private link at a time. Creating a new one resets
-    // access immediately, just like resetting a WhatsApp invite link.
-    await tx
-      .update(groupInviteLinksTable)
-      .set({ revokedAt: new Date() })
-      .where(and(
-        eq(groupInviteLinksTable.groupId, groupId),
-        isNull(groupInviteLinksTable.revokedAt),
-        gt(groupInviteLinksTable.expiresAt, new Date()),
-      ));
+      // A group has one active private link at a time. Creating a new one resets
+      // access immediately, just like resetting a WhatsApp invite link.
+      await tx
+        .update(groupInviteLinksTable)
+        .set({ revokedAt: new Date() })
+        .where(and(
+          eq(groupInviteLinksTable.groupId, groupId),
+          isNull(groupInviteLinksTable.revokedAt),
+          gt(groupInviteLinksTable.expiresAt, new Date()),
+        ));
 
-    const [created] = await tx
-      .insert(groupInviteLinksTable)
-      .values({
-        groupId,
-        tokenHash: linkHash(token),
-        createdByUserId: req.user!.id,
-        expiresAt,
-      })
-      .returning();
-    if (!created) throw new Error("could-not-create-link");
-    return created;
-  });
+      const [created] = await tx
+        .insert(groupInviteLinksTable)
+        .values({
+          groupId,
+          tokenHash: linkHash(token),
+          createdByUserId: req.user!.id,
+          expiresAt,
+        })
+        .returning();
+      if (!created) throw new Error("could-not-create-link");
+      return created;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "workspace-full") {
+      res.status(409).json({ error: memberLimitMessage() });
+      return;
+    }
+    throw error;
+  }
 
   res.status(201).json(CreateGroupInviteLinkResponse.parse({
     ...toLinkResponse(link),

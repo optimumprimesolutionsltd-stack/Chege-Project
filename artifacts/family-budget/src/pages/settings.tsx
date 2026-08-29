@@ -30,6 +30,7 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, groupKindPresentation, type SharedGroupKind } from "@/components/group-kind";
 import { applyAppearance, readAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
 import { appPath } from "@/lib/base-path";
+import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from "@/lib/member-limit";
 
 type GroupInvitation = {
   id: number;
@@ -420,16 +421,24 @@ export default function Settings() {
       const failureNote = result.failed.length > 0
         ? ` ${result.failed.length} could not be sent: ${result.failed.map((item) => `${item.email} (${item.error})`).join(", ")}`
         : "";
-      toast({
-        title: result.sent.length === 1 ? "Invitation sent" : `${result.sent.length} invitations sent`,
-        description: `${result.sent.map((item) => item.email).join(", ")} can sign in and accept.${failureNote}`,
-      });
+      const limitFailure = result.failed.find((item) => isMemberLimitError(new Error(item.error)));
+      toast(limitFailure
+        ? {
+            title: MEMBER_LIMIT_PROMPT.title,
+            description: `${MEMBER_LIMIT_PROMPT.description}${result.sent.length > 0 ? " Some other invitations were sent successfully." : ""}`,
+          }
+        : {
+            title: result.sent.length === 1 ? "Invitation sent" : `${result.sent.length} invitations sent`,
+            description: `${result.sent.map((item) => item.email).join(", ")} can sign in and accept.${failureNote}`,
+          });
       setInviteEmails("");
       setNewMemberRole("member");
       queryClient.invalidateQueries({ queryKey: ["group-invitations"] });
       queryClient.invalidateQueries({ queryKey: ["group-invitation-contacts"] });
     } catch (error) {
-      toast({ variant: "destructive", title: "Could not send invitation", description: error instanceof Error ? error.message : undefined });
+      toast(isMemberLimitError(error)
+        ? MEMBER_LIMIT_PROMPT
+        : { variant: "destructive", title: "Could not send invitation", description: error instanceof Error ? error.message : undefined });
     } finally {
       setSendingInvite(false);
     }
@@ -446,7 +455,9 @@ export default function Settings() {
       toast({ title: `Invitation sent to ${contact.name}` });
       queryClient.invalidateQueries({ queryKey: ["group-invitations"] });
     } catch (error) {
-      toast({ variant: "destructive", title: "Could not send invitation", description: error instanceof Error ? error.message : undefined });
+      toast(isMemberLimitError(error)
+        ? MEMBER_LIMIT_PROMPT
+        : { variant: "destructive", title: "Could not send invitation", description: error instanceof Error ? error.message : undefined });
     } finally {
       setSendingInvite(false);
     }
