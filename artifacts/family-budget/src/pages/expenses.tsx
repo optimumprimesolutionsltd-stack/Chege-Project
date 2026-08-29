@@ -1167,19 +1167,14 @@ export default function Expenses() {
                 form.setPaidFromBank(nextPaidFromBank);
                 form.setIncomeSourceId(null);
                 form.setOtherIncomeSourceLabel(null);
-                 setAllowMixedFunding(nextPaidFromBank && form.payerIds.length > 0);
-                 if (nextPaidFromBank && mode === "add" && form.payerIds.length === 1) {
-                   const directAmount = Number(form.payerAmounts[form.payerIds[0]]);
-                   const remainder = getFundingRemainder(Number(form.amount), directAmount);
-                   form.setPayerAmounts((previous) => ({
-                     ...previous,
-                     __joint_bank__: remainder > 0 ? String(remainder) : previous.__joint_bank__ ?? "",
-                   }));
-                 }
-                if (nextPaidFromBank && (mode === "edit" || form.payerIds.length === 0)) {
+                  setAllowMixedFunding(false);
+                 if (nextPaidFromBank && mode === "add") {
                   form.setPaidById("");
                   form.setPayerIds([]);
                   form.setPayerIncomeSourceIds({});
+                   form.setPayerAmounts({ __joint_bank__: form.amount });
+                 } else if (nextPaidFromBank && mode === "edit" && form.payerIds.length === 0) {
+                   form.setPaidById("");
                 }
               }}
               className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
@@ -1347,7 +1342,7 @@ export default function Expenses() {
           }).showBankOnlyExplanation && (
             <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:bg-sky-950 dark:text-sky-300">
               <p>This expense reduces the selected bank-account balance. Direct payer and income-source fields are not needed.</p>
-              {!allowMixedFunding && canManageExpenses && (
+              {mode === "edit" && !allowMixedFunding && canManageExpenses && (
                 <button
                   type="button"
                   className="mt-2 font-semibold underline underline-offset-2"

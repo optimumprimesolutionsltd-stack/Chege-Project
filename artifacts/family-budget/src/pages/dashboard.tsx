@@ -925,7 +925,7 @@ function ExpenseForm({
             </div>
           )}
         </div>
-        {isSharedWorkspace && (!paidFromBank || allowMixedFunding) && <div className="space-y-1.5">
+        {isSharedWorkspace && !paidFromBank && <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">
             Paid by <span className="text-destructive">*</span>
           </label>
@@ -939,7 +939,6 @@ function ExpenseForm({
                   onClick={() => {
                     setPaidBy(m.userId);
                     setIncomeSourceId(null);
-                     if (paidFromBank) setAllowMixedFunding(true);
                   }}
                   className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
                   {name}
@@ -967,7 +966,7 @@ function ExpenseForm({
           {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
         </div>
       </div>
-      {(!paidFromBank || allowMixedFunding) && (
+      {!paidFromBank && (
         <div className="space-y-1.5">
            <label className="text-sm font-semibold text-foreground">
              Financed by <span className="text-destructive">*</span>
@@ -983,7 +982,6 @@ function ExpenseForm({
               value={incomeSourceId?.toString() ?? ""}
                onChange={e => {
                  setIncomeSourceId(e.target.value ? Number(e.target.value) : null);
-                 if (paidFromBank && e.target.value) setAllowMixedFunding(true);
                }}
               className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
@@ -1024,7 +1022,7 @@ function ExpenseForm({
                )}
              </div>
            )}
-           {incomeSourceId && (!paidFromBank || allowMixedFunding) && (
+           {incomeSourceId && !paidFromBank && (
               <label className="block space-y-1.5 text-sm font-semibold text-foreground">
                 Type the amount from this source to confirm
                <Input
@@ -1075,8 +1073,12 @@ function ExpenseForm({
                     setRemainderAnchor("direct");
                    } else if (mode === "bank") {
                      setPaidFromBank(true);
-                     setAllowMixedFunding(Boolean(directPayerId && incomeSourceId));
-                     setRemainderAnchor(directPortion ? "direct" : "bank");
+                     setAllowMixedFunding(false);
+                     setPaidBy("");
+                     setIncomeSourceId(null);
+                     setDirectPortion("");
+                     setBankPortion(amount);
+                     setRemainderAnchor("bank");
                    }
                 }}
                 className={`rounded-xl border p-3 text-left transition-colors ${
@@ -1149,7 +1151,7 @@ function ExpenseForm({
                     className="h-11 bg-card"
                   />
                   <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                     Enter this manually to confirm which amount should reduce the selected account. If it is less than the expense, choose a direct source and Jamvi will fill the remainder.
+                     Enter the full expense amount to confirm how much should reduce the selected account.
                   </span>
                 </label>
               )}
@@ -1159,26 +1161,8 @@ function ExpenseForm({
                   Projected closing balance: {formatKes(projectedExpenseBankBalance)}. Jamvi will still save the expense.
                 </div>
               )}
-               {paidFromBank && !allowMixedFunding && (
-                 <button
-                   type="button"
-                   className="text-left text-xs font-semibold text-sky-700 underline underline-offset-2 dark:text-sky-300"
-                   onClick={() => {
-                     setAllowMixedFunding(true);
-                     setRemainderAnchor("bank");
-                     if (isSharedWorkspace && !paidBy && currentUserId && !canManageShared) setPaidBy(currentUserId);
-                   }}
-                 >
-                   Add another funding source
-                 </button>
-               )}
             </div>
           )}
-           {allowMixedFunding && (
-             <p className="text-xs leading-relaxed text-muted-foreground">
-               Choose the second source above. After you type the primary amount, Jamvi fills the remaining amount into the other selected source. Only the bank portion reduces the selected account.
-             </p>
-           )}
           <div className="flex justify-end">
           <label className="flex items-start gap-2 text-sm text-foreground">
             <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />

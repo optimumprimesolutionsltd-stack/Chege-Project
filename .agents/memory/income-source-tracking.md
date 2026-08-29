@@ -10,6 +10,12 @@ Contributions are now **derived**, not manually recorded:
 - **Direct expense payments** → count as a contribution from the payer when `incomeSourceId IS NOT NULL`
 - **Joint bank expenses** → incomeSourceId = NULL → do NOT count as contributions
 
+“Financed by” belongs only to direct payments. Choosing bank funding for a new expense must clear and hide personal payer/income-source attribution; the selected bank account is already the complete funding source.
+
+**Why:** Personal income-source tracing explains where directly paid money came from. Applying it to a bank-funded expense duplicates attribution and misrepresents money already recorded in the account.
+
+**How to apply:** Keep direct and bank funding mutually exclusive in new-expense flows. Historic split-funded records may remain editable without rewriting their stored history.
+
 ## DB changes
 
 - New table: `income_sources` (id, userId, name, isMain, createdAt)

@@ -253,6 +253,7 @@ export default function AddExpenseSheet() {
   // Reset funding selections whenever the payer changes
   useEffect(() => {
     if (isEditMode) return;
+    if (!paidById) return;
     setPaidFromBank(false);
     setAllowMixedFunding(false);
     setSelectedBankAccountId(null);
@@ -1167,26 +1168,12 @@ export default function AddExpenseSheet() {
                     setAllowMixedFunding(false);
                   } else {
                     setPaidFromBank(true);
-                   setAllowMixedFunding(payerIds.length > 0);
-                   if (payerIds.length === 1) {
-                     const directAmount = selectedSources.reduce(
-                       (sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0),
-                       0,
-                     );
-                     const selectedSourceId = selectedSources.length === 1
-                       ? incomeSourceIdFromKey(selectedSources[0])
-                       : null;
-                     setPayerAmounts((previous) => ({
-                       ...previous,
-                       [payerIds[0]]: directAmount > 0 ? String(directAmount) : previous[payerIds[0]] ?? '',
-                       __joint_bank__: directAmount > 0
-                         ? String(getFundingRemainder(parseFloat(amount.replace(/,/g, '')), directAmount) || '')
-                         : previous.__joint_bank__ ?? '',
-                     }));
-                     if (selectedSourceId) {
-                       setPayerIncomeSourceIds((previous) => ({ ...previous, [payerIds[0]]: selectedSourceId }));
-                     }
-                    }
+                    setAllowMixedFunding(false);
+                    setPayerIds([]);
+                    setSelectedSources([]);
+                    setSplitAmounts({});
+                    setPayerIncomeSourceIds({});
+                    setPayerAmounts({ __joint_bank__: amount.replace(/,/g, '') });
                   }
                 }}
                 style={[styles.paidByPill, {
@@ -1379,7 +1366,7 @@ export default function AddExpenseSheet() {
                     <Text style={[styles.hintText, { color: '#38bdf8' }]}>
                       This expense reduces the selected bank-account balance. Direct payer and income-source fields are not needed.
                     </Text>
-                    {!allowMixedFunding && canManageShared ? (
+                    {isEditMode && !allowMixedFunding && canManageShared ? (
                       <Pressable onPress={() => setAllowMixedFunding(true)} style={{ marginTop: 6 }}>
                         <Text style={{ color: '#38bdf8', fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' }}>
                           Add another funding source
