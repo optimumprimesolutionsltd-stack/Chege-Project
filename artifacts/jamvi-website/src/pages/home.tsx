@@ -251,7 +251,7 @@ export default function Home() {
       {/* CTA Section */}
       <section className="py-24 bg-white text-center">
         <div className="container mx-auto px-4 max-w-4xl">
-          <img src={`${import.meta.env.BASE_URL}branding/jamvi-mark.png`} alt="Jamvi Mark" className="w-20 h-20 mx-auto mb-8 drop-shadow-md" />
+          <img src={`${import.meta.env.BASE_URL}branding/jamvi-mark-inline.png`} alt="Jamvi Mark" className="w-20 h-20 mx-auto mb-8 drop-shadow-md" />
           <h2 className="text-4xl md:text-5xl font-bold text-primary mb-6">Take a seat on the mat.</h2>
           <p className="text-xl text-foreground/70 mb-6 max-w-2xl mx-auto leading-relaxed">
             Start managing your money with clarity and confidence. Setup takes less than two minutes.
