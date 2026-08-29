@@ -221,6 +221,8 @@ export default function Expenses() {
   const [newCategoryBudget, setNewCategoryBudget] = useState("");
   const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
   const [newCategoryPriority, setNewCategoryPriority] = useState("3");
+  const [newCategoryAddToBudget, setNewCategoryAddToBudget] = useState(false);
+  const [allowMixedFunding, setAllowMixedFunding] = useState(false);
 
   const addForm = useExpenseForm(undefined, now);
   const editForm = useExpenseForm();
@@ -318,7 +320,8 @@ export default function Expenses() {
     addForm.setDate(today);
     setAddNewSource(false); setNewSourceName("");
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
-    setNewCategoryRecurring(true); setNewCategoryPriority("3");
+    setNewCategoryRecurring(true); setNewCategoryPriority("3"); setNewCategoryAddToBudget(false);
+    setAllowMixedFunding(false);
     setIsAdding(false);
   };
 
@@ -357,7 +360,8 @@ export default function Expenses() {
     editForm.setIsRecurring(expense.isRecurring);
     editForm.setDate(expense.date);
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
-    setNewCategoryRecurring(true); setNewCategoryPriority("3");
+    setNewCategoryRecurring(true); setNewCategoryPriority("3"); setNewCategoryAddToBudget(false);
+    setAllowMixedFunding(false);
     setEditingId(expense.id);
     setIsAdding(false);
   };
@@ -415,17 +419,16 @@ export default function Expenses() {
 
   const cancelEdit = () => {
     setIsCreatingCategory(false); setNewCategoryName(""); setNewCategoryBudget("");
-    setNewCategoryRecurring(true); setNewCategoryPriority("3");
+    setNewCategoryRecurring(true); setNewCategoryPriority("3"); setNewCategoryAddToBudget(false);
+    setAllowMixedFunding(false);
     setEditingId(null);
     setEditHasBankFunding(false);
     clearEditDeepLink();
   };
 
   const handleQuickCreateCategory = async (form: ReturnType<typeof useExpenseForm>) => {
-    const budgetAmount = Number(newCategoryBudget);
-    const priority = Number(newCategoryPriority);
-    const [expenseYear, expenseMonth] = form.date.split("-").map(Number);
-    if (!newCategoryName.trim()) {
+    const name = newCategoryName.trim();
+    if (!name) {
       toast({
         variant: "destructive",
         title: "Category name required",
@@ -433,6 +436,32 @@ export default function Expenses() {
       });
       return;
     }
+    if ((categories ?? []).some((category) => category.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      toast({
+        variant: "destructive",
+        title: "Category already exists",
+        description: "Select the existing category from the list instead.",
+      });
+      return;
+    }
+    if (!newCategoryAddToBudget || !canManageCategories) {
+      form.setCategory(name);
+      setIsCreatingCategory(false);
+      setNewCategoryName("");
+      setNewCategoryBudget("");
+      setNewCategoryRecurring(true);
+      setNewCategoryPriority("3");
+      setNewCategoryAddToBudget(false);
+      toast({
+        title: "Unbudgeted category selected",
+        description: `${name} will be recorded without changing the monthly budget.`,
+      });
+      return;
+    }
+
+    const budgetAmount = Number(newCategoryBudget);
+    const priority = Number(newCategoryPriority);
+    const [expenseYear, expenseMonth] = form.date.split("-").map(Number);
     if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
       toast({ variant: "destructive", title: "Enter a valid monthly budget", description: "Use a whole number of KES or zero." });
       return;
@@ -459,6 +488,7 @@ export default function Expenses() {
       setNewCategoryBudget("");
       setNewCategoryRecurring(true);
       setNewCategoryPriority("3");
+      setNewCategoryAddToBudget(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
@@ -497,6 +527,7 @@ export default function Expenses() {
     setNewCategoryBudget("");
     setNewCategoryRecurring(true);
     setNewCategoryPriority("3");
+    setNewCategoryAddToBudget(false);
     setIsCreatingCategory(true);
   };
 
@@ -821,36 +852,51 @@ export default function Expenses() {
               <option value="" disabled>Select category...</option>
               {categories?.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
-            {canManageCategories && (
-              <Button
-                type="button"
-                variant="outline"
-                className="h-12 w-full shrink-0 border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
-                onClick={() => {
-                  form.setCategory("");
-                  setIsCreatingCategory((open) => !open);
-                }}
-                aria-expanded={isCreatingCategory}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Create category
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-full shrink-0 border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+              onClick={() => {
+                form.setCategory("");
+                setIsCreatingCategory((open) => !open);
+                setNewCategoryAddToBudget(false);
+              }}
+              aria-expanded={isCreatingCategory}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add category
+            </Button>
           </div>
           {isCreatingCategory && (
             <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-foreground">
               <div>
-                <p className="text-sm font-semibold text-foreground">Set up the right category</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Name this spending clearly. We’ll save the category and select it without clearing the rest of your expense.</p>
+                <p className="text-sm font-semibold text-foreground">Name this expense category</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Emergencies and one-off spending can stay unbudgeted. You can also add the category to the monthly budget.</p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  placeholder="e.g. Transport"
-                  value={newCategoryName}
-                  onChange={(event) => setNewCategoryName(event.target.value)}
-                  aria-label="New category name"
-                  className="h-10 border-input bg-card text-foreground placeholder:text-muted-foreground"
-                />
+              <Input
+                placeholder="e.g. Emergency repair"
+                value={newCategoryName}
+                onChange={(event) => setNewCategoryName(event.target.value)}
+                aria-label="New category name"
+                className="h-10 border-input bg-card text-foreground placeholder:text-muted-foreground"
+              />
+              {canManageCategories ? (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Add this category to the budget?</p>
+                    <p className="text-xs text-muted-foreground">
+                      {newCategoryAddToBudget ? "Set its budget details below." : "No — record it as unbudgeted spending."}
+                    </p>
+                  </div>
+                  <Switch checked={newCategoryAddToBudget} onCheckedChange={setNewCategoryAddToBudget} aria-label="Add category to budget" />
+                </div>
+              ) : (
+                <p className="rounded-lg border border-border/70 bg-card px-3 py-2 text-xs text-muted-foreground">
+                  This will be recorded without changing the Shared budget. An owner or admin can add it to the budget later.
+                </p>
+              )}
+              {newCategoryAddToBudget && canManageCategories && (
+                <div className="grid gap-3 sm:grid-cols-2">
                 <Input
                   type="number"
                   min="0"
@@ -887,7 +933,8 @@ export default function Expenses() {
                   </div>
                   <Switch checked={newCategoryRecurring} onCheckedChange={setNewCategoryRecurring} aria-label="New category recurring" />
                 </div>
-              </div>
+                </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
                   type="button"
@@ -897,7 +944,7 @@ export default function Expenses() {
                   disabled={createCategory.isPending}
                 >
                   {createCategory.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Add category
+                  {newCategoryAddToBudget && canManageCategories ? "Add to budget" : "Use without budget"}
                 </Button>
                 <button
                 type="button"
@@ -908,6 +955,7 @@ export default function Expenses() {
                   setNewCategoryBudget("");
                   setNewCategoryRecurring(true);
                   setNewCategoryPriority("3");
+                  setNewCategoryAddToBudget(false);
                 }}
                 className="h-10 rounded-md px-3 text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
               >
@@ -978,7 +1026,12 @@ export default function Expenses() {
                 form.setPaidFromBank(nextPaidFromBank);
                 form.setIncomeSourceId(null);
                 form.setOtherIncomeSourceLabel(null);
-                if (mode === "edit" && nextPaidFromBank) form.setPaidById("");
+                setAllowMixedFunding(false);
+                if (nextPaidFromBank && (mode === "edit" || form.payerIds.length === 0)) {
+                  form.setPaidById("");
+                  form.setPayerIds([]);
+                  form.setPayerIncomeSourceIds({});
+                }
               }}
               className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
             >
@@ -992,6 +1045,7 @@ export default function Expenses() {
               return (
                 <button
                   key={m.userId} type="button"
+                  disabled={form.paidFromBank && form.payerIds.length === 0 && !allowMixedFunding}
                   onClick={() => {
                     form.setIncomeSourceId(null);
                     form.setOtherIncomeSourceLabel(null);
@@ -1014,7 +1068,7 @@ export default function Expenses() {
                       form.setPaidFromBank(false);
                     }
                   }}
-                  className={`h-12 rounded-xl border text-base font-semibold transition-colors ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
+                  className={`h-12 rounded-xl border text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
                 >
                   {name}
                 </button>
@@ -1037,6 +1091,23 @@ export default function Expenses() {
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
               {bankAccounts.length === 0 && <p className="text-xs text-destructive">A budget manager must add a bank account before this expense can be bank-funded.</p>}
+            </div>
+          )}
+          {form.paidFromBank && form.payerIds.length === 0 && (
+            <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+              <p>This expense is paid from the selected bank account. Personal payer and income-source fields are not needed.</p>
+              {!allowMixedFunding && canManageExpenses && (
+                <button
+                  type="button"
+                  className="mt-2 font-semibold underline underline-offset-2"
+                  onClick={() => setAllowMixedFunding(true)}
+                >
+                  Add a personal portion
+                </button>
+              )}
+              {allowMixedFunding && (
+                <p className="mt-2">Choose one or more people above to combine their funds with the bank account.</p>
+              )}
             </div>
           )}
           {mode === "add" && form.payerIds.length === 0 && !form.paidFromBank && (

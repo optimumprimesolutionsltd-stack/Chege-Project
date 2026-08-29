@@ -197,6 +197,8 @@ export default function AddExpenseSheet() {
   const [newCategoryBudget, setNewCategoryBudget] = useState('');
   const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
   const [newCategoryPriority, setNewCategoryPriority] = useState('3');
+  const [newCategoryAddToBudget, setNewCategoryAddToBudget] = useState(false);
+  const [allowMixedFunding, setAllowMixedFunding] = useState(false);
   const [editHydratedForId, setEditHydratedForId] = useState<number | null>(null);
   const [editFundingHydratedForId, setEditFundingHydratedForId] = useState<number | null>(null);
   const [fundingDirty, setFundingDirty] = useState(false);
@@ -229,6 +231,7 @@ export default function AddExpenseSheet() {
   useEffect(() => {
     if (isEditMode) return;
     setPaidFromBank(false);
+    setAllowMixedFunding(false);
     setSelectedBankAccountId(null);
     setSelectedSources([]);
     setSplitAmounts({});
@@ -241,6 +244,7 @@ export default function AddExpenseSheet() {
     if (!canManageShared && user?.id) {
       setPayerIds([user.id]);
       setPaidFromBank(false);
+      setAllowMixedFunding(false);
       setIsRecurring(false);
     }
   }, [canManageShared, user?.id]);
@@ -289,6 +293,7 @@ export default function AddExpenseSheet() {
     setIsRecurring(editingExpense.isRecurring);
     setPayerIds(personalPayerIds);
     setPaidFromBank(hasBankFunding);
+    setAllowMixedFunding(false);
     setSelectedBankAccountId(
       editingExpense.accountId
       ?? storedSplits.find((split) => split.fromBank)?.accountId
@@ -413,13 +418,29 @@ export default function AddExpenseSheet() {
 
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();
-    const budgetAmount = Number(newCategoryBudget);
-    const priority = Number(newCategoryPriority);
-    const [expenseYear, expenseMonth] = date.split('-').map(Number);
     if (!name) {
       Alert.alert('Category name required', 'Give this spending a clear name, such as Transport or Childcare.');
       return;
     }
+    if (categories.some((category) => category.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      Alert.alert('Category already exists', 'Select the existing category from the list instead.');
+      return;
+    }
+    if (!newCategoryAddToBudget || !canManageCategories) {
+      setCategory(name);
+      setNewCategoryName('');
+      setNewCategoryBudget('');
+      setNewCategoryRecurring(true);
+      setNewCategoryPriority('3');
+      setNewCategoryAddToBudget(false);
+      setIsCreatingCategory(false);
+      Alert.alert('Unbudgeted category selected', `${name} will be recorded without changing the monthly budget.`);
+      return;
+    }
+
+    const budgetAmount = Number(newCategoryBudget);
+    const priority = Number(newCategoryPriority);
+    const [expenseYear, expenseMonth] = date.split('-').map(Number);
     if (!Number.isInteger(budgetAmount) || budgetAmount < 0) {
       Alert.alert('Enter a valid monthly budget', 'Use a whole number of KES or zero.');
       return;
@@ -445,6 +466,7 @@ export default function AddExpenseSheet() {
       setNewCategoryBudget('');
       setNewCategoryRecurring(true);
       setNewCategoryPriority('3');
+      setNewCategoryAddToBudget(false);
       setIsCreatingCategory(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
@@ -462,7 +484,7 @@ export default function AddExpenseSheet() {
           : error instanceof Error ? error.message : 'Check the category details and try again.',
       );
     }
-  }, [createCategory, date, newCategoryBudget, newCategoryName, newCategoryPriority, newCategoryRecurring, queryClient]);
+  }, [canManageCategories, categories, createCategory, date, newCategoryAddToBudget, newCategoryBudget, newCategoryName, newCategoryPriority, newCategoryRecurring, queryClient]);
 
   const chooseCategory = useCallback((name: string) => {
     setCategory(name);
@@ -813,29 +835,57 @@ export default function AddExpenseSheet() {
               </Pressable>
             );
           })}
-          {canManageCategories ? (
-            <Pressable
-              onPress={() => {
-                setCategory('');
-                setIsCreatingCategory((open) => !open);
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: isCreatingCategory }}
-              style={[styles.categoryChip, { backgroundColor: isCreatingCategory ? colors.primary + '12' : colors.background, borderColor: colors.primary, borderRadius: colors.radius }]}
-            >
-              <Feather name="plus" size={14} color={colors.primary} />
-              <Text style={[styles.categoryChipText, { color: colors.primary }]}>New category</Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            onPress={() => {
+              setCategory('');
+              setIsCreatingCategory((open) => !open);
+              setNewCategoryAddToBudget(false);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isCreatingCategory }}
+            style={[styles.categoryChip, { backgroundColor: isCreatingCategory ? colors.primary + '12' : colors.background, borderColor: colors.primary, borderRadius: colors.radius }]}
+          >
+            <Feather name="plus" size={14} color={colors.primary} />
+            <Text style={[styles.categoryChipText, { color: colors.primary }]}>Add category</Text>
+          </Pressable>
         </ScrollView>
         {isCreatingCategory ? (
           <View style={[styles.categoryCreateCard, { backgroundColor: colors.muted, borderColor: colors.primary + '45' }]}>
             <View>
-              <Text style={[styles.categoryCreateTitle, { color: colors.foreground }]}>Set up the right category</Text>
-              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>Name this spending clearly. We’ll save and select it without clearing the rest of your expense.</Text>
+              <Text style={[styles.categoryCreateTitle, { color: colors.foreground }]}>Name this expense category</Text>
+              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>Emergencies and one-off spending can stay unbudgeted. You can also add the category to the monthly budget.</Text>
             </View>
-            <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>Priority: 1 is must-pay; 5 is flexible.</Text>
-            <View style={styles.categoryPriorityRow}>
+            <TextInput
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              placeholder="e.g. Emergency repair"
+              placeholderTextColor={colors.mutedForeground}
+              maxLength={60}
+              editable={!createCategory.isPending}
+              style={[styles.categoryCreateInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+            />
+            {canManageCategories ? (
+              <View style={[styles.categoryRecurringRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.categoryCreateTitle, { color: colors.foreground, fontSize: 13 }]}>Add this category to the budget?</Text>
+                  <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>
+                    {newCategoryAddToBudget ? 'Set its budget details below' : 'No — record it as unbudgeted spending'}
+                  </Text>
+                </View>
+                <Switch
+                  value={newCategoryAddToBudget}
+                  onValueChange={setNewCategoryAddToBudget}
+                  disabled={createCategory.isPending}
+                  accessibilityLabel="Add category to budget"
+                />
+              </View>
+            ) : (
+              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>This will not change the Shared budget. An owner or admin can add it later.</Text>
+            )}
+            {newCategoryAddToBudget && canManageCategories ? (
+              <>
+              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>Priority: 1 is must-pay; 5 is flexible.</Text>
+              <View style={styles.categoryPriorityRow}>
               {[1, 2, 3, 4, 5].map((priority) => (
                 <Pressable
                   key={priority}
@@ -855,8 +905,8 @@ export default function AddExpenseSheet() {
                   <Text style={{ color: newCategoryPriority === String(priority) ? colors.primary : colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{priority}</Text>
                 </Pressable>
               ))}
-            </View>
-            <View style={[styles.categoryRecurringRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              </View>
+              <View style={[styles.categoryRecurringRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.categoryCreateTitle, { color: colors.foreground, fontSize: 13 }]}>Recurring category</Text>
                 <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>
@@ -870,17 +920,7 @@ export default function AddExpenseSheet() {
                 accessibilityLabel="Recurring category"
                 accessibilityHint="When on, this category is available every month"
               />
-            </View>
-            <View style={styles.categoryCreateRow}>
-              <TextInput
-                value={newCategoryName}
-                onChangeText={setNewCategoryName}
-                placeholder="e.g. Transport"
-                placeholderTextColor={colors.mutedForeground}
-                maxLength={60}
-                editable={!createCategory.isPending}
-                style={[styles.categoryCreateInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-              />
+              </View>
               <TextInput
                 value={newCategoryBudget}
                 onChangeText={setNewCategoryBudget}
@@ -890,14 +930,15 @@ export default function AddExpenseSheet() {
                 editable={!createCategory.isPending}
                 style={[styles.categoryCreateBudgetInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
               />
-            </View>
+              </>
+            ) : null}
             <View style={styles.categoryCreateActions}>
               <Pressable
                 onPress={() => void handleCreateCategory()}
                 disabled={createCategory.isPending}
                 style={[styles.categoryCreateSave, { backgroundColor: colors.primary, opacity: createCategory.isPending ? 0.55 : 1 }]}
               >
-                {createCategory.isPending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.categoryCreateSaveText}>Add category</Text>}
+                {createCategory.isPending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.categoryCreateSaveText}>{newCategoryAddToBudget && canManageCategories ? 'Add to budget' : 'Use without budget'}</Text>}
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -906,6 +947,7 @@ export default function AddExpenseSheet() {
                   setNewCategoryBudget('');
                   setNewCategoryRecurring(true);
                   setNewCategoryPriority('3');
+                  setNewCategoryAddToBudget(false);
                   setCategory('');
                 }}
                 disabled={createCategory.isPending}
@@ -932,116 +974,6 @@ export default function AddExpenseSheet() {
             </View>
           );
         })() : null}
-
-        {/* Funding breakdown — visible while choosing a single named payer */}
-        {!paidFromBank && payerIds.length === 0 && (
-        <View style={[styles.fundingCard, { backgroundColor: colors.muted, borderColor: colors.primary + '50' }]}>
-          <View style={styles.fundingCardHeader}>
-            <Feather name="layers" size={14} color={colors.primary} />
-            <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0, flex: 1 }]}>FINANCED BY (INCOME STREAMS)</Text>
-            <Text style={styles.fundingRequired}>* Required</Text>
-          </View>
-
-          {/* Personal income sources — loaded from DB for the selected payer */}
-          {!paidById ? (
-            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              Select who paid above to see their income sources
-            </Text>
-          ) : sourcesLoading ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ alignSelf: 'flex-start' }} />
-          ) : incomeSources.length === 0 ? (
-            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              No income sources set up — add them from Budget
-            </Text>
-          ) : (
-            <View style={styles.sourceChipsGrid}>
-              {incomeSources.map((src, idx) => {
-                const color = PALETTE[idx % PALETTE.length];
-                const key = incomeSourceKey(src.id);
-                const selected = selectedSources.includes(key);
-                return (
-                  <Pressable
-                    key={src.id}
-                    onPress={() => {
-                      if (isEditMode) setFundingDirty(true);
-                      setSelectedSources(prev =>
-                        prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-                      );
-                    }}
-                    style={[styles.sourceChip, {
-                      backgroundColor: selected ? color + '22' : colors.background,
-                      borderColor: selected ? color : colors.border,
-                      borderRadius: colors.radius,
-                    }]}
-                  >
-                    <Feather name="briefcase" size={13} color={selected ? color : colors.mutedForeground} />
-                    <Text style={[styles.sourceChipText, { color: selected ? color : colors.foreground }]}>
-                      {src.name}
-                    </Text>
-                    {selected && <Feather name="check" size={11} color={color} />}
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Split amounts — shown when 2+ personal sources selected */}
-          {selectedSources.length > 1 && (
-            <View style={{ marginTop: 12, gap: 6 }}>
-              <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
-                How much from each source?
-              </Text>
-              {selectedSources.map((key, idx) => {
-                const color = PALETTE[idx % PALETTE.length];
-                const sourceId = incomeSourceIdFromKey(key);
-                const sourceName = sourceId
-                  ? incomeSources.find((source) => source.id === sourceId)?.name
-                  : key.split(':').slice(2).join(':');
-                return (
-                  <View key={key} style={[styles.splitAmountRow, {
-                    backgroundColor: colors.background,
-                    borderColor: color + '44',
-                    borderRadius: colors.radius,
-                  }]}>
-                     <Feather name="briefcase" size={14} color={color} />
-                    <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
-                       {sourceName || 'Personal funds'}
-                    </Text>
-                    <View style={styles.splitAmountInputBox}>
-                      <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
-                      <TextInput
-                        style={[styles.splitAmountInput, { color }]}
-                        placeholder="0"
-                        placeholderTextColor={colors.mutedForeground}
-                        keyboardType="numeric"
-                        value={splitAmounts[key] || ''}
-                        onChangeText={v => {
-                          if (isEditMode) setFundingDirty(true);
-                          setSplitAmounts(prev => ({ ...prev, [key]: v }));
-                        }}
-                      />
-                    </View>
-                  </View>
-                );
-              })}
-              {(() => {
-                const total = selectedSources.reduce((s, k) => s + (parseFloat(splitAmounts[k] || '0') || 0), 0);
-                const expAmt = parseFloat(amount.replace(/,/g, '')) || 0;
-                const ok = expAmt > 0 && Math.abs(total - expAmt) < 1;
-                return (
-                  <Text style={[styles.hintText, {
-                    color: ok ? '#4ade80' : '#f87171',
-                    fontFamily: ok ? 'Inter_600SemiBold' : 'Inter_400Regular',
-                    marginTop: 2,
-                  }]}>
-                    {ok ? `✓ Sources add up to KES ${total.toLocaleString()}` : `Total: KES ${total.toLocaleString()} · need KES ${expAmt.toLocaleString()}`}
-                  </Text>
-                );
-              })()}
-            </View>
-          )}
-        </View>
-        )}
 
         {/* Description */}
         <Text style={[styles.label, { color: colors.mutedForeground }]}>DESCRIPTION</Text>
@@ -1097,7 +1029,16 @@ export default function AddExpenseSheet() {
                   if (isEditMode) setFundingDirty(true);
                   if (paidFromBank) {
                     setPaidFromBank(false);
-                  } else setPaidFromBank(true);
+                    setAllowMixedFunding(false);
+                  } else {
+                    setPaidFromBank(true);
+                    setAllowMixedFunding(false);
+                    if (payerIds.length === 0 || isEditMode) {
+                      setPayerIds([]);
+                      setPayerIncomeSourceIds({});
+                      setSelectedSources([]);
+                    }
+                  }
                 }}
                 style={[styles.paidByPill, {
                   backgroundColor: paidFromBank ? 'rgba(56,189,248,0.15)' : colors.muted,
@@ -1115,6 +1056,7 @@ export default function AddExpenseSheet() {
                 return (
                   <Pressable
                     key={m.userId}
+                    disabled={paidFromBank && payerIds.length === 0 && !allowMixedFunding}
                     onPress={() => {
                       if (!canManageShared) return;
                       if (isEditMode) setFundingDirty(true);
@@ -1138,6 +1080,7 @@ export default function AddExpenseSheet() {
                         backgroundColor: selected ? colors.primary : colors.muted,
                         borderColor: selected ? colors.primary : colors.border,
                         borderRadius: colors.radius,
+                        opacity: paidFromBank && payerIds.length === 0 && !allowMixedFunding ? 0.4 : 1,
                       },
                     ]}
                   >
@@ -1178,6 +1121,24 @@ export default function AddExpenseSheet() {
                   })}
                 </View>
                 {bankAccounts.length === 0 && <Text style={[styles.hintText, { color: '#ef4444' }]}>Add a bank account from the Bank tab before using bank funds.</Text>}
+                {payerIds.length === 0 && (
+                  <View>
+                    <Text style={[styles.hintText, { color: '#38bdf8' }]}>
+                      Paid from this bank account. Personal payer and income-source fields are not needed.
+                    </Text>
+                    {!allowMixedFunding && canManageShared ? (
+                      <Pressable onPress={() => setAllowMixedFunding(true)} style={{ marginTop: 6 }}>
+                        <Text style={{ color: '#38bdf8', fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' }}>
+                          Add a personal portion
+                        </Text>
+                      </Pressable>
+                    ) : allowMixedFunding ? (
+                      <Text style={[styles.hintText, { color: '#38bdf8', marginTop: 6 }]}>
+                        Choose one or more people above to combine their funds with the bank account.
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
               </View>
             )}
               {!canManageShared && (
