@@ -90,7 +90,7 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Log an expense",
     web: "done",
     mobile: "done",
-    note: "Web: inline form. Mobile: dedicated add-expense screen",
+    note: "Both use one primary funding amount and automatically assign any remainder to the explicitly selected second income source or bank account",
   },
   {
     category: "Expenses",

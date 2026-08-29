@@ -45,8 +45,10 @@ import {
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import {
+  addFundingSourceWithRemainder,
   buildSinglePayerFundingReplacement,
   getExpenseFundingControlState,
+  getFundingRemainder,
   getNewExpenseCategoryMode,
   preserveExpenseSplitsForAmount,
 } from '@/lib/expenseFundingPreservation';
@@ -1153,11 +1155,25 @@ export default function AddExpenseSheet() {
                     setAllowMixedFunding(false);
                   } else {
                     setPaidFromBank(true);
-                    setAllowMixedFunding(false);
-                    if (payerIds.length === 0 || isEditMode) {
-                      setPayerIds([]);
-                      setPayerIncomeSourceIds({});
-                      setSelectedSources([]);
+                   setAllowMixedFunding(payerIds.length > 0);
+                   if (payerIds.length === 1) {
+                     const directAmount = selectedSources.reduce(
+                       (sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0),
+                       0,
+                     );
+                     const selectedSourceId = selectedSources.length === 1
+                       ? incomeSourceIdFromKey(selectedSources[0])
+                       : null;
+                     setPayerAmounts((previous) => ({
+                       ...previous,
+                       [payerIds[0]]: directAmount > 0 ? String(directAmount) : previous[payerIds[0]] ?? '',
+                       __joint_bank__: directAmount > 0
+                         ? String(getFundingRemainder(parseFloat(amount.replace(/,/g, '')), directAmount) || '')
+                         : previous.__joint_bank__ ?? '',
+                     }));
+                     if (selectedSourceId) {
+                       setPayerIncomeSourceIds((previous) => ({ ...previous, [payerIds[0]]: selectedSourceId }));
+                     }
                     }
                   }
                 }}
@@ -1174,10 +1190,12 @@ export default function AddExpenseSheet() {
               </Pressable>}
               {selectablePayers.map((m) => {
                 const selected = payerIds.includes(m.userId);
+                const sourceLimitReached = !selected
+                  && payerIds.length >= (paidFromBank ? 1 : 2);
                 return (
                   <Pressable
                     key={m.userId}
-                    disabled={getExpenseFundingControlState({
+                    disabled={sourceLimitReached || getExpenseFundingControlState({
                       paidFromBank,
                       hasPersonalFunding: payerIds.length > 0,
                       allowMixedFunding,
@@ -1186,6 +1204,15 @@ export default function AddExpenseSheet() {
                       if (!canManageShared) return;
                       if (isEditMode) setFundingDirty(true);
                       setPayerIds(prev => {
+                        if (sourceLimitReached) return prev;
+                        if (!prev.includes(m.userId)) {
+                          setPayerAmounts((previous) => addFundingSourceWithRemainder({
+                            total: parseFloat(amount.replace(/,/g, '')),
+                            selectedSourceIds: prev,
+                            newSourceId: m.userId,
+                            amounts: previous,
+                          }));
+                        }
                         const next = prev.includes(m.userId)
                           ? prev.filter(id => id !== m.userId)
                           : [...prev, m.userId];
@@ -1196,6 +1223,17 @@ export default function AddExpenseSheet() {
                             return copy;
                           });
                         }
+                         if (paidFromBank) {
+                           setAllowMixedFunding(next.length > 0);
+                           if (next.length === 1) {
+                             const bankAmount = parseFloat(payerAmounts.__joint_bank__ || '0') || 0;
+                             const remainder = getFundingRemainder(parseFloat(amount.replace(/,/g, '')), bankAmount);
+                             setPayerAmounts((previous) => ({
+                               ...previous,
+                               [next[0]]: remainder > 0 ? String(remainder) : previous[next[0]] ?? '',
+                             }));
+                           }
+                         }
                         return next;
                       });
                     }}
@@ -1205,7 +1243,7 @@ export default function AddExpenseSheet() {
                         backgroundColor: selected ? colors.primary : colors.muted,
                         borderColor: selected ? colors.primary : colors.border,
                         borderRadius: colors.radius,
-                        opacity: paidFromBank && payerIds.length === 0 && !allowMixedFunding ? 0.4 : 1,
+                        opacity: sourceLimitReached || (paidFromBank && payerIds.length === 0 && !allowMixedFunding) ? 0.4 : 1,
                       },
                     ]}
                   >
@@ -1321,7 +1359,7 @@ export default function AddExpenseSheet() {
                     {!allowMixedFunding && canManageShared ? (
                       <Pressable onPress={() => setAllowMixedFunding(true)} style={{ marginTop: 6 }}>
                         <Text style={{ color: '#38bdf8', fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' }}>
-                          Add a direct-payment portion
+                          Add another funding source
                         </Text>
                       </Pressable>
                     ) : allowMixedFunding ? (
@@ -1353,7 +1391,7 @@ export default function AddExpenseSheet() {
               return (
                 <View style={{ marginTop: 10, gap: 8 }}>
                   <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                    Type each funding amount manually{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''} so you can catch a forgotten second source.
+                    Type the primary amount{total > 0 ? ` (expense total: KES ${total.toLocaleString()})` : ''}. Jamvi fills the remaining amount into the other selected source.
                   </Text>
                   {paidFromBank && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -1364,7 +1402,14 @@ export default function AddExpenseSheet() {
                         value={payerAmounts.__joint_bank__ || ''}
                         onChangeText={val => {
                           if (isEditMode) setFundingDirty(true);
-                          setPayerAmounts(prev => ({ ...prev, __joint_bank__: val }));
+                          setPayerAmounts((previous) => {
+                            const next: Record<string, string> = { ...previous, __joint_bank__: val };
+                            if (payerIds.length === 1) {
+                              const remainder = getFundingRemainder(parseFloat(amount.replace(/,/g, '')), parseFloat(val || '0'));
+                              next[payerIds[0]] = remainder > 0 ? String(remainder) : '';
+                            }
+                            return next;
+                          });
                         }}
                       />
                     </View>
@@ -1393,7 +1438,14 @@ export default function AddExpenseSheet() {
                             value={payerAmounts[pid] || ''}
                             onChangeText={val => {
                               if (isEditMode) setFundingDirty(true);
-                              setPayerAmounts(prev => ({ ...prev, [pid]: val }));
+                              setPayerAmounts((previous) => {
+                                const next = { ...previous, [pid]: val };
+                                if (paidFromBank && payerIds.length === 1) {
+                                  const remainder = getFundingRemainder(parseFloat(amount.replace(/,/g, '')), parseFloat(val || '0'));
+                                  next.__joint_bank__ = remainder > 0 ? String(remainder) : '';
+                                }
+                                return next;
+                              });
                             }}
                           />
                         </View>
@@ -1505,7 +1557,24 @@ export default function AddExpenseSheet() {
                   return (
                     <Pressable key={src.id} onPress={() => {
                       if (isEditMode) setFundingDirty(true);
-                      setSelectedSources(prev => prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key]);
+                      setSelectedSources((previous) => {
+                        if (previous.includes(key)) {
+                          setSplitAmounts((amounts) => {
+                            const next = { ...amounts };
+                            delete next[key];
+                            return next;
+                          });
+                          return previous.filter((item) => item !== key);
+                        }
+                        if (previous.length >= 2) return previous;
+                        setSplitAmounts((amounts) => addFundingSourceWithRemainder({
+                          total: parseFloat(amount.replace(/,/g, '')),
+                          selectedSourceIds: previous,
+                          newSourceId: key,
+                          amounts,
+                        }));
+                        return [...previous, key];
+                      });
                     }}
                       style={[styles.sourceChip, { backgroundColor: selected ? color + '22' : colors.background, borderColor: selected ? color : colors.border, borderRadius: colors.radius }]}>
                       <Feather name="briefcase" size={13} color={selected ? color : colors.mutedForeground} />
@@ -1551,9 +1620,9 @@ export default function AddExpenseSheet() {
             {!paidFromBank && selectedSources.length > 0 && (
               <View style={{ marginTop: 12, gap: 6 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
-                  {selectedSources.length === 1
-                    ? 'Type the amount from this source to confirm'
-                    : 'Type the amount from each source to confirm'}
+                    {selectedSources.length === 1
+                      ? 'Type the amount from this source to confirm'
+                      : 'Type the primary amount; Jamvi fills the second source with the remainder'}
                 </Text>
                 {selectedSources.map((key, index) => {
                   const sourceId = incomeSourceIdFromKey(key);
@@ -1566,7 +1635,20 @@ export default function AddExpenseSheet() {
                     <TextInput style={[styles.splitAmountInput, { color: colors.foreground }]} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground}
                       value={splitAmounts[key] || ''} onChangeText={value => {
                         if (isEditMode) setFundingDirty(true);
-                        setSplitAmounts(prev => ({ ...prev, [key]: value }));
+                        setSplitAmounts((previous) => {
+                          const next = { ...previous, [key]: value };
+                          if (selectedSources.length === 2) {
+                            const otherKey = selectedSources.find((item) => item !== key);
+                            if (otherKey) {
+                              const remainder = getFundingRemainder(
+                                parseFloat(amount.replace(/,/g, '')),
+                                parseFloat(value || '0'),
+                              );
+                              next[otherKey] = remainder > 0 ? String(remainder) : '';
+                            }
+                          }
+                          return next;
+                        });
                       }} />
                   </View>
                 )})}

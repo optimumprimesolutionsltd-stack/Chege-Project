@@ -34,6 +34,29 @@ export function getExpenseFundingControlState({
   };
 }
 
+export function getFundingRemainder(total: number, primaryAmount: number): number {
+  if (!Number.isInteger(total) || total <= 0 || !Number.isInteger(primaryAmount) || primaryAmount <= 0) {
+    return 0;
+  }
+  return Math.max(0, total - primaryAmount);
+}
+
+export function addFundingSourceWithRemainder({
+  total,
+  selectedSourceIds,
+  newSourceId,
+  amounts,
+}: {
+  total: number;
+  selectedSourceIds: string[];
+  newSourceId: string;
+  amounts: Record<string, string>;
+}): Record<string, string> {
+  if (selectedSourceIds.includes(newSourceId) || selectedSourceIds.length !== 1) return amounts;
+  const remainder = getFundingRemainder(total, Number(amounts[selectedSourceIds[0]]));
+  return remainder > 0 ? { ...amounts, [newSourceId]: String(remainder) } : amounts;
+}
+
 export function getNewExpenseCategoryMode({
   addToBudget,
   canManageCategories,

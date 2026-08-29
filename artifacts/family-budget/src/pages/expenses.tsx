@@ -59,7 +59,9 @@ import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repe
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  addFundingSourceWithRemainder,
   getExpenseFundingControlState,
+  getFundingRemainder,
   getNewExpenseCategoryMode,
   hasMissingPersonalFundingSource,
 } from "@/lib/expense-funding-utils";
@@ -1156,7 +1158,15 @@ export default function Expenses() {
                 form.setPaidFromBank(nextPaidFromBank);
                 form.setIncomeSourceId(null);
                 form.setOtherIncomeSourceLabel(null);
-                setAllowMixedFunding(false);
+                 setAllowMixedFunding(nextPaidFromBank && form.payerIds.length > 0);
+                 if (nextPaidFromBank && mode === "add" && form.payerIds.length === 1) {
+                   const directAmount = Number(form.payerAmounts[form.payerIds[0]]);
+                   const remainder = getFundingRemainder(Number(form.amount), directAmount);
+                   form.setPayerAmounts((previous) => ({
+                     ...previous,
+                     __joint_bank__: remainder > 0 ? String(remainder) : previous.__joint_bank__ ?? "",
+                   }));
+                 }
                 if (nextPaidFromBank && (mode === "edit" || form.payerIds.length === 0)) {
                   form.setPaidById("");
                   form.setPayerIds([]);
@@ -1172,10 +1182,12 @@ export default function Expenses() {
               const name = m.userName?.split(" ")[0] ?? "Member";
               const isMultiEnabled = mode === "add";
               const selected = isMultiEnabled ? form.payerIds.includes(m.userId) : form.paidById === m.userId;
+              const sourceLimitReached = !selected
+                && form.payerIds.length >= (form.paidFromBank ? 1 : 2);
               return (
                 <button
                   key={m.userId} type="button"
-                  disabled={getExpenseFundingControlState({
+                  disabled={sourceLimitReached || getExpenseFundingControlState({
                     paidFromBank: form.paidFromBank,
                     hasPersonalFunding: form.payerIds.length > 0,
                     allowMixedFunding,
@@ -1184,6 +1196,15 @@ export default function Expenses() {
                     form.setIncomeSourceId(null);
                     form.setOtherIncomeSourceLabel(null);
                     if (isMultiEnabled) {
+                      if (sourceLimitReached) return;
+                      if (!selected) {
+                        form.setPayerAmounts((previous) => addFundingSourceWithRemainder({
+                          total: Number(form.amount),
+                          selectedSourceIds: form.payerIds,
+                          newSourceId: m.userId,
+                          amounts: previous,
+                        }));
+                      }
                       const next = form.payerIds.includes(m.userId)
                         ? form.payerIds.filter(id => id !== m.userId)
                         : [...form.payerIds, m.userId];
@@ -1197,9 +1218,20 @@ export default function Expenses() {
                       }
                       // Keep single paidById in sync for income sources
                       form.setPaidById(next.length === 1 ? next[0] : "");
+                       if (form.paidFromBank) {
+                         setAllowMixedFunding(next.length > 0);
+                         if (next.length === 1) {
+                           const bankAmount = Number(form.payerAmounts.__joint_bank__);
+                           const remainder = getFundingRemainder(Number(form.amount), bankAmount);
+                           form.setPayerAmounts((previous) => ({
+                             ...previous,
+                             [next[0]]: remainder > 0 ? String(remainder) : previous[next[0]] ?? "",
+                           }));
+                         }
+                       }
                     } else {
                       form.setPaidById(m.userId);
-                      form.setPaidFromBank(false);
+                     if (!form.paidFromBank) form.setPaidFromBank(false);
                     }
                   }}
                   className={`h-12 rounded-xl border text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
@@ -1257,7 +1289,17 @@ export default function Expenses() {
                     min="1"
                     step="1"
                     value={form.payerAmounts.__joint_bank__ ?? ""}
-                    onChange={(event) => form.setPayerAmounts((previous) => ({ ...previous, __joint_bank__: event.target.value }))}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      form.setPayerAmounts((previous) => {
+                        const next: Record<string, string> = { ...previous, __joint_bank__: value };
+                        if (mode === "add" && form.payerIds.length === 1) {
+                          const remainder = getFundingRemainder(Number(form.amount), Number(value));
+                          next[form.payerIds[0]] = remainder > 0 ? String(remainder) : "";
+                        }
+                        return next;
+                      });
+                    }}
                     placeholder="KES 0"
                     className="h-10 bg-card"
                     required
@@ -1319,14 +1361,24 @@ export default function Expenses() {
             return (
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Type each funding amount manually{total > 0 ? ` (total: KES ${total.toLocaleString()})` : ""} so you can catch a forgotten second source:
+                  Type the primary amount{total > 0 ? ` (expense total: KES ${total.toLocaleString()})` : ""}. Jamvi fills the remaining amount into the other selected source:
                 </p>
                  {form.paidFromBank && (
                    <div className="flex items-center gap-3">
                      <span className="text-sm font-semibold w-20 shrink-0">{isPersonalBudget ? "Personal bank" : "Shared bank"}</span>
                      <input type="number" placeholder="0" min="0" step="1"
                        value={form.payerAmounts.__joint_bank__ ?? ""}
-                       onChange={e => form.setPayerAmounts(prev => ({ ...prev, __joint_bank__: e.target.value }))}
+                       onChange={e => {
+                         const value = e.target.value;
+                         form.setPayerAmounts((previous) => {
+                           const next: Record<string, string> = { ...previous, __joint_bank__: value };
+                           if (form.payerIds.length === 1) {
+                             const remainder = getFundingRemainder(Number(form.amount), Number(value));
+                             next[form.payerIds[0]] = remainder > 0 ? String(remainder) : "";
+                           }
+                           return next;
+                         });
+                       }}
                         required
                        className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
                    </div>
@@ -1345,7 +1397,17 @@ export default function Expenses() {
                            min="0"
                            step="1"
                            value={form.payerAmounts[pid] ?? ""}
-                           onChange={e => form.setPayerAmounts(prev => ({ ...prev, [pid]: e.target.value }))}
+                           onChange={e => {
+                             const value = e.target.value;
+                             form.setPayerAmounts((previous) => {
+                               const next = { ...previous, [pid]: value };
+                               if (form.paidFromBank && form.payerIds.length === 1) {
+                                 const remainder = getFundingRemainder(Number(form.amount), Number(value));
+                                 next.__joint_bank__ = remainder > 0 ? String(remainder) : "";
+                               }
+                               return next;
+                             });
+                           }}
                             required
                            className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                          />
@@ -1431,7 +1493,7 @@ export default function Expenses() {
                     required
                  />
                   <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                    Enter this manually, even when it equals the expense total. If more than one source paid, select another payer or the bank account and enter both portions.
+                   Enter this manually, even when it equals the expense total. If it is less, select another payer or bank account and Jamvi will fill the remainder.
                   </span>
                </label>
              )}

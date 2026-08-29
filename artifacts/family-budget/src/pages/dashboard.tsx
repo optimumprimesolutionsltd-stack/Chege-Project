@@ -55,6 +55,7 @@ import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kin
 import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
 import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
+import { getFundingRemainder } from "@/lib/expense-funding-utils";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 
@@ -508,6 +509,7 @@ function ExpenseForm({
   const [selectedBankAccountId, setSelectedBankAccountId] = useState<number | null>(null);
   const [bankPortion, setBankPortion] = useState("");
   const [directPortion, setDirectPortion] = useState("");
+  const [remainderAnchor, setRemainderAnchor] = useState<"direct" | "bank" | null>(null);
   const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
   const [newBankAccountName, setNewBankAccountName] = useState("");
   const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
@@ -540,6 +542,24 @@ function ExpenseForm({
   const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
   const bankLabel = isSharedWorkspace ? "Shared bank deposits" : "Personal bank deposits";
   const isOtherCategory = category.trim().toLocaleLowerCase() === "other";
+
+  useEffect(() => {
+    if (!paidFromBank || !allowMixedFunding) return;
+    const total = Number(amount);
+    const direct = Number(directPortion);
+    const bank = Number(bankPortion);
+    if (!Number.isInteger(total) || total <= 0) return;
+
+    if (remainderAnchor === "direct" && Number.isInteger(direct) && direct > 0) {
+      const remainder = getFundingRemainder(total, direct);
+      setBankPortion(remainder > 0 ? String(remainder) : "");
+      return;
+    }
+    if (remainderAnchor === "bank" && Number.isInteger(bank) && bank > 0) {
+      const remainder = getFundingRemainder(total, bank);
+      setDirectPortion(remainder > 0 ? String(remainder) : "");
+    }
+  }, [allowMixedFunding, amount, bankPortion, directPortion, paidFromBank, remainderAnchor]);
 
   const handleAddBankAccount = async () => {
     const name = newBankAccountName.trim();
@@ -643,6 +663,8 @@ function ExpenseForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
+    const bankAmount = Number(bankPortion);
+    const directAmount = Number(directPortion);
     if (!amt || amt <= 0) {
       toast({
         variant: "destructive",
@@ -683,7 +705,7 @@ function ExpenseForm({
       });
       return;
     }
-    if ((!paidFromBank || allowMixedFunding) && !directPayerId) {
+    if (directAmount > 0 && !directPayerId) {
       toast({
         variant: "destructive",
         title: "Choose who paid",
@@ -691,7 +713,7 @@ function ExpenseForm({
       });
       return;
     }
-    if ((!paidFromBank || allowMixedFunding) && !incomeSourceId) {
+    if (directAmount > 0 && !incomeSourceId) {
       toast({
         variant: "destructive",
         title: "Income source required",
@@ -699,7 +721,7 @@ function ExpenseForm({
       });
       return;
     }
-    if (paidFromBank && !selectedBankAccountId) {
+    if (bankAmount > 0 && !selectedBankAccountId) {
       toast({
         variant: "destructive",
         title: "Choose a bank account",
@@ -707,52 +729,26 @@ function ExpenseForm({
       });
       return;
     }
-    if (!allowMixedFunding) {
-      const sourceAmount = Number(paidFromBank ? bankPortion : directPortion);
-      if (!Number.isInteger(sourceAmount) || sourceAmount <= 0) {
-        toast({
-          variant: "destructive",
-          title: "Enter the funding amount",
-          description: `Enter how much came from the selected ${paidFromBank ? "bank account" : "income source"}.`,
-        });
-        return;
-      }
-      if (sourceAmount !== amt) {
-        const remaining = amt - sourceAmount;
-        toast({
-          variant: "destructive",
-          title: remaining > 0 ? "Add another funding source" : "Funding exceeds the expense",
-          description: remaining > 0
-            ? `${formatKes(remaining)} is still unfunded. Choose Both or add another source.`
-            : `Reduce the funding amount by ${formatKes(Math.abs(remaining))}.`,
-        });
-        return;
-      }
+    const fundingTotal = (Number.isInteger(bankAmount) && bankAmount > 0 ? bankAmount : 0)
+      + (Number.isInteger(directAmount) && directAmount > 0 ? directAmount : 0);
+    if (!Number.isInteger(bankAmount) || !Number.isInteger(directAmount) || fundingTotal <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter the funding amount",
+        description: "Type the amount from the selected source. If it is less than the expense, add another source so Jamvi can fill the remainder.",
+      });
+      return;
     }
-    if (allowMixedFunding) {
-      const bankAmount = Number(bankPortion);
-      const directAmount = Number(directPortion);
-      if (
-        !Number.isInteger(bankAmount) ||
-        !Number.isInteger(directAmount) ||
-        bankAmount <= 0 ||
-        directAmount <= 0
-      ) {
-        toast({
-          variant: "destructive",
-          title: "Enter both funding portions",
-          description: "Bank deposits and direct payment must each be a positive whole-KES amount.",
-        });
-        return;
-      }
-      if (bankAmount + directAmount !== amt) {
-        toast({
-          variant: "destructive",
-          title: "Amounts do not add up",
-          description: `The portions total ${formatKes(bankAmount + directAmount)}, but the expense is ${formatKes(amt)}.`,
-        });
-        return;
-      }
+    if (fundingTotal !== amt) {
+      const remaining = amt - fundingTotal;
+      toast({
+        variant: "destructive",
+        title: remaining > 0 ? "Choose another funding source" : "Funding exceeds the expense",
+        description: remaining > 0
+          ? `${formatKes(remaining)} is still unfunded. Select another source or enter the full amount.`
+          : `Reduce the funding amount by ${formatKes(Math.abs(remaining))}.`,
+      });
+      return;
     }
     if (date > today) {
       toast({
@@ -778,8 +774,6 @@ function ExpenseForm({
           await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
         }
       }
-      const bankAmount = Number(bankPortion);
-      const directAmount = Number(directPortion);
       const payerName = isSharedWorkspace
         ? selectableMembers.find((member) => member.userId === directPayerId)?.userName?.split(" ")[0] ?? "Member"
         : "Personal funds";
@@ -789,13 +783,13 @@ function ExpenseForm({
           description,
            category: expenseCategory,
           notes: notes.trim() || undefined,
-          paidById: paidFromBank && !allowMixedFunding ? undefined : directPayerId,
-          paidFromBank: paidFromBank && !allowMixedFunding,
+           paidById: directAmount > 0 ? directPayerId : undefined,
+           paidFromBank: bankAmount > 0 && directAmount <= 0,
           isRecurring,
           date,
-          ...(paidFromBank ? { accountId: selectedBankAccountId! } : {}),
-          ...(incomeSourceId && !paidFromBank ? { incomeSourceId } : {}),
-          ...(allowMixedFunding ? {
+           ...(bankAmount > 0 ? { accountId: selectedBankAccountId! } : {}),
+           ...(incomeSourceId && directAmount > 0 ? { incomeSourceId } : {}),
+           ...(bankAmount > 0 && directAmount > 0 ? {
             incomeSplits: [
               {
                 userId: null,
@@ -812,7 +806,7 @@ function ExpenseForm({
                 incomeSourceId: incomeSourceId!,
               },
             ],
-          } : {}),
+           } : {}),
         } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
       });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
@@ -920,7 +914,7 @@ function ExpenseForm({
             </div>
           )}
         </div>
-        {isSharedWorkspace && fundingMode !== "bank" && <div className="space-y-1.5">
+        {isSharedWorkspace && (!paidFromBank || allowMixedFunding) && <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">
             Paid by <span className="text-destructive">*</span>
           </label>
@@ -934,6 +928,7 @@ function ExpenseForm({
                   onClick={() => {
                     setPaidBy(m.userId);
                     setIncomeSourceId(null);
+                     if (paidFromBank) setAllowMixedFunding(true);
                   }}
                   className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
                   {name}
@@ -961,7 +956,7 @@ function ExpenseForm({
           {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
         </div>
       </div>
-      {fundingMode !== "bank" && (
+      {(!paidFromBank || allowMixedFunding) && (
         <div className="space-y-1.5">
            <label className="text-sm font-semibold text-foreground">
              Financed by <span className="text-destructive">*</span>
@@ -975,7 +970,10 @@ function ExpenseForm({
           ) : incomeSources.length > 0 ? (
             <select
               value={incomeSourceId?.toString() ?? ""}
-              onChange={e => setIncomeSourceId(e.target.value ? Number(e.target.value) : null)}
+               onChange={e => {
+                 setIncomeSourceId(e.target.value ? Number(e.target.value) : null);
+                 if (paidFromBank && e.target.value) setAllowMixedFunding(true);
+               }}
               className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
                <option value="">Select an income source...</option>
@@ -1015,7 +1013,7 @@ function ExpenseForm({
                )}
              </div>
            )}
-           {incomeSourceId && fundingMode === "direct" && (
+           {incomeSourceId && (!paidFromBank || allowMixedFunding) && (
               <label className="block space-y-1.5 text-sm font-semibold text-foreground">
                 Type the amount from this source to confirm
                <Input
@@ -1023,13 +1021,15 @@ function ExpenseForm({
                  min="1"
                  step="1"
                  value={directPortion}
-                 onChange={(event) => setDirectPortion(event.target.value)}
+                 onChange={(event) => {
+                   setRemainderAnchor("direct");
+                   setDirectPortion(event.target.value);
+                 }}
                  placeholder="KES 0"
                  className="h-11 bg-card"
-                  required
                />
                 <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                  Enter this manually, even when it equals the expense total. If more than one source paid, choose Both and enter each portion.
+                   Enter this manually, even when it equals the expense total. If it is less, select another source and Jamvi will fill the remainder there.
                 </span>
              </label>
            )}
@@ -1042,40 +1042,34 @@ function ExpenseForm({
         <div className="space-y-4 rounded-xl border border-border/50 bg-card p-4">
           <div>
             <p className="text-sm font-semibold text-foreground">How was this expense funded?</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Choose whether the money had already been recorded as a bank deposit, was paid directly from income, or used both.
-            </p>
+             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+               Choose the primary source. If it does not cover the full expense, select one more source and Jamvi will fill the remainder there.
+             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
+           <div className="grid gap-2 sm:grid-cols-2">
             {([
               ["direct", "Paid directly", "No bank balance changes"],
               ["bank", bankLabel, "Reduces one selected account"],
-              ["mixed", "Both", "Only the bank portion reduces the account"],
             ] as const).map(([mode, label, detail]) => (
               <button
                 key={mode}
                 type="button"
-                aria-pressed={fundingMode === mode}
+                 aria-pressed={mode === "bank" ? paidFromBank : !paidFromBank}
                 onClick={() => {
                   if (mode === "direct") {
                     setPaidFromBank(false);
                     setAllowMixedFunding(false);
                     setSelectedBankAccountId(null);
                     setBankPortion("");
-                  } else if (mode === "bank") {
-                    setPaidFromBank(true);
-                    setAllowMixedFunding(false);
-                    setPaidBy("");
-                    setIncomeSourceId(null);
-                    setDirectPortion("");
-                  } else {
-                    setPaidFromBank(true);
-                    setAllowMixedFunding(true);
-                    if (!paidBy && currentUserId && isSharedWorkspace && !canManageShared) setPaidBy(currentUserId);
-                  }
+                    setRemainderAnchor("direct");
+                   } else if (mode === "bank") {
+                     setPaidFromBank(true);
+                     setAllowMixedFunding(Boolean(directPayerId && incomeSourceId));
+                     setRemainderAnchor(directPortion ? "direct" : "bank");
+                   }
                 }}
                 className={`rounded-xl border p-3 text-left transition-colors ${
-                  fundingMode === mode
+                  (mode === "bank" ? paidFromBank : !paidFromBank)
                     ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
                     : "border-input bg-background text-foreground hover:border-primary/50"
                 }`}
@@ -1128,32 +1122,46 @@ function ExpenseForm({
                   + New bank account
                 </Button>
               )}
-              {fundingMode === "bank" && (
+              {paidFromBank && (
                 <label className="block space-y-1.5 text-sm font-semibold text-foreground">
                   Type the amount from this account to confirm
-                  <Input type="number" min="1" step="1" value={bankPortion} onChange={(event) => setBankPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" required />
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={bankPortion}
+                    onChange={(event) => {
+                      setRemainderAnchor("bank");
+                      setBankPortion(event.target.value);
+                    }}
+                    placeholder="KES 0"
+                    className="h-11 bg-card"
+                  />
                   <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                    Enter this manually to confirm which amount should reduce the selected account.
+                     Enter this manually to confirm which amount should reduce the selected account. If it is less than the expense, choose a direct source and Jamvi will fill the remainder.
                   </span>
                 </label>
               )}
+               {paidFromBank && !allowMixedFunding && (
+                 <button
+                   type="button"
+                   className="text-left text-xs font-semibold text-sky-700 underline underline-offset-2 dark:text-sky-300"
+                   onClick={() => {
+                     setAllowMixedFunding(true);
+                     setRemainderAnchor("bank");
+                     if (isSharedWorkspace && !paidBy && currentUserId && !canManageShared) setPaidBy(currentUserId);
+                   }}
+                 >
+                   Add another funding source
+                 </button>
+               )}
             </div>
           )}
-          {allowMixedFunding && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1.5 text-sm font-semibold text-foreground">
-                Type the bank-deposit amount
-                <Input type="number" min="1" step="1" value={bankPortion} onChange={(event) => setBankPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" required />
-              </label>
-              <label className="space-y-1.5 text-sm font-semibold text-foreground">
-                Type the direct-payment amount
-                <Input type="number" min="1" step="1" value={directPortion} onChange={(event) => setDirectPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" required />
-              </label>
-              <p className="text-xs leading-relaxed text-muted-foreground sm:col-span-2">
-                Type both amounts manually so a forgotten second funding source is caught before saving. They must add up to the expense total. Only the bank-deposit amount reduces the selected account.
-              </p>
-            </div>
-          )}
+           {allowMixedFunding && (
+             <p className="text-xs leading-relaxed text-muted-foreground">
+               Choose the second source above. After you type the primary amount, Jamvi fills the remaining amount into the other selected source. Only the bank portion reduces the selected account.
+             </p>
+           )}
           <div className="flex justify-end">
           <label className="flex items-start gap-2 text-sm text-foreground">
             <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" />

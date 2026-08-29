@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addFundingSourceWithRemainder,
   buildSinglePayerFundingReplacement,
   getExpenseFundingControlState,
+  getFundingRemainder,
   getNewExpenseCategoryMode,
   preserveExpenseSplitsForAmount,
 } from '../expenseFundingPreservation';
@@ -65,6 +67,22 @@ describe('expense funding preservation', () => {
       hasPersonalFunding: false,
       allowMixedFunding: true,
     }).personalPayersDisabled).toBe(false);
+  });
+
+  it('calculates the positive remainder for a selected primary source', () => {
+    expect(getFundingRemainder(1000, 650)).toBe(350);
+    expect(getFundingRemainder(1000, 1000)).toBe(0);
+    expect(getFundingRemainder(1000, 1200)).toBe(0);
+    expect(getFundingRemainder(1000, 0)).toBe(0);
+  });
+
+  it('fills a newly selected second source from the existing primary amount', () => {
+    expect(addFundingSourceWithRemainder({
+      total: 1000,
+      selectedSourceIds: ['primary'],
+      newSourceId: 'second',
+      amounts: { primary: '650' },
+    })).toEqual({ primary: '650', second: '350' });
   });
 
   it('keeps a named category unbudgeted unless a manager explicitly adds it', () => {

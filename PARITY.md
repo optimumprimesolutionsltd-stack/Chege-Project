@@ -28,7 +28,7 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | Platform parity page | ✅ | ❌ | This page is web-only |
 | **Expenses** | | | |
 | Expense list | ✅ | ✅ | Mobile: hidden "History" tab reachable from dashboard |
-| Log an expense | ✅ | ✅ | Web: inline form. Mobile: dedicated add-expense screen |
+| Log an expense | ✅ | ✅ | Both use one primary funding amount and automatically assign any remainder to the explicitly selected second income source or bank account |
 | Edit an expense (incl. payer correction) | ✅ | ✅ | Both show a visible Edit action and a prefilled form for all fields, including payer |
 | Delete an expense | ✅ | ✅ | Both show a visible Remove action with a destructive confirmation |
 | Recurring expense flag | ✅ | ✅ | Both allow marking an expense as recurring |

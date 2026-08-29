@@ -30,21 +30,22 @@ describe("dashboard quick actions", () => {
     expect(dashboardSource).toContain("const { data: bankAccounts = [] } = useGetJointAccounts();");
     expect(dashboardSource).toContain('"Paid directly"');
     expect(dashboardSource).toContain('"Personal bank deposits"');
-    expect(dashboardSource).toContain('"Both"');
+    expect(dashboardSource).not.toContain('["mixed", "Both"');
+    expect(dashboardSource).toContain("Add another funding source");
     expect(dashboardSource).toContain("selectedBankAccountId");
-     expect(dashboardSource).toContain("Only the bank-deposit amount reduces the selected account.");
+    expect(dashboardSource).toContain("Only the bank portion reduces the selected account.");
   });
 
   it("does not ask a Personal budget owner who paid", () => {
     expect(expenseFormSource).toContain("const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? \"\");");
-    expect(expenseFormSource).toContain('{isSharedWorkspace && fundingMode !== "bank" && <div className="space-y-1.5">');
+    expect(expenseFormSource).toContain("{isSharedWorkspace && (!paidFromBank || allowMixedFunding)");
     expect(expenseFormSource).toContain("max={isSharedWorkspace && !canManageShared ? today : undefined}");
     expect(expenseFormSource).toContain('{isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}');
   });
 
   it("keeps the payer selector and Shared bank variant available only in Shared quick log", () => {
     expect(expenseFormSource).toMatch(
-      /\{isSharedWorkspace && fundingMode !== "bank" && <div className="space-y-1\.5">[\s\S]*?Paid by/,
+      /\{isSharedWorkspace && \(!paidFromBank \|\| allowMixedFunding\) && <div className="space-y-1\.5">[\s\S]*?Paid by/,
     );
     expect(expenseFormSource).toContain('const bankLabel = isSharedWorkspace ? "Shared bank deposits" : "Personal bank deposits";');
     expect(expenseFormSource).toContain('label: isSharedWorkspace ? "Shared bank" : "Personal bank"');
