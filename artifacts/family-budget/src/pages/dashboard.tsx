@@ -692,11 +692,11 @@ function ExpenseForm({
       });
       return;
     }
-    if (isOtherCategory && description.trim().length < 3) {
+    if (isOtherCategory && notes.trim().length < 3) {
       toast({
         variant: "destructive",
-        title: "Brief description required",
-        description: "Briefly describe what this Other expense was for.",
+        title: "Note required",
+        description: "Add a note explaining what this Other expense was for.",
       });
       return;
     }
@@ -951,8 +951,16 @@ function ExpenseForm({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
-          <Input placeholder="Any extra details…" value={notes} onChange={e => setNotes(e.target.value)} className="h-11 bg-card" />
+           <label className="text-sm font-semibold text-foreground">
+             Notes <span className="text-destructive">{isOtherCategory ? "*" : <span className="font-normal text-muted-foreground">(optional)</span>}</span>
+           </label>
+          <Input
+            placeholder={isOtherCategory ? "Explain what this Other expense was for" : "Any extra details…"}
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            required={isOtherCategory}
+            className="h-11 bg-card"
+          />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Date <span className="text-destructive">*</span></label>

@@ -649,12 +649,12 @@ export default function Expenses() {
     }
     if (
       addForm.category.trim().toLocaleLowerCase() === "other" &&
-      addForm.description.trim().length < 3
+      addForm.notes.trim().length < 3
     ) {
       toast({
         variant: "destructive",
-        title: "Brief description required",
-        description: "Briefly describe what this Other expense was for.",
+        title: "Note required",
+        description: "Add a note explaining what this Other expense was for.",
       });
       return;
     }
@@ -818,12 +818,12 @@ export default function Expenses() {
     }
     if (
       editForm.category.trim().toLocaleLowerCase() === "other" &&
-      editForm.description.trim().length < 3
+      editForm.notes.trim().length < 3
     ) {
       toast({
         variant: "destructive",
-        title: "Brief description required",
-        description: "Briefly describe what this Other expense was for.",
+        title: "Note required",
+        description: "Add a note explaining what this Other expense was for.",
       });
       return;
     }
@@ -1126,9 +1126,15 @@ export default function Expenses() {
         </div>
 
         <div className="space-y-2 md:col-span-2">
-          <label className="text-sm font-semibold text-foreground">Notes <span className="font-normal text-muted-foreground">(optional)</span></label>
+           <label className="text-sm font-semibold text-foreground">
+             Notes <span className={form.category.trim().toLocaleLowerCase() === "other" ? "text-destructive" : "font-normal text-muted-foreground"}>
+               {form.category.trim().toLocaleLowerCase() === "other" ? "*" : "(optional)"}
+             </span>
+           </label>
           <Input placeholder="Any extra details..." value={form.notes ?? ""}
-            onChange={e => form.setNotes(e.target.value)} className="h-12 bg-card" />
+             onChange={e => form.setNotes(e.target.value)}
+             required={form.category.trim().toLocaleLowerCase() === "other"}
+             className="h-12 bg-card" />
         </div>
 
         <div className="space-y-2">

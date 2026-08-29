@@ -147,9 +147,9 @@ function toDateString(value: string | Date) {
   return typeof value === "string" ? value : value.toISOString().split("T")[0];
 }
 
-export function validateOtherExpenseDescription(category: string, description: string) {
+export function validateOtherExpenseNotes(category: string, notes: string | null | undefined) {
   if (category.trim().toLocaleLowerCase() !== "other") return null;
-  if (description.trim().length < 3) return "Briefly describe what this Other expense was for.";
+  if (!notes?.trim() || notes.trim().length < 3) return "Add a note explaining what this Other expense was for.";
   return null;
 }
 
@@ -389,9 +389,9 @@ router.post("/expenses", async (req, res) => {
     return;
   }
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits, accountId } = parsed.data;
-  const otherDescriptionError = validateOtherExpenseDescription(category, description);
-  if (otherDescriptionError) {
-    res.status(400).json({ error: otherDescriptionError });
+   const otherNotesError = validateOtherExpenseNotes(category, notes);
+   if (otherNotesError) {
+     res.status(400).json({ error: otherNotesError });
     return;
   }
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);
@@ -485,9 +485,9 @@ router.patch("/expenses/:id", async (req, res) => {
   if (!idParsed.success || !parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const expenseId = idParsed.data.id;
   const { amount, category, description, notes, paidById, isRecurring, date, incomeSourceId, paidFromBank, incomeSplits, accountId } = parsed.data;
-  const otherDescriptionError = validateOtherExpenseDescription(category, description);
-  if (otherDescriptionError) {
-    res.status(400).json({ error: otherDescriptionError });
+   const otherNotesError = validateOtherExpenseNotes(category, notes);
+   if (otherNotesError) {
+     res.status(400).json({ error: otherNotesError });
     return;
   }
   const splitResult = await validateFundingSplits(incomeSplits, amount, groupId);

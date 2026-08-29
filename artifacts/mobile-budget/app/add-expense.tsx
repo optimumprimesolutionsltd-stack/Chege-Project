@@ -560,8 +560,8 @@ export default function AddExpenseSheet() {
       Alert.alert('Category required', 'Please choose a category.');
       return;
     }
-    if (category.trim().toLocaleLowerCase() === 'other' && description.trim().length < 3) {
-      Alert.alert('Brief description required', 'Briefly describe what this Other expense was for.');
+    if (category.trim().toLocaleLowerCase() === 'other' && notes.trim().length < 3) {
+      Alert.alert('Note required', 'Add a note explaining what this Other expense was for.');
       return;
     }
     if (!description.trim()) {
@@ -1131,7 +1131,9 @@ export default function AddExpenseSheet() {
         )}
 
         {/* Notes */}
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>NOTES (optional)</Text>
+        <Text style={[styles.label, { color: colors.mutedForeground }]}>
+          NOTES {category.trim().toLocaleLowerCase() === 'other' ? <Text style={{ color: '#ef4444' }}>*</Text> : '(optional)'}
+        </Text>
         <TextInput
           style={[
             styles.textInput,
@@ -1143,10 +1145,11 @@ export default function AddExpenseSheet() {
               borderRadius: colors.radius,
             },
           ]}
-          placeholder="Any extra details…"
+          placeholder={category.trim().toLocaleLowerCase() === 'other' ? 'Explain what this Other expense was for' : 'Any extra details…'}
           placeholderTextColor={colors.mutedForeground}
           value={notes}
           onChangeText={setNotes}
+          accessibilityLabel={category.trim().toLocaleLowerCase() === 'other' ? 'Note required' : 'Notes'}
           multiline
           numberOfLines={3}
           textAlignVertical="top"
