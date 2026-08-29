@@ -66,9 +66,11 @@ type DashboardActivityItem = ActivityEditItem & {
 function DashboardActivityRow({
   item,
   compact = false,
+  bankLabel = "Shared bank",
 }: {
   item: DashboardActivityItem;
   compact?: boolean;
+  bankLabel?: string;
 }) {
   const editLink = getActivityEditLink(item);
   const rowClass = compact
@@ -81,7 +83,7 @@ function DashboardActivityRow({
         <div className="min-w-0">
           <p className="truncate text-sm text-foreground">{item.description}</p>
           <p className="text-xs text-muted-foreground">
-            {item.userName ?? "Joint bank"} · {formatDate(String(item.date))}
+            {item.userName ?? bankLabel} · {formatDate(String(item.date))}
             {editLink?.label === "Edit expense" ? " · Edit expense" : ""}
           </p>
         </div>
@@ -508,7 +510,8 @@ function ExpenseForm({
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const { data: bankAccounts = [] } = useGetJointAccounts();
-  const payerId = paidBy || (!canManageShared ? currentUserId : "");
+  const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? "");
+  const payerId = directPayerId;
   const { data: incomeSources = [], isLoading: isIncomeSourcesLoading } = useGetIncomeSources(
     { userId: payerId },
     {
@@ -596,16 +599,10 @@ function ExpenseForm({
   };
 
   useEffect(() => {
-    if (!canManageShared && currentUserId && paidBy !== currentUserId) {
-      setPaidBy(currentUserId);
-    }
-  }, [canManageShared, currentUserId, paidBy]);
-
-  useEffect(() => {
-    if (!paidBy && selectableMembers.length === 1) {
+    if (isSharedWorkspace && !paidBy && selectableMembers.length === 1) {
       setPaidBy(selectableMembers[0].userId);
     }
-  }, [paidBy, selectableMembers]);
+  }, [isSharedWorkspace, paidBy, selectableMembers]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -642,7 +639,7 @@ function ExpenseForm({
       });
       return;
     }
-    if ((!paidFromBank || allowMixedFunding) && !paidBy) {
+    if ((!paidFromBank || allowMixedFunding) && !directPayerId) {
       toast({
         variant: "destructive",
         title: "Choose who paid",
@@ -702,14 +699,16 @@ function ExpenseForm({
     try {
       const bankAmount = Number(bankPortion);
       const directAmount = Number(directPortion);
-      const payerName = selectableMembers.find((member) => member.userId === paidBy)?.userName?.split(" ")[0] ?? "Personal funds";
+      const payerName = isSharedWorkspace
+        ? selectableMembers.find((member) => member.userId === directPayerId)?.userName?.split(" ")[0] ?? "Member"
+        : "Personal funds";
       await createExpense.mutateAsync({
         data: {
           amount: amt,
           description,
           category: category,
           notes: notes.trim() || undefined,
-          paidById: paidFromBank && !allowMixedFunding ? undefined : (paidBy || currentUserId),
+          paidById: paidFromBank && !allowMixedFunding ? undefined : directPayerId,
           paidFromBank: paidFromBank && !allowMixedFunding,
           isRecurring,
           date,
@@ -725,7 +724,7 @@ function ExpenseForm({
                 accountId: selectedBankAccountId!,
               },
               {
-                userId: paidBy || currentUserId,
+                userId: directPayerId,
                 label: payerName,
                 amount: directAmount,
                 fromBank: false,
@@ -806,7 +805,7 @@ function ExpenseForm({
             </div>
           )}
         </div>
-        {fundingMode !== "bank" && <div className="space-y-1.5">
+        {isSharedWorkspace && fundingMode !== "bank" && <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">
             Paid by <span className="text-destructive">*</span>
           </label>
@@ -827,7 +826,7 @@ function ExpenseForm({
               );
             })}
           </div>
-          {!paidBy && !paidFromBank && <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>}
+           {!paidBy && !paidFromBank && <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>}
         </div>}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -841,10 +840,10 @@ function ExpenseForm({
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            max={canManageShared ? undefined : today}
+            max={isSharedWorkspace && !canManageShared ? today : undefined}
             className="h-11 bg-card"
           />
-          {!canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
+          {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
         </div>
       </div>
       {fundingMode !== "bank" && (
@@ -853,7 +852,9 @@ function ExpenseForm({
              Financed by <span className="text-destructive">*</span>
           </label>
           {!payerId ? (
-            <p className="text-xs text-muted-foreground">Choose who paid above to see their income streams.</p>
+            <p className="text-xs text-muted-foreground">
+              {isSharedWorkspace ? "Choose who paid above to see their income streams." : "Your Personal budget owner account is still loading."}
+            </p>
           ) : isIncomeSourcesLoading ? (
             <p className="text-xs text-muted-foreground">Loading income sources…</p>
           ) : incomeSources.length > 0 ? (
@@ -937,7 +938,7 @@ function ExpenseForm({
                   } else {
                     setPaidFromBank(true);
                     setAllowMixedFunding(true);
-                    if (!paidBy && currentUserId && !canManageShared) setPaidBy(currentUserId);
+                    if (!paidBy && currentUserId && isSharedWorkspace && !canManageShared) setPaidBy(currentUserId);
                   }
                 }}
                 className={`rounded-xl border p-3 text-left transition-colors ${
@@ -983,7 +984,7 @@ function ExpenseForm({
                 <Input type="number" min="1" step="1" value={directPortion} onChange={(event) => setDirectPortion(event.target.value)} placeholder="KES 0" className="h-11 bg-card" />
               </label>
               <p className="text-xs leading-relaxed text-muted-foreground sm:col-span-2">
-                Only the bank-deposit portion reduces the selected account. The direct portion is reported against the person and income source above.
+                Only the bank-deposit portion reduces the selected account. The direct portion is reported against {isSharedWorkspace ? "the selected person" : "you"} and the income source above.
               </p>
             </div>
           )}
@@ -1468,7 +1469,7 @@ export default function Dashboard() {
            {activity.length > 0 ? (
              <div className="divide-y divide-border/50">
                 {activity.slice(0, 6).map((item) => (
-                  <DashboardActivityRow key={item.id} item={item} />
+                  <DashboardActivityRow key={item.id} item={item} bankLabel={isSharedWorkspace ? "Shared bank" : "Personal bank"} />
                 ))}
              </div>
            ) : (
@@ -1748,7 +1749,7 @@ export default function Dashboard() {
               {activity.length > 0 ? (
                 <div className="space-y-1">
                   {activity.slice(0, 6).map((item) => (
-                    <DashboardActivityRow key={item.id} item={item} compact />
+                    <DashboardActivityRow key={item.id} item={item} compact bankLabel={isSharedWorkspace ? "Shared bank" : "Personal bank"} />
                   ))}
                 </div>
               ) : (

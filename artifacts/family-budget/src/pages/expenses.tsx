@@ -248,13 +248,14 @@ export default function Expenses() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const currentMembership = members?.find((member) => member.userId === user?.id);
+  const isPersonalBudget = group?.isPrivate === true;
   const canManageExpenses =
     group?.isPrivate === true ||
     group?.role === "owner" ||
     group?.role === "admin" ||
     currentMembership?.role === "owner" ||
     currentMembership?.role === "admin";
-  const memberPayerId = canManageExpenses ? undefined : currentMembership?.userId;
+  const memberPayerId = isPersonalBudget ? user?.id : (canManageExpenses ? undefined : currentMembership?.userId);
   const canManageCategories = canManageExpenses;
   const canEditExpense = (expense: Expense) =>
     canManageExpenses || (expense.date === today && isSelfFundedPersonalExpense(expense, user?.id));
@@ -265,7 +266,7 @@ export default function Expenses() {
     return true;
   });
   const selectedPayerName = ledgerFilter.payerId === "__joint__"
-    ? "Joint bank"
+    ? (isPersonalBudget ? "Personal bank" : "Shared bank")
     : members?.find((member) => member.userId === ledgerFilter.payerId)?.userName;
   const ledgerFilterLabel = [
     selectedPayerName ? `Paid by ${selectedPayerName}` : null,
@@ -273,7 +274,8 @@ export default function Expenses() {
   ].filter(Boolean).join(" · ");
 
   useEffect(() => {
-    if (!isAdding || canManageExpenses || !memberPayerId) return;
+    if (!isAdding || !memberPayerId || addForm.paidFromBank) return;
+    if (!isPersonalBudget && canManageExpenses) return;
     if (
       addForm.payerIds.length === 1 &&
       addForm.payerIds[0] === memberPayerId &&
@@ -283,10 +285,10 @@ export default function Expenses() {
 
     addForm.setPayerIds([memberPayerId]);
     addForm.setPaidById(memberPayerId);
-    addForm.setPaidFromBank(false);
   }, [
     isAdding,
     canManageExpenses,
+    isPersonalBudget,
     memberPayerId,
     addForm.payerIds,
     addForm.paidById,
@@ -664,7 +666,7 @@ export default function Expenses() {
     try {
       const incomeSplits = isSplitPayment
         ? [
-          ...(addForm.paidFromBank ? [{ amount: Number(addForm.payerAmounts.__joint_bank__ || 0), fromBank: true, userId: null, label: "Joint bank", accountId: addForm.accountId! }] : []),
+          ...(addForm.paidFromBank ? [{ amount: Number(addForm.payerAmounts.__joint_bank__ || 0), fromBank: true, userId: null, label: isPersonalBudget ? "Personal bank" : "Shared bank", accountId: addForm.accountId! }] : []),
           ...payerIds.map((userId) => ({
             userId, amount: Number(addForm.payerAmounts[userId] || 0), fromBank: false,
             label: (members ?? []).find((member) => member.userId === userId)?.userName?.split(" ")[0] ?? "Member",
@@ -730,7 +732,9 @@ export default function Expenses() {
       toast({
         variant: "destructive",
         title: "Choose who paid",
-        description: "Select a payer or Joint bank before saving this expense.",
+        description: isPersonalBudget
+          ? "Choose how this Personal expense was funded."
+          : "Select a payer or Shared bank before saving this expense.",
       });
       return;
     }
@@ -752,7 +756,7 @@ export default function Expenses() {
     }
     const selectedSource = editFormSources?.find((source) => source.id === editForm.incomeSourceId);
     const fundingSplits = editForm.paidFromBank
-      ? [{ userId: null, label: "Joint bank", amount, fromBank: true, accountId: editForm.accountId! }]
+      ? [{ userId: null, label: isPersonalBudget ? "Personal bank" : "Shared bank", amount, fromBank: true, accountId: editForm.accountId! }]
       : !editHasMultipleFundingSplits && editForm.incomeSourceId
         ? [{
           userId: editForm.paidById,
@@ -1019,13 +1023,13 @@ export default function Expenses() {
 
         <div className="space-y-2">
           <label className="text-sm font-semibold text-foreground">
-            Paid by <span className="text-destructive">*</span>
-            {mode === "add" && canManageExpenses && (
+            {isPersonalBudget ? "Funding source" : "Paid by"} <span className="text-destructive">*</span>
+            {mode === "add" && canManageExpenses && !isPersonalBudget && (
               <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>
             )}
           </label>
           <div className="grid grid-cols-2 gap-2">
-            {/* Joint bank — unattributed, no individual payer */}
+            {/* A workspace bank account is unattributed to an individual payer. */}
             {canManageExpenses && (
             <button type="button"
               onClick={() => {
@@ -1042,10 +1046,10 @@ export default function Expenses() {
               }}
               className={`col-span-2 h-12 rounded-xl border text-base font-semibold transition-colors ${form.paidFromBank ? "bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-700" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
             >
-              🏦 Joint bank account
+              🏦 {isPersonalBudget ? "Personal bank account" : "Shared bank account"}
             </button>
             )}
-            {(canManageExpenses ? (members ?? []) : (members ?? []).filter((member) => member.userId === user?.id)).map((m) => {
+            {!isPersonalBudget && (canManageExpenses ? (members ?? []) : (members ?? []).filter((member) => member.userId === user?.id)).map((m) => {
               const name = m.userName?.split(" ")[0] ?? "Member";
               const isMultiEnabled = mode === "add";
               const selected = isMultiEnabled ? form.payerIds.includes(m.userId) : form.paidById === m.userId;
@@ -1101,7 +1105,11 @@ export default function Expenses() {
                 <option value="" disabled>{bankAccounts.length ? "Choose the account used..." : "No bank accounts available"}</option>
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
-              {bankAccounts.length === 0 && <p className="text-xs text-destructive">A budget manager must add a bank account before this expense can be bank-funded.</p>}
+              {bankAccounts.length === 0 && (
+                <p className="text-xs text-destructive">
+                  {isPersonalBudget ? "Add a Personal bank account before using bank funds." : "A budget manager must add a bank account before this expense can be bank-funded."}
+                </p>
+              )}
               <p className="text-xs leading-relaxed text-muted-foreground">
                 This uses money already recorded in the selected account as an opening balance or deposit.
               </p>
@@ -1118,26 +1126,34 @@ export default function Expenses() {
                 <button
                   type="button"
                   className="mt-2 font-semibold underline underline-offset-2"
-                  onClick={() => setAllowMixedFunding(true)}
+                  onClick={() => {
+                    setAllowMixedFunding(true);
+                    if (isPersonalBudget && user?.id) {
+                      form.setPayerIds([user.id]);
+                      form.setPaidById(user.id);
+                    }
+                  }}
                 >
                   Add a direct-payment portion
                 </button>
               )}
               {allowMixedFunding && (
-                <p className="mt-2">Choose one or more people above. Only the bank portion reduces the selected account.</p>
+                <p className="mt-2">
+                  {isPersonalBudget ? "Choose your income source below." : "Choose one or more people above."} Only the bank portion reduces the selected account.
+                </p>
               )}
             </div>
           )}
           {mode === "add" && form.payerIds.length === 0 && !form.paidFromBank && (
             <p className="text-xs text-muted-foreground">
-              {canManageExpenses ? "Choose who paid, or select Joint bank account." : "Choose yourself to record this expense."}
+              {isPersonalBudget ? "Choose an income source below." : canManageExpenses ? "Choose who paid, or select Shared bank account." : "Choose yourself to record this expense."}
             </p>
           )}
           {mode === "edit" && !form.paidById && !form.paidFromBank && (
             <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>
           )}
 
-           {/* Per-source split rows. Joint bank can be combined with members. */}
+           {/* Per-source split rows. A workspace bank account can be combined with direct funding. */}
            {mode === "add" && form.payerIds.length + (form.paidFromBank ? 1 : 0) > 1 && (() => {
             const total = Number(form.amount) || 0;
              const splitTotal = form.payerIds.reduce((s, id) => s + Number(form.payerAmounts[id] || 0), 0)
@@ -1150,7 +1166,7 @@ export default function Expenses() {
                 </p>
                  {form.paidFromBank && (
                    <div className="flex items-center gap-3">
-                     <span className="text-sm font-semibold w-20 shrink-0">Joint bank</span>
+                     <span className="text-sm font-semibold w-20 shrink-0">{isPersonalBudget ? "Personal bank" : "Shared bank"}</span>
                      <input type="number" placeholder="0" min="0" step="1"
                        value={form.payerAmounts.__joint_bank__ ?? ""}
                        onChange={e => form.setPayerAmounts(prev => ({ ...prev, __joint_bank__: e.target.value }))}
@@ -1666,14 +1682,14 @@ export default function Expenses() {
                         <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
                           <span className="px-2 py-0.5 bg-muted rounded text-xs font-medium">{expense.category}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
-                          <span>{expense.paidByName ?? "🏦 Joint bank"}</span>
+                          <span>{expense.paidByName ?? `🏦 ${isPersonalBudget ? "Personal bank" : "Shared bank"}`}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
                           <span>{formatDate(expense.date)}</span>
                         </p>
                         {expense.incomeSplits && expense.incomeSplits.length > 0 && (
                           <p className="text-xs text-muted-foreground mt-1">
                             Funded by {expense.incomeSplits.map((split) =>
-                              `${split.fromBank ? "Joint bank" : split.label}: ${formatKes(split.amount)}`
+                              `${split.fromBank ? (isPersonalBudget ? "Personal bank" : "Shared bank") : split.label}: ${formatKes(split.amount)}`
                             ).join(" · ")}
                           </p>
                         )}

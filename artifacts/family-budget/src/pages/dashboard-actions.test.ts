@@ -30,4 +30,11 @@ describe("dashboard quick actions", () => {
     expect(dashboardSource).toContain("selectedBankAccountId");
     expect(dashboardSource).toContain("Only the bank-deposit portion reduces the selected account.");
   });
+
+  it("does not ask a Personal budget owner who paid", () => {
+    expect(dashboardSource).toContain("const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? \"\");");
+    expect(dashboardSource).toContain('{isSharedWorkspace && fundingMode !== "bank" && <div className="space-y-1.5">');
+    expect(dashboardSource).toContain("max={isSharedWorkspace && !canManageShared ? today : undefined}");
+    expect(dashboardSource).toContain('{isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}');
+  });
 });
