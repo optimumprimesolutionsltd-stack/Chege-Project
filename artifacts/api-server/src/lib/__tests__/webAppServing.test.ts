@@ -267,4 +267,36 @@ describe("attachWebBuild", () => {
     expect(response.status).toBe(308);
     expect(response.headers.location).toBe("/app/");
   });
+
+  it("sends the addresses people actually type to the app", async () => {
+    // /login is not a route in the marketing app, so without a redirect it
+    // reaches the catch-all and renders the not-found page with a 200 — the
+    // visitor sees a broken site and the crawler sees a soft 404.
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir: await buildFixture("Jamvi marketing"),
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    for (const path of ["/login", "/signin", "/sign-in", "/signup", "/sign-up", "/register"]) {
+      const response = await request(app).get(path);
+      expect(response.status, `${path} should redirect`).toBe(302);
+      expect(response.headers.location, `${path} should point at the app`).toBe("/app/");
+    }
+  });
+
+  it("leaves ordinary marketing routes alone", async () => {
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir: await buildFixture("Jamvi marketing"),
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const response = await request(app).get("/pricing");
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain("Jamvi marketing");
+  });
 });
