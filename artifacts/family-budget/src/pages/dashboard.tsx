@@ -1151,7 +1151,7 @@ function ExpenseForm({
               </Button>
             )}
         </div>
-        {isSharedWorkspace && !paidFromBank && <div className="space-y-1.5">
+        {isSharedWorkspace && (!paidFromBank || allowMixedFunding) && <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">
             Paid by <span className="text-destructive">*</span>
           </label>
@@ -1208,7 +1208,7 @@ function ExpenseForm({
           <div>
             <p className="text-sm font-semibold text-foreground">How was this expense funded?</p>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-               Choose the primary source. If it does not cover the full expense, select one more source and Jamvi will fill the remainder there.
+               Choose a source, enter its portion, then keep adding sources until the remaining amount reaches zero.
              </p>
           </div>
            <div className="grid gap-2 sm:grid-cols-2">
@@ -1254,7 +1254,7 @@ function ExpenseForm({
                 <span className="block text-sm font-semibold">{label}</span>
                 <span className="mt-1 block text-xs text-muted-foreground">{detail}</span>
                </button>
-               {mode === "direct" && !paidFromBank && (
+                {mode === "direct" && (!paidFromBank || allowMixedFunding) && (
                   <div className="space-y-2 border-t border-primary/25 bg-primary/5 p-3">
                    <label className="text-sm font-semibold text-foreground">
                      Financed by <span className="text-destructive">*</span>
@@ -1477,6 +1477,26 @@ function ExpenseForm({
                   <span className="flex items-center gap-1.5 font-semibold"><Flag className="h-3.5 w-3.5 fill-current" /> This will take the account below zero.</span>{" "}
                   Projected closing balance: {formatKes(projectedExpenseBankBalance)}. Jamvi will still save the expense.
                 </div>
+              )}
+              {!allowMixedFunding ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-10 border-sky-300 bg-white/70 text-sky-800 hover:bg-white dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
+                  onClick={() => {
+                    setAllowMixedFunding(true);
+                    setRemainderAnchor("bank");
+                  }}
+                  data-testid="quick-expense-add-funding-source"
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Add another funding source
+                </Button>
+              ) : (
+                <p className="text-xs font-medium text-sky-800 dark:text-sky-200">
+                  Choose the payer and income source above. Only the bank portion reduces this account.
+                </p>
               )}
             </div>
           )}

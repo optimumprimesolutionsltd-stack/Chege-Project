@@ -30,7 +30,7 @@ export function getExpenseFundingControlState({
     requiresBankAccount: paidFromBank,
     personalPayersDisabled: bankOnly && !allowMixedFunding,
     showBankOnlyExplanation: bankOnly,
-    showPersonalIncomeSources: !paidFromBank && hasPersonalFunding,
+    showPersonalIncomeSources: hasPersonalFunding && (!paidFromBank || allowMixedFunding),
   };
 }
 

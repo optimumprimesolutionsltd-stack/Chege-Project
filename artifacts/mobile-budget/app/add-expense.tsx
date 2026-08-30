@@ -214,6 +214,7 @@ export default function AddExpenseSheet() {
   const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
   const [newCategoryPriority, setNewCategoryPriority] = useState('3');
   const [newCategoryAddToBudget, setNewCategoryAddToBudget] = useState(false);
+  const [showAdditionalCategoryPicker, setShowAdditionalCategoryPicker] = useState(false);
   const [allowMixedFunding, setAllowMixedFunding] = useState(false);
   const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
   const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
@@ -282,16 +283,12 @@ export default function AddExpenseSheet() {
   // Reset funding selections whenever the payer changes
   useEffect(() => {
     if (isEditMode) return;
-    if (!paidById) return;
-    setPaidFromBank(false);
-    setAllowMixedFunding(false);
-    setSelectedBankAccountId(null);
+    if (!paidById || payerIds.length !== 1) return;
     setSelectedSources([]);
     setSplitAmounts({});
-    setPayerIncomeSourceIds({});
     setNewSourcePayerId(null);
     setNewSourceName('');
-  }, [isEditMode, paidById]);
+  }, [isEditMode, paidById, payerIds.length]);
 
   useEffect(() => {
     if (!canManageShared && user?.id) {
@@ -590,6 +587,7 @@ export default function AddExpenseSheet() {
     setCategory((previous) => previous || name);
     if (name.trim().toLocaleLowerCase() !== 'other') setSaveOtherAsCategory(false);
     setIsCreatingCategory(false);
+    setShowAdditionalCategoryPicker(false);
   }, []);
 
   const updateAllocationAmount = useCallback((allocationCategory: string, value: string) => {
@@ -1205,6 +1203,56 @@ export default function AddExpenseSheet() {
                 </Pressable>
               </View>
             ))}
+            <Pressable
+              onPress={() => setShowAdditionalCategoryPicker((visible) => !visible)}
+              accessibilityRole="button"
+              accessibilityLabel="Add another expense category"
+              testID="add-category-allocation-mobile"
+              style={styles.addSourceLink}
+            >
+              <Feather name="plus-circle" size={15} color={colors.primary} />
+              <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>Add another category</Text>
+            </Pressable>
+            {showAdditionalCategoryPicker && (
+              <View style={{ gap: 8 }}>
+                <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
+                  Choose the next category for this same expense.
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {categories
+                    .filter((item) => !categoryAllocations.some((allocation) => allocation.category === item.name))
+                    .map((item) => (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => chooseCategory(item.name)}
+                        style={[styles.sourceChip, {
+                          backgroundColor: colors.background,
+                          borderColor: colors.border,
+                          borderRadius: colors.radius,
+                        }]}
+                        testID={`add-category-option-${item.id}`}
+                      >
+                        <Feather name={getCategoryIcon(item.name)} size={13} color={colors.primary} />
+                        <Text style={[styles.sourceChipText, { color: colors.foreground }]}>{item.name}</Text>
+                      </Pressable>
+                    ))}
+                  {!categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && (
+                    <Pressable
+                      onPress={() => chooseCategory('Other')}
+                      style={[styles.sourceChip, {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        borderRadius: colors.radius,
+                      }]}
+                      testID="add-category-option-other"
+                    >
+                      <Feather name="more-horizontal" size={13} color={colors.primary} />
+                      <Text style={[styles.sourceChipText, { color: colors.foreground }]}>Other</Text>
+                    </Pressable>
+                  )}
+                </ScrollView>
+              </View>
+            )}
             {(() => {
               const total = categoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0);
               const expenseTotal = Number(amount.replace(/,/g, '')) || 0;
@@ -1610,7 +1658,7 @@ export default function AddExpenseSheet() {
                     <Text style={[styles.hintText, { color: '#38bdf8' }]}>
                       This expense reduces the selected bank-account balance. Direct payer and income-source fields are not needed.
                     </Text>
-                    {isEditMode && !allowMixedFunding && canManageShared ? (
+                    {!allowMixedFunding && canManageShared ? (
                       <Pressable onPress={() => setAllowMixedFunding(true)} style={{ marginTop: 6 }}>
                         <Text style={{ color: '#38bdf8', fontFamily: 'Inter_600SemiBold', textDecorationLine: 'underline' }}>
                           Add another funding source

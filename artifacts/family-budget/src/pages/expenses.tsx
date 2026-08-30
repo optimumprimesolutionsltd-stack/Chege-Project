@@ -1657,14 +1657,14 @@ export default function Expenses() {
               </p>
              </div>
            )}
-          {getExpenseFundingControlState({
-            paidFromBank: form.paidFromBank,
-            hasPersonalFunding: form.payerIds.length > 0,
-            allowMixedFunding,
-          }).showBankOnlyExplanation && (
+          {form.paidFromBank && (
             <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:bg-sky-950 dark:text-sky-300">
-              <p>This expense reduces the selected bank-account balance. Direct payer and income-source fields are not needed.</p>
-              {mode === "edit" && !allowMixedFunding && canManageExpenses && (
+              <p>
+                {allowMixedFunding
+                  ? "Only the bank portion reduces the selected bank-account balance."
+                  : "This expense reduces the selected bank-account balance. Direct payer and income-source fields are not needed."}
+              </p>
+              {!allowMixedFunding && canManageExpenses && (
                 <button
                   type="button"
                   className="mt-2 font-semibold underline underline-offset-2"
@@ -1676,12 +1676,12 @@ export default function Expenses() {
                     }
                   }}
                 >
-                  Add a direct-payment portion
+                  Add another funding source
                 </button>
               )}
               {allowMixedFunding && (
                 <p className="mt-2">
-                  {isPersonalBudget ? "Choose your income source below." : "Choose one or more people above."} Only the bank portion reduces the selected account.
+                  {isPersonalBudget ? "Choose your income source below." : "Choose one or more people above."}
                 </p>
               )}
             </div>

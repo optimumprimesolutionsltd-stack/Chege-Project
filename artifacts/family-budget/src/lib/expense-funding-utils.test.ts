@@ -59,6 +59,12 @@ describe("expense funding controls", () => {
       hasPersonalFunding: false,
       allowMixedFunding: true,
     }).personalPayersDisabled).toBe(false);
+
+    expect(getExpenseFundingControlState({
+      paidFromBank: true,
+      hasPersonalFunding: true,
+      allowMixedFunding: true,
+    }).showPersonalIncomeSources).toBe(true);
   });
 
   it("calculates only a positive whole-KES remainder", () => {

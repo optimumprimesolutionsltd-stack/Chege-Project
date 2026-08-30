@@ -38,17 +38,17 @@ describe("dashboard quick actions", () => {
 
   it("does not ask a Personal budget owner who paid", () => {
     expect(expenseFormSource).toContain("const directPayerId = isSharedWorkspace ? paidBy : (currentUserId ?? \"\");");
-    expect(expenseFormSource).toContain("{isSharedWorkspace && !paidFromBank");
+    expect(expenseFormSource).toContain("{isSharedWorkspace && (!paidFromBank || allowMixedFunding)");
     expect(expenseFormSource).toContain("max={isSharedWorkspace && !canManageShared ? today : undefined}");
     expect(expenseFormSource).toContain('{isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}');
   });
 
   it("keeps the payer selector and named bank accounts available in Shared quick log", () => {
     expect(expenseFormSource).toMatch(
-      /\{isSharedWorkspace && !paidFromBank && <div className="space-y-1\.5">[\s\S]*?Paid by/,
+      /\{isSharedWorkspace && \(!paidFromBank \|\| allowMixedFunding\) && <div className="space-y-1\.5">[\s\S]*?Paid by/,
     );
     expect(expenseFormSource).toContain("Financed by");
-    expect(expenseFormSource).toContain('mode === "direct" && !paidFromBank');
+    expect(expenseFormSource).toContain('mode === "direct" && (!paidFromBank || allowMixedFunding)');
     expect(expenseFormSource).toContain('const bankLabel = "Bank account";');
     expect(expenseFormSource).toContain('bankAccounts.find((account) => account.id === selectedBankAccountId)?.name ?? "Bank account"');
     expect(expenseFormSource).not.toContain('canManageShared && fundingMode !== "bank"');

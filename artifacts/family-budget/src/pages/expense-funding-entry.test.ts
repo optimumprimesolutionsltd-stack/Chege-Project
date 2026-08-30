@@ -51,6 +51,22 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain('testID="expense-funding-remainder"');
     expect(mobileSource).not.toContain("if (previous.length >= 2)");
   });
+
+  it("keeps mixed bank and personal funding controls available while creating an expense", () => {
+    expect(expensesSource).toContain("{form.paidFromBank && (");
+    expect(expensesSource).toContain("!allowMixedFunding && canManageExpenses");
+    expect(expensesSource).toContain("Add another funding source");
+    expect(dashboardSource).toContain('data-testid="quick-expense-add-funding-source"');
+    expect(dashboardSource).toContain("(!paidFromBank || allowMixedFunding)");
+    expect(mobileSource).toContain("!allowMixedFunding && canManageShared");
+    expect(mobileSource).not.toContain("isEditMode && !allowMixedFunding && canManageShared");
+  });
+
+  it("shows an explicit mobile add-category action", () => {
+    expect(mobileSource).toContain('testID="add-category-allocation-mobile"');
+    expect(mobileSource).toContain("Add another category");
+    expect(mobileSource).toContain("showAdditionalCategoryPicker");
+  });
 });
 
 describe("inline expense bank-account creation", () => {
