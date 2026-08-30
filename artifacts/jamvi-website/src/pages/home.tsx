@@ -29,9 +29,9 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
       <section className="relative pt-20 pb-32 overflow-hidden bg-white">
-        <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,var(--color-muted),transparent_50%)] opacity-70"></div>
-        <div className="absolute top-20 -left-20 w-72 h-72 bg-secondary/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-10 right-10 w-96 h-96 bg-accent/10 rounded-full blur-3xl"></div>
+        <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,var(--color-muted),transparent_50%)] opacity-50"></div>
+        <div className="absolute top-20 -left-20 w-64 h-64 bg-secondary/10 rounded-full blur-2xl opacity-60"></div>
+        <div className="absolute bottom-10 right-10 w-80 h-80 bg-accent/10 rounded-full blur-2xl opacity-60"></div>
         
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 items-center">
@@ -66,81 +66,46 @@ export default function Home() {
             </motion.div>
             
             <motion.div 
-              initial={shouldReduceMotion ? false : { opacity: 0.94, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={shouldReduceMotion ? false : { opacity: 0.94, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: shouldReduceMotion ? 0 : 0.45, delay: shouldReduceMotion ? 0 : 0.1 }}
               className="relative lg:h-[600px] flex items-center justify-center"
             >
               {/* Abstract decorative graphic representing the "mat" (Jamvi) and connection */}
-              {/* Taller than a square on purpose: the card is absolutely positioned
-                  inside this box, so the box is what gives it height, and the
-                  progress bar and member rows do not fit a square. */}
-              <div className="relative w-full max-w-md aspect-[4/5]">
+              <div className="relative w-full max-w-md aspect-square">
                 <div className="absolute inset-0 bg-primary rounded-[3rem] rotate-6 opacity-5 shadow-2xl"></div>
                 <div className="absolute inset-0 bg-secondary rounded-[3rem] -rotate-3 opacity-10 shadow-xl"></div>
                 <div className="absolute inset-0 bg-white rounded-[2.5rem] border border-border shadow-2xl overflow-hidden flex flex-col p-6">
                   
-                  {/*
-                    Deliberately not a balance. A large figure above a list of
-                    credits and debits is the visual grammar of a banking app,
-                    and it was reading as money Jamvi holds — which it never
-                    does. Framed as progress against a target, the same numbers
-                    say "we are keeping count" instead, and show the thing a
-                    treasurer actually opens the app for: who has paid.
-                  */}
-                  <div className="flex items-start justify-between mb-6">
+                  {/* Mockup UI representation */}
+                  <div className="flex items-center justify-between mb-8">
                     <div>
-                      <div className="text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">
-                        Kilimani Chama · September
-                      </div>
-                      <div className="text-3xl font-serif font-bold text-primary leading-none">
-                        KES 45,000
-                      </div>
-                      <div className="text-sm font-medium text-foreground/60 mt-1">
-                        recorded of KES 60,000 expected
-                      </div>
+                      <div className="text-sm font-bold text-foreground/50 uppercase tracking-wider mb-1">CHAMA FUND</div>
+                      <div className="text-3xl font-serif font-bold text-primary">KES 45,000</div>
                     </div>
-                    <div className="w-12 h-12 shrink-0 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground">
+                    <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground">
                       <Users className="w-6 h-6" />
                     </div>
                   </div>
-
-                  <div className="mb-6">
-                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                      <div className="h-full w-3/4 rounded-full bg-secondary"></div>
-                    </div>
-                    <div className="mt-2 text-xs font-bold text-foreground/60">
-                      9 of 12 members have paid
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
+                  
+                  <div className="space-y-4">
                     {[
-                      { by: "Nanjala", amount: "KES 5,000", paid: true, color: "bg-secondary" },
-                      { by: "Ochieng", amount: "KES 5,000", paid: true, color: "bg-primary" },
-                      { by: "Wanjiru", amount: "KES 5,000", paid: false, color: "bg-accent" },
+                      { name: "Monthly Contribution", amount: "+ KES 5,000", by: "Nanjala", color: "bg-secondary" },
+                      { name: "Venue Booking", amount: "- KES 1,500", by: "Shared", color: "bg-accent" },
+                      { name: "Emergency Fund", amount: "+ KES 2,000", by: "Ochieng", color: "bg-primary" },
                     ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-muted/50">
+                      <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-muted/50">
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center text-white text-sm font-bold`}>
                             {item.by.charAt(0)}
                           </div>
                           <div>
-                            <div className="font-bold text-foreground">{item.by}</div>
-                            <div className="text-xs text-foreground/60 font-medium">
-                              {item.paid ? "Recorded 3 Sep" : "Not yet recorded"}
-                            </div>
+                            <div className="font-bold text-foreground">{item.name}</div>
+                            <div className="text-xs text-foreground/60 font-medium">{item.by}</div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-bold ${item.paid ? "text-foreground" : "text-foreground/40"}`}>
-                            {item.amount}
-                          </span>
-                          {item.paid ? (
-                            <CheckCircle2 className="w-5 h-5 text-secondary" />
-                          ) : (
-                            <span className="w-5 h-5 rounded-full border-2 border-foreground/20 inline-block"></span>
-                          )}
+                        <div className={`font-bold ${item.amount.startsWith('+') ? 'text-secondary' : 'text-primary'}`}>
+                          {item.amount}
                         </div>
                       </div>
                     ))}
@@ -148,7 +113,7 @@ export default function Home() {
 
                   <div className="mt-auto pt-6">
                     <div className="h-12 w-full bg-primary rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md">
-                      Record a contribution
+                      Add Contribution
                     </div>
                   </div>
 
