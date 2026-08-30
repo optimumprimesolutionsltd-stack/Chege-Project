@@ -1,5 +1,5 @@
 import { useSeo } from "@/hooks/use-seo";
-import { LegalPage, Todo } from "@/components/layout/LegalPage";
+import { LegalPage } from "@/components/layout/LegalPage";
 import { JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 
 export default function Terms() {
@@ -10,13 +10,12 @@ export default function Terms() {
   });
 
   return (
-    <LegalPage title="Terms of Service" effective={<Todo>the date you publish this</Todo>}>
+    <LegalPage title="Terms of Service" effective="30 August 2026">
       <p>
         These terms are an agreement between you and{" "}
-        <strong>Optimum Prime Solutions Ltd</strong>, a company registered in Kenya
-        (registration number <Todo>company registration number</Todo>, registered
-        office <Todo>registered office address</Todo>), which operates Jamvi. By
-        creating an account you accept them.
+        <strong>Optimum Prime Solutions Ltd</strong>, a company registered in
+        Kenya and based in Nairobi, which operates Jamvi. By creating an account
+        you accept them.
       </p>
 
       <h2>1. What Jamvi is</h2>
@@ -97,9 +96,9 @@ export default function Terms() {
         nobody is removed because of a rule introduced after they joined.
       </p>
       <p>
-        Paid plan prices, billing cycle, and refund terms are{" "}
-        <Todo>pricing, billing cycle, and refund policy</Todo>. We will give
-        reasonable notice before changing the price of a plan you are on.
+        Current prices and what each plan includes are shown on our{" "}
+        <a href="/pricing">Pricing page</a>. We will give reasonable notice
+        before changing the price of a plan you are already on.
       </p>
 
       <h2>7. Your records belong to you</h2>
@@ -134,9 +133,10 @@ export default function Terms() {
         members of a group.
       </p>
       <p>
-        Nothing here limits liability that cannot lawfully be limited. Where our
-        liability can be limited, it is capped at{" "}
-        <Todo>liability cap — commonly the fees paid in the preceding 12 months</Todo>.
+        Nothing here limits liability that cannot lawfully be limited — including
+        liability for death or personal injury caused by negligence, or for
+        fraud. Where our liability can be limited, it is capped at the total
+        amount you paid us in the twelve months before the claim arose.
       </p>
 
       <h2>10. Suspension and ending your account</h2>

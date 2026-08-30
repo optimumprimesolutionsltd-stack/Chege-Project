@@ -9,21 +9,6 @@ import type { ReactNode } from "react";
  * than styled like the marketing pages.
  */
 
-/**
- * A decision only the company can make, rendered so it is impossible to ship
- * by accident. Amber, in the flow of the text, saying what is needed.
- *
- * Deliberately loud: an unnoticed placeholder in a legal document is worse
- * than a missing document, because it looks settled when it is not.
- */
-export function Todo({ children }: { children: ReactNode }) {
-  return (
-    <mark className="bg-amber-100 text-amber-900 border border-amber-300 rounded px-1.5 py-0.5 font-medium not-italic">
-      [ TO CONFIRM: {children} ]
-    </mark>
-  );
-}
-
 export function LegalPage({
   title,
   effective,

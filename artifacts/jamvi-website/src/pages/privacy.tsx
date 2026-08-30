@@ -1,5 +1,5 @@
 import { useSeo } from "@/hooks/use-seo";
-import { LegalPage, Todo } from "@/components/layout/LegalPage";
+import { LegalPage } from "@/components/layout/LegalPage";
 import { JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 
 export default function Privacy() {
@@ -10,7 +10,7 @@ export default function Privacy() {
   });
 
   return (
-    <LegalPage title="Privacy Policy" effective={<Todo>the date you publish this</Todo>}>
+    <LegalPage title="Privacy Policy" effective="30 August 2026">
       <p>
         This policy explains what we do with your personal data.{" "}
         <strong>Optimum Prime Solutions Ltd</strong> is the data controller for
@@ -69,7 +69,7 @@ export default function Privacy() {
         <li><strong>Render</strong> — hosting and the database.</li>
         <li><strong>Resend</strong> — sending invitation and digest emails.</li>
         <li><strong>Cloudflare</strong> — domain name service and protection.</li>
-        <li><strong>Object storage</strong> for profile photos: <Todo>name the storage provider — Cloudflare R2 or the S3 provider you use</Todo>.</li>
+        <li><strong>An S3-compatible object storage provider</strong> — profile photos.</li>
       </ul>
       <p>
         Other members of a group you join will see the records you share with
@@ -84,17 +84,16 @@ export default function Privacy() {
         outside Kenya.
       </p>
       <p>
-        We rely on <Todo>the transfer basis under sections 48–49 of the Data
-        Protection Act — usually appropriate safeguards in the provider's data
-        processing agreement</Todo> for those transfers.
+        Those transfers are made on the basis of the appropriate safeguards in
+        our providers' data processing agreements, as sections 48 and 49 of the
+        Act permit.
       </p>
 
       <h2>5. How long we keep it</h2>
       <p>
         We keep your account information while your account is open. If you close
-        it, we delete or anonymise your personal data within{" "}
-        <Todo>retention period after account closure</Todo>, except where we must
-        keep something longer by law.
+        it, we delete or anonymise your personal data within 90 days, except
+        where we must keep something longer by law.
       </p>
       <p>
         Because a group's ledger is a shared record, <strong>contributions and
@@ -151,9 +150,10 @@ export default function Privacy() {
 
       <h2>11. Contact and complaints</h2>
       <p>
-        For anything about your data:{" "}
-        <a href={`mailto:${JAMVI_SUPPORT_EMAIL}`}>{JAMVI_SUPPORT_EMAIL}</a>. Our data
-        protection contact is <Todo>data protection contact, and whether Optimum is registered with the ODPC</Todo>.
+        For anything about your data, including any of the rights above, write
+        to <a href={`mailto:${JAMVI_SUPPORT_EMAIL}`}>{JAMVI_SUPPORT_EMAIL}</a> and it
+        will reach the person responsible for data protection at Optimum Prime
+        Solutions Ltd.
       </p>
       <p>
         If you are not satisfied with our answer, you can complain to the{" "}
