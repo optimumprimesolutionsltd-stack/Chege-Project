@@ -32,6 +32,22 @@
 > and commit the generated `.sql`. That file is the only thing that can carry
 > the change to production, where a human applies it with `migrate`.
 
+> **Two agents work on this repository. Stay on your side.**
+>
+> Claude Code works on the same `main` branch from a separate machine. It has
+> no persistent workspace, pulls before every edit, and can reach production —
+> Render, Cloudflare, the database — which this workspace cannot. It cannot run
+> the app, because the native CSS and bundler binaries are stripped on its
+> platform.
+>
+> You build features: screens, the API, the database, anything that needs the
+> app actually running. It handles infrastructure, the marketing website,
+> deployment, tests and production access.
+>
+> When work must cross that line, say so in the commit message rather than
+> assuming the other side will notice. Most reverts here have come from one of
+> us editing a file the other had just changed.
+
 A household budget tracker for families, couples, or individuals. Any number of household members can sign in, track expenses, record contributions, set savings goals, and monitor spending — all together in one place.
 
 ## Run & Operate
