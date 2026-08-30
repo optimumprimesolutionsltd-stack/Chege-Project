@@ -11,6 +11,27 @@
 > Pull first, and if a push is rejected, pull and rebase. Never force-push
 > `main`.
 
+> **Never run `drizzle-kit push` or `migrate` against the production database.**
+>
+> `push` diffs your schema against a database and changes it immediately,
+> writing no file and no journal entry. Someone pushed at production once: the
+> schema moved to 0010 while the journal stayed at 0004, so every later
+> migration counted as pending and `migrate` died trying to create a table that
+> already existed — silently, because drizzle-kit prints nothing when a
+> migration fails.
+>
+> Worse, `push` infers intent from a diff. Rename a column in the schema and it
+> sees one column gone and one arrived; it can drop the old one and take every
+> value with it.
+>
+> In this workspace, `push` against the development database is fine and fast.
+> But after any schema change also run:
+>
+>     pnpm --filter @workspace/db run generate
+>
+> and commit the generated `.sql`. That file is the only thing that can carry
+> the change to production, where a human applies it with `migrate`.
+
 A household budget tracker for families, couples, or individuals. Any number of household members can sign in, track expenses, record contributions, set savings goals, and monitor spending — all together in one place.
 
 ## Run & Operate
