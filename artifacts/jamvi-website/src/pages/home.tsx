@@ -77,35 +77,67 @@ export default function Home() {
                 <div className="absolute inset-0 bg-secondary rounded-[3rem] -rotate-3 opacity-10 shadow-xl"></div>
                 <div className="absolute inset-0 bg-white rounded-[2.5rem] border border-border shadow-2xl overflow-hidden flex flex-col p-6">
                   
-                  {/* Mockup UI representation */}
-                  <div className="flex items-center justify-between mb-8">
+                  {/*
+                    Deliberately not a balance. A large figure above a list of
+                    credits and debits is the visual grammar of a banking app,
+                    and it was reading as money Jamvi holds — which it never
+                    does. Framed as progress against a target, the same numbers
+                    say "we are keeping count" instead, and show the thing a
+                    treasurer actually opens the app for: who has paid.
+                  */}
+                  <div className="flex items-start justify-between mb-6">
                     <div>
-                      <div className="text-sm font-bold text-foreground/50 uppercase tracking-wider mb-1">CHAMA FUND</div>
-                      <div className="text-3xl font-serif font-bold text-primary">KES 45,000</div>
+                      <div className="text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">
+                        Kilimani Chama · September
+                      </div>
+                      <div className="text-3xl font-serif font-bold text-primary leading-none">
+                        KES 45,000
+                      </div>
+                      <div className="text-sm font-medium text-foreground/60 mt-1">
+                        recorded of KES 60,000 expected
+                      </div>
                     </div>
-                    <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground">
+                    <div className="w-12 h-12 shrink-0 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground">
                       <Users className="w-6 h-6" />
                     </div>
                   </div>
-                  
-                  <div className="space-y-4">
+
+                  <div className="mb-6">
+                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                      <div className="h-full w-3/4 rounded-full bg-secondary"></div>
+                    </div>
+                    <div className="mt-2 text-xs font-bold text-foreground/60">
+                      9 of 12 members have paid
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
                     {[
-                      { name: "Monthly Contribution", amount: "+ KES 5,000", by: "Nanjala", color: "bg-secondary" },
-                      { name: "Venue Booking", amount: "- KES 1,500", by: "Shared", color: "bg-accent" },
-                      { name: "Emergency Fund", amount: "+ KES 2,000", by: "Ochieng", color: "bg-primary" },
+                      { by: "Nanjala", amount: "KES 5,000", paid: true, color: "bg-secondary" },
+                      { by: "Ochieng", amount: "KES 5,000", paid: true, color: "bg-primary" },
+                      { by: "Wanjiru", amount: "KES 5,000", paid: false, color: "bg-accent" },
                     ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-muted/50">
+                      <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-muted/50">
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center text-white text-sm font-bold`}>
                             {item.by.charAt(0)}
                           </div>
                           <div>
-                            <div className="font-bold text-foreground">{item.name}</div>
-                            <div className="text-xs text-foreground/60 font-medium">{item.by}</div>
+                            <div className="font-bold text-foreground">{item.by}</div>
+                            <div className="text-xs text-foreground/60 font-medium">
+                              {item.paid ? "Recorded 3 Sep" : "Not yet recorded"}
+                            </div>
                           </div>
                         </div>
-                        <div className={`font-bold ${item.amount.startsWith('+') ? 'text-secondary' : 'text-primary'}`}>
-                          {item.amount}
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold ${item.paid ? "text-foreground" : "text-foreground/40"}`}>
+                            {item.amount}
+                          </span>
+                          {item.paid ? (
+                            <CheckCircle2 className="w-5 h-5 text-secondary" />
+                          ) : (
+                            <span className="w-5 h-5 rounded-full border-2 border-foreground/20 inline-block"></span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -113,7 +145,7 @@ export default function Home() {
 
                   <div className="mt-auto pt-6">
                     <div className="h-12 w-full bg-primary rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md">
-                      Add Contribution
+                      Record a contribution
                     </div>
                   </div>
 
