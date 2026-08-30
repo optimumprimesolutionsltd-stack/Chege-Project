@@ -72,7 +72,10 @@ export default function Home() {
               className="relative lg:h-[600px] flex items-center justify-center"
             >
               {/* Abstract decorative graphic representing the "mat" (Jamvi) and connection */}
-              <div className="relative w-full max-w-md aspect-square">
+              {/* Taller than a square on purpose: the card is absolutely positioned
+                  inside this box, so the box is what gives it height, and the
+                  progress bar and member rows do not fit a square. */}
+              <div className="relative w-full max-w-md aspect-[4/5]">
                 <div className="absolute inset-0 bg-primary rounded-[3rem] rotate-6 opacity-5 shadow-2xl"></div>
                 <div className="absolute inset-0 bg-secondary rounded-[3rem] -rotate-3 opacity-10 shadow-xl"></div>
                 <div className="absolute inset-0 bg-white rounded-[2.5rem] border border-border shadow-2xl overflow-hidden flex flex-col p-6">
