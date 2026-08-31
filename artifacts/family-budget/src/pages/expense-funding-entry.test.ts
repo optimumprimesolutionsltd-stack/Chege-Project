@@ -113,6 +113,8 @@ describe("expense funding amount entry", () => {
   it("requires category amounts to be entered manually on every expense form", () => {
     expect(dashboardSource).toContain("KES amount covered by the primary category");
     expect(dashboardSource).toContain('data-testid="primary-category-allocation-dashboard"');
+    expect(dashboardSource).toContain('className="flex flex-col gap-2 sm:flex-row sm:items-center"');
+    expect(dashboardSource).toContain('className="h-11 w-full border-primary/45 bg-card font-semibold"');
     expect(dashboardSource).toContain("const isPrimaryOtherCategory = categoryAllocations[0]?.category.trim().toLocaleLowerCase() === \"other\";");
     expect(dashboardSource).not.toContain("{category.trim() && categoryAllocations.length === 1 && (\n                <div");
     expect(dashboardSource).toContain("Need to split this expense? Add another category and enter its share.");
@@ -129,6 +131,8 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("const setAmount = (value: string) => setAmountValue(value);");
     expect(expensesSource).toContain("KES amount covered by the primary category");
     expect(expensesSource).toContain('data-testid={`primary-category-allocation-${mode}`}');
+    expect(expensesSource).toContain('className="flex flex-col gap-2 sm:flex-row sm:items-center"');
+    expect(expensesSource).toContain('className="h-12 w-full border-primary/45 bg-card font-semibold"');
     expect(expensesSource).toContain("Need to split this expense? Add another category and enter its share.");
     expect(expensesSource).toContain('disabled={!form.category.trim()}');
     expect(expensesSource).toContain("Choose a category first, then add another category");
@@ -180,6 +184,10 @@ describe("expense funding amount entry", () => {
       expect(source).toContain("Uncategorized");
       expect(source).toContain("outside any budget category");
     }
+    expect(dashboardSource).toContain('<option value="">Select a category</option>');
+    expect(expensesSource).toContain('<option value="">Select a category</option>');
+    expect(dashboardSource).not.toContain('<option value="">No category</option>');
+    expect(expensesSource).not.toContain('<option value="">No category</option>');
   });
 });
 

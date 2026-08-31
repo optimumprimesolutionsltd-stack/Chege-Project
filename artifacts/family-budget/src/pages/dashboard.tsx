@@ -1071,7 +1071,8 @@ function ExpenseForm({
                  Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
              </p>
            </div>
-           <div className="space-y-2">
+            <div className="space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
              <select
                 value={category}
                onChange={e => {
@@ -1079,14 +1080,35 @@ function ExpenseForm({
                   setCategoryAllocations(current => current.map((allocation, index) => index === 0 ? { ...allocation, category: e.target.value } : allocation));
                  if (e.target.value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
                }}
-               className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-11 w-full flex-1 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
              >
-               <option value="">No category</option>
+                <option value="">Select a category</option>
                {categories
                  .filter(c => c.name.trim().toLocaleLowerCase() !== "other")
                  .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 <option value="Other">One-off spending</option>
-            </select>
+              </select>
+              {category.trim() && (
+                <div data-testid="primary-category-allocation-dashboard" className="sm:w-48">
+                  <label htmlFor="dashboard-primary-category-amount" className="sr-only">
+                    {isPrimaryOtherCategory ? "One-off spending amount (KES)" : `${category} amount (KES)`}
+                  </label>
+                  <Input
+                    id="dashboard-primary-category-amount"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={categoryAllocations[0]?.amount ?? ""}
+                    onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
+                    aria-label={isPrimaryOtherCategory ? "KES amount for one-off spending" : "KES amount covered by the primary category"}
+                    aria-required="true"
+                    required
+                    placeholder="Enter KES amount"
+                    className="h-11 w-full border-primary/45 bg-card font-semibold"
+                  />
+                </div>
+              )}
+              </div>
              <Button
                type="button"
                variant={isOtherCategory ? "default" : "outline"}
@@ -1112,25 +1134,6 @@ function ExpenseForm({
              <p className="text-xs leading-relaxed text-muted-foreground">
                Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
              </p>
-             {category.trim() && (
-                <div data-testid="primary-category-allocation-dashboard" className="flex flex-col gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
-                 <label className="text-sm font-semibold text-foreground">
-                    {isPrimaryOtherCategory ? "One-off spending amount (KES)" : `${category} amount (KES)`}
-                 </label>
-                 <Input
-                   type="number"
-                   min="1"
-                   step="1"
-                   value={categoryAllocations[0]?.amount ?? ""}
-                   onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
-                    aria-label={isPrimaryOtherCategory ? "KES amount for one-off spending" : "KES amount covered by the primary category"}
-                   aria-required="true"
-                   required
-                   placeholder="Enter KES amount"
-                   className="h-11 w-full border-primary/45 bg-card font-semibold sm:w-44"
-                 />
-               </div>
-             )}
           </div>
            {categoryAllocations.length === 1 && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
