@@ -2,7 +2,6 @@ import { Router } from "express";
 import {
   db,
   bankAccountsTable,
-  budgetCategoriesTable,
   groupMembershipsTable,
   groupsTable,
 } from "@workspace/db";
@@ -21,7 +20,6 @@ import {
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
 import { resolvePhotoUrl } from "../lib/photoStorage";
-import { categoryPackRows } from "../lib/categoryPacks";
 
 const router = Router();
 
@@ -115,7 +113,6 @@ router.post("/groups", async (req, res): Promise<void> => {
       name: "Bank account",
       openingBalance: 0,
     });
-    await tx.insert(budgetCategoriesTable).values(categoryPackRows(created.id, created.kind));
     return created;
   });
 

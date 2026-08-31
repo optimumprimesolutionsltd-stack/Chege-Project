@@ -18,32 +18,6 @@ function isReservedBudgetCategoryName(name: string) {
   return name.trim().toLocaleLowerCase() === UNCATEGORIZED_CATEGORY.toLocaleLowerCase();
 }
 
-/**
- * A budget without any categories leaves its expense picker unusable. Seed a
- * small, editable starter set once so both new and older empty workspaces can
- * record their first expense immediately.
- */
-async function seedStarterCategoriesIfMissing(groupId: number): Promise<void> {
-  await db.transaction(async (tx) => {
-    const [existingCategory] = await tx
-      .select({ id: budgetCategoriesTable.id })
-      .from(budgetCategoriesTable)
-      .where(eq(budgetCategoriesTable.groupId, groupId))
-      .limit(1);
-
-    if (existingCategory) return;
-
-    const [group] = await tx
-      .select({ kind: groupsTable.kind })
-      .from(groupsTable)
-      .where(eq(groupsTable.id, groupId))
-      .limit(1);
-    if (!group) return;
-
-    await tx.insert(budgetCategoriesTable).values(categoryPackRows(groupId, group.kind)).onConflictDoNothing();
-  });
-}
-
 function normalizedCategoryName(name: string): string {
   return name.trim().toLocaleLowerCase("en-US");
 }
@@ -77,7 +51,6 @@ async function getCategoryRecommendationPreview(groupId: number) {
 router.get("/budget-categories", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  await seedStarterCategoriesIfMissing(groupId);
   const categories = await db
     .select()
     .from(budgetCategoriesTable)
