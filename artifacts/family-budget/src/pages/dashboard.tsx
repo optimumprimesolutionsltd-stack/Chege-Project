@@ -527,6 +527,7 @@ function ExpenseForm({
   const [bankPortion, setBankPortion] = useState("");
   const [directPortion, setDirectPortion] = useState("");
   const [additionalDirectPortions, setAdditionalDirectPortions] = useState<Array<{ sourceId: number; amount: string }>>([]);
+  const [remainderAnchor, setRemainderAnchor] = useState<"direct" | "bank" | null>(null);
   const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
   const [newBankAccountName, setNewBankAccountName] = useState("");
   const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
@@ -689,6 +690,24 @@ function ExpenseForm({
     const url = `${appPath("/budget", import.meta.env.BASE_URL)}?recurringSetup=1&returnTo=dashboard&categorySetup=${makeRecurring ? "recurring" : "other"}&category=${encodeURIComponent(recurringCategory)}&expenseAmount=${encodeURIComponent(amount)}`;
     window.location.assign(url);
   };
+
+  useEffect(() => {
+    if (!paidFromBank || !allowMixedFunding) return;
+    const total = Number(amount);
+    const direct = Number(directPortion);
+    const bank = Number(bankPortion);
+    if (!Number.isInteger(total) || total <= 0) return;
+
+    if (remainderAnchor === "direct" && Number.isInteger(direct) && direct > 0) {
+      const remainder = getFundingRemainder(total, direct);
+      setBankPortion(remainder > 0 ? String(remainder) : "");
+      return;
+    }
+    if (remainderAnchor === "bank" && Number.isInteger(bank) && bank > 0) {
+      const remainder = getFundingRemainder(total, bank);
+      setDirectPortion(remainder > 0 ? String(remainder) : "");
+    }
+  }, [allowMixedFunding, amount, bankPortion, directPortion, paidFromBank, remainderAnchor]);
 
   const handleAddBankAccount = async () => {
     const name = newBankAccountName.trim();
@@ -1317,6 +1336,7 @@ function ExpenseForm({
                     setAllowMixedFunding(false);
                     setSelectedBankAccountId(null);
                     setBankPortion("");
+                    setRemainderAnchor(null);
                    } else if (mode === "bank") {
                      const directTotal = (Number(directPortion) || 0)
                        + additionalDirectPortions.reduce((sum, portion) => sum + (Number(portion.amount) || 0), 0);
@@ -1324,6 +1344,7 @@ function ExpenseForm({
                      const remaining = getFundingRemainder(Number(amount), directTotal);
                      setPaidFromBank(true);
                      setAllowMixedFunding(hasDirectSelection);
+                     setRemainderAnchor(hasDirectSelection && directTotal > 0 ? "direct" : null);
                      if (hasDirectSelection) {
                         setBankPortion(directTotal > 0 ? String(remaining) : amount);
                      } else {
@@ -1364,6 +1385,7 @@ function ExpenseForm({
                           setIncomeSourceId(e.target.value ? Number(e.target.value) : null);
                           setDirectPortion("");
                           setAdditionalDirectPortions([]);
+                          setRemainderAnchor(null);
                         }}
                        className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                      >
@@ -1382,7 +1404,10 @@ function ExpenseForm({
                             min="1"
                             step="1"
                             value={directPortion}
-                             onChange={(event) => setDirectPortion(event.target.value)}
+                             onChange={(event) => {
+                               setRemainderAnchor("direct");
+                               setDirectPortion(event.target.value);
+                             }}
                             placeholder="KES 0"
                             className="h-11 bg-card"
                           />
@@ -1444,6 +1469,7 @@ function ExpenseForm({
                                     const sourceId = Number(event.target.value);
                                     if (!sourceId) return;
                                     setAdditionalDirectPortions((previous) => [...previous, { sourceId, amount: String(difference) }]);
+                                    setRemainderAnchor("direct");
                                   }}
                                   className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
                                 >
@@ -1549,7 +1575,10 @@ function ExpenseForm({
                     min="1"
                     step="1"
                     value={bankPortion}
-                    onChange={(event) => setBankPortion(event.target.value)}
+                    onChange={(event) => {
+                      setRemainderAnchor("bank");
+                      setBankPortion(event.target.value);
+                    }}
                     placeholder="KES 0"
                     className="h-11 bg-card"
                   />

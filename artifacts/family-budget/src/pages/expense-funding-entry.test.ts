@@ -21,8 +21,10 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain('data-testid="quick-expense-funding-remainder"');
     expect(dashboardSource).toContain("additionalDirectPortions");
     expect(dashboardSource).toContain('title: remaining > 0 ? "Choose another funding source"');
-    expect(dashboardSource).not.toContain("setBankPortion(remainder");
-    expect(dashboardSource).not.toContain("setDirectPortion(remainder");
+    expect(dashboardSource).toContain("setBankPortion(remainder");
+    expect(dashboardSource).toContain("setDirectPortion(remainder");
+    expect(dashboardSource).toContain('setRemainderAnchor("direct")');
+    expect(dashboardSource).toContain('setRemainderAnchor("bank")');
     expect(dashboardSource).not.toContain('["mixed", "Both"');
   });
 
