@@ -10,6 +10,7 @@ import {
 import { db } from "@workspace/db";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { parseBudgetSummaryPeriod } from "../lib/ai-budget-summary";
+import { generateAskJamviResponse, type AskJamviSummary } from "../lib/ask-jamvi-llm";
 
 const router = Router();
 
@@ -89,6 +90,32 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
       workspaceScoped: true,
     },
   });
+});
+
+router.post("/ai/ask", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const question = typeof req.body?.question === "string" ? req.body.question.trim() : "";
+  if (!question || question.length > 500) {
+    res.status(400).json({ error: "Ask a question between 1 and 500 characters." });
+    return;
+  }
+  const { month, year } = parseBudgetSummaryPeriod(req.body ?? {});
+  try {
+    const summaryUrl = `${req.protocol}://${req.get("host")}/api/ai/budget-summary?month=${month}&year=${year}`;
+    const summaryResponse = await fetch(summaryUrl, {
+      headers: { cookie: req.headers.cookie ?? "" },
+    });
+    if (!summaryResponse.ok) {
+      res.status(summaryResponse.status).json({ error: "Could not load the selected budget summary." });
+      return;
+    }
+    const summary = await summaryResponse.json() as AskJamviSummary;
+    const answer = await generateAskJamviResponse(question, summary);
+    res.json({ answer, readOnly: true, workspaceScoped: true, month, year });
+  } catch (error) {
+    res.status(503).json({ error: error instanceof Error ? error.message : "Ask Jamvi is temporarily unavailable." });
+  }
 });
 
 export default router;
