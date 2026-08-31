@@ -56,6 +56,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location, navigate]);
 
   const isSharedWorkspace = group?.isPrivate === false;
+  const workspaceContextLabel = group ? (isSharedWorkspace ? 'Shared budget' : 'Personal budget') : 'Select a budget';
   const activeWorkspaceRole = group?.role ?? (group?.isPrivate ? 'owner' : 'member');
   const activeWorkspaceRoleLabel = activeWorkspaceRole === 'owner'
     ? 'Owner'
@@ -103,7 +104,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="mt-2 min-w-0">
             <span className="block text-[11px] font-medium text-sidebar-foreground/70">Personal & shared money, together</span>
-            <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
+            <span className="mt-1 flex items-center gap-1.5 truncate text-xs text-sidebar-foreground/60"><span className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', isSharedWorkspace ? 'bg-[#087F8C]' : 'bg-sidebar-primary')} aria-hidden="true" />{group ? workspaceLabel(group) : 'My budget'}</span>
+            <span className="mt-1 inline-flex rounded-full border border-sidebar-border bg-sidebar-accent/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/80">{workspaceContextLabel}</span>
           </div>
         </div>
         {location !== '/' && (
@@ -154,6 +156,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0">
             <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
+            <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.1em] text-sidebar-primary">{workspaceContextLabel}</span>
           </div>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-sidebar-foreground">
