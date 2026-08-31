@@ -94,6 +94,7 @@ export function BudgetChooser({
   const createSharedGroup = useCreateSharedGroup();
   const queryClient = useQueryClient();
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [duplicateCategoryNotice, setDuplicateCategoryNotice] = useState<string | null>(null);
   const [creationError, setCreationError] = useState<string | null>(null);
   const userId = user.id ?? "";
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
@@ -153,7 +154,19 @@ export function BudgetChooser({
   const chooseWorkspace = async (workspace: Workspace) => {
     if (selectWorkspace.isPending) return;
     setSelectionError(null);
+    setDuplicateCategoryNotice(null);
     try {
+      if (!workspace.isPrivate && selectedCategories.length > 0) {
+        const response = await fetch(`/api/onboarding/duplicate-categories?groupId=${workspace.id}`, { credentials: "include" });
+        if (response.ok) {
+          const result = await response.json() as { duplicates?: string[] };
+          const repeated = (result.duplicates ?? []).filter((name) => selectedCategories.includes(name));
+          if (repeated.length > 0) {
+            const proceed = window.confirm(`Some selected categories already exist in your Personal budget: ${repeated.join(", ")}. Personal and Shared budgets keep separate category records, so these will be created separately for group spending. Continue?`);
+            if (!proceed) return;
+          }
+        }
+      }
       // The only ID sent comes from the server-returned workspace list.
       await selectWorkspace.mutateAsync({ data: { groupId: workspace.id } });
       await applyOnboardingPreferences(workspace);
@@ -390,6 +403,7 @@ export function BudgetChooser({
 
           <div className="p-6 sm:p-10">
             {selectionError ? <p className="mb-6 rounded-xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" role="alert">{selectionError}</p> : null}
+            {duplicateCategoryNotice ? <p className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-foreground" role="status"><span className="font-semibold">Shared budget notice:</span> {duplicateCategoryNotice}</p> : null}
             {isLoading ? <div className="h-36 animate-pulse rounded-2xl bg-muted" role="status" aria-label="Loading budgets" /> : workspaceLoadFailed ? (
               <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-6 text-center" role="alert">
                 <h2 className="font-display text-xl font-bold text-foreground">Your budgets could not load</h2>
