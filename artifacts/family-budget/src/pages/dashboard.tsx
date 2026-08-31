@@ -799,7 +799,8 @@ function ExpenseForm({
       toast({ variant: "destructive", title: "Category allocations don't add up", description: "Choose distinct categories with positive whole-KES amounts that total the expense." });
       return;
     }
-    if (isOtherCategory && notes.trim().length < 3) {
+    // Naming a category already explains the expense; do not ask twice.
+    if (isOtherCategory && !saveOtherAsCategory && notes.trim().length < 3) {
       toast({
         variant: "destructive",
         title: "Note required",
@@ -1046,33 +1047,15 @@ function ExpenseForm({
              </Button>
           </div>
             {isOtherCategory && (
+              /*
+                The choice comes first, and the field below adapts to it.
+                Previously this panel asked for a "brief description" and then a
+                required "Notes" underneath — two boxes, both asking you to
+                describe the same expense, where only the first silently became
+                the category name. People filled in the one marked required and
+                got a category named after the other.
+              */
               <div id="dashboard-other-expense-panel" role="tabpanel" className="mt-3 space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                <label className="text-sm font-semibold text-foreground">Brief description</label>
-                <Input
-                  placeholder="Briefly describe this expense"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  required
-                  maxLength={120}
-                  className="h-11 bg-card"
-                  data-testid="other-brief-description"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
-                </p>
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-sm font-semibold text-foreground">
-                    Notes <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    placeholder="Explain what this Other expense was for"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    required
-                    className="h-11 bg-card"
-                    data-testid="other-expense-notes"
-                  />
-                </div>
                 <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
                   <input
                     type="checkbox"
@@ -1085,6 +1068,38 @@ function ExpenseForm({
                     <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
                   </span>
                 </label>
+                <label className="text-sm font-semibold text-foreground pt-1 block">
+                  {saveOtherAsCategory ? "Category name" : "Brief description"}
+                </label>
+                <Input
+                  placeholder={saveOtherAsCategory ? "Name this category, e.g. School fees" : "Briefly describe this expense"}
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  required
+                  maxLength={120}
+                  className="h-11 bg-card"
+                  data-testid="other-brief-description"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {saveOtherAsCategory
+                    ? "This becomes a category you can budget against and pick again next time."
+                    : "Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time."}
+                </p>
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-sm font-semibold text-foreground">
+                    Notes {saveOtherAsCategory
+                      ? <span className="font-normal text-muted-foreground">(optional)</span>
+                      : <span className="text-destructive">*</span>}
+                  </label>
+                  <Input
+                    placeholder="Explain what this Other expense was for"
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    required={!saveOtherAsCategory}
+                    className="h-11 bg-card"
+                    data-testid="other-expense-notes"
+                  />
+                </div>
               </div>
             )}
             {!(isOtherCategory && categoryAllocations.length === 1) && (

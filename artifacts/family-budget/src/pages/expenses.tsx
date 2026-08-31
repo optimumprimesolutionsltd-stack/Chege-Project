@@ -805,7 +805,7 @@ export default function Expenses() {
     }
     if (
       categoryAllocations.some((allocation) => allocation.category.toLocaleLowerCase() === "other") &&
-      addForm.notes.trim().length < 3
+      !saveOtherAsCategory && addForm.notes.trim().length < 3
     ) {
       toast({
         variant: "destructive",
@@ -1234,32 +1234,8 @@ export default function Expenses() {
           </div>
           {form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (
              <div id={`other-expense-panel-${mode}`} role="tabpanel" className="mt-3 space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
-              <label className="text-sm font-semibold text-foreground">Brief description</label>
-              <Input
-                value={form.description}
-                onChange={e => form.setDescription(e.target.value)}
-                placeholder="Briefly describe this expense"
-                maxLength={120}
-                required
-                className="h-12 bg-card"
-                data-testid="other-brief-description"
-              />
-              <p className="text-xs text-muted-foreground">
-                Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
-              </p>
-              <div className="space-y-2 pt-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Notes <span className="text-destructive">*</span>
-                </label>
-                <Input
-                  placeholder="Explain what this Other expense was for"
-                  value={form.notes ?? ""}
-                  onChange={e => form.setNotes(e.target.value)}
-                  required
-                  className="h-12 bg-card"
-                  data-testid="other-expense-notes"
-                />
-              </div>
+              {/* The choice comes first so the field below can say what it is
+                  for. See the dashboard panel for why. */}
               {mode === "add" && canManageCategories && (
                 <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
                   <input
@@ -1274,6 +1250,38 @@ export default function Expenses() {
                   </span>
                 </label>
               )}
+              <label className="text-sm font-semibold text-foreground">
+                {saveOtherAsCategory ? "Category name" : "Brief description"}
+              </label>
+              <Input
+                value={form.description}
+                onChange={e => form.setDescription(e.target.value)}
+                placeholder={saveOtherAsCategory ? "Name this category, e.g. School fees" : "Briefly describe this expense"}
+                maxLength={120}
+                required
+                className="h-12 bg-card"
+                data-testid="other-brief-description"
+              />
+              <p className="text-xs text-muted-foreground">
+                {saveOtherAsCategory
+                  ? "This becomes a category you can budget against and pick again next time."
+                  : "Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time."}
+              </p>
+              <div className="space-y-2 pt-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Notes {saveOtherAsCategory
+                    ? <span className="font-normal text-muted-foreground">(optional)</span>
+                    : <span className="text-destructive">*</span>}
+                </label>
+                <Input
+                  placeholder="Explain what this Other expense was for"
+                  value={form.notes ?? ""}
+                  onChange={e => form.setNotes(e.target.value)}
+                  required={!saveOtherAsCategory}
+                  className="h-12 bg-card"
+                  data-testid="other-expense-notes"
+                />
+              </div>
             </div>
           )}
           {!form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && isCreatingCategory && (

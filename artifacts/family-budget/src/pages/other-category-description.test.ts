@@ -88,7 +88,9 @@ describe("Other expense category", () => {
     expect(mobileSource).toContain("chooseCategory('Other')");
     expect(mobileSource).toContain("categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other')");
     expect(mobileSource).toContain("const hasOtherAllocation = hasOtherCategoryAllocation(normalizedAllocations)");
-    expect(mobileSource).toContain("hasOtherAllocation && notes.trim().length < 3");
+    // The note is only demanded when the description is not already becoming a
+    // category name; see "stops demanding a note that repeats the category name".
+    expect(mobileSource).toContain("hasOtherAllocation && !saveOtherAsCategory && notes.trim().length < 3");
     expect(mobileSource).toContain("Note required");
     expect(mobileSource).toContain("Briefly describe this expense");
     expect(mobileSource).toContain("accessibilityLabel=\"Brief description for Other expense\"");
@@ -96,5 +98,39 @@ describe("Other expense category", () => {
     expect(mobileSource).toContain("{!categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && (");
     expect(mobileSource).toContain("Save as a category if this repeats?");
     expect(mobileSource).toContain("category: expenseCategory");
+  });
+
+  it("asks whether this is a category before asking what to call it", () => {
+    // The panel used to present a "brief description" and a required "Notes"
+    // box, both asking you to describe the same expense, where only the first
+    // silently became the category name. People filled in the one marked
+    // required and got a category named after the other.
+    expect(dashboardSource.indexOf("Save as a category if this repeats"))
+      .toBeLessThan(dashboardSource.indexOf('data-testid="other-brief-description"'));
+    expect(expensesSource.indexOf("Save as a category if this repeats"))
+      .toBeLessThan(expensesSource.indexOf('data-testid="other-brief-description"'));
+    expect(mobileSource.indexOf("Save as a category if this repeats?"))
+      .toBeLessThan(mobileSource.indexOf('accessibilityLabel="Brief description for Other expense"'));
+  });
+
+  it("calls the field a category name once it is going to become one", () => {
+    for (const source of [dashboardSource, expensesSource]) {
+      expect(source).toContain('saveOtherAsCategory ? "Category name" : "Brief description"');
+      expect(source).toContain('This becomes a category you can budget against and pick again next time.');
+    }
+    expect(mobileSource).toContain("saveOtherAsCategory ? 'Name this category, e.g. School fees' : 'Briefly describe this expense'");
+  });
+
+  it("stops demanding a note that repeats the category name", () => {
+    // Naming a category already explains the expense. Requiring a note as well
+    // meant typing the same words twice to get past the form.
+    expect(dashboardSource).toContain("isOtherCategory && !saveOtherAsCategory && notes.trim().length < 3");
+    expect(expensesSource).toContain("!saveOtherAsCategory && addForm.notes.trim().length < 3");
+    expect(mobileSource).toContain("hasOtherAllocation && !saveOtherAsCategory && notes.trim().length < 3");
+
+    // Still required for a one-off Other expense, which has nothing else to
+    // explain it.
+    expect(dashboardSource).toContain('title: "Note required"');
+    expect(mobileSource).toContain("Note required");
   });
 });

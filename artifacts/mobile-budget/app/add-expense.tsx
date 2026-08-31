@@ -641,7 +641,7 @@ export default function AddExpenseSheet() {
       return;
     }
     const hasOtherAllocation = hasOtherCategoryAllocation(normalizedAllocations);
-    if (hasOtherAllocation && notes.trim().length < 3) {
+    if (hasOtherAllocation && !saveOtherAsCategory && notes.trim().length < 3) {
       Alert.alert('Note required', 'Add a note explaining what this Other expense was for.');
       return;
     }
@@ -1101,6 +1101,25 @@ export default function AddExpenseSheet() {
             style={[styles.otherCategoryPrompt, { backgroundColor: colors.muted, borderColor: colors.primary + '45' }]}
           >
             <Text style={[styles.label, { color: colors.mutedForeground }]}>BRIEF DESCRIPTION</Text>
+            {!isEditMode && canManageCategories && (
+              <View style={[styles.otherCategoryPrompt, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <View style={styles.otherCategoryPromptCopy}>
+                  <Text style={[styles.otherCategoryPromptTitle, { color: colors.foreground }]}>
+                    Save as a category if this repeats?
+                  </Text>
+                  <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                    Your brief description will be used as the category name.
+                  </Text>
+                </View>
+                <Switch
+                  value={saveOtherAsCategory}
+                  onValueChange={setSaveOtherAsCategory}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#ffffff"
+                  accessibilityLabel="Save brief description as an expense category"
+                />
+              </View>
+            )}
             <TextInput
               style={[
                 styles.textInput,
@@ -1111,7 +1130,7 @@ export default function AddExpenseSheet() {
                   borderRadius: colors.radius,
                 },
               ]}
-              placeholder="Briefly describe this expense"
+              placeholder={saveOtherAsCategory ? 'Name this category, e.g. School fees' : 'Briefly describe this expense'}
               placeholderTextColor={colors.mutedForeground}
               value={description}
               onChangeText={setDescription}
@@ -1120,10 +1139,14 @@ export default function AddExpenseSheet() {
               accessibilityLabel="Brief description for Other expense"
             />
             <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
+              {saveOtherAsCategory
+                ? 'This becomes a category you can budget against and pick again next time.'
+                : 'Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.'}
             </Text>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>
-              NOTES <Text style={{ color: '#ef4444' }}>*</Text>
+              NOTES {saveOtherAsCategory
+                ? <Text style={{ color: colors.mutedForeground }}>(optional)</Text>
+                : <Text style={{ color: '#ef4444' }}>*</Text>}
             </Text>
             <TextInput
               style={[
@@ -1146,25 +1169,6 @@ export default function AddExpenseSheet() {
               numberOfLines={3}
               textAlignVertical="top"
             />
-            {!isEditMode && canManageCategories && (
-              <View style={[styles.otherCategoryPrompt, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                <View style={styles.otherCategoryPromptCopy}>
-                  <Text style={[styles.otherCategoryPromptTitle, { color: colors.foreground }]}>
-                    Save as a category if this repeats?
-                  </Text>
-                  <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-                    Your brief description will be used as the category name.
-                  </Text>
-                </View>
-                <Switch
-                  value={saveOtherAsCategory}
-                  onValueChange={setSaveOtherAsCategory}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor="#ffffff"
-                  accessibilityLabel="Save brief description as an expense category"
-                />
-              </View>
-            )}
           </View>
         )}
         {categoryAllocations.length > 0 && !(hasOtherCategorySelected && categoryAllocations.length === 1) && (
