@@ -102,12 +102,42 @@ export function BudgetChooser({
     window.location.reload();
   };
 
+  const applyOnboardingPreferences = async (workspace: Workspace) => {
+    if (!userId) return;
+    // Category management belongs to the workspace manager. Income streams are
+    // attributed to the signed-in user and can be added by any member.
+    if (selectedCategories.length > 0 && (workspace.isPrivate || workspace.role === "owner" || workspace.role === "admin")) {
+      await Promise.allSettled(selectedCategories.map(async (name) => {
+        const tier = ONBOARDING_CATEGORY_TIERS.find((item) => item.categories.some((category) => category === name));
+        const response = await fetch("/api/budget-categories", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, budgetAmount: 0, priority: tier?.priority ?? 4, color: "#6B7280", isRecurring: true }),
+        });
+        if (!response.ok && response.status !== 409) throw new Error("Could not save category preference");
+      }));
+    }
+    if (selectedIncomeStreams.length > 0) {
+      await Promise.allSettled(selectedIncomeStreams.map(async (name) => {
+        const response = await fetch("/api/income-sources", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, name, isMain: false, expectedMonthlyAmount: 0 }),
+        });
+        if (!response.ok && response.status !== 409) throw new Error("Could not save income preference");
+      }));
+    }
+  };
+
   const chooseWorkspace = async (workspace: Workspace) => {
     if (selectWorkspace.isPending) return;
     setSelectionError(null);
     try {
       // The only ID sent comes from the server-returned workspace list.
       await selectWorkspace.mutateAsync({ data: { groupId: workspace.id } });
+      await applyOnboardingPreferences(workspace);
       enterApp();
     } catch (error) {
       setSelectionError(error instanceof Error ? error.message : "Could not open that budget. Please try again.");
@@ -135,6 +165,7 @@ export function BudgetChooser({
       // well so this flow remains safe if that implementation changes.
       await queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() });
       await selectWorkspace.mutateAsync({ data: { groupId: workspace.id } });
+      await applyOnboardingPreferences(workspace);
       enterApp();
     } catch (error) {
       setCreationError(error instanceof Error ? error.message : "Could not create that Shared budget. Please try again.");
