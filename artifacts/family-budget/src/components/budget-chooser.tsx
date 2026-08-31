@@ -328,7 +328,13 @@ export function BudgetChooser({
       if (stream && !selectedIncomeStreams.includes(stream)) setSelectedIncomeStreams((current) => [...current, stream]);
       setCustomIncomeStream("");
     };
-    const finishOnboarding = () => {
+    const finishOnboarding = async () => {
+      await fetch("/api/onboarding/preferences", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usageMode: onboardingMode, persona: onboardingPurpose, budgetDuration, budgetEndDate: budgetDuration === "custom" ? customEndDate : null, categoryNames: selectedCategories, incomeStreams: selectedIncomeStreams, completed: true, onboardingVersion: 1 }),
+      }).catch(() => undefined);
       try {
         window.localStorage.setItem(`jamvi:onboarding:income-streams:${encodeURIComponent(userId)}`, JSON.stringify(selectedIncomeStreams));
       } catch { /* Continue even when storage is unavailable. */ }

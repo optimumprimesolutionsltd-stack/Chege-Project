@@ -15,6 +15,7 @@ import incomeSourcesRouter from "./income-sources";
 import { invitationsRouter, publicInvitationsRouter } from "./invitations";
 import { inviteLinksRouter, publicInviteLinksRouter } from "./invite-links";
 import photoStorageRouter from "./photo-storage";
+import onboardingRouter from "./onboarding";
 import { requireMember } from "../middlewares/requireMember";
 
 const router: IRouter = Router();
@@ -24,6 +25,7 @@ router.use(authRouter);
 router.use(healthRouter);
 router.use(publicInvitationsRouter);
 router.use(publicInviteLinksRouter);
+router.use(onboardingRouter);
 
 // Apply member check to everything else
 router.use(requireMember);

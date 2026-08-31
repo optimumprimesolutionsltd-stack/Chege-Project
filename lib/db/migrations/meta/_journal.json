@@ -2,82 +2,17 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1787656943571,
-      "tag": "0000_talented_swarm",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1787686166577,
-      "tag": "0001_curvy_hairball",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1787686832426,
-      "tag": "0002_lively_nicolaos",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1787781405658,
-      "tag": "0003_flashy_prowler",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1787781500000,
-      "tag": "0004_multiple_bank_accounts",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1787984634463,
-      "tag": "0005_group_plan",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1787986722163,
-      "tag": "0006_windy_trauma",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1788008129405,
-      "tag": "0007_deep_preak",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1788008129406,
-      "tag": "0008_expense_category_allocations",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1788008129407,
-      "tag": "0009_expense_category_allocation_positions",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1788008129408,
-      "tag": "0010_bank_to_bank_transfers",
-      "breakpoints": true
-    }
+    { "idx": 0, "version": "7", "when": 1787656943571, "tag": "0000_talented_swarm", "breakpoints": true },
+    { "idx": 1, "version": "7", "when": 1787686166577, "tag": "0001_curvy_hairball", "breakpoints": true },
+    { "idx": 2, "version": "7", "when": 1787686832426, "tag": "0002_lively_nicolaos", "breakpoints": true },
+    { "idx": 3, "version": "7", "when": 1787781405658, "tag": "0003_flashy_prowler", "breakpoints": true },
+    { "idx": 4, "version": "7", "when": 1787781500000, "tag": "0004_multiple_bank_accounts", "breakpoints": true },
+    { "idx": 5, "version": "7", "when": 1787984634463, "tag": "0005_group_plan", "breakpoints": true },
+    { "idx": 6, "version": "7", "when": 1787986722163, "tag": "0006_windy_trauma", "breakpoints": true },
+    { "idx": 7, "version": "7", "when": 1788008129405, "tag": "0007_deep_preak", "breakpoints": true },
+    { "idx": 8, "version": "7", "when": 1788008129406, "tag": "0008_expense_category_allocations", "breakpoints": true },
+    { "idx": 9, "version": "7", "when": 1788008129407, "tag": "0009_expense_category_allocation_positions", "breakpoints": true },
+    { "idx": 10, "version": "7", "when": 1788008129408, "tag": "0010_bank_to_bank_transfers", "breakpoints": true },
+    { "idx": 11, "version": "7", "when": 1788188954000, "tag": "0011_onboarding_preferences", "breakpoints": true }
   ]
 }
