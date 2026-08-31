@@ -637,8 +637,14 @@ export default function AddExpenseSheet() {
 
   const chooseCategory = useCallback((name: string) => {
     setCategoryAllocations((previous) => {
-      if (previous.some((allocation) => allocation.category === name)) return previous;
-      const next = [...previous, { category: name, amount: '' }];
+      if (name.trim().toLocaleLowerCase() === 'other') {
+        const existingOneOff = previous.find((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
+        setCategory('Other');
+        return [{ category: 'Other', amount: existingOneOff?.amount ?? '' }];
+      }
+      const standardAllocations = previous.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== 'other');
+      if (standardAllocations.some((allocation) => allocation.category === name)) return standardAllocations;
+      const next = [...standardAllocations, { category: name, amount: '' }];
       setCategory(next[0].category);
       return next;
     });
@@ -993,6 +999,9 @@ export default function AddExpenseSheet() {
     .map((item) => item.name)
     .filter((name) => name.trim().toLocaleLowerCase() !== 'other');
   const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
+  const displayedCategoryAllocations = hasOneOffAllocation
+    ? categoryAllocations.filter((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other')
+    : categoryAllocations;
 
   if (isEditMode && editExpensesQuery.isLoading) {
     return (
@@ -1098,7 +1107,7 @@ export default function AddExpenseSheet() {
               )}
               {categoryList.map((cat) => {
                 const icon = getCategoryIcon(cat);
-                const selected = categoryAllocations.some((allocation) => allocation.category === cat);
+                const selected = !hasOneOffAllocation && categoryAllocations.some((allocation) => allocation.category === cat);
                 return (
                   <Pressable
                     key={cat}
@@ -1174,10 +1183,10 @@ export default function AddExpenseSheet() {
                 <Text style={[styles.hintText, { color: colors.foreground }]}>Enter how much of the expense each category covered.</Text>
               </View>
               <Text style={[styles.allocationTotal, { color: colors.foreground }]}>
-                KES {categoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0).toLocaleString()}
+                KES {displayedCategoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0).toLocaleString()}
               </Text>
             </View>
-            {categoryAllocations.map((allocation) => {
+            {displayedCategoryAllocations.map((allocation) => {
               const isOneOff = allocation.category.trim().toLocaleLowerCase() === 'other';
               return (
               <View key={allocation.category} style={[styles.allocationRow, { borderColor: colors.border, backgroundColor: colors.background, borderRadius: colors.radius }]}>
@@ -1209,10 +1218,7 @@ export default function AddExpenseSheet() {
               </View>
               );
             })}
-            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              One-off spending is for a one-time expense that does not fit any listed category. Add a note when you use it.
-            </Text>
-            <Pressable
+            {!hasOneOffAllocation && <Pressable
               onPress={() => setShowAdditionalCategoryPicker((visible) => !visible)}
               accessibilityRole="button"
               accessibilityLabel="Add another expense category"
@@ -1221,8 +1227,8 @@ export default function AddExpenseSheet() {
             >
               <Feather name="plus-circle" size={15} color={colors.primary} />
               <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>Add another category</Text>
-            </Pressable>
-            {showAdditionalCategoryPicker && (
+            </Pressable>}
+            {!hasOneOffAllocation && showAdditionalCategoryPicker && (
               <View style={{ gap: 8 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
                   Choose the next category for this same expense.
@@ -1249,7 +1255,7 @@ export default function AddExpenseSheet() {
               </View>
             )}
             {(() => {
-              const total = categoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0);
+              const total = displayedCategoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0);
               const expenseTotal = Number(amount.replace(/,/g, '')) || 0;
               const difference = expenseTotal - total;
               return (

@@ -632,26 +632,22 @@ export default function Expenses() {
   };
 
   const chooseCategory = (form: ReturnType<typeof useExpenseForm>, value: string) => {
-    form.setCategory(value);
-    if (value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
+    form.setCategoryAllocations((current) => {
+      if (!value) return [{ category: "", amount: "" }];
+      const currentPrimaryIsOther = current[0]?.category.trim().toLocaleLowerCase() === "other";
+      return [
+        { category: value, amount: currentPrimaryIsOther ? "" : current[0]?.amount ?? "" },
+        ...current.slice(1).filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other"),
+      ];
+    });
+    setSaveOtherAsCategory(false);
     setIsCreatingCategory(false);
   };
 
   const addOneOffCategory = (form: ReturnType<typeof useExpenseForm>) => {
-    if (form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")) {
-      return;
-    }
-    if (!form.category.trim()) {
-      form.setCategory("Other");
-    }
     form.setCategoryAllocations((current) => {
-      if (current.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")) {
-        return current;
-      }
-      if (!current[0]?.category.trim()) {
-        return current.map((allocation, index) => index === 0 ? { ...allocation, category: "Other" } : allocation);
-      }
-      return [...current, { category: "Other", amount: "" }];
+      const existingOneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+      return [{ category: "Other", amount: existingOneOff?.amount ?? "" }];
     });
     setIsCreatingCategory(false);
   };
@@ -1213,6 +1209,9 @@ export default function Expenses() {
     const expenseTotal = Number(form.amount) || 0;
     const allocatedTotal = form.categoryAllocations.reduce((total, allocation) => total + (Number(allocation.amount) || 0), 0);
     const allocationDifference = expenseTotal - allocatedTotal;
+    const otherCategoryIndex = form.categoryAllocations.findIndex((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+    const isOtherCategory = otherCategoryIndex >= 0;
+    const hasStandardAdditionalCategory = form.categoryAllocations.slice(1).some((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
     const directFundingTotal = mode === "edit"
       ? (!editHasMultipleFundingSplits && form.paidById && form.incomeSourceId ? expenseTotal : 0)
        : form.payerIds.length === 1 && addDirectSourceIds.length > 0
@@ -1287,16 +1286,15 @@ export default function Expenses() {
                <select
                  className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                  aria-label="Expense category"
-                 value={form.category}
+                  value={isOtherCategory ? "" : form.category}
                  onChange={e => chooseCategory(form, e.target.value)}
                >
                  <option value="">Select a category</option>
                  {categories
                    ?.filter(c => c.name.trim().toLocaleLowerCase() !== "other")
                    .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                 <option value="Other">One-off spending</option>
                </select>
-              {form.category.trim() && form.category.trim().toLocaleLowerCase() !== "other" && (
+               {form.category.trim() && !isOtherCategory && (
                  <div data-testid={`primary-category-allocation-${mode}`} className="sm:w-48">
                    <label htmlFor={`${mode}-primary-category-amount`} className="sr-only">
                     {`${form.category} amount (KES)`}
@@ -1329,7 +1327,7 @@ export default function Expenses() {
                 >
                   One-off spending
                 </Button>
-                {form.category.trim().toLocaleLowerCase() === "other" && (
+                {isOtherCategory && (
                   <div data-testid={`primary-category-allocation-${mode}`} className="sm:w-48">
                     <label htmlFor={`${mode}-primary-category-amount`} className="sr-only">One-off spending amount (KES)</label>
                     <Input
@@ -1337,8 +1335,8 @@ export default function Expenses() {
                       type="number"
                       min="1"
                       step="1"
-                      value={form.categoryAllocations[0]?.amount ?? ""}
-                      onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
+                      value={form.categoryAllocations[otherCategoryIndex]?.amount ?? ""}
+                      onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === otherCategoryIndex ? { ...item, amount: event.target.value } : item))}
                       aria-label="KES amount for one-off spending"
                       aria-required="true"
                       required
@@ -1352,7 +1350,7 @@ export default function Expenses() {
                Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
              </p>
           </div>
-           {form.categoryAllocations.length === 1 && (
+            {!isOtherCategory && form.categoryAllocations.length === 1 && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                <p className="text-xs text-muted-foreground">
                  {form.category.trim() ? "Need to split this expense? Add another category and enter its share." : "Choose a category first, then add another category if this expense covers more than one."}
@@ -1531,7 +1529,7 @@ export default function Expenses() {
               </p>
             ) : null;
           })()}
-            {form.categoryAllocations.length > 1 && (
+             {!isOtherCategory && hasStandardAdditionalCategory && (
              <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
                <div>
                 <div>
@@ -1539,8 +1537,10 @@ export default function Expenses() {
                   <p className="mt-0.5 text-xs font-medium text-foreground">Enter the amount for each additional category.</p>
                 </div>
              </div>
-              {form.categoryAllocations.slice(1).map((allocation, index) => (
-                <div key={index} className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
+              {form.categoryAllocations.slice(1).map((allocation, index) => {
+                if (allocation.category.trim().toLocaleLowerCase() === "other") return null;
+                return (
+                 <div key={index} className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                      <select
                        value={allocation.category}
@@ -1574,7 +1574,8 @@ export default function Expenses() {
                       {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><Trash2 className="h-4 w-4" /></Button>}
                   </div>
                </div>
-             ))}
+                );
+              })}
               <Button
                 type="button"
                 size="sm"

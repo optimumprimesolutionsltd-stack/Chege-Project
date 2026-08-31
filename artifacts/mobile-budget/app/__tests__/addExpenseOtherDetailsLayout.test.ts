@@ -50,8 +50,15 @@ describe('optional expense category layout', () => {
   });
 
   it('creates the first allocation when an uncategorized expense is recategorized', () => {
-    expect(source).toContain("const next = [...previous, { category: name, amount: '' }];");
+    expect(source).toContain("const standardAllocations = previous.filter");
+    expect(source).toContain("const next = [...standardAllocations, { category: name, amount: '' }];");
     expect(source).toContain('.filter((allocation) => allocation.category.trim())');
+  });
+
+  it('keeps one-off spending independent from regular category allocations', () => {
+    expect(source).toContain("return [{ category: 'Other', amount: existingOneOff?.amount ?? '' }]");
+    expect(source).toContain('const displayedCategoryAllocations = hasOneOffAllocation');
+    expect(source).toContain('{!hasOneOffAllocation && <Pressable');
   });
 
   it('lets uncategorized creates and edits pass allocation validation', () => {
