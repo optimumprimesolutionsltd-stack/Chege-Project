@@ -1067,7 +1067,7 @@ export default function AddExpenseSheet() {
         {/* Category */}
         <Text style={[styles.label, { color: colors.mutedForeground }]}>CATEGORY (OPTIONAL)</Text>
         <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
-          Add a category to track this spending against a budget. You can also save without one and categorize it later.
+          Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
         </Text>
         <ScrollView
           horizontal
@@ -1130,7 +1130,10 @@ export default function AddExpenseSheet() {
             <View style={styles.allocationHeader}>
               <View>
                 <Text style={[styles.allocationTitle, { color: colors.foreground }]}>CATEGORY AMOUNT REQUIRED</Text>
-                <Text style={[styles.hintText, { color: colors.foreground }]}>Enter the amount covered by each selected category.</Text>
+                <Text style={[styles.hintText, { color: colors.foreground }]}>Enter how much of the expense each category covered.</Text>
+                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                  <Text style={{ fontWeight: '700', color: colors.foreground }}>Other category</Text> is only for spending that does not fit any listed category. Add a note when you use it.
+                </Text>
               </View>
               <Text style={[styles.allocationTotal, { color: colors.foreground }]}>
                 KES {categoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0).toLocaleString()}
@@ -1144,7 +1147,7 @@ export default function AddExpenseSheet() {
                   value={allocation.amount}
                   onChangeText={(value) => updateAllocationAmount(allocation.category, value)}
                   keyboardType="numeric"
-                  placeholder="Enter amount"
+                  placeholder="Enter KES amount"
                   placeholderTextColor={colors.mutedForeground}
                   accessibilityLabel={`Amount covered by ${allocation.category}`}
                   accessibilityHint="Required before this expense can be saved"

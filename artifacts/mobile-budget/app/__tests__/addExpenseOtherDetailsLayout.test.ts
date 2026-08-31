@@ -3,11 +3,20 @@ import { describe, expect, it } from 'vitest';
 
 const source = readFileSync('app/add-expense.tsx', 'utf8');
 const budgetSource = readFileSync('app/(tabs)/budget.tsx', 'utf8');
+const homeSource = readFileSync('app/(tabs)/index.tsx', 'utf8');
 
 describe('optional expense category layout', () => {
+  it('prompts the user to categorize editable uncategorized expenses from Home', () => {
+    expect(homeSource).toContain('isUncategorizedExpense');
+    expect(homeSource).toContain('testID="uncategorized-expense-cta"');
+    expect(homeSource).toContain('waiting for a category');
+    expect(homeSource).toContain('Categorize now');
+    expect(homeSource).toContain('router.push(getExpenseEditHref(expense)');
+  });
+
   it('explains that categories are optional without offering Other as an intermediate category', () => {
     expect(source).toContain('CATEGORY (OPTIONAL)');
-    expect(source).toContain('You can also save without one and categorize it later.');
+    expect(source).toContain('Leave this blank to save the expense as Uncategorized, outside any budget category.');
     expect(source).not.toContain("chooseCategory('Other')");
   });
 
@@ -16,8 +25,9 @@ describe('optional expense category layout', () => {
     expect(source).toContain('testID="category-allocation-card"');
     expect(source).toContain('testID="add-category-allocation-mobile"');
     expect(source).toContain('CATEGORY AMOUNT REQUIRED');
-    expect(source).toContain('Enter the amount covered by each selected category.');
-    expect(source).toContain('placeholder="Enter amount"');
+    expect(source).toContain('Enter how much of the expense each category covered.');
+    expect(source).toContain('Other category');
+    expect(source).toContain('placeholder="Enter KES amount"');
   });
 
   it('offers explicit uncategorized save and preserves the draft while creating a budget', () => {

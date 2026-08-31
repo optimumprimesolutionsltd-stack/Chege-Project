@@ -1258,7 +1258,7 @@ export default function Expenses() {
           <div>
             <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Add a category to track this spending against a budget. You can also save it uncategorized.
+               Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -1290,7 +1290,45 @@ export default function Expenses() {
             >
               Other
             </Button>
+             {form.category.trim() && (
+               <Input
+                 type="number"
+                 min="1"
+                 step="1"
+                 value={form.categoryAllocations[0]?.amount ?? ""}
+                 onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
+                 aria-label="KES amount covered by the primary category"
+                 aria-required="true"
+                 required
+                 placeholder="Enter KES amount"
+                 className="h-12 w-full border-primary/45 bg-card font-semibold sm:w-36"
+               />
+             )}
           </div>
+           {form.category.trim() && (
+             <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+               <p className="text-xs text-muted-foreground">Need to split this expense? Add another category and enter its share.</p>
+               <Button type="button" size="sm" variant="outline" onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])} data-testid={`add-category-allocation-${mode}`}>
+                 <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
+               </Button>
+             </div>
+           )}
+           {form.category.trim() && form.categoryAllocations.length === 1 && (
+             <div
+               role="status"
+               aria-live="polite"
+               data-testid={`category-allocation-total-${mode}`}
+               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                 categoryStatus.tone === "ready"
+                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                   : categoryStatus.tone === "error"
+                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+               }`}
+             >
+               {categoryStatus.message}
+             </div>
+           )}
           {form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (
              <div id={`other-expense-panel-${mode}`} role="tabpanel" className="mt-3 space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
               <label className="text-sm font-semibold text-foreground">Brief description</label>
@@ -1444,43 +1482,43 @@ export default function Expenses() {
               </p>
             ) : null;
           })()}
-            {form.categoryAllocations.some((allocation) => allocation.category.trim()) && !(form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && form.categoryAllocations.length === 1) && (
+            {form.categoryAllocations.length > 1 && (
              <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
              <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">Category breakdown <span className="text-destructive">*</span></p>
-                  <p className="mt-0.5 text-xs font-medium text-foreground">Required: enter the amount covered by each selected category.</p>
+                  <p className="text-sm font-semibold text-foreground">Additional category breakdown</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">Enter the amount for each additional category.</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground"><span className="font-semibold text-foreground">Other category</span> is only for spending that does not fit any listed category. Add a note when you use it.</p>
                 </div>
                <Button
                  type="button"
                  size="sm"
                  variant="outline"
                  onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])}
-                 data-testid={`add-category-allocation-${mode}`}
                >
-                 <Plus className="mr-1 h-3.5 w-3.5" /> Add category
+                 <Plus className="mr-1 h-3.5 w-3.5" /> Add another
                </Button>
              </div>
-             {form.categoryAllocations.map((allocation, index) => (
+              {form.categoryAllocations.slice(1).map((allocation, index) => (
                <div key={index} className="flex gap-2">
                  <select
                    value={allocation.category.trim().toLocaleLowerCase() === "other" ? "" : allocation.category}
-                   onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item))}
-                   aria-label={`Allocation category ${index + 1}`}
+                    onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
+                    aria-label={`Additional allocation category ${index + 2}`}
                    className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"
                  >
                    <option value="" disabled>Select category...</option>
                    {(categories ?? []).filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) =>
-                     <option key={item.id} value={item.name} disabled={form.categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index && selected.category === item.name)}>{item.name}</option>,
+                      <option key={item.id} value={item.name} disabled={form.categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>,
                    )}
                  </select>
                  <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"}
-                   onClick={() => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: item.category.trim().toLocaleLowerCase() === "other" ? "" : "Other" } : item))}
-                   aria-label={`Other allocation ${index + 1}`}>Other</Button>
+                    onClick={() => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: item.category.trim().toLocaleLowerCase() === "other" ? "" : "Other" } : item))}
+                    aria-label={`Use Other category for allocation ${index + 2}`}>Other category</Button>
                   <Input type="number" min="1" step="1" value={allocation.amount}
-                   onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))}
-                    aria-label={`Allocation amount ${index + 1}`} aria-required="true" required placeholder="Amount" className="h-10 w-32 border-primary/45 bg-card font-semibold" />
-                 {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>}
+                    onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, amount: event.target.value } : item))}
+                     aria-label={`KES amount covered by allocation ${index + 2}`} aria-required="true" required placeholder="Enter KES amount" className="h-10 w-36 border-primary/45 bg-card font-semibold" />
+                  {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><Trash2 className="h-4 w-4" /></Button>}
                </div>
              ))}
              {(() => {

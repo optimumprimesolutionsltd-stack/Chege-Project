@@ -111,15 +111,33 @@ describe("expense funding amount entry", () => {
   });
 
   it("requires category amounts to be entered manually on every expense form", () => {
-    expect(dashboardSource).toContain("Required: enter the amount covered by each selected category.");
+    expect(dashboardSource).toContain("KES amount covered by the primary category");
+    expect(dashboardSource).toContain("Need to split this expense? Add another category and enter its share.");
+    expect(dashboardSource).toContain("categoryAllocations.slice(1).map");
+    expect(dashboardSource).toContain("Other category");
+    expect(dashboardSource).toContain("Use Other category for allocation");
+    expect(dashboardSource).toContain('placeholder="Enter KES amount"');
     expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
     expect(dashboardSource).not.toContain("setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }]");
     expect(expensesSource).toContain("const setAmount = (value: string) => setAmountValue(value);");
-    expect(expensesSource).toContain('aria-required="true" required placeholder="Amount"');
+    expect(expensesSource).toContain("KES amount covered by the primary category");
+    expect(expensesSource).toContain("Need to split this expense? Add another category and enter its share.");
+    expect(expensesSource).toContain("form.categoryAllocations.slice(1).map");
+    expect(expensesSource).toContain("Other category");
+    expect(expensesSource).toContain("Use Other category for allocation");
+    expect(expensesSource).toContain('aria-required="true" required placeholder="Enter KES amount"');
     expect(mobileSource).toContain("CATEGORY AMOUNT REQUIRED");
-    expect(mobileSource).toContain("Enter the amount covered by each selected category.");
+    expect(mobileSource).toContain("Enter how much of the expense each category covered.");
+    expect(mobileSource).toContain("Other category");
     expect(mobileSource).toContain(": [{ category: result.categoryName!, amount: '' }]");
     expect(mobileSource).not.toContain("amount: result.expenseDraft?.amount ?? amount");
+  });
+
+  it("explains where an expense goes when no category is selected", () => {
+    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+      expect(source).toContain("Uncategorized");
+      expect(source).toContain("outside any budget category");
+    }
   });
 });
 

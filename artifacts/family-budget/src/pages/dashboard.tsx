@@ -4,6 +4,7 @@ import {
   useGetDashboardActivity,
   useGetDashboardCategoryBreakdown,
   useGetDashboardTrends,
+  useGetExpenses,
   useGetSavingsGoals,
   useGetBudgetCategories,
   useGetMembers,
@@ -39,7 +40,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatKes, formatDate } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag,
+   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag, BellRing,
   ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,24 @@ type DashboardActivityItem = ActivityEditItem & {
   userName?: string | null;
   categoryAllocations?: { category: string; amount: number }[];
 };
+
+type DashboardExpense = {
+  id: number;
+  amount: number;
+  description: string;
+  category?: string | null;
+  categoryAllocations?: { category: string; amount: number }[];
+  date: string;
+  paidById?: string | null;
+  paidFromBank?: boolean;
+  isRecurring?: boolean;
+  incomeSplits?: { userId?: string | null; fromBank: boolean }[];
+};
+
+function isUncategorizedExpense(expense: DashboardExpense) {
+  return !expense.category?.trim()
+    && !(expense.categoryAllocations ?? []).some((allocation) => allocation.category.trim());
+}
 
 function DashboardActivityRow({
   item,
@@ -1048,7 +1067,7 @@ function ExpenseForm({
            <div>
               <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Add a category to track this spending against a budget. You can also save it uncategorized.
+                 Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
              </p>
            </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -1083,7 +1102,45 @@ function ExpenseForm({
              >
                Other
              </Button>
+              {category.trim() && (
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={categoryAllocations[0]?.amount ?? ""}
+                  onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
+                  aria-label="KES amount covered by the primary category"
+                  aria-required="true"
+                  required
+                  placeholder="Enter KES amount"
+                  className="h-11 w-full border-primary/45 bg-card font-semibold sm:w-36"
+                />
+              )}
           </div>
+           {category.trim() && (
+             <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+               <p className="text-xs text-muted-foreground">Need to split this expense? Add another category and enter its share.</p>
+               <Button type="button" size="sm" variant="outline" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard">
+                 <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
+               </Button>
+             </div>
+           )}
+           {category.trim() && categoryAllocations.length === 1 && (
+             <div
+               role="status"
+               aria-live="polite"
+               data-testid="category-allocation-total-dashboard"
+               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                 categoryStatus.tone === "ready"
+                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                   : categoryStatus.tone === "error"
+                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+               }`}
+             >
+               {categoryStatus.message}
+             </div>
+           )}
             {isOtherCategory && (
               <div id="dashboard-other-expense-panel" role="tabpanel" className="mt-3 space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3">
                 <label className="text-sm font-semibold text-foreground">Brief description</label>
@@ -1126,26 +1183,27 @@ function ExpenseForm({
                 </label>}
               </div>
             )}
-            {categoryAllocations.some((allocation) => allocation.category.trim()) && !(isOtherCategory && categoryAllocations.length === 1) && (
+            {categoryAllocations.length > 1 && (
               <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
               <div className="flex items-center justify-between gap-2">
                  <div>
-                   <p className="text-sm font-semibold text-foreground">Category breakdown <span className="text-destructive">*</span></p>
-                   <p className="mt-0.5 text-xs font-medium text-foreground">Required: enter the amount covered by each selected category.</p>
+                   <p className="text-sm font-semibold text-foreground">Additional category breakdown</p>
+                   <p className="mt-0.5 text-xs font-medium text-foreground">Enter the amount for each additional category.</p>
+                   <p className="mt-0.5 text-xs text-muted-foreground"><span className="font-semibold text-foreground">Other category</span> is only for spending that does not fit any listed category. Add a note when you use it.</p>
                  </div>
-               <Button type="button" size="sm" variant="outline" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard"><Plus className="mr-1 h-3.5 w-3.5" /> Add category</Button>
+               <Button type="button" size="sm" variant="outline" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])}><Plus className="mr-1 h-3.5 w-3.5" /> Add another</Button>
              </div>
-             {categoryAllocations.map((allocation, index) => (
+              {categoryAllocations.slice(1).map((allocation, index) => (
                <div className="flex gap-2" key={index}>
                  <select value={allocation.category.trim().toLocaleLowerCase() === "other" ? "" : allocation.category}
-                   onChange={(event) => { setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item)); if (index === 0) setCategory(event.target.value); }}
-                   aria-label={`Allocation category ${index + 1}`} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm">
+                   onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
+                   aria-label={`Additional allocation category ${index + 2}`} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm">
                    <option value="" disabled>Pick a category</option>
-                   {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index && selected.category === item.name)}>{item.name}</option>)}
+                   {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>)}
                  </select>
-                 <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"} onClick={() => { const value = allocation.category.trim().toLocaleLowerCase() === "other" ? "" : "Other"; setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: value } : item)); if (index === 0) setCategory(value); }} aria-label={`Other allocation ${index + 1}`}>Other</Button>
-                  <Input type="number" min="1" step="1" value={allocation.amount} onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} aria-label={`Allocation amount ${index + 1}`} aria-required="true" required placeholder="Amount" className="h-10 w-32 border-primary/45 bg-card font-semibold" />
-                 {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><X className="h-4 w-4" /></Button>}
+                 <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"} onClick={() => { const value = allocation.category.trim().toLocaleLowerCase() === "other" ? "" : "Other"; setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: value } : item)); }} aria-label={`Use Other category for allocation ${index + 2}`}>Other category</Button>
+                   <Input type="number" min="1" step="1" value={allocation.amount} onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, amount: event.target.value } : item))} aria-label={`KES amount covered by allocation ${index + 2}`} aria-required="true" required placeholder="Enter KES amount" className="h-10 w-36 border-primary/45 bg-card font-semibold" />
+                  {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><X className="h-4 w-4" /></Button>}
                </div>
              ))}
               {(() => {
@@ -1818,6 +1876,7 @@ export default function Dashboard() {
 
   const { data: summary, isLoading: isSummaryLoading, isError: isSummaryError } = useGetDashboardSummary({ month, year });
   const { data: activity, isLoading: isActivityLoading } = useGetDashboardActivity();
+  const { data: monthlyExpenses = [] } = useGetExpenses({ month, year });
   const { data: group } = useGetGroup();
   const isSharedWorkspace = group?.isPrivate === false;
   const { data: breakdown, isLoading: isBreakdownLoading } = useGetDashboardCategoryBreakdown(
@@ -1843,7 +1902,19 @@ export default function Dashboard() {
   );
   const canManageShared = isSharedWorkspace && canManageSetup;
   const canManageCategories = group?.isPrivate === true || canManageShared;
+  const canManageExpenses = group?.isPrivate === true || canManageShared;
   const canManageBank = canManageBankAccount(group);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const editableUncategorizedExpenses = (monthlyExpenses as DashboardExpense[])
+    .filter(isUncategorizedExpense)
+    .filter((expense) => {
+      if (canManageExpenses) return true;
+      if (!user?.id || expense.date.slice(0, 10) !== today || expense.paidById !== user.id) return false;
+      if (expense.paidFromBank || expense.isRecurring) return false;
+      return !(expense.incomeSplits ?? []).some(
+        (split) => split.fromBank || (split.userId && split.userId !== user.id),
+      );
+    });
 
   // Compute this-month totals from the transactions array
   const monthlyDeposited = bankAccount?.transactions
@@ -1994,6 +2065,51 @@ export default function Dashboard() {
       </div>
 
       <AskJamviPanel month={month} year={year} workspaceName={group?.name ?? undefined} />
+
+      {editableUncategorizedExpenses.length > 0 && (
+        <section
+          aria-labelledby="uncategorized-expenses-heading"
+          aria-live="polite"
+          data-testid="uncategorized-expense-cta"
+          className="rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/35 sm:p-5"
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">
+              <BellRing className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-amber-800 dark:text-amber-200">Needs your attention</p>
+              <h2 id="uncategorized-expenses-heading" className="mt-1 font-display text-lg font-bold text-foreground">
+                {editableUncategorizedExpenses.length} expense{editableUncategorizedExpenses.length === 1 ? "" : "s"} waiting for a category
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Categorize these expenses so category budgets and reports show where the money went.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            {editableUncategorizedExpenses.slice(0, 3).map((expense) => (
+              <div key={expense.id} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-card px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/70">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">{expense.description}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{formatKes(expense.amount)} · {formatDate(expense.date)}</p>
+                </div>
+                <Link href={`/expenses?edit=${expense.id}&month=${month}&year=${year}`}>
+                  <Button size="sm" className="w-full shrink-0 sm:w-auto" data-testid={`categorize-expense-${expense.id}`}>
+                    Categorize now
+                  </Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+          {editableUncategorizedExpenses.length > 3 && (
+            <Link href="/expenses" className="mt-3 inline-flex text-sm font-semibold text-amber-900 underline-offset-4 hover:underline dark:text-amber-100">
+              Review all {editableUncategorizedExpenses.length} uncategorized expenses
+            </Link>
+          )}
+        </section>
+      )}
+
       {isSharedWorkspace && (
         <section aria-labelledby="group-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
           <div className="mb-4">

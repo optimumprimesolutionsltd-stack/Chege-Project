@@ -8,6 +8,14 @@ const expenseFormSource = dashboardSource.slice(
 );
 
 describe("dashboard quick actions", () => {
+  it("prompts the user to categorize editable uncategorized expenses", () => {
+    expect(dashboardSource).toContain("isUncategorizedExpense");
+    expect(dashboardSource).toContain('data-testid="uncategorized-expense-cta"');
+    expect(dashboardSource).toContain("waiting for a category");
+    expect(dashboardSource).toContain("Categorize now");
+    expect(dashboardSource).toContain("`/expenses?edit=${expense.id}&month=${month}&year=${year}`");
+  });
+
   it("keeps a responsive budget action beside the money actions", () => {
     expect(dashboardSource).toContain('data-testid="dashboard-create-budget-cta"');
     expect(dashboardSource).toContain('href="/budget"');

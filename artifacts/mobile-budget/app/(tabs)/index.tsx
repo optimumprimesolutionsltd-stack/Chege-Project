@@ -29,9 +29,11 @@ import BudgetRing from '@/components/BudgetRing';
 import ActivityCard from '@/components/ActivityCard';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
+import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import {
   useGetDashboardSummary,
   useGetDashboardActivity,
+  useGetExpenses,
   useGetJointAccount,
   useGetGroup,
 } from '@workspace/api-client-react';
@@ -42,6 +44,24 @@ const MONTHS_SHORT = [
 ];
 
 const PRIVACY_KEY = 'dashboard_privacy';
+
+type HomeExpense = {
+  id: number;
+  amount: number;
+  description: string;
+  category?: string | null;
+  categoryAllocations?: { category: string; amount: number }[];
+  date: string;
+  paidById?: string | null;
+  paidFromBank?: boolean;
+  isRecurring?: boolean;
+  incomeSplits?: { userId?: string | null; fromBank: boolean }[];
+};
+
+function isUncategorizedExpense(expense: HomeExpense) {
+  return !expense.category?.trim()
+    && !(expense.categoryAllocations ?? []).some((allocation) => allocation.category.trim());
+}
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -128,6 +148,10 @@ export default function DashboardScreen() {
     isLoading: activityLoading,
     refetch: refetchActivity,
   } = useGetDashboardActivity();
+  const {
+    data: expenses = [],
+    refetch: refetchExpenses,
+  } = useGetExpenses({ month, year });
 
   const {
     data: bankAccount,
@@ -140,9 +164,9 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchSummary(), refetchActivity(), refetchBank()]);
+    await Promise.all([refetchSummary(), refetchActivity(), refetchExpenses(), refetchBank()]);
     setRefreshing(false);
-  }, [refetchSummary, refetchActivity, refetchBank]);
+  }, [refetchSummary, refetchActivity, refetchExpenses, refetchBank]);
 
   // Compute this-month bank totals from transactions
   const monthlyDeposited = useMemo(() => {
@@ -184,6 +208,18 @@ export default function DashboardScreen() {
   const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
   const shortcuts = isSharedWorkspace ? SHARED_SHORTCUTS : PERSONAL_SHORTCUTS;
   const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
+  const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const editableUncategorizedExpenses = (expenses as HomeExpense[])
+    .filter(isUncategorizedExpense)
+    .filter((expense) => {
+      if (canManageExpenses) return true;
+      if (!user?.id || expense.date.slice(0, 10) !== today || expense.paidById !== user.id) return false;
+      if (expense.paidFromBank || expense.isRecurring) return false;
+      return !(expense.incomeSplits ?? []).some(
+        (split) => split.fromBank || (split.userId && split.userId !== user.id),
+      );
+    });
   type MemberContribution = {
     userId: string;
     name: string;
@@ -413,6 +449,51 @@ export default function DashboardScreen() {
             </Pressable>
           ))}
         </View>
+
+        {editableUncategorizedExpenses.length > 0 && (
+          <View
+            testID="uncategorized-expense-cta"
+            accessibilityLiveRegion="polite"
+            style={[styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: '#F59E0B' }]}
+          >
+            <View style={styles.groupCtaHeader}>
+              <View style={[styles.groupCtaIcon, { backgroundColor: '#F59E0B22' }]}>
+                <Feather name="bell" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.groupCtaEyebrow, { color: '#D97706' }]}>NEEDS YOUR ATTENTION</Text>
+                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>
+                  {editableUncategorizedExpenses.length} expense{editableUncategorizedExpenses.length === 1 ? '' : 's'} waiting for a category
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+              Categorize these expenses so category budgets and reports show where the money went.
+            </Text>
+            <View style={styles.uncategorizedList}>
+              {editableUncategorizedExpenses.slice(0, 3).map((expense) => (
+                <Pressable
+                  key={expense.id}
+                  testID={`categorize-expense-${expense.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Categorize ${expense.description}`}
+                  onPress={() => router.push(getExpenseEditHref(expense) as never)}
+                  style={({ pressed }) => [
+                    styles.uncategorizedRow,
+                    { backgroundColor: colors.background, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
+                  ]}
+                >
+                  <View style={styles.uncategorizedCopy}>
+                    <Text numberOfLines={1} style={[styles.uncategorizedDescription, { color: colors.foreground }]}>{expense.description}</Text>
+                    <Text style={[styles.uncategorizedAmount, { color: colors.mutedForeground }]}>KES {formatKES(expense.amount)}</Text>
+                  </View>
+                  <Text style={[styles.uncategorizedAction, { color: colors.primary }]}>Categorize now</Text>
+                  <Feather name="chevron-right" size={16} color={colors.primary} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
 
         {!summaryLoading && summary && summary.totalBudget === 0 && (
           <View style={[styles.budgetCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
@@ -712,6 +793,13 @@ const styles = StyleSheet.create({
   overviewNavChevron: { position: 'absolute', top: 6, right: 6 },
   groupCtaCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
   budgetCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
+  uncategorizedCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
+  uncategorizedList: { marginTop: 12, gap: 8 },
+  uncategorizedRow: { minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  uncategorizedCopy: { minWidth: 0, flex: 1 },
+  uncategorizedDescription: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  uncategorizedAmount: { marginTop: 2, fontSize: 11, fontFamily: 'Inter_400Regular' },
+  uncategorizedAction: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   groupCtaHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   groupCtaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   groupCtaEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
