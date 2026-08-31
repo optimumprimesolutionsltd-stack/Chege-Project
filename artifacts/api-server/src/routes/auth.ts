@@ -284,7 +284,15 @@ router.get('/auth/user', async (req: Request, res: Response) => {
   // Always fetch fresh user data from DB — session snapshots can be stale
   // (e.g. firstName/lastName added after the session was first created).
   const [dbUser] = await db
-    .select()
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      preferredName: usersTable.preferredName,
+      profileImageUrl: usersTable.profileImageUrl,
+      customProfilePhotoPath: usersTable.customProfilePhotoPath,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, req.user.id))
     .limit(1);
