@@ -16,24 +16,24 @@ import { Input } from "@/components/ui/input";
 
 const CHOOSER_STORAGE_PREFIX = "jamvi:budget-chooser:completed:";
 
-const ONBOARDING_CATEGORY_TIERS = [
-  { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Housing", "Utilities", "Transport"] },
-  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Family support", "Personal care"] },
-  { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business"] },
-  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Clothing", "Gifts", "Other"] },
-] as const;
+const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; description: string; categories: readonly string[] }[] = [
+  { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Food & meals", "Groceries", "Housing", "Accommodation", "Rent", "Utilities", "Shared bills", "Transport"] },
+  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Tuition & fees", "Books & supplies", "Family support", "Personal care", "Insurance", "School fees"] },
+  { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business", "Business supplies", "Stock & inventory", "Savings", "Joint savings", "Emergency fund"] },
+  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Member contributions", "Projects", "Loans", "Other"] },
+];
 
 const ALL_ONBOARDING_CATEGORIES = ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories);
 const COMMON_INCOME_STREAMS = ["Salary or wages", "Business or side hustle", "Freelance or contract work", "Farming or livestock", "Rental income", "Family support or remittances", "Pension or benefits", "Other income"] as const;
 const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
-  student: ["Food", "Housing", "Transport", "Education", "Airtime & data", "Entertainment", "Other"],
-  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Personal care", "Other"],
-  business: ["Food", "Transport", "Health", "Work & business", "Airtime & data", "Other"],
-  couple: ["Food", "Housing", "Utilities", "Transport", "Health", "Family support", "Other"],
-  friends: ["Food", "Housing", "Utilities", "Transport", "Entertainment", "Airtime & data", "Other"],
-  family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support"],
-  chama: ["Food", "Transport", "Family support", "Work & business", "Other"],
-  club: ["Food", "Transport", "Education", "Entertainment", "Work & business", "Other"],
+  student: ["Food & meals", "Accommodation", "Transport", "Tuition & fees", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Emergency fund", "Savings", "Other"],
+  working: ["Food", "Rent", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Savings", "Emergency fund", "Other"],
+  business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Airtime & data", "Savings", "Other"],
+  couple: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Joint savings", "Emergency fund", "Other"],
+  friends: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Other"],
+  family: ["Groceries", "Rent", "Utilities", "Transport", "Health", "School fees", "Family support", "Insurance", "Household", "Emergency fund"],
+  chama: ["Member welfare", "Loans", "Member contributions", "Events", "Transport", "Projects", "Emergency fund", "Other"],
+  club: ["Member contributions", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
 };
 
 export function budgetChooserCompletionKey(userId: string) {
@@ -107,6 +107,8 @@ export function BudgetChooser({
   const [customEndDate, setCustomEndDate] = useState("");
   const [showCategorySetup, setShowCategorySetup] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [customCategory, setCustomCategory] = useState("");
   const [showIncomeSetup, setShowIncomeSetup] = useState(false);
   const [selectedIncomeStreams, setSelectedIncomeStreams] = useState<string[]>([]);
   const [customIncomeStream, setCustomIncomeStream] = useState("");
@@ -272,10 +274,12 @@ export function BudgetChooser({
   }
 
   if (showCategorySetup) {
-    const recommendedCategories = onboardingPurpose ? (PURPOSE_CATEGORY_MAP[onboardingPurpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES;
+    const recommendedCategories = [...(onboardingPurpose ? (PURPOSE_CATEGORY_MAP[onboardingPurpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES), ...customCategories];
     const visibleTiers = ONBOARDING_CATEGORY_TIERS.map((tier) => ({ ...tier, categories: tier.categories.filter((category) => recommendedCategories.includes(category)) })).filter((tier) => tier.categories.length > 0);
+    if (customCategories.length > 0) visibleTiers.push({ priority: 5, label: "Your categories", description: "Custom categories you added for your own situation.", categories: customCategories });
     const allSelected = recommendedCategories.every((category) => selectedCategories.includes(category));
     const toggleCategory = (category: string) => setSelectedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]);
+    const addCustomCategory = () => { const category = customCategory.trim(); if (category && !customCategories.includes(category)) { setCustomCategories((current) => [...current, category]); setSelectedCategories((current) => [...current, category]); } setCustomCategory(""); };
     return (
       <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
         <section className="mx-auto w-full max-w-4xl">
@@ -303,6 +307,7 @@ export function BudgetChooser({
                   </section>
                 ))}
               </div>
+              <div className="mt-8 rounded-2xl border border-dashed border-primary/30 bg-primary/[0.03] p-4"><p className="font-semibold text-foreground">Can’t find what you need?</p><p className="mt-1 text-sm text-muted-foreground">Add a category that is unique to your life, group, or short-term plan.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input aria-label="Custom budget category" placeholder="e.g. HELB, wedding venue, or trip fund" value={customCategory} onChange={(event) => setCustomCategory(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomCategory(); } }} /><Button type="button" variant="outline" className="rounded-xl" onClick={addCustomCategory}>Add category</Button></div></div>
               <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{selectedCategories.length} of {recommendedCategories.length} recommended categories selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:categories:${encodeURIComponent(userId)}`, JSON.stringify(selectedCategories)); } catch { /* Continue even when storage is unavailable. */ } setShowCategorySetup(false); setShowIncomeSetup(true); }}>Continue to income setup <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
             </div>
           </div>
