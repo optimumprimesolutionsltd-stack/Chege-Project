@@ -13,6 +13,7 @@
     { "idx": 8, "version": "7", "when": 1788008129406, "tag": "0008_expense_category_allocations", "breakpoints": true },
     { "idx": 9, "version": "7", "when": 1788008129407, "tag": "0009_expense_category_allocation_positions", "breakpoints": true },
     { "idx": 10, "version": "7", "when": 1788008129408, "tag": "0010_bank_to_bank_transfers", "breakpoints": true },
-    { "idx": 11, "version": "7", "when": 1788188954000, "tag": "0011_onboarding_preferences", "breakpoints": true }
+    { "idx": 11, "version": "7", "when": 1788188954000, "tag": "0011_onboarding_preferences", "breakpoints": true },
+    { "idx": 12, "version": "7", "when": 1788189168000, "tag": "0012_budget_plans_and_onboarding_allocations", "breakpoints": true }
   ]
 }
