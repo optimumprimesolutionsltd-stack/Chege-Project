@@ -16,6 +16,7 @@ import { invitationsRouter, publicInvitationsRouter } from "./invitations";
 import { inviteLinksRouter, publicInviteLinksRouter } from "./invite-links";
 import photoStorageRouter from "./photo-storage";
 import onboardingRouter from "./onboarding";
+import budgetPlansRouter from "./budget-plans";
 import { requireMember } from "../middlewares/requireMember";
 
 const router: IRouter = Router();
@@ -44,5 +45,6 @@ router.use(incomeSourcesRouter);
 router.use(invitationsRouter);
 router.use(inviteLinksRouter);
 router.use(photoStorageRouter);
+router.use(budgetPlansRouter);
 
 export default router;

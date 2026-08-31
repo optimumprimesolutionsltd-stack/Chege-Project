@@ -127,16 +127,21 @@ export function BudgetChooser({
     // Category management belongs to the workspace manager. Income streams are
     // attributed to the signed-in user and can be added by any member.
     if (selectedCategories.length > 0 && (workspace.isPrivate || workspace.role === "owner" || workspace.role === "admin")) {
-      await Promise.allSettled(selectedCategories.map(async (name) => {
-        const tier = ONBOARDING_CATEGORY_TIERS.find((item) => item.categories.some((category) => category === name));
-        const response = await fetch("/api/budget-categories", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, budgetAmount: Math.max(0, Math.round(Number(categoryBudgets[name] ?? 0))), priority: tier?.priority ?? 4, color: "#6B7280", isRecurring: true }),
-        });
-        if (!response.ok && response.status !== 409) throw new Error("Could not save category preference");
-      }));
+      const startDate = new Date().toISOString().slice(0, 10);
+      const response = await fetch("/api/budget-plans/onboarding", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: onboardingPurpose ? `${onboardingPurpose} budget` : "My budget",
+          purpose: onboardingPurpose,
+          durationType: budgetDuration ?? "month",
+          startDate,
+          endDate: budgetDuration === "custom" ? customEndDate : null,
+          categories: selectedCategories.map((name, position) => ({ name, plannedAmount: Math.max(0, Math.round(Number(categoryBudgets[name] ?? 0))), priority: ONBOARDING_CATEGORY_TIERS.find((item) => item.categories.some((category) => category === name))?.priority ?? 4, isCustom: customCategories.includes(name), position })),
+        }),
+      });
+      if (!response.ok) throw new Error("Could not save your budget plan");
     }
     if (selectedIncomeStreams.length > 0) {
       await Promise.allSettled(selectedIncomeStreams.map(async (name) => {
