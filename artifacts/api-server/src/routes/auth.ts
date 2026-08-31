@@ -57,8 +57,8 @@ import { resolvePhotoUrl } from '../lib/photoStorage';
 import { resolveOrigin } from '../lib/requestOrigin.js';
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
-
 const router: IRouter = Router();
+const normalizeEmail = (email: string) => email.trim().toLocaleLowerCase("en-US");
 
 async function authUserPayload(user: {
   id: string;
@@ -189,7 +189,8 @@ function getSafeErrorMetadata(error: unknown) {
 }
 
 export async function upsertUser(claims: Record<string, unknown>) {
-  const email = (claims.email as string) || null;
+  const rawEmail = (claims.email as string) || "";
+  const email = rawEmail ? normalizeEmail(rawEmail) : null;
   const profile = {
     email,
     // Google OIDC uses given_name / family_name; fall back to first_name /
@@ -246,13 +247,14 @@ router.post('/auth/register', async (req: Request, res: Response) => {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter valid details.' });
     return;
   }
-  const existing = await db.query.usersTable.findFirst({ where: eq(usersTable.email, parsed.data.email) });
+  const email = normalizeEmail(parsed.data.email);
+  const existing = await db.query.usersTable.findFirst({ where: eq(usersTable.email, email) });
   if (existing) {
     res.status(409).json({ error: 'An account with this email already exists. Try signing in instead.' });
     return;
   }
   const [user] = await db.insert(usersTable).values({
-    email: parsed.data.email,
+    email,
     passwordHash: hashPassword(parsed.data.password),
     preferredName: parsed.data.name,
     firstName: parsed.data.name,
@@ -267,7 +269,8 @@ router.post('/auth/password-login', async (req: Request, res: Response) => {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter a valid email and password.' });
     return;
   }
-  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.email, parsed.data.email) });
+  const email = normalizeEmail(parsed.data.email);
+  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.email, email) });
   if (!user?.passwordHash || !verifyPassword(parsed.data.password, user.passwordHash)) {
     res.status(401).json({ error: 'Email or password is incorrect.' });
     return;

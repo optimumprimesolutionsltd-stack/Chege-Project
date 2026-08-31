@@ -98,6 +98,10 @@ export function BudgetChooser({
   const [duplicateCategoryNotice, setDuplicateCategoryNotice] = useState<string | null>(null);
   const [creationError, setCreationError] = useState<string | null>(null);
   const userId = user.id ?? "";
+  const skipOnboarding = () => {
+    markBudgetChooserComplete(userId);
+    window.location.assign(import.meta.env.BASE_URL);
+  };
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
   const [sharedBudgetName, setSharedBudgetName] = useState("");
   const [sharedBudgetKind, setSharedBudgetKind] = useState<SharedGroupKind | null>(null);
@@ -409,7 +413,12 @@ export function BudgetChooser({
       <section className="mx-auto w-full max-w-5xl">
         <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
           <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Your budgets</p>
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Your budgets</p>
+              <button type="button" onClick={skipOnboarding} className="shrink-0 text-xs font-medium text-primary-foreground/55 underline-offset-4 transition-colors hover:text-primary-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="You can complete setup later from your budgets">
+                Skip for now
+              </button>
+            </div>
             <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{onboardingHeading}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your private and Shared budgets stay separate in Jamvi.</p>
           </header>

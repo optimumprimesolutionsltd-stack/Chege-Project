@@ -180,6 +180,16 @@ function MainRouter() {
     enabled: isAuthenticated,
     retry: false,
   });
+  const { data: onboardingPreferences, isLoading: isOnboardingPreferencesLoading } = useQuery({
+    queryKey: ['onboarding-preferences', user?.id],
+    queryFn: async () => {
+      const response = await fetch('/api/onboarding/preferences', { credentials: 'include' });
+      if (!response.ok) throw new Error('Could not check onboarding status.');
+      return response.json() as Promise<{ completed?: boolean } | null>;
+    },
+    enabled: isAuthenticated,
+    retry: false,
+  });
 
   const appRoute = routePath(window.location.pathname, import.meta.env.BASE_URL);
   const publicPath = appRoute?.replace(/\/+$/, '') || '/';
@@ -216,7 +226,15 @@ function MainRouter() {
     return <LoginPage />;
   }
 
-  const completedBudgetChooser = hasCompletedBudgetChooser(user?.id ?? '');
+  if (isOnboardingPreferencesLoading) {
+    return <AppLoading message="Checking your Jamvi setup…" />;
+  }
+
+  // The server record is authoritative across browsers and login providers.
+  // The local flag remains a fallback for older accounts that completed setup
+  // before onboarding preferences were persisted.
+  const hasExistingBudget = workspaces.length > 0;
+  const completedBudgetChooser = Boolean(onboardingPreferences?.completed) || hasCompletedBudgetChooser(user?.id ?? '') || hasExistingBudget;
   const chooserRoute = shouldShowBudgetChooser({
     pathname: window.location.pathname,
     basePath: import.meta.env.BASE_URL,
