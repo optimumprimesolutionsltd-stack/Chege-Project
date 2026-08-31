@@ -6,7 +6,7 @@ export type AskJamviSummary = {
   goals: Array<{ name: string; targetAmount: number; currentAmount: number; remaining: number; deadline: string | null }>;
 };
 
-const ACTION_REQUEST = /\b(transfer|send|move money|withdraw|deposit|pay|create|add|delete|remove|edit|change|update|save|set a budget)\b/i;
+const ACTION_REQUEST = /\b(transfer|send|withdraw|deposit|pay|create|add|delete|remove|edit|change|update|save|set a budget)\b|\b(move\s+(?:money|\w+\s+\d+(?:\.\d+)?|\d+(?:\.\d+)?)\b.{0,80}\b(to|into)\b)|\bmove money\b/i;
 
 export function isAskJamviActionRequest(question: string): boolean {
   return ACTION_REQUEST.test(question.trim());

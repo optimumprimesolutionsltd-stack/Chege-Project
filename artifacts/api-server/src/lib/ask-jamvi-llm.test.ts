@@ -12,7 +12,7 @@ const summary = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("Ask Jamvi server LLM guardrails", () => {
-  it.each(["Move money to savings", "delete my expense", "change my budget"]) ("identifies action request: %s", (question) => {
+  it.each(["Move money to savings", "Move KES 500 to savings", "delete my expense", "change my budget"]) ("identifies action request: %s", (question) => {
     expect(isAskJamviActionRequest(question)).toBe(true);
   });
 
