@@ -56,6 +56,7 @@ import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
 import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
+import { AskJamviPanel } from "@/components/ask-jamvi-panel";
 import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
 import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder } from "@/lib/expense-funding-utils";
@@ -1992,6 +1993,7 @@ export default function Dashboard() {
         </section>
       </div>
 
+      <AskJamviPanel month={month} year={year} workspaceName={group?.name ?? undefined} />
       {isSharedWorkspace && (
         <section aria-labelledby="group-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
           <div className="mb-4">
