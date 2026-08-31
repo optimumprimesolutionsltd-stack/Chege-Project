@@ -585,6 +585,7 @@ function ExpenseForm({
   const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
   const bankLabel = "Bank account";
   const isOtherCategory = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+  const isPrimaryOtherCategory = categoryAllocations[0]?.category.trim().toLocaleLowerCase() === "other";
   const expenseTotal = Number(amount) || 0;
   const fundingTotal = (Number(bankPortion) || 0)
     + (Number(directPortion) || 0)
@@ -1111,10 +1112,10 @@ function ExpenseForm({
              <p className="text-xs leading-relaxed text-muted-foreground">
                Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
              </p>
-            {category.trim() && categoryAllocations.length === 1 && (
-               <div className="flex flex-col gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
+             {category.trim() && (
+                <div data-testid="primary-category-allocation-dashboard" className="flex flex-col gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
                  <label className="text-sm font-semibold text-foreground">
-                   {isOtherCategory ? "One-off spending amount (KES)" : `${category} amount (KES)`}
+                    {isPrimaryOtherCategory ? "One-off spending amount (KES)" : `${category} amount (KES)`}
                  </label>
                  <Input
                    type="number"
@@ -1122,7 +1123,7 @@ function ExpenseForm({
                    step="1"
                    value={categoryAllocations[0]?.amount ?? ""}
                    onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
-                   aria-label={isOtherCategory ? "KES amount for one-off spending" : "KES amount covered by the primary category"}
+                    aria-label={isPrimaryOtherCategory ? "KES amount for one-off spending" : "KES amount covered by the primary category"}
                    aria-required="true"
                    required
                    placeholder="Enter KES amount"

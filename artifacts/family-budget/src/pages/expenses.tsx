@@ -780,6 +780,7 @@ export default function Expenses() {
 
   const handleCreate = async (e: React.FormEvent, saveWithoutCategory = false) => {
     e.preventDefault();
+    const addDescription = addForm.description.trim();
     const payerIds = addForm.payerIds.length > 0
       ? addForm.payerIds
       : (memberPayerId ? [memberPayerId] : []);
@@ -834,7 +835,7 @@ export default function Expenses() {
       });
       return;
     }
-    if (!addForm.description || !addForm.date) {
+    if (!addDescription || !addForm.date) {
       toast({
         variant: "destructive",
         title: "Complete the expense details",
@@ -1000,7 +1001,7 @@ export default function Expenses() {
                ? { ...allocation, category: normalizedOtherCategory ?? allocation.category }
                : allocation,
             ) } : {}),
-          description: addForm.description, notes: addForm.notes || undefined,
+          description: addDescription, notes: addForm.notes || undefined,
           paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
           isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
           ...(addForm.paidFromBank ? { accountId: addForm.accountId! } : {}),
@@ -1020,6 +1021,7 @@ export default function Expenses() {
 
   const handleUpdate = async (e: React.FormEvent, id: number) => {
     e.preventDefault();
+    const editDescription = editForm.description.trim();
     if (!editForm.amount) {
       toast({
         variant: "destructive",
@@ -1072,7 +1074,7 @@ export default function Expenses() {
       });
       return;
     }
-    if (!editForm.description || !editForm.date) {
+    if (!editDescription || !editForm.date) {
       toast({
         variant: "destructive",
         title: "Complete the expense details",
@@ -1143,7 +1145,7 @@ export default function Expenses() {
           amount,
           category: hasCategoryAllocation ? editForm.category : "",
            ...(hasCategoryAllocation ? { categoryAllocations } : {}),
-          description: editForm.description,
+          description: editDescription,
           notes: editForm.notes || undefined,
           paidById: editForm.paidById || undefined,
           isRecurring: editForm.isRecurring,
@@ -1308,7 +1310,7 @@ export default function Expenses() {
                Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
              </p>
              {form.category.trim() && (
-               <div className="flex flex-col gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
+               <div data-testid={`primary-category-allocation-${mode}`} className="flex flex-col gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
                  <label className="text-sm font-semibold text-foreground">
                    {form.category.trim().toLocaleLowerCase() === "other" ? "One-off spending amount (KES)" : `${form.category} amount (KES)`}
                  </label>

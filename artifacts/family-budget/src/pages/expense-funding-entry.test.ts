@@ -112,6 +112,9 @@ describe("expense funding amount entry", () => {
 
   it("requires category amounts to be entered manually on every expense form", () => {
     expect(dashboardSource).toContain("KES amount covered by the primary category");
+    expect(dashboardSource).toContain('data-testid="primary-category-allocation-dashboard"');
+    expect(dashboardSource).toContain("const isPrimaryOtherCategory = categoryAllocations[0]?.category.trim().toLocaleLowerCase() === \"other\";");
+    expect(dashboardSource).not.toContain("{category.trim() && categoryAllocations.length === 1 && (\n                <div");
     expect(dashboardSource).toContain("Need to split this expense? Add another category and enter its share.");
     expect(dashboardSource).toContain('disabled={!category.trim()}');
     expect(dashboardSource).toContain("Choose a category first, then add another category");
@@ -125,6 +128,7 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).not.toContain("setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }]");
     expect(expensesSource).toContain("const setAmount = (value: string) => setAmountValue(value);");
     expect(expensesSource).toContain("KES amount covered by the primary category");
+    expect(expensesSource).toContain('data-testid={`primary-category-allocation-${mode}`}');
     expect(expensesSource).toContain("Need to split this expense? Add another category and enter its share.");
     expect(expensesSource).toContain('disabled={!form.category.trim()}');
     expect(expensesSource).toContain("Choose a category first, then add another category");
@@ -140,6 +144,15 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain("Use this for a one-time expense that does not fit any listed category.");
     expect(mobileSource).toContain(": [{ category: result.categoryName!, amount: '' }]");
     expect(mobileSource).not.toContain("amount: result.expenseDraft?.amount ?? amount");
+  });
+
+  it("rejects whitespace-only web descriptions and submits trimmed descriptions", () => {
+    expect(expensesSource).toContain("const addDescription = addForm.description.trim();");
+    expect(expensesSource).toContain("if (!addDescription || !addForm.date)");
+    expect(expensesSource).toContain("description: addDescription");
+    expect(expensesSource).toContain("const editDescription = editForm.description.trim();");
+    expect(expensesSource).toContain("if (!editDescription || !editForm.date)");
+    expect(expensesSource).toContain("description: editDescription");
   });
 
   it("treats one-off spending as a category with its own amount", () => {
