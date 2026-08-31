@@ -1150,6 +1150,19 @@ export default function AddExpenseSheet() {
             </Text>
           </View>
         </Pressable>
+        {categoryAllocations.length === 0 && (
+          <Pressable
+            disabled
+            accessibilityRole="button"
+            accessibilityLabel="Add another expense category"
+            accessibilityState={{ disabled: true }}
+            testID="add-category-allocation-mobile-disabled"
+            style={[styles.addSourceLink, { opacity: 0.5 }]}
+          >
+            <Feather name="plus-circle" size={15} color={colors.mutedForeground} />
+            <Text style={[styles.addSourceLinkText, { color: colors.mutedForeground }]}>Add another category</Text>
+          </Pressable>
+        )}
         {categoryAllocations.length > 0 && (
           <View
             testID="category-allocation-card"

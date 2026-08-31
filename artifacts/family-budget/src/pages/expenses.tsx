@@ -637,6 +637,25 @@ export default function Expenses() {
     setIsCreatingCategory(false);
   };
 
+  const addOneOffCategory = (form: ReturnType<typeof useExpenseForm>) => {
+    if (form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")) {
+      return;
+    }
+    if (!form.category.trim()) {
+      form.setCategory("Other");
+    }
+    form.setCategoryAllocations((current) => {
+      if (current.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")) {
+        return current;
+      }
+      if (!current[0]?.category.trim()) {
+        return current.map((allocation, index) => index === 0 ? { ...allocation, category: "Other" } : allocation);
+      }
+      return [...current, { category: "Other", amount: "" }];
+    });
+    setIsCreatingCategory(false);
+  };
+
   const openRecurringBudgetSetup = (form: ReturnType<typeof useExpenseForm>, mode: "add" | "edit", makeRecurring = true, proposedCategory?: string) => {
     if (mode !== "add") {
       form.setIsRecurring(true);
@@ -1274,6 +1293,20 @@ export default function Expenses() {
                   .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                  <option value="Other">One-off spending</option>
             </select>
+             <Button
+               type="button"
+               variant={form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") ? "default" : "outline"}
+               className="h-12 w-full justify-start border-input text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+               onClick={() => addOneOffCategory(form)}
+               aria-label="Select one-off spending category"
+               aria-pressed={form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")}
+               data-testid={`one-off-spending-category-${mode}`}
+             >
+               One-off spending
+             </Button>
+             <p className="text-xs leading-relaxed text-muted-foreground">
+               Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
+             </p>
              {form.category.trim() && (
                <div className="flex flex-col gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
                  <label className="text-sm font-semibold text-foreground">
@@ -1293,14 +1326,13 @@ export default function Expenses() {
                  />
                </div>
              )}
-              {form.category.trim().toLocaleLowerCase() === "other" && <p className="text-xs leading-relaxed text-muted-foreground">
-               Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
-              </p>}
           </div>
-           {form.category.trim() && form.categoryAllocations.length === 1 && (
+           {form.categoryAllocations.length === 1 && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-               <p className="text-xs text-muted-foreground">Need to split this expense? Add another category and enter its share.</p>
-               <Button type="button" size="sm" variant="outline" onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])} data-testid={`add-category-allocation-${mode}`}>
+               <p className="text-xs text-muted-foreground">
+                 {form.category.trim() ? "Need to split this expense? Add another category and enter its share." : "Choose a category first, then add another category if this expense covers more than one."}
+               </p>
+               <Button type="button" size="sm" variant="outline" disabled={!form.category.trim()} onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])} data-testid={`add-category-allocation-${mode}`}>
                  <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
                </Button>
              </div>

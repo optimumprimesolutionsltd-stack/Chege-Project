@@ -1086,6 +1086,31 @@ function ExpenseForm({
                  .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 <option value="Other">One-off spending</option>
             </select>
+             <Button
+               type="button"
+               variant={isOtherCategory ? "default" : "outline"}
+               className="h-11 w-full justify-start sm:w-auto"
+               onClick={() => {
+                 setCategoryAllocations(current => {
+                   if (current.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")) return current;
+                   if (!current[0]?.category.trim()) {
+                     setCategory("Other");
+                     return current.map((allocation, index) => index === 0 ? { ...allocation, category: "Other" } : allocation);
+                   }
+                   return [...current, { category: "Other", amount: "" }];
+                 });
+                 setCategory(previous => previous || "Other");
+                 setIsAddingCategory(false);
+               }}
+               aria-label="Select one-off spending category"
+               aria-pressed={isOtherCategory}
+               data-testid="one-off-spending-category-dashboard"
+             >
+               One-off spending
+             </Button>
+             <p className="text-xs leading-relaxed text-muted-foreground">
+               Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
+             </p>
             {category.trim() && categoryAllocations.length === 1 && (
                <div className="flex flex-col gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
                  <label className="text-sm font-semibold text-foreground">
@@ -1105,14 +1130,13 @@ function ExpenseForm({
                  />
                </div>
              )}
-              {isOtherCategory && <p className="text-xs leading-relaxed text-muted-foreground">
-               Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
-              </p>}
           </div>
-           {category.trim() && (
+           {categoryAllocations.length === 1 && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-               <p className="text-xs text-muted-foreground">Need to split this expense? Add another category and enter its share.</p>
-               <Button type="button" size="sm" variant="outline" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard">
+               <p className="text-xs text-muted-foreground">
+                 {category.trim() ? "Need to split this expense? Add another category and enter its share." : "Choose a category first, then add another category if this expense covers more than one."}
+               </p>
+               <Button type="button" size="sm" variant="outline" disabled={!category.trim()} onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard">
                  <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
                </Button>
              </div>

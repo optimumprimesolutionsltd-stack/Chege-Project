@@ -26,6 +26,7 @@ describe('optional expense category layout', () => {
     expect(source).toContain('{categoryAllocations.length > 0 && (');
     expect(source).toContain('testID="category-allocation-card"');
     expect(source).toContain('testID="add-category-allocation-mobile"');
+    expect(source).toContain('testID="add-category-allocation-mobile-disabled"');
     expect(source).toContain('CATEGORY AMOUNTS REQUIRED');
     expect(source).toContain('Enter how much of the expense each category covered.');
     expect(source).toContain('One-off spending amount (KES)');

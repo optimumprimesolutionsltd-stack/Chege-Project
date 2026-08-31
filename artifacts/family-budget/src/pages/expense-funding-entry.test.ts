@@ -113,9 +113,12 @@ describe("expense funding amount entry", () => {
   it("requires category amounts to be entered manually on every expense form", () => {
     expect(dashboardSource).toContain("KES amount covered by the primary category");
     expect(dashboardSource).toContain("Need to split this expense? Add another category and enter its share.");
+    expect(dashboardSource).toContain('disabled={!category.trim()}');
+    expect(dashboardSource).toContain("Choose a category first, then add another category");
     expect(dashboardSource).toContain("categoryAllocations.slice(1).map");
     expect(dashboardSource).toContain("One-off spending amount (KES)");
     expect(dashboardSource).toContain('<option value="Other"');
+    expect(dashboardSource).toContain('data-testid="one-off-spending-category-dashboard"');
     expect(dashboardSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
     expect(dashboardSource).toContain('placeholder="Enter KES amount"');
     expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
@@ -123,9 +126,12 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("const setAmount = (value: string) => setAmountValue(value);");
     expect(expensesSource).toContain("KES amount covered by the primary category");
     expect(expensesSource).toContain("Need to split this expense? Add another category and enter its share.");
+    expect(expensesSource).toContain('disabled={!form.category.trim()}');
+    expect(expensesSource).toContain("Choose a category first, then add another category");
     expect(expensesSource).toContain("form.categoryAllocations.slice(1).map");
     expect(expensesSource).toContain("One-off spending amount (KES)");
     expect(expensesSource).toContain('<option value="Other"');
+    expect(expensesSource).toContain('data-testid={`one-off-spending-category-${mode}`}');
     expect(expensesSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
     expect(expensesSource).toContain('aria-required="true" required placeholder="Enter KES amount"');
     expect(mobileSource).toContain("CATEGORY AMOUNTS REQUIRED");
