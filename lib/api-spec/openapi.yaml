@@ -1905,10 +1905,10 @@ components:
           description: Amount in KES
         category:
           type: string
-          description: Compatibility/display primary category. For allocated expenses this is the first allocation category.
+          description: Compatibility/display primary category. Empty when the expense is uncategorized; for allocated expenses this is the first allocation category.
         categoryAllocations:
           type: array
-          description: Category portions. Legacy expenses without stored portions are returned as one portion using category and amount.
+          description: Category portions. Empty when the expense is uncategorized; legacy categorized expenses without stored portions are returned as one portion using category and amount.
           items:
             $ref: "#/components/schemas/ExpenseCategoryAllocation"
         description:
@@ -1957,7 +1957,7 @@ components:
           type: number
         category:
           type: string
-          description: Compatibility/display primary category. Must match the first categoryAllocations item when allocations are supplied.
+          description: Optional compatibility/display primary category. Omit or leave blank for an uncategorized expense. When non-empty allocations are supplied, defaults to and must match the first allocation category. "Uncategorized" is reserved internally and cannot be submitted as a category.
         categoryAllocations:
           type: array
           description: Optional whole-KES category portions. Amounts must total amount exactly and each category can appear once.
@@ -1993,7 +1993,6 @@ components:
           format: date
       required:
         - amount
-        - category
         - description
         - date
 
@@ -2029,6 +2028,7 @@ components:
         category:
           type: string
           minLength: 1
+          description: Cannot be "Uncategorized", which is reserved internally for uncategorized expenses.
         amount:
           type: number
           minimum: 1
@@ -2094,6 +2094,7 @@ components:
       properties:
         name:
           type: string
+          description: Budget category name. "Uncategorized" is reserved internally and cannot be used.
         budgetAmount:
           type: number
           description: Monthly budget in KES; use 0 when creating a category from a withdrawal
@@ -2122,6 +2123,7 @@ components:
       properties:
         name:
           type: string
+          description: Budget category name. "Uncategorized" is reserved internally and cannot be used.
         budgetAmount:
           type: number
         priority:

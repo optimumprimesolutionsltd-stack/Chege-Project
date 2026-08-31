@@ -126,26 +126,6 @@ function attachDualWebBuilds(
 
   // Register the scoped application first so its /app assets cannot be
   // shadowed by a similarly named marketing asset.
-  // People type the address they know from every other site. None of these are
-  // routes in the marketing app, so without this they fall through to its
-  // catch-all and land on the not-found page — a soft 404 that answers 200 and
-  // looks like the site is broken. Sending them to /app/ lets the app decide:
-  // straight to the dashboard if their session is good, to sign-in if not.
-  const SIGN_IN_ALIASES = [
-    "/login",
-    "/log-in",
-    "/signin",
-    "/sign-in",
-    "/signup",
-    "/sign-up",
-    "/register",
-  ];
-  for (const alias of SIGN_IN_ALIASES) {
-    app.get(alias, (_req, res) => {
-      res.redirect(302, "/app/");
-    });
-  }
-
   // Express does not distinguish "/app" from "/app/" by default, so this route
   // matches both. Redirecting "/app/" to "/app/" is an infinite loop, and the
   // browser gives up with ERR_TOO_MANY_REDIRECTS — the app is unreachable at

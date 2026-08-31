@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   addFundingSourceWithRemainder,
   getExpenseFundingControlState,
+  getExpenseFundingStatus,
   getFundingRemainder,
+  getCategoryAllocationStatus,
   getNewExpenseCategoryMode,
   hasMissingPersonalFundingSource,
 } from "./expense-funding-utils";
@@ -132,5 +134,48 @@ describe("expense funding controls", () => {
     expect(getNewExpenseCategoryMode({ addToBudget: false, canManageCategories: true })).toBe("unbudgeted");
     expect(getNewExpenseCategoryMode({ addToBudget: true, canManageCategories: false })).toBe("unbudgeted");
     expect(getNewExpenseCategoryMode({ addToBudget: true, canManageCategories: true })).toBe("budgeted");
+  });
+
+  it("does not mark an amount-only category row ready before a category is selected", () => {
+    expect(getCategoryAllocationStatus({
+      total: 1000,
+      allocations: [{ category: "", amount: 1000 }],
+      formatAmount: String,
+    })).toEqual({
+      tone: "attention",
+      message: "Choose a category for every row",
+    });
+  });
+
+  it("does not mark bank funding ready before an account is selected", () => {
+    expect(getExpenseFundingStatus({
+      total: 1000,
+      fundingTotal: 1000,
+      hasBankFunding: true,
+      hasBankAccount: false,
+      hasDirectFunding: false,
+      hasDirectPayer: false,
+      hasDirectIncomeSource: false,
+      formatAmount: String,
+    })).toEqual({
+      tone: "attention",
+      message: "Choose the bank account used for this expense",
+    });
+  });
+
+  it("does not mark direct funding ready before its payer and income source are selected", () => {
+    expect(getExpenseFundingStatus({
+      total: 1000,
+      fundingTotal: 1000,
+      hasBankFunding: false,
+      hasBankAccount: false,
+      hasDirectFunding: true,
+      hasDirectPayer: true,
+      hasDirectIncomeSource: false,
+      formatAmount: String,
+    })).toEqual({
+      tone: "attention",
+      message: "Choose an income source for every direct portion",
+    });
   });
 });

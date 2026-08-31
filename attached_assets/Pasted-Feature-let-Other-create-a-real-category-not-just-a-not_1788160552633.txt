@@ -1,0 +1,73 @@
+Feature: let "Other" create a real category, not just a note.
+
+CONTEXT — read this before changing anything, most of it already
+exists.
+
+Today, picking "Other" as an expense category asks for a note. The note
+describes that one expense and nothing more. The category is not saved,
+so next month the same spending is "Other" again and it never appears
+in the budget.
+
+What the user wants: when they pick "Other" and name it, offer to save
+it as a real category they can budget against and reuse.
+
+WHAT ALREADY EXISTS — do not rebuild any of this.
+
+- Table `budget_categories` (lib/db/src/schema/budget.ts): groupId,
+  name, budgetAmount, priority, color, isRecurring, activeMonth,
+  activeYear. Unique on (groupId, name).
+- `budgetAmount` is NOT NULL. A category cannot exist without a monthly
+  figure. That is deliberate and matches what the user wants.
+- `POST /budget-categories` already exists in the API.
+- The recurring-expense-to-budget handoff already exists: marking an
+  expense recurring takes the user to the Budget tab, asks for the
+  monthly amount, and returns without losing the draft. Reuse that
+  interaction rather than inventing a second one.
+- Multi-category splits already work through `categoryAllocations`.
+  "Other" is currently detected by comparing an allocation's category
+  to the literal string "other".
+
+NO SCHEMA CHANGE IS NEEDED. If you think you need one, stop and explain
+why before writing a migration.
+
+THE FLOW TO BUILD
+
+1. User picks "Other" and types a name, e.g. "School fees".
+2. Offer to save it as a category — a checkbox or a small button, not a
+   separate screen.
+3. If they accept, ask for the monthly budget figure. Use the same
+   handoff the recurring flow already uses, and preserve every unsaved
+   field on the expense form.
+4. Create it with POST /budget-categories.
+5. The expense is then recorded against "School fees", not "Other".
+6. Next time, "School fees" appears in the category list normally.
+
+If they decline, keep today's behaviour exactly: the note describes
+that single expense and no category is created.
+
+WHERE IT APPLIES
+
+All three surfaces, consistently:
+- the dashboard quick log
+- the full expenses page
+- mobile add-expense
+
+TWO THINGS TO GET RIGHT
+
+Categories belong to a workspace (groupId). Creating one inside a
+shared workspace creates it for that group and everyone will see it.
+Creating one in a personal budget affects only that budget. Make sure
+the right groupId is used.
+
+There is an existing test, other-category-description.test.ts, that
+asserts the current "Other requires a note" behaviour. Do not delete it
+to make your change pass. Update it deliberately to describe the new
+behaviour, and keep a case covering the decline path.
+
+CONSTRAINTS
+
+- Run `git pull` before you start. This workspace goes stale and work
+  has been reverted because of it.
+- Do not touch the marketing website, render.yaml, CI, or anything in
+  lib/db/scripts. Those are the other agent's side, as replit.md says.
+- Read replit.md first.

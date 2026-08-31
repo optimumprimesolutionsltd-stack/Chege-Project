@@ -62,7 +62,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   addFundingSourceWithRemainder,
+  getCategoryAllocationStatus,
   getExpenseFundingControlState,
+  getExpenseFundingStatus,
   getFundingRemainder,
   getNewExpenseCategoryMode,
   hasMissingPersonalFundingSource,
@@ -253,6 +255,7 @@ export default function Expenses() {
   const [newBankAccountName, setNewBankAccountName] = useState("");
   const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
   const [newBankOpeningBalance, setNewBankOpeningBalance] = useState("");
+  const [uncategorizedSaveOpen, setUncategorizedSaveOpen] = useState(false);
 
   const addForm = useExpenseForm(undefined, now);
   const editForm = useExpenseForm();
@@ -280,9 +283,15 @@ export default function Expenses() {
         date?: string;
         saveOtherAsCategory?: boolean;
         recurringMonthlyBudget?: string;
+        isRecurring?: boolean;
+        confirmedCategory?: string;
       };
       addForm.setAmount(draft.amount ?? "");
-      addForm.setCategoryAllocations(draft.categoryAllocations?.length ? draft.categoryAllocations : [{ category: "", amount: "" }]);
+      addForm.setCategoryAllocations((draft.categoryAllocations?.length ? draft.categoryAllocations : [{ category: "", amount: "" }]).map((allocation) =>
+        (!allocation.category.trim() || allocation.category.trim().toLocaleLowerCase() === "other") && draft.confirmedCategory
+          ? { ...allocation, category: draft.confirmedCategory }
+          : allocation,
+      ));
       addForm.setDescription(draft.description ?? "");
       addForm.setNotes(draft.notes ?? "");
       addForm.setPaidById(draft.paidById ?? "");
@@ -294,7 +303,7 @@ export default function Expenses() {
       addForm.setPaidFromBank(draft.paidFromBank ?? false);
       addForm.setAccountId(draft.accountId ?? null);
       addForm.setDate(draft.date ?? today);
-      addForm.setIsRecurring(true);
+      addForm.setIsRecurring(draft.isRecurring ?? true);
       addForm.setRecurringMonthlyBudget(
         params.get("recurringMonthlyBudget") ?? draft.recurringMonthlyBudget ?? "",
       );
@@ -632,7 +641,7 @@ export default function Expenses() {
     setIsCreatingCategory(false);
   };
 
-  const openRecurringBudgetSetup = (form: ReturnType<typeof useExpenseForm>, mode: "add" | "edit") => {
+  const openRecurringBudgetSetup = (form: ReturnType<typeof useExpenseForm>, mode: "add" | "edit", makeRecurring = true, proposedCategory?: string) => {
     if (mode !== "add") {
       form.setIsRecurring(true);
       const selected = (categories ?? []).find((item) => item.name === form.category);
@@ -640,7 +649,7 @@ export default function Expenses() {
       return;
     }
 
-    if (!form.category.trim()) {
+    if (!form.category.trim() && !proposedCategory?.trim()) {
       toast({
         variant: "destructive",
         title: "Choose a category first",
@@ -672,7 +681,9 @@ export default function Expenses() {
         paidFromBank: form.paidFromBank,
         accountId: form.accountId,
         date: form.date,
-        saveOtherAsCategory: form.category.trim().toLocaleLowerCase() === "other",
+        saveOtherAsCategory: form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other"),
+        isRecurring: makeRecurring,
+        recurringMonthlyBudget: form.recurringMonthlyBudget,
       }));
     } catch {
       toast({
@@ -683,10 +694,10 @@ export default function Expenses() {
       return;
     }
 
-    const category = form.category.trim().toLocaleLowerCase() === "other"
+    const category = proposedCategory?.trim() || (form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")
       ? form.description.trim()
-      : form.category.trim();
-    const url = `${appPath("/budget", import.meta.env.BASE_URL)}?recurringSetup=1&category=${encodeURIComponent(category)}&expenseAmount=${encodeURIComponent(form.amount)}`;
+      : form.category.trim());
+    const url = `${appPath("/budget", import.meta.env.BASE_URL)}?recurringSetup=1&categorySetup=${makeRecurring ? "recurring" : "other"}&category=${encodeURIComponent(category)}&expenseAmount=${encodeURIComponent(form.amount)}`;
     window.location.assign(url);
   };
 
@@ -757,7 +768,7 @@ export default function Expenses() {
     }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent, saveWithoutCategory = false) => {
     e.preventDefault();
     const payerIds = addForm.payerIds.length > 0
       ? addForm.payerIds
@@ -796,16 +807,17 @@ export default function Expenses() {
     const categoryAllocations = addForm.categoryAllocations.map((allocation) => ({
       category: allocation.category.trim(), amount: Number(allocation.amount),
     }));
+    const hasCategoryAllocation = categoryAllocations.some((allocation) => allocation.category);
     const allocationTotal = categoryAllocations.reduce((total, allocation) => total + allocation.amount, 0);
-    if (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
+    if (hasCategoryAllocation && (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
       new Set(categoryAllocations.map((allocation) => allocation.category.toLocaleLowerCase())).size !== categoryAllocations.length ||
-      allocationTotal !== amount) {
+      allocationTotal !== amount)) {
       toast({ variant: "destructive", title: "Category allocations don't add up", description: "Choose distinct categories with positive whole-KES amounts that total the expense." });
       return;
     }
     if (
       categoryAllocations.some((allocation) => allocation.category.toLocaleLowerCase() === "other") &&
-      !saveOtherAsCategory && addForm.notes.trim().length < 3
+      addForm.notes.trim().length < 3
     ) {
       toast({
         variant: "destructive",
@@ -814,12 +826,16 @@ export default function Expenses() {
       });
       return;
     }
-    if (!addForm.category || !addForm.description || !addForm.date) {
+    if (!addForm.description || !addForm.date) {
       toast({
         variant: "destructive",
         title: "Complete the expense details",
-        description: "Add an amount, category, description, and date before saving.",
+        description: "Add an amount, description, and date before saving.",
       });
+      return;
+    }
+    if (!hasCategoryAllocation && !saveWithoutCategory) {
+      setUncategorizedSaveOpen(true);
       return;
     }
     if (!effectivePaidById && !addForm.paidFromBank) {
@@ -921,6 +937,12 @@ export default function Expenses() {
       toast({ variant: "destructive", title: "Save this recurring expense as a category", description: "Use the brief description as a category so its monthly budget can be tracked." });
       return;
     }
+    if (categoryAllocations.some((allocation) => allocation.category.toLocaleLowerCase() === "other") && saveOtherAsCategory && !(categories ?? []).some(
+      (item) => item.name.trim().toLocaleLowerCase() === addForm.description.trim().toLocaleLowerCase(),
+    )) {
+      openRecurringBudgetSetup(addForm, "add", false);
+      return;
+    }
     try {
       if (categoryAllocations.some((allocation) => allocation.category.toLocaleLowerCase() === "other") && saveOtherAsCategory) {
         const existingCategory = (categories ?? []).find(
@@ -931,15 +953,6 @@ export default function Expenses() {
           expenseCategory = categoryAllocations[0]?.category.toLocaleLowerCase() === "other"
             ? existingCategory.name
             : categoryAllocations[0]?.category ?? addForm.category;
-        } else {
-          const createdCategory = await createCategory.mutateAsync({
-            data: { name: addForm.description.trim(), budgetAmount: addForm.isRecurring ? recurringBudget : 0, priority: 3, isRecurring: true },
-          });
-          normalizedOtherCategory = createdCategory.name;
-          expenseCategory = categoryAllocations[0]?.category.toLocaleLowerCase() === "other"
-            ? createdCategory.name
-            : categoryAllocations[0]?.category ?? addForm.category;
-          await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
         }
       }
       if (addForm.isRecurring) {
@@ -974,11 +987,11 @@ export default function Expenses() {
         : undefined;
       await createExpense.mutateAsync({
         data: {
-           amount, category: expenseCategory, categoryAllocations: categoryAllocations.map((allocation) =>
+            amount, category: hasCategoryAllocation ? expenseCategory : "", ...(hasCategoryAllocation ? { categoryAllocations: categoryAllocations.map((allocation) =>
              allocation.category.toLocaleLowerCase() === "other"
                ? { ...allocation, category: normalizedOtherCategory ?? allocation.category }
                : allocation,
-           ),
+            ) } : {}),
           description: addForm.description, notes: addForm.notes || undefined,
           paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
           isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
@@ -1032,10 +1045,11 @@ export default function Expenses() {
     const categoryAllocations = editForm.categoryAllocations.map((allocation) => ({
       category: allocation.category.trim(), amount: Number(allocation.amount),
     }));
+    const hasCategoryAllocation = categoryAllocations.some((allocation) => allocation.category);
     const allocationTotal = categoryAllocations.reduce((total, allocation) => total + allocation.amount, 0);
-    if (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
+    if (hasCategoryAllocation && (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
       new Set(categoryAllocations.map((allocation) => allocation.category.toLocaleLowerCase())).size !== categoryAllocations.length ||
-      allocationTotal !== amount) {
+      allocationTotal !== amount)) {
       toast({ variant: "destructive", title: "Category allocations don't add up", description: "Choose distinct categories with positive whole-KES amounts that total the expense." });
       return;
     }
@@ -1050,11 +1064,11 @@ export default function Expenses() {
       });
       return;
     }
-    if (!editForm.category || !editForm.description || !editForm.date) {
+    if (!editForm.description || !editForm.date) {
       toast({
         variant: "destructive",
         title: "Complete the expense details",
-        description: "Add an amount, category, description, and date before saving.",
+        description: "Add an amount, description, and date before saving.",
       });
       return;
     }
@@ -1119,8 +1133,8 @@ export default function Expenses() {
         id,
         data: {
           amount,
-          category: editForm.category,
-           categoryAllocations,
+          category: hasCategoryAllocation ? editForm.category : "",
+           ...(hasCategoryAllocation ? { categoryAllocations } : {}),
           description: editForm.description,
           notes: editForm.notes || undefined,
           paidById: editForm.paidById || undefined,
@@ -1185,11 +1199,63 @@ export default function Expenses() {
     title: string,
     submitLabel: string,
     mode: "add" | "edit",
-  ) => (
+  ) => {
+    const expenseTotal = Number(form.amount) || 0;
+    const allocatedTotal = form.categoryAllocations.reduce((total, allocation) => total + (Number(allocation.amount) || 0), 0);
+    const allocationDifference = expenseTotal - allocatedTotal;
+    const directFundingTotal = mode === "edit"
+      ? (!editHasMultipleFundingSplits && form.paidById && form.incomeSourceId ? expenseTotal : 0)
+      : isPersonalBudget
+        ? addDirectSourceIds.reduce((total, sourceId) => total + (Number(addDirectSourceAmounts[String(sourceId)]) || 0), 0)
+        : form.payerIds.reduce((total, payerId) => total + (Number(form.payerAmounts[payerId]) || 0), 0);
+    const bankFundingTotal = form.paidFromBank
+      ? (Number(form.payerAmounts.__joint_bank__) || (mode === "edit" && !form.payerIds.length ? expenseTotal : 0))
+      : 0;
+    const fundingTotal = directFundingTotal + bankFundingTotal;
+    const categoryStatus = getCategoryAllocationStatus({
+      total: expenseTotal,
+      allocations: form.categoryAllocations.map((allocation) => ({
+        category: allocation.category,
+        amount: Number(allocation.amount),
+      })),
+      formatAmount: formatKes,
+    });
+    const hasDirectFunding = mode === "add"
+      ? !form.paidFromBank || allowMixedFunding
+      : !form.paidFromBank;
+    const hasDirectPayer = mode === "add"
+      ? (isPersonalBudget ? Boolean(memberPayerId) : form.payerIds.length > 0)
+      : Boolean(form.paidById);
+    const hasDirectIncomeSource = mode === "add"
+      ? isPersonalBudget
+        ? addDirectSourceIds.length > 0
+        : form.payerIds.length > 1
+          ? form.payerIds.every((payerId) => Boolean(form.payerIncomeSourceIds[payerId]))
+          : Boolean(form.incomeSourceId)
+      : Boolean(form.incomeSourceId);
+    const fundingStatus = getExpenseFundingStatus({
+      total: expenseTotal,
+      fundingTotal,
+      hasBankFunding: form.paidFromBank,
+      hasBankAccount: Boolean(form.accountId),
+      hasDirectFunding,
+      hasDirectPayer,
+      hasDirectIncomeSource,
+      formatAmount: formatKes,
+    });
+
+    return (
     <form onSubmit={onSubmit} noValidate className="space-y-5 sm:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-4">
         <h3 className="text-lg sm:text-xl font-bold font-display text-foreground">{title}</h3>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+      </div>
+
+      <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+        <p className="text-sm font-semibold text-foreground">1. Record the expense</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          Enter the total once, then show what it covered and where the money came from.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -1199,17 +1265,21 @@ export default function Expenses() {
             required min="1" className="h-12 text-lg bg-card" />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Category</label>
+        <div className="space-y-2 md:col-span-2 rounded-xl border border-border/60 bg-card p-4">
+          <div>
+            <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Add a category to track this spending against a budget. You can also save it uncategorized.
+            </p>
+          </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <select
               className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Expense category"
                value={form.category.trim().toLocaleLowerCase() === "other" ? "" : form.category}
               onChange={e => chooseCategory(form, e.target.value)}
-               required={form.category.trim().toLocaleLowerCase() !== "other"}
             >
-              <option value="" disabled>Select category...</option>
+              <option value="">No category</option>
                 {categories
                   ?.filter(c => c.name.trim().toLocaleLowerCase() !== "other")
                   .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
@@ -1234,8 +1304,32 @@ export default function Expenses() {
           </div>
           {form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (
              <div id={`other-expense-panel-${mode}`} role="tabpanel" className="mt-3 space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
-              {/* The choice comes first so the field below can say what it is
-                  for. See the dashboard panel for why. */}
+              <label className="text-sm font-semibold text-foreground">Brief description</label>
+              <Input
+                value={form.description}
+                onChange={e => form.setDescription(e.target.value)}
+                placeholder="Briefly describe this expense"
+                maxLength={120}
+                required
+                className="h-12 bg-card"
+                data-testid="other-brief-description"
+              />
+              <p className="text-xs text-muted-foreground">
+                Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
+              </p>
+              <div className="space-y-2 pt-1">
+                <label className="text-sm font-semibold text-foreground">
+                  Notes <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  placeholder="Explain what this Other expense was for"
+                  value={form.notes ?? ""}
+                  onChange={e => form.setNotes(e.target.value)}
+                  required
+                  className="h-12 bg-card"
+                  data-testid="other-expense-notes"
+                />
+              </div>
               {mode === "add" && canManageCategories && (
                 <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
                   <input
@@ -1250,38 +1344,6 @@ export default function Expenses() {
                   </span>
                 </label>
               )}
-              <label className="text-sm font-semibold text-foreground">
-                {saveOtherAsCategory ? "Category name" : "Brief description"}
-              </label>
-              <Input
-                value={form.description}
-                onChange={e => form.setDescription(e.target.value)}
-                placeholder={saveOtherAsCategory ? "Name this category, e.g. School fees" : "Briefly describe this expense"}
-                maxLength={120}
-                required
-                className="h-12 bg-card"
-                data-testid="other-brief-description"
-              />
-              <p className="text-xs text-muted-foreground">
-                {saveOtherAsCategory
-                  ? "This becomes a category you can budget against and pick again next time."
-                  : "Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time."}
-              </p>
-              <div className="space-y-2 pt-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Notes {saveOtherAsCategory
-                    ? <span className="font-normal text-muted-foreground">(optional)</span>
-                    : <span className="text-destructive">*</span>}
-                </label>
-                <Input
-                  placeholder="Explain what this Other expense was for"
-                  value={form.notes ?? ""}
-                  onChange={e => form.setNotes(e.target.value)}
-                  required={!saveOtherAsCategory}
-                  className="h-12 bg-card"
-                  data-testid="other-expense-notes"
-                />
-              </div>
             </div>
           )}
           {!form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && isCreatingCategory && (
@@ -1393,10 +1455,10 @@ export default function Expenses() {
               </p>
             ) : null;
           })()}
-            {!(form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && form.categoryAllocations.length === 1) && (
-            <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+            {form.categoryAllocations.some((allocation) => allocation.category.trim()) && !(form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && form.categoryAllocations.length === 1) && (
+             <div className="mt-3 space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
              <div className="flex items-center justify-between gap-2">
-               <p className="text-sm font-semibold text-foreground">Category allocations</p>
+               <p className="text-sm font-semibold text-foreground">Category breakdown</p>
                <Button
                  type="button"
                  size="sm"
@@ -1430,11 +1492,22 @@ export default function Expenses() {
                </div>
              ))}
              {(() => {
-               const allocated = form.categoryAllocations.reduce((total, allocation) => total + (Number(allocation.amount) || 0), 0);
-               const difference = (Number(form.amount) || 0) - allocated;
-               return <p className={`text-xs ${difference === 0 && allocated > 0 ? "text-primary" : "text-muted-foreground"}`} data-testid={`category-allocation-total-${mode}`}>
-                 Allocated: {formatKes(allocated)} · {difference === 0 && allocated > 0 ? "Exactly allocated" : difference > 0 ? `${formatKes(difference)} remaining` : `${formatKes(Math.abs(difference))} excess`}
-               </p>;
+                return (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    data-testid={`category-allocation-total-${mode}`}
+                    className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                      categoryStatus.tone === "ready"
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                        : categoryStatus.tone === "error"
+                          ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                          : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                    }`}
+                  >
+                    {categoryStatus.message}
+                  </div>
+                );
               })()}
             </div>
             )}
@@ -1484,9 +1557,36 @@ export default function Expenses() {
           )}
         </div>
 
-        <div className="space-y-2">
+         <div className="md:col-span-2 space-y-4 rounded-xl border border-border/60 bg-card p-4">
+           <div>
+             <p className="text-sm font-semibold text-foreground">3. How was this expense funded?</p>
+             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+               Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
+             </p>
+           </div>
+           {mode === "edit" && editHasMultipleFundingSplits ? (
+             <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-foreground" data-testid="expense-funding-summary-edit">
+               <span className="font-semibold">Multiple saved funding portions</span>
+               <span className="mt-1 block text-xs text-muted-foreground">The existing bank and direct portions will stay unchanged while you edit the expense details.</span>
+             </div>
+           ) : expenseTotal > 0 && (
+             <div
+               role="status"
+               aria-live="polite"
+               data-testid={`expense-funding-summary-${mode}`}
+               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                 fundingStatus.tone === "ready"
+                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                   : fundingStatus.tone === "error"
+                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+               }`}
+             >
+               {fundingStatus.message}
+             </div>
+           )}
           <label className="text-sm font-semibold text-foreground">
-            {isPersonalBudget ? "Funding source" : "Paid by"} <span className="text-destructive">*</span>
+             {isPersonalBudget ? "Funding sources" : "Who paid?"} <span className="text-destructive">*</span>
             {mode === "add" && canManageExpenses && !isPersonalBudget && (
               <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>
             )}
@@ -1574,7 +1674,7 @@ export default function Expenses() {
                 </button>
               );
             })}
-          </div>
+         </div>
           {(form.paidFromBank || (mode === "edit" && editHasBankFunding)) && (
             <div className="mt-3 space-y-2">
               <label className="text-sm font-semibold text-foreground">
@@ -2006,7 +2106,8 @@ export default function Expenses() {
         </Button>
       </div>
     </form>
-  );
+    );
+  };
 
   return (
     <div className="space-y-5 pb-8 sm:space-y-8 sm:pb-12">
@@ -2361,7 +2462,7 @@ export default function Expenses() {
                 <div className="p-4 hover:bg-muted/20 transition-colors sm:flex sm:items-start sm:justify-between sm:gap-4 sm:p-5">
                     <div className="flex items-start gap-4 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-accent/60 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-xs font-bold text-primary">{expense.category.slice(0, 2).toUpperCase()}</span>
+                        <span className="text-xs font-bold text-primary">{(expense.category || "Uncategorized").slice(0, 2).toUpperCase()}</span>
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -2376,7 +2477,7 @@ export default function Expenses() {
                           <p className="text-sm text-muted-foreground mt-0.5 italic">"{expense.notes}"</p>
                         )}
                         <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                           <span className="px-2 py-0.5 bg-muted rounded text-xs font-medium">{expense.category}</span>
+                           <span className="px-2 py-0.5 bg-muted rounded text-xs font-medium" data-testid={`expense-category-${expense.id}`}>{expense.category || "Uncategorized"}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
                           <span>{expense.paidByName ?? `🏦 ${bankAccounts.find((account) => account.id === expense.accountId)?.name ?? "Bank account"}`}</span>
                           <span className="w-1 h-1 rounded-full bg-border" />
@@ -2472,6 +2573,37 @@ export default function Expenses() {
               }}
             >
               {deleteExpense.isPending ? "Removing…" : "Remove expense"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={uncategorizedSaveOpen} onOpenChange={setUncategorizedSaveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save without a category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This expense will be recorded but will not count toward a monthly budget category.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                setUncategorizedSaveOpen(false);
+                void handleCreate({ preventDefault() {} } as React.FormEvent, true);
+              }}
+            >
+              Save without category
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                setUncategorizedSaveOpen(false);
+                openRecurringBudgetSetup(addForm, "add", false, addForm.description);
+              }}
+            >
+              Create a monthly budget
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

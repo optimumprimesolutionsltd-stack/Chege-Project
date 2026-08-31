@@ -10,6 +10,7 @@
  * Fields to update. A one-time budget requires both activeMonth and activeYear.
  */
 export interface BudgetCategoryUpdateInput {
+  /** Budget category name. "Uncategorized" is reserved internally and cannot be used. */
   name?: string;
   budgetAmount?: number;
   priority?: number;

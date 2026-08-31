@@ -328,7 +328,7 @@ function CategoryDialog({
             <DialogTitle>{recurringSetup ? "Set average monthly amount" : initial ? "Edit category" : "Add category"}</DialogTitle>
             {recurringSetup ? (
               <p className="text-sm text-muted-foreground">
-                Enter the average amount you expect to spend each month. Jamvi will use it as this recurring expense’s monthly budget.
+                Enter the average amount you expect to spend each month. Jamvi will use it as this category’s monthly budget.
               </p>
             ) : null}
           </DialogHeader>
@@ -459,7 +459,7 @@ export default function Budget() {
     },
     staleTime: 30_000,
   });
-  const [recurringSetup, setRecurringSetup] = useState<{ category: string; expenseAmount: string; returnTo: "expenses" | "dashboard" } | null>(null);
+  const [recurringSetup, setRecurringSetup] = useState<{ category: string; expenseAmount: string; returnTo: "expenses" | "dashboard"; categorySetup: "recurring" | "other" } | null>(null);
   const [recurringSetupHandled, setRecurringSetupHandled] = useState(false);
   const { data: incomeSources = [], refetch: refetchIncomeSources } = useQuery<IncomeSource[]>({
     queryKey: ["income-sources", "budget-report"],
@@ -545,6 +545,7 @@ export default function Budget() {
       category: params.get("category")?.trim() ?? "",
       expenseAmount: params.get("expenseAmount") ?? "",
       returnTo: params.get("returnTo") === "dashboard" ? "dashboard" as const : "expenses" as const,
+      categorySetup: params.get("categorySetup") === "other" ? "other" as const : "recurring" as const,
     };
     const existing = allCategories.find(
       (category) => category.name.trim().toLocaleLowerCase() === handoff.category.toLocaleLowerCase(),
@@ -563,6 +564,7 @@ export default function Budget() {
     params.delete("category");
     params.delete("expenseAmount");
     params.delete("returnTo");
+    params.delete("categorySetup");
     const search = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
   }, [allCategories, allCategoriesLoading, recurringSetupHandled]);
@@ -592,6 +594,7 @@ export default function Budget() {
           sessionStorage.setItem(draftKey, JSON.stringify({
             ...draft,
             recurringMonthlyBudget: String(change?.budgetAmount ?? 0),
+            confirmedCategory: change?.name ?? recurringSetup.category,
           }));
         }
       } catch {

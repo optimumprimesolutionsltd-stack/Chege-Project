@@ -45,7 +45,7 @@ describe("dashboard quick actions", () => {
 
   it("keeps the payer selector and named bank accounts available in Shared quick log", () => {
     expect(expenseFormSource).toMatch(
-      /\{isSharedWorkspace && \(!paidFromBank \|\| allowMixedFunding\) && <div className="space-y-1\.5">[\s\S]*?Paid by/,
+      /\{isSharedWorkspace && \(!paidFromBank \|\| allowMixedFunding\) && \([\s\S]*?Who paid\?/,
     );
     expect(expenseFormSource).toContain("Financed by");
     expect(expenseFormSource).toContain('mode === "direct" && (!paidFromBank || allowMixedFunding)');

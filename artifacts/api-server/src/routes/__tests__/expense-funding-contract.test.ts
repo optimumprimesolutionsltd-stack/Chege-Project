@@ -27,8 +27,9 @@ vi.mock("@workspace/db", () => {
 vi.mock("drizzle-orm", () => ({ eq: vi.fn(), and: vi.fn(), sql: vi.fn() }));
 
 import expensesRouter from "../expenses.js";
-import { validateOtherExpenseNotes } from "../expenses.js";
+import { formatExpense, UNCATEGORIZED_CATEGORY, validateOtherExpenseNotes } from "../expenses.js";
 import { db } from "@workspace/db";
+import { CreateExpenseBody, UpdateExpenseBody } from "@workspace/api-zod";
 
 function app(role: "owner" | "admin" | "member" = "owner") {
   const server = express();
@@ -61,6 +62,61 @@ function mockExpenseUpdateReads(existing: Record<string, unknown>, allocations: 
 }
 
 describe("expense funding request contract", () => {
+  it("accepts omitted or blank categories and empty allocation lists", () => {
+    const base = {
+      amount: 1000,
+      description: "Groceries",
+      paidFromBank: true,
+      date: "2026-08-19",
+    };
+
+    expect(CreateExpenseBody.safeParse(base).success).toBe(true);
+    expect(CreateExpenseBody.safeParse({ ...base, category: "", categoryAllocations: [] }).success).toBe(true);
+    expect(UpdateExpenseBody.safeParse({ ...base, categoryAllocations: [] }).success).toBe(true);
+  });
+
+  it("exposes the legacy uncategorized sentinel as an empty client category", () => {
+    const expense = formatExpense({
+      id: 1,
+      amount: 1000,
+      category: UNCATEGORIZED_CATEGORY,
+      description: "Groceries",
+      notes: null,
+      paidById: null,
+      paidByName: null,
+      incomeSourceId: null,
+      paidFromBank: true,
+      accountId: 1,
+      isRecurring: false,
+      date: "2026-08-19",
+      createdAt: new Date("2026-08-19T00:00:00.000Z"),
+    });
+
+    expect(expense.category).toBe("");
+    expect(expense.categoryAllocations).toEqual([]);
+  });
+
+  it("reserves Uncategorized case-insensitively for the internal storage sentinel", async () => {
+    const base = {
+      amount: 1000,
+      description: "Groceries",
+      paidFromBank: true,
+      date: "2026-08-19",
+    };
+
+    const primary = await request(app()).post("/expenses").send({ ...base, category: " unCATEGORIZED " });
+    const allocation = await request(app()).post("/expenses").send({
+      ...base,
+      category: "Food",
+      categoryAllocations: [{ category: "UNCATEGORIZED", amount: 1000 }],
+    });
+
+    expect(primary.status).toBe(400);
+    expect(allocation.status).toBe(400);
+    expect(primary.body.error).toContain("reserved");
+    expect(allocation.body.error).toContain("reserved");
+  });
+
   it("requires a note when Other is selected", async () => {
     const response = await request(app()).post("/expenses").send({
       amount: 1000,

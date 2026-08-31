@@ -7,7 +7,7 @@ describe("Personal budget expense controls", () => {
   it("attributes direct Personal expenses to the owner without a payer picker", () => {
     expect(expensesSource).toContain("const isPersonalBudget = group?.isPrivate === true;");
     expect(expensesSource).toContain("const memberPayerId = isPersonalBudget ? user?.id");
-    expect(expensesSource).toContain("{isPersonalBudget ? \"Funding source\" : \"Paid by\"}");
+    expect(expensesSource).toContain('{isPersonalBudget ? "Funding sources" : "Who paid?"}');
     expect(expensesSource).toContain("{!isPersonalBudget && (canManageExpenses ?");
     expect(expensesSource).toContain("if (!isAdding || !memberPayerId || addForm.paidFromBank) return;");
     expect(expensesSource).toContain("addForm.setPayerIds([memberPayerId]);");

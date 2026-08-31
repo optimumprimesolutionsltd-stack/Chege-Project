@@ -7,6 +7,7 @@
  */
 
 export interface BudgetCategoryInput {
+  /** Budget category name. "Uncategorized" is reserved internally and cannot be used. */
   name: string;
   /** Monthly budget in KES; use 0 when creating a category from a withdrawal */
   budgetAmount: number;

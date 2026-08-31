@@ -104,3 +104,25 @@ describe("PUT /budget-categories/:id", () => {
     ]);
   });
 });
+
+describe("reserved uncategorized budget category name", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("rejects creating or renaming a budget category to the internal sentinel", async () => {
+    const app = buildApp();
+
+    const create = await request(app).post("/budget-categories").send({
+      name: " uncategorized ",
+      budgetAmount: 1000,
+    });
+    const rename = await request(app).put("/budget-categories/8").send({
+      name: "UNCATEGORIZED",
+    });
+
+    expect(create.status).toBe(400);
+    expect(rename.status).toBe(400);
+    expect(create.body.error).toContain("reserved");
+    expect(rename.body.error).toContain("reserved");
+    expect(mockedDb.select).not.toHaveBeenCalled();
+  });
+});

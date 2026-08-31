@@ -10,8 +10,8 @@ import type { ExpenseFundingSplit } from './expenseFundingSplit';
 
 export interface ExpenseInput {
   amount: number;
-  /** Compatibility/display primary category. Must match the first categoryAllocations item when allocations are supplied. */
-  category: string;
+  /** Optional compatibility/display primary category. Omit or leave blank for an uncategorized expense. When non-empty allocations are supplied, defaults to and must match the first allocation category. "Uncategorized" is reserved internally and cannot be submitted as a category. */
+  category?: string;
   /** Optional whole-KES category portions. Amounts must total amount exactly and each category can appear once. */
   categoryAllocations?: ExpenseCategoryAllocation[];
   description: string;
