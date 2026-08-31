@@ -19,7 +19,7 @@ import {
   requireGroupManager,
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
-import { resolvePhotoUrl } from "../lib/photoStorage";
+import { resolvePhotoUrl, verifyPhotoObject } from "../lib/photoStorage";
 
 const router = Router();
 
@@ -182,6 +182,14 @@ router.patch("/group", async (req, res): Promise<void> => {
   ) {
     res.status(400).json({ error: "Photos are only available for Shared budgets." });
     return;
+  }
+  if (parsed.data.photoPath) {
+    try {
+      await verifyPhotoObject(parsed.data.photoPath);
+    } catch {
+      res.status(400).json({ error: "The uploaded photo could not be verified. Please upload it again." });
+      return;
+    }
   }
   const name = parsed.data.name.trim();
   if (name.length < 2 || name.length > 60) {

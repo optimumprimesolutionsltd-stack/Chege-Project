@@ -33,6 +33,7 @@ export const UpdateDisplayNameBody = z.object({
 });
 import { db, usersTable } from '@workspace/db';
 import { eq } from 'drizzle-orm';
+import { verifyPhotoObject } from '../lib/photoStorage';
 import { Router, type IRouter, type Request, type Response } from 'express';
 import * as oidc from 'openid-client';
 
@@ -276,6 +277,15 @@ router.put('/auth/profile-photo', async (req: Request, res: Response) => {
   if (!parsed.success) {
     res.status(400).json({ error: 'Choose a valid uploaded photo.' });
     return;
+  }
+
+  if (parsed.data.photoPath) {
+    try {
+      await verifyPhotoObject(parsed.data.photoPath);
+    } catch {
+      res.status(400).json({ error: 'The uploaded photo could not be verified. Please upload it again.' });
+      return;
+    }
   }
 
   const [user] = await db
