@@ -90,6 +90,9 @@ export function BudgetChooser({
   const [sharedBudgetName, setSharedBudgetName] = useState("");
   const [sharedBudgetKind, setSharedBudgetKind] = useState<SharedGroupKind | null>(null);
   const [onboardingMode, setOnboardingMode] = useState<"personal" | "shared" | "both" | null>(null);
+  const [showDurationSetup, setShowDurationSetup] = useState(false);
+  const [budgetDuration, setBudgetDuration] = useState<"ongoing" | "week" | "month" | "quarter" | "custom" | null>(null);
+  const [customEndDate, setCustomEndDate] = useState("");
   const [showCategorySetup, setShowCategorySetup] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showIncomeSetup, setShowIncomeSetup] = useState(false);
@@ -197,7 +200,7 @@ export function BudgetChooser({
                   ["shared", "Money with others", "A shared budget for a family, chama, club, or team.", UsersRound],
                   ["both", "Both", "Keep my personal money private and manage shared money too.", Heart],
                 ] as const).map(([value, title, description, Icon]) => (
-                  <button key={value} type="button" onClick={() => { setOnboardingMode(value); setShowCategorySetup(true); }} className="group rounded-2xl border border-border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <button key={value} type="button" onClick={() => { setOnboardingMode(value); setShowDurationSetup(true); }} className="group rounded-2xl border border-border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" aria-hidden="true" /></span>
                     <span className="mt-4 block text-base font-bold text-foreground">{title}</span>
                     <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{description}</span>
@@ -213,6 +216,40 @@ export function BudgetChooser({
     );
   }
 
+  if (showDurationSetup) {
+    const durationOptions = [
+      ["ongoing", "Everyday budgeting", "For your regular personal or shared money."],
+      ["week", "Up to 1 week", "For a short trip, event, or weekly plan."],
+      ["month", "Up to 1 month", "For a monthly challenge, project, or trip."],
+      ["quarter", "Up to 3 months", "For a school term, campaign, or longer project."],
+      ["custom", "Set an end date", "Choose the exact date this budget should finish."],
+    ] as const;
+    const canContinue = budgetDuration !== null && (budgetDuration !== "custom" || Boolean(customEndDate));
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
+        <section className="mx-auto w-full max-w-3xl">
+          <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
+            <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 4 · Choose your planning horizon</p>
+              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, how long is this budget for?` : "How long is this budget for?"}</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">A trip budget needs a finish line. An everyday budget can stay open. Tell Jamvi how to help you plan.</p>
+            </header>
+            <div className="p-6 sm:p-10">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {durationOptions.map(([value, title, description]) => {
+                  const selected = budgetDuration === value;
+                  return <button key={value} type="button" aria-pressed={selected} onClick={() => setBudgetDuration(value)} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"}`}><span className="flex items-center justify-between gap-3"><span className="font-bold text-foreground">{title}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></span><span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{description}</span></button>;
+                })}
+              </div>
+              {budgetDuration === "custom" && <div className="mt-5 max-w-sm"><label htmlFor="budget-end-date" className="text-sm font-semibold text-foreground">Budget end date</label><Input id="budget-end-date" type="date" min={new Date().toISOString().slice(0, 10)} value={customEndDate} onChange={(event) => setCustomEndDate(event.target.value)} className="mt-2" /></div>}
+              <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">You can change this later</p><Button type="button" disabled={!canContinue} className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:duration:${encodeURIComponent(userId)}`, JSON.stringify({ type: budgetDuration, endDate: budgetDuration === "custom" ? customEndDate : null })); } catch { /* Continue even when storage is unavailable. */ } setShowDurationSetup(false); setShowCategorySetup(true); }}>Continue to categories <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   if (showCategorySetup) {
     const allSelected = selectedCategories.length === ALL_ONBOARDING_CATEGORIES.length;
     const toggleCategory = (category: string) => setSelectedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]);
@@ -221,7 +258,7 @@ export function BudgetChooser({
         <section className="mx-auto w-full max-w-4xl">
           <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 3 · Personalize your budget</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 3 of 4 · Personalize your budget</p>
               <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, what should we help you track?` : "What should we help you track?"}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Choose the categories you want to see first. You can change them and add your own later.</p>
             </header>
@@ -274,7 +311,7 @@ export function BudgetChooser({
         <section className="mx-auto w-full max-w-3xl">
           <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 3 of 3 · Personalize your starting point</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 4 of 4 · Personalize your starting point</p>
               <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, ${incomeHeading.charAt(0).toLowerCase()}${incomeHeading.slice(1)}` : incomeHeading}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">{incomeDescription} You can add amounts and more sources later.</p>
             </header>
