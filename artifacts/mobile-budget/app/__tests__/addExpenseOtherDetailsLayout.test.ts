@@ -14,20 +14,29 @@ describe('optional expense category layout', () => {
     expect(homeSource).toContain('router.push(getExpenseEditHref(expense)');
   });
 
-  it('explains that categories are optional without offering Other as an intermediate category', () => {
+  it('explains categories and offers a clearly named one-off option below them', () => {
     expect(source).toContain('CATEGORY (OPTIONAL)');
     expect(source).toContain('Leave this blank to save the expense as Uncategorized, outside any budget category.');
-    expect(source).not.toContain("chooseCategory('Other')");
+    expect(source).toContain("onPress={() => chooseCategory('Other')}");
+    expect(source).toContain('testID="one-off-spending-category"');
+    expect(source).toContain('Use this for a one-time expense that does not fit any listed category. Add a note below.');
   });
 
   it('keeps allocation controls for deliberate category selection only', () => {
     expect(source).toContain('{categoryAllocations.length > 0 && (');
     expect(source).toContain('testID="category-allocation-card"');
     expect(source).toContain('testID="add-category-allocation-mobile"');
-    expect(source).toContain('CATEGORY AMOUNT REQUIRED');
+    expect(source).toContain('CATEGORY AMOUNTS REQUIRED');
     expect(source).toContain('Enter how much of the expense each category covered.');
-    expect(source).toContain('Other category');
+    expect(source).toContain('One-off spending amount (KES)');
+    expect(source).toContain('allocationAmountLabel');
     expect(source).toContain('placeholder="Enter KES amount"');
+  });
+
+  it('requires an explanatory note for one-off spending', () => {
+    expect(source).toContain("allocation.category.trim().toLocaleLowerCase() === 'other') && notes.trim().length < 3");
+    expect(source).toContain("Add a short note explaining what this one-off expense was for.");
+    expect(source).toContain("'NOTES (required for one-off spending)'");
   });
 
   it('offers explicit uncategorized save and preserves the draft while creating a budget', () => {

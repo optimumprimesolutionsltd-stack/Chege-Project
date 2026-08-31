@@ -1261,7 +1261,7 @@ export default function Expenses() {
                Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+           <div className="space-y-2">
             <select
               className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Expense category"
@@ -1273,10 +1273,29 @@ export default function Expenses() {
                   ?.filter(c => c.name.trim().toLocaleLowerCase() !== "other")
                   .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
+             {form.category.trim() && (
+               <div className="flex flex-col gap-1.5 rounded-lg border border-primary/20 bg-primary/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
+                 <label className="text-sm font-semibold text-foreground">
+                   {form.category.trim().toLocaleLowerCase() === "other" ? "One-off spending amount (KES)" : `${form.category} amount (KES)`}
+                 </label>
+                 <Input
+                   type="number"
+                   min="1"
+                   step="1"
+                   value={form.categoryAllocations[0]?.amount ?? ""}
+                   onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
+                   aria-label={form.category.trim().toLocaleLowerCase() === "other" ? "KES amount for one-off spending" : "KES amount covered by the primary category"}
+                   aria-required="true"
+                   required
+                   placeholder="Enter KES amount"
+                   className="h-12 w-full border-primary/45 bg-card font-semibold sm:w-44"
+                 />
+               </div>
+             )}
             <Button
               type="button"
               variant={form.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"}
-              className="h-12 w-full shrink-0 border-input text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+               className="h-12 w-full justify-start border-input text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
               onClick={() => {
                 const isOther = form.category.trim().toLocaleLowerCase() === "other";
                 form.setCategory(isOther ? "" : "Other");
@@ -1288,24 +1307,13 @@ export default function Expenses() {
               aria-selected={form.category.trim().toLocaleLowerCase() === "other"}
               aria-pressed={form.category.trim().toLocaleLowerCase() === "other"}
             >
-              Other
+               One-off spending
             </Button>
-             {form.category.trim() && (
-               <Input
-                 type="number"
-                 min="1"
-                 step="1"
-                 value={form.categoryAllocations[0]?.amount ?? ""}
-                 onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
-                 aria-label="KES amount covered by the primary category"
-                 aria-required="true"
-                 required
-                 placeholder="Enter KES amount"
-                 className="h-12 w-full border-primary/45 bg-card font-semibold sm:w-36"
-               />
-             )}
+             <p className="text-xs leading-relaxed text-muted-foreground">
+               Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
+             </p>
           </div>
-           {form.category.trim() && (
+           {form.category.trim() && form.categoryAllocations.length === 1 && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                <p className="text-xs text-muted-foreground">Need to split this expense? Add another category and enter its share.</p>
                <Button type="button" size="sm" variant="outline" onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])} data-testid={`add-category-allocation-${mode}`}>
@@ -1342,14 +1350,14 @@ export default function Expenses() {
                 data-testid="other-brief-description"
               />
               <p className="text-xs text-muted-foreground">
-                Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
+                 Explain what this one-off expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
               </p>
               <div className="space-y-2 pt-1">
                 <label className="text-sm font-semibold text-foreground">
                   Notes <span className="text-destructive">*</span>
                 </label>
                 <Input
-                  placeholder="Explain what this Other expense was for"
+                  placeholder="Explain what this one-off expense was for"
                   value={form.notes ?? ""}
                   onChange={e => form.setNotes(e.target.value)}
                   required
@@ -1484,43 +1492,53 @@ export default function Expenses() {
           })()}
             {form.categoryAllocations.length > 1 && (
              <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
-             <div className="flex items-center justify-between gap-2">
+               <div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">Additional category breakdown</p>
                   <p className="mt-0.5 text-xs font-medium text-foreground">Enter the amount for each additional category.</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground"><span className="font-semibold text-foreground">Other category</span> is only for spending that does not fit any listed category. Add a note when you use it.</p>
                 </div>
-               <Button
-                 type="button"
-                 size="sm"
-                 variant="outline"
-                 onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])}
-               >
-                 <Plus className="mr-1 h-3.5 w-3.5" /> Add another
-               </Button>
              </div>
               {form.categoryAllocations.slice(1).map((allocation, index) => (
-               <div key={index} className="flex gap-2">
-                 <select
-                   value={allocation.category.trim().toLocaleLowerCase() === "other" ? "" : allocation.category}
-                    onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
-                    aria-label={`Additional allocation category ${index + 2}`}
-                   className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"
-                 >
-                   <option value="" disabled>Select category...</option>
-                   {(categories ?? []).filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) =>
-                      <option key={item.id} value={item.name} disabled={form.categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>,
-                   )}
-                 </select>
-                 <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"}
-                    onClick={() => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: item.category.trim().toLocaleLowerCase() === "other" ? "" : "Other" } : item))}
-                    aria-label={`Use Other category for allocation ${index + 2}`}>Other category</Button>
-                  <Input type="number" min="1" step="1" value={allocation.amount}
-                    onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, amount: event.target.value } : item))}
-                     aria-label={`KES amount covered by allocation ${index + 2}`} aria-required="true" required placeholder="Enter KES amount" className="h-10 w-36 border-primary/45 bg-card font-semibold" />
-                  {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><Trash2 className="h-4 w-4" /></Button>}
+                <div key={index} className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <select
+                      value={allocation.category.trim().toLocaleLowerCase() === "other" ? "" : allocation.category}
+                       onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
+                       aria-label={`Additional allocation category ${index + 2}`}
+                      className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"
+                    >
+                      <option value="" disabled>Select category...</option>
+                      {(categories ?? []).filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) =>
+                         <option key={item.id} value={item.name} disabled={form.categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>,
+                      )}
+                    </select>
+                    <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"}
+                       onClick={() => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: item.category.trim().toLocaleLowerCase() === "other" ? "" : "Other" } : item))}
+                       aria-label={`Use one-off spending for allocation ${index + 2}`}>One-off spending</Button>
+                     {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><Trash2 className="h-4 w-4" /></Button>}
+                  </div>
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="text-xs font-semibold text-foreground">
+                      {allocation.category.trim().toLocaleLowerCase() === "other" ? "One-off spending amount (KES)" : `${allocation.category || "Category"} amount (KES)`}
+                    </label>
+                    <Input type="number" min="1" step="1" value={allocation.amount}
+                      onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, amount: event.target.value } : item))}
+                       aria-label={allocation.category.trim().toLocaleLowerCase() === "other" ? "KES amount for one-off spending" : `KES amount covered by allocation ${index + 2}`} aria-required="true" required placeholder="Enter KES amount" className="h-10 w-full border-primary/45 bg-card font-semibold sm:w-44" />
+                  </div>
                </div>
              ))}
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                One-off spending is for a one-time expense that does not fit any listed category. Add a note when you use it.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
+              </Button>
              {(() => {
                 return (
                   <div

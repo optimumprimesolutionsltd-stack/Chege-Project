@@ -678,6 +678,10 @@ export default function AddExpenseSheet() {
       Alert.alert('Description required', 'Please add a description.');
       return;
     }
+    if (categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && notes.trim().length < 3) {
+      Alert.alert('Note required', 'Add a short note explaining what this one-off expense was for.');
+      return;
+    }
     if (!categoryAllocations.length && !isEditMode && !allowUncategorized) {
       const expenseDraft: ExpenseBudgetDraft = {
         amount, category, categoryAllocations, description, notes, payerIds, payerAmounts,
@@ -988,6 +992,7 @@ export default function AddExpenseSheet() {
   const categoryList = categories
     .map((item) => item.name)
     .filter((name) => name.trim().toLocaleLowerCase() !== 'other');
+  const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
 
   if (isEditMode && editExpensesQuery.isLoading) {
     return (
@@ -1122,6 +1127,29 @@ export default function AddExpenseSheet() {
             </>
           )}
         </ScrollView>
+        <Pressable
+          onPress={() => chooseCategory('Other')}
+          accessibilityRole="button"
+          accessibilityLabel="Add one-off spending category"
+          accessibilityState={{ selected: hasOneOffAllocation }}
+          testID="one-off-spending-category"
+          style={[
+            styles.oneOffCategoryOption,
+            {
+              backgroundColor: hasOneOffAllocation ? colors.primary + '18' : colors.muted,
+              borderColor: hasOneOffAllocation ? colors.primary : colors.border,
+              borderRadius: colors.radius,
+            },
+          ]}
+        >
+          <Feather name="help-circle" size={16} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.oneOffCategoryTitle, { color: colors.foreground }]}>One-off spending</Text>
+            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+              Use this for a one-time expense that does not fit any listed category. Add a note below.
+            </Text>
+          </View>
+        </Pressable>
         {categoryAllocations.length > 0 && (
           <View
             testID="category-allocation-card"
@@ -1129,19 +1157,31 @@ export default function AddExpenseSheet() {
           >
             <View style={styles.allocationHeader}>
               <View>
-                <Text style={[styles.allocationTitle, { color: colors.foreground }]}>CATEGORY AMOUNT REQUIRED</Text>
+                <Text style={[styles.allocationTitle, { color: colors.foreground }]}>CATEGORY AMOUNTS REQUIRED</Text>
                 <Text style={[styles.hintText, { color: colors.foreground }]}>Enter how much of the expense each category covered.</Text>
-                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-                  <Text style={{ fontWeight: '700', color: colors.foreground }}>Other category</Text> is only for spending that does not fit any listed category. Add a note when you use it.
-                </Text>
               </View>
               <Text style={[styles.allocationTotal, { color: colors.foreground }]}>
                 KES {categoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0).toLocaleString()}
               </Text>
             </View>
-            {categoryAllocations.map((allocation) => (
-              <View key={allocation.category} style={styles.allocationRow}>
-                <Text style={[styles.allocationCategory, { color: colors.foreground }]} numberOfLines={1}>{allocation.category}</Text>
+            {categoryAllocations.map((allocation) => {
+              const isOneOff = allocation.category.trim().toLocaleLowerCase() === 'other';
+              return (
+              <View key={allocation.category} style={[styles.allocationRow, { borderColor: colors.border, backgroundColor: colors.background, borderRadius: colors.radius }]}>
+                <View style={styles.allocationCategoryRow}>
+                  <Text style={[styles.allocationCategory, { color: colors.foreground }]} numberOfLines={1}>{isOneOff ? 'One-off spending' : allocation.category}</Text>
+                  <Pressable
+                    onPress={() => removeAllocation(allocation.category)}
+                    accessibilityLabel={`Remove ${isOneOff ? 'one-off spending' : allocation.category} allocation`}
+                    testID={`remove-category-allocation-${allocation.category}`}
+                    style={styles.allocationRemove}
+                  >
+                    <Feather name="x" size={18} color={colors.destructive} />
+                  </Pressable>
+                </View>
+                <Text style={[styles.allocationAmountLabel, { color: colors.foreground }]}>
+                  {isOneOff ? 'One-off spending amount (KES)' : `${allocation.category} amount (KES)`}
+                </Text>
                 <TextInput
                   style={[styles.allocationInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background, borderRadius: colors.radius }]}
                   value={allocation.amount}
@@ -1149,20 +1189,16 @@ export default function AddExpenseSheet() {
                   keyboardType="numeric"
                   placeholder="Enter KES amount"
                   placeholderTextColor={colors.mutedForeground}
-                  accessibilityLabel={`Amount covered by ${allocation.category}`}
+                  accessibilityLabel={isOneOff ? 'KES amount for one-off spending' : `Amount covered by ${allocation.category}`}
                   accessibilityHint="Required before this expense can be saved"
                   testID={`category-allocation-${allocation.category}`}
                 />
-                <Pressable
-                  onPress={() => removeAllocation(allocation.category)}
-                  accessibilityLabel={`Remove ${allocation.category} allocation`}
-                  testID={`remove-category-allocation-${allocation.category}`}
-                  style={styles.allocationRemove}
-                >
-                  <Feather name="x" size={18} color={colors.destructive} />
-                </Pressable>
               </View>
-            ))}
+              );
+            })}
+            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+              One-off spending is for a one-time expense that does not fit any listed category. Add a note when you use it.
+            </Text>
             <Pressable
               onPress={() => setShowAdditionalCategoryPicker((visible) => !visible)}
               accessibilityRole="button"
@@ -1180,7 +1216,7 @@ export default function AddExpenseSheet() {
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                   {categories
-                    .filter((item) => !categoryAllocations.some((allocation) => allocation.category === item.name))
+                    .filter((item) => item.name.trim().toLocaleLowerCase() !== 'other' && !categoryAllocations.some((allocation) => allocation.category === item.name))
                     .map((item) => (
                       <Pressable
                         key={item.id}
@@ -1366,7 +1402,7 @@ export default function AddExpenseSheet() {
 
          {/* Notes */}
            <>
-             <Text style={[styles.label, { color: colors.mutedForeground }]}>NOTES (optional)</Text>
+             <Text style={[styles.label, { color: colors.mutedForeground }]}>{hasOneOffAllocation ? 'NOTES (required for one-off spending)' : 'NOTES (optional)'}</Text>
              <TextInput
                style={[
                  styles.textInput,
@@ -1378,7 +1414,7 @@ export default function AddExpenseSheet() {
                    borderRadius: colors.radius,
                  },
                ]}
-               placeholder="Any extra details…"
+               placeholder={hasOneOffAllocation ? 'Explain what this one-off expense was for' : 'Any extra details…'}
                placeholderTextColor={colors.mutedForeground}
                value={notes}
                onChangeText={setNotes}
@@ -2118,6 +2154,19 @@ const styles = StyleSheet.create({
   },
   categoryScroll: { marginHorizontal: -20 },
   categoryScrollContent: { paddingHorizontal: 20, gap: 8 },
+  oneOffCategoryOption: {
+    marginTop: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+  },
+  oneOffCategoryTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2233,17 +2282,19 @@ const styles = StyleSheet.create({
   },
   allocationTitle: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1 },
   allocationTotal: { fontSize: 14, fontFamily: 'Inter_700Bold' },
-  allocationRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  allocationCategory: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium' },
+  allocationRow: { borderWidth: 1, padding: 10, gap: 7 },
+  allocationCategoryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  allocationCategory: { flex: 1, fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  allocationAmountLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   allocationInput: {
-    width: 92,
+    width: '100%',
     height: 40,
     borderWidth: 1,
     paddingHorizontal: 10,
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
   },
-  allocationRemove: { width: 32, height: 40, alignItems: 'center', justifyContent: 'center' },
+  allocationRemove: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   allocationStatus: { fontSize: 12, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
   textInput: {
     paddingHorizontal: 14,

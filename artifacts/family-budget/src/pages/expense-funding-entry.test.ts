@@ -114,8 +114,9 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain("KES amount covered by the primary category");
     expect(dashboardSource).toContain("Need to split this expense? Add another category and enter its share.");
     expect(dashboardSource).toContain("categoryAllocations.slice(1).map");
-    expect(dashboardSource).toContain("Other category");
-    expect(dashboardSource).toContain("Use Other category for allocation");
+    expect(dashboardSource).toContain("One-off spending amount (KES)");
+    expect(dashboardSource).toContain("Use one-off spending for allocation");
+    expect(dashboardSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
     expect(dashboardSource).toContain('placeholder="Enter KES amount"');
     expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
     expect(dashboardSource).not.toContain("setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }]");
@@ -123,14 +124,35 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("KES amount covered by the primary category");
     expect(expensesSource).toContain("Need to split this expense? Add another category and enter its share.");
     expect(expensesSource).toContain("form.categoryAllocations.slice(1).map");
-    expect(expensesSource).toContain("Other category");
-    expect(expensesSource).toContain("Use Other category for allocation");
+    expect(expensesSource).toContain("One-off spending amount (KES)");
+    expect(expensesSource).toContain("Use one-off spending for allocation");
+    expect(expensesSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
     expect(expensesSource).toContain('aria-required="true" required placeholder="Enter KES amount"');
-    expect(mobileSource).toContain("CATEGORY AMOUNT REQUIRED");
+    expect(mobileSource).toContain("CATEGORY AMOUNTS REQUIRED");
     expect(mobileSource).toContain("Enter how much of the expense each category covered.");
-    expect(mobileSource).toContain("Other category");
+    expect(mobileSource).toContain("One-off spending amount (KES)");
+    expect(mobileSource).toContain("Use this for a one-time expense that does not fit any listed category.");
     expect(mobileSource).toContain(": [{ category: result.categoryName!, amount: '' }]");
     expect(mobileSource).not.toContain("amount: result.expenseDraft?.amount ?? amount");
+  });
+
+  it("keeps category amounts above the one-off and add-another controls", () => {
+    for (const source of [dashboardSource, expensesSource]) {
+      const primaryAmount = source.indexOf("One-off spending amount (KES)");
+      const oneOffControl = source.indexOf(">One-off spending</Button>", primaryAmount);
+      const addAnotherControl = source.indexOf("Add another category", oneOffControl);
+
+      expect(primaryAmount).toBeGreaterThan(-1);
+      expect(oneOffControl).toBeGreaterThan(primaryAmount);
+      expect(addAnotherControl).toBeGreaterThan(oneOffControl);
+    }
+
+    const mobileOneOff = mobileSource.indexOf('testID="one-off-spending-category"');
+    const mobileAmount = mobileSource.indexOf("One-off spending amount (KES)", mobileOneOff);
+    const mobileAddAnother = mobileSource.indexOf("Add another category", mobileAmount);
+    expect(mobileOneOff).toBeGreaterThan(-1);
+    expect(mobileAmount).toBeGreaterThan(mobileOneOff);
+    expect(mobileAddAnother).toBeGreaterThan(mobileAmount);
   });
 
   it("explains where an expense goes when no category is selected", () => {
