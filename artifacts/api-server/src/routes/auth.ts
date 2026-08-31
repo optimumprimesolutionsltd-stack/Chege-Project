@@ -49,6 +49,8 @@ import {
   SESSION_COOKIE,
   SESSION_TTL,
   type SessionData,
+  hashPassword,
+  verifyPassword,
 } from '../lib/auth';
 import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
 import { resolvePhotoUrl } from '../lib/photoStorage';
@@ -106,6 +108,38 @@ function setOidcCookie(res: Response, name: string, value: string) {
     path: '/',
     maxAge: OIDC_COOKIE_TTL,
   });
+}
+
+const CredentialBody = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
+  password: z.string().min(8, 'Use at least 8 characters.'),
+});
+const RegisterBody = CredentialBody.extend({
+  name: z.string().trim().min(1, 'Enter your name.').max(80, 'Use 80 characters or fewer.'),
+});
+
+function localAuthUser(user: {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  preferredName: string | null;
+  profileImageUrl: string | null;
+}): SessionData['user'] {
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.preferredName ?? user.firstName,
+    lastName: user.preferredName ? null : user.lastName,
+    profileImageUrl: user.profileImageUrl,
+    needsDisplayName: !user.preferredName,
+  };
+}
+
+async function startLocalSession(res: Response, user: Parameters<typeof localAuthUser>[0]) {
+  const sid = await createSession({ user: localAuthUser(user), access_token: 'local-password' });
+  clearActiveWorkspaceCookie(res);
+  setSessionCookie(res, sid);
 }
 
 function getSafeReturnTo(value: unknown): string {
@@ -205,6 +239,42 @@ export async function upsertUser(claims: Record<string, unknown>) {
     .returning();
   return user;
 }
+
+router.post('/auth/register', async (req: Request, res: Response) => {
+  const parsed = RegisterBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter valid details.' });
+    return;
+  }
+  const existing = await db.query.usersTable.findFirst({ where: eq(usersTable.email, parsed.data.email) });
+  if (existing) {
+    res.status(409).json({ error: 'An account with this email already exists. Try signing in instead.' });
+    return;
+  }
+  const [user] = await db.insert(usersTable).values({
+    email: parsed.data.email,
+    passwordHash: hashPassword(parsed.data.password),
+    preferredName: parsed.data.name,
+    firstName: parsed.data.name,
+  }).returning();
+  await startLocalSession(res, user);
+  res.json({ user: await authUserPayload(user) });
+});
+
+router.post('/auth/password-login', async (req: Request, res: Response) => {
+  const parsed = CredentialBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter a valid email and password.' });
+    return;
+  }
+  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.email, parsed.data.email) });
+  if (!user?.passwordHash || !verifyPassword(parsed.data.password, user.passwordHash)) {
+    res.status(401).json({ error: 'Email or password is incorrect.' });
+    return;
+  }
+  await startLocalSession(res, user);
+  res.json({ user: await authUserPayload(user) });
+});
 
 router.get('/auth/user', async (req: Request, res: Response) => {
   if (!req.isAuthenticated()) {

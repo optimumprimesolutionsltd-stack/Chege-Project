@@ -17,6 +17,29 @@ function FeatureRow({ icon, text }: { icon: React.ReactNode; text: string }) {
 export default function LoginPage() {
   const { login } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [credentialMode, setCredentialMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [credentialError, setCredentialError] = useState<string | null>(null);
+
+  const submitCredentials = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setCredentialError(null);
+    setIsSigningIn(true);
+    try {
+      const response = await fetch(credentialMode === 'register' ? '/api/auth/register' : '/api/auth/password-login', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentialMode === 'register' ? { name, email, password } : { email, password }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? 'Could not sign in. Please try again.');
+      window.location.href = '/app/';
+    } catch (error) {
+      setCredentialError(error instanceof Error ? error.message : 'Could not sign in. Please try again.');
+      setIsSigningIn(false);
+    }
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#00132f] via-brand-navy to-brand-blue px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
@@ -86,23 +109,17 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                setIsSigningIn(true);
-                login();
-              }}
-              disabled={isSigningIn}
-              aria-busy={isSigningIn}
-              className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-brand-blue text-base font-bold text-white shadow-lg shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:bg-[#002966] hover:shadow-xl active:translate-y-0 disabled:cursor-wait disabled:opacity-80"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold" aria-hidden="true">
-                <span className="bg-gradient-to-br from-[#4285f4] via-[#34a853] to-[#ea4335] bg-clip-text text-transparent">G</span>
-              </span>
-              {isSigningIn ? 'Opening secure sign-in…' : 'Continue with Google'}
-            </button>
-            <p className="mt-4 text-center text-xs leading-5 text-blue-100/70">
-              You’ll continue through Google’s secure sign-in. Your Jamvi account works on web and mobile.
-            </p>
+            <form onSubmit={submitCredentials} className="space-y-3">
+              {credentialMode === 'register' ? <input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" autoComplete="name" className="h-12 w-full rounded-xl border border-blue-100/20 bg-white/[0.08] px-4 text-white placeholder:text-blue-100/50 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30" /> : null}
+              <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" autoComplete="email" className="h-12 w-full rounded-xl border border-blue-100/20 bg-white/[0.08] px-4 text-white placeholder:text-blue-100/50 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+              <input required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password (8+ characters)" autoComplete={credentialMode === 'register' ? 'new-password' : 'current-password'} className="h-12 w-full rounded-xl border border-blue-100/20 bg-white/[0.08] px-4 text-white placeholder:text-blue-100/50 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+              {credentialError ? <p role="alert" className="rounded-xl bg-red-400/15 px-3 py-2 text-sm text-red-100">{credentialError}</p> : null}
+              <button type="submit" disabled={isSigningIn} className="flex h-14 w-full items-center justify-center rounded-2xl bg-brand-teal text-base font-bold text-brand-navy shadow-lg shadow-brand-teal/20 transition-all hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-80">{isSigningIn ? 'Signing in securely…' : credentialMode === 'register' ? 'Create account with email' : 'Sign in with email'}</button>
+            </form>
+            <button type="button" onClick={() => { setCredentialMode(credentialMode === 'login' ? 'register' : 'login'); setCredentialError(null); }} className="mt-3 w-full text-sm font-semibold text-brand-teal hover:underline">{credentialMode === 'login' ? 'Need an account? Create one' : 'Already have an account? Sign in'}</button>
+            <div className="my-5 flex items-center gap-3 text-xs text-blue-100/50"><span className="h-px flex-1 bg-blue-100/15" /><span>OR</span><span className="h-px flex-1 bg-blue-100/15" /></div>
+            <button type="button" onClick={() => { setIsSigningIn(true); login(); }} disabled={isSigningIn} aria-busy={isSigningIn} className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-blue-100/20 bg-white/[0.08] text-base font-bold text-white transition-all hover:bg-white/[0.13] disabled:cursor-wait disabled:opacity-80"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold" aria-hidden="true"><span className="bg-gradient-to-br from-[#4285f4] via-[#34a853] to-[#ea4335] bg-clip-text text-transparent">G</span></span>{isSigningIn ? 'Opening secure sign-in…' : 'Continue with Google'}</button>
+            <p className="mt-4 text-center text-xs leading-5 text-blue-100/70">Use email and password or continue through Google’s secure sign-in. Your Jamvi account works on web and mobile.</p>
           </div>
         </main>
       </div>

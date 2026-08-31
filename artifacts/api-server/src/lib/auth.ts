@@ -32,6 +32,20 @@ export const ISSUER_URL =
 export const SESSION_COOKIE = 'sid';
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(password: string, stored: string): boolean {
+  const [salt, expected] = stored.split(':');
+  if (!salt || !expected || expected.length !== 128) return false;
+  const actual = crypto.scryptSync(password, salt, 64);
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  return expectedBuffer.length === actual.length && crypto.timingSafeEqual(actual, expectedBuffer);
+}
+
 export interface SessionData {
   user: AuthUser;
   access_token: string;
