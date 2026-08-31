@@ -25,6 +25,15 @@ const ONBOARDING_CATEGORY_TIERS = [
 
 const ALL_ONBOARDING_CATEGORIES = ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories);
 const COMMON_INCOME_STREAMS = ["Salary or wages", "Business or side hustle", "Freelance or contract work", "Farming or livestock", "Rental income", "Family support or remittances", "Pension or benefits", "Other income"] as const;
+const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
+  student: ["Food", "Housing", "Transport", "Education", "Airtime & data", "Entertainment", "Other"],
+  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Personal care", "Other"],
+  business: ["Food", "Transport", "Health", "Work & business", "Airtime & data", "Other"],
+  couple: ["Food", "Housing", "Utilities", "Transport", "Health", "Family support", "Other"],
+  family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support"],
+  chama: ["Food", "Transport", "Family support", "Work & business", "Other"],
+  club: ["Food", "Transport", "Education", "Entertainment", "Work & business", "Other"],
+};
 
 export function budgetChooserCompletionKey(userId: string) {
   return `${CHOOSER_STORAGE_PREFIX}${encodeURIComponent(userId)}`;
@@ -90,6 +99,8 @@ export function BudgetChooser({
   const [sharedBudgetName, setSharedBudgetName] = useState("");
   const [sharedBudgetKind, setSharedBudgetKind] = useState<SharedGroupKind | null>(null);
   const [onboardingMode, setOnboardingMode] = useState<"personal" | "shared" | "both" | null>(null);
+  const [showPurposeSetup, setShowPurposeSetup] = useState(false);
+  const [onboardingPurpose, setOnboardingPurpose] = useState<string | null>(null);
   const [showDurationSetup, setShowDurationSetup] = useState(false);
   const [budgetDuration, setBudgetDuration] = useState<"ongoing" | "week" | "month" | "quarter" | "custom" | null>(null);
   const [customEndDate, setCustomEndDate] = useState("");
@@ -200,7 +211,7 @@ export function BudgetChooser({
                   ["shared", "Money with others", "A shared budget for a family, chama, club, or team.", UsersRound],
                   ["both", "Both", "Keep my personal money private and manage shared money too.", Heart],
                 ] as const).map(([value, title, description, Icon]) => (
-                  <button key={value} type="button" onClick={() => { setOnboardingMode(value); setShowDurationSetup(true); }} className="group rounded-2xl border border-border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <button key={value} type="button" onClick={() => { setOnboardingMode(value); setShowPurposeSetup(true); }} className="group rounded-2xl border border-border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" aria-hidden="true" /></span>
                     <span className="mt-4 block text-base font-bold text-foreground">{title}</span>
                     <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{description}</span>
@@ -213,6 +224,15 @@ export function BudgetChooser({
           </div>
         </section>
       </main>
+    );
+  }
+
+  if (showPurposeSetup) {
+    const purposeOptions = onboardingMode === "shared"
+      ? [["couple", "A couple", "Plan shared household money together."], ["family", "A family", "Coordinate home costs, school, health, and support."], ["chama", "A chama or welfare group", "Track contributions, welfare, loans, and group plans."], ["club", "A club, church, or team", "Manage membership money, events, and projects."], ["other", "Something else", "Tell Jamvi what matters to your group."]] as const
+      : [["student", "A student", "Balance school life, living costs, and personal goals."], ["working", "Working or employed", "Plan income, household costs, and future goals."], ["business", "A business owner", "Separate business costs, personal spending, and income."], ["other", "Something else", "Build a budget around your own priorities."]] as const;
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10"><section className="mx-auto w-full max-w-3xl"><div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl"><header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9"><p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 5 · Make it yours</p><h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, what are you using Jamvi for?` : "What are you using Jamvi for?"}</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Your answer helps us recommend categories that fit your life instead of showing you a generic budget.</p></header><div className="p-6 sm:p-10"><div className="grid gap-3 sm:grid-cols-2">{purposeOptions.map(([value, title, description]) => { const selected = onboardingPurpose === value; return <button key={value} type="button" aria-pressed={selected} onClick={() => setOnboardingPurpose(value)} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"}`}><span className="flex items-center justify-between gap-3"><span className="font-bold text-foreground">{title}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></span><span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{description}</span></button>; })}</div><div className="mt-8 flex justify-end"><Button type="button" disabled={!onboardingPurpose} className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:purpose:${encodeURIComponent(userId)}`, onboardingPurpose ?? ""); } catch { /* Continue even when storage is unavailable. */ } setShowPurposeSetup(false); setShowDurationSetup(true); }}>Continue to duration <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></div></section></main>
     );
   }
 
@@ -230,7 +250,7 @@ export function BudgetChooser({
         <section className="mx-auto w-full max-w-3xl">
           <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 4 · Choose your planning horizon</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 3 of 5 · Choose your planning horizon</p>
               <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, how long is this budget for?` : "How long is this budget for?"}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">A trip budget needs a finish line. An everyday budget can stay open. Tell Jamvi how to help you plan.</p>
             </header>
@@ -251,24 +271,26 @@ export function BudgetChooser({
   }
 
   if (showCategorySetup) {
-    const allSelected = selectedCategories.length === ALL_ONBOARDING_CATEGORIES.length;
+    const recommendedCategories = onboardingPurpose ? (PURPOSE_CATEGORY_MAP[onboardingPurpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES;
+    const visibleTiers = ONBOARDING_CATEGORY_TIERS.map((tier) => ({ ...tier, categories: tier.categories.filter((category) => recommendedCategories.includes(category)) })).filter((tier) => tier.categories.length > 0);
+    const allSelected = recommendedCategories.every((category) => selectedCategories.includes(category));
     const toggleCategory = (category: string) => setSelectedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]);
     return (
       <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
         <section className="mx-auto w-full max-w-4xl">
           <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 3 of 4 · Personalize your budget</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 4 of 5 · Personalize your budget</p>
               <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, what should we help you track?` : "What should we help you track?"}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Choose the categories you want to see first. You can change them and add your own later.</p>
             </header>
             <div className="p-6 sm:p-10">
               <div className="flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div><p className="font-semibold text-foreground">Start with the essentials</p><p className="mt-1 text-sm text-muted-foreground">Priorities keep your first budget focused and useful.</p></div>
-                <button type="button" aria-pressed={allSelected} onClick={() => setSelectedCategories(allSelected ? [] : [...ALL_ONBOARDING_CATEGORIES])} className="rounded-xl border border-primary/30 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/10">{allSelected ? "Clear all" : "Select all categories"}</button>
+                <button type="button" aria-pressed={allSelected} onClick={() => setSelectedCategories(allSelected ? [] : [...recommendedCategories])} className="rounded-xl border border-primary/30 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/10">{allSelected ? "Clear all" : "Select all recommended categories"}</button>
               </div>
               <div className="mt-6 space-y-6">
-                {ONBOARDING_CATEGORY_TIERS.map((tier) => (
+                {visibleTiers.map((tier) => (
                   <section key={tier.priority} aria-labelledby={`onboarding-tier-${tier.priority}`}>
                     <div className="mb-3"><h2 id={`onboarding-tier-${tier.priority}`} className="font-display text-lg font-bold text-foreground">Tier {tier.priority} · {tier.label}</h2><p className="text-sm text-muted-foreground">{tier.description}</p></div>
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -280,7 +302,7 @@ export function BudgetChooser({
                   </section>
                 ))}
               </div>
-              <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{selectedCategories.length} of {ALL_ONBOARDING_CATEGORIES.length} categories selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:categories:${encodeURIComponent(userId)}`, JSON.stringify(selectedCategories)); } catch { /* Continue even when storage is unavailable. */ } setShowCategorySetup(false); setShowIncomeSetup(true); }}>Continue to income setup <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
+              <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{selectedCategories.length} of {recommendedCategories.length} recommended categories selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:categories:${encodeURIComponent(userId)}`, JSON.stringify(selectedCategories)); } catch { /* Continue even when storage is unavailable. */ } setShowCategorySetup(false); setShowIncomeSetup(true); }}>Continue to income setup <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
             </div>
           </div>
         </section>
@@ -311,7 +333,7 @@ export function BudgetChooser({
         <section className="mx-auto w-full max-w-3xl">
           <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 4 of 4 · Personalize your starting point</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 5 of 5 · Personalize your starting point</p>
               <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, ${incomeHeading.charAt(0).toLowerCase()}${incomeHeading.slice(1)}` : incomeHeading}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">{incomeDescription} You can add amounts and more sources later.</p>
             </header>
