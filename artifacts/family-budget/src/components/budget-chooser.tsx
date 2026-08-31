@@ -19,20 +19,20 @@ const CHOOSER_STORAGE_PREFIX = "jamvi:budget-chooser:completed:";
 const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; description: string; categories: readonly string[] }[] = [
   { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Food & meals", "Groceries", "Housing", "Accommodation", "Rent", "Utilities", "Shared bills", "Transport"] },
   { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Tuition & fees", "Books & supplies", "Family support", "Personal care", "Insurance", "School fees"] },
-  { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business", "Business supplies", "Stock & inventory", "Savings", "Joint savings", "Emergency fund"] },
+  { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business", "Business supplies", "Stock & inventory"] },
   { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Member contributions", "Projects", "Loans", "Other"] },
 ];
 
 const ALL_ONBOARDING_CATEGORIES = ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories);
 const COMMON_INCOME_STREAMS = ["Salary or wages", "Business or side hustle", "Freelance or contract work", "Farming or livestock", "Rental income", "Family support or remittances", "Pension or benefits", "Other income"] as const;
 const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
-  student: ["Food & meals", "Accommodation", "Transport", "Tuition & fees", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Emergency fund", "Savings", "Other"],
-  working: ["Food", "Rent", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Savings", "Emergency fund", "Other"],
-  business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Airtime & data", "Savings", "Other"],
-  couple: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Joint savings", "Emergency fund", "Other"],
+  student: ["Food & meals", "Accommodation", "Transport", "Tuition & fees", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
+  working: ["Food", "Rent", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
+  business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Airtime & data", "Other"],
+  couple: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
   friends: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Other"],
-  family: ["Groceries", "Rent", "Utilities", "Transport", "Health", "School fees", "Family support", "Insurance", "Household", "Emergency fund"],
-  chama: ["Member welfare", "Loans", "Member contributions", "Events", "Transport", "Projects", "Emergency fund", "Other"],
+  family: ["Groceries", "Rent", "Utilities", "Transport", "Health", "School fees", "Family support", "Insurance", "Household"],
+  chama: ["Member welfare", "Loans", "Member contributions", "Events", "Transport", "Projects", "Other"],
   club: ["Member contributions", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
 };
 
@@ -287,14 +287,14 @@ export function BudgetChooser({
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 4 of 5 · Personalize your budget</p>
               <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, what should we help you track?` : "What should we help you track?"}</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Choose the categories you want to see first. You can change them and add your own later.</p>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Choose the expense categories you want to see first. You can change them and add your own later.</p>
             </header>
             <div className="p-6 sm:p-10">
               <div className="flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div><p className="font-semibold text-foreground">Start with the essentials</p><p className="mt-1 text-sm text-muted-foreground">Priorities keep your first budget focused and useful.</p></div>
                 <button type="button" aria-pressed={allSelected} onClick={() => setSelectedCategories(allSelected ? [] : [...recommendedCategories])} className="rounded-xl border border-primary/30 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/10">{allSelected ? "Clear all" : "Select all recommended categories"}</button>
               </div>
-              <div className="mt-6 space-y-6">
+              <p className="mt-4 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"><span className="font-semibold text-foreground">Planning a goal?</span> Savings, emergency funds, and joint savings are managed separately under Goals—not as expenses.</p><div className="mt-6 space-y-6">
                 {visibleTiers.map((tier) => (
                   <section key={tier.priority} aria-labelledby={`onboarding-tier-${tier.priority}`}>
                     <div className="mb-3"><h2 id={`onboarding-tier-${tier.priority}`} className="font-display text-lg font-bold text-foreground">Tier {tier.priority} · {tier.label}</h2><p className="text-sm text-muted-foreground">{tier.description}</p></div>
