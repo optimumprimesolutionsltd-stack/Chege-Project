@@ -748,14 +748,25 @@ export default function Expenses() {
         const src: IncomeSource = await res.json();
         addForm.setIncomeSourceId(src.id);
         addForm.setPayerIncomeSourceIds(prev => ({ ...prev, [paidById]: src.id }));
-        if (isPersonalBudget && !addDirectSourceIds.includes(src.id)) {
+        if (addForm.payerIds.length === 1 && !addDirectSourceIds.includes(src.id)) {
           const key = String(src.id);
-          setAddDirectSourceAmounts((previous) => addFundingSourceWithRemainder({
-            total: Number(addForm.amount),
-            selectedSourceIds: addDirectSourceIds.map(String),
-            newSourceId: key,
-            amounts: previous,
-          }));
+          setAddDirectSourceAmounts((previous) => {
+            const bankKey = "__joint_bank__";
+            const next = addFundingSourceWithRemainder({
+              total: Number(addForm.amount),
+              selectedSourceIds: [
+                ...(addForm.paidFromBank ? [bankKey] : []),
+                ...addDirectSourceIds.map(String),
+              ],
+              newSourceId: key,
+              amounts: {
+                ...previous,
+                ...(addForm.paidFromBank ? { [bankKey]: addForm.payerAmounts[bankKey] ?? "" } : {}),
+              },
+            });
+            delete next[bankKey];
+            return next;
+          });
           setAddDirectSourceIds((previous) => [...previous, src.id]);
         }
         setNewSourceName("");
@@ -773,10 +784,8 @@ export default function Expenses() {
     const payerIds = addForm.payerIds.length > 0
       ? addForm.payerIds
       : (memberPayerId ? [memberPayerId] : []);
-    const personalDirectSourceIds = isPersonalBudget && !addForm.paidFromBank
-      ? addDirectSourceIds
-      : [];
-    const sourceCount = (personalDirectSourceIds.length || payerIds.length) + (addForm.paidFromBank ? 1 : 0);
+    const directSourceIds = payerIds.length === 1 ? addDirectSourceIds : [];
+    const sourceCount = (directSourceIds.length || payerIds.length) + (addForm.paidFromBank ? 1 : 0);
     const isSplitPayment = sourceCount > 1;
     const effectivePaidById = payerIds[0] ?? addForm.paidById;
     if (!addForm.amount) {
@@ -854,7 +863,7 @@ export default function Expenses() {
       });
       return;
     }
-    if (!addForm.paidFromBank && personalDirectSourceIds.length === 0) {
+    if (payerIds.length > 0 && directSourceIds.length === 0) {
       const missingSource = hasMissingPersonalFundingSource({
         payerIds,
         isSplitPayment,
@@ -874,8 +883,8 @@ export default function Expenses() {
       const sourceAmount = Number(
         addForm.paidFromBank
           ? addForm.payerAmounts.__joint_bank__
-          : personalDirectSourceIds.length === 1
-            ? addDirectSourceAmounts[String(personalDirectSourceIds[0])]
+          : directSourceIds.length === 1
+            ? addDirectSourceAmounts[String(directSourceIds[0])]
             : addForm.payerAmounts[payerIds[0]],
       );
       if (!Number.isInteger(sourceAmount) || sourceAmount <= 0) {
@@ -901,8 +910,8 @@ export default function Expenses() {
     if (isSplitPayment) {
       const total = amount;
       if (
-        (personalDirectSourceIds.length > 0
-          ? personalDirectSourceIds.some((id) => Number(addDirectSourceAmounts[String(id)] || 0) <= 0)
+        (directSourceIds.length > 0
+          ? directSourceIds.some((id) => Number(addDirectSourceAmounts[String(id)] || 0) <= 0)
           : payerIds.some((id) => Number(addForm.payerAmounts[id] || 0) <= 0)) ||
         (addForm.paidFromBank && Number(addForm.payerAmounts.__joint_bank__ || 0) <= 0)
       ) {
@@ -913,8 +922,8 @@ export default function Expenses() {
         });
         return;
       }
-      const splitTotal = (personalDirectSourceIds.length > 0
-        ? personalDirectSourceIds.reduce((sum, id) => sum + Number(addDirectSourceAmounts[String(id)] || 0), 0)
+      const splitTotal = (directSourceIds.length > 0
+        ? directSourceIds.reduce((sum, id) => sum + Number(addDirectSourceAmounts[String(id)] || 0), 0)
         : payerIds.reduce((s, id) => s + Number(addForm.payerAmounts[id] || 0), 0))
         + (addForm.paidFromBank ? Number(addForm.payerAmounts.__joint_bank__ || 0) : 0);
       if (!Number.isInteger(total) || splitTotal !== total) {
@@ -970,8 +979,8 @@ export default function Expenses() {
             label: bankAccounts.find((account) => account.id === addForm.accountId)?.name ?? "Bank account",
             accountId: addForm.accountId!,
           }] : []),
-          ...(personalDirectSourceIds.length > 0
-            ? personalDirectSourceIds.map((incomeSourceId) => ({
+          ...(directSourceIds.length > 0
+            ? directSourceIds.map((incomeSourceId) => ({
               userId: effectivePaidById,
               amount: Number(addDirectSourceAmounts[String(incomeSourceId)] || 0),
               fromBank: false,
@@ -996,8 +1005,8 @@ export default function Expenses() {
           paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
           isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
           ...(addForm.paidFromBank ? { accountId: addForm.accountId! } : {}),
-          ...((personalDirectSourceIds[0] ?? addForm.incomeSourceId) && !isSplitPayment
-            ? { incomeSourceId: personalDirectSourceIds[0] ?? addForm.incomeSourceId! }
+          ...((directSourceIds[0] ?? addForm.incomeSourceId) && !isSplitPayment
+            ? { incomeSourceId: directSourceIds[0] ?? addForm.incomeSourceId! }
             : {}),
           ...(incomeSplits ? { incomeSplits } : {}),
         } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
@@ -1205,9 +1214,9 @@ export default function Expenses() {
     const allocationDifference = expenseTotal - allocatedTotal;
     const directFundingTotal = mode === "edit"
       ? (!editHasMultipleFundingSplits && form.paidById && form.incomeSourceId ? expenseTotal : 0)
-      : isPersonalBudget
-        ? addDirectSourceIds.reduce((total, sourceId) => total + (Number(addDirectSourceAmounts[String(sourceId)]) || 0), 0)
-        : form.payerIds.reduce((total, payerId) => total + (Number(form.payerAmounts[payerId]) || 0), 0);
+       : form.payerIds.length === 1 && addDirectSourceIds.length > 0
+         ? addDirectSourceIds.reduce((total, sourceId) => total + (Number(addDirectSourceAmounts[String(sourceId)]) || 0), 0)
+         : form.payerIds.reduce((total, payerId) => total + (Number(form.payerAmounts[payerId]) || 0), 0);
     const bankFundingTotal = form.paidFromBank
       ? (Number(form.payerAmounts.__joint_bank__) || (mode === "edit" && !form.payerIds.length ? expenseTotal : 0))
       : 0;
@@ -1227,9 +1236,9 @@ export default function Expenses() {
       ? (isPersonalBudget ? Boolean(memberPayerId) : form.payerIds.length > 0)
       : Boolean(form.paidById);
     const hasDirectIncomeSource = mode === "add"
-      ? isPersonalBudget
-        ? addDirectSourceIds.length > 0
-        : form.payerIds.length > 1
+       ? form.payerIds.length === 1 && addDirectSourceIds.length > 0
+         ? true
+         : form.payerIds.length > 1
           ? form.payerIds.every((payerId) => Boolean(form.payerIncomeSourceIds[payerId]))
           : Boolean(form.incomeSourceId)
       : Boolean(form.incomeSourceId);
@@ -1597,15 +1606,39 @@ export default function Expenses() {
             <button type="button"
               onClick={() => {
                 const nextPaidFromBank = !form.paidFromBank;
+                 const directTotal = mode === "add"
+                   ? form.payerIds.length === 1 && addDirectSourceIds.length > 0
+                     ? addDirectSourceIds.reduce((sum, sourceId) => sum + (Number(addDirectSourceAmounts[String(sourceId)]) || 0), 0)
+                     : form.payerIds.reduce((sum, payerId) => sum + (Number(form.payerAmounts[payerId]) || 0), 0)
+                   : 0;
+                  const hasDirectSelection = mode === "add" && (
+                   addDirectSourceIds.length > 0
+                   || directTotal > 0
+                   || Boolean(form.incomeSourceId)
+                 );
                 form.setPaidFromBank(nextPaidFromBank);
                 form.setIncomeSourceId(null);
                 form.setOtherIncomeSourceLabel(null);
-                  setAllowMixedFunding(false);
-                 if (nextPaidFromBank && mode === "add") {
-                  form.setPaidById("");
-                  form.setPayerIds([]);
-                  form.setPayerIncomeSourceIds({});
-                   form.setPayerAmounts({ __joint_bank__: form.amount });
+                   setAllowMixedFunding(nextPaidFromBank && hasDirectSelection);
+                  if (nextPaidFromBank && mode === "add") {
+                   const remaining = getFundingRemainder(Number(form.amount), directTotal);
+                   if (hasDirectSelection) {
+                     form.setPayerAmounts((previous) => ({
+                       ...previous,
+                       __joint_bank__: directTotal > 0 ? String(remaining) : form.amount,
+                     }));
+                   } else {
+                     form.setPaidById("");
+                     form.setPayerIds([]);
+                     form.setPayerIncomeSourceIds({});
+                     form.setPayerAmounts({ __joint_bank__: form.amount });
+                   }
+                  } else if (!nextPaidFromBank && mode === "add") {
+                    form.setPayerAmounts((previous) => {
+                      const next = { ...previous };
+                      delete next.__joint_bank__;
+                      return next;
+                    });
                  } else if (nextPaidFromBank && mode === "edit" && form.payerIds.length === 0) {
                    form.setPaidById("");
                 }
@@ -1632,12 +1665,15 @@ export default function Expenses() {
                     form.setOtherIncomeSourceLabel(null);
                     if (isMultiEnabled) {
                       if (!selected) {
-                        form.setPayerAmounts((previous) => addFundingSourceWithRemainder({
-                          total: Number(form.amount),
-                          selectedSourceIds: form.payerIds,
-                          newSourceId: m.userId,
-                          amounts: previous,
-                        }));
+                         form.setPayerAmounts((previous) => addFundingSourceWithRemainder({
+                           total: Number(form.amount),
+                           selectedSourceIds: [
+                             ...(form.paidFromBank ? ["__joint_bank__"] : []),
+                             ...form.payerIds,
+                           ],
+                           newSourceId: m.userId,
+                           amounts: previous,
+                         }));
                       }
                       const next = form.payerIds.includes(m.userId)
                         ? form.payerIds.filter(id => id !== m.userId)
@@ -1821,17 +1857,10 @@ export default function Expenses() {
                      </span>
                      <input type="number" placeholder="0" min="0" step="1"
                        value={form.payerAmounts.__joint_bank__ ?? ""}
-                       onChange={e => {
-                         const value = e.target.value;
-                         form.setPayerAmounts((previous) => {
-                           const next: Record<string, string> = { ...previous, __joint_bank__: value };
-                           if (form.payerIds.length === 1) {
-                             const remainder = getFundingRemainder(Number(form.amount), Number(value));
-                             next[form.payerIds[0]] = remainder > 0 ? String(remainder) : "";
-                           }
-                           return next;
-                         });
-                       }}
+                         onChange={e => form.setPayerAmounts((previous) => ({
+                           ...previous,
+                           __joint_bank__: e.target.value,
+                         }))}
                         required
                        className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
                    </div>
@@ -1854,10 +1883,6 @@ export default function Expenses() {
                              const value = e.target.value;
                              form.setPayerAmounts((previous) => {
                                const next = { ...previous, [pid]: value };
-                               if (form.paidFromBank && form.payerIds.length === 1) {
-                                 const remainder = getFundingRemainder(Number(form.amount), Number(value));
-                                 next.__joint_bank__ = remainder > 0 ? String(remainder) : "";
-                               }
                                return next;
                              });
                            }}
@@ -1918,14 +1943,25 @@ export default function Expenses() {
                  const sourceId = value ? Number(value) : null;
                  form.setIncomeSourceId(sourceId);
                 form.setOtherIncomeSourceLabel(null);
-                 if (mode === "add" && isPersonalBudget && sourceId && !addDirectSourceIds.includes(sourceId)) {
+                  if (mode === "add" && form.payerIds.length === 1 && sourceId && !addDirectSourceIds.includes(sourceId)) {
                    const key = String(sourceId);
-                   setAddDirectSourceAmounts((previous) => addFundingSourceWithRemainder({
-                     total: Number(form.amount),
-                     selectedSourceIds: addDirectSourceIds.map(String),
-                     newSourceId: key,
-                     amounts: previous,
-                   }));
+                    setAddDirectSourceAmounts((previous) => {
+                      const bankKey = "__joint_bank__";
+                      const next = addFundingSourceWithRemainder({
+                        total: Number(form.amount),
+                        selectedSourceIds: [
+                          ...(form.paidFromBank ? [bankKey] : []),
+                          ...addDirectSourceIds.map(String),
+                        ],
+                        newSourceId: key,
+                        amounts: {
+                          ...previous,
+                          ...(form.paidFromBank ? { [bankKey]: form.payerAmounts[bankKey] ?? "" } : {}),
+                        },
+                      });
+                      delete next[bankKey];
+                      return next;
+                    });
                    setAddDirectSourceIds((previous) => [...previous, sourceId]);
                  }
                 if (mode === "add" && form.payerIds[0]) {
@@ -1937,19 +1973,19 @@ export default function Expenses() {
               }}
               required
             >
-               <option value="" disabled>{mode === "add" && isPersonalBudget && addDirectSourceIds.length > 0 ? "Add another income source..." : "Select an income source..."}</option>
+               <option value="" disabled>{mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.length > 0 ? "Add another income source..." : "Select an income source..."}</option>
               {mode === "edit" && form.otherIncomeSourceLabel !== null && (
                 <option value="legacy" disabled>
                   Historical source: {form.otherIncomeSourceLabel || "choose a saved source"}
                 </option>
               )}
                {(mode === "add" ? addFormSources : editFormSources)?.map(src => (
-                 <option key={src.id} value={src.id} disabled={mode === "add" && isPersonalBudget && addDirectSourceIds.includes(src.id)}>
-                   {src.name}{mode === "add" && isPersonalBudget && addDirectSourceIds.includes(src.id) ? " — added" : ""}
+                 <option key={src.id} value={src.id} disabled={mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.includes(src.id)}>
+                    {src.name}{mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.includes(src.id) ? " — added" : ""}
                  </option>
               ))}
             </select>
-              {mode === "add" && isPersonalBudget && form.payerIds.length === 1 && !form.paidFromBank && addDirectSourceIds.length > 0 && (
+              {mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.length > 0 && (
                 <div className="space-y-2" data-testid="expense-direct-funding-portions">
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     Enter each portion. Add another income source as many times as needed until the expense is fully funded.
@@ -1995,7 +2031,7 @@ export default function Expenses() {
                     const assigned = addDirectSourceIds.reduce(
                       (sum, sourceId) => sum + (Number(addDirectSourceAmounts[String(sourceId)]) || 0),
                       0,
-                    );
+                    ) + (form.paidFromBank ? Number(form.payerAmounts.__joint_bank__ || 0) : 0);
                     const difference = total - assigned;
                     return total > 0 ? (
                       <div
@@ -2047,23 +2083,23 @@ export default function Expenses() {
                 This historical label is not a saved income source. Choose a saved source before saving.
               </p>
             )}
-            {mode === "add" && (
-              <div className="flex flex-wrap gap-2">
-                {addNewSource ? (
-                  <div className="flex items-center gap-1">
-                    <Input autoFocus placeholder="Source name" value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
-                      className="h-9 text-sm w-36 bg-card" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddNewSource(form.payerIds[0] ?? form.paidById); } }} />
-                    <Button type="button" size="sm" className="h-9" onClick={() => handleAddNewSource(form.payerIds[0] ?? form.paidById)}>Add</Button>
-                    <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => { setAddNewSource(false); setNewSourceName(""); }}>✕</Button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => setAddNewSource(true)}
-                    className="px-3 h-9 rounded-lg text-sm border border-dashed border-input text-muted-foreground hover:bg-muted/50 transition-colors">
-                    + New source
-                  </button>
-                )}
-              </div>
-            )}
+             {mode === "add" && (
+               <div className="flex flex-wrap gap-2 pt-1">
+                 {addNewSource ? (
+                   <div className="flex items-center gap-1">
+                     <Input autoFocus placeholder="Source name" value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
+                       className="h-9 text-sm w-36 bg-card" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddNewSource(form.payerIds[0] ?? form.paidById); } }} />
+                     <Button type="button" size="sm" className="h-9" onClick={() => handleAddNewSource(form.payerIds[0] ?? form.paidById)}>Add</Button>
+                     <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => { setAddNewSource(false); setNewSourceName(""); }}>✕</Button>
+                   </div>
+                 ) : (
+                   <button type="button" onClick={() => setAddNewSource(true)}
+                     className="px-3 h-9 rounded-lg text-sm border border-dashed border-input text-muted-foreground hover:bg-muted/50 transition-colors">
+                     + New source
+                   </button>
+                 )}
+               </div>
+             )}
           </div>
         )}
 

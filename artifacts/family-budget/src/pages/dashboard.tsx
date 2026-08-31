@@ -527,7 +527,6 @@ function ExpenseForm({
   const [bankPortion, setBankPortion] = useState("");
   const [directPortion, setDirectPortion] = useState("");
   const [additionalDirectPortions, setAdditionalDirectPortions] = useState<Array<{ sourceId: number; amount: string }>>([]);
-  const [remainderAnchor, setRemainderAnchor] = useState<"direct" | "bank" | null>(null);
   const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
   const [newBankAccountName, setNewBankAccountName] = useState("");
   const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
@@ -690,24 +689,6 @@ function ExpenseForm({
     const url = `${appPath("/budget", import.meta.env.BASE_URL)}?recurringSetup=1&returnTo=dashboard&categorySetup=${makeRecurring ? "recurring" : "other"}&category=${encodeURIComponent(recurringCategory)}&expenseAmount=${encodeURIComponent(amount)}`;
     window.location.assign(url);
   };
-
-  useEffect(() => {
-    if (!paidFromBank || !allowMixedFunding) return;
-    const total = Number(amount);
-    const direct = Number(directPortion);
-    const bank = Number(bankPortion);
-    if (!Number.isInteger(total) || total <= 0) return;
-
-    if (remainderAnchor === "direct" && Number.isInteger(direct) && direct > 0) {
-      const remainder = getFundingRemainder(total, direct);
-      setBankPortion(remainder > 0 ? String(remainder) : "");
-      return;
-    }
-    if (remainderAnchor === "bank" && Number.isInteger(bank) && bank > 0) {
-      const remainder = getFundingRemainder(total, bank);
-      setDirectPortion(remainder > 0 ? String(remainder) : "");
-    }
-  }, [allowMixedFunding, amount, bankPortion, directPortion, paidFromBank, remainderAnchor]);
 
   const handleAddBankAccount = async () => {
     const name = newBankAccountName.trim();
@@ -1336,16 +1317,22 @@ function ExpenseForm({
                     setAllowMixedFunding(false);
                     setSelectedBankAccountId(null);
                     setBankPortion("");
-                    setRemainderAnchor("direct");
                    } else if (mode === "bank") {
+                     const directTotal = (Number(directPortion) || 0)
+                       + additionalDirectPortions.reduce((sum, portion) => sum + (Number(portion.amount) || 0), 0);
+                      const hasDirectSelection = Boolean(incomeSourceId || directTotal > 0 || additionalDirectPortions.length > 0);
+                     const remaining = getFundingRemainder(Number(amount), directTotal);
                      setPaidFromBank(true);
-                     setAllowMixedFunding(false);
-                     setPaidBy("");
-                     setIncomeSourceId(null);
-                     setDirectPortion("");
-                     setAdditionalDirectPortions([]);
-                     setBankPortion(amount);
-                     setRemainderAnchor("bank");
+                     setAllowMixedFunding(hasDirectSelection);
+                     if (hasDirectSelection) {
+                        setBankPortion(directTotal > 0 ? String(remaining) : amount);
+                     } else {
+                       setPaidBy("");
+                       setIncomeSourceId(null);
+                       setDirectPortion("");
+                       setAdditionalDirectPortions([]);
+                       setBankPortion(amount);
+                     }
                    }
                 }}
                  className={`w-full p-3 text-left transition-colors ${
@@ -1386,37 +1373,6 @@ function ExpenseForm({
                    ) : (
                      <p className="text-xs text-muted-foreground">No income sources set up yet. Add one from Budget.</p>
                    )}
-                   {payerId && (
-                     <div className="flex flex-wrap items-center gap-2">
-                       {isAddingSource ? (
-                         <>
-                           <Input
-                             autoFocus
-                             placeholder="e.g. Freelance work"
-                             value={newSourceName}
-                             onChange={e => setNewSourceName(e.target.value)}
-                             onKeyDown={e => {
-                               if (e.key === "Enter") {
-                                 e.preventDefault();
-                                 void handleAddSource();
-                               }
-                             }}
-                             className="h-10 w-52 bg-card"
-                           />
-                           <Button type="button" size="sm" className="h-10" onClick={() => void handleAddSource()}>
-                             Save source
-                           </Button>
-                           <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingSource(false); setNewSourceName(""); }}>
-                             Cancel
-                           </Button>
-                         </>
-                       ) : (
-                         <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingSource(true)}>
-                           + New source
-                         </Button>
-                       )}
-                     </div>
-                   )}
                    {incomeSourceId && (
                       <div className="space-y-2">
                         <label className="block space-y-1.5 text-sm font-semibold text-foreground">
@@ -1426,10 +1382,7 @@ function ExpenseForm({
                             min="1"
                             step="1"
                             value={directPortion}
-                            onChange={(event) => {
-                              setRemainderAnchor("direct");
-                              setDirectPortion(event.target.value);
-                            }}
+                             onChange={(event) => setDirectPortion(event.target.value)}
                             placeholder="KES 0"
                             className="h-11 bg-card"
                           />
@@ -1509,6 +1462,37 @@ function ExpenseForm({
                    <p className="text-xs text-muted-foreground">
                      Paid directly means this expense is linked to the selected income source and does not reduce any Jamvi bank-account balance.
                    </p>
+                    {payerId && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {isAddingSource ? (
+                          <>
+                            <Input
+                              autoFocus
+                              placeholder="e.g. Freelance work"
+                              value={newSourceName}
+                              onChange={e => setNewSourceName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  void handleAddSource();
+                                }
+                              }}
+                              className="h-10 w-52 bg-card"
+                            />
+                            <Button type="button" size="sm" className="h-10" onClick={() => void handleAddSource()}>
+                              Save source
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingSource(false); setNewSourceName(""); }}>
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingSource(true)}>
+                            + New source
+                          </Button>
+                        )}
+                      </div>
+                    )}
                  </div>
                )}
              </div>
@@ -1565,10 +1549,7 @@ function ExpenseForm({
                     min="1"
                     step="1"
                     value={bankPortion}
-                    onChange={(event) => {
-                      setRemainderAnchor("bank");
-                      setBankPortion(event.target.value);
-                    }}
+                    onChange={(event) => setBankPortion(event.target.value)}
                     placeholder="KES 0"
                     className="h-11 bg-card"
                   />
@@ -1589,10 +1570,7 @@ function ExpenseForm({
                   size="sm"
                   variant="outline"
                   className="h-10 border-sky-300 bg-white/70 text-sky-800 hover:bg-white dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
-                  onClick={() => {
-                    setAllowMixedFunding(true);
-                    setRemainderAnchor("bank");
-                  }}
+                  onClick={() => setAllowMixedFunding(true)}
                   data-testid="quick-expense-add-funding-source"
                 >
                   <Plus className="mr-1.5 h-4 w-4" />

@@ -115,6 +115,42 @@ describe("expense funding controls", () => {
     })).toEqual({ primary: "250", second: "300", third: "450" });
   });
 
+  it("preserves a bank portion while adding three independent direct portions", () => {
+    const bankKey = "__joint_bank__";
+    let amounts = addFundingSourceWithRemainder({
+      total: 9000,
+      selectedSourceIds: [bankKey],
+      newSourceId: "salary",
+      amounts: { [bankKey]: "1000" },
+    });
+    amounts.salary = "2000";
+    amounts = addFundingSourceWithRemainder({
+      total: 9000,
+      selectedSourceIds: [bankKey, "salary"],
+      newSourceId: "business",
+      amounts,
+    });
+    amounts.business = "3000";
+    amounts = addFundingSourceWithRemainder({
+      total: 9000,
+      selectedSourceIds: [bankKey, "salary", "business"],
+      newSourceId: "freelance",
+      amounts,
+    });
+
+    expect(amounts).toEqual({
+      [bankKey]: "1000",
+      salary: "2000",
+      business: "3000",
+      freelance: "3000",
+    });
+  });
+
+  it("fills bank funding from the remaining balance after direct funding", () => {
+    expect(getFundingRemainder(9000, 5900)).toBe(3100);
+    expect(getFundingRemainder(9000, 9000)).toBe(0);
+  });
+
   it("does not create a positive remainder for an exact or overfunded primary", () => {
     expect(addFundingSourceWithRemainder({
       total: 1000,

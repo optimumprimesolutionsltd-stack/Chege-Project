@@ -314,7 +314,8 @@ export function BudgetChooser({
                 <div><p className="font-semibold text-foreground">Start with the essentials</p><p className="mt-1 text-sm text-muted-foreground">Priorities keep your first budget focused and useful.</p></div>
                 <button type="button" aria-pressed={allSelected} onClick={() => setSelectedCategories(allSelected ? [] : [...recommendedCategories])} className="rounded-xl border border-primary/30 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/10">{allSelected ? "Clear all" : "Select all recommended categories"}</button>
               </div>
-              <p className="mt-4 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"><span className="font-semibold text-foreground">Planning a goal?</span> Savings, emergency funds, and joint savings are managed separately under Goals—not as expenses.</p><div className="mt-6 space-y-6">
+              <p className="mt-4 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"><span className="font-semibold text-foreground">Planning a goal?</span> Savings, emergency funds, and joint savings are managed separately under Goals—not as expenses.</p>
+              <div className="mt-6 space-y-6">
                 {visibleTiers.map((tier) => (
                   <section key={tier.priority} aria-labelledby={`onboarding-tier-${tier.priority}`}>
                     <div className="mb-3"><h2 id={`onboarding-tier-${tier.priority}`} className="font-display text-lg font-bold text-foreground">Tier {tier.priority} · {tier.label}</h2><p className="text-sm text-muted-foreground">{tier.description}</p></div>

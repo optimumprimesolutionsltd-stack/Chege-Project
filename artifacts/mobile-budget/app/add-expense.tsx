@@ -1415,13 +1415,26 @@ export default function AddExpenseSheet() {
                     setPaidFromBank(false);
                     setAllowMixedFunding(false);
                   } else {
+                    const total = parseFloat(amount.replace(/,/g, '')) || 0;
+                    const directTotal = selectedSources.length > 0
+                      ? selectedSources.reduce((sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0), 0)
+                      : payerIds.reduce((sum, payerId) => sum + (parseFloat(payerAmounts[payerId] || '0') || 0), 0);
+                    const hasDirectSelection = selectedSources.length > 0 || directTotal > 0;
+                    const remaining = getFundingRemainder(total, directTotal);
                     setPaidFromBank(true);
-                    setAllowMixedFunding(false);
-                    setPayerIds([]);
-                    setSelectedSources([]);
-                    setSplitAmounts({});
-                    setPayerIncomeSourceIds({});
-                    setPayerAmounts({ __joint_bank__: amount.replace(/,/g, '') });
+                    setAllowMixedFunding(hasDirectSelection);
+                    if (hasDirectSelection) {
+                      setPayerAmounts((previous) => ({
+                        ...previous,
+                        __joint_bank__: directTotal > 0 ? String(remaining) : amount.replace(/,/g, ''),
+                      }));
+                    } else {
+                      setPayerIds([]);
+                      setSelectedSources([]);
+                      setSplitAmounts({});
+                      setPayerIncomeSourceIds({});
+                      setPayerAmounts({ __joint_bank__: amount.replace(/,/g, '') });
+                    }
                   }
                 }}
                 style={[styles.paidByPill, {
@@ -1452,7 +1465,10 @@ export default function AddExpenseSheet() {
                         if (!prev.includes(m.userId)) {
                           setPayerAmounts((previous) => addFundingSourceWithRemainder({
                             total: parseFloat(amount.replace(/,/g, '')),
-                            selectedSourceIds: prev,
+                            selectedSourceIds: [
+                              ...(paidFromBank ? ['__joint_bank__'] : []),
+                              ...prev,
+                            ],
                             newSourceId: m.userId,
                             amounts: previous,
                           }));
@@ -1695,10 +1711,6 @@ export default function AddExpenseSheet() {
                               if (isEditMode) setFundingDirty(true);
                               setPayerAmounts((previous) => {
                                 const next = { ...previous, [pid]: val };
-                                if (paidFromBank && payerIds.length === 1) {
-                                  const remainder = getFundingRemainder(parseFloat(amount.replace(/,/g, '')), parseFloat(val || '0'));
-                                  next.__joint_bank__ = remainder > 0 ? String(remainder) : '';
-                                }
                                 return next;
                               });
                             }}
@@ -1822,12 +1834,23 @@ export default function AddExpenseSheet() {
                           });
                           return previous.filter((item) => item !== key);
                         }
-                        setSplitAmounts((amounts) => addFundingSourceWithRemainder({
-                          total: parseFloat(amount.replace(/,/g, '')),
-                          selectedSourceIds: previous,
-                          newSourceId: key,
-                          amounts,
-                        }));
+                        setSplitAmounts((amounts) => {
+                          const bankKey = '__joint_bank__';
+                          const next = addFundingSourceWithRemainder({
+                            total: parseFloat(amount.replace(/,/g, '')),
+                            selectedSourceIds: [
+                              ...(paidFromBank ? [bankKey] : []),
+                              ...previous,
+                            ],
+                            newSourceId: key,
+                            amounts: {
+                              ...amounts,
+                              ...(paidFromBank ? { [bankKey]: payerAmounts[bankKey] || '' } : {}),
+                            },
+                          });
+                          delete next[bankKey];
+                          return next;
+                        });
                         return [...previous, key];
                       });
                     }}
@@ -1872,7 +1895,7 @@ export default function AddExpenseSheet() {
                 </Pressable>
               )}
             </View>
-            {!paidFromBank && selectedSources.length > 0 && (
+            {(!paidFromBank || allowMixedFunding) && selectedSources.length > 0 && (
               <View style={{ marginTop: 12, gap: 6 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
                     Type each amount. Jamvi fills the current remainder when you add another source.

@@ -21,7 +21,8 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain('data-testid="quick-expense-funding-remainder"');
     expect(dashboardSource).toContain("additionalDirectPortions");
     expect(dashboardSource).toContain('title: remaining > 0 ? "Choose another funding source"');
-    expect(dashboardSource).toContain("getFundingRemainder(total, direct)");
+    expect(dashboardSource).not.toContain("setBankPortion(remainder");
+    expect(dashboardSource).not.toContain("setDirectPortion(remainder");
     expect(dashboardSource).not.toContain('["mixed", "Both"');
   });
 
@@ -32,11 +33,14 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("Jamvi fills the remaining amount into the other selected source");
     expect(expensesSource).toContain("getFundingRemainder(Number(form.amount)");
     expect(expensesSource).toContain("addFundingSourceWithRemainder({");
-    expect(expensesSource).toContain("selectedSourceIds: form.payerIds");
+    expect(expensesSource).toContain("selectedSourceIds: [");
+    expect(expensesSource).toContain("...form.payerIds");
     expect(expensesSource).toContain('title: remaining > 0 ? "Add another funding source"');
     expect(expensesSource).toContain("Add another income source...");
     expect(expensesSource).toContain("as many times as needed until the expense is fully funded");
     expect(expensesSource).toContain('data-testid="expense-funding-remainder"');
+    expect(expensesSource).toContain("delete next[bankKey]");
+    expect(expensesSource).not.toContain("next.__joint_bank__ = remainder");
   });
 
   it("requires selected mobile sources to account for the full expense", () => {
@@ -46,7 +50,8 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain("TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM");
     expect(mobileSource).toContain("Jamvi fills the remaining amount into the other selected source");
     expect(mobileSource).toContain("getFundingRemainder(parseFloat(amount.replace");
-    expect(mobileSource).toContain("selectedSourceIds: previous");
+    expect(mobileSource).toContain("...(paidFromBank ? [bankKey] : [])");
+    expect(mobileSource).toContain("...previous");
     expect(mobileSource).toContain("newSourceId: key");
     expect(mobileSource).toContain('testID="expense-funding-remainder"');
     expect(mobileSource).not.toContain("if (previous.length >= 2)");
@@ -67,6 +72,35 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain("(!paidFromBank || allowMixedFunding)");
     expect(mobileSource).toContain("!allowMixedFunding && canManageShared");
     expect(mobileSource).not.toContain("isEditMode && !allowMixedFunding && canManageShared");
+  });
+
+  it("places new-source creation after the existing funding rows", () => {
+    const expenseRows = expensesSource.indexOf('data-testid="expense-direct-funding-portions"');
+    const expenseNewSource = expensesSource.indexOf("+ New source");
+    expect(expenseRows).toBeGreaterThan(-1);
+    expect(expenseNewSource).toBeGreaterThan(expenseRows);
+
+    const dashboardRows = dashboardSource.indexOf("additionalDirectPortions.map");
+    const dashboardNewSource = dashboardSource.indexOf("+ New source");
+    expect(dashboardRows).toBeGreaterThan(-1);
+    expect(dashboardNewSource).toBeGreaterThan(dashboardRows);
+  });
+
+  it("keeps direct funding and fills only the remaining amount when bank is selected", () => {
+    expect(expensesSource).toContain("const remaining = getFundingRemainder(Number(form.amount), directTotal);");
+    expect(expensesSource).toContain("__joint_bank__: directTotal > 0 ? String(remaining) : form.amount");
+    expect(expensesSource).toContain("...previous");
+    expect(dashboardSource).toContain("const remaining = getFundingRemainder(Number(amount), directTotal);");
+    expect(dashboardSource).toContain("setBankPortion(directTotal > 0 ? String(remaining) : amount)");
+    expect(mobileSource).toContain("__joint_bank__: directTotal > 0 ? String(remaining) : amount.replace");
+    expect(mobileSource).toContain("(!paidFromBank || allowMixedFunding) && selectedSources.length > 0");
+  });
+
+  it("applies bank remainder logic when a Shared budget member is selected", () => {
+    expect(expensesSource).toContain('...(form.paidFromBank ? ["__joint_bank__"] : [])');
+    expect(expensesSource).toContain("...form.payerIds");
+    expect(mobileSource).toContain("...(paidFromBank ? ['__joint_bank__'] : [])");
+    expect(mobileSource).toContain("...prev");
   });
 
   it("shows an explicit mobile add-category action", () => {
