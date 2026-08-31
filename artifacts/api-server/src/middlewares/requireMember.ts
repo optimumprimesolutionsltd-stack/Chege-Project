@@ -34,10 +34,10 @@ const LEGACY_GROUP_NAME = "Shared budget";
  * auth upsert path.
  */
 async function ensureAuthenticatedUser(userId: string): Promise<void> {
-  await db
-    .insert(usersTable)
-    .values({ id: userId })
-    .onConflictDoNothing();
+  // Use a minimal SQL insert rather than Drizzle's table insert here. This
+  // recovery path must remain usable while additive user columns are being
+  // migrated in production.
+  await db.execute(sql`INSERT INTO users (id) VALUES (${userId}) ON CONFLICT (id) DO NOTHING`);
 }
 
 /**
