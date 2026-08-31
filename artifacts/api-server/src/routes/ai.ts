@@ -102,7 +102,8 @@ router.post("/ai/ask", async (req, res): Promise<void> => {
   }
   const { month, year } = parseBudgetSummaryPeriod(req.body ?? {});
   try {
-    const summaryUrl = `${req.protocol}://${req.get("host")}/api/ai/budget-summary?month=${month}&year=${year}`;
+    const forwardedProtocol = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
+    const summaryUrl = `${forwardedProtocol}://${req.get("host")}/api/ai/budget-summary?month=${month}&year=${year}`;
     const summaryResponse = await fetch(summaryUrl, {
       headers: { cookie: req.headers.cookie ?? "" },
     });
