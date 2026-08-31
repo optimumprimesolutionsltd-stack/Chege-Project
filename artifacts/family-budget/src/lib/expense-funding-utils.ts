@@ -70,3 +70,107 @@ export function getNewExpenseCategoryMode({
 }) {
   return addToBudget && canManageCategories ? "budgeted" as const : "unbudgeted" as const;
 }
+
+export type ExpenseEntryStatus = {
+  tone: "ready" | "attention" | "error";
+  message: string;
+};
+
+export function getCategoryAllocationStatus({
+  total,
+  allocations,
+  formatAmount,
+}: {
+  total: number;
+  allocations: Array<{ category: string; amount: number }>;
+  formatAmount: (amount: number) => string;
+}): ExpenseEntryStatus {
+  if (!Number.isInteger(total) || total <= 0) {
+    return { tone: "attention", message: "Enter the expense amount to begin" };
+  }
+  if (allocations.some((allocation) => !allocation.category.trim())) {
+    return { tone: "attention", message: "Choose a category for every row" };
+  }
+  if (new Set(allocations.map((allocation) => allocation.category.trim().toLocaleLowerCase())).size !== allocations.length) {
+    return { tone: "error", message: "Choose a different category for each row" };
+  }
+  if (allocations.some((allocation) => !Number.isInteger(allocation.amount) || allocation.amount <= 0)) {
+    return { tone: "attention", message: "Enter a positive whole-KES amount for every category" };
+  }
+
+  const allocated = allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+  const difference = total - allocated;
+  if (difference > 0) {
+    return {
+      tone: "attention",
+      message: `Allocated ${formatAmount(allocated)} of ${formatAmount(total)} · ${formatAmount(difference)} remaining`,
+    };
+  }
+  if (difference < 0) {
+    return {
+      tone: "error",
+      message: `Allocated ${formatAmount(allocated)} of ${formatAmount(total)} · ${formatAmount(Math.abs(difference))} over`,
+    };
+  }
+  return {
+    tone: "ready",
+    message: `Allocated ${formatAmount(allocated)} of ${formatAmount(total)} · Ready to save`,
+  };
+}
+
+export function getExpenseFundingStatus({
+  total,
+  fundingTotal,
+  hasBankFunding,
+  hasBankAccount,
+  hasDirectFunding,
+  hasDirectPayer,
+  hasDirectIncomeSource,
+  formatAmount,
+}: {
+  total: number;
+  fundingTotal: number;
+  hasBankFunding: boolean;
+  hasBankAccount: boolean;
+  hasDirectFunding: boolean;
+  hasDirectPayer: boolean;
+  hasDirectIncomeSource: boolean;
+  formatAmount: (amount: number) => string;
+}): ExpenseEntryStatus {
+  if (!Number.isInteger(total) || total <= 0) {
+    return { tone: "attention", message: "Enter the expense amount to begin" };
+  }
+  if (!hasBankFunding && !hasDirectFunding) {
+    return { tone: "attention", message: "Choose a direct payer or bank account to begin" };
+  }
+  if (hasBankFunding && !hasBankAccount) {
+    return { tone: "attention", message: "Choose the bank account used for this expense" };
+  }
+  if (hasDirectFunding && !hasDirectPayer) {
+    return { tone: "attention", message: "Choose who paid the direct portion" };
+  }
+  if (hasDirectFunding && !hasDirectIncomeSource) {
+    return { tone: "attention", message: "Choose an income source for every direct portion" };
+  }
+  if (!Number.isInteger(fundingTotal) || fundingTotal <= 0) {
+    return { tone: "attention", message: "Enter the amount from each funding source" };
+  }
+
+  const difference = total - fundingTotal;
+  if (difference > 0) {
+    return {
+      tone: "attention",
+      message: `Funded ${formatAmount(fundingTotal)} of ${formatAmount(total)} · ${formatAmount(difference)} remaining`,
+    };
+  }
+  if (difference < 0) {
+    return {
+      tone: "error",
+      message: `Funded ${formatAmount(fundingTotal)} of ${formatAmount(total)} · ${formatAmount(Math.abs(difference))} over`,
+    };
+  }
+  return {
+    tone: "ready",
+    message: `Funded ${formatAmount(fundingTotal)} of ${formatAmount(total)} · Ready to save`,
+  };
+}

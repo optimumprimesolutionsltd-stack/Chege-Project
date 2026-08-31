@@ -145,7 +145,10 @@ export function hydrateCategoryAllocations(
   const stored = allocations?.filter(
     (allocation) => allocation.category.trim() && Number.isInteger(allocation.amount) && allocation.amount > 0,
   ) ?? [];
-  return stored.length > 0 ? stored : [{ category, amount }];
+  if (stored.length > 0) return stored;
+  // Uncategorized expenses deliberately have both fields empty. Do not create a
+  // synthetic blank allocation when opening one for editing.
+  return category.trim() ? [{ category, amount }] : [];
 }
 
 export function hasOtherCategoryAllocation(allocations: Array<{ category: string }>) {

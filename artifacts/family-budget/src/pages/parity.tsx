@@ -90,7 +90,14 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Log an expense",
     web: "done",
     mobile: "done",
-    note: "Both use one primary funding amount and automatically assign any remainder to the explicitly selected second income source or bank account",
+    note: "Both platforms can save an expense without a category after an explicit choice, or hand it off to create a monthly budget from the description.",
+  },
+  {
+    category: "Expenses",
+    feature: "Save an Other expense as a budget category",
+    web: "done",
+    mobile: "done",
+    note: "Legacy Other records retain their notes. New expenses can instead be saved uncategorized or use the monthly-budget handoff directly on both platforms.",
   },
   {
     category: "Expenses",

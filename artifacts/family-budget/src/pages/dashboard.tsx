@@ -50,6 +50,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { ProfileAvatar } from "@/components/profile-avatar";
@@ -57,7 +58,7 @@ import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kin
 import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
 import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
-import { getFundingRemainder } from "@/lib/expense-funding-utils";
+import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder } from "@/lib/expense-funding-utils";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";
@@ -66,6 +67,7 @@ type DashboardActivityItem = ActivityEditItem & {
   type: string;
   amount: number;
   description: string;
+  category?: string | null;
   userName?: string | null;
   categoryAllocations?: { category: string; amount: number }[];
 };
@@ -93,6 +95,11 @@ function DashboardActivityRow({
             {item.userName ?? bankLabel} · {formatDate(String(item.date))}
             {editLink?.label === "Edit expense" ? " · Edit expense" : ""}
           </p>
+           {item.type === ACTIVITY_TYPE.EXPENSE && (
+             <p className="text-xs text-muted-foreground" data-testid={`activity-category-${item.id}`}>
+               {item.category || "Uncategorized"}
+             </p>
+           )}
           {item.categoryAllocations && item.categoryAllocations.length > 1 && (
             <p className="text-xs text-muted-foreground" data-testid={`activity-category-breakdown-${item.id}`}>
               {item.categoryAllocations.map((allocation) => `${allocation.category}: ${formatKes(allocation.amount)}`).join(" · ")}
@@ -135,12 +142,6 @@ function localDateInputValue(date = new Date()) {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-
-const PERSONAL_OVERVIEW_SHORTCUTS = [
-  { href: "/budget", label: "Budget", description: "Plan your month", icon: Wallet },
-  { href: "/expenses", label: "Expenses", description: "See where it goes", icon: Receipt },
-  { href: "/savings-goals", label: "Goals", description: "Build towards more", icon: Target },
-];
 
 const SHARED_OVERVIEW_SHORTCUTS = [
   { href: "/budget", label: "Budget", description: "Plan spending", icon: Wallet },
@@ -533,6 +534,7 @@ function ExpenseForm({
   const [newBankOpeningBalance, setNewBankOpeningBalance] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringMonthlyBudget, setRecurringMonthlyBudget] = useState("");
+  const [uncategorizedSaveOpen, setUncategorizedSaveOpen] = useState(false);
   const [date, setDate] = useState(localDateInputValue());
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
@@ -564,6 +566,28 @@ function ExpenseForm({
   const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
   const bankLabel = "Bank account";
   const isOtherCategory = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+  const expenseTotal = Number(amount) || 0;
+  const fundingTotal = (Number(bankPortion) || 0)
+    + (Number(directPortion) || 0)
+    + additionalDirectPortions.reduce((sum, portion) => sum + (Number(portion.amount) || 0), 0);
+  const categoryStatus = getCategoryAllocationStatus({
+    total: expenseTotal,
+    allocations: categoryAllocations.map((allocation) => ({
+      category: allocation.category,
+      amount: Number(allocation.amount),
+    })),
+    formatAmount: formatKes,
+  });
+  const fundingStatus = getExpenseFundingStatus({
+    total: expenseTotal,
+    fundingTotal,
+    hasBankFunding: paidFromBank,
+    hasBankAccount: Boolean(selectedBankAccountId),
+    hasDirectFunding: !paidFromBank || allowMixedFunding,
+    hasDirectPayer: Boolean(directPayerId),
+    hasDirectIncomeSource: Boolean(incomeSourceId),
+    formatAmount: formatKes,
+  });
   const enteredBankAmount = Number(bankPortion);
   const projectedExpenseBankBalance = paidFromBank &&
     selectedBankAccountId &&
@@ -596,12 +620,18 @@ function ExpenseForm({
         saveOtherAsCategory?: boolean;
         date?: string;
         recurringMonthlyBudget?: string;
+        isRecurring?: boolean;
+        confirmedCategory?: string;
       };
       setAmount(draft.amount ?? "");
       setDescription(draft.description ?? "");
       setNotes(draft.notes ?? "");
-      setCategory(draft.category ?? "");
-      setCategoryAllocations(draft.categoryAllocations?.length ? draft.categoryAllocations : [{ category: "", amount: "" }]);
+      setCategory(draft.confirmedCategory && !draft.category?.trim() ? draft.confirmedCategory : draft.category ?? "");
+      setCategoryAllocations((draft.categoryAllocations?.length ? draft.categoryAllocations : [{ category: "", amount: "" }]).map((allocation) =>
+        (!allocation.category.trim() || allocation.category.trim().toLocaleLowerCase() === "other") && draft.confirmedCategory
+          ? { ...allocation, category: draft.confirmedCategory }
+          : allocation,
+      ));
       setPaidBy(draft.paidBy ?? "");
       setIncomeSourceId(draft.incomeSourceId ?? null);
       setPaidFromBank(draft.paidFromBank ?? false);
@@ -612,7 +642,7 @@ function ExpenseForm({
       setAdditionalDirectPortions(draft.additionalDirectPortions ?? []);
       setSaveOtherAsCategory(draft.saveOtherAsCategory ?? false);
       setDate(draft.date ?? localDateInputValue());
-      setIsRecurring(true);
+      setIsRecurring(draft.isRecurring ?? true);
       setRecurringMonthlyBudget(draft.recurringMonthlyBudget ?? "");
       sessionStorage.removeItem(RECURRING_DASHBOARD_DRAFT_KEY);
     } catch {
@@ -623,8 +653,8 @@ function ExpenseForm({
     window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
   }, []);
 
-  const openRecurringBudgetSetup = () => {
-    if (!category.trim()) {
+  const openRecurringBudgetSetup = (makeRecurring = true, proposedCategory?: string) => {
+    if (!category.trim() && !proposedCategory?.trim()) {
       toast({ variant: "destructive", title: "Choose a category first", description: "A recurring expense needs a category before Jamvi can set its average monthly budget." });
       return;
     }
@@ -648,14 +678,16 @@ function ExpenseForm({
         directPortion,
         additionalDirectPortions,
         saveOtherAsCategory: isOtherCategory,
+        isRecurring: makeRecurring,
+        recurringMonthlyBudget,
         date,
       }));
     } catch {
       toast({ variant: "destructive", title: "Could not open Budget", description: "Your quick expense could not be kept while opening the monthly budget setup." });
       return;
     }
-    const recurringCategory = isOtherCategory ? description.trim() : category.trim();
-    const url = `${appPath("/budget", import.meta.env.BASE_URL)}?recurringSetup=1&returnTo=dashboard&category=${encodeURIComponent(recurringCategory)}&expenseAmount=${encodeURIComponent(amount)}`;
+    const recurringCategory = proposedCategory?.trim() || (isOtherCategory ? description.trim() : category.trim());
+    const url = `${appPath("/budget", import.meta.env.BASE_URL)}?recurringSetup=1&returnTo=dashboard&categorySetup=${makeRecurring ? "recurring" : "other"}&category=${encodeURIComponent(recurringCategory)}&expenseAmount=${encodeURIComponent(amount)}`;
     window.location.assign(url);
   };
 
@@ -776,7 +808,7 @@ function ExpenseForm({
     }
   }, [isSharedWorkspace, paidBy, selectableMembers]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, saveWithoutCategory = false) => {
     e.preventDefault();
     const amt = Number(amount);
     const bankAmount = Number(bankPortion);
@@ -798,15 +830,15 @@ function ExpenseForm({
       return;
     }
     const allocations = categoryAllocations.map((allocation) => ({ category: allocation.category.trim(), amount: Number(allocation.amount) }));
+    const hasCategoryAllocation = allocations.some((allocation) => allocation.category);
     const allocationTotal = allocations.reduce((total, allocation) => total + allocation.amount, 0);
-    if (allocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
+    if (hasCategoryAllocation && (allocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
       new Set(allocations.map((allocation) => allocation.category.toLocaleLowerCase())).size !== allocations.length ||
-      allocationTotal !== amt) {
+      allocationTotal !== amt)) {
       toast({ variant: "destructive", title: "Category allocations don't add up", description: "Choose distinct categories with positive whole-KES amounts that total the expense." });
       return;
     }
-    // Naming a category already explains the expense; do not ask twice.
-    if (isOtherCategory && !saveOtherAsCategory && notes.trim().length < 3) {
+    if (isOtherCategory && notes.trim().length < 3) {
       toast({
         variant: "destructive",
         title: "Note required",
@@ -822,12 +854,8 @@ function ExpenseForm({
       });
       return;
     }
-    if (!category) {
-      toast({
-        variant: "destructive",
-        title: "Choose a category",
-        description: "Select a category before logging this expense.",
-      });
+    if (!hasCategoryAllocation && !saveWithoutCategory) {
+      setUncategorizedSaveOpen(true);
       return;
     }
     if (directAmount > 0 && !directPayerId) {
@@ -906,6 +934,12 @@ function ExpenseForm({
       toast({ variant: "destructive", title: "Save this recurring expense as a category", description: "Use the brief description as a category so its monthly budget can be tracked." });
       return;
     }
+    if (isOtherCategory && saveOtherAsCategory && !categories.some(
+      (item) => item.name.trim().toLocaleLowerCase() === description.trim().toLocaleLowerCase(),
+    )) {
+      openRecurringBudgetSetup(false);
+      return;
+    }
     let expenseCategory = allocations[0]?.category ?? category;
     let normalizedOtherCategory: string | null = null;
     try {
@@ -918,15 +952,6 @@ function ExpenseForm({
           expenseCategory = allocations[0]?.category.toLocaleLowerCase() === "other"
             ? existingCategory.name
             : allocations[0]?.category ?? category;
-        } else {
-          const createdCategory = await createCategory.mutateAsync({
-            data: { name: description.trim(), budgetAmount: isRecurring ? monthlyBudget : 0, priority: 3, isRecurring: true },
-          });
-          normalizedOtherCategory = createdCategory.name;
-          expenseCategory = allocations[0]?.category.toLocaleLowerCase() === "other"
-            ? createdCategory.name
-            : allocations[0]?.category ?? category;
-          await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
         }
       }
       if (isRecurring) {
@@ -972,12 +997,12 @@ function ExpenseForm({
         data: {
           amount: amt,
           description,
-           category: expenseCategory,
-           categoryAllocations: allocations.map((allocation) =>
+           category: hasCategoryAllocation ? expenseCategory : "",
+           ...(hasCategoryAllocation ? { categoryAllocations: allocations.map((allocation) =>
              allocation.category.toLocaleLowerCase() === "other"
                ? { ...allocation, category: normalizedOtherCategory ?? allocation.category }
                : allocation,
-           ),
+            ) } : {}),
           notes: notes.trim() || undefined,
            paidById: directAmount > 0 ? directPayerId : undefined,
            paidFromBank: bankAmount > 0 && directAmount <= 0,
@@ -1000,7 +1025,13 @@ function ExpenseForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+       <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+         <p className="text-sm font-semibold text-foreground">1. Record the expense</p>
+         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+           Enter the total once, then show what it covered and where the money came from.
+         </p>
+       </div>
+       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => { setAmount(e.target.value); setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }] : current); }} min="1" required className="h-11 bg-card text-base" autoFocus />
@@ -1017,8 +1048,13 @@ function ExpenseForm({
              />
            </div>
          )}
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Category <span className="text-destructive">*</span></label>
+         <div className="space-y-3 sm:col-span-2 lg:col-span-4 rounded-xl border border-border/60 bg-card p-4">
+           <div>
+              <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
+             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Add a category to track this spending against a budget. You can also save it uncategorized.
+             </p>
+           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
              <select
                value={isOtherCategory ? "" : category}
@@ -1029,7 +1065,7 @@ function ExpenseForm({
                }}
                className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
              >
-              <option value="">Pick a category</option>
+               <option value="">No category</option>
                {categories
                  .filter(c => c.name.trim().toLocaleLowerCase() !== "other")
                  .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
@@ -1053,16 +1089,34 @@ function ExpenseForm({
              </Button>
           </div>
             {isOtherCategory && (
-              /*
-                The choice comes first, and the field below adapts to it.
-                Previously this panel asked for a "brief description" and then a
-                required "Notes" underneath — two boxes, both asking you to
-                describe the same expense, where only the first silently became
-                the category name. People filled in the one marked required and
-                got a category named after the other.
-              */
               <div id="dashboard-other-expense-panel" role="tabpanel" className="mt-3 space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+                <label className="text-sm font-semibold text-foreground">Brief description</label>
+                <Input
+                  placeholder="Briefly describe this expense"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  required
+                  maxLength={120}
+                  className="h-11 bg-card"
+                  data-testid="other-brief-description"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
+                </p>
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-sm font-semibold text-foreground">
+                    Notes <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    placeholder="Explain what this Other expense was for"
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    required
+                    className="h-11 bg-card"
+                    data-testid="other-expense-notes"
+                  />
+                </div>
+                {canManageCategories && <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
                   <input
                     type="checkbox"
                     checked={saveOtherAsCategory}
@@ -1073,45 +1127,13 @@ function ExpenseForm({
                     <span className="font-semibold">Save as a category if this repeats</span>
                     <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
                   </span>
-                </label>
-                <label className="text-sm font-semibold text-foreground pt-1 block">
-                  {saveOtherAsCategory ? "Category name" : "Brief description"}
-                </label>
-                <Input
-                  placeholder={saveOtherAsCategory ? "Name this category, e.g. School fees" : "Briefly describe this expense"}
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  required
-                  maxLength={120}
-                  className="h-11 bg-card"
-                  data-testid="other-brief-description"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {saveOtherAsCategory
-                    ? "This becomes a category you can budget against and pick again next time."
-                    : "Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time."}
-                </p>
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-sm font-semibold text-foreground">
-                    Notes {saveOtherAsCategory
-                      ? <span className="font-normal text-muted-foreground">(optional)</span>
-                      : <span className="text-destructive">*</span>}
-                  </label>
-                  <Input
-                    placeholder="Explain what this Other expense was for"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    required={!saveOtherAsCategory}
-                    className="h-11 bg-card"
-                    data-testid="other-expense-notes"
-                  />
-                </div>
+                </label>}
               </div>
             )}
-            {!(isOtherCategory && categoryAllocations.length === 1) && (
-            <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+            {categoryAllocations.some((allocation) => allocation.category.trim()) && !(isOtherCategory && categoryAllocations.length === 1) && (
+             <div className="mt-3 space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
              <div className="flex items-center justify-between">
-               <p className="text-sm font-semibold">Category allocations</p>
+                <p className="text-sm font-semibold text-foreground">Category breakdown</p>
                <Button type="button" size="sm" variant="outline" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard"><Plus className="mr-1 h-3.5 w-3.5" /> Add category</Button>
              </div>
              {categoryAllocations.map((allocation, index) => (
@@ -1127,7 +1149,24 @@ function ExpenseForm({
                  {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><X className="h-4 w-4" /></Button>}
                </div>
              ))}
-             {(() => { const allocated = categoryAllocations.reduce((total, allocation) => total + (Number(allocation.amount) || 0), 0); const difference = (Number(amount) || 0) - allocated; return <p className={`text-xs ${difference === 0 && allocated > 0 ? "text-primary" : "text-muted-foreground"}`} data-testid="category-allocation-total-dashboard">Allocated: {formatKes(allocated)} · {difference === 0 && allocated > 0 ? "Exactly allocated" : difference > 0 ? `${formatKes(difference)} remaining` : `${formatKes(Math.abs(difference))} excess`}</p>; })()}
+              {(() => {
+                return (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    data-testid="category-allocation-total-dashboard"
+                    className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                      categoryStatus.tone === "ready"
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                        : categoryStatus.tone === "error"
+                          ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                          : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                    }`}
+                  >
+                    {categoryStatus.message}
+                  </div>
+                );
+              })()}
             </div>
             )}
              {canManageCategories && !isOtherCategory && isAddingCategory && (
@@ -1172,31 +1211,6 @@ function ExpenseForm({
               </Button>
             )}
         </div>
-        {isSharedWorkspace && (!paidFromBank || allowMixedFunding) && <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">
-            Paid by <span className="text-destructive">*</span>
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-             {selectableMembers.map((m) => {
-              const name = m.userName?.split(" ")[0] ?? "Member";
-              return (
-                <button
-                  key={m.userId}
-                  type="button"
-                  onClick={() => {
-                    setPaidBy(m.userId);
-                    setIncomeSourceId(null);
-                    setDirectPortion("");
-                    setAdditionalDirectPortions([]);
-                  }}
-                  className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}>
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-           {!paidBy && !paidFromBank && <p className="text-xs text-muted-foreground">Choose who paid before saving.</p>}
-        </div>}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
          {!isOtherCategory && (
@@ -1224,18 +1238,65 @@ function ExpenseForm({
           {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
         </div>
       </div>
-      {canUseBankFunding && (
-        <div className="space-y-4 rounded-xl border border-border/50 bg-card p-4">
+      <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
+        <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
           <div>
-            <p className="text-sm font-semibold text-foreground">How was this expense funded?</p>
+             <p className="text-sm font-semibold text-foreground">3. How was this expense funded?</p>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-               Choose a source, enter its portion, then keep adding sources until the remaining amount reaches zero.
+                Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
           </div>
-           <div className="grid gap-2 sm:grid-cols-2">
+           {expenseTotal > 0 && (
+             <div
+               role="status"
+               aria-live="polite"
+               data-testid="quick-expense-funding-summary"
+               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                 fundingStatus.tone === "ready"
+                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                   : fundingStatus.tone === "error"
+                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+               }`}
+             >
+               {fundingStatus.message}
+             </div>
+           )}
+           {isSharedWorkspace && (!paidFromBank || allowMixedFunding) && (
+             <div className="space-y-2">
+               <div>
+                 <label className="text-sm font-semibold text-foreground">
+                   Who paid? <span className="text-destructive">*</span>
+                 </label>
+                 <p className="mt-1 text-xs text-muted-foreground">Choose the person whose income funded the direct portion.</p>
+               </div>
+               <div className="grid grid-cols-2 gap-2">
+                 {selectableMembers.map((m) => {
+                   const name = m.userName?.split(" ")[0] ?? "Member";
+                   return (
+                     <button
+                       key={m.userId}
+                       type="button"
+                       onClick={() => {
+                         setPaidBy(m.userId);
+                         setIncomeSourceId(null);
+                         setDirectPortion("");
+                         setAdditionalDirectPortions([]);
+                       }}
+                       className={`h-11 rounded-lg border text-sm font-semibold transition-colors ${paidBy === m.userId ? "bg-primary text-primary-foreground border-primary" : "bg-card border-input text-foreground hover:bg-muted/40"}`}
+                     >
+                       {name}
+                     </button>
+                   );
+                 })}
+               </div>
+               {!paidBy && !paidFromBank && <p className="text-xs text-amber-700 dark:text-amber-300">Choose who paid to show their income sources.</p>}
+             </div>
+           )}
+           <div className={`grid gap-2 ${canUseBankFunding ? "sm:grid-cols-2" : ""}`}>
              {([
                ["direct", "Paid directly", "No bank balance changes"],
-               ["bank", bankLabel, "Reduces one selected account"],
+               ...(canUseBankFunding ? [["bank", bankLabel, "Reduces one selected account"] as const] : []),
              ] as const).map(([mode, label, detail]) => (
                <div
                  key={mode}
@@ -1548,7 +1609,7 @@ function ExpenseForm({
             </label>
           )}
         </div>
-      )}
+      </div>
       <div className="flex gap-3">
         <Button type="submit" className="h-11 rounded-xl bg-warning px-6 text-warning-foreground hover:bg-warning/90" disabled={createExpense.isPending}>
           {createExpense.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -1556,6 +1617,36 @@ function ExpenseForm({
         </Button>
         <Button type="button" variant="ghost" className="h-11" onClick={onDone}>Cancel</Button>
       </div>
+      <AlertDialog open={uncategorizedSaveOpen} onOpenChange={setUncategorizedSaveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Save without a category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This expense will be recorded but will not count toward a monthly budget category.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                setUncategorizedSaveOpen(false);
+                void handleSubmit({ preventDefault() {} } as React.FormEvent, true);
+              }}
+            >
+              Save without category
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                openRecurringBudgetSetup(false, description);
+              }}
+            >
+              Create a monthly budget
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }
@@ -1905,51 +1996,6 @@ export default function Dashboard() {
           </p>
         </section>
       </div>
-
-      {!isSharedWorkspace && (
-        <section aria-labelledby="personal-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
-          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Your Jamvi toolkit</p>
-              <h2 id="personal-overview-shortcuts-heading" className="mt-1 font-display text-xl font-bold text-foreground">
-                Your money stays private. Share when you choose.
-              </h2>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Start with your own budget, then create a separate Shared budget for your family, partner, flatmates, chama, or team.
-              </p>
-              <p className="mt-3 max-w-2xl rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-                <span className="font-semibold text-foreground">Two ways to manage money, one Jamvi account.</span>{" "}
-                Personal records remain private, while every Shared budget has its own members, activity, contributions, and goals.
-              </p>
-            </div>
-            <Link href="/activity" className="text-sm font-semibold text-primary hover:underline">
-              View your activity
-            </Link>
-          </div>
-          <nav aria-label="Personal budget shortcuts" className="grid gap-2 sm:grid-cols-3">
-            {PERSONAL_OVERVIEW_SHORTCUTS.map((shortcut) => {
-              const ShortcutIcon = shortcut.icon;
-              return (
-                <Link
-                  key={shortcut.href}
-                  href={shortcut.href}
-                  data-testid={`personal-overview-shortcut-${shortcut.label.toLowerCase()}`}
-                  className="group flex min-h-20 min-w-0 items-center gap-3 rounded-xl border border-border/80 bg-background px-3 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <ShortcutIcon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block w-full whitespace-normal break-words text-sm font-bold leading-tight text-foreground">{shortcut.label}</span>
-                    <span className="mt-1 block w-full whitespace-normal break-words text-xs leading-tight text-muted-foreground">{shortcut.description}</span>
-                  </span>
-                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                </Link>
-              );
-            })}
-          </nav>
-        </section>
-      )}
 
       {isSharedWorkspace && (
         <section aria-labelledby="group-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">

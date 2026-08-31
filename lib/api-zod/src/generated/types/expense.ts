@@ -12,9 +12,9 @@ export interface Expense {
   id: number;
   /** Amount in KES */
   amount: number;
-  /** Compatibility/display primary category. For allocated expenses this is the first allocation category. */
+  /** Compatibility/display primary category. Empty when the expense is uncategorized; for allocated expenses this is the first allocation category. */
   category: string;
-  /** Category portions. Legacy expenses without stored portions are returned as one portion using category and amount. */
+  /** Category portions. Empty when the expense is uncategorized; legacy categorized expenses without stored portions are returned as one portion using category and amount. */
   categoryAllocations: ExpenseCategoryAllocation[];
   description: string;
   /**

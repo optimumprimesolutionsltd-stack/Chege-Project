@@ -9,13 +9,10 @@ const origin = "https://jamvi.co.ke";
 const image = `${origin}/branding/jamvi-mark.png`;
 
 const pages = {
-  // NOTE: these duplicate the useSeo() calls in each page component. The
-  // prerendered HTML is what a crawler reads, so a change made only in the
-  // component is invisible where it matters most.
   "/": {
     title: "Gather Around Your Money",
     description:
-      "Jamvi keeps your own budget and the ones you share in one place — with a partner, a family, flatmates, or a chama. Built in Kenya, for Kenyan money.",
+      "Jamvi brings clarity, trust, and warmth to personal budgets and shared money. Track everyday spending or manage a chama with confidence.",
   },
   "/features": {
     title: "Features - Everything you need",

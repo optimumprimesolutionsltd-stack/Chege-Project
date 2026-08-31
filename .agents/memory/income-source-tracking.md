@@ -10,11 +10,11 @@ Contributions are now **derived**, not manually recorded:
 - **Direct expense payments** → count as a contribution from the payer when `incomeSourceId IS NOT NULL`
 - **Joint bank expenses** → incomeSourceId = NULL → do NOT count as contributions
 
-“Financed by” belongs with the direct portion of an expense and applies only to that portion. A bank portion needs no income source: the account is already the complete record of where that money came from.
+“Financed by” belongs visibly inside/under the “Paid directly” path and appears only when direct funding is selected. Choosing bank funding for a new expense must clear and hide personal payer/income-source attribution; the selected bank account is already the complete funding source.
 
-**Why:** Personal income-source tracing explains where directly paid money came from. Attaching it to a bank portion duplicates attribution and misrepresents money already recorded in the account.
+**Why:** Personal income-source tracing explains where directly paid money came from. Applying it to a bank-funded expense duplicates attribution and misrepresents money already recorded in the account.
 
-**How to apply:** Per portion, not per expense. An expense may be funded from several portions — direct, bank, or a mix of both — and each direct portion carries its own income source while bank portions carry none. This corrects an earlier version of this note, which said direct and bank funding were mutually exclusive within one expense; that contradicted [[mixed-expense-funding-controls]] and the product intent, which is that one expense can be paid partly from a pocket and partly from a bank.
+**How to apply:** Keep direct and bank funding mutually exclusive in new-expense flows. Historic split-funded records may remain editable without rewriting their stored history.
 
 ## DB changes
 

@@ -12,6 +12,8 @@ import { sql, eq, desc, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendEmail } from "./email";
 
+const UNCATEGORIZED_CATEGORY = "Uncategorized";
+
 function fmt(kes: number): string {
   return `KES ${Math.round(kes).toLocaleString()}`;
 }
@@ -379,6 +381,8 @@ export async function sendMonthlyDigest(
   const remaining = totalBudget - totalSpent;
   const pctUsed = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
   const spentMap = new Map(spentByCategory.map((s) => [s.category, Number(s.total)]));
+  // The expense storage sentinel is unbudgeted spending, never budget use.
+  spentMap.delete(UNCATEGORIZED_CATEGORY);
   const label = monthName(month, year);
 
   const html = buildEmailHtml({

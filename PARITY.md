@@ -28,7 +28,8 @@ Whenever you add, change, or remove a feature on either platform, find the relev
 | Platform parity page | ✅ | ❌ | This page is web-only |
 | **Expenses** | | | |
 | Expense list | ✅ | ✅ | Mobile: hidden "History" tab reachable from dashboard |
-| Log an expense | ✅ | ✅ | Both use one primary funding amount and automatically assign any remainder to the explicitly selected second income source or bank account |
+| Log an expense | ✅ | ✅ | Both platforms can save an expense without a category after an explicit choice, or hand it off to create a monthly budget from the description. |
+| Save an Other expense as a budget category | ✅ | ✅ | Legacy Other records retain their notes. New expenses can instead be saved uncategorized or use the monthly-budget handoff directly on both platforms. |
 | Edit an expense (incl. payer correction) | ✅ | ✅ | Both show a visible Edit action and a prefilled form for all fields, including payer |
 | Delete an expense | ✅ | ✅ | Both show a visible Remove action with a destructive confirmation |
 | Recurring expense flag | ✅ | ✅ | Both allow marking an expense as recurring |

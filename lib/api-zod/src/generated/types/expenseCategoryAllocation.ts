@@ -7,7 +7,10 @@
  */
 
 export interface ExpenseCategoryAllocation {
-  /** @minLength 1 */
+  /**
+     * Cannot be "Uncategorized", which is reserved internally for uncategorized expenses.
+     * @minLength 1
+     */
   category: string;
   /** @minimum 1 */
   amount: number;

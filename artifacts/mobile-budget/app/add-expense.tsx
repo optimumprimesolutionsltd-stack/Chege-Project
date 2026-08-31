@@ -53,7 +53,6 @@ import {
   getExpenseFundingControlState,
   getFundingRemainder,
   getNewExpenseCategoryMode,
-  hasOtherCategoryAllocation,
   hydrateCategoryAllocations,
   preserveExpenseSplitsForAmount,
 } from '@/lib/expenseFundingPreservation';
@@ -84,6 +83,30 @@ type ExpenseRecord = {
   date: string;
 };
 type CategoryAllocation = { category: string; amount: string };
+type ExpenseBudgetDraft = {
+  amount: string;
+  category: string;
+  categoryAllocations: CategoryAllocation[];
+  description: string;
+  notes: string;
+  payerIds: string[];
+  payerAmounts: Record<string, string>;
+  payerIncomeSourceIds: Record<string, number | null>;
+  isRecurring: boolean;
+  recurringMonthlyBudget: string;
+  paidFromBank: boolean;
+  selectedBankAccountId: number | null;
+  selectedSources: string[];
+  splitAmounts: Record<string, string>;
+  allowMixedFunding: boolean;
+  date: string;
+};
+type BudgetHandoff = {
+  categoryName?: string;
+  expenseDraft?: ExpenseBudgetDraft;
+  monthlyBudget?: string;
+  isRecurring?: boolean;
+};
 
 function getExpenseSaveError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -216,7 +239,6 @@ export default function AddExpenseSheet() {
   const [newCategoryAddToBudget, setNewCategoryAddToBudget] = useState(false);
   const [showAdditionalCategoryPicker, setShowAdditionalCategoryPicker] = useState(false);
   const [allowMixedFunding, setAllowMixedFunding] = useState(false);
-  const [saveOtherAsCategory, setSaveOtherAsCategory] = useState(false);
   const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
   const [newBankAccountName, setNewBankAccountName] = useState('');
   const [newBankAccountNumber, setNewBankAccountNumber] = useState('');
@@ -242,10 +264,35 @@ export default function AddExpenseSheet() {
       AsyncStorage.getItem(RECURRING_BUDGET_HANDOFF_KEY)
         .then(async (raw) => {
           if (!active || !raw) return;
-          const result = JSON.parse(raw) as { monthlyBudget?: string };
-          if (result.monthlyBudget) {
+          const result = JSON.parse(raw) as BudgetHandoff;
+          if (result.isRecurring && result.monthlyBudget) {
             setIsRecurring(true);
             setRecurringMonthlyBudget(result.monthlyBudget);
+          }
+          if (result.expenseDraft) {
+            const draft = result.expenseDraft;
+            setAmount(draft.amount);
+            setCategory(draft.category);
+            setCategoryAllocations(draft.categoryAllocations);
+            setDescription(draft.description);
+            setNotes(draft.notes);
+            setPayerIds(draft.payerIds);
+            setPayerAmounts(draft.payerAmounts);
+            setPayerIncomeSourceIds(draft.payerIncomeSourceIds);
+            setIsRecurring(draft.isRecurring);
+            setRecurringMonthlyBudget(draft.recurringMonthlyBudget);
+            setPaidFromBank(draft.paidFromBank);
+            setSelectedBankAccountId(draft.selectedBankAccountId);
+            setSelectedSources(draft.selectedSources);
+            setSplitAmounts(draft.splitAmounts);
+            setAllowMixedFunding(draft.allowMixedFunding);
+            setDate(draft.date);
+          }
+          if (result.categoryName) {
+            setCategory(result.categoryName);
+            setCategoryAllocations((current) => current.length > 0
+              ? current
+              : [{ category: result.categoryName!, amount: result.expenseDraft?.amount ?? amount }]);
           }
           await AsyncStorage.removeItem(RECURRING_BUDGET_HANDOFF_KEY);
         })
@@ -341,7 +388,7 @@ export default function AddExpenseSheet() {
       editingExpense.amount,
       editingExpense.categoryAllocations,
     ).map((allocation) => ({ category: allocation.category, amount: String(allocation.amount) }));
-    setCategory(hydratedAllocations[0].category);
+    setCategory(hydratedAllocations[0]?.category ?? '');
     setCategoryAllocations(hydratedAllocations);
     setDescription(editingExpense.description);
     setNotes(editingExpense.notes ?? '');
@@ -585,7 +632,6 @@ export default function AddExpenseSheet() {
       return next;
     });
     setCategory((previous) => previous || name);
-    if (name.trim().toLocaleLowerCase() !== 'other') setSaveOtherAsCategory(false);
     setIsCreatingCategory(false);
     setShowAdditionalCategoryPicker(false);
   }, []);
@@ -604,7 +650,7 @@ export default function AddExpenseSheet() {
     });
   }, []);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (allowUncategorized = false) => {
     if (isEditMode && (!editingExpense || !canEditExpense)) {
       Alert.alert(
         'You cannot edit this expense',
@@ -617,20 +663,50 @@ export default function AddExpenseSheet() {
       Alert.alert('Amount required', 'Please enter a valid amount.');
       return;
     }
-    if (!categoryAllocations.length) {
-      Alert.alert('Category required', 'Please choose a category.');
+    if (!description.trim()) {
+      Alert.alert('Description required', 'Please add a description.');
       return;
     }
-    const normalizedAllocations = categoryAllocations.map((allocation) => ({
-      category: allocation.category,
-      amount: Number(allocation.amount.replace(/,/g, '')),
-    }));
-    if (normalizedAllocations.some((allocation) => !Number.isInteger(allocation.amount) || allocation.amount <= 0)) {
+    if (!categoryAllocations.length && !isEditMode && !allowUncategorized) {
+      const expenseDraft: ExpenseBudgetDraft = {
+        amount, category, categoryAllocations, description, notes, payerIds, payerAmounts,
+        payerIncomeSourceIds, isRecurring, recurringMonthlyBudget, paidFromBank,
+        selectedBankAccountId, selectedSources, splitAmounts, allowMixedFunding, date,
+      };
+      Alert.alert(
+        'Add a category later?',
+        'Categories are optional. You can save this expense without one, or create a monthly budget now.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save without category', onPress: () => void handleSubmit(true) },
+          {
+            text: 'Create a monthly budget',
+            onPress: async () => {
+              await AsyncStorage.setItem(RECURRING_BUDGET_HANDOFF_KEY, JSON.stringify({ expenseDraft }));
+              router.push({
+                pathname: '/(tabs)/budget',
+                params: { recurringSetup: '1', category: description.trim() },
+              });
+            },
+          },
+        ],
+      );
+      return;
+    }
+    const normalizedAllocations = categoryAllocations
+      .filter((allocation) => allocation.category.trim())
+      .map((allocation) => ({
+        category: allocation.category.trim(),
+        amount: Number(allocation.amount.replace(/,/g, '')),
+      }));
+    if (normalizedAllocations.length > 0 && normalizedAllocations.some(
+      (allocation) => !Number.isInteger(allocation.amount) || allocation.amount <= 0,
+    )) {
       Alert.alert('Allocation amounts required', 'Enter a positive whole-KES amount for every category.');
       return;
     }
     const allocatedTotal = normalizedAllocations.reduce((sum, allocation) => sum + allocation.amount, 0);
-    if (allocatedTotal !== parsed) {
+    if (normalizedAllocations.length > 0 && allocatedTotal !== parsed) {
       const difference = parsed - allocatedTotal;
       Alert.alert(
         difference > 0 ? 'Category amounts still needed' : 'Category amounts exceed the expense',
@@ -638,15 +714,6 @@ export default function AddExpenseSheet() {
           ? `Allocate the remaining KES ${difference.toLocaleString()} before saving.`
           : `Reduce category allocations by KES ${Math.abs(difference).toLocaleString()}.`,
       );
-      return;
-    }
-    const hasOtherAllocation = hasOtherCategoryAllocation(normalizedAllocations);
-    if (hasOtherAllocation && !saveOtherAsCategory && notes.trim().length < 3) {
-      Alert.alert('Note required', 'Add a note explaining what this Other expense was for.');
-      return;
-    }
-    if (!description.trim()) {
-      Alert.alert('Description required', 'Please add a description.');
       return;
     }
     const effectivePayerIds = canManageShared ? payerIds : user?.id ? [user.id] : [];
@@ -662,10 +729,6 @@ export default function AddExpenseSheet() {
     const recurringBudget = Number(recurringMonthlyBudget);
     if (effectiveIsRecurring && (!Number.isInteger(recurringBudget) || recurringBudget <= 0)) {
       Alert.alert('Monthly budget required', 'Enter a whole KES amount greater than zero for this recurring expense.');
-      return;
-    }
-    if (effectiveIsRecurring && category.trim().toLocaleLowerCase() === 'other' && !saveOtherAsCategory) {
-      Alert.alert('Save this recurring expense as a category', 'Use the brief description as a category so its monthly budget can be tracked.');
       return;
     }
     if (effectivePayerIds.length === 0 && !effectivePaidFromBank) {
@@ -697,7 +760,7 @@ export default function AddExpenseSheet() {
       try {
         const data = {
           amount: parsed,
-          category: normalizedAllocations[0].category,
+          category: normalizedAllocations[0]?.category ?? '',
           categoryAllocations: normalizedAllocations,
           description: description.trim(),
           notes: notes.trim() || undefined,
@@ -786,35 +849,8 @@ export default function AddExpenseSheet() {
 
     setIsPending(true);
     try {
-      let expenseCategory = normalizedAllocations[0].category;
-      let expenseAllocations = normalizedAllocations;
-      if (!isEditMode && normalizedAllocations.length === 1 && hasOtherAllocation && saveOtherAsCategory) {
-        const existingCategory = categories.find(
-          (item) => item.name.trim().toLocaleLowerCase() === description.trim().toLocaleLowerCase(),
-        );
-        if (existingCategory) {
-          expenseCategory = existingCategory.name;
-        } else {
-          const createdCategory = await createCategory.mutateAsync({
-            data: {
-              name: description.trim(),
-              budgetAmount: effectiveIsRecurring ? recurringBudget : 0,
-              priority: 3,
-              isRecurring: true,
-            },
-          });
-          expenseCategory = createdCategory.name;
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
-            queryClient.invalidateQueries({ queryKey: ['budget-categories-full'] }),
-          ]);
-        }
-        expenseAllocations = normalizedAllocations.map((allocation) => (
-          allocation.category.trim().toLocaleLowerCase() === 'other'
-            ? { ...allocation, category: expenseCategory }
-            : allocation
-        ));
-      }
+      const expenseCategory = normalizedAllocations[0]?.category ?? '';
+      const expenseAllocations = normalizedAllocations;
       if (effectiveIsRecurring) {
         const recurringCategory = categories.find(
           (item) => item.name.trim().toLocaleLowerCase() === expenseCategory.trim().toLocaleLowerCase(),
@@ -905,7 +941,7 @@ export default function AddExpenseSheet() {
     } finally {
       setIsPending(false);
     }
-  }, [amount, category, categoryAllocations, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, selectedBankAccountId, members, canManageShared, user?.id, createExpenseAsync, createCategory, categories, queryClient, saveOtherAsCategory, updateExpense, invalidateExpenses, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty, recurringMonthlyBudget, updateCategory, bankAccounts]);
+  }, [allowMixedFunding, amount, category, categoryAllocations, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, selectedBankAccountId, members, canManageShared, user?.id, createExpenseAsync, createCategory, categories, queryClient, updateExpense, invalidateExpenses, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty, recurringMonthlyBudget, updateCategory, bankAccounts]);
 
   const handleRemove = useCallback(() => {
     if (!editingExpense || !canRemoveExpense) return;
@@ -941,7 +977,6 @@ export default function AddExpenseSheet() {
   const categoryList = categories
     .map((item) => item.name)
     .filter((name) => name.trim().toLocaleLowerCase() !== 'other');
-  const hasOtherCategorySelected = hasOtherCategoryAllocation(categoryAllocations);
 
   if (isEditMode && editExpensesQuery.isLoading) {
     return (
@@ -987,7 +1022,7 @@ export default function AddExpenseSheet() {
         </Pressable>
         <Text style={[styles.title, { color: colors.foreground }]}>{isEditMode ? 'Edit Expense' : 'Log Expense'}</Text>
         <Pressable
-          onPress={handleSubmit}
+          onPress={() => void handleSubmit()}
           disabled={isPending}
           style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: isPending ? 0.7 : 1 }]}
         >
@@ -1019,7 +1054,10 @@ export default function AddExpenseSheet() {
         </View>
 
         {/* Category */}
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>CATEGORY</Text>
+        <Text style={[styles.label, { color: colors.mutedForeground }]}>CATEGORY (OPTIONAL)</Text>
+        <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
+          Add a category to track this spending against a budget. You can also save without one and categorize it later.
+        </Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1039,7 +1077,7 @@ export default function AddExpenseSheet() {
             <>
               {categoryList.length === 0 && (
                 <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>
-                  {canManageCategories ? 'No categories yet. You can create one or use Other.' : 'No categories are available. You can use Other or ask a budget manager to add one.'}
+                  {canManageCategories ? 'No categories yet. You can create one below or save without a category.' : 'No categories are available. You can save without one or ask a budget manager to add one.'}
                 </Text>
               )}
               {categoryList.map((cat) => {
@@ -1070,108 +1108,10 @@ export default function AddExpenseSheet() {
                   </Pressable>
                 );
               })}
-              <Pressable
-                  onPress={() => chooseCategory('Other')}
-                accessibilityRole="tab"
-                  accessibilityState={{ selected: categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') }}
-                accessibilityHint="Opens the brief description and required notes for an Other expense"
-                style={[
-                  styles.categoryChip,
-                  {
-                    backgroundColor: categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') ? colors.primary : colors.muted,
-                    borderColor: categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') ? colors.primary : colors.border,
-                    borderRadius: colors.radius,
-                  },
-                ]}
-              >
-                <Feather name="edit-3" size={14} color={categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') ? '#fff' : colors.mutedForeground} />
-                <Text style={[styles.categoryChipText, { color: categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') ? '#fff' : colors.foreground }]}>
-                  Other
-                </Text>
-              </Pressable>
             </>
           )}
         </ScrollView>
-        {hasOtherCategorySelected && (
-          <View
-            accessible
-            accessibilityRole="none"
-            accessibilityLabel="Other expense details"
-            testID="other-expense-details"
-            style={[styles.otherCategoryPrompt, { backgroundColor: colors.muted, borderColor: colors.primary + '45' }]}
-          >
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>BRIEF DESCRIPTION</Text>
-            {!isEditMode && canManageCategories && (
-              <View style={[styles.otherCategoryPrompt, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                <View style={styles.otherCategoryPromptCopy}>
-                  <Text style={[styles.otherCategoryPromptTitle, { color: colors.foreground }]}>
-                    Save as a category if this repeats?
-                  </Text>
-                  <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-                    Your brief description will be used as the category name.
-                  </Text>
-                </View>
-                <Switch
-                  value={saveOtherAsCategory}
-                  onValueChange={setSaveOtherAsCategory}
-                  trackColor={{ false: colors.border, true: colors.primary }}
-                  thumbColor="#ffffff"
-                  accessibilityLabel="Save brief description as an expense category"
-                />
-              </View>
-            )}
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: colors.muted,
-                  borderColor: colors.border,
-                  color: colors.foreground,
-                  borderRadius: colors.radius,
-                },
-              ]}
-              placeholder={saveOtherAsCategory ? 'Name this category, e.g. School fees' : 'Briefly describe this expense'}
-              placeholderTextColor={colors.mutedForeground}
-              value={description}
-              onChangeText={setDescription}
-              maxLength={120}
-              returnKeyType="next"
-              accessibilityLabel="Brief description for Other expense"
-            />
-            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              {saveOtherAsCategory
-                ? 'This becomes a category you can budget against and pick again next time.'
-                : 'Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.'}
-            </Text>
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>
-              NOTES {saveOtherAsCategory
-                ? <Text style={{ color: colors.mutedForeground }}>(optional)</Text>
-                : <Text style={{ color: '#ef4444' }}>*</Text>}
-            </Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                styles.notesInput,
-                {
-                  backgroundColor: colors.muted,
-                  borderColor: colors.border,
-                  color: colors.foreground,
-                  borderRadius: colors.radius,
-                },
-              ]}
-              placeholder="Explain what this Other expense was for"
-              placeholderTextColor={colors.mutedForeground}
-              value={notes}
-              onChangeText={setNotes}
-              accessibilityLabel="Other expense notes"
-              testID="other-expense-notes"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
-        )}
-        {categoryAllocations.length > 0 && !(hasOtherCategorySelected && categoryAllocations.length === 1) && (
+        {categoryAllocations.length > 0 && (
           <View
             testID="category-allocation-card"
             style={[styles.allocationCard, { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: colors.radius }]}
@@ -1240,20 +1180,6 @@ export default function AddExpenseSheet() {
                         <Text style={[styles.sourceChipText, { color: colors.foreground }]}>{item.name}</Text>
                       </Pressable>
                     ))}
-                  {!categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && (
-                    <Pressable
-                      onPress={() => chooseCategory('Other')}
-                      style={[styles.sourceChip, {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                        borderRadius: colors.radius,
-                      }]}
-                      testID="add-category-option-other"
-                    >
-                      <Feather name="more-horizontal" size={13} color={colors.primary} />
-                      <Text style={[styles.sourceChipText, { color: colors.foreground }]}>Other</Text>
-                    </Pressable>
-                  )}
                 </ScrollView>
               </View>
             )}
@@ -1273,7 +1199,7 @@ export default function AddExpenseSheet() {
             })()}
           </View>
         )}
-        {isCreatingCategory && !hasOtherCategorySelected ? (
+        {isCreatingCategory ? (
           <View
             testID="create-category-form"
             style={[styles.categoryCreateCard, { backgroundColor: colors.muted, borderColor: colors.primary + '45' }]}
@@ -1402,7 +1328,6 @@ export default function AddExpenseSheet() {
           );
         })() : null}
          {/* Description */}
-          {!categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && (
            <>
              <Text style={[styles.label, { color: colors.mutedForeground }]}>DESCRIPTION</Text>
              <TextInput
@@ -1422,10 +1347,8 @@ export default function AddExpenseSheet() {
                returnKeyType="next"
              />
            </>
-         )}
 
          {/* Notes */}
-          {!categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && (
            <>
              <Text style={[styles.label, { color: colors.mutedForeground }]}>NOTES (optional)</Text>
              <TextInput
@@ -1449,7 +1372,6 @@ export default function AddExpenseSheet() {
                textAlignVertical="top"
              />
            </>
-         )}
 
         {/* Who paid */}
         {members.length > 0 && (
@@ -2055,18 +1977,13 @@ export default function AddExpenseSheet() {
                         Alert.alert('Choose a category first', 'A recurring expense needs a category before Jamvi can set its average monthly budget.');
                         return;
                       }
-                      if (category.trim().toLocaleLowerCase() === 'other' && !description.trim()) {
-                        Alert.alert('Describe this expense first', 'Jamvi will use the description as the recurring budget category name.');
-                        return;
-                      }
                       setIsRecurring(true);
-                      if (category.trim().toLocaleLowerCase() === 'other') setSaveOtherAsCategory(true);
                       await AsyncStorage.removeItem(RECURRING_BUDGET_HANDOFF_KEY);
                       router.push({
                         pathname: '/(tabs)/budget',
                         params: {
                           recurringSetup: '1',
-                          category: category.trim().toLocaleLowerCase() === 'other' ? description.trim() : category.trim(),
+                          category: category.trim(),
                           expenseAmount: amount,
                         },
                       });

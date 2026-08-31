@@ -12,6 +12,11 @@ import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { categoryPackForKind, categoryPackRows, normalizedCategoryPackKind } from "../lib/categoryPacks";
 
 const router = Router();
+const UNCATEGORIZED_CATEGORY = "Uncategorized";
+
+function isReservedBudgetCategoryName(name: string) {
+  return name.trim().toLocaleLowerCase() === UNCATEGORIZED_CATEGORY.toLocaleLowerCase();
+}
 
 /**
  * A budget without any categories leaves its expense picker unusable. Seed a
@@ -145,6 +150,10 @@ router.post("/budget-categories", async (req, res) => {
   if (!requireGroupManager(req, res)) return;
   const parsed = categorySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
+  if (isReservedBudgetCategoryName(parsed.data.name)) {
+    res.status(400).json({ error: `"${UNCATEGORIZED_CATEGORY}" is reserved for uncategorized expenses.` });
+    return;
+  }
   const duplicate = await db.query.budgetCategoriesTable.findFirst({
     where: and(
       eq(budgetCategoriesTable.name, parsed.data.name),
@@ -177,6 +186,12 @@ router.put("/budget-categories/:id", async (req, res) => {
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = categoryFields.partial().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
+  // Do not rewrite historical sentinel-named budget rows, but never allow a
+  // new/renamed category to collide with the expense storage sentinel.
+  if (parsed.data.name !== undefined && isReservedBudgetCategoryName(parsed.data.name)) {
+    res.status(400).json({ error: `"${UNCATEGORIZED_CATEGORY}" is reserved for uncategorized expenses.` });
+    return;
+  }
   const [existing] = await db.select().from(budgetCategoriesTable)
     .where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId)))
     .limit(1);

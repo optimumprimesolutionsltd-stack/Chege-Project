@@ -41,4 +41,9 @@ describe('getCategoryAllocationStatus', () => {
       { category: 'Vet emergency', amount: 2_400 },
     ])).toEqual([{ category: 'Vet emergency', amount: 2_400 }]);
   });
+
+  it('keeps an uncategorized expense allocation-free when editing', () => {
+    expect(hydrateCategoryAllocations('', 2_400, [])).toEqual([]);
+    expect(hydrateCategoryAllocations('', 2_400)).toEqual([]);
+  });
 });

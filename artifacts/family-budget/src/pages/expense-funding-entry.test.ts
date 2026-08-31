@@ -95,6 +95,6 @@ describe("recurring expense budget setup", () => {
     expect(mobileSource).toContain('setRecurringMonthlyBudget(result.monthlyBudget)');
     expect(mobileBudgetSource).toContain('Set average monthly amount');
     expect(mobileBudgetSource).toContain('AVERAGE MONTHLY AMOUNT (KES)');
-    expect(mobileBudgetSource).toContain('JSON.stringify({ monthlyBudget: String(amt) })');
+    expect(mobileBudgetSource).toContain('{ monthlyBudget: String(amt), isRecurring: true }');
   });
 });

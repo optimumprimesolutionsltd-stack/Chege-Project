@@ -378,9 +378,15 @@ export default function BudgetScreen() {
       });
       await refreshAll();
       if (recurringSetupActive) {
+        const rawHandoff = await AsyncStorage.getItem(RECURRING_BUDGET_HANDOFF_KEY);
+        const handoff = rawHandoff ? JSON.parse(rawHandoff) as Record<string, unknown> : {};
         await AsyncStorage.setItem(
           RECURRING_BUDGET_HANDOFF_KEY,
-          JSON.stringify({ monthlyBudget: String(amt) }),
+          JSON.stringify(
+            handoff.expenseDraft
+              ? { ...handoff, categoryName: formName.trim() }
+              : { monthlyBudget: String(amt), isRecurring: true },
+          ),
         );
       }
       closeModal();
@@ -495,7 +501,7 @@ export default function BudgetScreen() {
                 ) : null}
                 {recurringSetupActive ? (
                   <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
-                    Enter the average amount you expect to spend each month. Jamvi will use it as this recurring expense&apos;s monthly budget.
+                    Enter the average amount you expect to spend each month. Jamvi will use it as this category&apos;s monthly budget.
                   </Text>
                 ) : null}
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>

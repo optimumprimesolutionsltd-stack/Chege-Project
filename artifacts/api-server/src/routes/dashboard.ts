@@ -30,6 +30,22 @@ import { getActiveGroupId } from "../lib/activeGroup";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 
 const router = Router();
+const UNCATEGORIZED_CATEGORY = "Uncategorized";
+
+function displayExpenseCategory(category: string) {
+  return category.trim() === "" || category === UNCATEGORIZED_CATEGORY
+    ? UNCATEGORIZED_CATEGORY
+    : category;
+}
+
+function displayExpenseAllocations(
+  category: string,
+  amount: number,
+  allocations?: Array<{ category: string; amount: number }>,
+) {
+  if (displayExpenseCategory(category) === UNCATEGORIZED_CATEGORY) return [];
+  return allocations ?? [{ category, amount }];
+}
 
 function parseDateOnlyQuery(value: unknown): { raw: string; date: Date } | null {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -254,7 +270,7 @@ router.get("/dashboard/member-breakdown", async (req, res): Promise<void> => {
   const savingsTotal  = savings.reduce((s,  r) => s + Number(r.amount), 0);
 
   res.json({
-    expenses:  expenses.map(r => ({ ...r, amount: Number(r.amount), date: r.date ? String(r.date) : null })),
+    expenses:  expenses.map(r => ({ ...r, category: displayExpenseCategory(r.category), amount: Number(r.amount), date: r.date ? String(r.date) : null })),
     deposits:  deposits.map(r => ({ ...r, amount: Number(r.amount), date: r.date ? String(r.date) : null })),
     savingsContributions: savings.map(r => ({ ...r, amount: Number(r.amount), date: r.date ? String(r.date) : null })),
     totals: { expenses: expenseTotal, deposits: depositTotal, savings: savingsTotal, grand: expenseTotal + depositTotal + savingsTotal },
@@ -453,7 +469,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
         amount: Number(split.amount),
         description: `Expense paid: ${split.description}`,
         userName: split.fromBank ? "Joint bank" : (split.userName ?? split.label),
-        category: split.category,
+        category: displayExpenseCategory(split.category),
         date: String(split.date),
       })),
       ...legacyExpenseRows.map((expense) => ({
@@ -463,7 +479,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
         amount: Number(expense.amount),
         description: `Expense paid: ${expense.description}`,
         userName: expense.userName ?? "Unknown",
-        category: expense.category,
+        category: displayExpenseCategory(expense.category),
         date: String(expense.date),
       })),
       ...depositSplits.map((split) => ({
@@ -506,8 +522,8 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       amount: e.amount,
       description: e.description,
       userName: e.paidById === null ? "Joint bank" : (e.paidByName ?? "Unknown"),
-      category: e.category,
-      categoryAllocations: allocationsByExpense.get(e.id) ?? [{ category: e.category, amount: e.amount }],
+      category: displayExpenseCategory(e.category),
+      categoryAllocations: displayExpenseAllocations(e.category, e.amount, allocationsByExpense.get(e.id)),
       // The feed's visible date must match the month used to include the expense.
       date: String(e.date),
     })),
@@ -590,7 +606,11 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
   const disbursementMap = new Map(disbursementsByCategory.map((d) => [d.category, Number(d.total)]));
 
   const breakdown = categories.map((cat) => {
-    const spentAmount = (spentMap.get(cat.name) ?? 0) + (disbursementMap.get(cat.name) ?? 0);
+    // The storage sentinel is never a budget category, even if a legacy
+    // budget row happens to have the same name.
+    const spentAmount = cat.name === UNCATEGORIZED_CATEGORY
+      ? 0
+      : (spentMap.get(cat.name) ?? 0) + (disbursementMap.get(cat.name) ?? 0);
     return {
       category: cat.name,
       budgetAmount: cat.budgetAmount,
@@ -692,9 +712,13 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
       .orderBy(expenseCategoryAllocationsTable.position),
   ]);
 
-  const activeCategoryNames = new Set(activeCategories.map((item) => item.name));
+  const activeCategoryNames = new Set(activeCategories
+    .map((item) => item.name)
+    .filter((name) => name !== UNCATEGORIZED_CATEGORY));
   const isIncluded = (entryCategory: string) => (
-    isBudgeted ? entryCategory === category : !activeCategoryNames.has(entryCategory)
+    isBudgeted
+      ? entryCategory !== UNCATEGORIZED_CATEGORY && entryCategory === category
+      : !activeCategoryNames.has(entryCategory)
   );
   const entries = [
     ...expenses.flatMap((expense) => {
@@ -703,7 +727,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
       return portions.filter((portion) => isIncluded(portion.category)).map((portion) => ({
         id: `expense-${expense.id}-${portion.category}`,
         source: "expense" as const,
-        category: portion.category,
+        category: displayExpenseCategory(portion.category),
         description: expense.description,
         amount: portion.amount,
         payerName: expense.payerName ?? (expense.paidFromBank ? "Joint bank" : "Payer not recorded"),
@@ -1230,7 +1254,9 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const spentMap = new Map(spentByCategory.map((item) => [item.category, item.total]));
   const disbursementMap = new Map(disbursementsByCategory.map((item) => [item.category, Number(item.total)]));
   const categoryRows = categories.map((category) => {
-    const spentAmount = (spentMap.get(category.name) ?? 0) + (disbursementMap.get(category.name) ?? 0);
+    const spentAmount = category.name === UNCATEGORIZED_CATEGORY
+      ? 0
+      : (spentMap.get(category.name) ?? 0) + (disbursementMap.get(category.name) ?? 0);
     return {
       category: category.name,
       budgetAmount: category.budgetAmount,

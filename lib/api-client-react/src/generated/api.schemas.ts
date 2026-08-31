@@ -92,7 +92,10 @@ export interface AuthUserEnvelope {
 }
 
 export interface ExpenseCategoryAllocation {
-  /** @minLength 1 */
+  /**
+     * Cannot be "Uncategorized", which is reserved internally for uncategorized expenses.
+     * @minLength 1
+     */
   category: string;
   /** @minimum 1 */
   amount: number;
@@ -126,9 +129,9 @@ export interface Expense {
   id: number;
   /** Amount in KES */
   amount: number;
-  /** Compatibility/display primary category. For allocated expenses this is the first allocation category. */
+  /** Compatibility/display primary category. Empty when the expense is uncategorized; for allocated expenses this is the first allocation category. */
   category: string;
-  /** Category portions. Legacy expenses without stored portions are returned as one portion using category and amount. */
+  /** Category portions. Empty when the expense is uncategorized; legacy categorized expenses without stored portions are returned as one portion using category and amount. */
   categoryAllocations: ExpenseCategoryAllocation[];
   description: string;
   /**
@@ -154,8 +157,8 @@ export interface Expense {
 
 export interface ExpenseInput {
   amount: number;
-  /** Compatibility/display primary category. Must match the first categoryAllocations item when allocations are supplied. */
-  category: string;
+  /** Optional compatibility/display primary category. Omit or leave blank for an uncategorized expense. When non-empty allocations are supplied, defaults to and must match the first allocation category. "Uncategorized" is reserved internally and cannot be submitted as a category. */
+  category?: string;
   /** Optional whole-KES category portions. Amounts must total amount exactly and each category can appear once. */
   categoryAllocations?: ExpenseCategoryAllocation[];
   description: string;
@@ -218,6 +221,7 @@ export interface BudgetCategory {
 }
 
 export interface BudgetCategoryInput {
+  /** Budget category name. "Uncategorized" is reserved internally and cannot be used. */
   name: string;
   /** Monthly budget in KES; use 0 when creating a category from a withdrawal */
   budgetAmount: number;
@@ -242,6 +246,7 @@ export interface BudgetCategoryInput {
  * Fields to update. A one-time budget requires both activeMonth and activeYear.
  */
 export interface BudgetCategoryUpdateInput {
+  /** Budget category name. "Uncategorized" is reserved internally and cannot be used. */
   name?: string;
   budgetAmount?: number;
   priority?: number;

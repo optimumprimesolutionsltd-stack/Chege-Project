@@ -116,11 +116,11 @@ export const getExpensesResponseIncomeSplitsItemAmountMultipleOf = 1;
 export const GetExpensesResponseItem = zod.object({
   "id": zod.number(),
   "amount": zod.number().describe('Amount in KES'),
-  "category": zod.string().describe('Compatibility\/display primary category. For allocated expenses this is the first allocation category.'),
+  "category": zod.string().describe('Compatibility\/display primary category. Empty when the expense is uncategorized; for allocated expenses this is the first allocation category.'),
   "categoryAllocations": zod.array(zod.object({
-  "category": zod.string().min(1),
+  "category": zod.string().min(1).describe('Cannot be \"Uncategorized\", which is reserved internally for uncategorized expenses.'),
   "amount": zod.number().min(1).multipleOf(getExpensesResponseCategoryAllocationsItemAmountMultipleOf)
-})).describe('Category portions. Legacy expenses without stored portions are returned as one portion using category and amount.'),
+})).describe('Category portions. Empty when the expense is uncategorized; legacy categorized expenses without stored portions are returned as one portion using category and amount.'),
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
   "paidById": zod.string().nullable(),
@@ -158,9 +158,9 @@ export const createExpenseBodyIncomeSplitsItemAmountMultipleOf = 1;
 
 export const CreateExpenseBody = zod.object({
   "amount": zod.number(),
-  "category": zod.string().describe('Compatibility\/display primary category. Must match the first categoryAllocations item when allocations are supplied.'),
+  "category": zod.string().optional().describe('Optional compatibility\/display primary category. Omit or leave blank for an uncategorized expense. When non-empty allocations are supplied, defaults to and must match the first allocation category. \"Uncategorized\" is reserved internally and cannot be submitted as a category.'),
   "categoryAllocations": zod.array(zod.object({
-  "category": zod.string().min(1),
+  "category": zod.string().min(1).describe('Cannot be \"Uncategorized\", which is reserved internally for uncategorized expenses.'),
   "amount": zod.number().min(1).multipleOf(createExpenseBodyCategoryAllocationsItemAmountMultipleOf)
 })).optional().describe('Optional whole-KES category portions. Amounts must total amount exactly and each category can appear once.'),
   "description": zod.string(),
@@ -193,11 +193,11 @@ export const createExpenseResponseIncomeSplitsItemAmountMultipleOf = 1;
 export const CreateExpenseResponse = zod.object({
   "id": zod.number(),
   "amount": zod.number().describe('Amount in KES'),
-  "category": zod.string().describe('Compatibility\/display primary category. For allocated expenses this is the first allocation category.'),
+  "category": zod.string().describe('Compatibility\/display primary category. Empty when the expense is uncategorized; for allocated expenses this is the first allocation category.'),
   "categoryAllocations": zod.array(zod.object({
-  "category": zod.string().min(1),
+  "category": zod.string().min(1).describe('Cannot be \"Uncategorized\", which is reserved internally for uncategorized expenses.'),
   "amount": zod.number().min(1).multipleOf(createExpenseResponseCategoryAllocationsItemAmountMultipleOf)
-})).describe('Category portions. Legacy expenses without stored portions are returned as one portion using category and amount.'),
+})).describe('Category portions. Empty when the expense is uncategorized; legacy categorized expenses without stored portions are returned as one portion using category and amount.'),
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
   "paidById": zod.string().nullable(),
@@ -238,9 +238,9 @@ export const updateExpenseBodyIncomeSplitsItemAmountMultipleOf = 1;
 
 export const UpdateExpenseBody = zod.object({
   "amount": zod.number(),
-  "category": zod.string().describe('Compatibility\/display primary category. Must match the first categoryAllocations item when allocations are supplied.'),
+  "category": zod.string().optional().describe('Optional compatibility\/display primary category. Omit or leave blank for an uncategorized expense. When non-empty allocations are supplied, defaults to and must match the first allocation category. \"Uncategorized\" is reserved internally and cannot be submitted as a category.'),
   "categoryAllocations": zod.array(zod.object({
-  "category": zod.string().min(1),
+  "category": zod.string().min(1).describe('Cannot be \"Uncategorized\", which is reserved internally for uncategorized expenses.'),
   "amount": zod.number().min(1).multipleOf(updateExpenseBodyCategoryAllocationsItemAmountMultipleOf)
 })).optional().describe('Optional whole-KES category portions. Amounts must total amount exactly and each category can appear once.'),
   "description": zod.string(),
@@ -273,11 +273,11 @@ export const updateExpenseResponseIncomeSplitsItemAmountMultipleOf = 1;
 export const UpdateExpenseResponse = zod.object({
   "id": zod.number(),
   "amount": zod.number().describe('Amount in KES'),
-  "category": zod.string().describe('Compatibility\/display primary category. For allocated expenses this is the first allocation category.'),
+  "category": zod.string().describe('Compatibility\/display primary category. Empty when the expense is uncategorized; for allocated expenses this is the first allocation category.'),
   "categoryAllocations": zod.array(zod.object({
-  "category": zod.string().min(1),
+  "category": zod.string().min(1).describe('Cannot be \"Uncategorized\", which is reserved internally for uncategorized expenses.'),
   "amount": zod.number().min(1).multipleOf(updateExpenseResponseCategoryAllocationsItemAmountMultipleOf)
-})).describe('Category portions. Legacy expenses without stored portions are returned as one portion using category and amount.'),
+})).describe('Category portions. Empty when the expense is uncategorized; legacy categorized expenses without stored portions are returned as one portion using category and amount.'),
   "description": zod.string(),
   "notes": zod.string().nullish().describe('Optional extra notes'),
   "paidById": zod.string().nullable(),
@@ -351,7 +351,7 @@ export const createBudgetCategoryBodyActiveYearMax = 2200;
 
 
 export const CreateBudgetCategoryBody = zod.object({
-  "name": zod.string(),
+  "name": zod.string().describe('Budget category name. \"Uncategorized\" is reserved internally and cannot be used.'),
   "budgetAmount": zod.number().describe('Monthly budget in KES; use 0 when creating a category from a withdrawal'),
   "priority": zod.number().optional(),
   "color": zod.string().optional(),
@@ -437,7 +437,7 @@ export const updateBudgetCategoryBodyActiveYearMax = 2200;
 
 
 export const UpdateBudgetCategoryBody = zod.object({
-  "name": zod.string().optional(),
+  "name": zod.string().optional().describe('Budget category name. \"Uncategorized\" is reserved internally and cannot be used.'),
   "budgetAmount": zod.number().optional(),
   "priority": zod.number().optional(),
   "color": zod.string().optional(),
@@ -623,7 +623,7 @@ export const GetDashboardActivityResponseItem = zod.object({
   "userName": zod.string().describe('Display name of the actor. \"Joint bank\" for shared deposits\/ disbursements with no individual attribution.\n'),
   "category": zod.string().nullish(),
   "categoryAllocations": zod.array(zod.object({
-  "category": zod.string().min(1),
+  "category": zod.string().min(1).describe('Cannot be \"Uncategorized\", which is reserved internally for uncategorized expenses.'),
   "amount": zod.number().min(1).multipleOf(getDashboardActivityResponseCategoryAllocationsItemAmountMultipleOf)
 })).optional().describe('Category portions for an expense activity item. Legacy expenses return one portion.'),
   "date": zod.coerce.date()
