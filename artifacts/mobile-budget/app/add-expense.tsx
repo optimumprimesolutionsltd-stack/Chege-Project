@@ -291,7 +291,7 @@ export default function AddExpenseSheet() {
             setCategory(result.categoryName);
             setCategoryAllocations((current) => current.length > 0
               ? current
-              : [{ category: result.categoryName!, amount: result.expenseDraft?.amount ?? amount }]);
+              : [{ category: result.categoryName!, amount: '' }]);
           }
           await AsyncStorage.removeItem(RECURRING_BUDGET_HANDOFF_KEY);
         })
@@ -1125,12 +1125,12 @@ export default function AddExpenseSheet() {
         {categoryAllocations.length > 0 && (
           <View
             testID="category-allocation-card"
-            style={[styles.allocationCard, { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: colors.radius }]}
+            style={[styles.allocationCard, { backgroundColor: colors.primary + '0A', borderColor: colors.primary + '60', borderRadius: colors.radius }]}
           >
             <View style={styles.allocationHeader}>
               <View>
-                <Text style={[styles.allocationTitle, { color: colors.foreground }]}>CATEGORY ALLOCATION</Text>
-                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>Choose category tabs above to add another row.</Text>
+                <Text style={[styles.allocationTitle, { color: colors.foreground }]}>CATEGORY AMOUNT REQUIRED</Text>
+                <Text style={[styles.hintText, { color: colors.foreground }]}>Enter the amount covered by each selected category.</Text>
               </View>
               <Text style={[styles.allocationTotal, { color: colors.foreground }]}>
                 KES {categoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0).toLocaleString()}
@@ -1144,8 +1144,10 @@ export default function AddExpenseSheet() {
                   value={allocation.amount}
                   onChangeText={(value) => updateAllocationAmount(allocation.category, value)}
                   keyboardType="numeric"
-                  placeholder="KES"
+                  placeholder="Enter amount"
                   placeholderTextColor={colors.mutedForeground}
+                  accessibilityLabel={`Amount covered by ${allocation.category}`}
+                  accessibilityHint="Required before this expense can be saved"
                   testID={`category-allocation-${allocation.category}`}
                 />
                 <Pressable

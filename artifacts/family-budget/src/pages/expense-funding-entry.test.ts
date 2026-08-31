@@ -109,6 +109,18 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain("Add another category");
     expect(mobileSource).toContain("showAdditionalCategoryPicker");
   });
+
+  it("requires category amounts to be entered manually on every expense form", () => {
+    expect(dashboardSource).toContain("Required: enter the amount covered by each selected category.");
+    expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
+    expect(dashboardSource).not.toContain("setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }]");
+    expect(expensesSource).toContain("const setAmount = (value: string) => setAmountValue(value);");
+    expect(expensesSource).toContain('aria-required="true" required placeholder="Amount"');
+    expect(mobileSource).toContain("CATEGORY AMOUNT REQUIRED");
+    expect(mobileSource).toContain("Enter the amount covered by each selected category.");
+    expect(mobileSource).toContain(": [{ category: result.categoryName!, amount: '' }]");
+    expect(mobileSource).not.toContain("amount: result.expenseDraft?.amount ?? amount");
+  });
 });
 
 describe("inline expense bank-account creation", () => {

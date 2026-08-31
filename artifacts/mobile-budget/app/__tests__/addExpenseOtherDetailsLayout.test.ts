@@ -15,6 +15,9 @@ describe('optional expense category layout', () => {
     expect(source).toContain('{categoryAllocations.length > 0 && (');
     expect(source).toContain('testID="category-allocation-card"');
     expect(source).toContain('testID="add-category-allocation-mobile"');
+    expect(source).toContain('CATEGORY AMOUNT REQUIRED');
+    expect(source).toContain('Enter the amount covered by each selected category.');
+    expect(source).toContain('placeholder="Enter amount"');
   });
 
   it('offers explicit uncategorized save and preserves the draft while creating a budget', () => {

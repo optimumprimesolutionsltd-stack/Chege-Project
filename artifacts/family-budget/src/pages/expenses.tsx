@@ -115,16 +115,13 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [amountValue, setAmountValue] = useState(defaults?.amount?.toString() ?? "");
   const initialAllocations = defaults?.categoryAllocations?.length
     ? defaults.categoryAllocations.map((allocation) => ({ category: allocation.category, amount: String(allocation.amount) }))
-    : [{ category: defaults?.category ?? "", amount: defaults?.amount?.toString() ?? "" }];
+    : [{ category: defaults?.category ?? "", amount: defaults?.category ? defaults?.amount?.toString() ?? "" : "" }];
   const [categoryAllocations, setCategoryAllocations] = useState(initialAllocations);
   const amount = amountValue;
-  const setAmount = (value: string) => {
-    setAmountValue(value);
-    setCategoryAllocations((current) => current.length === 1 ? [{ ...current[0], amount: value }] : current);
-  };
+  const setAmount = (value: string) => setAmountValue(value);
   const category = categoryAllocations[0]?.category ?? "";
   const setCategory = (value: string) => setCategoryAllocations((current) =>
-    current.length ? [{ ...current[0], category: value }, ...current.slice(1)] : [{ category: value, amount: amountValue }],
+    current.length ? [{ ...current[0], category: value }, ...current.slice(1)] : [{ category: value, amount: "" }],
   );
   const [description, setDescription] = useState(defaults?.description ?? "");
   const [notes, setNotes] = useState(defaults?.notes ?? "");
@@ -1448,9 +1445,12 @@ export default function Expenses() {
             ) : null;
           })()}
             {form.categoryAllocations.some((allocation) => allocation.category.trim()) && !(form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && form.categoryAllocations.length === 1) && (
-             <div className="mt-3 space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
+             <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
              <div className="flex items-center justify-between gap-2">
-               <p className="text-sm font-semibold text-foreground">Category breakdown</p>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Category breakdown <span className="text-destructive">*</span></p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">Required: enter the amount covered by each selected category.</p>
+                </div>
                <Button
                  type="button"
                  size="sm"
@@ -1477,9 +1477,9 @@ export default function Expenses() {
                  <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"}
                    onClick={() => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: item.category.trim().toLocaleLowerCase() === "other" ? "" : "Other" } : item))}
                    aria-label={`Other allocation ${index + 1}`}>Other</Button>
-                 <Input type="number" min="1" step="1" value={allocation.amount}
+                  <Input type="number" min="1" step="1" value={allocation.amount}
                    onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))}
-                   aria-label={`Allocation amount ${index + 1}`} className="h-10 w-28" />
+                    aria-label={`Allocation amount ${index + 1}`} aria-required="true" required placeholder="Amount" className="h-10 w-32 border-primary/45 bg-card font-semibold" />
                  {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>}
                </div>
              ))}

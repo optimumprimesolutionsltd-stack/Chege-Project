@@ -1029,7 +1029,7 @@ function ExpenseForm({
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
-          <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => { setAmount(e.target.value); setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }] : current); }} min="1" required className="h-11 bg-card text-base" autoFocus />
+           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-11 bg-card text-base" autoFocus />
         </div>
          {!isOtherCategory && (
            <div className="space-y-1.5 lg:col-span-1">
@@ -1126,9 +1126,12 @@ function ExpenseForm({
               </div>
             )}
             {categoryAllocations.some((allocation) => allocation.category.trim()) && !(isOtherCategory && categoryAllocations.length === 1) && (
-             <div className="mt-3 space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
-             <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-foreground">Category breakdown</p>
+              <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
+              <div className="flex items-center justify-between gap-2">
+                 <div>
+                   <p className="text-sm font-semibold text-foreground">Category breakdown <span className="text-destructive">*</span></p>
+                   <p className="mt-0.5 text-xs font-medium text-foreground">Required: enter the amount covered by each selected category.</p>
+                 </div>
                <Button type="button" size="sm" variant="outline" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard"><Plus className="mr-1 h-3.5 w-3.5" /> Add category</Button>
              </div>
              {categoryAllocations.map((allocation, index) => (
@@ -1140,7 +1143,7 @@ function ExpenseForm({
                    {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index && selected.category === item.name)}>{item.name}</option>)}
                  </select>
                  <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"} onClick={() => { const value = allocation.category.trim().toLocaleLowerCase() === "other" ? "" : "Other"; setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: value } : item)); if (index === 0) setCategory(value); }} aria-label={`Other allocation ${index + 1}`}>Other</Button>
-                 <Input type="number" min="1" step="1" value={allocation.amount} onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} aria-label={`Allocation amount ${index + 1}`} className="h-10 w-24" />
+                  <Input type="number" min="1" step="1" value={allocation.amount} onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} aria-label={`Allocation amount ${index + 1}`} aria-required="true" required placeholder="Amount" className="h-10 w-32 border-primary/45 bg-card font-semibold" />
                  {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><X className="h-4 w-4" /></Button>}
                </div>
              ))}
