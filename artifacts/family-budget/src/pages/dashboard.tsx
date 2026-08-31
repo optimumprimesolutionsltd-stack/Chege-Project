@@ -1088,10 +1088,10 @@ function ExpenseForm({
                  .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 <option value="Other">One-off spending</option>
               </select>
-              {category.trim() && (
+              {category.trim() && !isPrimaryOtherCategory && (
                 <div data-testid="primary-category-allocation-dashboard" className="sm:w-48">
                   <label htmlFor="dashboard-primary-category-amount" className="sr-only">
-                    {isPrimaryOtherCategory ? "One-off spending amount (KES)" : `${category} amount (KES)`}
+                    {`${category} amount (KES)`}
                   </label>
                   <Input
                     id="dashboard-primary-category-amount"
@@ -1100,7 +1100,7 @@ function ExpenseForm({
                     step="1"
                     value={categoryAllocations[0]?.amount ?? ""}
                     onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
-                    aria-label={isPrimaryOtherCategory ? "KES amount for one-off spending" : "KES amount covered by the primary category"}
+                    aria-label="KES amount covered by the primary category"
                     aria-required="true"
                     required
                     placeholder="Enter KES amount"
@@ -1109,28 +1109,48 @@ function ExpenseForm({
                 </div>
               )}
               </div>
-             <Button
-               type="button"
-               variant={isOtherCategory ? "default" : "outline"}
-               className="h-11 w-full justify-start sm:w-auto"
-               onClick={() => {
-                 setCategoryAllocations(current => {
-                   if (current.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")) return current;
-                   if (!current[0]?.category.trim()) {
-                     setCategory("Other");
-                     return current.map((allocation, index) => index === 0 ? { ...allocation, category: "Other" } : allocation);
-                   }
-                   return [...current, { category: "Other", amount: "" }];
-                 });
-                 setCategory(previous => previous || "Other");
-                 setIsAddingCategory(false);
-               }}
-               aria-label="Select one-off spending category"
-               aria-pressed={isOtherCategory}
-               data-testid="one-off-spending-category-dashboard"
-             >
-               One-off spending
-             </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  variant={isOtherCategory ? "default" : "outline"}
+                  className="h-11 w-full justify-start sm:w-auto"
+                  onClick={() => {
+                    setCategoryAllocations(current => {
+                      if (current.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")) return current;
+                      if (!current[0]?.category.trim()) {
+                        setCategory("Other");
+                        return current.map((allocation, index) => index === 0 ? { ...allocation, category: "Other" } : allocation);
+                      }
+                      return [...current, { category: "Other", amount: "" }];
+                    });
+                    setCategory(previous => previous || "Other");
+                    setIsAddingCategory(false);
+                  }}
+                  aria-label="Select one-off spending category"
+                  aria-pressed={isOtherCategory}
+                  data-testid="one-off-spending-category-dashboard"
+                >
+                  One-off spending
+                </Button>
+                {isPrimaryOtherCategory && (
+                  <div data-testid="primary-category-allocation-dashboard" className="sm:w-48">
+                    <label htmlFor="dashboard-primary-category-amount" className="sr-only">One-off spending amount (KES)</label>
+                    <Input
+                      id="dashboard-primary-category-amount"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={categoryAllocations[0]?.amount ?? ""}
+                      onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
+                      aria-label="KES amount for one-off spending"
+                      aria-required="true"
+                      required
+                      placeholder="Enter KES amount"
+                      className="h-11 w-full border-primary/45 bg-card font-semibold"
+                    />
+                  </div>
+                )}
+              </div>
              <p className="text-xs leading-relaxed text-muted-foreground">
                Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
              </p>
@@ -1213,26 +1233,35 @@ function ExpenseForm({
              </div>
               {categoryAllocations.slice(1).map((allocation, index) => (
                 <div className="space-y-2 rounded-lg border border-border/60 bg-card p-3" key={index}>
-                  <div className="flex flex-col gap-2 sm:flex-row">
+                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <select value={allocation.category}
                       onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
                       aria-label={`Additional allocation category ${index + 2}`} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm">
-                      <option value="" disabled>Pick a category</option>
+                       <option value="">Select a category</option>
                       {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>)}
                     </select>
-                    {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><X className="h-4 w-4" /></Button>}
-                  </div>
-                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                    <label className="text-xs font-semibold text-foreground">
-                      {allocation.category.trim().toLocaleLowerCase() === "other" ? "One-off spending amount (KES)" : `${allocation.category || "Category"} amount (KES)`}
-                    </label>
-                    <Input type="number" min="1" step="1" value={allocation.amount} onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, amount: event.target.value } : item))} aria-label={allocation.category.trim().toLocaleLowerCase() === "other" ? "KES amount for one-off spending" : `KES amount covered by allocation ${index + 2}`} aria-required="true" required placeholder="Enter KES amount" className="h-10 w-full border-primary/45 bg-card font-semibold sm:w-44" />
+                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                       <label htmlFor={`dashboard-additional-category-amount-${index}`} className="sr-only">
+                         {`${allocation.category || "Category"} amount (KES)`}
+                       </label>
+                       <Input
+                         id={`dashboard-additional-category-amount-${index}`}
+                         type="number"
+                         min="1"
+                         step="1"
+                         value={allocation.amount}
+                         onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, amount: event.target.value } : item))}
+                         aria-label={`KES amount covered by allocation ${index + 2}`}
+                         aria-required="true"
+                         required
+                         placeholder="Enter KES amount"
+                         className="h-10 w-full border-primary/45 bg-card font-semibold"
+                       />
+                     </div>
+                     {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><X className="h-4 w-4" /></Button>}
                   </div>
                </div>
              ))}
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                One-off spending is for a one-time expense that does not fit any listed category. Add a note when you use it.
-              </p>
               <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])}><Plus className="mr-1 h-3.5 w-3.5" /> Add another category</Button>
               {(() => {
                 return (
