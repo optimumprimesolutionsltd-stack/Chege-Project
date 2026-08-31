@@ -1282,6 +1282,7 @@ export default function Expenses() {
             </p>
           </div>
             <div className="space-y-2">
+              {!isOtherCategory && (
              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                <select
                  className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1315,6 +1316,7 @@ export default function Expenses() {
                  </div>
                )}
              </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button
                   type="button"

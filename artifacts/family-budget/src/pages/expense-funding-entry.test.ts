@@ -131,6 +131,7 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).not.toContain('<option value="Other"');
     expect(dashboardSource).toContain('data-testid="one-off-spending-category-dashboard"');
     expect(dashboardSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
+    expect(dashboardSource).toContain("{!isOtherCategory && (");
     expect(dashboardSource).toContain('placeholder="Enter KES amount"');
     expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
     expect(dashboardSource).not.toContain("setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }]");
@@ -153,6 +154,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).not.toContain('<option value="Other"');
     expect(expensesSource).toContain('data-testid={`one-off-spending-category-${mode}`}');
     expect(expensesSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
+    expect(expensesSource).toContain("{!isOtherCategory && (");
     expect(expensesSource).toContain('aria-required="true"');
     expect(expensesSource).toContain('placeholder="Enter KES amount"');
     expect(mobileSource).toContain("CATEGORY AMOUNTS REQUIRED");

@@ -1074,8 +1074,9 @@ function ExpenseForm({
              </p>
            </div>
             <div className="space-y-2">
+              {!isOtherCategory && (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-             <select
+                <select
                 value={isOtherCategory ? "" : category}
                onChange={e => {
                  const nextCategory = e.target.value;
@@ -1118,6 +1119,7 @@ function ExpenseForm({
                 </div>
               )}
               </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button
                   type="button"
