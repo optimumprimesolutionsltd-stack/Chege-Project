@@ -91,7 +91,7 @@ export function BudgetChooser({
   const [sharedBudgetKind, setSharedBudgetKind] = useState<SharedGroupKind | null>(null);
   const [onboardingMode, setOnboardingMode] = useState<"personal" | "shared" | "both" | null>(null);
   const [showCategorySetup, setShowCategorySetup] = useState(false);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([...ALL_ONBOARDING_CATEGORIES]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showIncomeSetup, setShowIncomeSetup] = useState(false);
   const [selectedIncomeStreams, setSelectedIncomeStreams] = useState<string[]>([]);
   const [customIncomeStream, setCustomIncomeStream] = useState("");
