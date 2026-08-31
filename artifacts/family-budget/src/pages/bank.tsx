@@ -852,6 +852,16 @@ export default function Bank() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
+              {(mode === "deposit" || mode === "disbursement") && (
+                <div className="space-y-2 sm:col-span-2">
+                  <label htmlFor="transaction-bank-account" className="text-sm font-semibold text-foreground">Bank account <span className="text-destructive">*</span></label>
+                  <select id="transaction-bank-account" data-testid="select-transaction-bank-account" required value={selectedAccountId?.toString() ?? ""} onChange={(event) => setSelectedAccountId(event.target.value ? Number(event.target.value) : null)} disabled={accountsLoading || accounts.length === 0} className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    <option value="" disabled>{accounts.length === 0 ? "Add a bank account first" : "Choose the bank account"}</option>
+                    {accounts.map((item) => <option key={item.id} value={item.id}>{item.name}{item.accountNumber ? ` · ${item.accountNumber}` : ""}</option>)}
+                  </select>
+                  <p className="text-xs text-muted-foreground">This account will receive the deposit or be reduced by the withdrawal.</p>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-foreground">Amount (KES)</label>

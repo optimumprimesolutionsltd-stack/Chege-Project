@@ -1184,6 +1184,22 @@ export default function BankScreen() {
                 : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankTransfer ? 'Move Between Bank Accounts' : isBankCharge ? 'Record Bank Charge' : 'Take Money Out'}
             </Text>
 
+            {(isDeposit || isWithdrawal) && (
+              <View style={{ marginBottom: 14 }}>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account *</Text>
+                <View style={{ gap: 8 }}>
+                  {accounts.length === 0 ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>Add a bank account before recording this transaction.</Text>
+                  ) : accounts.map((accountOption) => (
+                    <TouchableOpacity key={accountOption.id} onPress={() => selectAccount(accountOption.id)} style={{ borderWidth: 1, borderColor: selectedAccountId === accountOption.id ? colors.primary : colors.border, backgroundColor: selectedAccountId === accountOption.id ? `${colors.primary}18` : colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }} accessibilityRole="radio" accessibilityState={{ selected: selectedAccountId === accountOption.id }}>
+                      <Text style={{ color: colors.foreground, fontWeight: selectedAccountId === accountOption.id ? '700' : '500' }}>{accountOption.name}{accountOption.accountNumber ? ` · ${accountOption.accountNumber}` : ''}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>This account will receive the deposit or be reduced by the withdrawal.</Text>
+              </View>
+            )}
+
             {/* Amount */}
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount (KES)</Text>
             <TextInput
