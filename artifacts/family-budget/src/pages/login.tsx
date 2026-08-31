@@ -27,23 +27,23 @@ export default function LoginPage() {
         <section className="hidden max-w-xl flex-1 lg:block">
           <div className="mb-8 flex flex-col items-start gap-2">
             <div className="flex h-12 w-44 items-center justify-center rounded-2xl bg-brand-surface px-3 shadow-lg">
-              <BrandLogo className="h-10 w-full" />
+              <BrandLogo className="h-10 w-full" alt="Jamvi — personal and shared budgeting" />
             </div>
-            <p className="pl-1 text-xs font-medium text-blue-100/70">Shared finances, together</p>
+            <p className="pl-1 text-xs font-medium text-blue-100/70">Personal & shared money, together</p>
           </div>
 
           <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-brand-gold">A calmer way to budget</p>
           <h1 className="max-w-lg font-display text-5xl font-bold leading-[1.05] tracking-tight text-white xl:text-6xl">
-            Make every shilling count — together.
+            Make every shilling count — your way.
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-8 text-blue-100/80">
-            One clear place for group spending, shared goals, and the decisions that keep everyone moving forward.
+            One clear place for your personal budget and the money you choose to share with others.
           </p>
 
           <div className="mt-9 space-y-3">
-            <FeatureRow icon={<WalletCards className="h-5 w-5" />} text="See where your group money is going" />
-            <FeatureRow icon={<Users className="h-5 w-5" />} text="Keep every member on the same page" />
-            <FeatureRow icon={<ShieldCheck className="h-5 w-5" />} text="Build a record everyone can trust" />
+            <FeatureRow icon={<WalletCards className="h-5 w-5" />} text="Understand your personal spending" />
+            <FeatureRow icon={<Users className="h-5 w-5" />} text="Share budgets with the people you choose" />
+            <FeatureRow icon={<ShieldCheck className="h-5 w-5" />} text="Keep personal and shared money separate" />
           </div>
         </section>
 
@@ -52,9 +52,9 @@ export default function LoginPage() {
             <div className="mb-8 flex items-start justify-between gap-4">
               <div className="flex flex-col items-start gap-2 lg:hidden">
                 <div className="flex h-11 w-36 items-center justify-center rounded-2xl bg-brand-surface px-2">
-                  <BrandLogo className="h-9 w-full" />
+                  <BrandLogo className="h-9 w-full" alt="Jamvi — personal and shared budgeting" />
                 </div>
-                <p className="pl-1 text-xs font-medium text-blue-100/70">Shared finances, together</p>
+                <p className="pl-1 text-xs font-medium text-blue-100/70">Personal & shared money, together</p>
               </div>
               <div className="ml-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-teal/15 text-brand-teal">
                 <Sparkles className="h-5 w-5" />
@@ -66,14 +66,14 @@ export default function LoginPage() {
               Your money, in focus.
             </h2>
             <p className="mt-3 text-sm leading-6 text-blue-100/80">
-              Sign in to pick up where your group left off.
+              Sign in to pick up where your money journey left off.
             </p>
 
             <div className="my-7 rounded-2xl border border-blue-100/15 bg-white/[0.055] p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-teal">Your shared view</p>
-                  <p className="mt-1 font-display text-lg font-bold text-white">Clearer decisions</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-brand-teal">Your money view</p>
+                  <p className="mt-1 font-display text-lg font-bold text-white">Clearer next steps</p>
                 </div>
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-teal/15 text-brand-teal">
                   <ArrowUpRight className="h-5 w-5" />
