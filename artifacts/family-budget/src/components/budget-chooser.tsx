@@ -16,6 +16,16 @@ import { Input } from "@/components/ui/input";
 
 const CHOOSER_STORAGE_PREFIX = "jamvi:budget-chooser:completed:";
 
+const ONBOARDING_CATEGORY_TIERS = [
+  { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Housing", "Utilities", "Transport"] },
+  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Family support", "Personal care"] },
+  { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business"] },
+  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Clothing", "Gifts", "Other"] },
+] as const;
+
+const ALL_ONBOARDING_CATEGORIES = ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories);
+const COMMON_INCOME_STREAMS = ["Salary", "Business income", "Freelance or contract work", "Rental income", "Pension", "Other income"] as const;
+
 export function budgetChooserCompletionKey(userId: string) {
   return `${CHOOSER_STORAGE_PREFIX}${encodeURIComponent(userId)}`;
 }
@@ -79,6 +89,12 @@ export function BudgetChooser({
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
   const [sharedBudgetName, setSharedBudgetName] = useState("");
   const [sharedBudgetKind, setSharedBudgetKind] = useState<SharedGroupKind | null>(null);
+  const [onboardingMode, setOnboardingMode] = useState<"personal" | "shared" | "both" | null>(null);
+  const [showCategorySetup, setShowCategorySetup] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([...ALL_ONBOARDING_CATEGORIES]);
+  const [showIncomeSetup, setShowIncomeSetup] = useState(false);
+  const [selectedIncomeStreams, setSelectedIncomeStreams] = useState<string[]>([]);
+  const [customIncomeStream, setCustomIncomeStream] = useState("");
 
   const enterApp = () => {
     if (userId) markBudgetChooserComplete(userId);
@@ -130,14 +146,129 @@ export function BudgetChooser({
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? personal[0] ?? shared[0] ?? null;
   const selectedName = selectedWorkspace?.isPrivate ? "Personal budget" : selectedWorkspace ? workspaceLabel(selectedWorkspace) : "";
 
+  if (!onboardingMode) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
+        <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-3xl items-center">
+          <div className="w-full overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
+            <header className="border-b border-primary/10 bg-primary px-6 py-8 text-primary-foreground sm:px-10 sm:py-10">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Welcome to Jamvi</p>
+              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">Let’s set up Jamvi for you{user.firstName ? `, ${user.firstName}` : ""}.</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">One account can hold your private Personal budget and the Shared budgets you choose to create with other people.</p>
+            </header>
+            <div className="p-6 sm:p-10">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">First, a quick question</p>
+              <h2 className="mt-2 font-display text-2xl font-bold text-foreground">How will you use Jamvi?</h2>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">This helps us take you to the right starting point. You can always add another budget later.</p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                {([
+                  ["personal", "My money", "A private budget for my income, spending, and goals.", Wallet],
+                  ["shared", "Money with others", "A shared budget for a family, chama, club, or team.", UsersRound],
+                  ["both", "Both", "Keep my personal money private and manage shared money too.", Heart],
+                ] as const).map(([value, title, description, Icon]) => (
+                  <button key={value} type="button" onClick={() => { setOnboardingMode(value); setShowCategorySetup(true); }} className="group rounded-2xl border border-border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" aria-hidden="true" /></span>
+                    <span className="mt-4 block text-base font-bold text-foreground">{title}</span>
+                    <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{description}</span>
+                    <span className="mt-4 block text-sm font-semibold text-primary">Continue <ChevronRight className="ml-1 inline h-4 w-4" aria-hidden="true" /></span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-6 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2.5 text-xs leading-relaxed text-muted-foreground"><span className="font-semibold text-foreground">Your choice does not lock you in.</span> Personal records stay private, and Shared budgets are only visible to the people you invite.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (showCategorySetup) {
+    const allSelected = selectedCategories.length === ALL_ONBOARDING_CATEGORIES.length;
+    const toggleCategory = (category: string) => setSelectedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]);
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
+        <section className="mx-auto w-full max-w-4xl">
+          <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
+            <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 3 · Personalize your budget</p>
+              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">What should we help you track?</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Choose the categories you want to see first. You can change them and add your own later.</p>
+            </header>
+            <div className="p-6 sm:p-10">
+              <div className="flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div><p className="font-semibold text-foreground">Start with the essentials</p><p className="mt-1 text-sm text-muted-foreground">Priorities keep your first budget focused and useful.</p></div>
+                <button type="button" aria-pressed={allSelected} onClick={() => setSelectedCategories(allSelected ? [] : [...ALL_ONBOARDING_CATEGORIES])} className="rounded-xl border border-primary/30 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/10">{allSelected ? "Clear all" : "Select all categories"}</button>
+              </div>
+              <div className="mt-6 space-y-6">
+                {ONBOARDING_CATEGORY_TIERS.map((tier) => (
+                  <section key={tier.priority} aria-labelledby={`onboarding-tier-${tier.priority}`}>
+                    <div className="mb-3"><h2 id={`onboarding-tier-${tier.priority}`} className="font-display text-lg font-bold text-foreground">Tier {tier.priority} · {tier.label}</h2><p className="text-sm text-muted-foreground">{tier.description}</p></div>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {tier.categories.map((category) => {
+                        const selected = selectedCategories.includes(category);
+                        return <button key={category} type="button" aria-pressed={selected} onClick={() => toggleCategory(category)} className={`flex min-h-12 items-center justify-between rounded-xl border px-3 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40"}`}><span>{category}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></button>;
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+              <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{selectedCategories.length} of {ALL_ONBOARDING_CATEGORIES.length} categories selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:categories:${encodeURIComponent(userId)}`, JSON.stringify(selectedCategories)); } catch { /* Continue even when storage is unavailable. */ } setShowCategorySetup(false); setShowIncomeSetup(true); }}>Continue to income setup <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (showIncomeSetup) {
+    const toggleIncomeStream = (stream: string) => setSelectedIncomeStreams((current) => current.includes(stream) ? current.filter((item) => item !== stream) : [...current, stream]);
+    const addCustomIncomeStream = () => {
+      const stream = customIncomeStream.trim();
+      if (stream && !selectedIncomeStreams.includes(stream)) setSelectedIncomeStreams((current) => [...current, stream]);
+      setCustomIncomeStream("");
+    };
+    const finishOnboarding = () => {
+      try {
+        window.localStorage.setItem(`jamvi:onboarding:income-streams:${encodeURIComponent(userId)}`, JSON.stringify(selectedIncomeStreams));
+      } catch { /* Continue even when storage is unavailable. */ }
+      setShowIncomeSetup(false);
+    };
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
+        <section className="mx-auto w-full max-w-3xl">
+          <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
+            <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 3 of 3 · Personalize your starting point</p>
+              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">Where does your money come from?</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Select the income streams you want to recognise in Jamvi. You can add amounts and more sources later.</p>
+            </header>
+            <div className="p-6 sm:p-10">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {COMMON_INCOME_STREAMS.map((stream) => {
+                  const selected = selectedIncomeStreams.includes(stream);
+                  return <button key={stream} type="button" aria-pressed={selected} onClick={() => toggleIncomeStream(stream)} className={`flex min-h-12 items-center justify-between rounded-xl border px-3 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40"}`}><span>{stream}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></button>;
+                })}
+              </div>
+              <div className="mt-6 flex flex-col gap-2 sm:flex-row"><Input aria-label="Custom income stream" placeholder="Add another income stream" value={customIncomeStream} onChange={(event) => setCustomIncomeStream(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomIncomeStream(); } }} /><Button type="button" variant="outline" className="rounded-xl" onClick={addCustomIncomeStream}>Add source</Button></div>
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Income streams are private to you in a Personal budget. In a Shared budget, each member can record their own source.</p>
+              <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{selectedIncomeStreams.length} income {selectedIncomeStreams.length === 1 ? "stream" : "streams"} selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={finishOnboarding}>Continue to my budgets <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  const onboardingHeading = onboardingMode === "personal" ? "Start with your Personal budget." : onboardingMode === "shared" ? "Choose or create your Shared budget." : "Choose where to start today.";
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
       <section className="mx-auto w-full max-w-5xl">
         <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
           <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Your budgets</p>
-            <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">Choose where to work.</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Select a budget to open it.</p>
+            <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{onboardingHeading}</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your private and Shared budgets stay separate in Jamvi.</p>
           </header>
 
           <div className="p-6 sm:p-10">

@@ -136,6 +136,12 @@ function localDateInputValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+const PERSONAL_OVERVIEW_SHORTCUTS = [
+  { href: "/budget", label: "Budget", description: "Plan your month", icon: Wallet },
+  { href: "/expenses", label: "Expenses", description: "See where it goes", icon: Receipt },
+  { href: "/savings-goals", label: "Goals", description: "Build towards more", icon: Target },
+];
+
 const SHARED_OVERVIEW_SHORTCUTS = [
   { href: "/budget", label: "Budget", description: "Plan spending", icon: Wallet },
   { href: "/contributions", label: "Contributions", description: "See money in", icon: TrendingUp },
@@ -1899,6 +1905,51 @@ export default function Dashboard() {
           </p>
         </section>
       </div>
+
+      {!isSharedWorkspace && (
+        <section aria-labelledby="personal-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Your Jamvi toolkit</p>
+              <h2 id="personal-overview-shortcuts-heading" className="mt-1 font-display text-xl font-bold text-foreground">
+                Your money stays private. Share when you choose.
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                Start with your own budget, then create a separate Shared budget for your family, partner, flatmates, chama, or team.
+              </p>
+              <p className="mt-3 max-w-2xl rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+                <span className="font-semibold text-foreground">Two ways to manage money, one Jamvi account.</span>{" "}
+                Personal records remain private, while every Shared budget has its own members, activity, contributions, and goals.
+              </p>
+            </div>
+            <Link href="/activity" className="text-sm font-semibold text-primary hover:underline">
+              View your activity
+            </Link>
+          </div>
+          <nav aria-label="Personal budget shortcuts" className="grid gap-2 sm:grid-cols-3">
+            {PERSONAL_OVERVIEW_SHORTCUTS.map((shortcut) => {
+              const ShortcutIcon = shortcut.icon;
+              return (
+                <Link
+                  key={shortcut.href}
+                  href={shortcut.href}
+                  data-testid={`personal-overview-shortcut-${shortcut.label.toLowerCase()}`}
+                  className="group flex min-h-20 min-w-0 items-center gap-3 rounded-xl border border-border/80 bg-background px-3 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <ShortcutIcon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block w-full whitespace-normal break-words text-sm font-bold leading-tight text-foreground">{shortcut.label}</span>
+                    <span className="mt-1 block w-full whitespace-normal break-words text-xs leading-tight text-muted-foreground">{shortcut.description}</span>
+                  </span>
+                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </Link>
+              );
+            })}
+          </nav>
+        </section>
+      )}
 
       {isSharedWorkspace && (
         <section aria-labelledby="group-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
