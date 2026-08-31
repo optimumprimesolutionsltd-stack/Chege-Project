@@ -37,7 +37,8 @@ async function ensureAuthenticatedUser(userId: string): Promise<void> {
   // Use a minimal SQL insert rather than Drizzle's table insert here. This
   // recovery path must remain usable while additive user columns are being
   // migrated in production.
-  await db.execute(sql`INSERT INTO users (id) VALUES (${userId}) ON CONFLICT (id) DO NOTHING`);
+  await db
+    .execute(sql`INSERT INTO users (id) VALUES (${userId}) ON CONFLICT (id) DO NOTHING`);
 }
 
 /**

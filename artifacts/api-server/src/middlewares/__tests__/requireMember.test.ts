@@ -182,6 +182,10 @@ const tx = {
 };
 
 const db = {
+  execute: vi.fn(async (query: { values?: unknown[] }) => {
+    const userId = query?.values?.[0];
+    if (typeof userId === "string") persistedUserIds.add(userId);
+  }),
   select: vi.fn(selectQuery),
   insert: vi.fn(insertQuery),
   transaction: vi.fn(async (callback: (transaction: typeof tx) => unknown) => callback(tx)),
@@ -218,7 +222,7 @@ vi.mock("drizzle-orm", () => ({
   asc: vi.fn(),
   eq: vi.fn((column, value: unknown) => ({ kind: "eq", column, value })),
   isNull: vi.fn((column) => ({ kind: "isNull", column })),
-  sql: vi.fn(),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
 }));
 
 const {
