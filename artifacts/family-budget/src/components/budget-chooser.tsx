@@ -222,7 +222,7 @@ export function BudgetChooser({
           <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 3 · Personalize your budget</p>
-              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">What should we help you track?</h1>
+              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, what should we help you track?` : "What should we help you track?"}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Choose the categories you want to see first. You can change them and add your own later.</p>
             </header>
             <div className="p-6 sm:p-10">
@@ -270,7 +270,7 @@ export function BudgetChooser({
           <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 3 of 3 · Personalize your starting point</p>
-              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">Where does your money come from?</h1>
+              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, where does your money come from?` : "Where does your money come from?"}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Select the income streams you want to recognise in Jamvi. You can add amounts and more sources later.</p>
             </header>
             <div className="p-6 sm:p-10">
