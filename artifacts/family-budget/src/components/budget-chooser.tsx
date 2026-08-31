@@ -24,7 +24,7 @@ const ONBOARDING_CATEGORY_TIERS = [
 ] as const;
 
 const ALL_ONBOARDING_CATEGORIES = ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories);
-const COMMON_INCOME_STREAMS = ["Salary", "Business income", "Freelance or contract work", "Rental income", "Pension", "Other income"] as const;
+const COMMON_INCOME_STREAMS = ["Salary or wages", "Business or side hustle", "Freelance or contract work", "Farming or livestock", "Rental income", "Family support or remittances", "Pension or benefits", "Other income"] as const;
 
 export function budgetChooserCompletionKey(userId: string) {
   return `${CHOOSER_STORAGE_PREFIX}${encodeURIComponent(userId)}`;
@@ -252,6 +252,11 @@ export function BudgetChooser({
   }
 
   if (showIncomeSetup) {
+    const isSharedSetup = onboardingMode === "shared";
+    const incomeHeading = isSharedSetup ? "What will bring money into your Shared budget?" : "What brings money into your budget?";
+    const incomeDescription = isSharedSetup
+      ? "Choose the sources you expect members to contribute from. Each person can add their own source later."
+      : "Choose the sources you rely on so Jamvi can help you see what is available to plan with.";
     const toggleIncomeStream = (stream: string) => setSelectedIncomeStreams((current) => current.includes(stream) ? current.filter((item) => item !== stream) : [...current, stream]);
     const addCustomIncomeStream = () => {
       const stream = customIncomeStream.trim();
@@ -270,8 +275,8 @@ export function BudgetChooser({
           <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
             <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 3 of 3 · Personalize your starting point</p>
-              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, where does your money come from?` : "Where does your money come from?"}</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Select the income streams you want to recognise in Jamvi. You can add amounts and more sources later.</p>
+              <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, ${incomeHeading.charAt(0).toLowerCase()}${incomeHeading.slice(1)}` : incomeHeading}</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">{incomeDescription} You can add amounts and more sources later.</p>
             </header>
             <div className="p-6 sm:p-10">
               <div className="grid gap-2 sm:grid-cols-2">
