@@ -52,6 +52,13 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).not.toContain("if (previous.length >= 2)");
   });
 
+  it("adds a newly created mobile income source without replacing an existing partial portion", () => {
+    expect(mobileSource).toContain("setSelectedSources((previous) => previous.includes(sourceKey) ? previous : [...previous, sourceKey])");
+    expect(mobileSource).toContain("setSplitAmounts((previous) => ({ ...previous, [sourceKey]: String(remainder) }))");
+    expect(mobileSource).toContain("selectedSources.map((key, index) =>");
+    expect(mobileSource).not.toContain("if (previous.length >= 2)");
+  });
+
   it("keeps mixed bank and personal funding controls available while creating an expense", () => {
     expect(expensesSource).toContain("{form.paidFromBank && (");
     expect(expensesSource).toContain("!allowMixedFunding && canManageExpenses");

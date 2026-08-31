@@ -504,7 +504,23 @@ export default function AddExpenseSheet() {
           ...previous.filter((item) => item.id !== source.id),
           source,
         ]);
-        setSelectedSources([incomeSourceKey(source.id)]);
+        const sourceKey = incomeSourceKey(source.id);
+        const assigned = selectedSources.reduce(
+          (sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0),
+          0,
+        );
+        const total = parseFloat(amount.replace(/,/g, '')) || 0;
+        const remainder = total - assigned;
+        const shouldAddAsAnotherPortion = selectedSources.length > 0
+          && Number.isInteger(remainder)
+          && remainder > 0;
+
+        if (shouldAddAsAnotherPortion) {
+          setSelectedSources((previous) => previous.includes(sourceKey) ? previous : [...previous, sourceKey]);
+          setSplitAmounts((previous) => ({ ...previous, [sourceKey]: String(remainder) }));
+        } else {
+          setSelectedSources([sourceKey]);
+        }
         if (isEditMode) setFundingDirty(true);
       } else {
         queryClient.setQueryData<Record<string, IncomeSource[]>>(
@@ -518,13 +534,24 @@ export default function AddExpenseSheet() {
       setPayerIncomeSourceIds((previous) => ({ ...previous, [userId]: source.id }));
       setNewSourceName('');
       setNewSourcePayerId(null);
-      Alert.alert('Income source added', `${source.name} is ready to use for this expense.`);
+      const assigned = selectedSources.reduce(
+        (sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0),
+        0,
+      );
+      const total = parseFloat(amount.replace(/,/g, '')) || 0;
+      const remainder = total - assigned;
+      Alert.alert(
+        'Income source added',
+        userId === paidById && selectedSources.length > 0 && Number.isInteger(remainder) && remainder > 0
+          ? `${source.name} was added with the remaining KES ${remainder.toLocaleString()}.`
+          : `${source.name} is ready to use for this expense.`,
+      );
     } catch (error) {
       Alert.alert('Could not add income source', getExpenseSaveError(error));
     } finally {
       setIsCreatingSource(false);
     }
-  }, [isEditMode, newSourceName, paidById, payerSourceIds, queryClient]);
+  }, [amount, isEditMode, newSourceName, paidById, payerSourceIds, queryClient, selectedSources, splitAmounts]);
 
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();

@@ -275,7 +275,7 @@ export default function Settings() {
       toast({
         variant: "destructive",
         title: "Could not update your name",
-        description: error instanceof Error ? error.message : "Use letters, spaces, apostrophes, or hyphens.",
+        description: error instanceof Error ? error.message : "Use up to 40 printable characters without line breaks.",
       });
     } finally {
       setSavingDisplayName(false);

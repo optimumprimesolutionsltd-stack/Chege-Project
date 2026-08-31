@@ -788,11 +788,34 @@ function ExpenseForm({
         throw new Error("Could not create source");
       }
       const source: IncomeSource = await response.json();
-      setIncomeSourceId(source.id);
+      const existingDirectAmount = Number(directPortion) || 0;
+      const existingAdditionalAmount = additionalDirectPortions.reduce(
+        (sum, portion) => sum + (Number(portion.amount) || 0),
+        0,
+      );
+      const remaining = Number(amount) - existingDirectAmount - existingAdditionalAmount - (Number(bankPortion) || 0);
+      const shouldAddAsAnotherPortion = Boolean(incomeSourceId)
+        && existingDirectAmount > 0
+        && Number.isInteger(remaining)
+        && remaining > 0;
+
+      if (shouldAddAsAnotherPortion) {
+        setAdditionalDirectPortions((previous) => [
+          ...previous,
+          { sourceId: source.id, amount: String(remaining) },
+        ]);
+      } else {
+        setIncomeSourceId(source.id);
+      }
       setNewSourceName("");
       setIsAddingSource(false);
       await qc.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }) });
-      toast({ title: "Income source added", description: `${source.name} is selected for this expense.` });
+      toast({
+        title: "Income source added",
+        description: shouldAddAsAnotherPortion
+          ? `${source.name} was added with the remaining ${formatKes(remaining)}.`
+          : `${source.name} is selected for this expense.`,
+      });
     } catch {
       toast({
         variant: "destructive",

@@ -34,8 +34,12 @@ export const GetAuthUserResponse = zod.object({
 /**
  * @summary Save the authenticated user's preferred display name
  */
+export const updateDisplayNameBodyNameMax = 40;
+
+
+
 export const UpdateDisplayNameBody = zod.object({
-  "name": zod.string()
+  "name": zod.string().min(1).max(updateDisplayNameBodyNameMax).describe('Printable Unicode display name without control characters or line breaks')
 })
 
 export const UpdateDisplayNameResponse = zod.object({

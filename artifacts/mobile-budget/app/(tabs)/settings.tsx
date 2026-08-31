@@ -234,7 +234,7 @@ export default function SettingsScreen() {
     } catch (error) {
       Alert.alert(
         'Could not update your name',
-        error instanceof Error ? error.message : 'Use letters, spaces, apostrophes, or hyphens.',
+        error instanceof Error ? error.message : 'Use up to 40 printable characters without line breaks.',
       );
     } finally {
       setSavingDisplayName(false);

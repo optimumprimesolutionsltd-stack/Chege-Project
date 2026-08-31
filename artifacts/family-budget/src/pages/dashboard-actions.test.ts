@@ -54,6 +54,14 @@ describe("dashboard quick actions", () => {
     expect(expenseFormSource).not.toContain('canManageShared && fundingMode !== "bank"');
   });
 
+  it("keeps an existing direct portion when a new income source is created for the remainder", () => {
+    expect(expenseFormSource).toContain("setAdditionalDirectPortions((previous) => [");
+    expect(expenseFormSource).toContain("shouldAddAsAnotherPortion");
+    expect(expenseFormSource).toContain("was added with the remaining");
+    expect(expenseFormSource).toContain("additionalDirectPortions.map");
+    expect(expenseFormSource).not.toContain("additionalDirectPortions.length >= 2");
+  });
+
   it("sends recurring quick expenses to Budget and restores the draft afterward", () => {
     expect(expenseFormSource).toContain('RECURRING_DASHBOARD_DRAFT_KEY');
     expect(expenseFormSource).toContain('returnTo=dashboard');

@@ -1826,6 +1826,9 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 40
+          description: Printable Unicode display name without control characters or line breaks
       required:
         - name
 
