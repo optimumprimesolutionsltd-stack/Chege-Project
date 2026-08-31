@@ -115,7 +115,7 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain("Need to split this expense? Add another category and enter its share.");
     expect(dashboardSource).toContain("categoryAllocations.slice(1).map");
     expect(dashboardSource).toContain("One-off spending amount (KES)");
-    expect(dashboardSource).toContain("Use one-off spending for allocation");
+    expect(dashboardSource).toContain('<option value="Other"');
     expect(dashboardSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
     expect(dashboardSource).toContain('placeholder="Enter KES amount"');
     expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
@@ -125,7 +125,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("Need to split this expense? Add another category and enter its share.");
     expect(expensesSource).toContain("form.categoryAllocations.slice(1).map");
     expect(expensesSource).toContain("One-off spending amount (KES)");
-    expect(expensesSource).toContain("Use one-off spending for allocation");
+    expect(expensesSource).toContain('<option value="Other"');
     expect(expensesSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
     expect(expensesSource).toContain('aria-required="true" required placeholder="Enter KES amount"');
     expect(mobileSource).toContain("CATEGORY AMOUNTS REQUIRED");
@@ -136,15 +136,16 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).not.toContain("amount: result.expenseDraft?.amount ?? amount");
   });
 
-  it("keeps category amounts above the one-off and add-another controls", () => {
+  it("treats one-off spending as a category with its own amount", () => {
     for (const source of [dashboardSource, expensesSource]) {
-      const primaryAmount = source.indexOf("One-off spending amount (KES)");
-      const oneOffControl = source.indexOf(">One-off spending</Button>", primaryAmount);
-      const addAnotherControl = source.indexOf("Add another category", oneOffControl);
+      const oneOffControl = source.indexOf('<option value="Other">One-off spending</option>');
+      const primaryAmount = source.indexOf("One-off spending amount (KES)", oneOffControl);
+      const addAnotherControl = source.indexOf("Add another category", primaryAmount);
 
-      expect(primaryAmount).toBeGreaterThan(-1);
-      expect(oneOffControl).toBeGreaterThan(primaryAmount);
-      expect(addAnotherControl).toBeGreaterThan(oneOffControl);
+      expect(oneOffControl).toBeGreaterThan(-1);
+      expect(primaryAmount).toBeGreaterThan(oneOffControl);
+      expect(addAnotherControl).toBeGreaterThan(primaryAmount);
+      expect(source.match(/<option value="Other">One-off spending<\/option>/g)).toHaveLength(1);
     }
 
     const mobileOneOff = mobileSource.indexOf('testID="one-off-spending-category"');
