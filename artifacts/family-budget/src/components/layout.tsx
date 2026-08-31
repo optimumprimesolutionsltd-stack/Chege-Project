@@ -99,10 +99,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
         <div className="p-6">
             <div className="flex h-10 w-40 items-center justify-center rounded-xl bg-brand-surface px-2 shadow-sm">
-            <BrandLogo className="h-8 w-full" />
+            <BrandLogo className="h-8 w-full" alt="Jamvi — personal and shared budgeting" />
           </div>
           <div className="mt-2 min-w-0">
-            <span className="block text-[11px] font-medium text-sidebar-foreground/70">Shared finances, together</span>
+            <span className="block text-[11px] font-medium text-sidebar-foreground/70">Personal & shared money, together</span>
             <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
           </div>
         </div>
@@ -150,7 +150,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-sidebar border-b border-sidebar-border z-50 flex items-center justify-between px-4">
         <div className="flex items-center gap-2 text-sidebar-foreground">
            <div className="flex h-8 w-28 items-center justify-center rounded-lg bg-brand-surface px-1.5">
-            <BrandLogo className="h-6 w-full" />
+            <BrandLogo className="h-6 w-full" alt="Jamvi — personal and shared budgeting" />
           </div>
           <div className="min-w-0">
             <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
