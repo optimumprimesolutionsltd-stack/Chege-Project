@@ -527,7 +527,6 @@ function ExpenseForm({
   const [bankPortion, setBankPortion] = useState("");
   const [directPortion, setDirectPortion] = useState("");
   const [additionalDirectPortions, setAdditionalDirectPortions] = useState<Array<{ sourceId: number; amount: string }>>([]);
-  const [remainderAnchor, setRemainderAnchor] = useState<"direct" | "bank" | null>(null);
   const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
   const [newBankAccountName, setNewBankAccountName] = useState("");
   const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
@@ -691,24 +690,6 @@ function ExpenseForm({
     window.location.assign(url);
   };
 
-  useEffect(() => {
-    if (!paidFromBank || !allowMixedFunding) return;
-    const total = Number(amount);
-    const direct = Number(directPortion);
-    const bank = Number(bankPortion);
-    if (!Number.isInteger(total) || total <= 0) return;
-
-    if (remainderAnchor === "direct" && Number.isInteger(direct) && direct > 0) {
-      const remainder = getFundingRemainder(total, direct);
-      setBankPortion(remainder > 0 ? String(remainder) : "");
-      return;
-    }
-    if (remainderAnchor === "bank" && Number.isInteger(bank) && bank > 0) {
-      const remainder = getFundingRemainder(total, bank);
-      setDirectPortion(remainder > 0 ? String(remainder) : "");
-    }
-  }, [allowMixedFunding, amount, bankPortion, directPortion, paidFromBank, remainderAnchor]);
-
   const handleAddBankAccount = async () => {
     const name = newBankAccountName.trim();
     const accountNumber = newBankAccountNumber.trim();
@@ -788,21 +769,12 @@ function ExpenseForm({
         throw new Error("Could not create source");
       }
       const source: IncomeSource = await response.json();
-      const existingDirectAmount = Number(directPortion) || 0;
-      const existingAdditionalAmount = additionalDirectPortions.reduce(
-        (sum, portion) => sum + (Number(portion.amount) || 0),
-        0,
-      );
-      const remaining = Number(amount) - existingDirectAmount - existingAdditionalAmount - (Number(bankPortion) || 0);
-      const shouldAddAsAnotherPortion = Boolean(incomeSourceId)
-        && existingDirectAmount > 0
-        && Number.isInteger(remaining)
-        && remaining > 0;
+      const shouldAddAsAnotherPortion = Boolean(incomeSourceId);
 
       if (shouldAddAsAnotherPortion) {
         setAdditionalDirectPortions((previous) => [
           ...previous,
-          { sourceId: source.id, amount: String(remaining) },
+          { sourceId: source.id, amount: "" },
         ]);
       } else {
         setIncomeSourceId(source.id);
@@ -813,7 +785,7 @@ function ExpenseForm({
       toast({
         title: "Income source added",
         description: shouldAddAsAnotherPortion
-          ? `${source.name} was added with the remaining ${formatKes(remaining)}.`
+          ? `${source.name} was added. Enter the amount it funded.`
           : `${source.name} is selected for this expense.`,
       });
     } catch {
@@ -1336,7 +1308,6 @@ function ExpenseForm({
                     setAllowMixedFunding(false);
                     setSelectedBankAccountId(null);
                     setBankPortion("");
-                    setRemainderAnchor(null);
                    } else if (mode === "bank") {
                      const directTotal = (Number(directPortion) || 0)
                        + additionalDirectPortions.reduce((sum, portion) => sum + (Number(portion.amount) || 0), 0);
@@ -1344,7 +1315,6 @@ function ExpenseForm({
                      const remaining = getFundingRemainder(Number(amount), directTotal);
                      setPaidFromBank(true);
                      setAllowMixedFunding(hasDirectSelection);
-                     setRemainderAnchor(hasDirectSelection && directTotal > 0 ? "direct" : null);
                      if (hasDirectSelection) {
                         setBankPortion(directTotal > 0 ? String(remaining) : amount);
                      } else {
@@ -1385,7 +1355,6 @@ function ExpenseForm({
                           setIncomeSourceId(e.target.value ? Number(e.target.value) : null);
                           setDirectPortion("");
                           setAdditionalDirectPortions([]);
-                          setRemainderAnchor(null);
                         }}
                        className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                      >
@@ -1404,10 +1373,7 @@ function ExpenseForm({
                             min="1"
                             step="1"
                             value={directPortion}
-                             onChange={(event) => {
-                               setRemainderAnchor("direct");
-                               setDirectPortion(event.target.value);
-                             }}
+                             onChange={(event) => setDirectPortion(event.target.value)}
                             placeholder="KES 0"
                             className="h-11 bg-card"
                           />
@@ -1468,8 +1434,7 @@ function ExpenseForm({
                                   onChange={(event) => {
                                     const sourceId = Number(event.target.value);
                                     if (!sourceId) return;
-                                    setAdditionalDirectPortions((previous) => [...previous, { sourceId, amount: String(difference) }]);
-                                    setRemainderAnchor("direct");
+                                    setAdditionalDirectPortions((previous) => [...previous, { sourceId, amount: "" }]);
                                   }}
                                   className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
                                 >
@@ -1575,10 +1540,7 @@ function ExpenseForm({
                     min="1"
                     step="1"
                     value={bankPortion}
-                    onChange={(event) => {
-                      setRemainderAnchor("bank");
-                      setBankPortion(event.target.value);
-                    }}
+                    onChange={(event) => setBankPortion(event.target.value)}
                     placeholder="KES 0"
                     className="h-11 bg-card"
                   />

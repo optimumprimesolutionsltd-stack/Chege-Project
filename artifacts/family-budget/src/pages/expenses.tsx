@@ -61,7 +61,6 @@ import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repe
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  addFundingSourceWithRemainder,
   getCategoryAllocationStatus,
   getExpenseFundingControlState,
   getExpenseFundingStatus,
@@ -749,24 +748,8 @@ export default function Expenses() {
         addForm.setIncomeSourceId(src.id);
         addForm.setPayerIncomeSourceIds(prev => ({ ...prev, [paidById]: src.id }));
         if (addForm.payerIds.length === 1 && !addDirectSourceIds.includes(src.id)) {
-          const key = String(src.id);
-          setAddDirectSourceAmounts((previous) => {
-            const bankKey = "__joint_bank__";
-            const next = addFundingSourceWithRemainder({
-              total: Number(addForm.amount),
-              selectedSourceIds: [
-                ...(addForm.paidFromBank ? [bankKey] : []),
-                ...addDirectSourceIds.map(String),
-              ],
-              newSourceId: key,
-              amounts: {
-                ...previous,
-                ...(addForm.paidFromBank ? { [bankKey]: addForm.payerAmounts[bankKey] ?? "" } : {}),
-              },
-            });
-            delete next[bankKey];
-            return next;
-          });
+           const key = String(src.id);
+           setAddDirectSourceAmounts((previous) => ({ ...previous, [key]: "" }));
           setAddDirectSourceIds((previous) => [...previous, src.id]);
         }
         setNewSourceName("");
@@ -1665,14 +1648,9 @@ export default function Expenses() {
                     form.setOtherIncomeSourceLabel(null);
                     if (isMultiEnabled) {
                       if (!selected) {
-                         form.setPayerAmounts((previous) => addFundingSourceWithRemainder({
-                           total: Number(form.amount),
-                           selectedSourceIds: [
-                             ...(form.paidFromBank ? ["__joint_bank__"] : []),
-                             ...form.payerIds,
-                           ],
-                           newSourceId: m.userId,
-                           amounts: previous,
+                         form.setPayerAmounts((previous) => ({
+                           ...previous,
+                           [m.userId]: "",
                          }));
                       }
                       const next = form.payerIds.includes(m.userId)
@@ -1688,17 +1666,7 @@ export default function Expenses() {
                       }
                       // Keep single paidById in sync for income sources
                       form.setPaidById(next.length === 1 ? next[0] : "");
-                       if (form.paidFromBank) {
-                         setAllowMixedFunding(next.length > 0);
-                         if (next.length === 1) {
-                           const bankAmount = Number(form.payerAmounts.__joint_bank__);
-                           const remainder = getFundingRemainder(Number(form.amount), bankAmount);
-                           form.setPayerAmounts((previous) => ({
-                             ...previous,
-                             [next[0]]: remainder > 0 ? String(remainder) : previous[next[0]] ?? "",
-                           }));
-                         }
-                       }
+                        if (form.paidFromBank) setAllowMixedFunding(next.length > 0);
                     } else {
                       form.setPaidById(m.userId);
                      if (!form.paidFromBank) form.setPaidFromBank(false);
@@ -1763,10 +1731,6 @@ export default function Expenses() {
                       const value = event.target.value;
                       form.setPayerAmounts((previous) => {
                         const next: Record<string, string> = { ...previous, __joint_bank__: value };
-                        if (mode === "add" && form.payerIds.length === 1) {
-                          const remainder = getFundingRemainder(Number(form.amount), Number(value));
-                          next[form.payerIds[0]] = remainder > 0 ? String(remainder) : "";
-                        }
                         return next;
                       });
                     }}
@@ -1848,7 +1812,7 @@ export default function Expenses() {
             return (
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Type the primary amount{total > 0 ? ` (expense total: KES ${total.toLocaleString()})` : ""}. Jamvi fills the remaining amount into the other selected source:
+                  Enter the amount from each selected source manually{total > 0 ? ` (expense total: KES ${total.toLocaleString()})` : ""}:
                 </p>
                  {form.paidFromBank && (
                    <div className="flex items-center gap-3">
@@ -1945,23 +1909,7 @@ export default function Expenses() {
                 form.setOtherIncomeSourceLabel(null);
                   if (mode === "add" && form.payerIds.length === 1 && sourceId && !addDirectSourceIds.includes(sourceId)) {
                    const key = String(sourceId);
-                    setAddDirectSourceAmounts((previous) => {
-                      const bankKey = "__joint_bank__";
-                      const next = addFundingSourceWithRemainder({
-                        total: Number(form.amount),
-                        selectedSourceIds: [
-                          ...(form.paidFromBank ? [bankKey] : []),
-                          ...addDirectSourceIds.map(String),
-                        ],
-                        newSourceId: key,
-                        amounts: {
-                          ...previous,
-                          ...(form.paidFromBank ? { [bankKey]: form.payerAmounts[bankKey] ?? "" } : {}),
-                        },
-                      });
-                      delete next[bankKey];
-                      return next;
-                    });
+                     setAddDirectSourceAmounts((previous) => ({ ...previous, [key]: "" }));
                    setAddDirectSourceIds((previous) => [...previous, sourceId]);
                  }
                 if (mode === "add" && form.payerIds[0]) {

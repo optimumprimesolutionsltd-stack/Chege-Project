@@ -54,11 +54,13 @@ describe("dashboard quick actions", () => {
     expect(expenseFormSource).not.toContain('canManageShared && fundingMode !== "bank"');
   });
 
-  it("keeps an existing direct portion when a new income source is created for the remainder", () => {
+  it("keeps an existing direct portion and leaves a new income-source amount blank", () => {
     expect(expenseFormSource).toContain("setAdditionalDirectPortions((previous) => [");
     expect(expenseFormSource).toContain("shouldAddAsAnotherPortion");
-    expect(expenseFormSource).toContain("was added with the remaining");
+    expect(expenseFormSource).toContain('{ sourceId: source.id, amount: "" }');
+    expect(expenseFormSource).toContain("Enter the amount it funded");
     expect(expenseFormSource).toContain("additionalDirectPortions.map");
+    expect(expenseFormSource).not.toContain("was added with the remaining");
     expect(expenseFormSource).not.toContain("additionalDirectPortions.length >= 2");
   });
 
