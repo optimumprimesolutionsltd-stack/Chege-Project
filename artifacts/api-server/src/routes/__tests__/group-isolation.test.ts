@@ -41,6 +41,7 @@ vi.mock("@workspace/db", () => {
     groupMembershipsTable: makeTable("group_memberships"),
     membersTable: makeTable("members"),
     usersTable: makeTable("users"),
+    bankAccountsTable: makeTable("bank_accounts"),
     db: {
       select: vi.fn(),
       insert: vi.fn(),

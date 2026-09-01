@@ -155,7 +155,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("additional-category-amount");
     expect(expensesSource).toContain("<option value=\"\">Select a category</option>");
     expect(expensesSource).toContain("className=\"flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input");
-    expect(expensesSource).toContain("className=\"h-14 w-full justify-start border-input");
+    expect(expensesSource).toContain("className={`h-14 w-full justify-start border-input");
     expect(expensesSource).not.toContain("<option value=\"\" disabled>Select category...</option>");
     expect(expensesSource).not.toContain("One-off spending is for a one-time expense that does not fit any listed category.");
     expect(expensesSource).toContain("One-off spending amount (KES)");
