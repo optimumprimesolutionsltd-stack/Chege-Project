@@ -152,6 +152,23 @@ const AccountUpdateInput = z.object({
 });
 const AccountQuery = z.object({ accountId: z.coerce.number().int().positive().optional() });
 
+const accountColumns = {
+  id: bankAccountsTable.id,
+  groupId: bankAccountsTable.groupId,
+  name: bankAccountsTable.name,
+  accountNumber: bankAccountsTable.accountNumber,
+  openingBalance: bankAccountsTable.openingBalance,
+  createdAt: bankAccountsTable.createdAt,
+};
+
+type AccountRecord = Awaited<ReturnType<typeof selectWorkspaceAccounts>>[number];
+
+async function selectWorkspaceAccounts(groupId: number) {
+  const accounts = await db.select(accountColumns).from(bankAccountsTable)
+    .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.createdAt);
+  return accounts.map((account) => ({ ...account, openingBalanceDate: null as string | null }));
+}
+
 async function resolveAccountId(accountId: number | undefined, groupId: number): Promise<number | null> {
   const accounts = await db.select({ id: bankAccountsTable.id })
     .from(bankAccountsTable)
@@ -164,8 +181,7 @@ async function resolveAccountId(accountId: number | undefined, groupId: number):
 }
 
 async function listWorkspaceAccounts(groupId: number) {
-  let accounts = await db.select().from(bankAccountsTable)
-    .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.createdAt);
+  let accounts = await selectWorkspaceAccounts(groupId);
   if (accounts.length > 0) return accounts;
 
   await db.insert(bankAccountsTable).values({
@@ -174,8 +190,7 @@ async function listWorkspaceAccounts(groupId: number) {
     openingBalance: 0,
   }).onConflictDoNothing();
 
-  accounts = await db.select().from(bankAccountsTable)
-    .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.createdAt);
+  accounts = await selectWorkspaceAccounts(groupId);
   const mainAccount = accounts[0];
   if (mainAccount) {
     await db.update(jointAccountTxTable)
@@ -188,7 +203,7 @@ async function listWorkspaceAccounts(groupId: number) {
   return accounts;
 }
 
-function serializeAccount(account: typeof bankAccountsTable.$inferSelect) {
+function serializeAccount(account: AccountRecord) {
   const createdAt = account.createdAt instanceof Date ? account.createdAt.toISOString() : account.createdAt;
   return {
     ...account,
@@ -199,7 +214,7 @@ function serializeAccount(account: typeof bankAccountsTable.$inferSelect) {
   };
 }
 
-function resolveOpeningBalanceDate(account: typeof bankAccountsTable.$inferSelect): string {
+function resolveOpeningBalanceDate(account: AccountRecord): string {
   if (account.openingBalanceDate) return account.openingBalanceDate;
   const createdAt = account.createdAt as Date | string | undefined;
   if (createdAt instanceof Date) return createdAt.toISOString().slice(0, 10);
@@ -317,10 +332,9 @@ router.post("/joint-accounts", async (req, res): Promise<void> => {
       name: parsed.data.name,
       accountNumber: parsed.data.accountNumber,
       openingBalance: parsed.data.openingBalance ?? 0,
-      openingBalanceDate: parsed.data.openingBalanceDate ?? currentBusinessDate(),
-    }).onConflictDoNothing().returning();
+    }).onConflictDoNothing().returning(accountColumns);
     if (!account) { res.status(409).json({ error: "An account with this name already exists." }); return; }
-    res.status(201).json(serializeAccount(account));
+    res.status(201).json(serializeAccount({ ...account, openingBalanceDate: null }));
   } catch (error) {
     req.log.error({ err: error, groupId }, "Could not create bank account");
     res.status(500).json({ error: "Could not create the bank account. Please try again." });

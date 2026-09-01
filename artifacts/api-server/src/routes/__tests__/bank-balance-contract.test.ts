@@ -33,6 +33,19 @@ describe("bank balance contract", () => {
     );
   });
 
+  it("creates bank accounts without requiring the optional opening-balance-date column", () => {
+    const createRoute = routeSource.slice(
+      routeSource.indexOf('router.post("/joint-accounts"'),
+      routeSource.indexOf('router.patch("/joint-accounts/:id"'),
+    );
+    const insertValues = createRoute.slice(
+      createRoute.indexOf(".values({"),
+      createRoute.indexOf("}).onConflictDoNothing()"),
+    );
+    expect(createRoute).toContain("returning(accountColumns)");
+    expect(insertValues).not.toContain("openingBalanceDate:");
+  });
+
   it("keeps the existing member attribution when an ordinary disbursement edit omits madeById", () => {
     expect(routeSource).toContain(
       "madeById: requestedMadeById, description, expenseCategory, accountId",

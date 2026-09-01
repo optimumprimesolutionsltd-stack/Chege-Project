@@ -1218,7 +1218,7 @@ function ExpenseForm({
                  });
                  setSaveOtherAsCategory(false);
                }}
-                 className="h-14 w-full flex-1 rounded-xl border border-input bg-card px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-16 w-full flex-1 rounded-xl border border-input bg-card px-4 text-base font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
              >
                 <option value="">Select a category</option>
                {categories
@@ -1290,7 +1290,7 @@ function ExpenseForm({
                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <select value={allocation.category}
                       onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
-                       aria-label={`Additional allocation category ${index + 2}`} className="h-14 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm">
+                       aria-label={`Additional allocation category ${index + 2}`} className="h-16 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm font-medium">
                        <option value="">Select a category</option>
                       {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>)}
                     </select>
