@@ -1622,7 +1622,11 @@ export default function AddExpenseSheet() {
                     );
                   })}
                 </View>
-                {bankAccounts.length === 0 && <Text style={[styles.hintText, { color: '#ef4444' }]}>Add a bank account from the Bank tab before using bank funds.</Text>}
+                 {bankAccounts.length === 0 && (
+                   <Text style={[styles.hintText, { color: colors.foreground }]}>
+                     No bank account yet. Create one below and Jamvi will select it for this expense automatically.
+                   </Text>
+                 )}
                 {canManageShared && (isAddingBankAccount ? (
                   <View style={styles.inlineAccountRow}>
                     <TextInput
@@ -1662,9 +1666,11 @@ export default function AddExpenseSheet() {
                     </Pressable>
                   </View>
                 ) : (
-                  <Pressable onPress={() => setIsAddingBankAccount(true)} style={styles.addSourceLink}>
+                   <Pressable onPress={() => setIsAddingBankAccount(true)} style={styles.addSourceLink} testID="create-bank-account-inline-mobile">
                     <Feather name="plus-circle" size={14} color={colors.primary} />
-                    <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>New bank account</Text>
+                     <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>
+                       {bankAccounts.length === 0 ? 'Create bank account' : 'New bank account'}
+                     </Text>
                   </Pressable>
                 ))}
                 {payerIds.length === 0 && (

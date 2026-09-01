@@ -132,7 +132,6 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain('data-testid="one-off-spending-category-dashboard"');
     expect(dashboardSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
     expect(dashboardSource).toContain('value={isOtherCategory ? "" : category}');
-    expect(dashboardSource).toContain("{!isOtherCategory && (");
     expect(dashboardSource).toContain('placeholder="Enter KES amount"');
     expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
     expect(dashboardSource).not.toContain("setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }]");
@@ -156,7 +155,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain('data-testid={`one-off-spending-category-${mode}`}');
     expect(expensesSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
     expect(expensesSource).toContain('value={isOtherCategory ? "" : form.category}');
-    expect(expensesSource).toContain("{!isOtherCategory && (");
+    expect(expensesSource).toContain("{!isOtherCategory && form.categoryAllocations.length === 1 && (");
     expect(expensesSource).toContain('aria-required="true"');
     expect(expensesSource).toContain('placeholder="Enter KES amount"');
     expect(mobileSource).toContain("CATEGORY AMOUNTS REQUIRED");
@@ -208,8 +207,16 @@ describe("expense funding amount entry", () => {
   it("keeps category choices visible, highlights the total, and exposes bank funding in both budgets", () => {
     expect(dashboardSource).toContain("Expense total (KES)");
     expect(dashboardSource).toContain('data-testid="expense-total-dashboard"');
+    expect(dashboardSource).toContain("border-secondary/60 bg-secondary/10");
     expect(expensesSource).toContain("Expense total (KES)");
     expect(expensesSource).toContain('data-testid={`expense-total-${mode}`}');
+    expect(expensesSource).toContain("border-secondary/60 bg-secondary/10");
+    const dashboardCategoryPicker = dashboardSource.indexOf('aria-label="Expense category"');
+    const expensesCategoryPicker = expensesSource.indexOf('aria-label="Expense category"');
+    expect(dashboardCategoryPicker).toBeGreaterThan(-1);
+    expect(expensesCategoryPicker).toBeGreaterThan(-1);
+    expect(dashboardSource.slice(dashboardCategoryPicker - 240, dashboardCategoryPicker)).not.toContain("{!isOtherCategory && (");
+    expect(expensesSource.slice(expensesCategoryPicker - 240, expensesCategoryPicker)).not.toContain("{!isOtherCategory && (");
     expect(mobileSource).toContain("EXPENSE TOTAL");
     expect(mobileSource).toContain("FUNDING OPTIONS");
     expect(mobileSource).toContain('testID="expense-bank-funding-option"');
@@ -269,6 +276,17 @@ describe("inline expense bank-account creation", () => {
     expect(expensesSource).toContain("+ New bank account");
     expect(mobileSource).toContain("New bank account");
     expect(mobileSource).toContain("handleCreateBankAccount");
+  });
+
+  it("offers account creation directly from the empty bank-funding state", () => {
+    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+      expect(source).toContain("No bank account yet. Create one below");
+      expect(source).not.toContain("No bank accounts available");
+      expect(source).not.toContain("Add a bank account from the Bank tab before using bank funds.");
+    }
+    expect(dashboardSource).toContain('data-testid="create-bank-account-inline-dashboard"');
+    expect(expensesSource).toContain('data-testid={`create-bank-account-inline-${mode}`}');
+    expect(mobileSource).toContain('testID="create-bank-account-inline-mobile"');
   });
 });
 

@@ -1166,9 +1166,9 @@ function ExpenseForm({
          {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
        </div>
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="space-y-1.5 rounded-xl border border-primary/35 bg-primary/5 p-3">
-          <label className="text-sm font-bold text-primary">Expense total (KES)</label>
-           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-14 border-primary/50 bg-background text-xl font-bold shadow-sm sm:h-12" autoFocus data-testid="expense-total-dashboard" />
+        <div className="space-y-1.5 rounded-xl border border-secondary/60 bg-secondary/10 p-3">
+          <label className="text-sm font-bold text-secondary-foreground">Expense total (KES)</label>
+           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary sm:h-12" autoFocus data-testid="expense-total-dashboard" />
         </div>
          {!isOtherCategory && (
            <div className="space-y-1.5 lg:col-span-1">
@@ -1189,10 +1189,10 @@ function ExpenseForm({
                  Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
              </p>
            </div>
-            <div className="space-y-2">
-              {!isOtherCategory && (
+             <div className="space-y-2">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <select
+                 aria-label="Expense category"
                 value={isOtherCategory ? "" : category}
                onChange={e => {
                  const nextCategory = e.target.value;
@@ -1235,7 +1235,6 @@ function ExpenseForm({
                 </div>
               )}
               </div>
-              )}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button
                   type="button"
@@ -1730,15 +1729,15 @@ function ExpenseForm({
                 onChange={(event) => setSelectedBankAccountId(event.target.value ? Number(event.target.value) : null)}
                 className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">{bankAccounts.length ? "Choose the account used" : "No bank accounts available"}</option>
+                 <option value="">{bankAccounts.length ? "Choose the account used" : "Create a bank account below"}</option>
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Jamvi will record a withdrawal from this account. The money should already exist there as an opening balance or recorded deposit.
               </p>
-              {bankAccounts.length === 0 && (
-                <p className="text-xs font-medium text-muted-foreground">Create a bank account here to continue without leaving this expense.</p>
-              )}
+               {bankAccounts.length === 0 && (
+                 <p className="text-xs font-medium text-foreground">No bank account yet. Create one below and Jamvi will select it for this expense automatically.</p>
+               )}
               {isAddingBankAccount ? (
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Input
@@ -1759,8 +1758,8 @@ function ExpenseForm({
                   </Button>
                 </div>
               ) : (
-                <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)}>
-                  + New bank account
+                 <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)} data-testid="create-bank-account-inline-dashboard">
+                   {bankAccounts.length === 0 ? "Create bank account" : "+ New bank account"}
                 </Button>
               )}
               {paidFromBank && (

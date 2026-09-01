@@ -1293,10 +1293,10 @@ export default function Expenses() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-3">
-          <label className="text-sm font-bold text-primary">Expense total (KES)</label>
+        <div className="space-y-2 rounded-xl border border-secondary/60 bg-secondary/10 p-3">
+          <label className="text-sm font-bold text-secondary-foreground">Expense total (KES)</label>
           <Input type="number" placeholder="e.g. 5000" value={form.amount} onChange={e => form.setAmount(e.target.value)}
-            required min="1" className="h-14 border-primary/50 bg-background text-xl font-bold shadow-sm" data-testid={`expense-total-${mode}`} />
+            required min="1" className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary" data-testid={`expense-total-${mode}`} />
         </div>
 
         <div className="space-y-2 md:col-span-2 rounded-xl border border-border/60 bg-card p-4">
@@ -1307,7 +1307,6 @@ export default function Expenses() {
             </p>
           </div>
             <div className="space-y-2">
-              {!isOtherCategory && (
              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                <select
                  className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1341,7 +1340,6 @@ export default function Expenses() {
                   </div>
                 )}
              </div>
-              )}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button
                   type="button"
@@ -1799,12 +1797,12 @@ export default function Expenses() {
                 required
                 className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
               >
-                <option value="" disabled>{bankAccounts.length ? "Choose the account used..." : "No bank accounts available"}</option>
+                 <option value="" disabled>{bankAccounts.length ? "Choose the account used..." : "Create a bank account below"}</option>
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
-              {bankAccounts.length === 0 && (
-                <p className="text-xs text-muted-foreground">Create a bank account here to continue without leaving this expense.</p>
-              )}
+               {bankAccounts.length === 0 && (
+                 <p className="text-xs font-medium text-foreground">No bank account yet. Create one below and Jamvi will select it for this expense automatically.</p>
+               )}
               {canManageExpenses && (isAddingBankAccount ? (
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Input
@@ -1823,8 +1821,8 @@ export default function Expenses() {
                   <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingBankAccount(false); setNewBankAccountName(""); setNewBankAccountNumber(""); setNewBankOpeningBalance(""); }}>Cancel</Button>
                 </div>
               ) : (
-                <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)}>
-                  + New bank account
+                 <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)} data-testid={`create-bank-account-inline-${mode}`}>
+                   {bankAccounts.length === 0 ? "Create bank account" : "+ New bank account"}
                 </Button>
               ))}
               {mode === "add" && form.paidFromBank && form.payerIds.length === 0 && (
