@@ -78,8 +78,10 @@ import type {
   JointAccountTransaction,
   Member,
   MonthTrend,
+  MpesaParseResult,
   OpeningBalance,
   OpeningBalanceInput,
+  ParseMpesaMessageInput,
   PeriodTotalsReport,
   PhotoUploadUrlResponse,
   ProfilePhotoInput,
@@ -125,6 +127,77 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getParseMpesaMessageUrl = () => {
+
+
+
+
+  return `/api/parse`
+}
+
+/**
+ * @summary Parse an anonymized M-Pesa confirmation message
+ */
+export const parseMpesaMessage = async (parseMpesaMessageInput: ParseMpesaMessageInput, options?: Parameters<typeof customFetch>[1]): Promise<MpesaParseResult> => {
+
+  return customFetch<MpesaParseResult>(getParseMpesaMessageUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(parseMpesaMessageInput)
+  }
+);}
+
+
+
+
+
+export const getParseMpesaMessageMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof parseMpesaMessage>>, TError,{data: BodyType<ParseMpesaMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof parseMpesaMessage>>, TError,{data: BodyType<ParseMpesaMessageInput>}, TContext> => {
+
+const mutationKey = ['parseMpesaMessage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof parseMpesaMessage>>, {data: BodyType<ParseMpesaMessageInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  parseMpesaMessage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ParseMpesaMessageMutationResult = NonNullable<Awaited<ReturnType<typeof parseMpesaMessage>>>
+    export type ParseMpesaMessageMutationBody = BodyType<ParseMpesaMessageInput>
+    export type ParseMpesaMessageMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Parse an anonymized M-Pesa confirmation message
+ */
+export const useParseMpesaMessage = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof parseMpesaMessage>>, TError,{data: BodyType<ParseMpesaMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof parseMpesaMessage>>,
+        TError,
+        {data: BodyType<ParseMpesaMessageInput>},
+        TContext
+      > => {
+      return useMutation(getParseMpesaMessageMutationOptions(options));
+    }
 
 export const getHealthCheckUrl = () => {
 

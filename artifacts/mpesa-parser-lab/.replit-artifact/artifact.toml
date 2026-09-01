@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/mpesa-parser-lab/"
+title = "M-Pesa Parser Laboratory"
+description = "A standalone developer-facing web laboratory for pasting anonymized M-Pesa messages, parsing supported transaction data, reviewing confidence and warnings, and saving parser test cases."
+version = "1.0.0"
+id = "artifacts/mpesa-parser-lab"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/mpesa-parser-lab/" ]
+localPort = 25392
+
+[services.development]
+run = "pnpm --filter @workspace/mpesa-parser-lab run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mpesa-parser-lab", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/mpesa-parser-lab/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25392"
+BASE_PATH = "/mpesa-parser-lab/"

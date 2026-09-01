@@ -18,6 +18,7 @@ import photoStorageRouter from "./photo-storage";
 import onboardingRouter from "./onboarding";
 import budgetPlansRouter from "./budget-plans";
 import aiRouter from "./ai";
+import parserRouter from "./parser";
 import { requireMember } from "../middlewares/requireMember";
 
 const router: IRouter = Router();
@@ -28,6 +29,7 @@ router.use(healthRouter);
 router.use(publicInvitationsRouter);
 router.use(publicInviteLinksRouter);
 router.use(onboardingRouter);
+router.use(parserRouter);
 
 // Apply member check to everything else
 router.use(requireMember);
