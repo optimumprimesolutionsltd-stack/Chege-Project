@@ -94,15 +94,37 @@ export function getCategoryAllocationStatus({
   if (new Set(allocations.map((allocation) => allocation.category.trim().toLocaleLowerCase())).size !== allocations.length) {
     return { tone: "error", message: "Choose a different category for each row" };
   }
-  if (allocations.some((allocation) => !Number.isInteger(allocation.amount) || allocation.amount <= 0)) {
-    return { tone: "attention", message: "Enter a positive whole-KES amount for every category" };
-  }
-
-  const allocated = allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+  const hasInvalidAmount = allocations.some((allocation) => !Number.isInteger(allocation.amount) || allocation.amount <= 0);
+  const allocated = allocations.reduce(
+    (sum, allocation) => sum + (Number.isInteger(allocation.amount) && allocation.amount > 0 ? allocation.amount : 0),
+    0,
+  );
   const difference = total - allocated;
-  if (difference > 0) {
+  if (hasInvalidAmount) {
+    if (allocated === 0) {
+      return { tone: "attention", message: "Enter a positive whole-KES amount for every category" };
+    }
+    if (difference > 0) {
+      return {
+        tone: "error",
+        message: `Allocated ${formatAmount(allocated)} of ${formatAmount(total)} · ${formatAmount(difference)} remaining`,
+      };
+    }
+    if (difference < 0) {
+      return {
+        tone: "error",
+        message: `Allocated ${formatAmount(allocated)} of ${formatAmount(total)} · ${formatAmount(Math.abs(difference))} over`,
+      };
+    }
     return {
       tone: "attention",
+      message: `Allocated ${formatAmount(allocated)} of ${formatAmount(total)} · Complete the remaining category amounts`,
+    };
+  }
+
+  if (difference > 0) {
+    return {
+      tone: "error",
       message: `Allocated ${formatAmount(allocated)} of ${formatAmount(total)} · ${formatAmount(difference)} remaining`,
     };
   }
@@ -171,6 +193,6 @@ export function getExpenseFundingStatus({
   }
   return {
     tone: "ready",
-    message: `Funded ${formatAmount(fundingTotal)} of ${formatAmount(total)} · Ready to save`,
+    message: `Funded ${formatAmount(fundingTotal)} of ${formatAmount(total)} · Fully funded`,
   };
 }

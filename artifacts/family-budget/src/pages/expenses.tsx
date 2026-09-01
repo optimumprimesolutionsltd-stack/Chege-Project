@@ -1323,9 +1323,9 @@ export default function Expenses() {
             required min="1" className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary" data-testid={`expense-total-${mode}`} />
         </div>
 
-        <div className="space-y-2 md:col-span-2 rounded-xl border border-border/60 bg-card p-4">
+        <div className="space-y-2 md:col-span-2 rounded-xl border border-primary/35 bg-primary/[0.04] p-4">
           <div>
-            <label className="text-sm font-bold text-primary">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <label className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">2. What did this expense cover? <span className="ml-1 font-normal text-muted-foreground">(optional)</span></label>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
             </p>
@@ -1708,32 +1708,17 @@ export default function Expenses() {
            </div>
          )}
 
-         <div className="md:col-span-2 space-y-4 rounded-xl border border-border/60 bg-card p-4">
+          <div className="md:col-span-2 space-y-4 rounded-xl border border-secondary/60 bg-secondary/[0.08] p-4">
            <div>
-             <p className="text-sm font-bold text-primary">3. How was this expense funded?</p>
+              <p className="inline-flex rounded-full border border-secondary/50 bg-secondary/20 px-3 py-1 text-sm font-bold text-secondary-foreground">3. How was this expense funded?</p>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
            </div>
-           {mode === "edit" && editHasMultipleFundingSplits ? (
+            {mode === "edit" && editHasMultipleFundingSplits && (
              <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-foreground" data-testid="expense-funding-summary-edit">
                <span className="font-semibold">Multiple saved funding portions</span>
                <span className="mt-1 block text-xs text-muted-foreground">The existing bank and direct portions will stay unchanged while you edit the expense details.</span>
-             </div>
-           ) : expenseTotal > 0 && (
-             <div
-               role="status"
-               aria-live="polite"
-               data-testid={`expense-funding-summary-${mode}`}
-               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                 fundingStatus.tone === "ready"
-                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                   : fundingStatus.tone === "error"
-                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-               }`}
-             >
-               {fundingStatus.message}
              </div>
            )}
           <label className="text-sm font-semibold text-foreground">
@@ -1852,6 +1837,31 @@ export default function Expenses() {
                  <option value="" disabled>{bankAccounts.length ? "Choose the account used..." : "Create a bank account below"}</option>
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
+               {mode === "add" && form.paidFromBank && form.payerIds.length === 0 && form.accountId && (
+                 <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                   Type the amount from this account to confirm
+                   <Input
+                     type="number"
+                     min="1"
+                     step="1"
+                     value={form.payerAmounts.__joint_bank__ ?? ""}
+                     onChange={(event) => {
+                       const value = event.target.value;
+                       form.setPayerAmounts((previous) => ({
+                         ...previous,
+                         __joint_bank__: value,
+                       }));
+                     }}
+                     placeholder="KES 0"
+                     className="h-10 bg-card"
+                     data-testid={`expense-bank-amount-${mode}`}
+                     required
+                   />
+                   <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
+                     Enter this manually to confirm how much should reduce the selected account.
+                   </span>
+                 </label>
+               )}
                {bankAccounts.length === 0 && (
                  <p className="text-xs font-medium text-foreground">No bank account yet. Create one below and Jamvi will select it for this expense automatically.</p>
                )}
@@ -1877,30 +1887,6 @@ export default function Expenses() {
                    {bankAccounts.length === 0 ? "Create bank account" : "+ New bank account"}
                 </Button>
               ))}
-              {mode === "add" && form.paidFromBank && form.payerIds.length === 0 && (
-                <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-                  Type the amount from this account to confirm
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={form.payerAmounts.__joint_bank__ ?? ""}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      form.setPayerAmounts((previous) => {
-                        const next: Record<string, string> = { ...previous, __joint_bank__: value };
-                        return next;
-                      });
-                    }}
-                    placeholder="KES 0"
-                    className="h-10 bg-card"
-                    required
-                  />
-                  <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                    Enter this manually to confirm how much should reduce the selected account.
-                  </span>
-                </label>
-              )}
               {(() => {
                 const bankAmount = Number(form.payerAmounts.__joint_bank__ || 0);
                 const originalExpense = mode === "edit"
@@ -2139,23 +2125,9 @@ export default function Expenses() {
                       0,
                     ) + (form.paidFromBank ? Number(form.payerAmounts.__joint_bank__ || 0) : 0);
                     const difference = total - assigned;
-                    return total > 0 ? (
-                      <div
-                        role="status"
-                        data-testid="expense-funding-remainder"
-                        className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                          difference > 0
-                            ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-                            : difference < 0
-                              ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                              : "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                        }`}
-                      >
-                        {difference > 0
-                          ? `${formatKes(difference)} remaining — choose another income source to continue.`
-                          : difference < 0
-                            ? `Overfunded by ${formatKes(Math.abs(difference))}.`
-                            : "Fully funded."}
+                    return total > 0 && difference < 0 ? (
+                      <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+                        Overfunded by {formatKes(Math.abs(difference))}.
                       </div>
                     ) : null;
                   })()}
@@ -2208,6 +2180,22 @@ export default function Expenses() {
              )}
           </div>
         )}
+         {expenseTotal > 0 && (
+           <div
+             role="status"
+             aria-live="polite"
+             data-testid={`expense-funding-summary-${mode}`}
+             className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+               fundingStatus.tone === "ready"
+                 ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                 : fundingStatus.tone === "error"
+                   ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                   : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+             }`}
+           >
+             {fundingStatus.message}
+           </div>
+         )}
 
         {canManageExpenses && (
         <div className="md:col-span-2 flex items-center gap-3 bg-card rounded-xl p-4 border border-border/50">

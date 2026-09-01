@@ -605,6 +605,23 @@ export default function DashboardScreen() {
               <Text style={styles.bankEmptyText}>No deposits yet — tap to add one</Text>
             </View>
           )}
+           {bankAccount && bankAccount.balance < 0 && (
+             <View
+               accessibilityRole="alert"
+               testID="overview-negative-bank-balance-warning"
+               style={styles.negativeBankBalanceWarning}
+             >
+               <View style={styles.negativeBankBalanceWarningTitle}>
+                 <Feather name="flag" size={15} color="#b91c1c" />
+                 <Text style={styles.negativeBankBalanceWarningTitleText}>Bank balance is below zero</Text>
+               </View>
+               <Text style={styles.negativeBankBalanceWarningText}>
+                 {isPrivate
+                   ? 'Jamvi kept the withdrawal recorded. Deposit money to clear the shortfall.'
+                   : `This budget is short by KES ${shortKES(Math.abs(bankAccount.balance))}. Jamvi kept the withdrawal recorded so the shortfall stays visible.`}
+               </Text>
+             </View>
+           )}
         </Pressable>
 
         {isSharedWorkspace && (
@@ -833,4 +850,8 @@ const styles = StyleSheet.create({
 
   bankEmptyState: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
   bankEmptyText: { fontSize: 13, color: '#08B7B0', fontFamily: 'Inter_400Regular', opacity: 0.8 },
+  negativeBankBalanceWarning: { gap: 5, marginHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: '#fca5a5', borderRadius: 10, backgroundColor: '#fef2f2', paddingHorizontal: 12, paddingVertical: 10 },
+  negativeBankBalanceWarningTitle: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  negativeBankBalanceWarningTitleText: { color: '#991b1b', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  negativeBankBalanceWarningText: { color: '#7f1d1d', fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },
 });

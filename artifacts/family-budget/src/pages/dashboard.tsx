@@ -116,7 +116,7 @@ function DashboardMonthNavigator({
   return (
     <section
       aria-labelledby="dashboard-month-heading"
-      className="mt-3 max-w-xl rounded-2xl border-2 border-primary/30 bg-primary/[0.07] p-3 shadow-sm sm:p-4"
+      className="mt-3 w-full max-w-xl rounded-2xl border-2 border-primary/30 bg-primary/[0.07] p-3 shadow-sm sm:p-4"
       data-testid="dashboard-month-navigator"
     >
       <div className="flex items-start gap-3">
@@ -1191,9 +1191,9 @@ function ExpenseForm({
              />
            </div>
          )}
-         <div className="space-y-3 sm:col-span-2 lg:col-span-4 rounded-xl border border-border/60 bg-card p-4">
+          <div className="space-y-3 sm:col-span-2 lg:col-span-4 rounded-xl border border-primary/35 bg-primary/[0.04] p-4">
            <div>
-               <label className="text-sm font-bold text-primary">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
+                <label className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">2. What did this expense cover? <span className="ml-1 font-normal text-muted-foreground">(optional)</span></label>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                  Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
              </p>
@@ -1507,30 +1507,14 @@ function ExpenseForm({
            />
          </div>
        )}
-      <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
-        <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
+       <div className="space-y-4 rounded-xl border border-secondary/60 bg-secondary/[0.08] p-4">
+         <div className="space-y-4 rounded-xl border border-secondary/40 bg-secondary/[0.04] p-4">
           <div>
-              <p className="text-sm font-bold text-primary">3. How was this expense funded?</p>
+               <p className="inline-flex rounded-full border border-secondary/50 bg-secondary/20 px-3 py-1 text-sm font-bold text-secondary-foreground">3. How was this expense funded?</p>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
           </div>
-           {expenseTotal > 0 && (
-             <div
-               role="status"
-               aria-live="polite"
-               data-testid="quick-expense-funding-summary"
-               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                 fundingStatus.tone === "ready"
-                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                   : fundingStatus.tone === "error"
-                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-               }`}
-             >
-               {fundingStatus.message}
-             </div>
-           )}
            {isSharedWorkspace && (!paidFromBank || allowMixedFunding) && (
              <div className="space-y-2">
                <div>
@@ -1684,23 +1668,6 @@ function ExpenseForm({
                           );
                           return total > 0 ? (
                             <div className="space-y-2">
-                              <div
-                                role="status"
-                                data-testid="quick-expense-funding-remainder"
-                                className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                                  difference > 0
-                                    ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-                                    : difference < 0
-                                      ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                                      : "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                                }`}
-                              >
-                                {difference > 0
-                                  ? `${formatKes(difference)} remaining`
-                                  : difference < 0
-                                    ? `Overfunded by ${formatKes(Math.abs(difference))}`
-                                    : "Fully funded"}
-                              </div>
                               {difference > 0 && availableSources.length > 0 && (
                                 <select
                                   value=""
@@ -1775,6 +1742,24 @@ function ExpenseForm({
                  <option value="">{bankAccounts.length ? "Choose the account used" : "Create a bank account below"}</option>
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
+               {selectedBankAccountId && (
+                 <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                   Type the amount from this account to confirm
+                   <Input
+                     type="number"
+                     min="1"
+                     step="1"
+                     value={bankPortion}
+                     onChange={(event) => setBankPortion(event.target.value)}
+                     placeholder="KES 0"
+                     className="h-11 bg-card"
+                     data-testid="quick-expense-bank-amount"
+                   />
+                   <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
+                     Enter the full expense amount to confirm how much should reduce the selected account.
+                   </span>
+                 </label>
+               )}
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Jamvi will record a withdrawal from this account. The money should already exist there as an opening balance or recorded deposit.
               </p>
@@ -1804,23 +1789,6 @@ function ExpenseForm({
                  <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)} data-testid="create-bank-account-inline-dashboard">
                    {bankAccounts.length === 0 ? "Create bank account" : "+ New bank account"}
                 </Button>
-              )}
-              {paidFromBank && (
-                <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-                  Type the amount from this account to confirm
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={bankPortion}
-                    onChange={(event) => setBankPortion(event.target.value)}
-                    placeholder="KES 0"
-                    className="h-11 bg-card"
-                  />
-                  <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                     Enter the full expense amount to confirm how much should reduce the selected account.
-                  </span>
-                </label>
               )}
               {projectedExpenseBankBalance !== null && projectedExpenseBankBalance < 0 && (
                 <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100" role="alert" data-testid="quick-expense-negative-bank-warning">
@@ -1873,6 +1841,22 @@ function ExpenseForm({
               <span className="block text-xs font-normal text-muted-foreground">This becomes the recurring monthly budget for the selected category.</span>
             </label>
           )}
+           {expenseTotal > 0 && (
+             <div
+               role="status"
+               aria-live="polite"
+               data-testid="quick-expense-funding-summary"
+               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                 fundingStatus.tone === "ready"
+                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                   : fundingStatus.tone === "error"
+                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+               }`}
+             >
+               {fundingStatus.message}
+             </div>
+           )}
         </div>
       </div>
       <div className="flex gap-3">
@@ -2214,9 +2198,9 @@ export default function Dashboard() {
         Home · Start here
       </div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <ProfileAvatar user={user} className="h-12 w-12 sm:h-14 sm:w-14" textClassName="text-lg" alt={user?.firstName ?? "User"} />
-          <div>
+          <div className="min-w-0 flex-1">
           <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
             {isSharedWorkspace ? "Shared budget" : "Personal budget"}
           </p>
@@ -2657,6 +2641,21 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground">this month</p>
               </div>
             </div>
+             {bankAccount && bankAccount.balance < 0 && (
+               <div
+                 role="alert"
+                 data-testid="overview-negative-bank-balance-warning"
+                 className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
+               >
+                 <p className="flex items-center gap-2 font-semibold">
+                   <Flag className="h-4 w-4 fill-current" />
+                   Bank balance is below zero
+                 </p>
+                 <p className="mt-1">
+                   The selected budget is short by {formatKes(Math.abs(bankAccount.balance))}. Jamvi keeps the withdrawal recorded so the shortfall stays visible until money is deposited.
+                 </p>
+               </div>
+             )}
           </CardContent>
         </Card>
       </Link>

@@ -1177,7 +1177,9 @@ export default function AddExpenseSheet() {
         </View>
 
         {/* Category */}
-        <Text style={[styles.label, { color: colors.primary }]}>CATEGORY (OPTIONAL)</Text>
+        <View style={[styles.stageLabel, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '55', borderRadius: colors.radius }]}>
+          <Text style={[styles.stageLabelText, { color: colors.primary }]}>CATEGORY (OPTIONAL)</Text>
+        </View>
         <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
           Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
         </Text>
@@ -1490,7 +1492,16 @@ export default function AddExpenseSheet() {
           <Text
             accessibilityLiveRegion="polite"
             testID="category-allocation-status-mobile-end"
-            style={[styles.allocationStatus, { color: colors.foreground }]}
+             style={[styles.allocationStatus, { color: (() => {
+               const total = displayedCategoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0);
+               const expenseTotal = Number(amount.replace(/,/g, '')) || 0;
+               const difference = expenseTotal - total;
+               return difference === 0 && expenseTotal > 0
+                 ? colors.primary
+                 : difference < 0
+                   ? colors.destructive
+                   : colors.mutedForeground;
+             })() }]}
           >
             {(() => {
               const total = displayedCategoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0);
@@ -1568,9 +1579,11 @@ export default function AddExpenseSheet() {
         {/* Who paid */}
         {(canManageShared || selectablePayers.length > 0) && (
           <>
-            <Text style={[styles.label, { color: colors.primary }]}>
-              FUNDING OPTIONS <Text style={{ color: '#ef4444' }}>*</Text>
-            </Text>
+             <View style={[styles.stageLabel, { backgroundColor: '#f59e0b1A', borderColor: '#f59e0b80', borderRadius: colors.radius }]}>
+               <Text style={[styles.stageLabelText, { color: '#f59e0b' }]}>
+                 FUNDING OPTIONS <Text style={{ color: '#ef4444' }}>*</Text>
+               </Text>
+             </View>
             <View style={styles.paidByRow}>
               {/* Joint-bank spending is restricted to group managers. */}
               {canManageShared && <Pressable
@@ -1694,6 +1707,23 @@ export default function AddExpenseSheet() {
                     );
                   })}
                 </View>
+                {payerIds.length === 0 && selectedBankAccountId && (
+                  <View style={styles.singleFundingAmount}>
+                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM</Text>
+                    <TextInput
+                      style={[styles.newSourceInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                      keyboardType="numeric"
+                      placeholder="KES 0"
+                      placeholderTextColor={colors.mutedForeground}
+                      value={payerAmounts.__joint_bank__ || ''}
+                      onChangeText={(value) => setPayerAmounts((previous) => ({ ...previous, __joint_bank__: value }))}
+                      testID="expense-bank-amount"
+                    />
+                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 4 }]}>
+                      Enter this manually to confirm how much should reduce the selected account.
+                    </Text>
+                  </View>
+                )}
                  {bankAccounts.length === 0 && (
                    <Text style={[styles.hintText, { color: colors.foreground }]}>
                      No bank account yet. Create one below and Jamvi will select it for this expense automatically.
@@ -1745,22 +1775,6 @@ export default function AddExpenseSheet() {
                      </Text>
                   </Pressable>
                 ))}
-                {payerIds.length === 0 && (
-                  <View style={styles.singleFundingAmount}>
-                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM</Text>
-                    <TextInput
-                      style={[styles.newSourceInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                      keyboardType="numeric"
-                      placeholder="KES 0"
-                      placeholderTextColor={colors.mutedForeground}
-                      value={payerAmounts.__joint_bank__ || ''}
-                      onChangeText={(value) => setPayerAmounts((previous) => ({ ...previous, __joint_bank__: value }))}
-                    />
-                    <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 4 }]}>
-                      Enter this manually to confirm how much should reduce the selected account.
-                    </Text>
-                  </View>
-                )}
                 <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
                   This uses money already recorded in the selected account as an opening balance or deposit.
                 </Text>
@@ -2060,36 +2074,59 @@ export default function AddExpenseSheet() {
                       }} />
                   </View>
                 )})}
-                {(() => {
-                  const total = parseFloat(amount.replace(/,/g, '')) || 0;
-                  const assigned = selectedSources.reduce(
-                    (sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0),
-                    0,
-                  );
-                  const difference = total - assigned;
-                  if (total <= 0 || difference === 0) {
-                    return total > 0 ? (
-                      <Text style={{ fontSize: 13, color: colors.primary, fontFamily: 'Inter_600SemiBold' }}>
-                        Fully funded
-                      </Text>
-                    ) : null;
-                  }
-                  return (
-                    <Text
-                      accessibilityRole="alert"
-                      testID="expense-funding-remainder"
-                      style={{ fontSize: 13, color: difference > 0 ? '#f59e0b' : '#f87171', fontFamily: 'Inter_600SemiBold' }}
-                    >
-                      {difference > 0
-                        ? `KES ${difference.toLocaleString()} remaining — choose another source to continue`
-                        : `Overfunded by KES ${Math.abs(difference).toLocaleString()}`}
-                    </Text>
-                  );
-                })()}
               </View>
             )}
           </View>
         )}
+
+        {(() => {
+          const total = parseFloat(amount.replace(/,/g, '')) || 0;
+          if (total <= 0) return null;
+          const bankAmount = paidFromBank ? (parseFloat(payerAmounts.__joint_bank__ || '0') || 0) : 0;
+          const directAmount = selectedSources.length > 0
+            ? selectedSources.reduce((sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0), 0)
+            : payerIds.reduce((sum, payerId) => sum + (parseFloat(payerAmounts[payerId] || '0') || 0), 0);
+          const funded = bankAmount + directAmount;
+          const difference = total - funded;
+          const needsDirectFunding = !paidFromBank || allowMixedFunding;
+          const hasDirectSource = selectedSources.length > 0 || Boolean(payerIncomeSourceIds[paidById]);
+          const message = paidFromBank && !selectedBankAccountId
+            ? 'Choose the bank account used for this expense'
+            : needsDirectFunding && payerIds.length === 0
+              ? 'Choose who paid the direct portion'
+              : needsDirectFunding && !hasDirectSource
+                ? 'Choose an income source for every direct portion'
+                : funded <= 0
+                  ? 'Enter the amount from each funding source'
+                  : difference > 0
+                    ? `Funded KES ${funded.toLocaleString()} of KES ${total.toLocaleString()} · KES ${difference.toLocaleString()} remaining`
+                    : difference < 0
+                      ? `Funded KES ${funded.toLocaleString()} of KES ${total.toLocaleString()} · KES ${Math.abs(difference).toLocaleString()} over`
+                      : `Funded KES ${funded.toLocaleString()} of KES ${total.toLocaleString()} · Fully funded`;
+          const isReady = difference === 0 && funded > 0 && (!paidFromBank || Boolean(selectedBankAccountId)) && (!needsDirectFunding || (payerIds.length > 0 && hasDirectSource));
+          const isOver = difference < 0;
+          const statusColor = isReady ? '#15803d' : isOver ? '#b91c1c' : '#b45309';
+          const statusBorder = isReady ? '#86efac' : isOver ? '#fca5a5' : '#fcd34d';
+          const statusBackground = isReady ? '#f0fdf4' : isOver ? '#fef2f2' : '#fffbeb';
+          return (
+            <View
+              accessibilityLiveRegion="polite"
+              testID="expense-funding-summary"
+              style={{
+                borderWidth: 1,
+                borderColor: statusBorder,
+                backgroundColor: statusBackground,
+                borderRadius: colors.radius,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+              }}
+            >
+              <Text style={{ fontSize: 13, color: statusColor, fontFamily: 'Inter_600SemiBold' }}>
+                {message}
+              </Text>
+            </View>
+          );
+        })()}
 
         {/* Recurring expenses affect shared planning and are manager-only. */}
         {canManageShared && <View
@@ -2264,6 +2301,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 16,
     marginBottom: 8,
+  },
+  stageLabel: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  stageLabelText: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.9,
   },
   categoryScroll: { marginHorizontal: -20 },
   categoryScrollContent: { paddingHorizontal: 20, paddingVertical: 10, gap: 16 },

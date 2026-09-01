@@ -183,6 +183,20 @@ describe("expense funding controls", () => {
     });
   });
 
+  it("shows the pending balance after the first category amount is entered", () => {
+    expect(getCategoryAllocationStatus({
+      total: 10000,
+      allocations: [
+        { category: "Education", amount: 5000 },
+        { category: "Utilities", amount: Number.NaN },
+      ],
+      formatAmount: (amount) => `KES ${amount.toLocaleString()}`,
+    })).toEqual({
+      tone: "error",
+      message: "Allocated KES 5,000 of KES 10,000 · KES 5,000 remaining",
+    });
+  });
+
   it("does not mark bank funding ready before an account is selected", () => {
     expect(getExpenseFundingStatus({
       total: 1000,
@@ -212,6 +226,36 @@ describe("expense funding controls", () => {
     })).toEqual({
       tone: "attention",
       message: "Choose an income source for every direct portion",
+    });
+  });
+
+  it("shows the live balance after the first funding amount and only marks the exact final total fully funded", () => {
+    expect(getExpenseFundingStatus({
+      total: 10000,
+      fundingTotal: 4000,
+      hasBankFunding: false,
+      hasBankAccount: false,
+      hasDirectFunding: true,
+      hasDirectPayer: true,
+      hasDirectIncomeSource: true,
+      formatAmount: (amount) => `KES ${amount.toLocaleString()}`,
+    })).toEqual({
+      tone: "attention",
+      message: "Funded KES 4,000 of KES 10,000 · KES 6,000 remaining",
+    });
+
+    expect(getExpenseFundingStatus({
+      total: 10000,
+      fundingTotal: 10000,
+      hasBankFunding: false,
+      hasBankAccount: false,
+      hasDirectFunding: true,
+      hasDirectPayer: true,
+      hasDirectIncomeSource: true,
+      formatAmount: (amount) => `KES ${amount.toLocaleString()}`,
+    })).toEqual({
+      tone: "ready",
+      message: "Funded KES 10,000 of KES 10,000 · Fully funded",
     });
   });
 });

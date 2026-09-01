@@ -1382,7 +1382,7 @@ export default function Bank() {
                           : isDeposit
                             ? `Deposited by ${attribution} · ${tx.description}`
                             : `Withdrawn by ${attribution}${tx.expenseCategory && tx.description !== tx.expenseCategory ? ` · ${tx.description}` : ""}`}
-                        {" · "}{formatDate(tx.date)}{account.accountName ? ` · ${account.accountName}` : ""}
+                        {account.accountName ? ` · ${account.accountName}` : ""}
                       </p>
                     </div>
                   </div>
@@ -1391,6 +1391,13 @@ export default function Bank() {
                       <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
                         {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
                       </p>
+                      <time
+                        dateTime={tx.date}
+                        data-testid={`transaction-date-${tx.id}`}
+                        className="text-xs text-muted-foreground"
+                      >
+                        {formatDate(tx.date)}
+                      </time>
                       {typeof tx.runningBalance === "number" && (
                         <p className="text-xs text-muted-foreground" data-testid={`running-balance-${tx.id}`}>
                           Balance {formatKes(tx.runningBalance)}

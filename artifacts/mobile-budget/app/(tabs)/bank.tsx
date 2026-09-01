@@ -72,6 +72,13 @@ function formatDateTime(s?: string | null): string {
   );
 }
 
+function formatBankDate(s?: string | null): string {
+  if (!s) return 'Date unavailable';
+  const datePart = s.slice(0, 10);
+  const d = new Date(`${datePart}T00:00:00`);
+  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 type Tx = {
   id: number;
   type: string;
@@ -1048,12 +1055,18 @@ export default function BankScreen() {
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
                   {data?.accountName ? `${data.accountName} · ` : ''}
-                  {formatDateTime(item.date)}{canManageAccount ? ' · Edit or delete' : canEditTransaction(item) ? ' · Edit today' : ''}
+                  {canManageAccount ? 'Edit or delete' : canEditTransaction(item) ? 'Edit today' : ''}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
                 <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
                   {dep ? '+' : '-'}KES {formatKES(item.amount)}
+                </Text>
+                <Text
+                  style={[styles.txDate, { color: colors.mutedForeground }]}
+                  testID={`transaction-date-${item.id}`}
+                >
+                  {formatBankDate(item.date)}
                 </Text>
                 {typeof item.runningBalance === 'number' && (
                   <Text
@@ -2277,6 +2290,10 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     fontFamily: 'Inter_600SemiBold',
     marginLeft: 8,
+  },
+  txDate: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
   },
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: {

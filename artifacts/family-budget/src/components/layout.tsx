@@ -166,8 +166,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-sidebar pt-16 flex flex-col" onClick={(e) => { if (e.target === e.currentTarget) setIsMobileMenuOpen(false); }}>
-          <nav className="flex-1 p-4 space-y-2">
+        <div className="md:hidden fixed inset-x-0 bottom-0 top-16 z-[60] flex flex-col overflow-hidden bg-sidebar" onClick={(e) => { if (e.target === e.currentTarget) setIsMobileMenuOpen(false); }}>
+          <nav className="min-h-0 flex-1 overflow-y-auto p-4 pb-6 space-y-2">
             <WorkspaceSwitcher activeWorkspaceId={group?.id} className="mb-3 w-full" />
             {navItems.map((item) => {
               const isActive = location === item.href;
@@ -184,7 +184,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <div className="p-6 border-t border-sidebar-border">
+          <div className="shrink-0 border-t border-sidebar-border bg-sidebar p-6">
             <Button variant="outline" className="w-full h-12 text-lg border-sidebar-border text-sidebar-foreground bg-transparent hover:bg-sidebar-accent" onClick={logout}>
               <LogOut className="w-5 h-5 mr-2" />
               Sign Out
