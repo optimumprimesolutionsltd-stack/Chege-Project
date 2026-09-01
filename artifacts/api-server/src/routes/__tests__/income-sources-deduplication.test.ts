@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dedupeIncomeSources, normalizeIncomeSourceName } from "../income-sources";
+import { dedupeIncomeSources, normalizeIncomeSourceName } from "../income-source-utils";
 
 type Source = {
   id: number;

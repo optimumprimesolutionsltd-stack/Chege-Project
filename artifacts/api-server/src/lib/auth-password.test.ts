@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hashPassword, verifyPassword } from './auth';
+import { hashPassword, verifyPassword } from './auth-password';
 
 describe('local password authentication', () => {
   it('hashes and verifies a password without storing the plaintext', () => {

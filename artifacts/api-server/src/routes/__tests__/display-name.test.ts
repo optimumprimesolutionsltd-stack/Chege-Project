@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { UpdateDisplayNameBody } from "../auth";
+import { UpdateDisplayNameBody } from "../display-name-schema";
 
 describe("display name validation", () => {
   it.each([

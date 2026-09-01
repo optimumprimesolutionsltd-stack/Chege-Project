@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { UpdateDisplayNameBody } from './display-name-schema';
 
 const GetCurrentAuthUserResponse = z.object({
   user: z
@@ -23,14 +24,6 @@ const ExchangeMobileAuthorizationCodeBody = z.object({
 
 const ExchangeMobileAuthorizationCodeResponse = z.object({ token: z.string() });
 const LogoutMobileSessionResponse = z.object({ success: z.boolean() });
-export const UpdateDisplayNameBody = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Enter a name.')
-    .max(40, 'Use 40 characters or fewer.')
-    .regex(/^[^\p{C}\p{Zl}\p{Zp}]+$/u, 'Use printable characters without line breaks.'),
-});
 import { db, usersTable } from '@workspace/db';
 import { eq } from 'drizzle-orm';
 import { verifyPhotoObject } from '../lib/photoStorage';

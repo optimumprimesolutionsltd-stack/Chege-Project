@@ -4,24 +4,10 @@ import { groupMembershipsTable, incomeSourcesTable } from "@workspace/db";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveGroupId, isGroupManager, requireMemberSelfAttribution } from "../lib/activeGroup";
+import { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
+export { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
 
 const router = Router();
-
-export function normalizeIncomeSourceName(name: string): string {
-  return name.trim().toLocaleLowerCase("en-US");
-}
-
-export function dedupeIncomeSources<T extends { userId: string; name: string; isMain: boolean; id: number }>(
-  rows: T[],
-): T[] {
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    const key = `${row.userId}:${normalizeIncomeSourceName(row.name)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
 
 async function isGroupMember(userId: string, groupId: number): Promise<boolean> {
   const [member] = await db
