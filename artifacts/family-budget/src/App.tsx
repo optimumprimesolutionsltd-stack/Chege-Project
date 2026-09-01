@@ -230,6 +230,12 @@ function MainRouter() {
     return <AppLoading message="Checking your Jamvi setup…" />;
   }
 
+  // Do not classify a returning user as new while the server is still loading
+  // their existing Personal/Shared workspaces.
+  if (areWorkspacesLoading) {
+    return <AppLoading message="Loading your budgets…" />;
+  }
+
   // The server record is authoritative across browsers and login providers.
   // The local flag remains a fallback for older accounts that completed setup
   // before onboarding preferences were persisted.
@@ -249,7 +255,7 @@ function MainRouter() {
     return <BudgetChooser user={user ?? {}} />;
   }
 
-  if (isCheckingGroupAccess || areWorkspacesLoading) {
+  if (isCheckingGroupAccess) {
     return <AppLoading message="Loading your budget…" />;
   }
 
