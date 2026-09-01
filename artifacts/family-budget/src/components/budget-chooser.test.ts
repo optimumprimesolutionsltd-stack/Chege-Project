@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { budgetChooserCompletionKey, hasCompletedBudgetChooser } from "./budget-chooser";
+import { budgetChooserCompletionKey, getInitialOnboardingMode, hasCompletedBudgetChooser } from "./budget-chooser";
 
 describe("budget chooser completion", () => {
   let values: Map<string, string>;
@@ -40,5 +40,10 @@ describe("budget chooser completion", () => {
       },
     });
     expect(hasCompletedBudgetChooser("member")).toBe(false);
+  });
+
+  it("sends completed returning users directly to budget selection", () => {
+    expect(getInitialOnboardingMode(true)).toBe("returning");
+    expect(getInitialOnboardingMode(false)).toBeNull();
   });
 });

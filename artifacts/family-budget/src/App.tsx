@@ -252,7 +252,7 @@ function MainRouter() {
   });
 
   if (chooserRoute) {
-    return <BudgetChooser user={user ?? {}} />;
+    return <BudgetChooser user={user ?? {}} setupComplete={completedBudgetChooser} />;
   }
 
   if (isCheckingGroupAccess) {

@@ -16,6 +16,11 @@ import { Input } from "@/components/ui/input";
 import { getBudgetIncomeCheck, getKnownIncomeTotal } from "@/lib/onboarding-budget-utils";
 
 const CHOOSER_STORAGE_PREFIX = "jamvi:budget-chooser:completed:";
+type OnboardingMode = "personal" | "shared" | "both" | "returning";
+
+export function getInitialOnboardingMode(setupComplete: boolean): OnboardingMode | null {
+  return setupComplete ? "returning" : null;
+}
 
 const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; description: string; categories: readonly string[] }[] = [
   { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Food & meals", "Groceries", "Housing", "Accommodation", "Rent", "Utilities", "Shared bills", "Transport"] },
@@ -87,8 +92,10 @@ function WorkspaceIdentity({
 
 export function BudgetChooser({
   user,
+  setupComplete = false,
 }: {
   user: { id?: string | null; firstName?: string | null; lastName?: string | null; email?: string | null; profileImageUrl?: string | null };
+  setupComplete?: boolean;
 }) {
   const { data: workspaces = [], isLoading, isError: workspaceLoadFailed, refetch: refetchWorkspaces } = useGetWorkspaces();
   const selectWorkspace = useSelectWorkspace();
@@ -118,7 +125,7 @@ export function BudgetChooser({
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
   const [sharedBudgetName, setSharedBudgetName] = useState("");
   const [sharedBudgetKind, setSharedBudgetKind] = useState<SharedGroupKind | null>(null);
-  const [onboardingMode, setOnboardingMode] = useState<"personal" | "shared" | "both" | null>(null);
+  const [onboardingMode, setOnboardingMode] = useState<OnboardingMode | null>(() => getInitialOnboardingMode(setupComplete));
   const [showPurposeSetup, setShowPurposeSetup] = useState(false);
   const [onboardingPurpose, setOnboardingPurpose] = useState<string | null>(null);
   const [showDurationSetup, setShowDurationSetup] = useState(false);
@@ -425,7 +432,13 @@ export function BudgetChooser({
     );
   }
 
-  const onboardingHeading = onboardingMode === "personal" ? "Start with your Personal budget." : onboardingMode === "shared" ? "Choose or create your Shared budget." : "Choose where to start today.";
+  const onboardingHeading = onboardingMode === "personal"
+    ? "Start with your Personal budget."
+    : onboardingMode === "shared"
+      ? "Choose or create your Shared budget."
+      : onboardingMode === "returning"
+        ? "Welcome back. Choose a budget."
+        : "Choose where to start today.";
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
@@ -434,9 +447,9 @@ export function BudgetChooser({
           <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
             <div className="flex items-start justify-between gap-4">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Your budgets</p>
-              <button type="button" onClick={skipOnboarding} className="shrink-0 text-xs font-medium text-primary-foreground/55 underline-offset-4 transition-colors hover:text-primary-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="You can complete setup later from your budgets">
+              {!setupComplete ? <button type="button" onClick={skipOnboarding} className="shrink-0 text-xs font-medium text-primary-foreground/55 underline-offset-4 transition-colors hover:text-primary-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="You can complete setup later from your budgets">
                 Skip for now
-              </button>
+              </button> : null}
             </div>
             <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{onboardingHeading}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your private and Shared budgets stay separate in Jamvi.</p>
