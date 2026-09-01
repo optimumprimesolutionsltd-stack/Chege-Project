@@ -174,6 +174,14 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).not.toContain("amount: result.expenseDraft?.amount ?? amount");
   });
 
+  it("keeps the running-balance notice visible in Funding while category amounts are blank", () => {
+    expect(expensesSource).toContain("const hasBudgetedCategorySelection = form.categoryAllocations.some");
+    expect(expensesSource).toContain("(categoryBalancePreviews.length > 0 || hasBudgetedCategorySelection)");
+    expect(expensesSource).toContain("Enter the amount covered by each category above to see its running balance here.");
+    expect(dashboardSource).toContain("const hasBudgetedCategorySelection = categoryAllocations.some");
+    expect(dashboardSource).toContain("(categoryBalancePreviews.length > 0 || hasBudgetedCategorySelection)");
+  });
+
   it("rejects whitespace-only web descriptions and submits trimmed descriptions", () => {
     expect(expensesSource).toContain("const addDescription = addForm.description.trim();");
     expect(expensesSource).toContain("if (!addDescription || !addForm.date)");

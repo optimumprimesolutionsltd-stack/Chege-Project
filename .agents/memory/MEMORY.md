@@ -46,3 +46,5 @@
 - [Mixed expense funding controls](mixed-expense-funding-controls.md) — bank/direct UI must use explicit mixed-mode state, not infer bank-only mode from hidden payer IDs.
 - [Manual category allocations](manual-category-allocations.md) — expense category amounts always start blank, stay independent of the expense total, and are required before categorized saves.
 - [Managed OpenAI response compatibility](managed-openai-response-compatibility.md) — managed routing omits a hardcoded `/v1`; allow current GPT-5 token budgets and structured text responses.
+- [Normal expense entry](normal-expense-entry.md) — new expenses default to a three-field Normal flow; Advanced preserves explicit funding, allocation, date, notes, and recurring controls.
+- [Destructive prompt budget context](destructive-prompt-budget-context.md) — deletion, removal, and leave confirmations must name the affected budget to prevent cross-workspace mistakes.

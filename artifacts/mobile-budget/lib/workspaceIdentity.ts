@@ -31,3 +31,10 @@ export function workspaceIdentityText(
 ): string {
   return `${workspace.emoji ? `${workspace.emoji} ` : ''}${workspace.name.trim() || fallback}`;
 }
+
+export function workspaceBudgetName(
+  workspace?: { isPrivate?: boolean; emoji?: string | null; name: string } | null,
+): string {
+  if (workspace?.isPrivate) return 'Personal budget';
+  return workspace ? workspaceIdentityText(workspace, 'Shared budget') : 'Shared budget';
+}

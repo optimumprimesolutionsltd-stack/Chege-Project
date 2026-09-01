@@ -1,7 +1,4 @@
-import { useEffect, useState } from "react";
-import {
-  getGetDashboardCategoryBreakdownQueryKey,
-  getGetDashboardCategoryLedgerQueryKey,
+oryLedgerQueryKey,
   getGetDashboardIncomeStreamsQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetDashboardActivityQueryKey,
@@ -24,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { appPath } from "@/lib/base-path";
+import { workspaceLabel } from "@/lib/workspace-identity";
 
 type BudgetCategory = {
   id: number;
@@ -56,12 +54,14 @@ function IncomeSourceEditor({
   source,
   canEdit,
   canDelete,
+  budgetName,
   onSave,
   onDelete,
 }: {
   source: IncomeSource;
   canEdit: boolean;
   canDelete: boolean;
+  budgetName: string;
   onSave: (source: IncomeSource, name: string, expectedAmount: string) => Promise<void>;
   onDelete: (source: IncomeSource) => Promise<void>;
 }) {
@@ -105,7 +105,7 @@ function IncomeSourceEditor({
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Remove "${source.name}" from future income choices? Existing records will stay, but this source will no longer be available when adding a new expense or deposit.`)) {
+    if (!confirm(`Remove "${source.name}" from "${budgetName}"? Existing records will stay, but this source will no longer be available when adding a new expense or deposit.`)) {
       return;
     }
 
@@ -442,6 +442,7 @@ export default function Budget() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { data: group } = useGetGroup();
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
   const qc = useQueryClient();
 
   const {
@@ -845,9 +846,9 @@ export default function Budget() {
       <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove "{deleteTarget?.name}"?</AlertDialogTitle>
+            <AlertDialogTitle>{`Remove "${deleteTarget?.name}" from "${budgetName}"?`}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the budget limit. Existing expenses in this category are kept.
+              {`This removes the budget limit from "${budgetName}". Existing expenses in this category are kept.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1041,6 +1042,7 @@ export default function Budget() {
                           source={source}
                           canEdit={canManageShared || source.userId === user?.id}
                           canDelete={canManageShared || source.userId === user?.id}
+                          budgetName={budgetName}
                           onSave={saveIncomeSource}
                           onDelete={deleteIncomeSource}
                         />

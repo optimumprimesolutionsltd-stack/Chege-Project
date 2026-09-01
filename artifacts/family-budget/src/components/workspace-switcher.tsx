@@ -26,18 +26,21 @@ export function WorkspaceSwitcher({
   id,
   variant = "sidebar",
   showPendingLabel = false,
+  onWorkspaceSwitchRequested,
 }: {
   activeWorkspaceId?: number;
   className?: string;
   id?: string;
-  variant?: "sidebar" | "dashboard";
+  variant?: "sidebar" | "dashboard" | "mobile";
   showPendingLabel?: boolean;
+  onWorkspaceSwitchRequested?: () => void;
 }) {
   const { user } = useAuth();
   const { data: workspaces = [] } = useGetWorkspaces();
   const { data: activeGroup } = useGetGroup();
   const selectWorkspace = useSelectWorkspace();
   const isDashboardVariant = variant === "dashboard";
+  const isMobileVariant = variant === "mobile";
   const [pendingWorkspace, setPendingWorkspace] = useState<Workspace | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const activeBrandedBudget = activeGroup ?? null;
@@ -59,6 +62,7 @@ export function WorkspaceSwitcher({
     const destination = workspaces.find((workspace) => workspace.id === groupId);
     if (destination) {
       setSwitchError(null);
+      onWorkspaceSwitchRequested?.();
       setPendingWorkspace(destination);
     }
   };
@@ -206,7 +210,9 @@ export function WorkspaceSwitcher({
               aria-busy={selectWorkspace.isPending}
               className={[
                 `min-w-0 flex-1 cursor-pointer bg-card text-foreground outline-none transition-colors disabled:cursor-wait disabled:opacity-70 ${workspaceNameClass(activeGroup?.nameStyle)}`,
-                "h-9 rounded-lg border border-sidebar-border px-2 text-xs hover:bg-sidebar-accent",
+                isMobileVariant
+                  ? "h-12 rounded-xl border-2 border-sidebar-border px-4 text-sm font-semibold hover:bg-sidebar-accent"
+                  : "h-9 rounded-lg border border-sidebar-border px-2 text-xs hover:bg-sidebar-accent",
                 className,
               ].join(" ")}
             >
@@ -216,7 +222,7 @@ export function WorkspaceSwitcher({
                   : "Choose a budget"}
               </SelectValue>
             </SelectTrigger>
-            <SelectContent className="border-sidebar-border bg-popover text-popover-foreground">
+            <SelectContent className="z-[100] border-sidebar-border bg-popover text-popover-foreground">
               {workspaces
                 .slice()
                 .sort((a, b) => Number(b.isPrivate) - Number(a.isPrivate) || a.name.localeCompare(b.name))
@@ -243,7 +249,7 @@ export function WorkspaceSwitcher({
           }
         }}
       >
-        <AlertDialogContent className="w-[calc(100%-2rem)] rounded-2xl sm:w-full">
+        <AlertDialogContent className="z-[100] w-[calc(100%-2rem)] rounded-2xl sm:w-full">
           <AlertDialogHeader>
             <AlertDialogTitle>Switch budget?</AlertDialogTitle>
             <AlertDialogDescription>

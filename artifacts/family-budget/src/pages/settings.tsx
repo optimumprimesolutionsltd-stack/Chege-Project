@@ -1,36 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  useGetMembers,
-  useLeaveGroup,
-  useRemoveMember,
-  useUpdateMemberRole,
-  useGetGroup,
-  useUpdateGroup,
-  useRequestPhotoUpload,
-  useGetBudgetCategoryRecommendations,
-  useApplyBudgetCategoryRecommendations,
-  getGetGroupQueryKey,
-  getGetWorkspacesQueryKey,
-  getGetBudgetCategoriesQueryKey,
-  getGetBudgetCategoryRecommendationsQueryKey,
-} from "@workspace/api-client-react";
-import { useAuth } from "@workspace/replit-auth-web";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
-import { GroupInviteLinks } from "@/components/group-invite-links";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Moon, Palette, Pencil, Star, Sun, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
-import type { WorkspaceNameStyle } from "@workspace/api-client-react";
-import { ProfileAvatar } from "@/components/profile-avatar";
-import { SHARED_GROUP_KINDS, groupKindPresentation, type SharedGroupKind } from "@/components/group-kind";
-import { applyAppearance, readAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
+adAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
 import { appPath } from "@/lib/base-path";
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from "@/lib/member-limit";
+import { workspaceLabel } from "@/lib/workspace-identity";
 
 type GroupInvitation = {
   id: number;
@@ -126,6 +97,7 @@ export default function Settings() {
   const displayNameInputRef = useRef<HTMLInputElement>(null);
   const budgetNameInputRef = useRef<HTMLInputElement>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
   const canManageWorkspace = isPrivateWorkspace || (members?.some(
     (member) =>
       member.userId === user?.id &&
@@ -498,7 +470,7 @@ export default function Settings() {
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm("Remove this person from the group? They will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.")) return;
+    if (!confirm(`Remove this person from "${budgetName}"? They will lose access immediately. Shared expenses, goals, bank activity, and history will stay with "${budgetName}".`)) return;
     try {
       await removeMember.mutateAsync({ userId });
       toast({ title: "Member removed", description: "Shared records stay with the group." });
@@ -507,13 +479,13 @@ export default function Settings() {
       toast({
         variant: "destructive",
         title: "Could not remove this person",
-        description: error instanceof Error ? error.message : "Only owners and admins can remove members.",
+        description: error instanceof Error ? error.message : `Only owners and admins can remove members from "${budgetName}".`,
       });
     }
   };
 
   const handleLeaveGroup = async () => {
-    if (!confirm("Leave this group? You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.")) return;
+    if (!confirm(`Leave "${budgetName}"? You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with "${budgetName}".`)) return;
     try {
       await leaveGroup.mutateAsync();
       queryClient.clear();

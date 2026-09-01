@@ -24,6 +24,7 @@ import { routePath } from "@/lib/base-path";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { workspaceLabel } from "@/lib/workspace-identity";
 
 type ActivityTab = "all" | "expenses" | "contributions";
 type MemberContribution = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
@@ -49,6 +50,7 @@ export default function Activity() {
   const deleteExpense = useDeleteExpense();
   const deleteDeposit = useDeleteJointAccountTransaction();
   const isSharedWorkspace = group?.isPrivate === false;
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
   const canManageRecords =
     group?.isPrivate === true ||
     group?.role === "owner" ||
@@ -134,7 +136,7 @@ export default function Activity() {
     const record = getActivityRecordTarget(item);
     if (!record || !canManageRecords) return;
     const confirmed = window.confirm(
-      `${record.removeLabel}? This removes the source record from its ledger, summaries, reports, and activity. This cannot be undone.`,
+      `${record.removeLabel} from "${budgetName}"? This removes the source record from its ledger, summaries, reports, and activity in "${budgetName}". This cannot be undone.`,
     );
     if (!confirmed) return;
 

@@ -9,6 +9,8 @@ describe("bank transaction deletion", () => {
     expect(bankSource).toContain("await deleteExpense.mutateAsync({ id: tx.expenseId! });");
     expect(bankSource).toContain("await deleteTx.mutateAsync({ id: tx.id });");
     expect(bankSource).toContain("Its bank funding transaction will also be removed.");
+    expect(bankSource).toContain('Delete this expense from "${budgetName}"?');
+    expect(bankSource).toContain('Only an owner or admin can delete a shared bank transaction from "${budgetName}".');
     expect(bankSource).toContain("getGetExpensesQueryKey()");
     expect(bankSource).toContain("onClick={() => handleDelete(tx)}");
   });

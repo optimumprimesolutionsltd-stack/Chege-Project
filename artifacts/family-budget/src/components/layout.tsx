@@ -24,6 +24,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location]);
 
   useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileMenuOpen]);
+
+  useEffect(() => {
     const guardedUrl = window.location.href;
     const guardState = { ...(window.history.state ?? {}), jamviHomeGuard: true };
     window.history.pushState(guardState, '', guardedUrl);
@@ -159,16 +168,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.1em] text-sidebar-primary">{workspaceContextLabel}</span>
           </div>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-sidebar-foreground">
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-2 text-sidebar-foreground"
+          aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={isMobileMenuOpen}
+        >
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-x-0 bottom-0 top-16 z-[60] flex flex-col overflow-hidden bg-sidebar" onClick={(e) => { if (e.target === e.currentTarget) setIsMobileMenuOpen(false); }}>
-          <nav className="min-h-0 flex-1 overflow-y-auto p-4 pb-6 space-y-2">
-            <WorkspaceSwitcher activeWorkspaceId={group?.id} className="mb-3 w-full" />
+        <div
+          className="isolate fixed inset-x-0 top-16 z-[70] flex h-[calc(100dvh-4rem)] flex-col overflow-hidden bg-sidebar md:hidden"
+          onClick={(e) => { if (e.target === e.currentTarget) setIsMobileMenuOpen(false); }}
+        >
+          <nav className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-4 pb-6 space-y-2">
+            <div className="mb-4 space-y-2">
+              <p className="px-1 text-xs font-bold uppercase tracking-[0.12em] text-sidebar-primary">Switch budget</p>
+              <p className="px-1 text-xs leading-relaxed text-sidebar-foreground/65">
+                Choose Personal or Shared budget to change the money view.
+              </p>
+              <WorkspaceSwitcher
+                activeWorkspaceId={group?.id}
+                variant="mobile"
+                className="w-full"
+                onWorkspaceSwitchRequested={() => setIsMobileMenuOpen(false)}
+              />
+            </div>
             {navItems.map((item) => {
               const isActive = location === item.href;
               return (
@@ -194,6 +223,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Persistent quick logging control */}
+      {!isMobileMenuOpen && (
       <div className="fixed bottom-5 right-4 z-50 flex flex-col items-end gap-3 md:bottom-7 md:right-7">
         {isQuickLogOpen && (
           <div
@@ -281,6 +311,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <span className="text-sm font-bold">Quick log</span>
         </Button>
       </div>
+      )}
 
       {/* Main Content */}
       <main className="min-w-0 flex-1 flex flex-col min-h-screen pb-24 pt-16 md:pb-0 md:pt-0">

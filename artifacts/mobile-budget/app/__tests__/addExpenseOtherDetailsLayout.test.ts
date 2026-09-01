@@ -72,7 +72,7 @@ describe('optional expense category layout', () => {
   });
 
   it('keeps allocation controls for deliberate category selection only', () => {
-    expect(source).toContain('{categoryAllocations.length > 0 && (');
+    expect(source).toContain('{isAdvanced && categoryAllocations.length > 0 && (');
     expect(source).toContain('testID="category-allocation-card"');
     expect(source).toContain('testID="add-category-allocation-mobile"');
     expect(source).toContain('testID="add-category-allocation-mobile-disabled"');
@@ -81,6 +81,31 @@ describe('optional expense category layout', () => {
     expect(source).toContain('One-off spending amount (KES)');
     expect(source).toContain('allocationAmountLabel');
     expect(source).toContain('placeholder="Enter KES amount"');
+  });
+
+  it('keeps the running-balance notice visible in Funding before category amounts are entered', () => {
+    expect(source).toContain('const hasBudgetedCategorySelection = categoryAllocations.some');
+    expect(source).toContain('(categoryBalancePreviews.length > 0 || hasBudgetedCategorySelection)');
+    expect(source).toContain('Enter the amount covered by each category above to see its running balance here.');
+    expect(source).toContain('These running balances use each category amount entered above.');
+  });
+
+  it('keeps a newly created category in its allocation position', () => {
+    expect(source).toContain('const emptyIndex = standard.findIndex');
+    expect(source).toContain('standard[emptyIndex] = { ...standard[emptyIndex], category: categoryName };');
+    expect(source).toContain('const next = addStandardCategory(current, created.name);');
+    expect(source).not.toContain('selectPrimaryCategory');
+  });
+
+  it('keeps the inline bank-account form usable on a phone', () => {
+    expect(source).toContain('testID="new-bank-account-name-mobile"');
+    expect(source).toContain('testID="new-bank-account-number-mobile"');
+    expect(source).toContain('testID="new-bank-opening-balance-mobile"');
+    expect(source).toContain('testID="add-bank-account-mobile"');
+    expect(source).toContain('<Text style={styles.addSourceButtonText}>Add bank account</Text>');
+    expect(source).toMatch(/inlineAccountRow:\s*\{\s*gap: 8,/);
+    expect(source).toMatch(/inlineAccountInput:\s*\{[\s\S]*?width: '100%',/);
+    expect(source).toMatch(/inlineAccountActions:\s*\{[\s\S]*?width: '100%',/);
   });
 
   it('requires an explanatory note for one-off spending', () => {

@@ -44,6 +44,14 @@ describe("dashboard quick actions", () => {
     expect(dashboardSource).toContain("const canManageCategories = group?.isPrivate === true || canManageShared;");
   });
 
+  it("keeps a newly created category in the current allocation position", () => {
+    expect(dashboardSource).toContain("function appendCreatedCategoryAllocation(");
+    expect(dashboardSource).toContain("const emptyIndex = standardAllocations.findIndex");
+    expect(expenseFormSource).toContain("const next = appendCreatedCategoryAllocation(current, created.name);");
+    expect(expenseFormSource).toContain("setCategory(next[0]?.category ?? created.name);");
+    expect(expenseFormSource).not.toContain("{ category: created.name, amount: standardAllocations[0]?.amount ?? \"\" }");
+  });
+
   it("keeps workspace bank funding visible for Personal budget owners", () => {
     expect(dashboardSource).toContain("canUseBankFunding={canManageBank}");
     expect(dashboardSource).toContain("const { data: bankAccounts = [] } = useGetJointAccounts();");
@@ -94,5 +102,21 @@ describe("dashboard quick actions", () => {
     expect(expenseFormSource).toContain('params.get("resumeRecurring") !== "1"');
     expect(expenseFormSource).toContain('setRecurringMonthlyBudget(draft.recurringMonthlyBudget ?? "")');
     expect(expenseFormSource).toContain('Jamvi will take you to Budget to ask for the average monthly amount.');
+  });
+
+  it("starts Dashboard quick expense log in Normal mode with one-category direct funding assumptions", () => {
+    expect(expenseFormSource).toContain('useState<"normal" | "advanced">("normal")');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-form"');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-amount"');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-description"');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-category"');
+    expect(expenseFormSource).toContain('const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];');
+    expect(expenseFormSource).toContain('setCategoryAllocations(category.trim()');
+    expect(expenseFormSource).toContain('setDirectPortion(amount);');
+    expect(expenseFormSource).toContain('setDate(today);');
+    expect(expenseFormSource).toContain('setIsRecurring(false);');
+    expect(expenseFormSource).toContain('setPaidFromBank(false);');
+    expect(expenseFormSource).toContain('No income source is available for quick log.');
+    expect(expenseFormSource).toContain('Switch to Advanced');
   });
 });
