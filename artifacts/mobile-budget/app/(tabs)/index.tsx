@@ -546,7 +546,7 @@ export default function DashboardScreen() {
                 <BankBalanceSkeleton />
               ) : (
                 <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankBalance, { color: colors.info }]}>
-                  {bankAccount ? (isPrivate ? '••••' : `KES ${shortKES(bankAccount.balance)}`) : '—'}
+                  {bankAccount ? (isPrivate ? '••••' : `KES ${formatKES(bankAccount.balance)}`) : '—'}
                 </Text>
               )}
             </View>
@@ -554,14 +554,14 @@ export default function DashboardScreen() {
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>IN THIS MONTH</Text>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.success }]}>
-                {isPrivate ? '••••' : `+KES ${shortKES(monthlyDeposited)}`}
+                {isPrivate ? '••••' : `+KES ${formatKES(monthlyDeposited)}`}
               </Text>
             </View>
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>OUT THIS MONTH</Text>
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.destructive }]}>
-                {isPrivate ? '••••' : `-KES ${shortKES(monthlyDisbursed)}`}
+                {isPrivate ? '••••' : `-KES ${formatKES(monthlyDisbursed)}`}
               </Text>
             </View>
           </View>
@@ -806,9 +806,9 @@ const styles = StyleSheet.create({
   bankStatsRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
   bankStat: { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4 },
   bankStatLabel: { fontSize: 9, fontFamily: 'Inter_400Regular', letterSpacing: 0.4, marginBottom: 3 },
-  bankBalance: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  bankBalance: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
   bankBalanceSkeleton: { width: 62, height: 16, borderRadius: 4, backgroundColor: 'rgba(56,189,248,0.25)' },
-  bankStatValue: { fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+  bankStatValue: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
   bankStatDivider: { width: 1, marginVertical: 10 },
 
   bankEmptyState: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
