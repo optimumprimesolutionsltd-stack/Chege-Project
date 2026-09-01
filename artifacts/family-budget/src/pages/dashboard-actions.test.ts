@@ -75,11 +75,14 @@ describe("dashboard quick actions", () => {
   });
 
   it("keeps an existing direct portion and leaves a new income-source amount blank", () => {
-    expect(expenseFormSource).toContain("setAdditionalDirectPortions((previous) => [");
+    expect(expenseFormSource).toContain("qc.setQueryData<IncomeSource[]>(incomeSourcesQueryKey");
+    expect(expenseFormSource).toContain("setAdditionalDirectPortions((previous) => previous.some");
     expect(expenseFormSource).toContain("shouldAddAsAnotherPortion");
     expect(expenseFormSource).toContain('{ sourceId: source.id, amount: "" }');
     expect(expenseFormSource).toContain("Enter the amount it funded");
     expect(expenseFormSource).toContain("additionalDirectPortions.map");
+    expect(expenseFormSource.indexOf('<option value="" disabled>Add another income source...</option>'))
+      .toBeLessThan(expenseFormSource.indexOf("{additionalDirectPortions.map"));
     expect(expenseFormSource).not.toContain("was added with the remaining");
     expect(expenseFormSource).not.toContain("additionalDirectPortions.length >= 2");
   });

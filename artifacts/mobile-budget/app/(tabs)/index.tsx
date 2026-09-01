@@ -85,21 +85,6 @@ type Shortcut = {
   route: string;
 };
 
-const PERSONAL_SHORTCUTS: Shortcut[] = [
-  { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
-  { icon: 'credit-card', label: 'Deposit / Withdraw', color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank' },
-  { icon: 'repeat', label: 'Bank transfer', color: '#67E8F9', bg: '#164E63', route: '/(tabs)/bank?shortcut=bank-transfer' },
-  { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
-];
-
-const SHARED_SHORTCUTS: Shortcut[] = [
-  { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
-  { icon: 'credit-card', label: 'Deposit / Withdraw', color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank' },
-  { icon: 'repeat', label: 'Bank transfer', color: '#67E8F9', bg: '#164E63', route: '/(tabs)/bank?shortcut=bank-transfer' },
-  { icon: 'pie-chart',   label: 'Reports',  color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports'         },
-  { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
-];
-
 const SHARED_OVERVIEW_SHORTCUTS: Shortcut[] = [
   { icon: 'bar-chart-2', label: 'Budget',        color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget',        description: 'Plan spending' },
   { icon: 'trending-up', label: 'Contributions', color: '#3CDD62', bg: '#0D3428', route: '/(tabs)/contributions', description: 'See money in' },
@@ -206,7 +191,6 @@ export default function DashboardScreen() {
   const workspaceAccentColor = group?.accentColor ?? colors.brandBlue;
   const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
   const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
-  const shortcuts = isSharedWorkspace ? SHARED_SHORTCUTS : PERSONAL_SHORTCUTS;
   const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -432,24 +416,6 @@ export default function DashboardScreen() {
           )}
         </LinearGradient>
 
-        {/* Quick shortcuts */}
-        <View style={styles.shortcutRow}>
-          {shortcuts.map(s => (
-            <Pressable
-              key={s.label}
-              testID={`home-shortcut-${s.label.toLowerCase()}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Open ${s.label}`}
-              style={[styles.shortcutBtn, { backgroundColor: s.bg }]}
-              onPress={() => router.push(s.route as any)}
-              hitSlop={4}
-            >
-              <Feather name={s.icon} size={20} color={s.color} />
-              <Text style={[styles.shortcutLabel, { color: s.color }]}>{s.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-
         {editableUncategorizedExpenses.length > 0 && (
           <View
             testID="uncategorized-expense-cta"
@@ -579,7 +545,7 @@ export default function DashboardScreen() {
               {bankAccountLoading ? (
                 <BankBalanceSkeleton />
               ) : (
-                <Text style={[styles.bankBalance, { color: colors.info }]}>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankBalance, { color: colors.info }]}>
                   {bankAccount ? (isPrivate ? '••••' : `KES ${shortKES(bankAccount.balance)}`) : '—'}
                 </Text>
               )}
@@ -587,14 +553,14 @@ export default function DashboardScreen() {
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>IN THIS MONTH</Text>
-              <Text style={[styles.bankStatValue, { color: colors.success }]}>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.success }]}>
                 {isPrivate ? '••••' : `+KES ${shortKES(monthlyDeposited)}`}
               </Text>
             </View>
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>OUT THIS MONTH</Text>
-              <Text style={[styles.bankStatValue, { color: colors.destructive }]}>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.destructive }]}>
                 {isPrivate ? '••••' : `-KES ${shortKES(monthlyDisbursed)}`}
               </Text>
             </View>
@@ -796,9 +762,6 @@ const styles = StyleSheet.create({
   contribFill: { height: '100%', borderRadius: 2 },
   contribSubLabel: { fontSize: 9, color: 'rgba(247,250,246,0.4)', fontFamily: 'Inter_400Regular' },
 
-  shortcutRow: { flexDirection: 'row', marginHorizontal: 16, paddingTop: 16, paddingBottom: 4, gap: 8 },
-  shortcutBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 14, gap: 5 },
-  shortcutLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   overviewNavCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
   overviewNavEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   overviewNavTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 4 },

@@ -937,18 +937,24 @@ function ExpenseForm({
       }
       const source: IncomeSource = await response.json();
       const shouldAddAsAnotherPortion = Boolean(incomeSourceId);
+      const incomeSourcesQueryKey = getGetIncomeSourcesQueryKey({ userId: payerId });
+
+      qc.setQueryData<IncomeSource[]>(incomeSourcesQueryKey, (previous = []) => [
+        ...previous.filter((item) => item.id !== source.id),
+        source,
+      ]);
 
       if (shouldAddAsAnotherPortion) {
-        setAdditionalDirectPortions((previous) => [
-          ...previous,
-          { sourceId: source.id, amount: "" },
-        ]);
+        setAdditionalDirectPortions((previous) => previous.some((portion) => portion.sourceId === source.id)
+          ? previous
+          : [...previous, { sourceId: source.id, amount: "" }]);
       } else {
         setIncomeSourceId(source.id);
+        setDirectPortion("");
       }
       setNewSourceName("");
       setIsAddingSource(false);
-      await qc.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }) });
+      await qc.invalidateQueries({ queryKey: incomeSourcesQueryKey });
       toast({
         title: "Income source added",
         description: shouldAddAsAnotherPortion
@@ -1420,7 +1426,11 @@ function ExpenseForm({
                  <Button
                    type="button"
                    variant={isOtherCategory ? "default" : "outline"}
-                   className="h-14 w-full justify-start sm:w-auto"
+                    className={`h-14 w-full justify-start ${
+                      isOtherCategory
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:bg-primary"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+                    }`}
                    onClick={() => {
                      setCategoryAllocations(current => {
                        const existingOneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
@@ -1687,27 +1697,6 @@ function ExpenseForm({
                             className="h-11 bg-card"
                           />
                         </label>
-                        {additionalDirectPortions.map((portion, index) => {
-                          const source = incomeSources.find((item) => item.id === portion.sourceId);
-                          return (
-                            <div key={portion.sourceId} className="flex items-center gap-2 rounded-lg border border-border/60 bg-card p-2">
-                              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{source?.name ?? "Income source"}</span>
-                              <Input
-                                type="number"
-                                min="1"
-                                step="1"
-                                value={portion.amount}
-                                onChange={(event) => setAdditionalDirectPortions((previous) => previous.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, amount: event.target.value } : item,
-                                ))}
-                                className="h-10 w-32 bg-card"
-                              />
-                              <Button type="button" size="sm" variant="ghost" onClick={() => setAdditionalDirectPortions((previous) => previous.filter((_, itemIndex) => itemIndex !== index))}>
-                                Remove
-                              </Button>
-                            </div>
-                          );
-                        })}
                         {(() => {
                           const total = Number(amount) || 0;
                           const assigned = (Number(directPortion) || 0)
@@ -1740,6 +1729,31 @@ function ExpenseForm({
                             </div>
                           ) : null;
                         })()}
+                         {additionalDirectPortions.map((portion, index) => {
+                           const source = incomeSources.find((item) => item.id === portion.sourceId);
+                           return (
+                             <div key={portion.sourceId} className="space-y-1.5 rounded-lg border border-border/60 bg-card p-2">
+                               <span className="block min-w-0 truncate text-sm font-semibold">{source?.name ?? "Income source"}</span>
+                               <div className="flex items-center gap-2">
+                                 <Input
+                                   autoFocus={index === additionalDirectPortions.length - 1}
+                                   type="number"
+                                   min="1"
+                                   step="1"
+                                   value={portion.amount}
+                                   onChange={(event) => setAdditionalDirectPortions((previous) => previous.map((item, itemIndex) =>
+                                     itemIndex === index ? { ...item, amount: event.target.value } : item,
+                                   ))}
+                                   placeholder="KES 0"
+                                   className="h-10 min-w-0 flex-1 bg-card"
+                                 />
+                                 <Button type="button" size="sm" variant="ghost" onClick={() => setAdditionalDirectPortions((previous) => previous.filter((_, itemIndex) => itemIndex !== index))}>
+                                   Remove
+                                 </Button>
+                               </div>
+                             </div>
+                           );
+                         })}
                       </div>
                    )}
                    <p className="text-xs text-muted-foreground">

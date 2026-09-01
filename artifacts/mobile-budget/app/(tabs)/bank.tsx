@@ -297,9 +297,9 @@ export default function BankScreen() {
   };
 
   useEffect(() => {
-    if ((shortcut !== 'deposit' && shortcut !== 'bank-transfer') || handledShortcut.current === shortcut) return;
+    if ((shortcut !== 'deposit' && shortcut !== 'withdraw' && shortcut !== 'bank-transfer') || handledShortcut.current === shortcut) return;
     handledShortcut.current = shortcut;
-    openModal(shortcut === 'bank-transfer' ? 'bank_transfer' : 'deposit');
+    openModal(shortcut === 'bank-transfer' ? 'bank_transfer' : shortcut === 'withdraw' ? 'disbursement' : 'deposit');
   }, [shortcut]);
 
   const closeModal = () => {
@@ -560,6 +560,15 @@ export default function BankScreen() {
     }
     if (!Number.isInteger(parsed)) {
       Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
+      return;
+    }
+    if (!selectedAccountId) {
+      Alert.alert(
+        'Choose a bank account',
+        canManageAccount
+          ? 'Create a bank account first, then return here to record the transaction.'
+          : 'Ask an owner or admin to create a bank account before recording a deposit.',
+      );
       return;
     }
     if (txType === 'disbursement' && !expenseCategory.trim()) {
@@ -933,10 +942,9 @@ export default function BankScreen() {
             {/* Action buttons inside header */}
             <View style={styles.actionRow}>
               <TouchableOpacity
-                style={[styles.actionBtn, !hasBankAccounts && styles.actionBtnDisabled]}
+                style={styles.actionBtn}
                 onPress={() => openModal('deposit')}
                 activeOpacity={0.8}
-                disabled={!hasBankAccounts}
                 testID="bank-deposit-action"
               >
                 <Feather name="arrow-down-left" size={16} color="#0a1a10" />
@@ -1287,7 +1295,28 @@ export default function BankScreen() {
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account *</Text>
                 <View style={{ gap: 8 }}>
                   {accounts.length === 0 ? (
-                    <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>Add a bank account before recording this transaction.</Text>
+                    <View style={{ gap: 10 }}>
+                      <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>
+                        Add a bank account before recording this transaction.
+                      </Text>
+                      {canManageAccount ? (
+                        <TouchableOpacity
+                          style={[styles.inlineAccountButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}18` }]}
+                          onPress={() => {
+                            setModalVisible(false);
+                            openAccountEditor();
+                          }}
+                          testID="bank-create-account-from-transaction"
+                        >
+                          <Feather name="plus-circle" size={16} color={colors.primary} />
+                          <Text style={[styles.inlineAccountButtonText, { color: colors.primary }]}>Create bank account</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                          Ask an owner or admin to create an account before recording a deposit.
+                        </Text>
+                      )}
+                    </View>
                   ) : accounts.map((accountOption) => (
                     <TouchableOpacity key={accountOption.id} onPress={() => selectAccount(accountOption.id)} style={{ borderWidth: 1, borderColor: selectedAccountId === accountOption.id ? colors.primary : colors.border, backgroundColor: selectedAccountId === accountOption.id ? `${colors.primary}18` : colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }} accessibilityRole="radio" accessibilityState={{ selected: selectedAccountId === accountOption.id }}>
                       <Text style={{ color: colors.foreground, fontWeight: selectedAccountId === accountOption.id ? '700' : '500' }}>{accountOption.name}{accountOption.accountNumber ? ` · ${accountOption.accountNumber}` : ''}</Text>
@@ -1295,6 +1324,21 @@ export default function BankScreen() {
                   ))}
                 </View>
                 <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>This account will receive the deposit or be reduced by the withdrawal.</Text>
+                {selectedAccountId && data && (
+                  <View style={[styles.transactionBalanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]} testID="bank-transaction-account-balance">
+                    <View style={styles.transactionBalanceRow}>
+                      <Text style={[styles.transactionBalanceLabel, { color: colors.foreground }]}>
+                        {selectedAccount?.name ?? 'Selected account'} current balance
+                      </Text>
+                      <Text style={[styles.transactionBalanceValue, { color: colors.foreground }]}>
+                        KES {formatKES(data.balance)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.transactionBalanceHelp, { color: colors.mutedForeground }]}>
+                      This is the balance before the transaction is saved.
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -1962,7 +2006,7 @@ export default function BankScreen() {
             )}
 
             {/* Date */}
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>Date</Text>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>{isDeposit ? 'Deposit date' : 'Date'}</Text>
             <Pressable
               onPress={() => {
                 if (canManageShared || editingTransactionId === null) setShowDatePicker(true);
@@ -2264,6 +2308,47 @@ const styles = StyleSheet.create({
   },
   actionBtnDisabled: {
     opacity: 0.45,
+  },
+  inlineAccountButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  inlineAccountButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  transactionBalanceCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  transactionBalanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  transactionBalanceLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  transactionBalanceValue: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+  },
+  transactionBalanceHelp: {
+    marginTop: 3,
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
   },
   firstAccountCta: {
     minHeight: 64,

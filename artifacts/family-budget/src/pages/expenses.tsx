@@ -1043,12 +1043,13 @@ export default function Expenses() {
   const handleUpdate = async (e: React.FormEvent, id: number) => {
     e.preventDefault();
     const editDescription = editForm.description.trim();
-    if (!editForm.amount) {
-      toast({
-        variant: "destructive",
-        title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
-      });
+    if (!editForm.amount.trim()) {
+      const expense = expenses?.find((item) => item.id === id);
+      if (expense) {
+        setDeleteTarget(expense);
+      } else {
+        toast({ variant: "destructive", title: "Expense no longer available", description: "Refresh the list and try again." });
+      }
       return;
     }
     const amount = Number(editForm.amount);
@@ -1633,7 +1634,11 @@ export default function Expenses() {
                  <Button
                    type="button"
                    variant={isOtherCategory ? "default" : "outline"}
-                   className="h-14 w-full justify-start border-input text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+                    className={`h-14 w-full justify-start border-input ${
+                      isOtherCategory
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:bg-primary"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+                    }`}
                    onClick={() => addOneOffCategory(form)}
                    aria-label={isOtherCategory ? "Remove one-off spending category" : "Select one-off spending category"}
                    aria-pressed={isOtherCategory}

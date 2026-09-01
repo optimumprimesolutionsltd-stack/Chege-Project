@@ -931,7 +931,37 @@ export default function Bank() {
                     <option value="" disabled>{accounts.length === 0 ? "Add a bank account first" : "Choose the bank account"}</option>
                     {accounts.map((item) => <option key={item.id} value={item.id}>{item.name}{item.accountNumber ? ` · ${item.accountNumber}` : ""}</option>)}
                   </select>
-                  <p className="text-xs text-muted-foreground">This account will receive the deposit or be reduced by the withdrawal.</p>
+                  {accounts.length === 0 && canManageAccount && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10"
+                      data-testid="button-create-account-from-transaction"
+                      onClick={startAddingAccount}
+                    >
+                      <Plus className="mr-2 h-4 w-4" /> Create bank account
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {accounts.length === 0
+                      ? canManageAccount
+                        ? "Create an account above, then return here to record the transaction."
+                        : "Ask an owner or admin to create a bank account before recording a deposit."
+                      : "This account will receive the deposit or be reduced by the withdrawal."}
+                  </p>
+                  {selectedAccountId && account && (
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3" data-testid="transaction-account-balance">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                        <span className="text-sm font-medium text-foreground">
+                          {account.accountName} current balance
+                        </span>
+                        <span className="text-lg font-semibold text-foreground">{formatKes(account.balance)}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        This is the balance before the transaction is saved.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -969,7 +999,7 @@ export default function Bank() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">Date</label>
+                   <label className="text-sm font-semibold text-foreground">{mode === "deposit" ? "Deposit date" : "Date"}</label>
                   <Input
                     data-testid="input-date"
                     type="date"

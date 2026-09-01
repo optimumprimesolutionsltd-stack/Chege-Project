@@ -762,12 +762,45 @@ export default function AddExpenseSheet() {
     });
   }, []);
 
+  const handleRemove = useCallback(() => {
+    if (!editingExpense || !canRemoveExpense) return;
+    Alert.alert(
+      'Remove expense?',
+      `"${editingExpense.description}" and its effect on balances, reports, and activity will be removed. This cannot be undone.`,
+      [
+        { text: 'Keep expense', style: 'cancel' },
+        {
+          text: 'Remove expense',
+          style: 'destructive',
+          onPress: async () => {
+            setIsPending(true);
+            try {
+              await deleteExpense.mutateAsync({ id: editingExpense.id });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              invalidateExpenses();
+              router.dismiss();
+            } catch (error) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('Could not remove expense', getExpenseSaveError(error));
+            } finally {
+              setIsPending(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [canRemoveExpense, deleteExpense, editingExpense, invalidateExpenses]);
+
   const handleSubmit = useCallback(async (allowUncategorized = false) => {
     if (isEditMode && (!editingExpense || !canEditExpense)) {
       Alert.alert(
         'You cannot edit this expense',
         'Members can edit only their own personal expenses dated today.',
       );
+      return;
+    }
+    if (isEditMode && !amount.trim()) {
+      handleRemove();
       return;
     }
     const parsed = parseFloat(amount.replace(/,/g, ''));
@@ -1057,36 +1090,7 @@ export default function AddExpenseSheet() {
     } finally {
       setIsPending(false);
     }
-  }, [allowMixedFunding, amount, category, categoryAllocations, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, selectedBankAccountId, members, canManageShared, user?.id, createExpenseAsync, createCategory, categories, queryClient, updateExpense, invalidateExpenses, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty, recurringMonthlyBudget, updateCategory, bankAccounts]);
-
-  const handleRemove = useCallback(() => {
-    if (!editingExpense || !canRemoveExpense) return;
-    Alert.alert(
-      'Remove expense?',
-      `"${editingExpense.description}" and its effect on balances, reports, and activity will be removed. This cannot be undone.`,
-      [
-        { text: 'Keep expense', style: 'cancel' },
-        {
-          text: 'Remove expense',
-          style: 'destructive',
-          onPress: async () => {
-            setIsPending(true);
-            try {
-              await deleteExpense.mutateAsync({ id: editingExpense.id });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              invalidateExpenses();
-              router.dismiss();
-            } catch (error) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              Alert.alert('Could not remove expense', getExpenseSaveError(error));
-            } finally {
-              setIsPending(false);
-            }
-          },
-        },
-      ],
-    );
-  }, [canRemoveExpense, deleteExpense, editingExpense, invalidateExpenses]);
+  }, [allowMixedFunding, amount, category, categoryAllocations, description, notes, payerIds, payerAmounts, payerIncomeSourceIds, paidById, selectedSources, splitAmounts, isRecurring, date, paidFromBank, selectedBankAccountId, members, canManageShared, user?.id, createExpenseAsync, createCategory, categories, queryClient, updateExpense, invalidateExpenses, isEditMode, editId, editingExpense, canEditExpense, incomeSources, fundingDirty, recurringMonthlyBudget, updateCategory, bankAccounts, handleRemove]);
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
