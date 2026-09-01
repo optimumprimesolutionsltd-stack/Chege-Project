@@ -2941,6 +2941,9 @@ components:
           description: deposit or disbursement
         amount:
           type: number
+        runningBalance:
+          type: ["number", "null"]
+          description: Balance in this specific bank account immediately after this transaction; null for an all-accounts view
         description:
           type: string
         madeById:
@@ -3002,6 +3005,10 @@ components:
         openingBalance:
           type: number
           description: Manually entered balance carried into the first recorded transaction
+        openingBalanceDate:
+          type: ["string", "null"]
+          format: date
+          description: Calendar date on which the opening balance applies
         accountId:
           type: number
         accountName:
@@ -3040,6 +3047,9 @@ components:
           type: number
           minimum: 0
           multipleOf: 1
+        openingBalanceDate:
+          type: string
+          format: date
         accountId:
           type: number
       required:
@@ -3053,6 +3063,9 @@ components:
           type: number
           minimum: 0
           multipleOf: 1
+        openingBalanceDate:
+          type: string
+          format: date
         accountId:
           type: number
           minimum: 1
@@ -3297,6 +3310,7 @@ components:
         name: { type: string }
         accountNumber: { type: ["string", "null"] }
         openingBalance: { type: number }
+        openingBalanceDate: { type: string, format: date }
         createdAt: { type: string, format: date-time }
       required: [id, name, accountNumber, openingBalance, createdAt]
 
@@ -3306,6 +3320,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 80 }
         accountNumber: { type: string, minLength: 1, maxLength: 40 }
         openingBalance: { type: number, minimum: 0, multipleOf: 1 }
+        openingBalanceDate: { type: string, format: date }
       required: [name]
 
     BankAccountUpdate:
@@ -3314,6 +3329,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 80 }
         accountNumber: { type: ["string", "null"], minLength: 1, maxLength: 40 }
         openingBalance: { type: number, minimum: 0, multipleOf: 1 }
+        openingBalanceDate: { type: string, format: date }
 
     SavingsGoalInput:
       type: object

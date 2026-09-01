@@ -10,6 +10,11 @@ import type { JointAccountTransaction } from './jointAccountTransaction';
 export interface JointAccountSummary {
   /** Manually entered balance carried into the first recorded transaction */
   openingBalance: number;
+  /**
+     * Calendar date on which the opening balance applies
+     * @nullable
+     */
+  openingBalanceDate?: Date | null;
   accountId: number;
   accountName: string;
   /** @nullable */

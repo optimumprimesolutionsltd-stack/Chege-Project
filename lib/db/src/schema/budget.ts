@@ -9,6 +9,7 @@ export const bankAccountsTable = pgTable("bank_accounts", {
   name: text("name").notNull(),
   accountNumber: text("account_number"),
   openingBalance: integer("opening_balance").notNull().default(0),
+  openingBalanceDate: date("opening_balance_date", { mode: "string" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   unique("bank_accounts_group_name_unique").on(table.groupId, table.name),

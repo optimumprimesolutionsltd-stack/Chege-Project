@@ -45,3 +45,4 @@
 - [Recurring expense budget handoff](recurring-expense-budget-handoff.md) — marking a new expense recurring opens Budget to collect the average monthly amount, then restores the draft.
 - [Mixed expense funding controls](mixed-expense-funding-controls.md) — bank/direct UI must use explicit mixed-mode state, not infer bank-only mode from hidden payer IDs.
 - [Manual category allocations](manual-category-allocations.md) — expense category amounts always start blank, stay independent of the expense total, and are required before categorized saves.
+- [Managed OpenAI response compatibility](managed-openai-response-compatibility.md) — managed routing omits a hardcoded `/v1`; allow current GPT-5 token budgets and structured text responses.

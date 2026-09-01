@@ -1260,23 +1260,48 @@ export default function Expenses() {
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-        <p className="text-sm font-semibold text-foreground">1. Record the expense</p>
+      <div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3">
+        <p className="text-sm font-bold text-primary">1. Record the expense</p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           Enter the total once, then show what it covered and where the money came from.
         </p>
       </div>
 
+      <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid={`expense-date-section-${mode}`}>
+        <label className="text-sm font-bold text-primary">
+          When did this happen? <span className="text-destructive">*</span>
+        </label>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          This date decides which month includes the expense in budgets, totals, and reports.
+        </p>
+        <Input
+          type="date"
+          value={form.date}
+          onChange={e => form.setDate(e.target.value)}
+          required
+          disabled={!canManageExpenses}
+          min={canManageExpenses ? undefined : today}
+          max={canManageExpenses ? undefined : today}
+          aria-describedby={!canManageExpenses ? "member-expense-date-help" : undefined}
+          className="h-12 bg-card"
+        />
+        {!canManageExpenses && (
+          <p id="member-expense-date-help" className="text-xs text-muted-foreground">
+            Members can record and correct expenses for today only. Ask an admin to backdate.
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
+        <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-3">
+          <label className="text-sm font-bold text-primary">Expense total (KES)</label>
           <Input type="number" placeholder="e.g. 5000" value={form.amount} onChange={e => form.setAmount(e.target.value)}
-            required min="1" className="h-12 text-lg bg-card" />
+            required min="1" className="h-14 border-primary/50 bg-background text-xl font-bold shadow-sm" data-testid={`expense-total-${mode}`} />
         </div>
 
         <div className="space-y-2 md:col-span-2 rounded-xl border border-border/60 bg-card p-4">
           <div>
-            <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <label className="text-sm font-bold text-primary">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
             </p>
@@ -1313,8 +1338,8 @@ export default function Expenses() {
                      placeholder="Enter KES amount"
                      className="h-12 w-full border-primary/45 bg-card font-semibold"
                    />
-                 </div>
-               )}
+                  </div>
+                )}
              </div>
               )}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1633,29 +1658,9 @@ export default function Expenses() {
            </div>
          )}
 
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Date</label>
-          <Input
-            type="date"
-            value={form.date}
-            onChange={e => form.setDate(e.target.value)}
-            required
-            disabled={!canManageExpenses}
-            min={canManageExpenses ? undefined : today}
-            max={canManageExpenses ? undefined : today}
-            aria-describedby={!canManageExpenses ? "member-expense-date-help" : undefined}
-            className="h-12 bg-card"
-          />
-          {!canManageExpenses && (
-            <p id="member-expense-date-help" className="text-xs text-muted-foreground">
-              Members can record and correct expenses for today only. Ask an admin to backdate.
-            </p>
-          )}
-        </div>
-
          <div className="md:col-span-2 space-y-4 rounded-xl border border-border/60 bg-card p-4">
            <div>
-             <p className="text-sm font-semibold text-foreground">3. How was this expense funded?</p>
+             <p className="text-sm font-bold text-primary">3. How was this expense funded?</p>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
@@ -1708,17 +1713,16 @@ export default function Expenses() {
                 form.setOtherIncomeSourceLabel(null);
                    setAllowMixedFunding(nextPaidFromBank && hasDirectSelection);
                   if (nextPaidFromBank && mode === "add") {
-                   const remaining = getFundingRemainder(Number(form.amount), directTotal);
                    if (hasDirectSelection) {
                      form.setPayerAmounts((previous) => ({
                        ...previous,
-                       __joint_bank__: directTotal > 0 ? String(remaining) : form.amount,
+                       __joint_bank__: "",
                      }));
                    } else {
                      form.setPaidById("");
                      form.setPayerIds([]);
                      form.setPayerIncomeSourceIds({});
-                     form.setPayerAmounts({ __joint_bank__: form.amount });
+                     form.setPayerAmounts({ __joint_bank__: "" });
                    }
                   } else if (!nextPaidFromBank && mode === "add") {
                     form.setPayerAmounts((previous) => {

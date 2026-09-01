@@ -24,6 +24,10 @@ describe("Ask Jamvi server LLM guardrails", () => {
   });
 
   it("sends the question and selected summary to the server-side model", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+    delete process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
     process.env.BUILT_IN_FORGE_API_URL = "https://forge.example";
     process.env.BUILT_IN_FORGE_API_KEY = "test-key";
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: "You have KES 18,000 left." } }] }), { status: 200 }));
@@ -34,5 +38,65 @@ describe("Ask Jamvi server LLM guardrails", () => {
     expect(body.messages[1].content).toContain("How much is left?");
     expect(body.messages[1].content).toContain("Personal budget");
     expect(body.messages[0].content).toContain("Never instruct or claim");
+    expect(body.max_completion_tokens).toBe(8192);
+  });
+
+  it("uses the managed Replit OpenAI integration when no override is set", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    process.env.AI_INTEGRATIONS_OPENAI_BASE_URL = "https://managed-openai.example";
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY = "managed-test-key";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: "You have KES 18,000 left." } }] }), { status: 200 }));
+
+    await expect(generateAskJamviResponse("How much is left?", summary)).resolves.toBe("You have KES 18,000 left.");
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://managed-openai.example/chat/completions");
+  });
+
+  it("does not leak provider error details to callers", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    process.env.AI_INTEGRATIONS_OPENAI_BASE_URL = "https://managed-openai.example";
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY = "managed-test-key";
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      error: { code: "unsupported_parameter", message: "Provider detail" },
+    }), { status: 400 }));
+
+    await expect(generateAskJamviResponse("How much is left?", summary))
+      .rejects.toThrow("Ask Jamvi could not answer right now.");
+  });
+
+  it("reads managed chat responses that return content parts", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    process.env.AI_INTEGRATIONS_OPENAI_BASE_URL = "https://managed-openai.example";
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY = "managed-test-key";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: [{ type: "text", text: "KES 18,000 remains." }] } }],
+    }), { status: 200 }));
+
+    await expect(generateAskJamviResponse("How much is left?", summary))
+      .resolves.toBe("KES 18,000 remains.");
+  });
+
+  it("reads Responses-style output text when returned by the managed proxy", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    process.env.AI_INTEGRATIONS_OPENAI_BASE_URL = "https://managed-openai.example";
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY = "managed-test-key";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      output: [{ content: [{ type: "output_text", text: "KES 18,000 remains." }] }],
+    }), { status: 200 }));
+
+    await expect(generateAskJamviResponse("How much is left?", summary))
+      .resolves.toBe("KES 18,000 remains.");
   });
 });

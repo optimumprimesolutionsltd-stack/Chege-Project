@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
+  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction, useDeleteExpense,
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
   useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank, useGetGroup,
   getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
   getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey, useUpdateJointAccountOpeningBalance,
   useGetJointAccounts, useCreateJointAccount, useUpdateJointAccount, useDeleteJointAccount,
-  getGetJointAccountsQueryKey, useTransferBankToBank,
+  getGetJointAccountsQueryKey, getGetExpensesQueryKey, useTransferBankToBank,
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -38,6 +38,7 @@ type EditableTransaction = {
   accountId?: number | null;
   type: string;
   amount: number;
+  runningBalance?: number | null;
   description: string;
   date: string;
   madeById?: string | null;
@@ -50,6 +51,7 @@ type EditableTransaction = {
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
   transferDirection?: string | null;
+  expenseId?: number | null;
   contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
 };
 
@@ -69,6 +71,7 @@ export default function Bank() {
   const createBankCharge = useCreateBankCharge();
   const updateTx = useUpdateJointAccountTransaction();
   const deleteTx = useDeleteJointAccountTransaction();
+  const deleteExpense = useDeleteExpense();
   const transferToSavings = useTransferBankToSavings();
   const transferFromSavings = useTransferSavingsToBank();
   const updateOpeningBalance = useUpdateJointAccountOpeningBalance();
@@ -118,10 +121,14 @@ export default function Bank() {
   const [bankTransferDestinationId, setBankTransferDestinationId] = useState<number | null>(null);
   const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState("");
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(new Date().toISOString().slice(0, 10));
   const [editingOpeningBalance, setEditingOpeningBalance] = useState(false);
   const [accountNameDraft, setAccountNameDraft] = useState("");
   const [accountNumberDraft, setAccountNumberDraft] = useState("");
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
+  const [addingAccount, setAddingAccount] = useState(false);
+
+  const selectedBankAccount = accounts.find((item) => item.id === selectedAccountId) ?? null;
 
   useEffect(() => {
     if (!accounts.length) {
@@ -142,6 +149,14 @@ export default function Bank() {
     if (!bankSelectionKey || !selectedAccountId) return;
     try { localStorage.setItem(bankSelectionKey, String(selectedAccountId)); } catch {}
   }, [bankSelectionKey, selectedAccountId]);
+
+  useEffect(() => {
+    if (!selectedBankAccount || addingAccount) return;
+    if (editingAccountId === selectedBankAccount.id) return;
+    setEditingAccountId(selectedBankAccount.id);
+    setAccountNameDraft(selectedBankAccount.name);
+    setAccountNumberDraft(selectedBankAccount.accountNumber ?? "");
+  }, [selectedBankAccount, addingAccount, editingAccountId]);
 
   // Income sources — only fetch when exactly one named depositor is selected
   const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
@@ -164,10 +179,12 @@ export default function Bank() {
     queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
   };
 
   const openOpeningBalanceEditor = () => {
     setOpeningBalanceDraft(String(account?.openingBalance ?? 0));
+    setOpeningBalanceDate(account?.openingBalanceDate ?? new Date().toISOString().slice(0, 10));
     setEditingOpeningBalance(true);
   };
 
@@ -184,7 +201,9 @@ export default function Bank() {
     }
     try {
       if (!selectedAccountId) throw new Error("No bank account selected");
-      await updateOpeningBalance.mutateAsync({ data: { openingBalance: value, accountId: selectedAccountId } });
+      await updateOpeningBalance.mutateAsync({
+        data: { openingBalance: value, openingBalanceDate, accountId: selectedAccountId },
+      });
       setEditingOpeningBalance(false);
       toast({
         title: "Opening balance saved",
@@ -214,9 +233,10 @@ export default function Bank() {
       setSelectedAccountId(saved.id);
       setAccountNameDraft("");
       setAccountNumberDraft("");
-      setEditingAccountId(null);
+      setEditingAccountId(saved.id);
+      setAddingAccount(false);
       invalidate();
-      toast({ title: editingAccountId ? "Account renamed" : "Account added" });
+      toast({ title: editingAccountId ? "Account updated" : "Account added" });
     } catch {
       toast({ variant: "destructive", title: "Could not save account", description: "Check the name and try again." });
     }
@@ -232,6 +252,21 @@ export default function Bank() {
     } catch {
       toast({ variant: "destructive", title: "Could not remove account", description: "Accounts with transaction history must be kept." });
     }
+  };
+
+  const startAddingAccount = () => {
+    setAddingAccount(true);
+    setEditingAccountId(null);
+    setAccountNameDraft("");
+    setAccountNumberDraft("");
+  };
+
+  const startEditingSelectedAccount = () => {
+    if (!selectedBankAccount) return;
+    setAddingAccount(false);
+    setEditingAccountId(selectedBankAccount.id);
+    setAccountNameDraft(selectedBankAccount.name);
+    setAccountNumberDraft(selectedBankAccount.accountNumber ?? "");
   };
 
   const handleCreateCategory = async () => {
@@ -601,7 +636,7 @@ export default function Bank() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (tx: EditableTransaction) => {
     if (!canManageAccount) {
       toast({
         variant: "destructive",
@@ -610,13 +645,24 @@ export default function Bank() {
       });
       return;
     }
-    if (!confirm("Delete this transaction?")) return;
+    const deletesExpense = tx.expenseId != null;
+    if (!confirm(deletesExpense
+      ? "Delete this expense? Its bank funding transaction will also be removed."
+      : "Delete this transaction?")) return;
     try {
-      await deleteTx.mutateAsync({ id });
-      toast({ title: "Transaction deleted" });
+      if (deletesExpense) {
+        await deleteExpense.mutateAsync({ id: tx.expenseId! });
+      } else {
+        await deleteTx.mutateAsync({ id: tx.id });
+      }
+      toast({ title: deletesExpense ? "Expense deleted" : "Transaction deleted" });
       invalidate();
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not delete transaction." });
+    } catch (error: unknown) {
+      toast({
+        variant: "destructive",
+        title: deletesExpense ? "Could not delete expense" : "Could not delete transaction",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     }
   };
 
@@ -673,13 +719,14 @@ export default function Bank() {
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Personalize bank accounts</p>
               <p className="mb-3 text-xs text-muted-foreground">Give each account a name you recognize, such as M-Pesa wallet, KCB salary, or Savings.</p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={editingAccountId ? "New account name" : "e.g. Family M-Pesa"} maxLength={80} />
+                <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={addingAccount ? "e.g. Family M-Pesa" : "Account name"} maxLength={80} />
                 <Input data-testid="input-bank-account-number" value={accountNumberDraft} onChange={(event) => setAccountNumberDraft(event.target.value)} placeholder="Account number (optional)" maxLength={40} />
-                <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{editingAccountId ? "Save changes" : "Add account"}</Button>
-                {editingAccountId && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={() => { setEditingAccountId(null); setAccountNameDraft(""); setAccountNumberDraft(""); }}>Cancel</Button>}
+                <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{addingAccount ? "Add account" : "Save changes"}</Button>
+                {!addingAccount && <Button type="button" variant="outline" data-testid="button-add-bank-account" onClick={startAddingAccount}>Add another</Button>}
+                {addingAccount && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={startEditingSelectedAccount}>Cancel</Button>}
               </div>
               {selectedAccountId && <div className="mt-2 flex gap-2">
-                <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={() => { const item = accounts.find((candidate) => candidate.id === selectedAccountId); setEditingAccountId(selectedAccountId); setAccountNameDraft(item?.name ?? ""); setAccountNumberDraft(item?.accountNumber ?? ""); }}>Personalize selected</Button>
+                <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={startEditingSelectedAccount}>Edit selected account</Button>
                 <Button type="button" size="sm" variant="destructive" data-testid="button-remove-bank-account" onClick={() => handleAccountDelete(selectedAccountId)} disabled={deleteAccount.isPending}>Remove selected</Button>
               </div>}
             </div>
@@ -708,6 +755,7 @@ export default function Bank() {
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="opacity-75">
                     Opening balance: <span className="font-semibold">{formatKes(account?.openingBalance ?? 0)}</span>
+                    {account?.openingBalanceDate ? ` as of ${formatDate(account.openingBalanceDate)}` : ""}
                   </span>
                   {canManageAccount && (
                     <Button
@@ -762,8 +810,21 @@ export default function Bank() {
                   className="h-12 text-lg bg-card"
                   autoFocus
                 />
+                <label className="text-sm font-semibold text-foreground" htmlFor="bank-opening-balance-date">
+                  Balance date
+                </label>
+                <Input
+                  id="bank-opening-balance-date"
+                  data-testid="input-opening-balance-date"
+                  type="date"
+                  value={openingBalanceDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setOpeningBalanceDate(e.target.value)}
+                  className="h-12 bg-card"
+                  required
+                />
                 <p className="text-xs text-muted-foreground">
-                  Current balance = opening balance + deposits − withdrawals.
+                  The date marks when this starting amount applied. Current balance = opening balance + deposits − withdrawals.
                 </p>
               </div>
               <div className="flex justify-end gap-3">
@@ -863,6 +924,25 @@ export default function Bank() {
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {mode === "bank_charge" && (
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-sm font-semibold text-foreground">Bank account</label>
+                    <select
+                      data-testid="select-bank-charge-account"
+                      required
+                      value={selectedAccountId ?? ""}
+                      onChange={e => setSelectedAccountId(Number(e.target.value))}
+                      className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
+                    >
+                      {accounts.map(candidate => (
+                        <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      This charge reduces only the selected account.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
                   <Input
@@ -1307,9 +1387,16 @@ export default function Bank() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
-                      {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
-                    </p>
+                    <div className="text-right">
+                      <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
+                        {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
+                      </p>
+                      {typeof tx.runningBalance === "number" && (
+                        <p className="text-xs text-muted-foreground" data-testid={`running-balance-${tx.id}`}>
+                          Balance {formatKes(tx.runningBalance)}
+                        </p>
+                      )}
+                    </div>
                     {canEditTransaction(tx) && !isBankTransfer && <Button
                       variant="ghost"
                       size="icon"
@@ -1324,7 +1411,7 @@ export default function Bank() {
                       size="icon"
                       data-testid={`button-delete-tx-${tx.id}`}
                       className="text-destructive hover:text-destructive hover:bg-destructive/10 h-9 w-9"
-                      onClick={() => handleDelete(tx.id)}
+                      onClick={() => handleDelete(tx)}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>}

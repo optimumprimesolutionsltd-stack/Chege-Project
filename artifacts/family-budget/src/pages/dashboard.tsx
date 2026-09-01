@@ -37,10 +37,10 @@ import {
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { formatKes, formatDate } from "@/lib/utils";
+import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag, BellRing,
+   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronLeft, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag, BellRing, CalendarDays,
   ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,105 @@ type DashboardExpense = {
 function isUncategorizedExpense(expense: DashboardExpense) {
   return !expense.category?.trim()
     && !(expense.categoryAllocations ?? []).some((allocation) => allocation.category.trim());
+}
+
+function shiftDashboardMonth(month: number, year: number, offset: number) {
+  const date = new Date(year, month - 1 + offset, 1);
+  return { month: date.getMonth() + 1, year: date.getFullYear() };
+}
+
+function DashboardMonthNavigator({
+  month,
+  year,
+  currentMonth,
+  currentYear,
+  onChange,
+}: {
+  month: number;
+  year: number;
+  currentMonth: number;
+  currentYear: number;
+  onChange: (period: { month: number; year: number }) => void;
+}) {
+  const isCurrentMonth = month === currentMonth && year === currentYear;
+  const inputValue = `${year}-${String(month).padStart(2, "0")}`;
+
+  return (
+    <section
+      aria-labelledby="dashboard-month-heading"
+      className="mt-3 max-w-xl rounded-2xl border-2 border-primary/30 bg-primary/[0.07] p-3 shadow-sm sm:p-4"
+      data-testid="dashboard-month-navigator"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <CalendarDays className="h-5 w-5" aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Viewing month</p>
+          <h2 id="dashboard-month-heading" className="mt-0.5 text-xl font-display font-bold text-foreground sm:text-2xl" data-testid="dashboard-selected-month">
+            {formatMonthYear(month, year)}
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {isCurrentMonth ? "This is the current month." : "You are viewing a past or future month."}
+          </p>
+        </div>
+        {isCurrentMonth && (
+          <span className="ml-auto shrink-0 rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">
+            Current
+          </span>
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-10 w-10 border-primary/30 bg-background"
+          onClick={() => onChange(shiftDashboardMonth(month, year, -1))}
+          aria-label="View previous month"
+          data-testid="dashboard-previous-month"
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-10 w-10 border-primary/30 bg-background"
+          onClick={() => onChange(shiftDashboardMonth(month, year, 1))}
+          aria-label="View next month"
+          data-testid="dashboard-next-month"
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <label className="flex h-10 min-w-[155px] flex-1 items-center gap-2 rounded-md border border-primary/30 bg-background px-3 text-sm font-semibold text-foreground sm:flex-none">
+          <span className="sr-only">Choose a month</span>
+          <input
+            type="month"
+            value={inputValue}
+            onChange={(event) => {
+              const [nextYear, nextMonth] = event.target.value.split("-").map(Number);
+              if (nextYear && nextMonth) onChange({ month: nextMonth, year: nextYear });
+            }}
+            aria-label="Choose a month"
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
+            data-testid="dashboard-month-picker"
+          />
+        </label>
+        {!isCurrentMonth && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 px-3 text-sm font-semibold text-primary hover:bg-primary/10"
+            onClick={() => onChange({ month: currentMonth, year: currentYear })}
+            data-testid="dashboard-current-month"
+          >
+            Back to current
+          </Button>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function DashboardActivityRow({
@@ -1043,16 +1142,33 @@ function ExpenseForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-       <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-         <p className="text-sm font-semibold text-foreground">1. Record the expense</p>
+       <div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3">
+         <p className="text-sm font-bold text-primary">1. Record the expense</p>
          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
            Enter the total once, then show what it covered and where the money came from.
          </p>
        </div>
+       <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="expense-date-section-dashboard">
+         <label className="text-sm font-bold text-primary">
+           When did this happen? <span className="text-destructive">*</span>
+         </label>
+         <p className="text-xs leading-relaxed text-muted-foreground">
+           This date decides which month includes the expense in budgets, totals, and reports.
+         </p>
+         <Input
+           type="date"
+           value={date}
+           onChange={e => setDate(e.target.value)}
+           max={isSharedWorkspace && !canManageShared ? today : undefined}
+           required
+           className="h-11 bg-card"
+         />
+         {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
+       </div>
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
-           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-11 bg-card text-base" autoFocus />
+        <div className="space-y-1.5 rounded-xl border border-primary/35 bg-primary/5 p-3">
+          <label className="text-sm font-bold text-primary">Expense total (KES)</label>
+           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-14 border-primary/50 bg-background text-xl font-bold shadow-sm sm:h-12" autoFocus data-testid="expense-total-dashboard" />
         </div>
          {!isOtherCategory && (
            <div className="space-y-1.5 lg:col-span-1">
@@ -1068,7 +1184,7 @@ function ExpenseForm({
          )}
          <div className="space-y-3 sm:col-span-2 lg:col-span-4 rounded-xl border border-border/60 bg-card p-4">
            <div>
-              <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
+               <label className="text-sm font-bold text-primary">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                  Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
              </p>
@@ -1091,7 +1207,7 @@ function ExpenseForm({
                  });
                  setSaveOtherAsCategory(false);
                }}
-                className="h-11 w-full flex-1 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                 className="h-14 w-full flex-1 rounded-xl border border-input bg-card px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:h-12"
              >
                 <option value="">Select a category</option>
                {categories
@@ -1336,36 +1452,23 @@ function ExpenseForm({
             )}
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-         {!isOtherCategory && (
-           <div className="space-y-1.5">
-             <label className="text-sm font-semibold text-foreground">
-               Notes <span className="font-normal text-muted-foreground">(optional)</span>
-             </label>
-             <Input
-               placeholder="Any extra details…"
-               value={notes}
-               onChange={e => setNotes(e.target.value)}
-               className="h-11 bg-card"
-             />
-           </div>
-         )}
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Date <span className="text-destructive">*</span></label>
-          <Input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            max={isSharedWorkspace && !canManageShared ? today : undefined}
-            className="h-11 bg-card"
-          />
-          {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
-        </div>
-      </div>
+       {!isOtherCategory && (
+         <div className="space-y-1.5">
+           <label className="text-sm font-semibold text-foreground">
+             Notes <span className="font-normal text-muted-foreground">(optional)</span>
+           </label>
+           <Input
+             placeholder="Any extra details…"
+             value={notes}
+             onChange={e => setNotes(e.target.value)}
+             className="h-11 bg-card"
+           />
+         </div>
+       )}
       <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
         <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
           <div>
-             <p className="text-sm font-semibold text-foreground">3. How was this expense funded?</p>
+              <p className="text-sm font-bold text-primary">3. How was this expense funded?</p>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
@@ -1441,17 +1544,16 @@ function ExpenseForm({
                      const directTotal = (Number(directPortion) || 0)
                        + additionalDirectPortions.reduce((sum, portion) => sum + (Number(portion.amount) || 0), 0);
                       const hasDirectSelection = Boolean(incomeSourceId || directTotal > 0 || additionalDirectPortions.length > 0);
-                     const remaining = getFundingRemainder(Number(amount), directTotal);
                      setPaidFromBank(true);
                      setAllowMixedFunding(hasDirectSelection);
                      if (hasDirectSelection) {
-                        setBankPortion(directTotal > 0 ? String(remaining) : amount);
+                        setBankPortion("");
                      } else {
                        setPaidBy("");
                        setIncomeSourceId(null);
                        setDirectPortion("");
                        setAdditionalDirectPortions([]);
-                       setBankPortion(amount);
+                       setBankPortion("");
                      }
                    }
                 }}
@@ -1903,8 +2005,10 @@ function GoalForm({
 // ── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const [selectedPeriod, setSelectedPeriod] = useState({ month: currentMonth, year: currentYear });
+  const { month, year } = selectedPeriod;
   const [location] = useLocation();
   const requestedQuickAction = getQuickActionFromLocation(location);
   const [activeAction, setActiveAction] = useState<QuickAction>(() => requestedQuickAction ?? "none");
@@ -2077,9 +2181,13 @@ export default function Dashboard() {
           <h1 className="mt-1 text-2xl font-display font-bold text-foreground sm:text-3xl">
             {group?.isPrivate ? "Personal overview" : "Group overview"}
           </h1>
-          <p className="mt-1 text-muted-foreground">
-            {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
-          </p>
+           <DashboardMonthNavigator
+             month={month}
+             year={year}
+             currentMonth={currentMonth}
+             currentYear={currentYear}
+             onChange={setSelectedPeriod}
+           />
           </div>
         </div>
 

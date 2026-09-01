@@ -14,6 +14,11 @@ export interface JointAccountTransaction {
   /** deposit or disbursement */
   type: string;
   amount: number;
+  /**
+     * Balance in this specific bank account immediately after this transaction; null for an all-accounts view
+     * @nullable
+     */
+  runningBalance?: number | null;
   description: string;
   madeById?: string | null;
   madeByName?: string | null;

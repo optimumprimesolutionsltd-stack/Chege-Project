@@ -12,15 +12,68 @@ export function isAskJamviActionRequest(question: string): boolean {
   return ACTION_REQUEST.test(question.trim());
 }
 
+function chatCompletionsUrl(baseUrl: string): string {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  return normalizedBaseUrl.endsWith("/v1")
+    ? `${normalizedBaseUrl}/chat/completions`
+    : `${normalizedBaseUrl}/v1/chat/completions`;
+}
+
+function extractModelText(payload: unknown): string {
+  if (payload === null || typeof payload !== "object") return "";
+  const value = payload as Record<string, unknown>;
+  if (typeof value.output_text === "string" && value.output_text.trim()) return value.output_text.trim();
+
+  const choices = Array.isArray(value.choices) ? value.choices : [];
+  const firstChoice = choices[0];
+  if (firstChoice && typeof firstChoice === "object") {
+    const message = (firstChoice as Record<string, unknown>).message;
+    if (message && typeof message === "object") {
+      const content = (message as Record<string, unknown>).content;
+      if (typeof content === "string") return content.trim();
+      if (Array.isArray(content)) {
+        const text = content.flatMap((part) => {
+          if (typeof part === "string") return [part];
+          if (part === null || typeof part !== "object") return [];
+          const partValue = part as Record<string, unknown>;
+          if (typeof partValue.text === "string") return [partValue.text];
+          if (typeof partValue.content === "string") return [partValue.content];
+          return [];
+        }).join("\n").trim();
+        if (text) return text;
+      }
+    }
+  }
+
+  const output = Array.isArray(value.output) ? value.output : [];
+  return output.flatMap((item) => {
+    if (item === null || typeof item !== "object") return [];
+    const content = (item as Record<string, unknown>).content;
+    if (!Array.isArray(content)) return [];
+    return content.flatMap((part) => {
+      if (part === null || typeof part !== "object") return [];
+      const text = (part as Record<string, unknown>).text;
+      return typeof text === "string" ? [text] : [];
+    });
+  }).join("\n").trim();
+}
+
 export async function generateAskJamviResponse(question: string, summary: AskJamviSummary): Promise<string> {
   if (isAskJamviActionRequest(question)) {
     return "I can explain your budget, spending, income, and goals, but I cannot move money or change records.";
   }
-  const baseUrl = process.env.ASK_JAMVI_API_URL ?? process.env.BUILT_IN_FORGE_API_URL;
-  const apiKey = process.env.ASK_JAMVI_API_KEY ?? process.env.BUILT_IN_FORGE_API_KEY;
+  const customBaseUrl = process.env.ASK_JAMVI_API_URL;
+  const managedBaseUrl = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  const baseUrl = customBaseUrl ?? managedBaseUrl ?? process.env.BUILT_IN_FORGE_API_URL;
+  const apiKey = process.env.ASK_JAMVI_API_KEY
+    ?? (managedBaseUrl ? process.env.AI_INTEGRATIONS_OPENAI_API_KEY : undefined)
+    ?? process.env.BUILT_IN_FORGE_API_KEY;
   if (!baseUrl || !apiKey) throw new Error("Ask Jamvi AI is not configured on this server.");
+  const endpoint = !customBaseUrl && managedBaseUrl
+    ? `${managedBaseUrl.replace(/\/+$/, "")}/chat/completions`
+    : chatCompletionsUrl(baseUrl);
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/chat/completions`, {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -32,12 +85,30 @@ export async function generateAskJamviResponse(question: string, summary: AskJam
         },
         { role: "user", content: JSON.stringify({ question, budgetContext: summary }) },
       ],
-      max_completion_tokens: 350,
+      max_completion_tokens: 8192,
     }),
   });
-  if (!response.ok) throw new Error("Ask Jamvi could not answer right now.");
-  const payload = await response.json() as { choices?: Array<{ message?: { content?: string | null } }> };
-  const answer = payload.choices?.[0]?.message?.content?.trim();
+  if (!response.ok) {
+    const responseText = await response.text();
+    let providerError: { code?: string; message?: string } = {};
+    try {
+      const payload = JSON.parse(responseText) as { error?: { code?: unknown; message?: unknown } };
+      providerError = {
+        code: typeof payload.error?.code === "string" ? payload.error.code : undefined,
+        message: typeof payload.error?.message === "string" ? payload.error.message : undefined,
+      };
+    } catch {
+      providerError = {};
+    }
+    console.error("Ask Jamvi provider request failed", {
+      status: response.status,
+      code: providerError.code,
+      message: providerError.message,
+    });
+    throw new Error("Ask Jamvi could not answer right now.");
+  }
+  const payload: unknown = await response.json();
+  const answer = extractModelText(payload);
   if (!answer) throw new Error("Ask Jamvi returned an empty answer.");
   return answer;
 }

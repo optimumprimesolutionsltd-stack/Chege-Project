@@ -9,5 +9,6 @@
 export interface OpeningBalance {
   /** @minimum 0 */
   openingBalance: number;
+  openingBalanceDate?: Date;
   accountId: number;
 }

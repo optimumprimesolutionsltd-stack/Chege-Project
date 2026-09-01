@@ -1064,11 +1064,60 @@ export default function AddExpenseSheet() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: botPad + 24 }]}
       >
+        {/* Date comes first because it determines the month used by budgets and reports. */}
+        <View testID="expense-date-section" style={{ marginBottom: 4 }}>
+          <View style={styles.labelRow}>
+            <Text style={[styles.label, { color: colors.primary, marginBottom: 0 }]}>
+              WHEN DID THIS HAPPEN? <Text style={{ color: '#ef4444' }}>*</Text>
+            </Text>
+            <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0, fontSize: 11 }]}>
+              Backdate allowed · no future dates
+            </Text>
+          </View>
+          <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
+            This date decides which month includes the expense in budgets, totals, and reports.
+          </Text>
+          <Pressable
+            onPress={() => setShowDatePicker(true)}
+            style={[
+              styles.dateRow,
+              { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: colors.radius },
+            ]}
+          >
+            <Feather name="calendar" size={16} color={colors.primary} style={{ marginRight: 8 }} />
+            <Text style={[styles.dateText, { color: colors.foreground, flex: 1 }]}>
+              {formatDateDisplay(date)}
+            </Text>
+            {date === todayIso()
+              ? <Text style={[styles.dateBadge, { backgroundColor: colors.primary + '22', color: colors.primary }]}>Today</Text>
+              : <Text style={[styles.dateBadge, { backgroundColor: 'rgba(251,191,36,0.15)', color: '#fbbf24' }]}>Backdated</Text>
+            }
+          </Pressable>
+          {showDatePicker && (
+            <DateTimePicker
+              value={new Date(date + 'T00:00:00')}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+              maximumDate={new Date()}
+              onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                setShowDatePicker(Platform.OS === 'ios');
+                if (selected) {
+                  const y = selected.getFullYear();
+                  const m = String(selected.getMonth() + 1).padStart(2, '0');
+                  const d = String(selected.getDate()).padStart(2, '0');
+                  setDate(`${y}-${m}-${d}`);
+                }
+              }}
+            />
+          )}
+        </View>
+
         {/* Amount */}
-        <View style={styles.amountSection}>
-          <Text style={[styles.currencyLabel, { color: colors.mutedForeground }]}>KES</Text>
+        <Text style={[styles.label, { color: colors.primary, marginTop: 0 }]}>EXPENSE TOTAL</Text>
+        <View style={[styles.amountSection, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '60', borderRadius: colors.radius }]}>
+          <Text style={[styles.currencyLabel, { color: colors.primary }]}>KES</Text>
           <TextInput
-            style={[styles.amountInput, { color: colors.foreground }]}
+            style={[styles.amountInput, { color: colors.primary }]}
             placeholder="0"
             placeholderTextColor={colors.mutedForeground}
             keyboardType="numeric"
@@ -1079,7 +1128,7 @@ export default function AddExpenseSheet() {
         </View>
 
         {/* Category */}
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>CATEGORY (OPTIONAL)</Text>
+        <Text style={[styles.label, { color: colors.primary }]}>CATEGORY (OPTIONAL)</Text>
         <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
           Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
         </Text>
@@ -1445,10 +1494,10 @@ export default function AddExpenseSheet() {
            </>
 
         {/* Who paid */}
-        {members.length > 0 && (
+        {(canManageShared || selectablePayers.length > 0) && (
           <>
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>
-              PAID BY <Text style={{ color: '#ef4444' }}>*</Text>
+            <Text style={[styles.label, { color: colors.primary }]}>
+              FUNDING OPTIONS <Text style={{ color: '#ef4444' }}>*</Text>
             </Text>
             <View style={styles.paidByRow}>
               {/* Joint-bank spending is restricted to group managers. */}
@@ -1459,25 +1508,23 @@ export default function AddExpenseSheet() {
                     setPaidFromBank(false);
                     setAllowMixedFunding(false);
                   } else {
-                    const total = parseFloat(amount.replace(/,/g, '')) || 0;
                     const directTotal = selectedSources.length > 0
                       ? selectedSources.reduce((sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0), 0)
                       : payerIds.reduce((sum, payerId) => sum + (parseFloat(payerAmounts[payerId] || '0') || 0), 0);
                     const hasDirectSelection = selectedSources.length > 0 || directTotal > 0;
-                    const remaining = getFundingRemainder(total, directTotal);
                     setPaidFromBank(true);
                     setAllowMixedFunding(hasDirectSelection);
                     if (hasDirectSelection) {
                       setPayerAmounts((previous) => ({
                         ...previous,
-                        __joint_bank__: directTotal > 0 ? String(remaining) : amount.replace(/,/g, ''),
+                        __joint_bank__: '',
                       }));
                     } else {
                       setPayerIds([]);
                       setSelectedSources([]);
                       setSplitAmounts({});
                       setPayerIncomeSourceIds({});
-                      setPayerAmounts({ __joint_bank__: amount.replace(/,/g, '') });
+                      setPayerAmounts({ __joint_bank__: '' });
                     }
                   }
                 }}
@@ -1486,10 +1533,13 @@ export default function AddExpenseSheet() {
                   borderColor: paidFromBank ? '#38bdf8' : colors.border,
                   borderRadius: colors.radius,
                 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Use a bank account to fund this expense"
+                testID="expense-bank-funding-option"
               >
                 <Feather name="credit-card" size={14} color={paidFromBank ? '#38bdf8' : colors.mutedForeground} />
                 <Text style={[styles.paidByText, { color: paidFromBank ? '#38bdf8' : colors.foreground }]}>
-                  Joint bank
+                  Bank account
                 </Text>
               </Pressable>}
               {selectablePayers.map((m) => {
@@ -1695,7 +1745,7 @@ export default function AddExpenseSheet() {
                   </Text>
                   {paidFromBank && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold', width: 76 }}>Joint bank</Text>
+                      <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold', width: 76 }}>Bank account</Text>
                       <TextInput
                         style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.muted, paddingHorizontal: 12, fontSize: 16, color: colors.foreground, fontFamily: 'Inter_400Regular' }}
                         keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground}
@@ -1956,49 +2006,6 @@ export default function AddExpenseSheet() {
           </View>
         )}
 
-        {/* Date — required, no future dates */}
-        <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: colors.mutedForeground, marginBottom: 0 }]}>
-            DATE <Text style={{ color: '#ef4444' }}>*</Text>
-          </Text>
-          <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0, fontSize: 11 }]}>
-            Backdate allowed · no future dates
-          </Text>
-        </View>
-        <Pressable
-          onPress={() => setShowDatePicker(true)}
-          style={[
-            styles.dateRow,
-            { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: colors.radius },
-          ]}
-        >
-          <Feather name="calendar" size={16} color={colors.primary} style={{ marginRight: 8 }} />
-          <Text style={[styles.dateText, { color: colors.foreground, flex: 1 }]}>
-            {formatDateDisplay(date)}
-          </Text>
-          {date === todayIso()
-            ? <Text style={[styles.dateBadge, { backgroundColor: colors.primary + '22', color: colors.primary }]}>Today</Text>
-            : <Text style={[styles.dateBadge, { backgroundColor: 'rgba(251,191,36,0.15)', color: '#fbbf24' }]}>Backdated</Text>
-          }
-        </Pressable>
-        {showDatePicker && (
-          <DateTimePicker
-            value={new Date(date + 'T00:00:00')}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
-            maximumDate={new Date()}
-            onChange={(_event: DateTimePickerEvent, selected?: Date) => {
-              setShowDatePicker(Platform.OS === 'ios');
-              if (selected) {
-                const y = selected.getFullYear();
-                const m = String(selected.getMonth() + 1).padStart(2, '0');
-                const d = String(selected.getDate()).padStart(2, '0');
-                setDate(`${y}-${m}-${d}`);
-              }
-            }}
-          />
-        )}
-
         {/* Recurring expenses affect shared planning and are manager-only. */}
         {canManageShared && <View
           style={[
@@ -2148,7 +2155,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 8,
     marginBottom: 24,
-    paddingHorizontal: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1.5,
   },
   currencyLabel: {
     fontSize: 22,
@@ -2172,7 +2181,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryScroll: { marginHorizontal: -20 },
-  categoryScrollContent: { paddingHorizontal: 20, gap: 8 },
+  categoryScrollContent: { paddingHorizontal: 20, paddingVertical: 4, gap: 10 },
   oneOffCategoryOption: {
     marginTop: 10,
     borderWidth: 1,
@@ -2189,13 +2198,16 @@ const styles = StyleSheet.create({
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    minHeight: 48,
+    minWidth: 112,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
   },
   categoryChipText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500' as const,
     fontFamily: 'Inter_500Medium',
   },

@@ -967,6 +967,11 @@ export interface JointAccountTransaction {
   /** deposit or disbursement */
   type: string;
   amount: number;
+  /**
+     * Balance in this specific bank account immediately after this transaction; null for an all-accounts view
+     * @nullable
+     */
+  runningBalance?: number | null;
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
@@ -1019,6 +1024,11 @@ export interface JointAccountTransaction {
 export interface JointAccountSummary {
   /** Manually entered balance carried into the first recorded transaction */
   openingBalance: number;
+  /**
+     * Calendar date on which the opening balance applies
+     * @nullable
+     */
+  openingBalanceDate?: string | null;
   accountId: number;
   accountName: string;
   /** @nullable */
@@ -1035,12 +1045,14 @@ export interface JointAccountSummary {
 export interface OpeningBalance {
   /** @minimum 0 */
   openingBalance: number;
+  openingBalanceDate?: string;
   accountId: number;
 }
 
 export interface OpeningBalanceInput {
   /** @minimum 0 */
   openingBalance: number;
+  openingBalanceDate?: string;
   /**
      * Manual starting balance in whole KES
      * @minimum 1
@@ -1240,6 +1252,7 @@ export interface BankAccount {
   /** @nullable */
   accountNumber: string | null;
   openingBalance: number;
+  openingBalanceDate?: string;
   createdAt: string;
 }
 
@@ -1256,6 +1269,7 @@ export interface BankAccountInput {
   accountNumber?: string;
   /** @minimum 0 */
   openingBalance?: number;
+  openingBalanceDate?: string;
 }
 
 export interface BankAccountUpdate {
@@ -1272,6 +1286,7 @@ export interface BankAccountUpdate {
   accountNumber?: string | null;
   /** @minimum 0 */
   openingBalance?: number;
+  openingBalanceDate?: string;
 }
 
 export interface SavingsGoalInput {

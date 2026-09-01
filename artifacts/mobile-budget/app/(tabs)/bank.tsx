@@ -30,6 +30,7 @@ import {
   useCreateBankCharge,
   useUpdateJointAccountTransaction,
   useDeleteJointAccountTransaction,
+  useDeleteExpense,
   useGetBudgetCategories,
   getGetBudgetCategoriesQueryKey,
   useGetMembers,
@@ -47,6 +48,7 @@ import {
   useUpdateJointAccount,
   useDeleteJointAccount,
   getGetJointAccountsQueryKey,
+  getGetExpensesQueryKey,
   customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -74,6 +76,7 @@ type Tx = {
   id: number;
   type: string;
   amount: number;
+  runningBalance?: number | null;
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
@@ -83,6 +86,7 @@ type Tx = {
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
   transferDirection?: string | null;
+  expenseId?: number | null;
   bankTransferId?: string | null;
   bankTransferAccountId?: number | null;
   bankTransferAccountName?: string | null;
@@ -141,6 +145,8 @@ export default function BankScreen() {
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [openingBalanceModalVisible, setOpeningBalanceModalVisible] = useState(false);
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState('');
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(todayIso());
+  const [showOpeningBalanceDatePicker, setShowOpeningBalanceDatePicker] = useState(false);
   const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [accountNameDraft, setAccountNameDraft] = useState('');
@@ -180,6 +186,7 @@ export default function BankScreen() {
   const { mutateAsync: createBankCharge } = useCreateBankCharge();
   const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
+  const { mutateAsync: deleteExpense } = useDeleteExpense();
   const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
   const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
   const { mutateAsync: transferBankToBank } = useTransferBankToBank();
@@ -300,6 +307,7 @@ export default function BankScreen() {
     queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
   };
 
   const invalidateAccounts = async () => {
@@ -365,6 +373,7 @@ export default function BankScreen() {
 
   const openOpeningBalanceEditor = () => {
     setOpeningBalanceDraft(String(data?.openingBalance ?? 0));
+    setOpeningBalanceDate(data?.openingBalanceDate ?? todayIso());
     setOpeningBalanceModalVisible(true);
   };
 
@@ -381,7 +390,9 @@ export default function BankScreen() {
 
     setSavingOpeningBalance(true);
     try {
-      await updateOpeningBalance({ data: { openingBalance: value, accountId: selectedAccountId ?? undefined } });
+      await updateOpeningBalance({
+        data: { openingBalance: value, openingBalanceDate, accountId: selectedAccountId ?? undefined },
+      });
       setOpeningBalanceModalVisible(false);
       await invalidateBalance();
       Alert.alert('Opening balance saved', 'The current balance now includes this starting amount.');
@@ -397,18 +408,28 @@ export default function BankScreen() {
       Alert.alert('Admin access required', 'Ask a group owner or admin to delete a shared bank transaction.');
       return;
     }
+    const deletesExpense = tx.expenseId != null;
     Alert.alert(
-      'Delete transaction',
-      `Delete "${tx.description}"?`,
+      deletesExpense ? 'Delete expense' : 'Delete transaction',
+      deletesExpense
+        ? `Delete "${tx.description}"? Its bank funding transaction will also be removed.`
+        : `Delete "${tx.description}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete', style: 'destructive', onPress: async () => {
             try {
-              await deleteTransaction({ id: tx.id });
+              if (deletesExpense) {
+                await deleteExpense({ id: tx.expenseId! });
+              } else {
+                await deleteTransaction({ id: tx.id });
+              }
               await invalidateBalance();
-            } catch {
-              Alert.alert('Error', 'Could not delete transaction.');
+            } catch (error: unknown) {
+              Alert.alert(
+                deletesExpense ? 'Could not delete expense' : 'Could not delete transaction',
+                error instanceof Error ? error.message : 'Please try again.',
+              );
             }
           },
         },
@@ -869,6 +890,11 @@ export default function BankScreen() {
               <View>
                 <Text style={styles.openingBalanceLabel}>Opening balance</Text>
                 <Text style={styles.openingBalanceValue}>KES {formatKES(data?.openingBalance)}</Text>
+                {data?.openingBalanceDate && (
+                  <Text style={styles.openingBalanceDate}>
+                    As of {new Date(data.openingBalanceDate + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Text>
+                )}
               </View>
               {canManageAccount && (
                 <TouchableOpacity
@@ -1029,6 +1055,14 @@ export default function BankScreen() {
                 <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
                   {dep ? '+' : '-'}KES {formatKES(item.amount)}
                 </Text>
+                {typeof item.runningBalance === 'number' && (
+                  <Text
+                    style={[styles.txMeta, { color: colors.mutedForeground, textAlign: 'right' }]}
+                    testID={`bank-running-balance-${item.id}`}
+                  >
+                    Balance KES {formatKES(item.runningBalance)}
+                  </Text>
+                )}
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   {canEditTransaction(item) && <TouchableOpacity
                     onPress={() => openEdit(item)}
@@ -1184,6 +1218,38 @@ export default function BankScreen() {
                 : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankTransfer ? 'Move Between Bank Accounts' : isBankCharge ? 'Record Bank Charge' : 'Take Money Out'}
             </Text>
 
+            {isBankCharge && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account</Text>
+                <View style={styles.memberRow}>
+                  {accounts.map((candidate) => {
+                    const selected = candidate.id === selectedAccountId;
+                    return (
+                      <TouchableOpacity
+                        key={candidate.id}
+                        testID={`bank-charge-account-${candidate.id}`}
+                        style={[
+                          styles.memberPill,
+                          {
+                            backgroundColor: selected ? '#166534' : colors.muted,
+                            borderColor: selected ? '#22c55e' : colors.border,
+                          },
+                        ]}
+                        onPress={() => selectAccount(candidate.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                          {candidate.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                  This charge reduces only the selected account.
+                </Text>
+              </>
+            )}
             {(isDeposit || isWithdrawal) && (
               <View style={{ marginBottom: 14 }}>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account *</Text>
@@ -1957,8 +2023,37 @@ export default function BankScreen() {
               autoFocus
               testID="bank-opening-balance-input"
             />
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>Balance date</Text>
+            <Pressable
+              onPress={() => setShowOpeningBalanceDatePicker(true)}
+              style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+              testID="bank-opening-balance-date"
+            >
+              <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+              <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                {new Date(openingBalanceDate + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </Text>
+              <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+            </Pressable>
+            {showOpeningBalanceDatePicker && (
+              <DateTimePicker
+                value={new Date(openingBalanceDate + 'T00:00:00')}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                maximumDate={new Date()}
+                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                  setShowOpeningBalanceDatePicker(Platform.OS === 'ios');
+                  if (selected) {
+                    const y = selected.getFullYear();
+                    const m = String(selected.getMonth() + 1).padStart(2, '0');
+                    const d = String(selected.getDate()).padStart(2, '0');
+                    setOpeningBalanceDate(`${y}-${m}-${d}`);
+                  }
+                }}
+              />
+            )}
             <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
-              Current balance = opening balance + deposits − withdrawals.
+              The date marks when this starting amount applied. Current balance = opening balance + deposits − withdrawals.
             </Text>
             <View style={styles.openingBalanceActions}>
               <TouchableOpacity
@@ -2083,6 +2178,12 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: '#f7faf6',
     fontFamily: 'Inter_700Bold',
+    marginTop: 2,
+  },
+  openingBalanceDate: {
+    color: '#a7f3d0',
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
     marginTop: 2,
   },
   editOpeningBalanceBtn: {

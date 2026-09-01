@@ -8,6 +8,16 @@ const expenseFormSource = dashboardSource.slice(
 );
 
 describe("dashboard quick actions", () => {
+  it("makes the selected overview month prominent and lets users browse other months", () => {
+    expect(dashboardSource).toContain("DashboardMonthNavigator");
+    expect(dashboardSource).toContain('data-testid="dashboard-month-navigator"');
+    expect(dashboardSource).toContain('data-testid="dashboard-month-picker"');
+    expect(dashboardSource).toContain('aria-label="View previous month"');
+    expect(dashboardSource).toContain('aria-label="View next month"');
+    expect(dashboardSource).toContain("Back to current");
+    expect(dashboardSource).toContain("const { month, year } = selectedPeriod;");
+  });
+
   it("prompts the user to categorize editable uncategorized expenses", () => {
     expect(dashboardSource).toContain("isUncategorizedExpense");
     expect(dashboardSource).toContain('data-testid="uncategorized-expense-cta"');
@@ -41,7 +51,8 @@ describe("dashboard quick actions", () => {
     expect(dashboardSource).not.toContain('["mixed", "Both"');
     expect(dashboardSource).toContain("selectedBankAccountId");
     expect(expenseFormSource).toContain("setIncomeSourceId(null);");
-    expect(expenseFormSource).toContain("setBankPortion(amount);");
+    expect(expenseFormSource).toContain('setBankPortion("");');
+    expect(expenseFormSource).not.toContain("setBankPortion(amount);");
   });
 
   it("does not ask a Personal budget owner who paid", () => {

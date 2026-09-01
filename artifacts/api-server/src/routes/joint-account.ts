@@ -118,6 +118,7 @@ const UpdateJointAccountInput = z.object({
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
 const OpeningBalanceInput = z.object({
   openingBalance: z.number().int().nonnegative(),
+  openingBalanceDate: z.string().date().optional(),
   accountId: z.number().int().positive().optional(),
 });
 const SavingsTransferInput = z.object({
@@ -139,13 +140,15 @@ const AccountInput = z.object({
   name: z.string().trim().min(1).max(80),
   accountNumber: z.string().trim().min(1).max(40).optional(),
   openingBalance: z.number().int().nonnegative().optional(),
+  openingBalanceDate: z.string().date().optional(),
 });
 const AccountUpdateInput = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   accountNumber: z.string().trim().min(1).max(40).nullable().optional(),
   openingBalance: z.number().int().nonnegative().optional(),
-}).refine((value) => value.name !== undefined || value.accountNumber !== undefined || value.openingBalance !== undefined, {
-  message: "Provide a name, account number, or opening balance.",
+  openingBalanceDate: z.string().date().optional(),
+}).refine((value) => value.name !== undefined || value.accountNumber !== undefined || value.openingBalance !== undefined || value.openingBalanceDate !== undefined, {
+  message: "Provide a name, account number, opening balance, or opening balance date.",
 });
 const AccountQuery = z.object({ accountId: z.coerce.number().int().positive().optional() });
 
@@ -183,6 +186,25 @@ async function listWorkspaceAccounts(groupId: number) {
       ));
   }
   return accounts;
+}
+
+function serializeAccount(account: typeof bankAccountsTable.$inferSelect) {
+  const createdAt = account.createdAt instanceof Date ? account.createdAt.toISOString() : account.createdAt;
+  return {
+    ...account,
+    openingBalanceDate: account.openingBalanceDate ?? (
+      typeof createdAt === "string" ? createdAt.slice(0, 10) : currentBusinessDate()
+    ),
+    createdAt,
+  };
+}
+
+function resolveOpeningBalanceDate(account: typeof bankAccountsTable.$inferSelect): string {
+  if (account.openingBalanceDate) return account.openingBalanceDate;
+  const createdAt = account.createdAt as Date | string | undefined;
+  if (createdAt instanceof Date) return createdAt.toISOString().slice(0, 10);
+  if (typeof createdAt === "string") return createdAt.slice(0, 10);
+  return currentBusinessDate();
 }
 
 async function requireAccountId(accountId: number | undefined, groupId: number, res: Response): Promise<number | null> {
@@ -280,10 +302,7 @@ router.get("/joint-accounts", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   const accounts = await listWorkspaceAccounts(groupId);
-  res.json(accounts.map((account) => ({
-    ...account,
-    createdAt: account.createdAt instanceof Date ? account.createdAt.toISOString() : account.createdAt,
-  })));
+  res.json(accounts.map(serializeAccount));
 });
 
 router.post("/joint-accounts", async (req, res): Promise<void> => {
@@ -297,9 +316,10 @@ router.post("/joint-accounts", async (req, res): Promise<void> => {
     name: parsed.data.name,
     accountNumber: parsed.data.accountNumber,
     openingBalance: parsed.data.openingBalance ?? 0,
+    openingBalanceDate: parsed.data.openingBalanceDate ?? currentBusinessDate(),
   }).onConflictDoNothing().returning();
   if (!account) { res.status(409).json({ error: "An account with this name already exists." }); return; }
-  res.status(201).json({ ...account, createdAt: account.createdAt instanceof Date ? account.createdAt.toISOString() : account.createdAt });
+  res.status(201).json(serializeAccount(account));
 });
 
 router.patch("/joint-accounts/:id", async (req, res): Promise<void> => {
@@ -312,7 +332,7 @@ router.patch("/joint-accounts/:id", async (req, res): Promise<void> => {
   const [account] = await db.update(bankAccountsTable).set(parsed.data)
     .where(and(eq(bankAccountsTable.id, params.data.id), eq(bankAccountsTable.groupId, groupId))).returning();
   if (!account) { res.status(404).json({ error: "Bank account not found." }); return; }
-  res.json({ ...account, createdAt: account.createdAt instanceof Date ? account.createdAt.toISOString() : account.createdAt });
+  res.json(serializeAccount(account));
 });
 
 router.delete("/joint-accounts/:id", async (req, res): Promise<void> => {
@@ -366,18 +386,30 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   const openingBalance = isAggregate
     ? accounts.reduce((sum, account) => sum + account.openingBalance, 0)
     : selectedAccount.openingBalance;
+  const openingBalanceDate = isAggregate
+    ? null
+    : resolveOpeningBalanceDate(selectedAccount);
   const balance = openingBalance + ledgerDeposits - ledgerDisbursements;
+  let balanceCursor = balance;
+  const transactions = enriched.map((transaction) => {
+    const runningBalance = isAggregate ? null : balanceCursor;
+    if (!isAggregate) {
+      balanceCursor -= transaction.type === "deposit" ? transaction.amount : -transaction.amount;
+    }
+    return { ...transaction, runningBalance };
+  });
 
   res.json({
     accountId: selectedAccount.id,
     accountName: isAggregate ? "All accounts" : selectedAccount.name,
     accountNumber: isAggregate ? null : selectedAccount.accountNumber,
     openingBalance,
+    openingBalanceDate,
     balance,
     closingBalance: balance,
     totalDeposits,
     totalDisbursements,
-    transactions: enriched,
+    transactions,
   });
 });
 
@@ -395,15 +427,22 @@ router.patch("/joint-account/opening-balance", async (req, res): Promise<void> =
 
   const accountId = await requireAccountId(parsed.data.accountId, groupId, res);
   if (accountId === null) return;
-  const [group] = await db.update(bankAccountsTable).set({ openingBalance: parsed.data.openingBalance })
+  const openingBalanceDate = parsed.data.openingBalanceDate ?? currentBusinessDate();
+  const [account] = await db.update(bankAccountsTable).set({
+    openingBalance: parsed.data.openingBalance,
+    openingBalanceDate,
+  })
     .where(and(eq(bankAccountsTable.id, accountId), eq(bankAccountsTable.groupId, groupId)))
-    .returning({ openingBalance: bankAccountsTable.openingBalance });
+    .returning({
+      openingBalance: bankAccountsTable.openingBalance,
+      openingBalanceDate: bankAccountsTable.openingBalanceDate,
+    });
 
-  if (!group) {
-    res.status(404).json({ error: "Group not found" });
+  if (!account) {
+    res.status(404).json({ error: "Bank account not found." });
     return;
   }
-  res.json({ accountId, ...group });
+  res.json({ accountId, ...account });
 });
 
 // POST /joint-account/deposit

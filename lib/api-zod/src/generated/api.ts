@@ -846,6 +846,7 @@ export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountM
 
 export const GetJointAccountResponse = zod.object({
   "openingBalance": zod.number().describe('Manually entered balance carried into the first recorded transaction'),
+  "openingBalanceDate": zod.coerce.date().nullish().describe('Calendar date on which the opening balance applies'),
   "accountId": zod.number(),
   "accountName": zod.string(),
   "accountNumber": zod.string().nullable(),
@@ -858,6 +859,7 @@ export const GetJointAccountResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -893,6 +895,7 @@ export const updateJointAccountOpeningBalanceBodyOpeningBalanceMultipleOf = 1;
 
 export const UpdateJointAccountOpeningBalanceBody = zod.object({
   "openingBalance": zod.number().min(updateJointAccountOpeningBalanceBodyOpeningBalanceMin).multipleOf(updateJointAccountOpeningBalanceBodyOpeningBalanceMultipleOf),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "accountId": zod.number().min(1).optional().describe('Manual starting balance in whole KES')
 })
 
@@ -903,6 +906,7 @@ export const updateJointAccountOpeningBalanceResponseOpeningBalanceMultipleOf = 
 
 export const UpdateJointAccountOpeningBalanceResponse = zod.object({
   "openingBalance": zod.number().min(updateJointAccountOpeningBalanceResponseOpeningBalanceMin).multipleOf(updateJointAccountOpeningBalanceResponseOpeningBalanceMultipleOf),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "accountId": zod.number()
 })
 
@@ -944,6 +948,7 @@ export const CreateDepositResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -995,6 +1000,7 @@ export const CreateDisbursementResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1045,6 +1051,7 @@ export const CreateBankChargeResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1098,6 +1105,7 @@ export const TransferBankToSavingsResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1151,6 +1159,7 @@ export const TransferSavingsToBankResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1208,6 +1217,7 @@ export const TransferBankToBankResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1234,6 +1244,7 @@ export const TransferBankToBankResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1307,6 +1318,7 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1350,6 +1362,7 @@ export const GetJointAccountsResponseItem = zod.object({
   "name": zod.string(),
   "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "createdAt": zod.coerce.date()
 })
 export const GetJointAccountsResponse = zod.array(GetJointAccountsResponseItem)
@@ -1370,7 +1383,8 @@ export const createJointAccountBodyOpeningBalanceMultipleOf = 1;
 export const CreateJointAccountBody = zod.object({
   "name": zod.string().min(1).max(createJointAccountBodyNameMax),
   "accountNumber": zod.string().min(1).max(createJointAccountBodyAccountNumberMax).optional(),
-  "openingBalance": zod.number().min(createJointAccountBodyOpeningBalanceMin).multipleOf(createJointAccountBodyOpeningBalanceMultipleOf).optional()
+  "openingBalance": zod.number().min(createJointAccountBodyOpeningBalanceMin).multipleOf(createJointAccountBodyOpeningBalanceMultipleOf).optional(),
+  "openingBalanceDate": zod.coerce.date().optional()
 })
 
 export const CreateJointAccountResponse = zod.object({
@@ -1378,6 +1392,7 @@ export const CreateJointAccountResponse = zod.object({
   "name": zod.string(),
   "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1401,7 +1416,8 @@ export const updateJointAccountBodyOpeningBalanceMultipleOf = 1;
 export const UpdateJointAccountBody = zod.object({
   "name": zod.string().min(1).max(updateJointAccountBodyNameMax).optional(),
   "accountNumber": zod.string().min(1).max(updateJointAccountBodyAccountNumberMax).nullish(),
-  "openingBalance": zod.number().min(updateJointAccountBodyOpeningBalanceMin).multipleOf(updateJointAccountBodyOpeningBalanceMultipleOf).optional()
+  "openingBalance": zod.number().min(updateJointAccountBodyOpeningBalanceMin).multipleOf(updateJointAccountBodyOpeningBalanceMultipleOf).optional(),
+  "openingBalanceDate": zod.coerce.date().optional()
 })
 
 export const UpdateJointAccountResponse = zod.object({
@@ -1409,6 +1425,7 @@ export const UpdateJointAccountResponse = zod.object({
   "name": zod.string(),
   "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "createdAt": zod.coerce.date()
 })
 

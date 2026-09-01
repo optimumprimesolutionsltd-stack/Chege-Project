@@ -9,6 +9,7 @@
 export interface OpeningBalanceInput {
   /** @minimum 0 */
   openingBalance: number;
+  openingBalanceDate?: Date;
   /**
      * Manual starting balance in whole KES
      * @minimum 1

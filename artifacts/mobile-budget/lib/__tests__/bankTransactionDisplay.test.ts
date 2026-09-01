@@ -18,4 +18,18 @@ describe("mobile bank transaction display", () => {
     expect(bankScreenSource).toContain("This will take the account below zero.");
     expect(bankScreenSource).toContain("getProjectedBalanceAfterOutgoing");
   });
+
+  it("deletes an expense-owned bank withdrawal through the expense endpoint", () => {
+    expect(bankScreenSource).toContain("const deletesExpense = tx.expenseId != null;");
+    expect(bankScreenSource).toContain("await deleteExpense({ id: tx.expenseId! });");
+    expect(bankScreenSource).toContain("await deleteTransaction({ id: tx.id });");
+    expect(bankScreenSource).toContain("Its bank funding transaction will also be removed.");
+    expect(bankScreenSource).toContain("getGetExpensesQueryKey()");
+  });
+
+  it("stores and displays the opening balance date", () => {
+    expect(bankScreenSource).toContain('testID="bank-opening-balance-date"');
+    expect(bankScreenSource).toContain("openingBalance: value, openingBalanceDate");
+    expect(bankScreenSource).toContain("As of {new Date(data.openingBalanceDate");
+  });
 });

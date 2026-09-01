@@ -33,7 +33,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("Type the amount from this source to confirm");
     expect(expensesSource).toContain("Type the amount from this account to confirm");
     expect(expensesSource).toContain("Enter the amount from each selected source manually");
-    expect(expensesSource).toContain("getFundingRemainder(Number(form.amount)");
+    expect(expensesSource).not.toContain("getFundingRemainder(Number(form.amount)");
     expect(expensesSource).toContain('setAddDirectSourceAmounts((previous) => ({ ...previous, [key]: "" }))');
     expect(expensesSource).toContain('[m.userId]: ""');
     expect(expensesSource).toContain('title: remaining > 0 ? "Add another funding source"');
@@ -51,7 +51,7 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain("Enter each amount manually. This prevents a mistaken automatic allocation.");
     expect(mobileSource).toContain("TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM");
     expect(mobileSource).toContain("Enter the amount from each selected source manually");
-    expect(mobileSource).toContain("const remaining = getFundingRemainder(total, directTotal);");
+    expect(mobileSource).not.toContain("const remaining = getFundingRemainder(total, directTotal);");
     expect(mobileSource).toContain("setSplitAmounts((amounts) => ({ ...amounts, [key]: '' }))");
     expect(mobileSource).not.toContain("addFundingSourceWithRemainder");
     expect(mobileSource).toContain('testID="expense-funding-remainder"');
@@ -87,13 +87,13 @@ describe("expense funding amount entry", () => {
     expect(dashboardNewSource).toBeGreaterThan(dashboardRows);
   });
 
-  it("keeps direct funding and fills only the remaining amount when bank is selected", () => {
-    expect(expensesSource).toContain("const remaining = getFundingRemainder(Number(form.amount), directTotal);");
-    expect(expensesSource).toContain("__joint_bank__: directTotal > 0 ? String(remaining) : form.amount");
+  it("keeps direct and bank funding figures independent when bank is selected", () => {
+    expect(expensesSource).toContain('__joint_bank__: ""');
+    expect(expensesSource).not.toContain("__joint_bank__: directTotal > 0 ? String(remaining) : form.amount");
     expect(expensesSource).toContain("...previous");
-    expect(dashboardSource).toContain("const remaining = getFundingRemainder(Number(amount), directTotal);");
-    expect(dashboardSource).toContain("setBankPortion(directTotal > 0 ? String(remaining) : amount)");
-    expect(mobileSource).toContain("__joint_bank__: directTotal > 0 ? String(remaining) : amount.replace");
+    expect(dashboardSource).not.toContain("setBankPortion(directTotal > 0 ? String(remaining) : amount)");
+    expect(mobileSource).toContain("__joint_bank__: ''");
+    expect(mobileSource).not.toContain("__joint_bank__: directTotal > 0 ? String(remaining) : amount.replace");
     expect(mobileSource).toContain("(!paidFromBank || allowMixedFunding) && selectedSources.length > 0");
   });
 
@@ -131,6 +131,7 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).not.toContain('<option value="Other"');
     expect(dashboardSource).toContain('data-testid="one-off-spending-category-dashboard"');
     expect(dashboardSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
+    expect(dashboardSource).toContain('value={isOtherCategory ? "" : category}');
     expect(dashboardSource).toContain("{!isOtherCategory && (");
     expect(dashboardSource).toContain('placeholder="Enter KES amount"');
     expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
@@ -154,6 +155,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).not.toContain('<option value="Other"');
     expect(expensesSource).toContain('data-testid={`one-off-spending-category-${mode}`}');
     expect(expensesSource).toContain("Use One-off spending for a one-time expense that does not fit any listed category.");
+    expect(expensesSource).toContain('value={isOtherCategory ? "" : form.category}');
     expect(expensesSource).toContain("{!isOtherCategory && (");
     expect(expensesSource).toContain('aria-required="true"');
     expect(expensesSource).toContain('placeholder="Enter KES amount"');
@@ -201,6 +203,52 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain("!isOtherCategory && categoryAllocations.length === 1");
     expect(expensesSource).toContain("!isOtherCategory && form.categoryAllocations.length === 1");
     expect(mobileSource).toContain("!hasOneOffAllocation && <Pressable");
+  });
+
+  it("keeps category choices visible, highlights the total, and exposes bank funding in both budgets", () => {
+    expect(dashboardSource).toContain("Expense total (KES)");
+    expect(dashboardSource).toContain('data-testid="expense-total-dashboard"');
+    expect(expensesSource).toContain("Expense total (KES)");
+    expect(expensesSource).toContain('data-testid={`expense-total-${mode}`}');
+    expect(mobileSource).toContain("EXPENSE TOTAL");
+    expect(mobileSource).toContain("FUNDING OPTIONS");
+    expect(mobileSource).toContain('testID="expense-bank-funding-option"');
+    expect(mobileSource).toContain("minHeight: 48");
+    expect(mobileSource).toContain("minWidth: 112");
+    expect(mobileSource).toContain("(canManageShared || selectablePayers.length > 0)");
+  });
+
+  it("places the expense date before amount, category, and funding controls in every form", () => {
+    const dashboardDate = dashboardSource.indexOf('data-testid="expense-date-section-dashboard"');
+    const dashboardAmount = dashboardSource.indexOf('data-testid="expense-total-dashboard"');
+    const dashboardCategory = dashboardSource.indexOf("2. What did this expense cover?");
+    const dashboardFunding = dashboardSource.indexOf("3. How was this expense funded?");
+    expect(dashboardDate).toBeGreaterThan(-1);
+    expect(dashboardDate).toBeLessThan(dashboardAmount);
+    expect(dashboardDate).toBeLessThan(dashboardCategory);
+    expect(dashboardDate).toBeLessThan(dashboardFunding);
+
+    const webDate = expensesSource.indexOf('data-testid={`expense-date-section-${mode}`}');
+    const webAmount = expensesSource.indexOf('data-testid={`expense-total-${mode}`}');
+    const webCategory = expensesSource.indexOf("2. What did this expense cover?");
+    const webFunding = expensesSource.indexOf("3. How was this expense funded?");
+    expect(webDate).toBeGreaterThan(-1);
+    expect(webDate).toBeLessThan(webAmount);
+    expect(webDate).toBeLessThan(webCategory);
+    expect(webDate).toBeLessThan(webFunding);
+
+    const mobileDate = mobileSource.indexOf('testID="expense-date-section"');
+    const mobileAmount = mobileSource.indexOf("EXPENSE TOTAL");
+    const mobileCategory = mobileSource.indexOf("CATEGORY (OPTIONAL)");
+    const mobileFunding = mobileSource.indexOf("FUNDING OPTIONS");
+    expect(mobileDate).toBeGreaterThan(-1);
+    expect(mobileDate).toBeLessThan(mobileAmount);
+    expect(mobileDate).toBeLessThan(mobileCategory);
+    expect(mobileDate).toBeLessThan(mobileFunding);
+
+    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+      expect(source).toContain("This date decides which month includes the expense in budgets, totals, and reports.");
+    }
   });
 
   it("explains where an expense goes when no category is selected", () => {
