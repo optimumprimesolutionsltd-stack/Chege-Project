@@ -82,6 +82,41 @@ type ExpenseRecord = {
   date: string;
 };
 type CategoryAllocation = { category: string; amount: string };
+
+const isOneOffAllocation = (allocation: CategoryAllocation) =>
+  allocation.category.trim().toLocaleLowerCase() === 'other';
+
+function selectPrimaryCategory(
+  allocations: CategoryAllocation[],
+  categoryName: string,
+): CategoryAllocation[] {
+  const oneOff = allocations.find(isOneOffAllocation);
+  const standard = allocations.filter((allocation) => !isOneOffAllocation(allocation));
+  return [
+    { category: categoryName, amount: standard[0]?.amount ?? '' },
+    ...standard.slice(1),
+    ...(oneOff ? [oneOff] : []),
+  ];
+}
+
+function addStandardCategory(
+  allocations: CategoryAllocation[],
+  categoryName: string,
+): CategoryAllocation[] {
+  const oneOff = allocations.find(isOneOffAllocation);
+  const standard = allocations.filter((allocation) => !isOneOffAllocation(allocation));
+  if (!standard.some((allocation) => allocation.category === categoryName)) {
+    standard.push({ category: categoryName, amount: '' });
+  }
+  return [...standard, ...(oneOff ? [oneOff] : [])];
+}
+
+function toggleOneOffCategory(allocations: CategoryAllocation[]): CategoryAllocation[] {
+  if (allocations.some(isOneOffAllocation)) {
+    return allocations.filter((allocation) => !isOneOffAllocation(allocation));
+  }
+  return [...allocations, { category: 'Other', amount: '' }];
+}
 type ExpenseBudgetDraft = {
   amount: string;
   category: string;
@@ -551,8 +586,8 @@ export default function AddExpenseSheet() {
       addToBudget: newCategoryAddToBudget,
       canManageCategories,
     }) === 'unbudgeted') {
-       setCategory(name);
-       setCategoryAllocations([{ category: name, amount: '' }]);
+      setCategory(name);
+      setCategoryAllocations((current) => selectPrimaryCategory(current, name));
       setNewCategoryName('');
       setNewCategoryBudget('');
       setNewCategoryRecurring(true);
@@ -586,8 +621,8 @@ export default function AddExpenseSheet() {
           activeYear: newCategoryRecurring ? null : expenseYear,
         },
       });
-       setCategory(created.name);
-       setCategoryAllocations([{ category: created.name, amount: '' }]);
+      setCategory(created.name);
+      setCategoryAllocations((current) => selectPrimaryCategory(current, created.name));
       setNewCategoryName('');
       setNewCategoryBudget('');
       setNewCategoryRecurring(true);
@@ -636,21 +671,22 @@ export default function AddExpenseSheet() {
   }, [createBankAccount, newBankAccountName, newBankAccountNumber, newBankOpeningBalance, queryClient]);
 
   const chooseCategory = useCallback((name: string) => {
+    const isOneOff = name.trim().toLocaleLowerCase() === 'other';
     setCategoryAllocations((previous) => {
-      if (name.trim().toLocaleLowerCase() === 'other') {
-        const existingOneOff = previous.find((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
-        setCategory('Other');
-        return [{ category: 'Other', amount: existingOneOff?.amount ?? '' }];
+      if (isOneOff) {
+        const next = toggleOneOffCategory(previous);
+        setCategory(next.find((allocation) => !isOneOffAllocation(allocation))?.category ?? next[0]?.category ?? '');
+        return next;
       }
-      const standardAllocations = previous.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== 'other');
-      if (standardAllocations.some((allocation) => allocation.category === name)) return standardAllocations;
-      const next = [...standardAllocations, { category: name, amount: '' }];
-      setCategory(next[0].category);
+      const next = addStandardCategory(previous, name);
+      setCategory(next[0]?.category ?? name);
       return next;
     });
     setCategory((previous) => previous || name);
-    setIsCreatingCategory(false);
-    setShowAdditionalCategoryPicker(false);
+    if (!isOneOff) {
+      setIsCreatingCategory(false);
+      setShowAdditionalCategoryPicker(false);
+    }
   }, []);
 
   const updateAllocationAmount = useCallback((allocationCategory: string, value: string) => {
@@ -999,9 +1035,7 @@ export default function AddExpenseSheet() {
     .map((item) => item.name)
     .filter((name) => name.trim().toLocaleLowerCase() !== 'other');
   const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
-  const displayedCategoryAllocations = hasOneOffAllocation
-    ? categoryAllocations.filter((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other')
-    : categoryAllocations;
+  const displayedCategoryAllocations = categoryAllocations;
 
   if (isEditMode && editExpensesQuery.isLoading) {
     return (
@@ -1156,7 +1190,7 @@ export default function AddExpenseSheet() {
               )}
               {categoryList.map((cat) => {
                 const icon = getCategoryIcon(cat);
-                const selected = !hasOneOffAllocation && categoryAllocations.some((allocation) => allocation.category === cat);
+                const selected = categoryAllocations.some((allocation) => allocation.category === cat);
                 return (
                   <Pressable
                     key={cat}
@@ -1185,29 +1219,6 @@ export default function AddExpenseSheet() {
             </>
           )}
         </ScrollView>
-        <Pressable
-          onPress={() => chooseCategory('Other')}
-          accessibilityRole="button"
-          accessibilityLabel="Add one-off spending category"
-          accessibilityState={{ selected: hasOneOffAllocation }}
-          testID="one-off-spending-category"
-          style={[
-            styles.oneOffCategoryOption,
-            {
-              backgroundColor: hasOneOffAllocation ? colors.primary + '18' : colors.muted,
-              borderColor: hasOneOffAllocation ? colors.primary : colors.border,
-              borderRadius: colors.radius,
-            },
-          ]}
-        >
-          <Feather name="help-circle" size={16} color={colors.primary} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.oneOffCategoryTitle, { color: colors.foreground }]}>One-off spending</Text>
-            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              Use this for a one-time expense that does not fit any listed category. Add a note below.
-            </Text>
-          </View>
-        </Pressable>
         {categoryAllocations.length === 0 && (
           <Pressable
             disabled
@@ -1267,7 +1278,7 @@ export default function AddExpenseSheet() {
               </View>
               );
             })}
-            {!hasOneOffAllocation && <Pressable
+            <Pressable
               onPress={() => setShowAdditionalCategoryPicker((visible) => !visible)}
               accessibilityRole="button"
               accessibilityLabel="Add another expense category"
@@ -1276,8 +1287,8 @@ export default function AddExpenseSheet() {
             >
               <Feather name="plus-circle" size={15} color={colors.primary} />
               <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>Add another category</Text>
-            </Pressable>}
-            {!hasOneOffAllocation && showAdditionalCategoryPicker && (
+            </Pressable>
+            {showAdditionalCategoryPicker && (
               <View style={{ gap: 8 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
                   Choose the next category for this same expense.
@@ -1431,6 +1442,31 @@ export default function AddExpenseSheet() {
             </View>
           </View>
         ) : null}
+        <Pressable
+          onPress={() => chooseCategory('Other')}
+          accessibilityRole="button"
+          accessibilityLabel={hasOneOffAllocation ? "Remove one-off spending category" : "Add one-off spending category"}
+          accessibilityState={{ selected: hasOneOffAllocation }}
+          testID="one-off-spending-category"
+          style={[
+            styles.oneOffCategoryOption,
+            {
+              backgroundColor: hasOneOffAllocation ? colors.primary + '18' : colors.muted,
+              borderColor: hasOneOffAllocation ? colors.primary : colors.border,
+              borderRadius: colors.radius,
+            },
+          ]}
+        >
+          <Feather name="help-circle" size={16} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.oneOffCategoryTitle, { color: colors.foreground }]}>
+              {hasOneOffAllocation ? 'Remove One-off spending' : 'One-off spending'}
+            </Text>
+            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+              Use this as the last category when part of the expense does not fit any listed category.
+            </Text>
+          </View>
+        </Pressable>
 
         {/* Running balance for selected category */}
         {category ? (() => {
@@ -2206,10 +2242,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    minHeight: 48,
+    minHeight: 56,
     minWidth: 112,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 15,
     borderWidth: 1,
   },
   categoryChipText: {

@@ -568,7 +568,15 @@ export default function Expenses() {
       addToBudget: newCategoryAddToBudget,
       canManageCategories,
     }) === "unbudgeted") {
-      form.setCategory(name);
+      form.setCategoryAllocations((current) => {
+        const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+        const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+        return [
+          { category: name, amount: standardAllocations[0]?.amount ?? "" },
+          ...standardAllocations.slice(1),
+          ...(oneOff ? [oneOff] : []),
+        ];
+      });
       setIsCreatingCategory(false);
       setNewCategoryName("");
       setNewCategoryBudget("");
@@ -605,7 +613,15 @@ export default function Expenses() {
           activeYear: newCategoryRecurring ? null : expenseYear,
         },
       });
-      form.setCategory(category.name);
+      form.setCategoryAllocations((current) => {
+        const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+        const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+        return [
+          { category: category.name, amount: standardAllocations[0]?.amount ?? "" },
+          ...standardAllocations.slice(1),
+          ...(oneOff ? [oneOff] : []),
+        ];
+      });
       setIsCreatingCategory(false);
       setNewCategoryName("");
       setNewCategoryBudget("");
@@ -633,11 +649,13 @@ export default function Expenses() {
 
   const chooseCategory = (form: ReturnType<typeof useExpenseForm>, value: string) => {
     form.setCategoryAllocations((current) => {
-      if (!value) return [{ category: "", amount: "" }];
-      const currentPrimaryIsOther = current[0]?.category.trim().toLocaleLowerCase() === "other";
+      const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+      const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+      if (!value) return oneOff ? [oneOff] : [{ category: "", amount: "" }];
       return [
-        { category: value, amount: currentPrimaryIsOther ? "" : current[0]?.amount ?? "" },
-        ...current.slice(1).filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other"),
+        { category: value, amount: standardAllocations[0]?.amount ?? "" },
+        ...standardAllocations.slice(1),
+        ...(oneOff ? [oneOff] : []),
       ];
     });
     setSaveOtherAsCategory(false);
@@ -647,9 +665,14 @@ export default function Expenses() {
   const addOneOffCategory = (form: ReturnType<typeof useExpenseForm>) => {
     form.setCategoryAllocations((current) => {
       const existingOneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
-      return [{ category: "Other", amount: existingOneOff?.amount ?? "" }];
+      if (existingOneOff) {
+        const remaining = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+        return remaining.length ? remaining : [{ category: "", amount: "" }];
+      }
+      const retained = current.length === 1 && !current[0]?.category.trim() ? [] : current;
+      return [...retained, { category: "Other", amount: "" }];
     });
-    setIsCreatingCategory(false);
+    setSaveOtherAsCategory(false);
   };
 
   const openRecurringBudgetSetup = (form: ReturnType<typeof useExpenseForm>, mode: "add" | "edit", makeRecurring = true, proposedCategory?: string) => {
@@ -1211,6 +1234,7 @@ export default function Expenses() {
     const allocationDifference = expenseTotal - allocatedTotal;
     const otherCategoryIndex = form.categoryAllocations.findIndex((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
     const isOtherCategory = otherCategoryIndex >= 0;
+    const isPrimaryOtherCategory = form.categoryAllocations[0]?.category.trim().toLocaleLowerCase() === "other";
     const hasStandardAdditionalCategory = form.categoryAllocations.slice(1).some((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
     const directFundingTotal = mode === "edit"
       ? (!editHasMultipleFundingSplits && form.paidById && form.incomeSourceId ? expenseTotal : 0)
@@ -1309,9 +1333,9 @@ export default function Expenses() {
             <div className="space-y-2">
              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                <select
-                 className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                 className="flex h-14 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                  aria-label="Expense category"
-                  value={isOtherCategory ? "" : form.category}
+                   value={isPrimaryOtherCategory ? "" : form.category}
                  onChange={e => chooseCategory(form, e.target.value)}
                >
                  <option value="">Select a category</option>
@@ -1319,7 +1343,7 @@ export default function Expenses() {
                    ?.filter(c => c.name.trim().toLocaleLowerCase() !== "other")
                    .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                </select>
-               {form.category.trim() && !isOtherCategory && (
+                {form.category.trim() && !isPrimaryOtherCategory && (
                  <div data-testid={`primary-category-allocation-${mode}`} className="sm:w-48">
                    <label htmlFor={`${mode}-primary-category-amount`} className="sr-only">
                     {`${form.category} amount (KES)`}
@@ -1335,57 +1359,27 @@ export default function Expenses() {
                      aria-required="true"
                      required
                      placeholder="Enter KES amount"
-                     className="h-12 w-full border-primary/45 bg-card font-semibold"
+                     className="h-14 w-full border-primary/45 bg-card font-semibold"
                    />
                   </div>
                 )}
              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
-                  type="button"
-                  variant={form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") ? "default" : "outline"}
-                  className="h-12 w-full justify-start border-input text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
-                  onClick={() => addOneOffCategory(form)}
-                  aria-label="Select one-off spending category"
-                  aria-pressed={form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other")}
-                  data-testid={`one-off-spending-category-${mode}`}
-                >
-                  One-off spending
-                </Button>
-                {isOtherCategory && (
-                  <div data-testid={`primary-category-allocation-${mode}`} className="sm:w-48">
-                    <label htmlFor={`${mode}-primary-category-amount`} className="sr-only">One-off spending amount (KES)</label>
-                    <Input
-                      id={`${mode}-primary-category-amount`}
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={form.categoryAllocations[otherCategoryIndex]?.amount ?? ""}
-                      onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === otherCategoryIndex ? { ...item, amount: event.target.value } : item))}
-                      aria-label="KES amount for one-off spending"
-                      aria-required="true"
-                      required
-                      placeholder="Enter KES amount"
-                      className="h-12 w-full border-primary/45 bg-card font-semibold"
-                    />
-                  </div>
-                )}
-              </div>
-             <p className="text-xs leading-relaxed text-muted-foreground">
-               Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
-             </p>
           </div>
-            {!isOtherCategory && form.categoryAllocations.length === 1 && (
+            {!hasStandardAdditionalCategory && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                <p className="text-xs text-muted-foreground">
                  {form.category.trim() ? "Need to split this expense? Add another category and enter its share." : "Choose a category first, then add another category if this expense covers more than one."}
                </p>
-               <Button type="button" size="sm" variant="outline" disabled={!form.category.trim()} onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])} data-testid={`add-category-allocation-${mode}`}>
+               <Button type="button" size="sm" variant="outline" disabled={!form.category.trim() || isPrimaryOtherCategory} onClick={() => form.setCategoryAllocations((current) => {
+                 const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                 const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                 return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
+               })} data-testid={`add-category-allocation-${mode}`}>
                  <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
                </Button>
              </div>
            )}
-           {form.category.trim() && form.categoryAllocations.length === 1 && (
+           {form.categoryAllocations.some((allocation) => allocation.category.trim()) && !hasStandardAdditionalCategory && (
              <div
                role="status"
                aria-live="polite"
@@ -1401,51 +1395,7 @@ export default function Expenses() {
                {categoryStatus.message}
              </div>
            )}
-          {form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (
-             <div id={`other-expense-panel-${mode}`} role="tabpanel" className="mt-3 space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
-              <label className="text-sm font-semibold text-foreground">Brief description</label>
-              <Input
-                value={form.description}
-                onChange={e => form.setDescription(e.target.value)}
-                placeholder="Briefly describe this expense"
-                maxLength={120}
-                required
-                className="h-12 bg-card"
-                data-testid="other-brief-description"
-              />
-              <p className="text-xs text-muted-foreground">
-                 Explain what this one-off expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
-              </p>
-              <div className="space-y-2 pt-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Notes <span className="text-destructive">*</span>
-                </label>
-                <Input
-                  placeholder="Explain what this one-off expense was for"
-                  value={form.notes ?? ""}
-                  onChange={e => form.setNotes(e.target.value)}
-                  required
-                  className="h-12 bg-card"
-                  data-testid="other-expense-notes"
-                />
-              </div>
-              {mode === "add" && canManageCategories && (
-                <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={saveOtherAsCategory}
-                    onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="font-semibold">Save as a category if this repeats</span>
-                    <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
-                  </span>
-                </label>
-              )}
-            </div>
-          )}
-          {!form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && isCreatingCategory && (
+          {isCreatingCategory && (
             <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-foreground">
               <div>
                 <p className="text-sm font-semibold text-foreground">Name this expense category</p>
@@ -1554,7 +1504,7 @@ export default function Expenses() {
               </p>
             ) : null;
           })()}
-             {!isOtherCategory && hasStandardAdditionalCategory && (
+             {hasStandardAdditionalCategory && (
              <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
                <div>
                 <div>
@@ -1606,7 +1556,11 @@ export default function Expenses() {
                 size="sm"
                 variant="outline"
                 className="w-full sm:w-auto"
-                onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])}
+                 onClick={() => form.setCategoryAllocations((current) => {
+                   const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                   const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                   return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
+                 })}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
               </Button>
@@ -1630,6 +1584,86 @@ export default function Expenses() {
               })()}
             </div>
             )}
+             <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                 <Button
+                   type="button"
+                   variant={isOtherCategory ? "default" : "outline"}
+                   className="h-14 w-full justify-start border-input text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+                   onClick={() => addOneOffCategory(form)}
+                   aria-label={isOtherCategory ? "Remove one-off spending category" : "Select one-off spending category"}
+                   aria-pressed={isOtherCategory}
+                   data-testid={`one-off-spending-category-${mode}`}
+                 >
+                   {isOtherCategory ? "Remove One-off spending" : "One-off spending"}
+                 </Button>
+                 {isOtherCategory && (
+                   <div data-testid={`one-off-category-allocation-${mode}`} className="sm:w-48">
+                     <label htmlFor={`${mode}-one-off-category-amount`} className="sr-only">One-off spending amount (KES)</label>
+                     <Input
+                       id={`${mode}-one-off-category-amount`}
+                       type="number"
+                       min="1"
+                       step="1"
+                       value={form.categoryAllocations[otherCategoryIndex]?.amount ?? ""}
+                       onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === otherCategoryIndex ? { ...item, amount: event.target.value } : item))}
+                       aria-label="KES amount for one-off spending"
+                       aria-required="true"
+                       required
+                       placeholder="Enter KES amount"
+                       className="h-14 w-full border-primary/45 bg-card font-semibold"
+                     />
+                   </div>
+                 )}
+               </div>
+               <p className="text-xs leading-relaxed text-muted-foreground">
+                 Use One-off spending as the last category when part of this expense does not fit any listed category.
+               </p>
+               {isOtherCategory && (
+                 <div id={`other-expense-panel-${mode}`} role="tabpanel" className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                   <label className="text-sm font-semibold text-foreground">Brief description</label>
+                   <Input
+                     value={form.description}
+                     onChange={e => form.setDescription(e.target.value)}
+                     placeholder="Briefly describe this expense"
+                     maxLength={120}
+                     required
+                     className="h-12 bg-card"
+                     data-testid="other-brief-description"
+                   />
+                   <p className="text-xs text-muted-foreground">
+                     Explain what the one-off portion covered. If it repeats, save it as a category so it is easy to budget and find next time.
+                   </p>
+                   <div className="space-y-2 pt-1">
+                     <label className="text-sm font-semibold text-foreground">
+                       Notes <span className="text-destructive">*</span>
+                     </label>
+                     <Input
+                       placeholder="Explain what this one-off spending was for"
+                       value={form.notes ?? ""}
+                       onChange={e => form.setNotes(e.target.value)}
+                       required
+                       className="h-12 bg-card"
+                       data-testid="other-expense-notes"
+                     />
+                   </div>
+                   {mode === "add" && canManageCategories && (
+                     <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+                       <input
+                         type="checkbox"
+                         checked={saveOtherAsCategory}
+                         onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
+                         className="mt-0.5 h-4 w-4 accent-primary"
+                       />
+                       <span>
+                         <span className="font-semibold">Save as a category if this repeats</span>
+                         <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
+                       </span>
+                     </label>
+                   )}
+                 </div>
+               )}
+             </div>
          </div>
 
           {!form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (

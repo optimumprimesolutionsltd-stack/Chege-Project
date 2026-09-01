@@ -855,6 +855,15 @@ function ExpenseForm({
         data: { name, budgetAmount, priority: 1, isRecurring: true },
       });
       setCategory(created.name);
+      setCategoryAllocations(current => {
+        const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+        const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+        return [
+          { category: created.name, amount: standardAllocations[0]?.amount ?? "" },
+          ...standardAllocations.slice(1),
+          ...(oneOff ? [oneOff] : []),
+        ];
+      });
       setNewCategoryName("");
       setNewCategoryBudget("");
       setIsAddingCategory(false);
@@ -1193,28 +1202,30 @@ function ExpenseForm({
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <select
                  aria-label="Expense category"
-                value={isOtherCategory ? "" : category}
+                 value={isPrimaryOtherCategory ? "" : category}
                onChange={e => {
                  const nextCategory = e.target.value;
                  setCategory(nextCategory);
                  setCategoryAllocations(current => {
-                   if (!nextCategory) return [{ category: "", amount: "" }];
-                   const currentPrimaryIsOther = current[0]?.category.trim().toLocaleLowerCase() === "other";
+                    const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                    const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                    if (!nextCategory) return oneOff ? [oneOff] : [{ category: "", amount: "" }];
                    return [
-                     { category: nextCategory, amount: currentPrimaryIsOther ? "" : current[0]?.amount ?? "" },
-                     ...current.slice(1).filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other"),
+                      { category: nextCategory, amount: standardAllocations[0]?.amount ?? "" },
+                      ...standardAllocations.slice(1),
+                      ...(oneOff ? [oneOff] : []),
                    ];
                  });
                  setSaveOtherAsCategory(false);
                }}
-                 className="h-14 w-full flex-1 rounded-xl border border-input bg-card px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:h-12"
+                 className="h-14 w-full flex-1 rounded-xl border border-input bg-card px-4 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
              >
                 <option value="">Select a category</option>
                {categories
                  .filter(c => c.name.trim().toLocaleLowerCase() !== "other")
                  .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
-              {category.trim() && !isOtherCategory && (
+               {category.trim() && !isPrimaryOtherCategory && (
                 <div data-testid="primary-category-allocation-dashboard" className="sm:w-48">
                   <label htmlFor="dashboard-primary-category-amount" className="sr-only">
                     {`${category} amount (KES)`}
@@ -1230,64 +1241,27 @@ function ExpenseForm({
                     aria-required="true"
                     required
                     placeholder="Enter KES amount"
-                    className="h-11 w-full border-primary/45 bg-card font-semibold"
+                    className="h-14 w-full border-primary/45 bg-card font-semibold"
                   />
                 </div>
               )}
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
-                  type="button"
-                  variant={isOtherCategory ? "default" : "outline"}
-                  className="h-11 w-full justify-start sm:w-auto"
-                  onClick={() => {
-                    setCategoryAllocations(current => {
-                      const existingOneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
-                      return [{ category: "Other", amount: existingOneOff?.amount ?? "" }];
-                    });
-                    setCategory("Other");
-                    setIsAddingCategory(false);
-                  }}
-                  aria-label="Select one-off spending category"
-                  aria-pressed={isOtherCategory}
-                  data-testid="one-off-spending-category-dashboard"
-                >
-                  One-off spending
-                </Button>
-                {isOtherCategory && (
-                  <div data-testid="primary-category-allocation-dashboard" className="sm:w-48">
-                    <label htmlFor="dashboard-primary-category-amount" className="sr-only">One-off spending amount (KES)</label>
-                    <Input
-                      id="dashboard-primary-category-amount"
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={categoryAllocations[otherCategoryIndex]?.amount ?? ""}
-                      onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === otherCategoryIndex ? { ...item, amount: event.target.value } : item))}
-                      aria-label="KES amount for one-off spending"
-                      aria-required="true"
-                      required
-                      placeholder="Enter KES amount"
-                      className="h-11 w-full border-primary/45 bg-card font-semibold"
-                    />
-                  </div>
-                )}
-              </div>
-             <p className="text-xs leading-relaxed text-muted-foreground">
-               Use One-off spending for a one-time expense that does not fit any listed category. Add a note below so you remember what it was.
-             </p>
           </div>
-            {!isOtherCategory && categoryAllocations.length === 1 && (
+            {!hasStandardAdditionalCategory && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                <p className="text-xs text-muted-foreground">
                  {category.trim() ? "Need to split this expense? Add another category and enter its share." : "Choose a category first, then add another category if this expense covers more than one."}
                </p>
-               <Button type="button" size="sm" variant="outline" disabled={!category.trim()} onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard">
+               <Button type="button" size="sm" variant="outline" disabled={!category.trim() || isPrimaryOtherCategory} onClick={() => setCategoryAllocations(current => {
+                 const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                 const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                 return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
+               })} data-testid="add-category-allocation-dashboard">
                  <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
                </Button>
              </div>
            )}
-           {category.trim() && categoryAllocations.length === 1 && (
+           {categoryAllocations.some((allocation) => allocation.category.trim()) && !hasStandardAdditionalCategory && (
              <div
                role="status"
                aria-live="polite"
@@ -1303,49 +1277,7 @@ function ExpenseForm({
                {categoryStatus.message}
              </div>
            )}
-            {isOtherCategory && (
-              <div id="dashboard-other-expense-panel" role="tabpanel" className="mt-3 space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                <label className="text-sm font-semibold text-foreground">Brief description</label>
-                <Input
-                  placeholder="Briefly describe this expense"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  required
-                  maxLength={120}
-                  className="h-11 bg-card"
-                  data-testid="other-brief-description"
-                />
-                <p className="text-xs text-muted-foreground">
-                   Explain what this one-off expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
-                </p>
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-sm font-semibold text-foreground">
-                    Notes <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    placeholder="Explain what this one-off expense was for"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    required
-                    className="h-11 bg-card"
-                    data-testid="other-expense-notes"
-                  />
-                </div>
-                {canManageCategories && <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={saveOtherAsCategory}
-                    onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="font-semibold">Save as a category if this repeats</span>
-                    <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
-                  </span>
-                </label>}
-              </div>
-            )}
-            {!isOtherCategory && hasStandardAdditionalCategory && (
+            {hasStandardAdditionalCategory && (
               <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
                <div>
                  <div>
@@ -1387,7 +1319,11 @@ function ExpenseForm({
                 </div>
                 );
               })}
-              <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])}><Plus className="mr-1 h-3.5 w-3.5" /> Add another category</Button>
+              <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => setCategoryAllocations(current => {
+                const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
+              })}><Plus className="mr-1 h-3.5 w-3.5" /> Add another category</Button>
               {(() => {
                 return (
                   <div
@@ -1408,7 +1344,7 @@ function ExpenseForm({
               })()}
             </div>
             )}
-             {canManageCategories && !isOtherCategory && isAddingCategory && (
+             {canManageCategories && isAddingCategory && (
              <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
                <div>
                  <p className="text-sm font-semibold text-foreground">Create a category</p>
@@ -1437,7 +1373,7 @@ function ExpenseForm({
                </div>
              </div>
            )}
-             {canManageCategories && !isOtherCategory && (
+             {canManageCategories && (
               <Button
                 type="button"
                 variant="outline"
@@ -1449,6 +1385,95 @@ function ExpenseForm({
                 Create category
               </Button>
             )}
+             <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                 <Button
+                   type="button"
+                   variant={isOtherCategory ? "default" : "outline"}
+                   className="h-14 w-full justify-start sm:w-auto"
+                   onClick={() => {
+                     setCategoryAllocations(current => {
+                       const existingOneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                       if (existingOneOff) {
+                         const remaining = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                         return remaining.length ? remaining : [{ category: "", amount: "" }];
+                       }
+                       const retained = current.length === 1 && !current[0]?.category.trim() ? [] : current;
+                       return [...retained, { category: "Other", amount: "" }];
+                     });
+                     setSaveOtherAsCategory(false);
+                   }}
+                   aria-label={isOtherCategory ? "Remove one-off spending category" : "Select one-off spending category"}
+                   aria-pressed={isOtherCategory}
+                   data-testid="one-off-spending-category-dashboard"
+                 >
+                   {isOtherCategory ? "Remove One-off spending" : "One-off spending"}
+                 </Button>
+                 {isOtherCategory && (
+                   <div data-testid="one-off-category-allocation-dashboard" className="sm:w-48">
+                     <label htmlFor="dashboard-one-off-category-amount" className="sr-only">One-off spending amount (KES)</label>
+                     <Input
+                       id="dashboard-one-off-category-amount"
+                       type="number"
+                       min="1"
+                       step="1"
+                       value={categoryAllocations[otherCategoryIndex]?.amount ?? ""}
+                       onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === otherCategoryIndex ? { ...item, amount: event.target.value } : item))}
+                       aria-label="KES amount for one-off spending"
+                       aria-required="true"
+                       required
+                       placeholder="Enter KES amount"
+                       className="h-14 w-full border-primary/45 bg-card font-semibold"
+                     />
+                   </div>
+                 )}
+               </div>
+               <p className="text-xs leading-relaxed text-muted-foreground">
+                 Use One-off spending as the last category when part of this expense does not fit any listed category.
+               </p>
+               {isOtherCategory && (
+                 <div id="dashboard-other-expense-panel" role="tabpanel" className="space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                   <label className="text-sm font-semibold text-foreground">Brief description</label>
+                   <Input
+                     placeholder="Briefly describe this expense"
+                     value={description}
+                     onChange={e => setDescription(e.target.value)}
+                     required
+                     maxLength={120}
+                     className="h-11 bg-card"
+                     data-testid="other-brief-description"
+                   />
+                   <p className="text-xs text-muted-foreground">
+                     Explain what the one-off portion covered. If it repeats, save it as a category so it is easy to budget and find next time.
+                   </p>
+                   <div className="space-y-1.5 pt-1">
+                     <label className="text-sm font-semibold text-foreground">
+                       Notes <span className="text-destructive">*</span>
+                     </label>
+                     <Input
+                       placeholder="Explain what this one-off spending was for"
+                       value={notes}
+                       onChange={e => setNotes(e.target.value)}
+                       required
+                       className="h-11 bg-card"
+                       data-testid="other-expense-notes"
+                     />
+                   </div>
+                   {canManageCategories && <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+                     <input
+                       type="checkbox"
+                       checked={saveOtherAsCategory}
+                       onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
+                       className="mt-0.5 h-4 w-4 accent-primary"
+                     />
+                     <span>
+                       <span className="font-semibold">Save as a category if this repeats</span>
+                       <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
+                     </span>
+                   </label>}
+                 </div>
+               )}
+             </div>
         </div>
       </div>
        {!isOtherCategory && (
