@@ -12,6 +12,46 @@ export function isAskJamviActionRequest(question: string): boolean {
   return ACTION_REQUEST.test(question.trim());
 }
 
+type AskJamviIntent = "overview" | "spending" | "remaining" | "goals" | "income" | "unknown";
+
+function classifyQuestion(question: string): AskJamviIntent {
+  const value = question.trim().toLocaleLowerCase("en-US");
+  if (/(goal|saving|save|emergency|target)/.test(value)) return "goals";
+  if (/(income|earn|deposit|received|contribution)/.test(value)) return "income";
+  if (/(where|spend|spent|spending|category|categories|most)/.test(value)) return "spending";
+  if (/(left|remain|remaining|afford|balance)/.test(value)) return "remaining";
+  if (/(how am i|overview|summary|doing|budget|month)/.test(value)) return "overview";
+  return "unknown";
+}
+
+const formatKes = (amount: number) => `KES ${Math.round(amount).toLocaleString("en-KE")}`;
+
+export function generateAskJamviFallback(question: string, summary: AskJamviSummary): string {
+  const intent = classifyQuestion(question);
+  const { totals, categories, goals, workspace, period } = summary;
+  const periodLabel = new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric" })
+    .format(new Date(period.year, period.month - 1, 1));
+  if (intent === "remaining") {
+    return totals.remaining >= 0
+      ? `${workspace.name} has ${formatKes(totals.remaining)} left for ${periodLabel}.`
+      : `${workspace.name} is over budget by ${formatKes(Math.abs(totals.remaining))} for ${periodLabel}.`;
+  }
+  if (intent === "spending") {
+    const ranked = categories.filter((category) => category.spent > 0).sort((a, b) => b.spent - a.spent).slice(0, 3);
+    return ranked.length
+      ? `Your highest spending is ${ranked.map((category) => `${category.name} (${formatKes(category.spent)})`).join(", ")}.`
+      : `There is no recorded spending in ${periodLabel} yet.`;
+  }
+  if (intent === "goals") {
+    return goals.length
+      ? `You have ${goals.length} active saving goal${goals.length === 1 ? "" : "s"}. ${goals.slice(0, 2).map((goal) => `${goal.name}: ${formatKes(goal.currentAmount)} of ${formatKes(goal.targetAmount)}`).join("; ")}.`
+      : "You have no savings goals yet. Savings and Emergency Fund items stay separate from expenses.";
+  }
+  if (intent === "income") return `${formatKes(totals.incomeReceived)} has been recorded as income for ${periodLabel}.`;
+  if (intent === "overview") return `For ${periodLabel}, you have spent ${formatKes(totals.spent)} of ${formatKes(totals.budgeted)}, leaving ${formatKes(totals.remaining)}. Income recorded: ${formatKes(totals.incomeReceived)}.`;
+  return "I can help with your overview, spending, remaining balance, income, or savings goals. Try asking one of those.";
+}
+
 function chatCompletionsUrl(baseUrl: string): string {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
   return normalizedBaseUrl.endsWith("/v1")
@@ -68,26 +108,32 @@ export async function generateAskJamviResponse(question: string, summary: AskJam
   const apiKey = process.env.ASK_JAMVI_API_KEY
     ?? (managedBaseUrl ? process.env.AI_INTEGRATIONS_OPENAI_API_KEY : undefined)
     ?? process.env.BUILT_IN_FORGE_API_KEY;
-  if (!baseUrl || !apiKey) throw new Error("Ask Jamvi AI is not configured on this server.");
+  if (!baseUrl || !apiKey) return generateAskJamviFallback(question, summary);
   const endpoint = !customBaseUrl && managedBaseUrl
     ? `${managedBaseUrl.replace(/\/+$/, "")}/chat/completions`
     : chatCompletionsUrl(baseUrl);
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: process.env.ASK_JAMVI_MODEL ?? "gpt-5-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer. Answer only from the supplied budget context. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Never instruct or claim that you performed a financial action. If the question is not answered by the context, say so plainly.",
-        },
-        { role: "user", content: JSON.stringify({ question, budgetContext: summary }) },
-      ],
-      max_completion_tokens: 8192,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: process.env.ASK_JAMVI_MODEL ?? "gpt-5-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer. Answer only from the supplied budget context. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Never instruct or claim that you performed a financial action. If the question is not answered by the context, say so plainly.",
+          },
+          { role: "user", content: JSON.stringify({ question, budgetContext: summary }) },
+        ],
+        max_completion_tokens: 8192,
+      }),
+    });
+  } catch (error) {
+    console.error("Ask Jamvi provider could not be reached", { message: error instanceof Error ? error.message : "Unknown provider error" });
+    return generateAskJamviFallback(question, summary);
+  }
   if (!response.ok) {
     const responseText = await response.text();
     let providerError: { code?: string; message?: string } = {};
@@ -105,10 +151,9 @@ export async function generateAskJamviResponse(question: string, summary: AskJam
       code: providerError.code,
       message: providerError.message,
     });
-    throw new Error("Ask Jamvi could not answer right now.");
+    return generateAskJamviFallback(question, summary);
   }
   const payload: unknown = await response.json();
   const answer = extractModelText(payload);
-  if (!answer) throw new Error("Ask Jamvi returned an empty answer.");
-  return answer;
+  return answer || generateAskJamviFallback(question, summary);
 }

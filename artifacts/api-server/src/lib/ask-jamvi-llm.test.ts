@@ -54,7 +54,21 @@ describe("Ask Jamvi server LLM guardrails", () => {
     expect(fetchSpy.mock.calls[0][0]).toBe("https://managed-openai.example/chat/completions");
   });
 
-  it("does not leak provider error details to callers", async () => {
+  it("answers from the read-only summary when no AI provider is configured", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    delete process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+    delete process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    await expect(generateAskJamviResponse("How much is left?", summary))
+      .resolves.toContain("KES 18,000");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back without leaking provider error details to callers", async () => {
     delete process.env.ASK_JAMVI_API_URL;
     delete process.env.ASK_JAMVI_API_KEY;
     delete process.env.BUILT_IN_FORGE_API_URL;
@@ -67,7 +81,21 @@ describe("Ask Jamvi server LLM guardrails", () => {
     }), { status: 400 }));
 
     await expect(generateAskJamviResponse("How much is left?", summary))
-      .rejects.toThrow("Ask Jamvi could not answer right now.");
+      .resolves.toBe("Personal budget has KES 18,000 left for August 2026.");
+  });
+
+  it("falls back when the configured provider cannot be reached", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    process.env.AI_INTEGRATIONS_OPENAI_BASE_URL = "https://managed-openai.example";
+    process.env.AI_INTEGRATIONS_OPENAI_API_KEY = "managed-test-key";
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("connect ECONNREFUSED"));
+
+    await expect(generateAskJamviResponse("How am I doing this month?", summary))
+      .resolves.toContain("spent KES 12,000 of KES 30,000");
   });
 
   it("reads managed chat responses that return content parts", async () => {
