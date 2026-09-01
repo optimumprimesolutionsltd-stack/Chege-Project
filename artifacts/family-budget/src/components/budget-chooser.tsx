@@ -123,6 +123,7 @@ export function BudgetChooser({
   const [customEndDate, setCustomEndDate] = useState("");
   const [showCategorySetup, setShowCategorySetup] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [categorySelectionError, setCategorySelectionError] = useState(false);
   const [showCategoryBudgetSetup, setShowCategoryBudgetSetup] = useState(false);
   const [categoryBudgets, setCategoryBudgets] = useState<Record<string, string>>({});
   const [customCategories, setCustomCategories] = useState<string[]>([]);
@@ -314,7 +315,10 @@ export function BudgetChooser({
     const visibleTiers = ONBOARDING_CATEGORY_TIERS.map((tier) => ({ ...tier, categories: tier.categories.filter((category) => recommendedCategories.includes(category)) })).filter((tier) => tier.categories.length > 0);
     if (customCategories.length > 0) visibleTiers.push({ priority: 5, label: "Your categories", description: "Custom categories you added for your own situation.", categories: customCategories });
     const allSelected = recommendedCategories.every((category) => selectedCategories.includes(category));
-    const toggleCategory = (category: string) => setSelectedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]);
+    const toggleCategory = (category: string) => {
+      setCategorySelectionError(false);
+      setSelectedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]);
+    };
     const addCustomCategory = () => { const category = customCategory.trim(); if (category && !customCategories.includes(category)) { setCustomCategories((current) => [...current, category]); setSelectedCategories((current) => [...current, category]); } setCustomCategory(""); };
     return (
       <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
@@ -345,7 +349,8 @@ export function BudgetChooser({
                 ))}
               </div>
               <div className="mt-8 rounded-2xl border border-dashed border-primary/30 bg-primary/[0.03] p-4"><p className="font-semibold text-foreground">Can’t find what you need?</p><p className="mt-1 text-sm text-muted-foreground">Add a category that is unique to your life, group, or short-term plan.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input aria-label="Custom budget category" placeholder="e.g. HELB, wedding venue, or trip fund" value={customCategory} onChange={(event) => setCustomCategory(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomCategory(); } }} /><Button type="button" variant="outline" className="rounded-xl" onClick={addCustomCategory}>Add category</Button></div></div>
-                  <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{selectedCategories.length} of {recommendedCategories.length} recommended categories selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:categories:${encodeURIComponent(userId)}`, JSON.stringify(selectedCategories)); } catch { /* Continue even when storage is unavailable. */ } setShowCategorySetup(false); setShowIncomeSetup(true); }}>Add income streams <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
+                  {categorySelectionError ? <p className="mt-5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-foreground" role="alert"><span className="font-semibold">Choose at least one category to continue.</span> Select a category above, or use “Select all recommended categories”. If you would rather set this up later, use the subtle “Skip for now” link at the top.</p> : null}
+                  <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{selectedCategories.length} of {recommendedCategories.length} recommended categories selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => { if (selectedCategories.length === 0) { setCategorySelectionError(true); return; } try { window.localStorage.setItem(`jamvi:onboarding:categories:${encodeURIComponent(userId)}`, JSON.stringify(selectedCategories)); } catch { /* Continue even when storage is unavailable. */ } setShowCategorySetup(false); setShowIncomeSetup(true); }}>Add income streams <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
             </div>
           </div>
         </section>
