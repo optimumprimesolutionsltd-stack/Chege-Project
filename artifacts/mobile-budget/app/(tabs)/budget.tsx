@@ -357,7 +357,8 @@ export default function BudgetScreen() {
   };
 
   const handleSave = async () => {
-    const amt = parseInt(formAmount, 10);
+    const rawAmount = formAmount.trim();
+    const amt = rawAmount === '' && editTarget ? 0 : parseInt(rawAmount, 10);
     if (!formName.trim() || isNaN(amt) || amt < 0) {
       Alert.alert('Missing fields', 'Name and a valid amount are required.');
       return;
@@ -465,9 +466,28 @@ export default function BudgetScreen() {
   const ledgerEntries = ledger?.entries ?? [];
   const ledgerTotal = ledger?.total ?? 0;
   const ledgerCategoryTotal = breakdown.find(category => category.category === ledgerCategory?.category)?.spentAmount ?? 0;
+  const ledgerBudgetCategory = allCategories.find(category => category.name === ledgerCategory?.category);
   const managedCategories = managePriority == null
     ? allCategories
     : allCategories.filter(category => category.priority === managePriority);
+  const summaryBudgetCategories = activeCategories.filter(category => category.budgetAmount > 0);
+  const openOverallLedger = () => {
+    if (summaryBudgetCategories.length === 1) {
+      const [category] = summaryBudgetCategories;
+      setLedgerCategory({ category: category.name, isBudgeted: true });
+      return;
+    }
+    if (summaryBudgetCategories.length > 1) {
+      openManage();
+      return;
+    }
+    openAdd();
+  };
+  const summaryContext = summaryBudgetCategories.length === 1
+    ? `${summaryBudgetCategories[0].name} · Tap to view ledger and manage`
+    : summaryBudgetCategories.length > 1
+      ? `${summaryBudgetCategories.length} budget categories · Tap to choose one`
+      : 'No category is assigned yet · Tap to add one';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -516,6 +536,9 @@ export default function BudgetScreen() {
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="numeric"
                 />
+                <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
+                  Enter 0, or clear the amount while editing, to pause this budget. Existing expenses stay recorded.
+                </Text>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>PRIORITY TIER</Text>
                 <View style={styles.priorityRow}>
                   {[1, 2, 3, 4, 5].map(p => (
@@ -629,6 +652,53 @@ export default function BudgetScreen() {
                 <Feather name="x" size={22} color={colors.mutedForeground} />
               </Pressable>
             </View>
+            {ledgerBudgetCategory ? (
+              <View style={[styles.ledgerBudgetActions, { borderColor: colors.border, backgroundColor: colors.muted }]}>
+                <View style={styles.ledgerBudgetCopy}>
+                  <Text style={[styles.ledgerBudgetLabel, { color: colors.mutedForeground }]}>BUDGET LIMIT</Text>
+                  <Text style={[styles.ledgerBudgetValue, { color: colors.foreground }]}>
+                    KES {formatKES(ledgerBudgetCategory.budgetAmount)}
+                  </Text>
+                  <Text style={[styles.ledgerBudgetHint, { color: colors.mutedForeground }]}>
+                    {ledgerBudgetCategory.isRecurring
+                      ? 'Repeats every month'
+                      : `For ${MONTHS_SHORT[(ledgerBudgetCategory.activeMonth ?? month) - 1]} ${ledgerBudgetCategory.activeYear ?? year}`}
+                  </Text>
+                </View>
+                {canManageCategories ? (
+                  <View style={styles.ledgerBudgetButtons}>
+                    <Pressable
+                      onPress={() => {
+                        setLedgerCategory(null);
+                        openEdit(ledgerBudgetCategory);
+                      }}
+                      style={[styles.ledgerBudgetButton, { borderColor: colors.border, backgroundColor: colors.card }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${ledgerBudgetCategory.name} budget`}
+                    >
+                      <Feather name="edit-2" size={13} color={colors.primary} />
+                      <Text style={[styles.ledgerBudgetButtonText, { color: colors.primary }]}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setLedgerCategory(null);
+                        handleDelete(ledgerBudgetCategory);
+                      }}
+                      style={[styles.ledgerBudgetButton, { borderColor: colors.destructive + '66', backgroundColor: colors.card }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${ledgerBudgetCategory.name} budget`}
+                    >
+                      <Feather name="trash-2" size={13} color={colors.destructive} />
+                      <Text style={[styles.ledgerBudgetButtonText, { color: colors.destructive }]}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Text style={[styles.ledgerBudgetHint, { color: colors.mutedForeground }]}>
+                    Only owners and admins can edit or remove this budget.
+                  </Text>
+                )}
+              </View>
+            ) : null}
             <ScrollView contentContainerStyle={styles.ledgerBody} showsVerticalScrollIndicator={false}>
               <View style={[styles.ledgerSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                 <Text style={[styles.ledgerSummaryValue, { color: colors.foreground }]}>
@@ -741,7 +811,15 @@ export default function BudgetScreen() {
           </View>
 
           {!isLoading ? (
-            <View style={styles.overallCard}>
+            <Pressable
+              onPress={openOverallLedger}
+              accessibilityRole="button"
+              accessibilityLabel={summaryBudgetCategories.length === 1
+                ? `Open ${summaryBudgetCategories[0].name} budget ledger`
+                : 'Open budget categories'}
+              testID="budget-overall-ledger"
+              style={({ pressed }) => [styles.overallCard, pressed && styles.pressedCard]}
+            >
               <View style={styles.overallRow}>
                 <Text style={styles.overallLabel}>BUDGET VS ACTUAL</Text>
                 <Text style={styles.overallPct}>{Math.round(overallPct * 100)}%</Text>
@@ -763,7 +841,11 @@ export default function BudgetScreen() {
                   <Text style={[styles.overallSpent, reportVariance < 0 && { color: '#f87171' }]}>KES {formatKES(Math.abs(reportVariance))}</Text>
                 </View>
               </View>
-            </View>
+              <View style={styles.overallContextRow}>
+                <Feather name="arrow-up-right" size={13} color="#d9fbe5" />
+                <Text style={styles.overallContext}>{summaryContext}</Text>
+              </View>
+            </Pressable>
           ) : <ActivityIndicator color="#4ade80" style={{ marginVertical: 16 }} />}
         </LinearGradient>
 
@@ -1156,6 +1238,9 @@ const styles = StyleSheet.create({
    overallMiniLabel: { color: '#A5B9D4', fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5, marginBottom: 3 },
   overallSpent: { fontSize: 16, fontWeight: '700' as const, color: '#F4F8FF', fontFamily: 'Inter_700Bold' },
   overallTarget: { fontSize: 14, color: '#A5B9D4', fontFamily: 'Inter_400Regular', alignSelf: 'flex-end' },
+  overallContextRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 13 },
+  overallContext: { flex: 1, color: '#d9fbe5', fontSize: 11, fontFamily: 'Inter_500Medium' },
+  pressedCard: { opacity: 0.82 },
   barTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
    incomeSection: { paddingHorizontal: 16, paddingTop: 18 },
@@ -1235,6 +1320,14 @@ const styles = StyleSheet.create({
   ledgerSummary: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 12 },
   ledgerSummaryValue: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   ledgerSummaryLabel: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  ledgerBudgetActions: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, marginHorizontal: 20, marginBottom: 2, padding: 12 },
+  ledgerBudgetCopy: { flex: 1 },
+  ledgerBudgetLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.7 },
+  ledgerBudgetValue: { fontSize: 15, fontFamily: 'Inter_700Bold', marginTop: 3 },
+  ledgerBudgetHint: { fontSize: 10, fontFamily: 'Inter_400Regular', lineHeight: 14, marginTop: 3 },
+  ledgerBudgetButtons: { alignItems: 'flex-end', gap: 6 },
+  ledgerBudgetButton: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 6, minWidth: 72, justifyContent: 'center' },
+  ledgerBudgetButtonText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   ledgerState: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 14, padding: 24, alignItems: 'center', marginVertical: 8 },
   ledgerStateTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginTop: 10 },
   ledgerStateText: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, textAlign: 'center', marginTop: 4 },

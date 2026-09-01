@@ -104,8 +104,14 @@ router.post("/ai/ask", async (req, res): Promise<void> => {
   try {
     const forwardedProtocol = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
     const summaryUrl = `${forwardedProtocol}://${req.get("host")}/api/ai/budget-summary?month=${month}&year=${year}`;
+    const authorization = req.get("authorization");
+    const workspaceId = req.get("x-jamvi-workspace");
     const summaryResponse = await fetch(summaryUrl, {
-      headers: { cookie: req.headers.cookie ?? "" },
+      headers: {
+        cookie: req.headers.cookie ?? "",
+        ...(authorization ? { authorization } : {}),
+        ...(workspaceId ? { "x-jamvi-workspace": workspaceId } : {}),
+      },
     });
     if (!summaryResponse.ok) {
       res.status(summaryResponse.status).json({ error: "Could not load the selected budget summary." });

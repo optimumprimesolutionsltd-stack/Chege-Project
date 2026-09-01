@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  Modal,
+  TextInput,
 } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -22,6 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
@@ -36,6 +39,7 @@ import {
   useGetExpenses,
   useGetJointAccount,
   useGetGroup,
+  customFetch,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
@@ -56,6 +60,14 @@ type HomeExpense = {
   paidFromBank?: boolean;
   isRecurring?: boolean;
   incomeSplits?: { userId?: string | null; fromBank: boolean }[];
+};
+
+type AskResponse = {
+  answer: string;
+  readOnly: boolean;
+  workspaceScoped: boolean;
+  month: number;
+  year: number;
 };
 
 function isUncategorizedExpense(expense: HomeExpense) {
@@ -147,11 +159,42 @@ export default function DashboardScreen() {
   const isSharedWorkspace = group?.isPrivate === false;
 
   const [refreshing, setRefreshing] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askQuery, setAskQuery] = useState('');
+  const [askAnswer, setAskAnswer] = useState<AskResponse | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refetchSummary(), refetchActivity(), refetchExpenses(), refetchBank()]);
     setRefreshing(false);
   }, [refetchSummary, refetchActivity, refetchExpenses, refetchBank]);
+
+  const askJamvi = useCallback(async (value?: string) => {
+    const question = (value ?? askQuery).trim();
+    if (!question || asking) return;
+    setAskQuery(question);
+    setAskAnswer(null);
+    setAskError(null);
+    setAsking(true);
+    try {
+      const response = await customFetch<AskResponse>('/api/ai/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, month, year }),
+      });
+      setAskAnswer(response);
+    } catch (error) {
+      setAskError(error instanceof Error ? error.message : 'Ask Jamvi could not answer right now.');
+    } finally {
+      setAsking(false);
+    }
+  }, [askQuery, asking, month, year]);
+
+  const openAskJamvi = useCallback(() => {
+    setAskError(null);
+    setAskOpen(true);
+  }, []);
 
   // Compute this-month bank totals from transactions
   const monthlyDeposited = useMemo(() => {
@@ -416,6 +459,37 @@ export default function DashboardScreen() {
           )}
         </LinearGradient>
 
+        <View
+          testID="ask-jamvi-cta"
+          style={[styles.askCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}
+        >
+          <View style={styles.groupCtaHeader}>
+            <View style={[styles.askCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
+              <Feather name="search" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>QUICK ANSWERS</Text>
+              <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>Ask Jamvi</Text>
+            </View>
+          </View>
+          <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+            Search your current budget in plain language. Ask “Where am I spending the most?” or “How much is left?” Jamvi explains your numbers but cannot change records or move money.
+          </Text>
+          <Pressable
+            testID="open-ask-jamvi"
+            accessibilityRole="button"
+            accessibilityLabel="Ask Jamvi about this budget"
+            onPress={openAskJamvi}
+            style={({ pressed }) => [
+              styles.groupCtaButton,
+              { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
+            ]}
+          >
+            <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Ask Jamvi</Text>
+            <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
+          </Pressable>
+        </View>
+
         {editableUncategorizedExpenses.length > 0 && (
           <View
             testID="uncategorized-expense-cta"
@@ -644,6 +718,91 @@ export default function DashboardScreen() {
         )}
       </PageScrollView>
 
+      <Modal
+        visible={askOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAskOpen(false)}
+      >
+        <KeyboardAvoidingView behavior="padding" style={styles.askModalOverlay}>
+          <View style={[styles.askModalSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.askModalHeader}>
+              <View style={styles.askModalTitleRow}>
+                <View style={[styles.askModalIcon, { backgroundColor: `${colors.primary}18` }]}>
+                  <Feather name="search" size={19} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.askModalTitle, { color: colors.foreground }]}>Ask Jamvi</Text>
+                  <Text style={[styles.askModalSubtitle, { color: colors.mutedForeground }]}>
+                    Answers are read-only and limited to this budget.
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setAskOpen(false)}
+                hitSlop={8}
+                accessibilityLabel="Close Ask Jamvi"
+              >
+                <Feather name="x" size={22} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <TextInput
+              value={askQuery}
+              onChangeText={setAskQuery}
+              onSubmitEditing={() => void askJamvi()}
+              placeholder="Ask about your budget…"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.askInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+              accessibilityLabel="Ask Jamvi a question"
+              returnKeyType="send"
+              maxLength={500}
+              editable={!asking}
+            />
+            <Pressable
+              testID="submit-ask-jamvi"
+              accessibilityRole="button"
+              accessibilityLabel="Send question to Ask Jamvi"
+              onPress={() => void askJamvi()}
+              disabled={!askQuery.trim() || asking}
+              style={[styles.askSubmit, { backgroundColor: colors.primary, opacity: !askQuery.trim() || asking ? 0.5 : 1 }]}
+            >
+              {asking ? (
+                <ActivityIndicator color={colors.primaryForeground} size="small" />
+              ) : (
+                <>
+                  <Feather name="send" size={15} color={colors.primaryForeground} />
+                  <Text style={[styles.askSubmitText, { color: colors.primaryForeground }]}>Ask Jamvi</Text>
+                </>
+              )}
+            </Pressable>
+            <View style={styles.askPromptList}>
+              {['How am I doing this month?', 'Where am I spending the most?', 'How much is left?'].map((prompt) => (
+                <Pressable
+                  key={prompt}
+                  onPress={() => void askJamvi(prompt)}
+                  disabled={asking}
+                  style={[styles.askPrompt, { borderColor: `${colors.primary}40`, backgroundColor: `${colors.primary}0D`, opacity: asking ? 0.6 : 1 }]}
+                >
+                  <Text style={[styles.askPromptText, { color: colors.foreground }]}>{prompt}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {askError ? (
+              <Text style={[styles.askError, { color: colors.destructive }]}>{askError}</Text>
+            ) : null}
+            {askAnswer ? (
+              <View style={[styles.askAnswer, { borderColor: `${colors.primary}40`, backgroundColor: `${colors.primary}0D` }]}>
+                <Text style={[styles.askAnswerLabel, { color: colors.primary }]}>JAMVI SAYS</Text>
+                <Text style={[styles.askAnswerText, { color: colors.foreground }]}>{askAnswer.answer}</Text>
+                <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]}>
+                  Read-only · {askAnswer.workspaceScoped ? 'Current budget only' : 'Unscoped'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
     </View>
   );
 }
@@ -774,6 +933,8 @@ const styles = StyleSheet.create({
   groupCtaCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
   budgetCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
   uncategorizedCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
+  askCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
+  askCtaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   uncategorizedList: { marginTop: 12, gap: 8 },
   uncategorizedRow: { minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 8 },
   uncategorizedCopy: { minWidth: 0, flex: 1 },
@@ -787,6 +948,24 @@ const styles = StyleSheet.create({
   groupCtaText: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 11 },
   groupCtaButton: { minHeight: 46, borderRadius: 12, paddingHorizontal: 14, marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   groupCtaButtonText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  askModalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' },
+  askModalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28 },
+  askModalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
+  askModalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 11, flex: 1 },
+  askModalIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  askModalTitle: { fontSize: 19, fontFamily: 'Inter_700Bold' },
+  askModalSubtitle: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  askInput: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular' },
+  askSubmit: { minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
+  askSubmitText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  askPromptList: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 14 },
+  askPrompt: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8 },
+  askPromptText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+  askError: { fontSize: 12, lineHeight: 17, marginTop: 13, fontFamily: 'Inter_500Medium' },
+  askAnswer: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 15 },
+  askAnswerLabel: { fontSize: 10, letterSpacing: 0.8, fontFamily: 'Inter_700Bold' },
+  askAnswerText: { fontSize: 14, lineHeight: 21, marginTop: 5, fontFamily: 'Inter_400Regular' },
+  askAnswerMeta: { fontSize: 10, marginTop: 9, fontFamily: 'Inter_400Regular' },
   section: { paddingHorizontal: 20, paddingTop: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   sectionEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1, marginBottom: 3 },

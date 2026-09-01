@@ -280,7 +280,7 @@ function CategoryDialog({
     setActiveYear(initial?.activeYear ?? reportYear);
   }, [initial, open, reportMonth, reportYear, defaultPriority, defaultName, defaultAmount]);
 
-  const parsedAmount = parseInt(amount, 10);
+  const parsedAmount = amount.trim() === "" && initial ? 0 : parseInt(amount, 10);
 
   const handleSave = () => {
     if (!name.trim() || isNaN(parsedAmount) || parsedAmount < 0) {
@@ -353,6 +353,7 @@ function CategoryDialog({
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">{recurringSetup ? "Average monthly amount (KES)" : "Budget amount (KES)"}</label>
               <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} disabled={saving} />
+                <p className="text-xs text-muted-foreground">Enter 0, or clear the amount while editing, to pause this budget. Existing expenses stay recorded.</p>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">Priority tier</label>
