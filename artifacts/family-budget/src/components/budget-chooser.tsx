@@ -100,16 +100,19 @@ export function BudgetChooser({
   const userId = user.id ?? "";
   const skipOnboarding = async () => {
     if (!userId) return;
+    setSelectionError(null);
     try {
-      await fetch("/api/onboarding/preferences", {
+      const response = await fetch("/api/onboarding/preferences", {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ usageMode: "personal", persona: null, budgetDuration: "ongoing", budgetStartDate: null, budgetEndDate: null, categoryNames: [], incomeStreams: [], completed: true, onboardingVersion: 1 }),
       });
-    } finally {
+      if (!response.ok) throw new Error("Could not skip setup right now.");
       markBudgetChooserComplete(userId);
       window.location.assign(import.meta.env.BASE_URL);
+    } catch {
+      setSelectionError("We could not skip setup right now. Please try again, or choose how you will use Jamvi.");
     }
   };
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
@@ -260,6 +263,7 @@ export function BudgetChooser({
                 ))}
               </div>
               <div className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2.5"><p className="text-xs leading-relaxed text-muted-foreground"><span className="font-semibold text-foreground">Your choice does not lock you in.</span> Personal records stay private, and Shared budgets are only visible to the people you invite.</p><button type="button" onClick={() => void skipOnboarding()} className="shrink-0 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title="You can complete setup later from your budgets">Skip for now</button></div>
+              {selectionError ? <p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">{selectionError}</p> : null}
             </div>
           </div>
         </section>

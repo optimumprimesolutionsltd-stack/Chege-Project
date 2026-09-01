@@ -248,7 +248,7 @@ function MainRouter() {
     // The server never silently falls back to another workspace. Any missing
     // or stale selection must return to the chooser, whether the available
     // budgets are Personal, Shared, or the list is currently empty.
-    requiresSelection: hasGroupAccess === false && !workspacesFailed && !completedBudgetChooser,
+    requiresSelection: hasGroupAccess === false && !workspacesFailed,
   });
 
   if (chooserRoute) {
