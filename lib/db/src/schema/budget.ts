@@ -45,6 +45,9 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   budgetAmount: integer("budget_amount").notNull(),
   priority: integer("priority").notNull().default(1),
   color: text("color").notNull().default("#6B7280"),
+  // Archived categories remain available to historical reports and expenses,
+  // but are removed from new budget and expense choices.
+  isArchived: boolean("is_archived").notNull().default(false),
   isRecurring: boolean("is_recurring").notNull().default(true),
   activeMonth: integer("active_month"),
   activeYear: integer("active_year"),

@@ -31,6 +31,7 @@ type BudgetCategory = {
   budgetAmount: number;
   priority: number;
   color: string;
+  isArchived?: boolean;
   isRecurring: boolean;
   activeMonth?: number | null;
   activeYear?: number | null;
@@ -45,6 +46,10 @@ type PendingCategoryChange = {
   isRecurring: boolean;
   activeMonth: number;
   activeYear: number;
+};
+type CategoryMigration = {
+  group: { id: number; name: string; kind: string };
+  categories: Array<BudgetCategory & { recommended: boolean }>;
 };
 
 function IncomeSourceEditor({
@@ -752,6 +757,35 @@ export default function Budget() {
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) || group?.isPrivate === true;
+  const { data: categoryMigration, refetch: refetchCategoryMigration } = useQuery<CategoryMigration>({
+    queryKey: ["budget-category-migration", group?.id],
+    enabled: canManageShared,
+    queryFn: async () => {
+      const response = await fetch("/api/budget-categories/migration", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load category migration.");
+      return response.json();
+    },
+  });
+  const [migrationArchiveIds, setMigrationArchiveIds] = useState<number[]>([]);
+  const [applyingMigration, setApplyingMigration] = useState(false);
+  const mismatchedCategories = (categoryMigration?.categories ?? []).filter((category) => !category.recommended && !category.isArchived);
+  const applyCategoryMigration = async () => {
+    setApplyingMigration(true);
+    try {
+      const response = await fetch("/api/budget-categories/migration/apply", {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archiveCategoryIds: migrationArchiveIds, addRecommended: true }),
+      });
+      if (!response.ok) throw new Error("Could not update category setup.");
+      setMigrationArchiveIds([]);
+      await Promise.all([refetchCategoryMigration(), refreshAll()]);
+      toast({ title: "Category setup updated", description: "Historical records were kept. Archived categories will no longer appear for new entries." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not update categories", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setApplyingMigration(false);
+    }
+  };
   const groupedIncomeSources = incomeSources.reduce((groups, source) => {
     const existing = groups.get(source.userId) ?? [];
     existing.push(source);
@@ -928,6 +962,33 @@ export default function Budget() {
          </div>
        )}
       </div>
+
+       {canManageShared && mismatchedCategories.length > 0 ? (
+         <Card className="border-amber-500/30 bg-amber-500/[0.04] shadow-sm">
+           <CardContent className="p-5">
+             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+               <div>
+                 <p className="font-semibold text-foreground">Review categories for this {categoryMigration?.group.kind ?? "group"} budget</p>
+                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">Some older categories do not match this group type. Select categories to archive from future choices. Historical expenses and reports remain unchanged.</p>
+               </div>
+               <span className="shrink-0 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-800 dark:text-amber-200">Admin only</span>
+             </div>
+             <div className="mt-4 grid gap-2 sm:grid-cols-2">
+               {mismatchedCategories.map((category) => {
+                 const selected = migrationArchiveIds.includes(category.id);
+                 return <label key={category.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-3 text-sm">
+                   <input type="checkbox" checked={selected} onChange={() => setMigrationArchiveIds((current) => selected ? current.filter((id) => id !== category.id) : [...current, category.id])} className="h-4 w-4 accent-primary" />
+                   <span className="min-w-0 flex-1"><span className="font-medium text-foreground">{category.name}</span><span className="ml-2 text-xs text-muted-foreground">older category</span></span>
+                 </label>;
+               })}
+             </div>
+             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+               <p className="text-xs text-muted-foreground">Recommended {categoryMigration?.group.kind} categories will be added automatically.</p>
+               <Button type="button" onClick={applyCategoryMigration} disabled={applyingMigration || migrationArchiveIds.length === 0} className="w-full sm:w-auto">{applyingMigration ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{applyingMigration ? "Updating…" : "Apply reviewed cleanup"}</Button>
+             </div>
+           </CardContent>
+         </Card>
+       ) : null}
 
        <Card className="border-none shadow-sm bg-card">
          <CardContent className="p-5">

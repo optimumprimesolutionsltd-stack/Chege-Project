@@ -99,6 +99,13 @@
       "when": 1788188369703,
       "tag": "0013_square_jocasta",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788261934000,
+      "tag": "0014_category_archive_cleanup",
+      "breakpoints": true
     }
   ]
 }
