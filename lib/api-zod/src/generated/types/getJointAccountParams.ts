@@ -8,7 +8,7 @@
 
 export type GetJointAccountParams = {
 /**
- * Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.
+ * Optional account selection. When omitted, accountId is null and accountName is All accounts.
  * @minimum 1
  */
 accountId?: number;

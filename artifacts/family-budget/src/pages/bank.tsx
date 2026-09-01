@@ -129,6 +129,7 @@ export default function Bank() {
   const [addingAccount, setAddingAccount] = useState(false);
 
   const selectedBankAccount = accounts.find((item) => item.id === selectedAccountId) ?? null;
+  const isCreatingAccount = addingAccount || !selectedBankAccount;
 
   useEffect(() => {
     if (!accounts.length) {
@@ -237,8 +238,12 @@ export default function Bank() {
       setAddingAccount(false);
       invalidate();
       toast({ title: editingAccountId ? "Account updated" : "Account added" });
-    } catch {
-      toast({ variant: "destructive", title: "Could not save account", description: "Check the name and try again." });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not save account",
+        description: error instanceof Error ? error.message : "Check the name and try again.",
+      });
     }
   };
 
@@ -716,14 +721,20 @@ export default function Bank() {
           </div>
           {canManageAccount && (
             <div className="border-t border-border/60 pt-3">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Personalize bank accounts</p>
-              <p className="mb-3 text-xs text-muted-foreground">Give each account a name you recognize, such as M-Pesa wallet, KCB salary, or Savings.</p>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {isCreatingAccount ? "Create a bank account" : "Manage bank accounts"}
+              </p>
+              <p className="mb-3 text-xs text-muted-foreground">
+                {isCreatingAccount
+                  ? "Every bank account is created by you. Give it a clear name such as M-Pesa wallet, KCB salary, or Savings."
+                  : "Edit the selected account or add another separate bank account."}
+              </p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={addingAccount ? "e.g. Family M-Pesa" : "Account name"} maxLength={80} />
+                <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={isCreatingAccount ? "e.g. Family M-Pesa" : "Account name"} maxLength={80} />
                 <Input data-testid="input-bank-account-number" value={accountNumberDraft} onChange={(event) => setAccountNumberDraft(event.target.value)} placeholder="Account number (optional)" maxLength={40} />
-                <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{addingAccount ? "Add account" : "Save changes"}</Button>
-                {!addingAccount && <Button type="button" variant="outline" data-testid="button-add-bank-account" onClick={startAddingAccount}>Add another</Button>}
-                {addingAccount && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={startEditingSelectedAccount}>Cancel</Button>}
+                <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{isCreatingAccount ? "Add account" : "Save changes"}</Button>
+                {!isCreatingAccount && <Button type="button" variant="outline" data-testid="button-add-bank-account" onClick={startAddingAccount}>Add another</Button>}
+                {addingAccount && selectedBankAccount && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={startEditingSelectedAccount}>Cancel</Button>}
               </div>
               {selectedAccountId && <div className="mt-2 flex gap-2">
                 <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={startEditingSelectedAccount}>Edit selected account</Button>

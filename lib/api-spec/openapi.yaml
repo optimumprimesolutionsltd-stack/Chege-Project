@@ -770,7 +770,7 @@ paths:
       parameters:
         - name: accountId
           in: query
-          description: Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.
+          description: Optional account selection. When omitted, accountId is null and accountName is All accounts.
           schema:
             type: number
             minimum: 1
@@ -1977,7 +1977,7 @@ components:
           type: boolean
           description: Legacy single-source bank-account flag. Use incomeSplits for a mixed payment.
         accountId:
-          type: number
+          type: ["number", "null"]
           minimum: 1
           description: Selected bank account for bank funding. Omit to use the workspace's first account.
         incomeSourceId:

@@ -196,7 +196,7 @@ describe("multiple-account legacy fallback", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
-      accountId: 7,
+      accountId: null,
       accountName: "All accounts",
       openingBalance: 350,
       totalDeposits: 60,

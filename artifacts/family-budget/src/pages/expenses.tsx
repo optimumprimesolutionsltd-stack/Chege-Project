@@ -66,6 +66,7 @@ import {
   getExpenseFundingStatus,
   getFundingRemainder,
   getNewExpenseCategoryMode,
+  getProjectedCategoryBalance,
   hasMissingPersonalFundingSource,
 } from "@/lib/expense-funding-utils";
 
@@ -1276,6 +1277,49 @@ export default function Expenses() {
       hasDirectIncomeSource,
       formatAmount: formatKes,
     });
+    const originalExpense = mode === "edit"
+      ? expenses?.find((expense) => expense.id === editingId)
+      : undefined;
+    const originalCategoryAllocations = originalExpense?.categoryAllocations?.length
+      ? originalExpense.categoryAllocations
+      : originalExpense?.category
+        ? [{ category: originalExpense.category, amount: originalExpense.amount }]
+        : [];
+    const categoryBalancePreviews = form.categoryAllocations.flatMap((allocation) => {
+      const categoryName = allocation.category.trim();
+      const allocationAmount = Number(allocation.amount);
+      if (
+        !categoryName
+        || categoryName.toLocaleLowerCase() === "other"
+        || !Number.isInteger(allocationAmount)
+        || allocationAmount <= 0
+      ) {
+        return [];
+      }
+      const categoryBreakdown = breakdown?.find(
+        (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      );
+      const categoryDefinition = categories?.find(
+        (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      );
+      const budgetAmount = categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0;
+      const spentAmount = categoryBreakdown?.spentAmount ?? 0;
+      if (budgetAmount <= 0) return [];
+      const previousAllocationAmount = originalCategoryAllocations
+        .filter((item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase())
+        .reduce((sum, item) => sum + item.amount, 0);
+      return [{
+        category: categoryBreakdown?.category ?? categoryDefinition?.name ?? categoryName,
+        budgetAmount,
+        spentBeforeExpense: spentAmount - previousAllocationAmount,
+        ...getProjectedCategoryBalance({
+          budgetAmount,
+          spentAmount,
+          allocationAmount,
+          previousAllocationAmount,
+        }),
+      }];
+    });
 
     return (
     <form onSubmit={onSubmit} noValidate className="space-y-5 sm:space-y-6">
@@ -1491,13 +1535,17 @@ export default function Expenses() {
          </div>
           )}
           {form.category && (() => {
-            const cat = breakdown?.find(b => b.category === form.category);
-            return cat ? (
+            const preview = categoryBalancePreviews.find(
+              (item) => item.category.toLocaleLowerCase() === form.category.toLocaleLowerCase(),
+            );
+            return preview ? (
               <p className="flex flex-col gap-0.5 text-xs text-muted-foreground pt-1 sm:block">
-                Spent this month: <span className="font-semibold text-foreground">{formatKes(cat.spentAmount)}</span>
+                Spent before this expense: <span className="font-semibold text-foreground">{formatKes(preview.spentBeforeExpense)}</span>
                 <span className="hidden mx-1 sm:inline">·</span>
-                <span className={cat.spentAmount >= cat.budgetAmount ? "text-destructive font-semibold" : ""}>
-                  {formatKes(Math.max(0, cat.budgetAmount - cat.spentAmount))} remaining of {formatKes(cat.budgetAmount)}
+                <span className={preview.isOverBudget ? "text-destructive font-semibold" : ""}>
+                  {preview.isOverBudget
+                    ? `${formatKes(preview.overBy)} over budget after this expense`
+                    : `${formatKes(preview.remaining)} left after this expense of ${formatKes(preview.budgetAmount)}`}
                 </span>
               </p>
             ) : null;
@@ -1715,6 +1763,25 @@ export default function Expenses() {
                Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
            </div>
+            {categoryBalancePreviews.length > 0 && (
+              <div
+                className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3"
+                data-testid={`expense-category-balance-preview-${mode}`}
+              >
+                <p className="text-xs font-bold uppercase tracking-wide text-primary">Category balances after this expense</p>
+                {categoryBalancePreviews.map((preview) => (
+                  <div key={preview.category} className="flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                    <span className="font-semibold text-foreground">{preview.category}</span>
+                    <span className={preview.isOverBudget ? "font-semibold text-destructive" : "font-semibold text-emerald-700 dark:text-emerald-300"}>
+                      {preview.isOverBudget
+                        ? `${formatKes(preview.overBy)} over budget`
+                        : `${formatKes(preview.remaining)} left of ${formatKes(preview.budgetAmount)}`}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">These running balances use each category amount entered above.</p>
+              </div>
+            )}
             {mode === "edit" && editHasMultipleFundingSplits && (
              <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-foreground" data-testid="expense-funding-summary-edit">
                <span className="font-semibold">Multiple saved funding portions</span>

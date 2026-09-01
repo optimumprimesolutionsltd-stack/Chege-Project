@@ -6,6 +6,7 @@ import {
   getFundingRemainder,
   getCategoryAllocationStatus,
   getNewExpenseCategoryMode,
+  getProjectedCategoryBalance,
   hasMissingPersonalFundingSource,
 } from "./expense-funding-utils";
 
@@ -170,6 +171,33 @@ describe("expense funding controls", () => {
     expect(getNewExpenseCategoryMode({ addToBudget: false, canManageCategories: true })).toBe("unbudgeted");
     expect(getNewExpenseCategoryMode({ addToBudget: true, canManageCategories: false })).toBe("unbudgeted");
     expect(getNewExpenseCategoryMode({ addToBudget: true, canManageCategories: true })).toBe("budgeted");
+  });
+
+  it("projects the category balance after a new expense allocation", () => {
+    expect(getProjectedCategoryBalance({
+      budgetAmount: 10_000,
+      spentAmount: 4_000,
+      allocationAmount: 2_500,
+    })).toEqual({
+      projectedSpent: 6_500,
+      remaining: 3_500,
+      overBy: 0,
+      isOverBudget: false,
+    });
+  });
+
+  it("replaces the previous allocation when previewing an edited expense", () => {
+    expect(getProjectedCategoryBalance({
+      budgetAmount: 10_000,
+      spentAmount: 9_000,
+      previousAllocationAmount: 2_000,
+      allocationAmount: 4_000,
+    })).toEqual({
+      projectedSpent: 11_000,
+      remaining: 0,
+      overBy: 1_000,
+      isOverBudget: true,
+    });
   });
 
   it("does not mark an amount-only category row ready before a category is selected", () => {

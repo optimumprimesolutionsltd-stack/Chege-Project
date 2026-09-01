@@ -60,7 +60,7 @@ import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-
 import { AskJamviPanel } from "@/components/ask-jamvi-panel";
 import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
-import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder } from "@/lib/expense-funding-utils";
+import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder, getProjectedCategoryBalance } from "@/lib/expense-funding-utils";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";
@@ -654,9 +654,14 @@ function ExpenseForm({
   const [recurringMonthlyBudget, setRecurringMonthlyBudget] = useState("");
   const [uncategorizedSaveOpen, setUncategorizedSaveOpen] = useState(false);
   const [date, setDate] = useState(localDateInputValue());
+  const [expenseYear, expenseMonth] = date.split("-").map(Number);
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const { data: bankAccounts = [] } = useGetJointAccounts();
+  const { data: expenseCategoryBreakdown = [] } = useGetDashboardCategoryBreakdown({
+    month: expenseMonth,
+    year: expenseYear,
+  });
   const { data: selectedBankAccount } = useGetJointAccount(
     selectedBankAccountId ? { accountId: selectedBankAccountId } : undefined,
   );
@@ -698,6 +703,37 @@ function ExpenseForm({
       amount: Number(allocation.amount),
     })),
     formatAmount: formatKes,
+  });
+  const categoryBalancePreviews = categoryAllocations.flatMap((allocation) => {
+    const categoryName = allocation.category.trim();
+    const allocationAmount = Number(allocation.amount);
+    if (
+      !categoryName
+      || categoryName.toLocaleLowerCase() === "other"
+      || !Number.isInteger(allocationAmount)
+      || allocationAmount <= 0
+    ) {
+      return [];
+    }
+    const categoryBreakdown = expenseCategoryBreakdown.find(
+      (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+    );
+    const categoryDefinition = categories.find(
+      (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+    );
+    const budgetAmount = categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0;
+    const spentAmount = categoryBreakdown?.spentAmount ?? 0;
+    if (budgetAmount <= 0) return [];
+    return [{
+      category: categoryBreakdown?.category ?? categoryDefinition?.name ?? categoryName,
+      budgetAmount,
+      spentBeforeExpense: spentAmount,
+      ...getProjectedCategoryBalance({
+        budgetAmount,
+        spentAmount,
+        allocationAmount,
+      }),
+    }];
   });
   const fundingStatus = getExpenseFundingStatus({
     total: expenseTotal,
@@ -1515,6 +1551,22 @@ function ExpenseForm({
                 Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
           </div>
+            {categoryBalancePreviews.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3" data-testid="quick-expense-category-balance-preview">
+                <p className="text-xs font-bold uppercase tracking-wide text-primary">Category balances after this expense</p>
+                {categoryBalancePreviews.map((preview) => (
+                  <div key={preview.category} className="flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                    <span className="font-semibold text-foreground">{preview.category}</span>
+                    <span className={preview.isOverBudget ? "font-semibold text-destructive" : "font-semibold text-emerald-700 dark:text-emerald-300"}>
+                      {preview.isOverBudget
+                        ? `${formatKes(preview.overBy)} over budget`
+                        : `${formatKes(preview.remaining)} left of ${formatKes(preview.budgetAmount)}`}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">These running balances use each category amount entered above.</p>
+              </div>
+            )}
            {isSharedWorkspace && (!paidFromBank || allowMixedFunding) && (
              <div className="space-y-2">
                <div>

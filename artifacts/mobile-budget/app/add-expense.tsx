@@ -53,6 +53,7 @@ import {
   getExpenseFundingControlState,
   getFundingRemainder,
   getNewExpenseCategoryMode,
+  getProjectedCategoryBalance,
   hydrateCategoryAllocations,
   preserveExpenseSplitsForAmount,
 } from '@/lib/expenseFundingPreservation';
@@ -242,9 +243,6 @@ export default function AddExpenseSheet() {
   const selectablePayers = canManageShared
     ? members
     : members.filter((member) => member.userId === user?.id);
-  const now = new Date();
-  const { data: breakdown } = useGetDashboardCategoryBreakdown({ month: now.getMonth() + 1, year: now.getFullYear() });
-
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [categoryAllocations, setCategoryAllocations] = useState<CategoryAllocation[]>([]);
@@ -281,6 +279,11 @@ export default function AddExpenseSheet() {
   const [editHydratedForId, setEditHydratedForId] = useState<number | null>(null);
   const [editFundingHydratedForId, setEditFundingHydratedForId] = useState<number | null>(null);
   const [fundingDirty, setFundingDirty] = useState(false);
+  const [expenseYear, expenseMonth] = date.split('-').map(Number);
+  const { data: breakdown } = useGetDashboardCategoryBreakdown({
+    month: expenseMonth,
+    year: expenseYear,
+  });
   const { data: selectedBankAccount } = useGetJointAccount(
     selectedBankAccountId ? { accountId: selectedBankAccountId } : undefined,
   );
@@ -292,6 +295,46 @@ export default function AddExpenseSheet() {
     enteredBankAmount > 0
     ? selectedBankAccount.balance + originalBankAmount - enteredBankAmount
     : null;
+  const originalCategoryAllocations = editingExpense?.categoryAllocations?.length
+    ? editingExpense.categoryAllocations
+    : editingExpense?.category
+      ? [{ category: editingExpense.category, amount: editingExpense.amount }]
+      : [];
+  const categoryBalancePreviews = categoryAllocations.flatMap((allocation) => {
+    const categoryName = allocation.category.trim();
+    const allocationAmount = Number(allocation.amount.replace(/,/g, ''));
+    if (
+      !categoryName
+      || categoryName.toLocaleLowerCase() === 'other'
+      || !Number.isInteger(allocationAmount)
+      || allocationAmount <= 0
+    ) {
+      return [];
+    }
+    const categoryBreakdown = breakdown?.find(
+      (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+    );
+    const categoryDefinition = categories.find(
+      (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+    );
+    const budgetAmount = categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0;
+    const spentAmount = categoryBreakdown?.spentAmount ?? 0;
+    if (budgetAmount <= 0) return [];
+    const previousAllocationAmount = originalCategoryAllocations
+      .filter((item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase())
+      .reduce((sum, item) => sum + item.amount, 0);
+    return [{
+      category: categoryBreakdown?.category ?? categoryDefinition?.name ?? categoryName,
+      budgetAmount,
+      spentBeforeExpense: spentAmount - previousAllocationAmount,
+      ...getProjectedCategoryBalance({
+        budgetAmount,
+        spentAmount,
+        allocationAmount,
+        previousAllocationAmount,
+      }),
+    }];
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -1517,15 +1560,21 @@ export default function AddExpenseSheet() {
         )}
         {/* Running balance for selected category */}
         {category ? (() => {
-          const cat = breakdown?.find(b => b.category === category);
-          if (!cat) return null;
-          const over = cat.spentAmount >= cat.budgetAmount;
+          const preview = categoryBalancePreviews.find(
+            (item) => item.category.toLocaleLowerCase() === category.toLocaleLowerCase(),
+          );
+          if (!preview) return null;
           return (
-            <View style={[styles.balancePill, { backgroundColor: over ? 'rgba(239,68,68,0.1)' : 'rgba(74,222,128,0.1)', borderColor: over ? 'rgba(239,68,68,0.3)' : 'rgba(74,222,128,0.3)' }]}>
-              <Feather name="bar-chart-2" size={12} color={over ? '#ef4444' : '#4ade80'} />
-              <Text style={[styles.balancePillText, { color: over ? '#ef4444' : '#4ade80' }]}>
-                Spent this month: KES {cat.spentAmount.toLocaleString()} / {cat.budgetAmount.toLocaleString()}
-                {over ? '  ·  Over budget!' : `  ·  KES ${(cat.budgetAmount - cat.spentAmount).toLocaleString()} left`}
+            <View style={[styles.balancePill, {
+              backgroundColor: preview.isOverBudget ? colors.destructive + '18' : colors.primary + '18',
+              borderColor: preview.isOverBudget ? colors.destructive + '55' : colors.primary + '55',
+            }]}>
+              <Feather name="bar-chart-2" size={12} color={preview.isOverBudget ? colors.destructive : colors.primary} />
+              <Text style={[styles.balancePillText, { color: preview.isOverBudget ? colors.destructive : colors.primary }]}>
+                Spent before this expense: KES {preview.spentBeforeExpense.toLocaleString()}
+                {preview.isOverBudget
+                  ? `  ·  KES ${preview.overBy.toLocaleString()} over budget after this expense`
+                  : `  ·  KES ${preview.remaining.toLocaleString()} left after this expense`}
               </Text>
             </View>
           );
@@ -1584,6 +1633,38 @@ export default function AddExpenseSheet() {
                  FUNDING OPTIONS <Text style={{ color: '#ef4444' }}>*</Text>
                </Text>
              </View>
+             {categoryBalancePreviews.length > 0 && (
+               <View
+                 style={[styles.categoryBalancePreview, {
+                   backgroundColor: colors.primary + '0A',
+                   borderColor: colors.primary + '45',
+                   borderRadius: colors.radius,
+                 }]}
+                 accessibilityLiveRegion="polite"
+                 testID="expense-category-balance-preview-mobile"
+               >
+                 <Text style={[styles.categoryBalancePreviewTitle, { color: colors.primary }]}>
+                   CATEGORY BALANCES AFTER THIS EXPENSE
+                 </Text>
+                 {categoryBalancePreviews.map((preview) => (
+                   <View key={preview.category} style={styles.categoryBalancePreviewRow}>
+                     <Text style={[styles.categoryBalancePreviewCategory, { color: colors.foreground }]}>
+                       {preview.category}
+                     </Text>
+                     <Text style={[styles.categoryBalancePreviewAmount, {
+                       color: preview.isOverBudget ? colors.destructive : colors.primary,
+                     }]}>
+                       {preview.isOverBudget
+                         ? `KES ${preview.overBy.toLocaleString()} over budget`
+                         : `KES ${preview.remaining.toLocaleString()} left of KES ${preview.budgetAmount.toLocaleString()}`}
+                     </Text>
+                   </View>
+                 ))}
+                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
+                   These running balances use each category amount entered above.
+                 </Text>
+               </View>
+             )}
             <View style={styles.paidByRow}>
               {/* Joint-bank spending is restricted to group managers. */}
               {canManageShared && <Pressable
@@ -2557,6 +2638,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     flex: 1,
+  },
+  categoryBalancePreview: {
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  categoryBalancePreviewTitle: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.5,
+  },
+  categoryBalancePreviewRow: {
+    gap: 2,
+  },
+  categoryBalancePreviewCategory: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  categoryBalancePreviewAmount: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Inter_600SemiBold',
   },
   negativeBankWarning: {
     borderWidth: 1,

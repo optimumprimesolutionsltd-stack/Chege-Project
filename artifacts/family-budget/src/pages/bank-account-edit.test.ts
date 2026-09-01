@@ -8,7 +8,7 @@ describe("bank account personalization", () => {
     expect(bankSource).toContain("const selectedBankAccount = accounts.find");
     expect(bankSource).toContain("setAccountNameDraft(selectedBankAccount.name)");
     expect(bankSource).toContain("setAccountNumberDraft(selectedBankAccount.accountNumber ?? \"\")");
-    expect(bankSource).toContain('>{addingAccount ? "Add account" : "Save changes"}<');
+    expect(bankSource).toContain('>{isCreatingAccount ? "Add account" : "Save changes"}<');
     expect(bankSource).toContain('>Edit selected account<');
   });
 

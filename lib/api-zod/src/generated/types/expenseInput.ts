@@ -26,8 +26,9 @@ export interface ExpenseInput {
   /**
      * Selected bank account for bank funding. Omit to use the workspace's first account.
      * @minimum 1
+     * @nullable
      */
-  accountId?: number;
+  accountId?: number | null;
   /**
      * Required for a personal expense unless paidFromBank is true. Must belong to paidById.
      * @minimum 1

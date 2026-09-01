@@ -208,6 +208,7 @@ export default function BankScreen() {
   const canManageShared = isSharedWorkspace && canManageAccount;
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId)
     ?? accounts[0];
+  const hasBankAccounts = accounts.length > 0;
 
   useEffect(() => {
     if (!accountStorageKey) return;
@@ -869,6 +870,19 @@ export default function BankScreen() {
             );
           })}
         </View>
+        {!hasBankAccounts && canManageAccount && (
+          <Pressable
+            onPress={() => openAccountEditor()}
+            style={[styles.firstAccountCta, { borderColor: '#86efac', backgroundColor: '#1f3a2b' }]}
+            testID="bank-create-first-account"
+          >
+            <Feather name="plus-circle" size={18} color="#86efac" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.firstAccountCtaTitle}>Create your first bank account</Text>
+              <Text style={styles.firstAccountCtaText}>Jamvi will not create a main or placeholder account for you.</Text>
+            </View>
+          </Pressable>
+        )}
         {isSharedWorkspace && !canManageAccount && (
           <Text style={styles.managerGuidance}>
             You can add your own deposit today. An owner or admin handles withdrawals, transfers, and account changes.
@@ -919,19 +933,20 @@ export default function BankScreen() {
             {/* Action buttons inside header */}
             <View style={styles.actionRow}>
               <TouchableOpacity
-                style={styles.actionBtn}
+                style={[styles.actionBtn, !hasBankAccounts && styles.actionBtnDisabled]}
                 onPress={() => openModal('deposit')}
                 activeOpacity={0.8}
+                disabled={!hasBankAccounts}
                 testID="bank-deposit-action"
               >
                 <Feather name="arrow-down-left" size={16} color="#0a1a10" />
                 <Text style={styles.actionBtnText}>Deposit</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnDisburse, !canManageAccount && styles.actionBtnDisabled]}
+                style={[styles.actionBtn, styles.actionBtnDisburse, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
                 onPress={() => openModal('disbursement')}
                 activeOpacity={0.8}
-                disabled={!canManageAccount}
+                disabled={!canManageAccount || !hasBankAccounts}
                 accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can withdraw money.' : undefined}
                 testID="bank-withdraw-action"
               >
@@ -939,10 +954,10 @@ export default function BankScreen() {
                 <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#164e63' }, !canManageAccount && styles.actionBtnDisabled]}
+                style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
                 onPress={() => openModal('transfer')}
                 activeOpacity={0.8}
-                disabled={!canManageAccount}
+                disabled={!canManageAccount || !hasBankAccounts}
                 accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can transfer shared money.' : undefined}
                 testID="bank-transfer-action"
               >
@@ -959,10 +974,10 @@ export default function BankScreen() {
                 <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#78350f' }, !canManageAccount && styles.actionBtnDisabled]}
+                style={[styles.actionBtn, { backgroundColor: '#78350f' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
                 onPress={() => openModal('bank_charge')}
                 activeOpacity={0.8}
-                disabled={!canManageAccount}
+                disabled={!canManageAccount || !hasBankAccounts}
                 accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can record a bank charge.' : undefined}
                 testID="bank-charge-action"
               >
@@ -998,22 +1013,26 @@ export default function BankScreen() {
           !isLoading ? (
             <View style={styles.empty}>
               <Feather name="credit-card" size={40} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                No transactions yet
-              </Text>
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                 {hasBankAccounts ? 'No transactions yet' : 'Create a bank account first'}
+               </Text>
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                Money you put in or take out will appear here
+                 {hasBankAccounts
+                   ? 'Money you put in or take out will appear here'
+                   : 'Every account in Jamvi is created by you—there is no automatic main account.'}
               </Text>
-              <Pressable
-                testID="bank-create-first-deposit"
-                accessibilityRole="button"
-                accessibilityLabel="Record your first deposit"
-                onPress={() => openModal('deposit')}
-                style={[styles.emptyAction, { backgroundColor: colors.primary }]}
-              >
-                <Feather name="plus" size={16} color={colors.primaryForeground} />
-                <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Record first deposit</Text>
-              </Pressable>
+               <Pressable
+                 testID={hasBankAccounts ? 'bank-create-first-deposit' : 'bank-create-first-account-empty'}
+                 accessibilityRole="button"
+                 accessibilityLabel={hasBankAccounts ? 'Record your first deposit' : 'Create your first bank account'}
+                 onPress={() => hasBankAccounts ? openModal('deposit') : openAccountEditor()}
+                 style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+               >
+                 <Feather name="plus" size={16} color={colors.primaryForeground} />
+                 <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>
+                   {hasBankAccounts ? 'Record first deposit' : 'Create bank account'}
+                 </Text>
+               </Pressable>
             </View>
           ) : null
         }
@@ -2245,6 +2264,29 @@ const styles = StyleSheet.create({
   },
   actionBtnDisabled: {
     opacity: 0.45,
+  },
+  firstAccountCta: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  firstAccountCtaTitle: {
+    color: '#dcfce7',
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: 'Inter_700Bold',
+  },
+  firstAccountCtaText: {
+    color: '#d1fae5',
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: 'Inter_400Regular',
   },
   managerGuidance: {
     marginTop: 10,

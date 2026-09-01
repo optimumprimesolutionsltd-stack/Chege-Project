@@ -151,6 +151,27 @@ export function getNewExpenseCategoryMode({
   return addToBudget && canManageCategories ? 'budgeted' as const : 'unbudgeted' as const;
 }
 
+export function getProjectedCategoryBalance({
+  budgetAmount,
+  spentAmount,
+  allocationAmount,
+  previousAllocationAmount = 0,
+}: {
+  budgetAmount: number;
+  spentAmount: number;
+  allocationAmount: number;
+  previousAllocationAmount?: number;
+}) {
+  const projectedSpent = spentAmount - previousAllocationAmount + allocationAmount;
+  const difference = budgetAmount - projectedSpent;
+  return {
+    projectedSpent,
+    remaining: Math.max(0, difference),
+    overBy: Math.max(0, -difference),
+    isOverBudget: difference < 0,
+  };
+}
+
 export function getCategoryAllocationStatus(
   expenseAmount: number,
   allocations: Array<{ category: string; amount: number }>,

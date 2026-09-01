@@ -171,7 +171,7 @@ export const CreateExpenseBody = zod.object({
   "notes": zod.string().optional(),
   "paidById": zod.string().nullish().describe('Legacy single-payer attribution. Omit for split-funded or bank-account expenses.'),
   "paidFromBank": zod.boolean().optional().describe('Legacy single-source bank-account flag. Use incomeSplits for a mixed payment.'),
-  "accountId": zod.number().min(1).optional().describe('Selected bank account for bank funding. Omit to use the workspace\'s first account.'),
+  "accountId": zod.number().min(1).nullish().describe('Selected bank account for bank funding. Omit to use the workspace\'s first account.'),
   "incomeSourceId": zod.number().min(1).optional().describe('Required for a personal expense unless paidFromBank is true. Must belong to paidById.'),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
@@ -251,7 +251,7 @@ export const UpdateExpenseBody = zod.object({
   "notes": zod.string().optional(),
   "paidById": zod.string().nullish().describe('Legacy single-payer attribution. Omit for split-funded or bank-account expenses.'),
   "paidFromBank": zod.boolean().optional().describe('Legacy single-source bank-account flag. Use incomeSplits for a mixed payment.'),
-  "accountId": zod.number().min(1).optional().describe('Selected bank account for bank funding. Omit to use the workspace\'s first account.'),
+  "accountId": zod.number().min(1).nullish().describe('Selected bank account for bank funding. Omit to use the workspace\'s first account.'),
   "incomeSourceId": zod.number().min(1).optional().describe('Required for a personal expense unless paidFromBank is true. Must belong to paidById.'),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
@@ -836,7 +836,7 @@ export const CreateSavingsGoalResponse = zod.object({
 
 
 export const GetJointAccountQueryParams = zod.object({
-  "accountId": zod.coerce.number().min(1).optional().describe('Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.')
+  "accountId": zod.coerce.number().min(1).optional().describe('Optional account selection. When omitted, accountId is null and accountName is All accounts.')
 })
 
 export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf = 1;

@@ -46,6 +46,25 @@ describe("bank balance contract", () => {
     expect(insertValues).not.toContain("openingBalanceDate:");
   });
 
+  it("never creates a placeholder or main bank account while listing accounts", () => {
+    const listHelper = routeSource.slice(
+      routeSource.indexOf("async function listWorkspaceAccounts"),
+      routeSource.indexOf("function serializeAccount"),
+    );
+    expect(listHelper).toContain("return selectWorkspaceAccounts(groupId);");
+    expect(listHelper).not.toContain("db.insert");
+    expect(listHelper).not.toContain("mainAccount");
+  });
+
+  it("allows the final empty bank account to be removed", () => {
+    const deleteRoute = routeSource.slice(
+      routeSource.indexOf('router.delete("/joint-accounts/:id"'),
+      routeSource.indexOf('router.get("/joint-account"'),
+    );
+    expect(deleteRoute).not.toContain("must keep at least one bank account");
+    expect(deleteRoute).toContain("An account with transaction history cannot be deleted.");
+  });
+
   it("keeps the existing member attribution when an ordinary disbursement edit omits madeById", () => {
     expect(routeSource).toContain(
       "madeById: requestedMadeById, description, expenseCategory, accountId",

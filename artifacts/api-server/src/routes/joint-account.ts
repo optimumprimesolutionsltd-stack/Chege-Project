@@ -11,7 +11,7 @@ import {
   incomeSourcesTable,
   bankAccountsTable,
 } from "@workspace/db";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -181,26 +181,7 @@ async function resolveAccountId(accountId: number | undefined, groupId: number):
 }
 
 async function listWorkspaceAccounts(groupId: number) {
-  let accounts = await selectWorkspaceAccounts(groupId);
-  if (accounts.length > 0) return accounts;
-
-  await db.insert(bankAccountsTable).values({
-    groupId,
-    name: "Bank account",
-    openingBalance: 0,
-  }).onConflictDoNothing();
-
-  accounts = await selectWorkspaceAccounts(groupId);
-  const mainAccount = accounts[0];
-  if (mainAccount) {
-    await db.update(jointAccountTxTable)
-      .set({ accountId: mainAccount.id })
-      .where(and(
-        eq(jointAccountTxTable.groupId, groupId),
-        isNull(jointAccountTxTable.accountId),
-      ));
-  }
-  return accounts;
+  return selectWorkspaceAccounts(groupId);
 }
 
 function serializeAccount(account: AccountRecord) {
@@ -360,12 +341,6 @@ router.delete("/joint-accounts/:id", async (req, res): Promise<void> => {
   if (!requireGroupManager(req, res)) return;
   const params = IdParam.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid account id." }); return; }
-  const accounts = await db.select({ id: bankAccountsTable.id }).from(bankAccountsTable)
-    .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.id);
-  if (accounts.length <= 1) {
-    res.status(409).json({ error: "A workspace must keep at least one bank account." });
-    return;
-  }
   const [linked] = await db.select({ id: jointAccountTxTable.id }).from(jointAccountTxTable)
     .where(and(eq(jointAccountTxTable.accountId, params.data.id), eq(jointAccountTxTable.groupId, groupId))).limit(1);
   if (linked) { res.status(409).json({ error: "An account with transaction history cannot be deleted." }); return; }
@@ -383,17 +358,17 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   const query = AccountQuery.safeParse(req.query);
   if (!query.success) { res.status(400).json({ error: "Invalid account id." }); return; }
   const accounts = await listWorkspaceAccounts(groupId);
+  const isAggregate = query.data.accountId === undefined;
   const selectedAccount = query.data.accountId === undefined
     ? accounts[0]
     : accounts.find((account) => account.id === query.data.accountId);
-  if (!selectedAccount) { res.status(400).json({ error: "Bank account not found." }); return; }
-  const isAggregate = query.data.accountId === undefined;
+  if (!isAggregate && !selectedAccount) { res.status(400).json({ error: "Bank account not found." }); return; }
   const txs = await db
     .select()
     .from(jointAccountTxTable)
     .where(isAggregate
       ? eq(jointAccountTxTable.groupId, groupId)
-      : and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.accountId, selectedAccount.id)))
+      : and(eq(jointAccountTxTable.groupId, groupId), eq(jointAccountTxTable.accountId, selectedAccount!.id)))
     .orderBy(sql`${jointAccountTxTable.date} DESC, ${jointAccountTxTable.createdAt} DESC`);
 
   const enriched = await Promise.all(txs.map((tx) => enrichTx(tx, groupId)));
@@ -404,10 +379,10 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   const totalDisbursements = txs.filter(t => t.type === "disbursement" && t.bankTransferId == null).reduce((s, t) => s + t.amount, 0);
   const openingBalance = isAggregate
     ? accounts.reduce((sum, account) => sum + account.openingBalance, 0)
-    : selectedAccount.openingBalance;
+    : selectedAccount!.openingBalance;
   const openingBalanceDate = isAggregate
     ? null
-    : resolveOpeningBalanceDate(selectedAccount);
+    : resolveOpeningBalanceDate(selectedAccount!);
   const balance = openingBalance + ledgerDeposits - ledgerDisbursements;
   let balanceCursor = balance;
   const transactions = enriched.map((transaction) => {
@@ -419,9 +394,9 @@ router.get("/joint-account", async (req, res): Promise<void> => {
   });
 
   res.json({
-    accountId: selectedAccount.id,
-    accountName: isAggregate ? "All accounts" : selectedAccount.name,
-    accountNumber: isAggregate ? null : selectedAccount.accountNumber,
+    accountId: isAggregate ? null : selectedAccount!.id,
+    accountName: isAggregate ? "All accounts" : selectedAccount!.name,
+    accountNumber: isAggregate ? null : selectedAccount!.accountNumber,
     openingBalance,
     openingBalanceDate,
     balance,

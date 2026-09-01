@@ -178,8 +178,9 @@ export interface ExpenseInput {
   /**
      * Selected bank account for bank funding. Omit to use the workspace's first account.
      * @minimum 1
+     * @nullable
      */
-  accountId?: number;
+  accountId?: number | null;
   /**
      * Required for a personal expense unless paidFromBank is true. Must belong to paidById.
      * @minimum 1
@@ -1464,7 +1465,7 @@ months?: number;
 
 export type GetJointAccountParams = {
 /**
- * Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.
+ * Optional account selection. When omitted, accountId is null and accountName is All accounts.
  * @minimum 1
  */
 accountId?: number;
