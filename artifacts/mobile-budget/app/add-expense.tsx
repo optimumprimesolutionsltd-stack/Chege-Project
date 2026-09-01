@@ -1326,7 +1326,7 @@ export default function AddExpenseSheet() {
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
                   Choose the next category for this same expense.
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 6, gap: 14 }}>
                   {categories
                     .filter((item) => item.name.trim().toLocaleLowerCase() !== 'other' && !categoryAllocations.some((allocation) => allocation.category === item.name))
                     .map((item) => (
@@ -2266,7 +2266,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryScroll: { marginHorizontal: -20 },
-  categoryScrollContent: { paddingHorizontal: 20, paddingVertical: 4, gap: 10 },
+  categoryScrollContent: { paddingHorizontal: 20, paddingVertical: 10, gap: 16 },
   oneOffCategoryOption: {
     marginTop: 10,
     borderWidth: 1,
@@ -2285,16 +2285,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-     minHeight: 64,
+     minHeight: 72,
     minWidth: 112,
-    paddingHorizontal: 16,
-     paddingVertical: 18,
-    borderWidth: 1,
+     paddingHorizontal: 20,
+     paddingVertical: 20,
+     borderWidth: 1.5,
   },
   categoryChipText: {
      fontSize: 15,
-    fontWeight: '500' as const,
-    fontFamily: 'Inter_500Medium',
+     fontWeight: '600' as const,
+     fontFamily: 'Inter_600SemiBold',
   },
   categoryStatus: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   categoryStatusText: { fontSize: 13, fontFamily: 'Inter_400Regular' },
@@ -2411,7 +2411,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
   },
   allocationRemove: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  allocationStatus: { fontSize: 12, fontFamily: 'Inter_600SemiBold', marginTop: 2 },
+  allocationStatus: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_600SemiBold', marginTop: 8, paddingHorizontal: 4 },
   textInput: {
     paddingHorizontal: 14,
     paddingVertical: 13,

@@ -1218,7 +1218,7 @@ function ExpenseForm({
                  });
                  setSaveOtherAsCategory(false);
                }}
-                  className="h-16 w-full flex-1 rounded-xl border border-input bg-card px-4 text-base font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-[72px] w-full flex-1 rounded-xl border-2 border-input bg-card px-6 py-4 text-base font-semibold leading-7 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
              >
                 <option value="">Select a category</option>
                {categories
@@ -1247,7 +1247,7 @@ function ExpenseForm({
                      role="status"
                      aria-live="polite"
                      data-testid="category-allocation-total-dashboard"
-                     className={`mt-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                      className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
                        categoryStatus.tone === "ready"
                          ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
                          : categoryStatus.tone === "error"
@@ -1290,7 +1290,7 @@ function ExpenseForm({
                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <select value={allocation.category}
                       onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
-                       aria-label={`Additional allocation category ${index + 2}`} className="h-16 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm font-medium">
+                       aria-label={`Additional allocation category ${index + 2}`} className="h-[72px] min-w-0 flex-1 rounded-md border-2 border-input bg-card px-5 py-4 text-sm font-semibold leading-6">
                        <option value="">Select a category</option>
                       {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>)}
                     </select>
@@ -1318,7 +1318,7 @@ function ExpenseForm({
                      role="status"
                      aria-live="polite"
                      data-testid="category-allocation-total-dashboard"
-                     className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                      className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
                        categoryStatus.tone === "ready"
                          ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
                          : categoryStatus.tone === "error"
@@ -1423,7 +1423,7 @@ function ExpenseForm({
                         role="status"
                         aria-live="polite"
                         data-testid="category-allocation-total-dashboard"
-                        className={`mt-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                        className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
                           categoryStatus.tone === "ready"
                             ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
                             : categoryStatus.tone === "error"
@@ -1486,7 +1486,7 @@ function ExpenseForm({
                     role="status"
                     aria-live="polite"
                     data-testid="category-allocation-total-dashboard-end"
-                    className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2 text-sm font-semibold text-foreground"
+                    className="mt-3 rounded-lg border border-border/60 bg-muted/25 px-4 py-3 text-sm font-semibold leading-6 text-foreground"
                   >
                     {categoryStatus.message}
                   </div>

@@ -1333,7 +1333,7 @@ export default function Expenses() {
             <div className="space-y-2">
              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                <select
-                  className="flex h-16 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base font-medium text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input bg-card px-6 py-4 text-base font-semibold leading-7 text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                  aria-label="Expense category"
                    value={isPrimaryOtherCategory ? "" : form.category}
                  onChange={e => chooseCategory(form, e.target.value)}
@@ -1365,7 +1365,7 @@ export default function Expenses() {
                       role="status"
                       aria-live="polite"
                       data-testid={`category-allocation-total-${mode}`}
-                      className={`mt-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                       className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
                         categoryStatus.tone === "ready"
                           ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
                           : categoryStatus.tone === "error"
@@ -1519,7 +1519,7 @@ export default function Expenses() {
                        value={allocation.category}
                        onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
                        aria-label={`Additional allocation category ${index + 2}`}
-                        className="h-16 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm font-medium"
+                        className="h-[72px] min-w-0 flex-1 rounded-md border-2 border-input bg-card px-5 py-4 text-sm font-semibold leading-6"
                     >
                        <option value="">Select a category</option>
                       {(categories ?? []).filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) =>
@@ -1550,7 +1550,7 @@ export default function Expenses() {
                     role="status"
                     aria-live="polite"
                     data-testid={`category-allocation-total-${mode}`}
-                    className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                    className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
                       categoryStatus.tone === "ready"
                         ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
                         : categoryStatus.tone === "error"
@@ -1611,7 +1611,7 @@ export default function Expenses() {
                         role="status"
                         aria-live="polite"
                         data-testid={`category-allocation-total-${mode}`}
-                        className={`mt-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                       className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
                           categoryStatus.tone === "ready"
                             ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
                             : categoryStatus.tone === "error"
@@ -1676,7 +1676,7 @@ export default function Expenses() {
                     role="status"
                     aria-live="polite"
                     data-testid={`category-allocation-total-${mode}-end`}
-                    className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2 text-sm font-semibold text-foreground"
+                    className="mt-3 rounded-lg border border-border/60 bg-muted/25 px-4 py-3 text-sm font-semibold leading-6 text-foreground"
                   >
                     {categoryStatus.message}
                   </div>
