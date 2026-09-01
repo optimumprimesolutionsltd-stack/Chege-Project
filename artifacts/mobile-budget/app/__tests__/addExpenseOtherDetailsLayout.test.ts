@@ -52,7 +52,7 @@ describe('optional expense category layout', () => {
     expect(source).toContain('Leave this blank to save the expense as Uncategorized, outside any budget category.');
     expect(source).toContain("onPress={() => chooseCategory('Other')}");
     expect(source).toContain('testID="one-off-spending-category"');
-    expect(source).toContain('Use this for a one-time expense that does not fit any listed category. Add a note below.');
+    expect(source).toContain('Use this as the last category when part of the expense does not fit any listed category.');
   });
 
   it('keeps allocation controls for deliberate category selection only', () => {
@@ -83,15 +83,15 @@ describe('optional expense category layout', () => {
   });
 
   it('creates the first allocation when an uncategorized expense is recategorized', () => {
-    expect(source).toContain("const standardAllocations = previous.filter");
-    expect(source).toContain("const next = [...standardAllocations, { category: name, amount: '' }];");
+    expect(source).toContain("const next = addStandardCategory(previous, name);");
+    expect(source).toContain("standard.push({ category: categoryName, amount: '' });");
     expect(source).toContain('.filter((allocation) => allocation.category.trim())');
   });
 
   it('keeps one-off spending independent from regular category allocations', () => {
-    expect(source).toContain("return [{ category: 'Other', amount: existingOneOff?.amount ?? '' }]");
-    expect(source).toContain('const displayedCategoryAllocations = hasOneOffAllocation');
-    expect(source).toContain('{!hasOneOffAllocation && <Pressable');
+    expect(source).toContain('const hasOneOffAllocation = categoryAllocations.some');
+    expect(source).toContain('const displayedCategoryAllocations = categoryAllocations;');
+    expect(source).toContain('function toggleOneOffCategory(allocations: CategoryAllocation[]): CategoryAllocation[]');
   });
 
   it('lets uncategorized creates and edits pass allocation validation', () => {

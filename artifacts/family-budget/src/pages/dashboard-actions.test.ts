@@ -39,7 +39,8 @@ describe("dashboard quick actions", () => {
 
   it("keeps category creation visible for Personal budget owners", () => {
     expect(dashboardSource).toContain("canManageCategories={canManageCategories}");
-    expect(dashboardSource).toContain("{canManageCategories && !isOtherCategory && (");
+    expect(dashboardSource).toContain("{canManageCategories && isAddingCategory && (");
+    expect(dashboardSource).toContain('>Create a category</p>');
     expect(dashboardSource).toContain("const canManageCategories = group?.isPrivate === true || canManageShared;");
   });
 

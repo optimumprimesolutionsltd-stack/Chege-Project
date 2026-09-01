@@ -52,15 +52,19 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain("TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM");
     expect(mobileSource).toContain("Enter the amount from each selected source manually");
     expect(mobileSource).not.toContain("const remaining = getFundingRemainder(total, directTotal);");
-    expect(mobileSource).toContain("setSplitAmounts((amounts) => ({ ...amounts, [key]: '' }))");
+    expect(mobileSource).toContain('setSplitAmounts((amounts) => {');
+    expect(mobileSource).toContain('addIncomeSourceToSelection({');
+    expect(mobileSource).toContain('newSourceId: key');
     expect(mobileSource).not.toContain("addFundingSourceWithRemainder");
     expect(mobileSource).toContain('testID="expense-funding-remainder"');
     expect(mobileSource).not.toContain("if (previous.length >= 2)");
   });
 
   it("adds a newly created mobile income source without replacing an existing partial portion", () => {
-    expect(mobileSource).toContain("setSelectedSources((previous) => previous.includes(sourceKey) ? previous : [...previous, sourceKey])");
-    expect(mobileSource).toContain("setSplitAmounts((previous) => ({ ...previous, [sourceKey]: '' }))");
+    expect(mobileSource).toContain('setSelectedSources((previous) => {');
+    expect(mobileSource).toContain('newSourceId: sourceKey');
+    expect(mobileSource).toContain('setSplitAmounts(selection.amounts)');
+    expect(mobileSource).toContain('return selection.selectedSourceIds;');
     expect(mobileSource).toContain("selectedSources.map((key, index) =>");
     expect(mobileSource).not.toContain("if (previous.length >= 2)");
   });
@@ -125,7 +129,7 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain("const hasStandardAdditionalCategory");
     expect(dashboardSource).toContain("dashboard-additional-category-amount");
     expect(dashboardSource).toContain("<option value=\"\">Select a category</option>");
-    expect(dashboardSource).toContain("className=\"h-14 w-full flex-1 rounded-xl border border-input");
+    expect(dashboardSource).toContain("className=\"flex min-w-0 flex-1 flex-col gap-1.5");
     expect(dashboardSource).toContain("className=\"h-14 w-full justify-start sm:w-auto\"");
     expect(dashboardSource).not.toContain("<option value=\"\" disabled>Pick a category</option>");
     expect(dashboardSource).not.toContain("One-off spending is for a one-time expense that does not fit any listed category.");
@@ -150,7 +154,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("const hasStandardAdditionalCategory");
     expect(expensesSource).toContain("additional-category-amount");
     expect(expensesSource).toContain("<option value=\"\">Select a category</option>");
-    expect(expensesSource).toContain("className=\"flex h-14 min-w-0 flex-1 cursor-pointer rounded-md border border-input");
+    expect(expensesSource).toContain("className=\"flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input");
     expect(expensesSource).toContain("className=\"h-14 w-full justify-start border-input");
     expect(expensesSource).not.toContain("<option value=\"\" disabled>Select category...</option>");
     expect(expensesSource).not.toContain("One-off spending is for a one-time expense that does not fit any listed category.");
@@ -236,13 +240,13 @@ describe("expense funding amount entry", () => {
   });
 
   it("keeps responsive category controls substantial instead of thin", () => {
-    expect(dashboardSource).toContain('className="h-14 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"');
+    expect(dashboardSource).toContain('className="h-[72px] w-full flex-1 rounded-xl border-2 border-input bg-card px-6 py-4 text-base');
     expect(dashboardSource).toContain('className="h-14 w-full border-primary/45 bg-card font-semibold"');
     expect(dashboardSource).toContain('className="h-14 w-full justify-start sm:w-auto"');
-    expect(expensesSource).toContain('className="h-14 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"');
+    expect(expensesSource).toContain('className="flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input');
     expect(expensesSource).toContain('className="h-14 w-full border-primary/45 bg-card font-semibold"');
     expect(expensesSource).toContain('className="h-14 w-full justify-start sm:w-auto"');
-    expect(mobileSource).toContain("minHeight: 56");
+    expect(mobileSource).toContain("minHeight: 72");
   });
 
   it("keeps standard category splits when one-off spending is toggled", () => {
@@ -273,7 +277,7 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain("EXPENSE TOTAL");
     expect(mobileSource).toContain("FUNDING OPTIONS");
     expect(mobileSource).toContain('testID="expense-bank-funding-option"');
-    expect(mobileSource).toContain("minHeight: 56");
+    expect(mobileSource).toContain("minHeight: 72");
     expect(mobileSource).toContain("minWidth: 112");
     expect(mobileSource).toContain("(canManageShared || selectablePayers.length > 0)");
   });
