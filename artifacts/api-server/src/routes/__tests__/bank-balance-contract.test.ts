@@ -26,6 +26,13 @@ describe("bank balance contract", () => {
     expect(routeSource).toContain("eq(jointAccountTxTable.bankTransferId, existing.bankTransferId)");
   });
 
+  it("returns JSON when bank-account creation fails unexpectedly", () => {
+    expect(routeSource).toContain('req.log.error({ err: error, groupId }, "Could not create bank account")');
+    expect(routeSource).toContain(
+      'res.status(500).json({ error: "Could not create the bank account. Please try again." })',
+    );
+  });
+
   it("keeps the existing member attribution when an ordinary disbursement edit omits madeById", () => {
     expect(routeSource).toContain(
       "madeById: requestedMadeById, description, expenseCategory, accountId",

@@ -48,6 +48,7 @@ import {
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import {
+  addIncomeSourceToSelection,
   buildSinglePayerFundingReplacement,
   getExpenseFundingControlState,
   getFundingRemainder,
@@ -539,13 +540,15 @@ export default function AddExpenseSheet() {
           source,
         ]);
         const sourceKey = incomeSourceKey(source.id);
-        if (selectedSources.length > 0) {
-          setSelectedSources((previous) => previous.includes(sourceKey) ? previous : [...previous, sourceKey]);
-          setSplitAmounts((previous) => ({ ...previous, [sourceKey]: '' }));
-        } else {
-          setSelectedSources([sourceKey]);
-          setSplitAmounts((previous) => ({ ...previous, [sourceKey]: '' }));
-        }
+        const selection = addIncomeSourceToSelection({
+          selectedSourceIds: selectedSources,
+          amounts: splitAmounts,
+          existingSourceId: payerIncomeSourceIds[userId],
+          existingAmount: payerAmounts[userId],
+          newSourceId: sourceKey,
+        });
+        setSelectedSources(selection.selectedSourceIds);
+        setSplitAmounts(selection.amounts);
         if (isEditMode) setFundingDirty(true);
       } else {
         queryClient.setQueryData<Record<string, IncomeSource[]>>(
@@ -556,7 +559,9 @@ export default function AddExpenseSheet() {
           }),
         );
       }
-      setPayerIncomeSourceIds((previous) => ({ ...previous, [userId]: source.id }));
+      if (userId !== paidById) {
+        setPayerIncomeSourceIds((previous) => ({ ...previous, [userId]: source.id }));
+      }
       setNewSourceName('');
       setNewSourcePayerId(null);
       Alert.alert(
@@ -570,7 +575,17 @@ export default function AddExpenseSheet() {
     } finally {
       setIsCreatingSource(false);
     }
-  }, [isEditMode, newSourceName, paidById, payerSourceIds, queryClient, selectedSources]);
+  }, [
+    isEditMode,
+    newSourceName,
+    paidById,
+    payerAmounts,
+    payerIncomeSourceIds,
+    payerSourceIds,
+    queryClient,
+    selectedSources,
+    splitAmounts,
+  ]);
 
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();
@@ -1275,6 +1290,24 @@ export default function AddExpenseSheet() {
                   accessibilityHint="Required before this expense can be saved"
                   testID={`category-allocation-${allocation.category}`}
                 />
+                 {(() => {
+                   const total = displayedCategoryAllocations.reduce((sum, item) => sum + (Number(item.amount.replace(/,/g, '')) || 0), 0);
+                   const expenseTotal = Number(amount.replace(/,/g, '')) || 0;
+                   const difference = expenseTotal - total;
+                   return (
+                     <Text
+                       accessibilityLiveRegion="polite"
+                       testID={`category-allocation-status-mobile-${allocation.category}`}
+                       style={[styles.allocationStatus, { color: difference === 0 && expenseTotal > 0 ? colors.primary : difference < 0 ? colors.destructive : colors.mutedForeground }]}
+                     >
+                       {difference === 0 && expenseTotal > 0
+                         ? 'Allocated exactly.'
+                         : difference > 0
+                           ? `KES ${difference.toLocaleString()} remaining to allocate`
+                           : `KES ${Math.abs(difference).toLocaleString()} over allocated`}
+                     </Text>
+                   );
+                 })()}
               </View>
               );
             })}
@@ -1314,20 +1347,6 @@ export default function AddExpenseSheet() {
                 </ScrollView>
               </View>
             )}
-            {(() => {
-              const total = displayedCategoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0);
-              const expenseTotal = Number(amount.replace(/,/g, '')) || 0;
-              const difference = expenseTotal - total;
-              return (
-                <Text style={[styles.allocationStatus, { color: difference === 0 && expenseTotal > 0 ? colors.primary : difference < 0 ? colors.destructive : colors.mutedForeground }]}>
-                  {difference === 0 && expenseTotal > 0
-                    ? 'Allocated exactly.'
-                    : difference > 0
-                      ? `KES ${difference.toLocaleString()} remaining to allocate`
-                      : `KES ${Math.abs(difference).toLocaleString()} over allocated`}
-                </Text>
-              );
-            })()}
           </View>
         )}
         {isCreatingCategory ? (
@@ -1467,7 +1486,24 @@ export default function AddExpenseSheet() {
             </Text>
           </View>
         </Pressable>
-
+        {categoryAllocations.some((allocation) => allocation.category.trim()) && (
+          <Text
+            accessibilityLiveRegion="polite"
+            testID="category-allocation-status-mobile-end"
+            style={[styles.allocationStatus, { color: colors.foreground }]}
+          >
+            {(() => {
+              const total = displayedCategoryAllocations.reduce((sum, allocation) => sum + (Number(allocation.amount.replace(/,/g, '')) || 0), 0);
+              const expenseTotal = Number(amount.replace(/,/g, '')) || 0;
+              const difference = expenseTotal - total;
+              return difference === 0 && expenseTotal > 0
+                ? 'Allocated exactly.'
+                : difference > 0
+                  ? `KES ${difference.toLocaleString()} remaining to allocate`
+                  : `KES ${Math.abs(difference).toLocaleString()} over allocated`;
+            })()}
+          </Text>
+        )}
         {/* Running balance for selected category */}
         {category ? (() => {
           const cat = breakdown?.find(b => b.category === category);
@@ -1950,8 +1986,15 @@ export default function AddExpenseSheet() {
                           });
                           return previous.filter((item) => item !== key);
                         }
-                        setSplitAmounts((amounts) => ({ ...amounts, [key]: '' }));
-                        return [...previous, key];
+                        const selection = addIncomeSourceToSelection({
+                          selectedSourceIds: previous,
+                          amounts: splitAmounts,
+                          existingSourceId: previous.length === 0 ? payerIncomeSourceIds[paidById] : null,
+                          existingAmount: previous.length === 0 ? payerAmounts[paidById] : undefined,
+                          newSourceId: key,
+                        });
+                        setSplitAmounts(selection.amounts);
+                        return selection.selectedSourceIds;
                       });
                     }}
                       style={[styles.sourceChip, { backgroundColor: selected ? color + '22' : colors.background, borderColor: selected ? color : colors.border, borderRadius: colors.radius }]}>

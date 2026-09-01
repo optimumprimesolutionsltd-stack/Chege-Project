@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addFundingSourceWithRemainder,
+  addIncomeSourceToSelection,
   buildSinglePayerFundingReplacement,
   getExpenseFundingControlState,
   getFundingRemainder,
@@ -128,6 +129,32 @@ describe('expense funding preservation', () => {
       newSourceId: 'second',
       amounts: { primary: '1200' },
     })).toEqual({ primary: '1200' });
+  });
+
+  it('migrates the existing single-source amount before adding a new source row', () => {
+    expect(addIncomeSourceToSelection({
+      selectedSourceIds: [],
+      amounts: {},
+      existingSourceId: 7,
+      existingAmount: '5000',
+      newSourceId: 'source:12',
+    })).toEqual({
+      selectedSourceIds: ['source:7', 'source:12'],
+      amounts: { 'source:7': '5000', 'source:12': '' },
+    });
+  });
+
+  it('preserves already selected source amounts when adding another source', () => {
+    expect(addIncomeSourceToSelection({
+      selectedSourceIds: ['source:7'],
+      amounts: { 'source:7': '5000' },
+      existingSourceId: 7,
+      existingAmount: '5000',
+      newSourceId: 'source:12',
+    })).toEqual({
+      selectedSourceIds: ['source:7', 'source:12'],
+      amounts: { 'source:7': '5000', 'source:12': '' },
+    });
   });
 
   it('keeps a named category unbudgeted unless a manager explicitly adds it', () => {

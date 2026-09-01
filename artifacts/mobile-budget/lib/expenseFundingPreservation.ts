@@ -110,6 +110,37 @@ export function addFundingSourceWithRemainder({
   return remainder > 0 ? { ...amounts, [newSourceId]: String(remainder) } : amounts;
 }
 
+export function addIncomeSourceToSelection({
+  selectedSourceIds,
+  amounts,
+  existingSourceId,
+  existingAmount,
+  newSourceId,
+}: {
+  selectedSourceIds: string[];
+  amounts: Record<string, string>;
+  existingSourceId?: number | null;
+  existingAmount?: string;
+  newSourceId: string;
+}) {
+  const nextSelectedSourceIds = [...selectedSourceIds];
+  const nextAmounts = { ...amounts };
+  const existingSourceKey = existingSourceId ? `source:${existingSourceId}` : null;
+
+  // A one-source expense keeps its amount in payerAmounts until a second
+  // source is selected. Migrate that source before adding the new row.
+  if (existingSourceKey && !nextSelectedSourceIds.includes(existingSourceKey)) {
+    nextSelectedSourceIds.unshift(existingSourceKey);
+    nextAmounts[existingSourceKey] = existingAmount ?? '';
+  }
+  if (!nextSelectedSourceIds.includes(newSourceId)) {
+    nextSelectedSourceIds.push(newSourceId);
+    nextAmounts[newSourceId] = '';
+  }
+
+  return { selectedSourceIds: nextSelectedSourceIds, amounts: nextAmounts };
+}
+
 export function getNewExpenseCategoryMode({
   addToBudget,
   canManageCategories,

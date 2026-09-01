@@ -1243,6 +1243,20 @@ function ExpenseForm({
                     placeholder="Enter KES amount"
                     className="h-14 w-full border-primary/45 bg-card font-semibold"
                   />
+                   <div
+                     role="status"
+                     aria-live="polite"
+                     data-testid="category-allocation-total-dashboard"
+                     className={`mt-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                       categoryStatus.tone === "ready"
+                         ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                         : categoryStatus.tone === "error"
+                           ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                           : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                     }`}
+                   >
+                     {categoryStatus.message}
+                   </div>
                 </div>
               )}
               </div>
@@ -1252,29 +1266,13 @@ function ExpenseForm({
                <p className="text-xs text-muted-foreground">
                  {category.trim() ? "Need to split this expense? Add another category and enter its share." : "Choose a category first, then add another category if this expense covers more than one."}
                </p>
-               <Button type="button" size="sm" variant="outline" disabled={!category.trim() || isPrimaryOtherCategory} onClick={() => setCategoryAllocations(current => {
+               <Button type="button" size="sm" variant="outline" className="h-14 w-full justify-start sm:w-auto" disabled={!category.trim() || isPrimaryOtherCategory} onClick={() => setCategoryAllocations(current => {
                  const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
                  const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
                  return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
                })} data-testid="add-category-allocation-dashboard">
                  <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
                </Button>
-             </div>
-           )}
-           {categoryAllocations.some((allocation) => allocation.category.trim()) && !hasStandardAdditionalCategory && (
-             <div
-               role="status"
-               aria-live="polite"
-               data-testid="category-allocation-total-dashboard"
-               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                 categoryStatus.tone === "ready"
-                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                   : categoryStatus.tone === "error"
-                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-               }`}
-             >
-               {categoryStatus.message}
              </div>
            )}
             {hasStandardAdditionalCategory && (
@@ -1292,7 +1290,7 @@ function ExpenseForm({
                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <select value={allocation.category}
                       onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
-                      aria-label={`Additional allocation category ${index + 2}`} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm">
+                       aria-label={`Additional allocation category ${index + 2}`} className="h-14 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm">
                        <option value="">Select a category</option>
                       {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>)}
                     </select>
@@ -1311,37 +1309,33 @@ function ExpenseForm({
                          aria-required="true"
                          required
                          placeholder="Enter KES amount"
-                         className="h-10 w-full border-primary/45 bg-card font-semibold"
+                          className="h-14 w-full border-primary/45 bg-card font-semibold"
                        />
                      </div>
                      {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><X className="h-4 w-4" /></Button>}
                   </div>
+                   <div
+                     role="status"
+                     aria-live="polite"
+                     data-testid="category-allocation-total-dashboard"
+                     className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                       categoryStatus.tone === "ready"
+                         ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                         : categoryStatus.tone === "error"
+                           ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                           : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                     }`}
+                   >
+                     {categoryStatus.message}
+                   </div>
                 </div>
                 );
               })}
-              <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => setCategoryAllocations(current => {
+              <Button type="button" size="sm" variant="outline" className="h-14 w-full justify-start sm:w-auto" onClick={() => setCategoryAllocations(current => {
                 const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
                 const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
                 return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
               })}><Plus className="mr-1 h-3.5 w-3.5" /> Add another category</Button>
-              {(() => {
-                return (
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    data-testid="category-allocation-total-dashboard"
-                    className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                      categoryStatus.tone === "ready"
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                        : categoryStatus.tone === "error"
-                          ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                          : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-                    }`}
-                  >
-                    {categoryStatus.message}
-                  </div>
-                );
-              })()}
             </div>
             )}
              {canManageCategories && isAddingCategory && (
@@ -1377,7 +1371,7 @@ function ExpenseForm({
               <Button
                 type="button"
                 variant="outline"
-                className="mt-2 h-11"
+                className="mt-2 h-14 w-full justify-start sm:w-auto"
                 onClick={() => setIsAddingCategory((open) => !open)}
                 aria-expanded={isAddingCategory}
               >
@@ -1425,6 +1419,20 @@ function ExpenseForm({
                        placeholder="Enter KES amount"
                        className="h-14 w-full border-primary/45 bg-card font-semibold"
                      />
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        data-testid="category-allocation-total-dashboard"
+                        className={`mt-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                          categoryStatus.tone === "ready"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                            : categoryStatus.tone === "error"
+                              ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                              : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                        }`}
+                      >
+                        {categoryStatus.message}
+                      </div>
                    </div>
                  )}
                </div>
@@ -1473,6 +1481,16 @@ function ExpenseForm({
                    </label>}
                  </div>
                )}
+                {categoryAllocations.some((allocation) => allocation.category.trim()) && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    data-testid="category-allocation-total-dashboard-end"
+                    className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2 text-sm font-semibold text-foreground"
+                  >
+                    {categoryStatus.message}
+                  </div>
+                )}
              </div>
         </div>
       </div>

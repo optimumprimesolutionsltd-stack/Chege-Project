@@ -311,15 +311,20 @@ router.post("/joint-accounts", async (req, res): Promise<void> => {
   if (!requireGroupManager(req, res)) return;
   const parsed = AccountInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid account details." }); return; }
-  const [account] = await db.insert(bankAccountsTable).values({
-    groupId,
-    name: parsed.data.name,
-    accountNumber: parsed.data.accountNumber,
-    openingBalance: parsed.data.openingBalance ?? 0,
-    openingBalanceDate: parsed.data.openingBalanceDate ?? currentBusinessDate(),
-  }).onConflictDoNothing().returning();
-  if (!account) { res.status(409).json({ error: "An account with this name already exists." }); return; }
-  res.status(201).json(serializeAccount(account));
+  try {
+    const [account] = await db.insert(bankAccountsTable).values({
+      groupId,
+      name: parsed.data.name,
+      accountNumber: parsed.data.accountNumber,
+      openingBalance: parsed.data.openingBalance ?? 0,
+      openingBalanceDate: parsed.data.openingBalanceDate ?? currentBusinessDate(),
+    }).onConflictDoNothing().returning();
+    if (!account) { res.status(409).json({ error: "An account with this name already exists." }); return; }
+    res.status(201).json(serializeAccount(account));
+  } catch (error) {
+    req.log.error({ err: error, groupId }, "Could not create bank account");
+    res.status(500).json({ error: "Could not create the bank account. Please try again." });
+  }
 });
 
 router.patch("/joint-accounts/:id", async (req, res): Promise<void> => {

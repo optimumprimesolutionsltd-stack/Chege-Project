@@ -6,6 +6,39 @@ const budgetSource = readFileSync('app/(tabs)/budget.tsx', 'utf8');
 const homeSource = readFileSync('app/(tabs)/index.tsx', 'utf8');
 
 describe('optional expense category layout', () => {
+  it('creates a bank account inline without resetting the expense draft', () => {
+    const handler = source.slice(
+      source.indexOf('const handleCreateBankAccount = useCallback'),
+      source.indexOf('const chooseCategory = useCallback'),
+    );
+    const successBlock = handler.slice(handler.indexOf('const created ='), handler.indexOf('} catch (error)'));
+    const errorBlock = handler.slice(handler.indexOf('} catch (error)'), handler.indexOf('}, [createBankAccount'));
+
+    expect(successBlock).toContain('setSelectedBankAccountId(created.id)');
+    expect(successBlock).toContain("setNewBankAccountName('')");
+    expect(successBlock).toContain("setNewBankAccountNumber('')");
+    expect(successBlock).toContain("setNewBankOpeningBalance('')");
+    expect(successBlock).toContain('getGetJointAccountsQueryKey()');
+
+    for (const draftSetter of [
+      'setAmount(',
+      'setCategory(',
+      'setCategoryAllocations(',
+      'setDescription(',
+      'setNotes(',
+      'setDate(',
+      'setIsRecurring(',
+      'setPaidById(',
+      'setSelectedSources(',
+      'setSplitAmounts(',
+      'setPaidFromBank(',
+      'setAllowMixedFunding(',
+    ]) {
+      expect(successBlock).not.toContain(draftSetter);
+      expect(errorBlock).not.toContain(draftSetter);
+    }
+  });
+
   it('prompts the user to categorize editable uncategorized expenses from Home', () => {
     expect(homeSource).toContain('isUncategorizedExpense');
     expect(homeSource).toContain('testID="uncategorized-expense-cta"');

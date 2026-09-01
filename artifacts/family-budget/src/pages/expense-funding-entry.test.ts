@@ -199,6 +199,52 @@ describe("expense funding amount entry", () => {
     expect(mobileOneOff).toBeGreaterThan(mobileAddAnother);
   });
 
+  it("shows allocation progress immediately after every category amount entry", () => {
+    const dashboardStatus = 'data-testid="category-allocation-total-dashboard"';
+    const dashboardPrimaryAmount = dashboardSource.indexOf('id="dashboard-primary-category-amount"');
+    const dashboardAdditionalAmount = dashboardSource.indexOf('id={`dashboard-additional-category-amount-${index}`}');
+    const dashboardOneOffAmount = dashboardSource.indexOf('id="dashboard-one-off-category-amount"');
+    expect(dashboardSource.match(/data-testid="category-allocation-total-dashboard"/g)).toHaveLength(3);
+    expect(dashboardSource.indexOf(dashboardStatus, dashboardPrimaryAmount)).toBeGreaterThan(dashboardPrimaryAmount);
+    expect(dashboardSource.indexOf(dashboardStatus, dashboardAdditionalAmount)).toBeGreaterThan(dashboardAdditionalAmount);
+    expect(dashboardSource.indexOf(dashboardStatus, dashboardOneOffAmount)).toBeGreaterThan(dashboardOneOffAmount);
+
+    const expensesStatus = 'data-testid={`category-allocation-total-${mode}`}';
+    const expensesPrimaryAmount = expensesSource.indexOf('id={`${mode}-primary-category-amount`}');
+    const expensesAdditionalAmount = expensesSource.indexOf('id={`${mode}-additional-category-amount-${index}`}');
+    const expensesOneOffAmount = expensesSource.indexOf('id={`${mode}-one-off-category-amount`}');
+    expect(expensesSource.match(/data-testid=\{`category-allocation-total-\$\{mode\}`\}/g)).toHaveLength(3);
+    expect(expensesSource.indexOf(expensesStatus, expensesPrimaryAmount)).toBeGreaterThan(expensesPrimaryAmount);
+    expect(expensesSource.indexOf(expensesStatus, expensesAdditionalAmount)).toBeGreaterThan(expensesAdditionalAmount);
+    expect(expensesSource.indexOf(expensesStatus, expensesOneOffAmount)).toBeGreaterThan(expensesOneOffAmount);
+
+    const mobileAmount = mobileSource.indexOf('testID={`category-allocation-${allocation.category}`}');
+    const mobileStatus = mobileSource.indexOf('testID={`category-allocation-status-mobile-${allocation.category}`}');
+    const mobileAddAnother = mobileSource.indexOf('testID="add-category-allocation-mobile"');
+    const mobileOneOff = mobileSource.indexOf('testID="one-off-spending-category"');
+    const mobileEndStatus = mobileSource.indexOf('testID="category-allocation-status-mobile-end"');
+    expect(mobileStatus).toBeGreaterThan(mobileAmount);
+    expect(mobileAddAnother).toBeGreaterThan(mobileStatus);
+    expect(mobileEndStatus).toBeGreaterThan(mobileOneOff);
+
+    expect(dashboardSource.indexOf('data-testid="category-allocation-total-dashboard-end"')).toBeGreaterThan(
+      dashboardSource.indexOf('id="dashboard-other-expense-panel"'),
+    );
+    expect(expensesSource.indexOf('data-testid={`category-allocation-total-${mode}-end`}')).toBeGreaterThan(
+      expensesSource.indexOf('id={`other-expense-panel-${mode}`}'),
+    );
+  });
+
+  it("keeps responsive category controls substantial instead of thin", () => {
+    expect(dashboardSource).toContain('className="h-14 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"');
+    expect(dashboardSource).toContain('className="h-14 w-full border-primary/45 bg-card font-semibold"');
+    expect(dashboardSource).toContain('className="h-14 w-full justify-start sm:w-auto"');
+    expect(expensesSource).toContain('className="h-14 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"');
+    expect(expensesSource).toContain('className="h-14 w-full border-primary/45 bg-card font-semibold"');
+    expect(expensesSource).toContain('className="h-14 w-full justify-start sm:w-auto"');
+    expect(mobileSource).toContain("minHeight: 56");
+  });
+
   it("keeps standard category splits when one-off spending is toggled", () => {
     expect(dashboardSource).toContain('return [...retained, { category: "Other", amount: "" }]');
     expect(expensesSource).toContain('return [...retained, { category: "Other", amount: "" }]');
