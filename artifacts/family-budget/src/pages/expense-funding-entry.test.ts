@@ -18,7 +18,7 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain("Type the amount from this source to confirm");
     expect(dashboardSource).toContain("Type the amount from this account to confirm");
     expect(dashboardSource).toContain("Keep adding funding sources until the remaining amount reaches zero");
-    expect(dashboardSource).toContain('data-testid="quick-expense-funding-remainder"');
+    expect(dashboardSource).toContain('is still unfunded. Select another source or enter the full amount.');
     expect(dashboardSource).toContain("additionalDirectPortions");
     expect(dashboardSource).toContain('{ sourceId, amount: "" }');
     expect(dashboardSource).toContain('{ sourceId: source.id, amount: "" }');
@@ -39,7 +39,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain('title: remaining > 0 ? "Add another funding source"');
     expect(expensesSource).toContain("Add another income source...");
     expect(expensesSource).toContain("as many times as needed until the expense is fully funded");
-    expect(expensesSource).toContain('data-testid="expense-funding-remainder"');
+    expect(expensesSource).toContain('is still unfunded. Select another payer or add a bank-account portion.');
     expect(expensesSource).not.toContain("addFundingSourceWithRemainder");
     expect(expensesSource).not.toContain("Jamvi fills the remaining amount into the other selected source");
     expect(expensesSource).not.toContain("next.__joint_bank__ = remainder");
@@ -56,7 +56,7 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain('addIncomeSourceToSelection({');
     expect(mobileSource).toContain('newSourceId: key');
     expect(mobileSource).not.toContain("addFundingSourceWithRemainder");
-    expect(mobileSource).toContain('testID="expense-funding-remainder"');
+    expect(mobileSource).toContain('is still unfunded. Select another income source.');
     expect(mobileSource).not.toContain("if (previous.length >= 2)");
   });
 
