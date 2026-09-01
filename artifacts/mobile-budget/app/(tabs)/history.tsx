@@ -1,4 +1,546 @@
-ar }) });
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  RefreshControl,
+  ActivityIndicator,
+  Pressable,
+  Platform,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  ScrollView,
+  TouchableWithoutFeedback,
+} from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useColors } from '@/hooks/useColors';
+import { PageFlatList } from '@/components/PageScrollReset';
+import { useAuth } from '@/lib/auth';
+import {
+  useGetExpenses,
+  useGetContributions,
+  useGetDashboardActivity,
+  useGetDashboardSummary,
+  useGetGroup,
+  useUpdateExpense,
+  useDeleteExpense,
+  useUpdateContribution,
+  useDeleteContribution,
+  useApplyRecurringExpenses,
+  useGetBudgetCategories,
+  useGetMembers,
+  getGetExpensesQueryKey,
+  getGetContributionsQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardActivityQueryKey,
+  getGetDashboardCategoryBreakdownQueryKey,
+  getGetDashboardIncomeStreamsQueryKey,
+  customFetch,
+} from '@workspace/api-client-react';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
+import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
+import { ACTIVITY_TYPE } from '@/lib/activityTypes';
+import { getCategoryIcon } from '@/lib/categoryIcons';
+import { getExpenseEditHref } from '@/lib/expenseEditLink';
+import { workspaceBudgetName } from '@/lib/workspaceIdentity';
+
+const MONTH_PREF_KEY = 'expenses_month_pref';
+
+const MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+const PALETTE = ['#22c55e', '#f97316', '#8b5cf6', '#f59e0b', '#06b6d4', '#10b981', '#ec4899', '#3b82f6', '#a855f7', '#ef4444'];
+const JOINT_BANK_SOURCE = '__joint_bank__';
+type IncomeSource = { id: number; name: string; isMain: boolean; userId: string };
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatKES(n: number) {
+  return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
+}
+
+function formatDate(s: string) {
+  return new Date(s).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+type Expense = {
+  id: number;
+  amount: number;
+  category: string;
+  description: string;
+  notes?: string | null;
+  paidById: string | null;
+  paidByName: string | null;
+  incomeSourceId?: number | null;
+  paidFromBank?: boolean;
+  incomeSplits?: {
+    userId?: string | null;
+    label?: string;
+    amount: number;
+    incomeSourceId?: number;
+    fromBank: boolean;
+  }[];
+  isRecurring: boolean;
+  date: string;
+  createdAt: string;
+};
+
+type EditForm = {
+  amount: string;
+  category: string;
+  description: string;
+  notes: string;
+  paidById: string | null;
+  date: string;
+};
+
+type FeedTab = 'expenses' | 'activity' | 'contributions';
+type ContributionMember = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
+type Contribution = { id: number; userId: string; userName: string; amount: number; month: number; year: number; note?: string | null; createdAt: string };
+type ContributionEditForm = { amount: string; note: string; month: number; year: number; forUserId: string };
+
+export default function HistoryScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<FeedTab>('expenses');
+
+  // Restore last-viewed month from AsyncStorage
+  useEffect(() => {
+    AsyncStorage.getItem(MONTH_PREF_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const { m, y } = JSON.parse(raw);
+        if (typeof m === 'number' && typeof y === 'number') {
+          setMonth(m);
+          setYear(y);
+        }
+      } catch {}
+    });
+  }, []);
+
+  // Persist selected month whenever it changes
+  useEffect(() => {
+    AsyncStorage.setItem(MONTH_PREF_KEY, JSON.stringify({ m: month, y: year })).catch(() => {});
+  }, [month, year]);
+
+  // Build list of last 24 months (most-recent first)
+  const monthOptions = useMemo(() => {
+    const result: { month: number; year: number; label: string }[] = [];
+    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+    for (let i = 0; i < 24; i++) {
+      result.push({
+        month: d.getMonth() + 1,
+        year: d.getFullYear(),
+        label: `${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`,
+      });
+      d.setMonth(d.getMonth() - 1);
+    }
+    return result;
+  }, []);
+
+  function jumpToMonth(m: number, y: number) {
+    setMonth(m);
+    setYear(y);
+    setPickerVisible(false);
+  }
+
+  const { data: expenses = [], isLoading, refetch } = useGetExpenses({ month, year });
+  const prevMonthNum = month === 1 ? 12 : month - 1;
+  const prevYearNum = month === 1 ? year - 1 : year;
+  const { data: prevExpenses = [] } = useGetExpenses({ month: prevMonthNum, year: prevYearNum });
+  const recurringFromPrev = prevExpenses.filter((e: Expense) => e.isRecurring);
+  const alreadyApplied = expenses.some((e: Expense) => e.isRecurring);
+  const showRecurringBanner = recurringFromPrev.length > 0 && !alreadyApplied &&
+    month === now.getMonth() + 1 && year === now.getFullYear();
+  const applyRecurring = useApplyRecurringExpenses();
+  const [applyingRecurring, setApplyingRecurring] = useState(false);
+  const { data: categories = [] } = useGetBudgetCategories();
+  const { data: members = [] } = useGetMembers();
+  const { data: group } = useGetGroup();
+  const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
+  const updateContribution = useUpdateContribution();
+  const deleteContribution = useDeleteContribution();
+
+  const handleApplyRecurring = async () => {
+    setApplyingRecurring(true);
+    try {
+      await applyRecurring.mutateAsync({ data: { month, year } });
+      queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+    } catch {
+      Alert.alert('Error', 'Could not apply recurring expenses.');
+    } finally {
+      setApplyingRecurring(false);
+    }
+  };
+
+  // The general Activity feed is intentionally recent rather than month-scoped.
+  const recentActivity = useGetDashboardActivity(
+    undefined,
+    { query: { queryKey: getGetDashboardActivityQueryKey(), retry: false, enabled: activeTab === 'activity' } },
+  );
+  const contributionsQuery = useGetContributions(
+    { month, year },
+    { query: { queryKey: getGetContributionsQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+  );
+  // Shared-budget funding remains a summary card; standalone records below
+  // deliberately come only from GET /contributions.
+  const monthlyActivity = useGetDashboardActivity(
+    { month, year },
+    { query: { queryKey: getGetDashboardActivityQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+  );
+  const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: refetchSummary } = useGetDashboardSummary(
+    { month, year },
+    { query: { queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false, enabled: activeTab === 'contributions' } },
+  );
+  const contributionMembers = ((summary as { memberContributions?: ContributionMember[] } | undefined)?.memberContributions ?? []);
+  const activityFeed = recentActivity.data ?? [];
+  const activityLoading = recentActivity.isLoading;
+  const activityError = recentActivity.isError;
+  const contributions = (contributionsQuery.data ?? []) as Contribution[];
+  const isSharedWorkspace = group?.isPrivate === false;
+  const currentMember = members.find((member) => member.userId === user?.id);
+  const isContributionManager = group?.isPrivate === true
+    || group?.role === 'owner' || group?.role === 'admin'
+    || currentMember?.role === 'owner' || currentMember?.role === 'admin';
+  const isSharedMember = isSharedWorkspace && !isContributionManager;
+  const canEditExpenseRecord = (expense: Expense) => {
+    if (!user) return false;
+    if (isContributionManager) return true;
+    const hasBankFunding = expense.paidFromBank === true
+      || (expense.incomeSplits ?? []).some((split) => split.fromBank);
+    const personalPayerId = expense.paidById
+      ?? expense.incomeSplits?.find((split) => !split.fromBank)?.userId
+      ?? null;
+    const selfFunded = personalPayerId === user.id
+      && !hasBankFunding
+      && !expense.isRecurring
+      && (expense.incomeSplits ?? []).every(
+        (split) => !split.fromBank && (!split.userId || split.userId === user.id),
+      );
+    return !isSharedWorkspace
+      ? selfFunded
+      : expense.date.slice(0, 10) === todayIso() && selfFunded;
+  };
+  const canRemoveExpenseRecord = (expense: Expense) => {
+    if (!user) return false;
+    if (isContributionManager) return true;
+    const personalPayerId = expense.paidById
+      ?? expense.incomeSplits?.find((split) => !split.fromBank)?.userId
+      ?? null;
+    return !isSharedWorkspace && personalPayerId === user.id;
+  };
+  const sharedHouseholdRows = useMemo(
+    () => (monthlyActivity.data ?? []).filter((raw) => (raw as ActivityItem).type === 'household') as ActivityItem[],
+    [monthlyActivity.data],
+  );
+
+  // Grouped activity — collapsed by default, tap header to expand
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((date: string) => {
+    setExpandedGroups(s => {
+      const next = new Set(s);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  }, []);
+
+  type GroupHeaderRow = {
+    _kind: 'header';
+    date: string; dateLabel: string;
+    items: ActivityItem[];
+    totalExpenses: number; totalDeposits: number; count: number;
+  };
+  type GroupChildRow = { _kind: 'child'; groupDate: string; item: ActivityItem };
+  type ActivityRow = GroupHeaderRow | GroupChildRow;
+
+  const activityRows = useMemo((): ActivityRow[] => {
+    const groups = new Map<string, ActivityItem[]>();
+    for (const raw of activityFeed) {
+      const item = raw as ActivityItem;
+      const day = (item.date ?? '').slice(0, 10);
+      if (!day) continue;
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day)!.push(item);
+    }
+    const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const rows: ActivityRow[] = [];
+    for (const date of sortedDates) {
+      const items = groups.get(date)!;
+      const totalExpenses = items
+        .filter(i => i.type === ACTIVITY_TYPE.EXPENSE)
+        .reduce((s, i) => s + (i.amount ?? 0), 0);
+      const totalDeposits = items
+        .filter(i => i.type !== ACTIVITY_TYPE.EXPENSE)
+        .reduce((s, i) => s + (i.amount ?? 0), 0);
+      let dateLabel: string;
+      if (date === todayStr) dateLabel = 'Today';
+      else if (date === yesterdayStr) dateLabel = 'Yesterday';
+      else {
+        const d = new Date(date + 'T12:00:00');
+        dateLabel = d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' });
+      }
+      rows.push({ _kind: 'header', date, dateLabel, items, totalExpenses, totalDeposits, count: items.length });
+      if (expandedGroups.has(date)) {
+        for (const item of items) rows.push({ _kind: 'child', groupDate: date, item });
+      }
+    }
+    return rows;
+  }, [activityFeed, expandedGroups]);
+
+  // Grouped expenses — same expand/collapse pattern as activity
+  type ExpGroupHeader = {
+    _kind: 'exp-header';
+    date: string; dateLabel: string;
+    items: Expense[];
+    total: number; count: number;
+  };
+  type ExpGroupChild = { _kind: 'exp-child'; groupDate: string; item: Expense };
+  type ExpGroupRow = ExpGroupHeader | ExpGroupChild;
+
+  const expenseRows = useMemo((): ExpGroupRow[] => {
+    const groups = new Map<string, Expense[]>();
+    for (const exp of expenses as Expense[]) {
+      const day = (exp.date ?? '').slice(0, 10);
+      if (!day) continue;
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day)!.push(exp);
+    }
+    const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const result: ExpGroupRow[] = [];
+    for (const date of sortedDates) {
+      const items = groups.get(date)!;
+      const total = items.reduce((s, e) => s + e.amount, 0);
+      let dateLabel: string;
+      if (date === todayStr) dateLabel = 'Today';
+      else if (date === yesterdayStr) dateLabel = 'Yesterday';
+      else {
+        const d = new Date(date + 'T12:00:00');
+        dateLabel = d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' });
+      }
+      result.push({ _kind: 'exp-header', date, dateLabel, items, total, count: items.length });
+      for (const item of items) result.push({ _kind: 'exp-child', groupDate: date, item });
+    }
+    return result;
+  }, [expenses]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    if (activeTab === 'activity') {
+      await recentActivity.refetch();
+    } else if (activeTab === 'contributions') {
+      await Promise.all([contributionsQuery.refetch(), monthlyActivity.refetch(), refetchSummary()]);
+    } else {
+      await refetch();
+    }
+    setRefreshing(false);
+  }, [refetch, recentActivity, contributionsQuery, monthlyActivity, refetchSummary, activeTab]);
+
+  // Edit modal state
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({ amount: '', category: '', description: '', notes: '', paidById: '', date: '' });
+  const [saving, setSaving] = useState(false);
+  const [editPaidFromBank, setEditPaidFromBank] = useState(false);
+  const [editSelectedSources, setEditSelectedSources] = useState<string[]>([]);
+  const [editSplitAmounts, setEditSplitAmounts] = useState<Record<string, string>>({});
+  const [editOtherLabel, setEditOtherLabel] = useState('');
+  const [editShowDatePicker, setEditShowDatePicker] = useState(false);
+  const [editFundingHydratedForId, setEditFundingHydratedForId] = useState<number | null>(null);
+
+  // Load income sources for whoever paid the expense being edited
+  const { data: editSources = [], isLoading: editSourcesLoading } = useQuery<IncomeSource[]>({
+    queryKey: ['income-sources', editForm.paidById],
+    queryFn: async () => {
+      if (!editForm.paidById) return [];
+      return customFetch<IncomeSource[]>(`/api/income-sources?userId=${editForm.paidById}`);
+    },
+    enabled: !!editForm.paidById,
+    staleTime: 60_000,
+  });
+
+  const openEdit = (exp: Expense) => {
+    router.push(getExpenseEditHref(exp) as never);
+  };
+
+  const closeEdit = () => { setEditingExpense(null); setSaving(false); };
+
+  // The source list is requested after the modal opens. Match IDs first so
+  // renamed sources restore correctly, then labels for older stored splits.
+  useEffect(() => {
+    if (!editingExpense || editSourcesLoading || editFundingHydratedForId === editingExpense.id) return;
+
+    const sourcesById = new Map(editSources.map((source) => [source.id, source]));
+    const sourcesByName = new Map(editSources.map((source) => [source.name, source]));
+    const selectedSources: string[] = [];
+    const splitAmounts: Record<string, string> = {};
+    let otherLabel = '';
+
+    let hasBankFunding = editingExpense.paidFromBank === true;
+    const storedSplits = editingExpense.incomeSplits ?? [];
+    if (storedSplits.length === 0) {
+      if (editingExpense.paidFromBank) {
+        selectedSources.push(JOINT_BANK_SOURCE);
+        splitAmounts[JOINT_BANK_SOURCE] = String(editingExpense.amount);
+      } else if (editingExpense.incomeSourceId) {
+        const matchingSource = sourcesById.get(editingExpense.incomeSourceId);
+        if (matchingSource) {
+          selectedSources.push(matchingSource.name);
+          splitAmounts[matchingSource.name] = String(editingExpense.amount);
+        }
+      }
+    }
+
+    for (const split of storedSplits) {
+      if (split.fromBank) {
+        hasBankFunding = true;
+        if (!selectedSources.includes(JOINT_BANK_SOURCE)) selectedSources.push(JOINT_BANK_SOURCE);
+        splitAmounts[JOINT_BANK_SOURCE] = String(
+          (Number(splitAmounts[JOINT_BANK_SOURCE]) || 0) + split.amount,
+        );
+        continue;
+      }
+
+      const label = split.label?.trim();
+      const matchingSource = split.incomeSourceId
+        ? sourcesById.get(split.incomeSourceId)
+        : label ? sourcesByName.get(label) : undefined;
+      const sourceKey = matchingSource?.name ?? 'Other';
+
+      if (!selectedSources.includes(sourceKey)) {
+        selectedSources.push(sourceKey);
+        splitAmounts[sourceKey] = String(split.amount);
+      } else {
+        splitAmounts[sourceKey] = String((Number(splitAmounts[sourceKey]) || 0) + split.amount);
+      }
+
+      if (!matchingSource && label && !otherLabel) otherLabel = label;
+    }
+
+    setEditSelectedSources(selectedSources);
+    setEditSplitAmounts(splitAmounts);
+    setEditOtherLabel(otherLabel);
+    setEditPaidFromBank(hasBankFunding);
+    setEditFundingHydratedForId(editingExpense.id);
+  }, [editingExpense, editSources, editSourcesLoading, editFundingHydratedForId]);
+
+  const handleSave = async () => {
+    if (!editingExpense) return;
+    const parsed = parseFloat(editForm.amount);
+    if (!parsed || parsed <= 0 || !editForm.category || !editForm.description || !editForm.date) {
+      Alert.alert('Missing fields', 'Please fill in amount, category, description and date.');
+      return;
+    }
+    if (!editForm.paidById && !editPaidFromBank) {
+      Alert.alert('Paid by required', 'Please choose who paid for this expense.');
+      return;
+    }
+    if (editForm.date > todayIso()) {
+      Alert.alert('Future date not allowed', 'Expenses must be today or earlier.');
+      return;
+    }
+    if (editSelectedSources.includes('Other') && !editOtherLabel.trim()) {
+      Alert.alert('Label required', 'Please describe the "Other" source.');
+      return;
+    }
+    if (editSelectedSources.length > 1) {
+      const splitsTotal = editSelectedSources.reduce((s, k) => s + (parseFloat(editSplitAmounts[k] || '0') || 0), 0);
+      if (Math.abs(splitsTotal - parsed) >= 1) {
+        Alert.alert("Amounts don't add up", `Sources total KES ${splitsTotal.toLocaleString()} but expense is KES ${parsed.toLocaleString()}.`);
+        return;
+      }
+    }
+    const payerChanged =
+      (editingExpense.paidFromBank ?? false) !== editPaidFromBank ||
+      editingExpense.paidById !== editForm.paidById;
+    const isSplit = editSelectedSources.length > 1;
+    const personalIncomeSplits = editForm.paidById ? editSelectedSources.map(name => {
+      if (name === JOINT_BANK_SOURCE) {
+        return {
+          userId: null,
+          fromBank: true,
+          label: 'Joint bank',
+          amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
+        };
+      }
+      const source = editSources.find((item) => item.name === name);
+      return {
+        userId: editForm.paidById,
+        fromBank: false,
+        label: name === 'Other' ? editOtherLabel.trim() : name,
+        amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
+        ...(source ? { incomeSourceId: source.id } : {}),
+      };
+    }).filter(s => s.amount > 0) : [];
+    const incomeSplits = personalIncomeSplits.length > 0
+        ? personalIncomeSplits
+        : editPaidFromBank
+          ? [{ userId: null, label: 'Joint bank', amount: parsed, fromBank: true }]
+        : payerChanged && editForm.paidById
+          ? [{ userId: editForm.paidById, label: 'Personal funds', amount: parsed, fromBank: false }]
+          : [];
+    setSaving(true);
+    try {
+      await updateExpense.mutateAsync({
+        id: editingExpense.id,
+        data: {
+          amount: parsed,
+          category: editForm.category,
+          description: editForm.description,
+          notes: editForm.notes || undefined,
+          paidById: editForm.paidById,
+          date: editForm.date,
+          isRecurring: editingExpense.isRecurring,
+          paidFromBank: editPaidFromBank,
+          ...(incomeSplits.length > 0 ? { incomeSplits } : {}),
+        } as Parameters<typeof updateExpense.mutateAsync>[0]['data'],
+      });
+      queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey({ month, year }) });
+      closeEdit();
+    } catch {
+      Alert.alert('Error', 'Could not save changes.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = (exp: Expense) => {
+    Alert.alert('Delete expense', `Delete "${exp.description}" from "${workspaceBudgetName(group)}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await deleteExpense.mutateAsync({ id: exp.id });
+            queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
             queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
             queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
           } catch {

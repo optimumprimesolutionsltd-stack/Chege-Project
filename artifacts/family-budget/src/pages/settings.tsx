@@ -1,4 +1,34 @@
-adAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
+import { useEffect, useRef, useState } from "react";
+import {
+  useGetMembers,
+  useLeaveGroup,
+  useRemoveMember,
+  useUpdateMemberRole,
+  useGetGroup,
+  useUpdateGroup,
+  useRequestPhotoUpload,
+  useGetBudgetCategoryRecommendations,
+  useApplyBudgetCategoryRecommendations,
+  getGetGroupQueryKey,
+  getGetWorkspacesQueryKey,
+  getGetBudgetCategoriesQueryKey,
+  getGetBudgetCategoryRecommendationsQueryKey,
+} from "@workspace/api-client-react";
+import { useAuth } from "@workspace/replit-auth-web";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { GroupInviteLinks } from "@/components/group-invite-links";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getGetMembersQueryKey } from "@workspace/api-client-react";
+import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Moon, Palette, Pencil, Star, Sun, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
+import type { WorkspaceNameStyle } from "@workspace/api-client-react";
+import { ProfileAvatar } from "@/components/profile-avatar";
+import { SHARED_GROUP_KINDS, groupKindPresentation, type SharedGroupKind } from "@/components/group-kind";
+import { applyAppearance, readAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
 import { appPath } from "@/lib/base-path";
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from "@/lib/member-limit";
 import { workspaceLabel } from "@/lib/workspace-identity";

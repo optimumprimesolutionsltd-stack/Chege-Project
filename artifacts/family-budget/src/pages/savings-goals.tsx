@@ -1,4 +1,113 @@
-d<number, GoalFilterState>) {
+import { useState, useEffect } from "react";
+import {
+  useGetSavingsGoals,
+  useCreateSavingsGoal,
+  useUpdateSavingsGoal,
+  useDeleteSavingsGoal,
+  useContributeToSavingsGoal,
+  useCascadeContribute,
+  getGetSavingsGoalsQueryKey,
+  getGetSavingsGoalContributionsQueryKey,
+  getGetDashboardSummaryQueryKey,
+  useGetSavingsGoalContributions,
+  useDeleteSavingsGoalContribution,
+  useGetMembers,
+  useGetGroup,
+} from "@workspace/api-client-react";
+import type { SavingsGoal, CascadeContributeAllocation } from "@workspace/api-client-react";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { formatKes } from "@/lib/utils";
+import {
+  getChipRange,
+  filterByDateRange,
+  computeContributorTotals,
+} from "@/lib/goal-history-utils";
+import type { GoalContribution, QuickChip as GoalQuickChip } from "@/lib/goal-history-utils";
+import {
+  Plus,
+  Loader2,
+  Target,
+  CheckCircle2,
+  Pencil,
+  Trash2,
+  Calendar,
+  Trophy,
+  ArrowUp,
+  ArrowDown,
+  Sparkles,
+  ChevronRight,
+  History,
+  User,
+  SlidersHorizontal,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle } from "lucide-react";
+import { useAuth } from "@workspace/replit-auth-web";
+import { workspaceLabel } from "@/lib/workspace-identity";
+
+function GoalProgress({ current, target }: { current: number; target: number }) {
+  const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between text-sm">
+        <span className="font-semibold text-foreground">{formatKes(current)}</span>
+        <span className="text-muted-foreground">of {formatKes(target)}</span>
+      </div>
+      <div className="h-3 w-full bg-secondary/20 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-700 ${pct >= 100 ? "bg-emerald-500" : "bg-primary"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground text-right">{Math.round(pct)}% reached</p>
+    </div>
+  );
+}
+
+type QuickChip = GoalQuickChip;
+
+const QUICK_CHIPS: { id: QuickChip; label: string }[] = [
+  { id: "this-month", label: "This Month" },
+  { id: "last-month", label: "Last Month" },
+  { id: "last-3-months", label: "Last 3 Months" },
+  { id: "this-year", label: "This Year" },
+];
+
+interface GoalFilterState {
+  fromDate: string;
+  toDate: string;
+  activeChip: QuickChip | null;
+}
+
+const DEFAULT_FILTER: GoalFilterState = { fromDate: "", toDate: "", activeChip: null };
+
+const FILTERS_STORAGE_KEY = "goal-history-filters";
+
+function loadFiltersFromStorage(): Record<number, GoalFilterState> {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<number, GoalFilterState>;
+  } catch {
+    return {};
+  }
+}
+
+function saveFiltersToStorage(filters: Record<number, GoalFilterState>) {
   try {
     localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
   } catch {

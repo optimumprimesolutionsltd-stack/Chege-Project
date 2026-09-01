@@ -1,4 +1,1158 @@
-xtColor={colors.mutedForeground}
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  RefreshControl,
+  ActivityIndicator,
+  Platform,
+  Modal,
+  Pressable,
+  TouchableOpacity,
+  TextInput,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Alert,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useColors } from '@/hooks/useColors';
+import { PageFlatList } from '@/components/PageScrollReset';
+import {
+  useGetJointAccount,
+  useCreateDeposit,
+  useCreateDisbursement,
+  useCreateBankCharge,
+  useUpdateJointAccountTransaction,
+  useDeleteJointAccountTransaction,
+  useDeleteExpense,
+  useGetBudgetCategories,
+  getGetBudgetCategoriesQueryKey,
+  useGetMembers,
+  useGetSavingsGoals,
+  useTransferBankToSavings,
+  useTransferSavingsToBank,
+  useTransferBankToBank,
+  getGetJointAccountQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetSavingsGoalsQueryKey,
+  useUpdateJointAccountOpeningBalance,
+  useGetGroup,
+  useGetJointAccounts,
+  useCreateJointAccount,
+  useUpdateJointAccount,
+  useDeleteJointAccount,
+  getGetJointAccountsQueryKey,
+  getGetExpensesQueryKey,
+  customFetch,
+} from '@workspace/api-client-react';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth';
+import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
+import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
+import { getProjectedBalanceAfterOutgoing } from '@/lib/bankBalance';
+import { workspaceBudgetName } from '@/lib/workspaceIdentity';
+
+function formatKES(n?: number | null): string {
+  if (n === undefined || n === null) return '—';
+  return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
+}
+
+function formatDateTime(s?: string | null): string {
+  if (!s) return '';
+  const d = new Date(s);
+  return (
+    d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) +
+    ' · ' +
+    d.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })
+  );
+}
+
+function formatBankDate(s?: string | null): string {
+  if (!s) return 'Date unavailable';
+  const datePart = s.slice(0, 10);
+  const d = new Date(`${datePart}T00:00:00`);
+  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+type Tx = {
+  id: number;
+  type: string;
+  amount: number;
+  runningBalance?: number | null;
+  description: string;
+  madeById?: string | null;
+  madeByName?: string | null;
+  incomeSourceId?: number | null;
+  expenseCategory?: string | null;
+  bankCharge?: boolean;
+  savingsGoalId?: number | null;
+  savingsGoalName?: string | null;
+  transferDirection?: string | null;
+  expenseId?: number | null;
+  bankTransferId?: string | null;
+  bankTransferAccountId?: number | null;
+  bankTransferAccountName?: string | null;
+  contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
+  date: string;
+  createdAt?: string | null;
+};
+
+type TxType = 'deposit' | 'disbursement' | 'transfer' | 'bank_transfer' | 'bank_charge';
+
+type MemberIncomeSource = {
+  id: number;
+  name: string;
+};
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default function BankScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const topPad = Platform.OS === 'web' ? 67 : insets.top;
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { shortcut } = useLocalSearchParams<{ shortcut?: string }>();
+  const handledShortcut = useRef<string | null>(null);
+
+  const { data: group } = useGetGroup();
+  const { data: accounts = [], refetch: refetchAccounts } = useGetJointAccounts();
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const accountStorageKey = group?.id && user?.id ? `bank-account:${group.id}:${user.id}` : null;
+  const { data, isLoading, refetch } = useGetJointAccount(
+    selectedAccountId ? { accountId: selectedAccountId } : undefined,
+  );
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refetch(), refetchAccounts()]);
+    setRefreshing(false);
+  }, [refetch, refetchAccounts]);
+
+  // Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [txType, setTxType] = useState<TxType>('deposit');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('');
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [date, setDate] = useState(todayIso());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [openingBalanceModalVisible, setOpeningBalanceModalVisible] = useState(false);
+  const [openingBalanceDraft, setOpeningBalanceDraft] = useState('');
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(todayIso());
+  const [showOpeningBalanceDatePicker, setShowOpeningBalanceDatePicker] = useState(false);
+  const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
+  const [accountModalVisible, setAccountModalVisible] = useState(false);
+  const [accountNameDraft, setAccountNameDraft] = useState('');
+  const [accountNumberDraft, setAccountNumberDraft] = useState('');
+  const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
+  const [savingAccount, setSavingAccount] = useState(false);
+
+  // ── Deposit payer state ────────────────────────────────────────────────────
+  // depositorIds: [] = Joint bank (null madeById)
+  //               [id] = single named member
+  //               [id1, id2, …] = multi-split named members
+  const [depositorIds, setDepositorIds] = useState<string[]>([]);
+  const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [depositSourceKind, setDepositSourceKind] = useState<'income_source' | 'other' | null>(null);
+
+  // ── Withdrawal payer state ─────────────────────────────────────────────────
+  // withdrawerId: null = Joint bank; string = named member
+  const [withdrawerId, setWithdrawerId] = useState<string | null>(null);
+
+  // ── Withdrawal destination state ───────────────────────────────────────────
+  // 'source' = an income stream they defined, 'savings' = a savings goal,
+  // 'other' = free-text description
+  type WithdrawDestType = 'source' | 'savings' | 'other';
+  const [withdrawDest, setWithdrawDest] = useState<WithdrawDestType | null>(null);
+  const [withdrawSourceName, setWithdrawSourceName] = useState<string | null>(null);
+  const [withdrawGoalId, setWithdrawGoalId] = useState<number | null>(null);
+  const [showGoalPicker, setShowGoalPicker] = useState(false);
+  const [transferDirection, setTransferDirection] = useState<'to_savings' | 'from_savings'>('to_savings');
+  const [bankTransferDestinationId, setBankTransferDestinationId] = useState<number | null>(null);
+
+  // Derived: for income sources, only show when exactly one depositor is selected
+  const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
+
+  const { mutateAsync: createDeposit } = useCreateDeposit();
+  const { mutateAsync: createDisbursement } = useCreateDisbursement();
+  const { mutateAsync: createBankCharge } = useCreateBankCharge();
+  const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
+  const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
+  const { mutateAsync: deleteExpense } = useDeleteExpense();
+  const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
+  const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
+  const { mutateAsync: transferBankToBank } = useTransferBankToBank();
+  const { mutateAsync: updateOpeningBalance } = useUpdateJointAccountOpeningBalance();
+  const { mutateAsync: createAccount } = useCreateJointAccount();
+  const { mutateAsync: updateAccount } = useUpdateJointAccount();
+  const { mutateAsync: deleteAccount } = useDeleteJointAccount();
+  const { data: categories = [] } = useGetBudgetCategories();
+  const { data: members = [] } = useGetMembers();
+  const isSharedWorkspace = group?.isPrivate === false;
+  const budgetName = workspaceBudgetName(group);
+  const canManageAccount = canManageBankAccount(group);
+  const canManageShared = isSharedWorkspace && canManageAccount;
+  const selectedAccount = accounts.find((account) => account.id === selectedAccountId)
+    ?? accounts[0];
+  const hasBankAccounts = accounts.length > 0;
+
+  useEffect(() => {
+    if (!accountStorageKey) return;
+    let active = true;
+    AsyncStorage.getItem(accountStorageKey).then((stored) => {
+      const id = Number(stored);
+      if (active) {
+        setSelectedAccountId((current) =>
+          resolveBankAccountSelection(accounts, current, Number.isInteger(id) ? id : null),
+        );
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [accountStorageKey, accounts]);
+
+  const selectAccount = (accountId: number) => {
+    setSelectedAccountId(accountId);
+    if (accountStorageKey) AsyncStorage.setItem(accountStorageKey, String(accountId)).catch(() => {});
+  };
+  const canEditTransaction = (tx: Tx) =>
+    (canManageAccount && !tx.bankTransferId) || (
+      tx.type === 'deposit' &&
+      tx.madeById === user?.id &&
+      tx.date === todayIso() &&
+      !tx.savingsGoalId
+    );
+  const selectableDepositors = canManageShared
+    ? members
+    : members.filter((member) => member.userId === user?.id);
+
+  // Fetch income sources for selected depositor (single named only)
+  const { data: depositSources = [] } = useQuery<MemberIncomeSource[]>({
+    queryKey: ['income-sources', singleDepositorId],
+    queryFn: async () => {
+      if (!singleDepositorId) return [];
+      return customFetch<MemberIncomeSource[]>(`/api/income-sources?userId=${singleDepositorId}`);
+    },
+    enabled: !!singleDepositorId && txType === 'deposit',
+    staleTime: 60_000,
+  });
+
+  // Fetch income sources for the selected withdrawer (withdrawal destination chips)
+  const { data: withdrawSources = [] } = useQuery<MemberIncomeSource[]>({
+    queryKey: ['income-sources', withdrawerId],
+    queryFn: async () => {
+      if (!withdrawerId) return [];
+      return customFetch<MemberIncomeSource[]>(`/api/income-sources?userId=${withdrawerId}`);
+    },
+    enabled: !!withdrawerId && txType === 'disbursement',
+    staleTime: 60_000,
+  });
+
+  // Savings goals for the "Savings" destination option
+  const { data: savingsGoals = [] } = useGetSavingsGoals();
+
+  // The savings goal matching the current withdrawGoalId selection
+  const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
+
+  const openModal = (type: TxType) => {
+    if (!canManageAccount && type !== 'deposit') {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to record a shared transfer or withdrawal.');
+      return;
+    }
+    setEditingTransactionId(null);
+    setTxType(type);
+    setAmount('');
+    setDescription('');
+    setExpenseCategory('');
+    setShowCategoryPicker(false);
+    setNewCategoryName('');
+    setDate(todayIso());
+    setShowDatePicker(false);
+    setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : (!canManageShared && user?.id ? [user.id] : []));
+    setDepositorAmounts({});
+    setIncomeSourceId(null);
+    setDepositSourceKind(null);
+    setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : null);
+    // Reset withdrawal destination
+    setWithdrawDest(null);
+    setWithdrawSourceName(null);
+    setWithdrawGoalId(null);
+    setShowGoalPicker(false);
+    setTransferDirection('to_savings');
+    setBankTransferDestinationId(accounts.find((candidate) => candidate.id !== selectedAccountId)?.id ?? null);
+    setModalVisible(true);
+  };
+
+  useEffect(() => {
+    if ((shortcut !== 'deposit' && shortcut !== 'withdraw' && shortcut !== 'bank-transfer') || handledShortcut.current === shortcut) return;
+    handledShortcut.current = shortcut;
+    openModal(shortcut === 'bank-transfer' ? 'bank_transfer' : shortcut === 'withdraw' ? 'disbursement' : 'deposit');
+  }, [shortcut]);
+
+  const closeModal = () => {
+    if (submitting) return;
+    setModalVisible(false);
+    setNewCategoryName('');
+    setEditingTransactionId(null);
+  };
+
+  // Invalidate everywhere that displays the joint-account balance so all
+  // screens (home card + bank tab) update immediately after any mutation.
+  const invalidateBalance = () => {
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
+  };
+
+  const invalidateAccounts = async () => {
+    await queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+    await invalidateBalance();
+  };
+
+  const openAccountEditor = (accountId?: number) => {
+    const account = accounts.find((item) => item.id === accountId);
+    setEditingAccountId(account?.id ?? null);
+    setAccountNameDraft(account?.name ?? '');
+    setAccountNumberDraft(account?.accountNumber ?? '');
+    setAccountModalVisible(true);
+  };
+
+  const saveAccount = async () => {
+    const name = accountNameDraft.trim();
+    const accountNumber = accountNumberDraft.trim();
+    if (!name) {
+      Alert.alert('Account name required', 'Enter a clear name for this bank account.');
+      return;
+    }
+    setSavingAccount(true);
+    try {
+      const account = editingAccountId
+        ? await updateAccount({ id: editingAccountId, data: { name, accountNumber: accountNumber || null } })
+        : await createAccount({ data: { name, accountNumber: accountNumber || undefined } });
+      selectAccount(account.id);
+      setAccountModalVisible(false);
+      await invalidateAccounts();
+    } catch (error: unknown) {
+      Alert.alert('Could not save account', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  const removeAccount = (accountId: number) => {
+    const account = accounts.find((item) => item.id === accountId);
+    Alert.alert('Remove bank account', `Remove "${account?.name ?? 'this account'}" from "${budgetName}"? Accounts with transactions cannot be removed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteAccount({ id: accountId });
+            const next = accounts.find((item) => item.id !== accountId);
+            if (next) selectAccount(next.id);
+            await invalidateAccounts();
+          } catch (error: unknown) {
+            Alert.alert(
+              'Account cannot be removed',
+              error instanceof Error
+                ? error.message
+                : 'This account may have transaction history. Move or remove its transactions first.',
+            );
+          }
+        },
+      },
+    ]);
+  };
+
+  const openOpeningBalanceEditor = () => {
+    setOpeningBalanceDraft(String(data?.openingBalance ?? 0));
+    setOpeningBalanceDate(data?.openingBalanceDate ?? todayIso());
+    setOpeningBalanceModalVisible(true);
+  };
+
+  const closeOpeningBalanceEditor = () => {
+    if (!savingOpeningBalance) setOpeningBalanceModalVisible(false);
+  };
+
+  const handleOpeningBalanceSubmit = async () => {
+    const value = Number(openingBalanceDraft);
+    if (!Number.isInteger(value) || value < 0) {
+      Alert.alert('Enter a whole KES amount', 'The opening balance must be zero or more whole shillings.');
+      return;
+    }
+
+    setSavingOpeningBalance(true);
+    try {
+      await updateOpeningBalance({
+        data: { openingBalance: value, openingBalanceDate, accountId: selectedAccountId ?? undefined },
+      });
+      setOpeningBalanceModalVisible(false);
+      await invalidateBalance();
+      Alert.alert('Opening balance saved', 'The current balance now includes this starting amount.');
+    } catch (err: unknown) {
+      Alert.alert('Could not save opening balance', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setSavingOpeningBalance(false);
+    }
+  };
+
+  const handleDelete = (tx: Tx) => {
+    if (!canManageAccount) {
+      Alert.alert('Admin access required', `Ask a group owner or admin to delete a shared bank transaction from "${budgetName}".`);
+      return;
+    }
+    const deletesExpense = tx.expenseId != null;
+    Alert.alert(
+      deletesExpense ? 'Delete expense' : 'Delete transaction',
+      deletesExpense
+        ? `Delete "${tx.description}" from "${budgetName}"? Its bank funding transaction will also be removed.`
+        : `Delete "${tx.description}" from "${budgetName}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            try {
+              if (deletesExpense) {
+                await deleteExpense({ id: tx.expenseId! });
+              } else {
+                await deleteTransaction({ id: tx.id });
+              }
+              await invalidateBalance();
+            } catch (error: unknown) {
+              Alert.alert(
+                deletesExpense ? 'Could not delete expense' : 'Could not delete transaction',
+                error instanceof Error ? error.message : 'Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const openEdit = (tx: Tx) => {
+    if (!canEditTransaction(tx)) {
+      Alert.alert('This transaction is locked', 'Members can correct only their own deposits dated today. Ask an admin to correct an earlier or shared bank record.');
+      return;
+    }
+    const type: TxType = tx.savingsGoalId
+      ? 'transfer'
+      : tx.bankCharge ? 'bank_charge' : tx.type === 'deposit' ? 'deposit' : 'disbursement';
+    setTxType(type);
+    setEditingTransactionId(tx.id);
+    setAmount(String(tx.amount));
+    setDescription(type === 'transfer'
+      ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, '')
+      : tx.description);
+    setDate(tx.date);
+    setExpenseCategory(tx.expenseCategory ?? '');
+    setShowCategoryPicker(false);
+    const splitIds = tx.contributorSplits?.map((split) => split.userId) ?? [];
+    setDepositorIds(type === 'deposit'
+      ? (splitIds.length > 0 ? splitIds : !isSharedWorkspace && user?.id ? [user.id] : tx.madeById ? [tx.madeById] : [])
+      : []);
+    setDepositorAmounts(Object.fromEntries(
+      (tx.contributorSplits ?? []).map((split) => [split.userId, String(split.amount)]),
+    ));
+    setIncomeSourceId(tx.incomeSourceId ?? null);
+    setDepositSourceKind(null);
+    setWithdrawerId(type === 'disbursement'
+      ? (!isSharedWorkspace ? user?.id ?? null : tx.madeById ?? null)
+      : null);
+    setWithdrawDest(type === 'disbursement' ? 'other' : null);
+    setWithdrawSourceName(null);
+    setWithdrawGoalId(tx.savingsGoalId ?? null);
+    setShowGoalPicker(false);
+    setShowDatePicker(false);
+    setTransferDirection(tx.transferDirection === 'from_savings' ? 'from_savings' : 'to_savings');
+    setModalVisible(true);
+  };
+
+  // ── Toggle depositor member chip ───────────────────────────────────────────
+  // Selecting a member deselects Joint bank (and vice versa).
+  // Selecting all-off means Joint bank again.
+  const toggleDepositor = (memberId: string) => {
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to choose another person for this shared transaction.');
+      return;
+    }
+    setDepositorIds(prev => {
+      if (prev.includes(memberId)) {
+        // Deselect this member
+        return prev.filter(id => id !== memberId);
+      } else {
+        // Add member (removes Joint bank implicitly since joint = empty array)
+        return [...prev, memberId];
+      }
+    });
+    setIncomeSourceId(null);
+  };
+
+  // Selecting Joint bank chip explicitly clears all named members
+  const selectJointBank = () => {
+    if (!canManageShared) {
+      Alert.alert('Admin access required', 'Ask a group owner or admin to use Joint bank for this shared transaction.');
+      return;
+    }
+    setDepositorIds([]);
+    setDepositorAmounts({});
+    setIncomeSourceId(null);
+  };
+
+  const handleCreateCategory = async () => {
+    if (!canManageAccount) {
+      Alert.alert(
+        'Admin access required',
+        isSharedWorkspace
+          ? 'Ask a group owner or admin to add a shared category.'
+          : 'Only the Personal budget owner can add a category.',
+      );
+      return;
+    }
+    const name = newCategoryName.trim();
+    if (!name) {
+      Alert.alert('Enter a category name', 'Give the new category a short name first.');
+      return;
+    }
+
+    setAddingCategory(true);
+    try {
+      const category = await customFetch<{ id: number; name: string }>('/api/budget-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, budgetAmount: 0, priority: 1, color: '#6B7280' }),
+      });
+      setExpenseCategory(category.name);
+      setNewCategoryName('');
+      setShowCategoryPicker(false);
+      queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+    } catch {
+      Alert.alert('Could not add category', 'Please try again.');
+    } finally {
+      setAddingCategory(false);
+    }
+  };
+
+  // ── Validate member IDs against known members ──────────────────────────────
+  const knownMemberIds = new Set(members.map(m => m.userId));
+  const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
+
+  const handleSubmit = async () => {
+    const parsed = parseFloat(amount.replace(/,/g, ''));
+    if (!parsed || parsed <= 0) {
+      Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
+      return;
+    }
+    if (!Number.isInteger(parsed)) {
+      Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
+      return;
+    }
+    if (!selectedAccountId) {
+      Alert.alert(
+        'Choose a bank account',
+        canManageAccount
+          ? 'Create a bank account first, then return here to record the transaction.'
+          : 'Ask an owner or admin to create a bank account before recording a deposit.',
+      );
+      return;
+    }
+    if (txType === 'disbursement' && !expenseCategory.trim()) {
+      Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
+      return;
+    }
+    if (txType === 'bank_charge' && !description.trim()) {
+      Alert.alert('Narration required', 'Add the bank statement narration for this charge.');
+      return;
+    }
+    if (txType === 'disbursement' && withdrawDest === 'other' && !description.trim()) {
+      Alert.alert('Narration required', 'Explain where the money is going when you choose Other.');
+      return;
+    }
+    if (txType === 'transfer') {
+      if (!selectedGoal) {
+        Alert.alert('Select a goal', 'Choose the savings goal for this transfer.');
+        return;
+      }
+      if (!description.trim()) {
+        Alert.alert('Narration required', 'Add a short narration for this transfer.');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const transfer = {
+          amount: parsed,
+          goalId: selectedGoal.id,
+          narration: description.trim(),
+          date,
+          madeById: isSharedWorkspace ? null : user?.id,
+          accountId: selectedAccountId ?? undefined,
+        };
+        if (editingTransactionId !== null) {
+          await updateTransaction({
+            id: editingTransactionId,
+            data: { ...transfer, transferDirection },
+          });
+        } else if (transferDirection === 'to_savings') {
+          await transferBankToSavings({ data: transfer });
+        } else {
+          await transferSavingsToBank({ data: transfer });
+        }
+        setModalVisible(false);
+        await invalidateBalance();
+      } catch (err: unknown) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'Could not create transfer.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+    if (txType === 'bank_transfer') {
+      if (!selectedAccountId || !bankTransferDestinationId || selectedAccountId === bankTransferDestinationId) {
+        Alert.alert('Choose another account', 'Source and destination bank accounts must be different.');
+        return;
+      }
+      if (!description.trim()) {
+        Alert.alert('Narration required', 'Add a short narration for this transfer.');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await transferBankToBank({ data: { sourceAccountId: selectedAccountId, destinationAccountId: bankTransferDestinationId, amount: parsed, narration: description.trim(), date } });
+        setModalVisible(false);
+        await invalidateAccounts();
+        Alert.alert('Bank transfer recorded', 'Both account balances were updated.');
+      } catch (err: unknown) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'Could not create transfer.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+    // For withdrawals, derive description from destination selection
+    let finalDescription = description.trim();
+    if (txType === 'disbursement') {
+      if (withdrawDest === 'source') {
+        if (!withdrawSourceName) {
+          Alert.alert('Destination required', 'Please select where this money is going.');
+          return;
+        }
+        finalDescription = description.trim() || withdrawSourceName;
+      } else if (withdrawDest === 'savings') {
+        if (!selectedGoal) {
+          Alert.alert('Select a goal', 'Please choose which savings goal this is for.');
+          return;
+        }
+        finalDescription = description.trim() || `Savings – ${selectedGoal.name}`;
+      } else {
+        // Details are optional for a withdrawal — its category is the primary
+        // reportable label, and becomes the fallback transaction description.
+        finalDescription = description.trim() || expenseCategory;
+      }
+    } else if (!finalDescription) {
+      Alert.alert('Description required', 'Please enter a description.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (editingTransactionId !== null) {
+        const editingTransaction = data?.transactions.find((transaction) => transaction.id === editingTransactionId);
+        const contributorSplits = txType === 'deposit' && validDepositorIds.length > 1
+          ? validDepositorIds.map((userId) => ({
+              userId,
+              amount: parseFloat(depositorAmounts[userId] || '0') || 0,
+              ...(() => {
+                const existingSourceId = editingTransaction?.contributorSplits
+                  ?.find((split) => split.userId === userId)
+                  ?.incomeSourceId;
+                return existingSourceId ? { incomeSourceId: existingSourceId } : {};
+              })(),
+            }))
+          : [];
+        await updateTransaction({
+          id: editingTransactionId,
+          data: {
+            amount: parsed,
+            description: finalDescription,
+            date,
+            madeById: !isSharedWorkspace
+              ? user?.id
+              : txType === 'deposit'
+                ? contributorSplits.length > 0 ? undefined : validDepositorIds[0] ?? null
+                : withdrawerId ?? null,
+            ...(txType === 'deposit' ? { contributorSplits } : {}),
+            ...(txType === 'deposit' && contributorSplits.length === 0 ? { incomeSourceId } : {}),
+            ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+            ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
+            ...(txType === 'bank_charge' ? { bankCharge: true } : {}),
+            accountId: selectedAccountId ?? undefined,
+          },
+        });
+      } else if (txType === 'deposit') {
+        const isJoint = isSharedWorkspace && validDepositorIds.length === 0;
+        const isMultiDepositor = validDepositorIds.length > 1;
+
+        if (isMultiDepositor) {
+          // Multiple named depositors: validate split sums match total
+          const splitTotal = validDepositorIds.reduce(
+            (s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0
+          );
+          const splitAmounts = validDepositorIds.map(
+            id => parseFloat(depositorAmounts[id] || '0') || 0,
+          );
+          if (splitAmounts.some(portion => !Number.isInteger(portion) || portion <= 0)) {
+            Alert.alert(
+              'Enter every amount',
+              'Each depositor portion must be a positive whole-shilling amount.',
+            );
+            setSubmitting(false);
+            return;
+          }
+          if (splitTotal !== parsed) {
+            Alert.alert(
+              "Amounts don't add up",
+              `Depositor portions total KES ${splitTotal.toLocaleString()} but the deposit is KES ${parsed.toLocaleString()}.`,
+            );
+            setSubmitting(false);
+            return;
+          }
+          await createDeposit({
+            data: {
+              amount: parsed,
+              description: description.trim(),
+              date,
+              contributorSplits: validDepositorIds.map((userId) => ({
+                userId,
+                amount: parseFloat(depositorAmounts[userId] || '0') || 0,
+              })),
+              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              accountId: selectedAccountId ?? undefined,
+            },
+          });
+        } else if (isJoint) {
+          // Joint bank: send madeById: null explicitly
+          await createDeposit({
+            data: {
+              amount: parsed,
+              description: description.trim(),
+              date,
+              madeById: null,
+              ...(incomeSourceId ? { incomeSourceId } : {}),
+              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              accountId: selectedAccountId ?? undefined,
+            },
+          });
+        } else {
+          // Single named depositor
+          const singleId = validDepositorIds[0];
+          await createDeposit({
+            data: {
+              amount: parsed,
+              description: description.trim(),
+              date,
+              madeById: singleId,
+              ...(incomeSourceId ? { incomeSourceId } : {}),
+              ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              accountId: selectedAccountId ?? undefined,
+            },
+          });
+        }
+      } else if (txType === 'bank_charge') {
+        await createBankCharge({
+          data: {
+            amount: parsed,
+            narration: description.trim(),
+            date,
+            accountId: selectedAccountId ?? undefined,
+          },
+        });
+      } else {
+        // Disbursement — include madeById: null for Joint bank or the selected member
+        await createDisbursement({
+          data: {
+            amount: parsed,
+            description: finalDescription,
+            date,
+            expenseCategory,
+            madeById: !isSharedWorkspace ? user?.id : withdrawerId ?? null,
+            destinationKind: withdrawDest === 'other' ? 'other' : 'category',
+            accountId: selectedAccountId ?? undefined,
+          },
+        });
+      }
+      setModalVisible(false);
+      setEditingTransactionId(null);
+      await invalidateBalance();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      Alert.alert('Error', message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const transactions: Tx[] = data?.transactions ?? [];
+
+  const isDeposit = txType === 'deposit';
+  const isWithdrawal = txType === 'disbursement';
+  const isTransfer = txType === 'transfer';
+  const isBankCharge = txType === 'bank_charge';
+  const isBankTransfer = txType === 'bank_transfer';
+  const parsedOutgoingAmount = Number(amount.replace(/,/g, ''));
+  const editingTransaction = editingTransactionId === null
+    ? null
+    : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
+  const isOutgoingTransaction = isWithdrawal || isBankCharge || isBankTransfer || (isTransfer && transferDirection === 'to_savings');
+  const projectedBalance = isOutgoingTransaction &&
+    data &&
+    Number.isInteger(parsedOutgoingAmount) &&
+    parsedOutgoingAmount > 0
+    ? getProjectedBalanceAfterOutgoing(
+        data.balance,
+        parsedOutgoingAmount,
+        editingTransaction
+          ? { amount: editingTransaction.amount, type: editingTransaction.type }
+          : null,
+      )
+    : null;
+
+  // Derive a display label for a transaction in the list
+  const txPayerLabel = (tx: Tx): string => {
+    if (tx.type === 'deposit') {
+      if (tx.madeByName) return tx.madeByName;
+       return selectedAccount?.name ?? 'Bank account';
+    }
+    // disbursement
+    if (tx.madeByName) return tx.madeByName;
+    return selectedAccount?.name ?? 'Bank account';
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Sticky header */}
+      <LinearGradient
+        colors={['#0a1a10', '#0f2217', '#132a1c']}
+        style={[styles.header, { paddingTop: topPad + 16 }]}
+      >
+        <WorkspaceIdentityRow group={group} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <Text style={styles.headerTitle}>Bank accounts</Text>
+          {canManageAccount && (
+            <TouchableOpacity onPress={() => openAccountEditor()} hitSlop={10} testID="bank-add-account">
+              <Feather name="plus-circle" size={24} color="#86efac" />
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+          {accounts.map((account) => {
+            const active = account.id === selectedAccount?.id;
+            return (
+              <TouchableOpacity
+                key={account.id}
+                onPress={() => selectAccount(account.id)}
+                style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: active ? '#dcfce7' : '#1f3a2b' }}
+                testID={`bank-account-${account.id}`}
+              >
+                <Text style={{ color: active ? '#14532d' : '#d1fae5', fontFamily: 'Inter_600SemiBold' }}>{account.name}</Text>
+                {canManageAccount && active && (
+                  <TouchableOpacity onPress={() => openAccountEditor(account.id)} hitSlop={8} testID={`bank-edit-account-${account.id}`}>
+                    <Feather name="edit-2" size={13} color="#14532d" />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {!hasBankAccounts && canManageAccount && (
+          <Pressable
+            onPress={() => openAccountEditor()}
+            style={[styles.firstAccountCta, { borderColor: '#86efac', backgroundColor: '#1f3a2b' }]}
+            testID="bank-create-first-account"
+          >
+            <Feather name="plus-circle" size={18} color="#86efac" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.firstAccountCtaTitle}>Create your first bank account</Text>
+              <Text style={styles.firstAccountCtaText}>Jamvi will not create a main or placeholder account for you.</Text>
+            </View>
+          </Pressable>
+        )}
+        {isSharedWorkspace && !canManageAccount && (
+          <Text style={styles.managerGuidance}>
+            You can add your own deposit today. An owner or admin handles withdrawals, transfers, and account changes.
+          </Text>
+        )}
+        {isLoading ? (
+          <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
+        ) : (
+          <>
+            <Text style={styles.balanceLabel}>Closing balance</Text>
+            <Text style={styles.balance}>KES {formatKES(data?.balance)}</Text>
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <Feather name="arrow-down-circle" size={14} color="#4ade80" />
+                <Text style={styles.statLabel}>Deposits</Text>
+                <Text style={styles.statValue}>KES {formatKES(data?.totalDeposits)}</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Feather name="arrow-up-circle" size={14} color="#f87171" />
+                <Text style={styles.statLabel}>Withdrawn</Text>
+                <Text style={styles.statValue}>KES {formatKES(data?.totalDisbursements)}</Text>
+              </View>
+            </View>
+            <View style={styles.openingBalanceRow}>
+              <View>
+                <Text style={styles.openingBalanceLabel}>Opening balance</Text>
+                <Text style={styles.openingBalanceValue}>KES {formatKES(data?.openingBalance)}</Text>
+                {data?.openingBalanceDate && (
+                  <Text style={styles.openingBalanceDate}>
+                    As of {new Date(data.openingBalanceDate + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Text>
+                )}
+              </View>
+              {canManageAccount && (
+                <TouchableOpacity
+                  style={styles.editOpeningBalanceBtn}
+                  onPress={openOpeningBalanceEditor}
+                  activeOpacity={0.8}
+                  testID="bank-edit-opening-balance"
+                >
+                  <Feather name="edit-2" size={14} color="#d1fae5" />
+                  <Text style={styles.editOpeningBalanceText}>Edit starting balance</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Action buttons inside header */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => openModal('deposit')}
+                activeOpacity={0.8}
+                testID="bank-deposit-action"
+              >
+                <Feather name="arrow-down-left" size={16} color="#0a1a10" />
+                <Text style={styles.actionBtnText}>Deposit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnDisburse, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
+                onPress={() => openModal('disbursement')}
+                activeOpacity={0.8}
+                disabled={!canManageAccount || !hasBankAccounts}
+                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can withdraw money.' : undefined}
+                testID="bank-withdraw-action"
+              >
+                <Feather name="arrow-up-right" size={16} color="#f87171" />
+                <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
+                onPress={() => openModal('transfer')}
+                activeOpacity={0.8}
+                disabled={!canManageAccount || !hasBankAccounts}
+                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can transfer shared money.' : undefined}
+                testID="bank-transfer-action"
+              >
+                <Feather name="repeat" size={16} color="#67e8f9" />
+                <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Transfer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || accounts.length < 2) && styles.actionBtnDisabled]}
+                onPress={() => openModal('bank_transfer')}
+                disabled={!canManageAccount || accounts.length < 2}
+                testID="bank-to-bank-action"
+              >
+                <Feather name="shuffle" size={16} color="#67e8f9" />
+                <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#78350f' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
+                onPress={() => openModal('bank_charge')}
+                activeOpacity={0.8}
+                disabled={!canManageAccount || !hasBankAccounts}
+                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can record a bank charge.' : undefined}
+                testID="bank-charge-action"
+              >
+                <Feather name="file-minus" size={16} color="#fde68a" />
+                <Text style={[styles.actionBtnText, { color: '#fde68a' }]}>Charge</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </LinearGradient>
+
+      <PageFlatList
+        data={transactions}
+        keyExtractor={(item) => String(item.id)}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.secondary}
+          />
+        }
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          transactions.length > 0 ? (
+            <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
+          ) : null
+        }
+        ListEmptyComponent={
+          !isLoading ? (
+            <View style={styles.empty}>
+              <Feather name="credit-card" size={40} color={colors.mutedForeground} />
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                 {hasBankAccounts ? 'No transactions yet' : 'Create a bank account first'}
+               </Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                 {hasBankAccounts
+                   ? 'Money you put in or take out will appear here'
+                   : 'Every account in Jamvi is created by you—there is no automatic main account.'}
+              </Text>
+               <Pressable
+                 testID={hasBankAccounts ? 'bank-create-first-deposit' : 'bank-create-first-account-empty'}
+                 accessibilityRole="button"
+                 accessibilityLabel={hasBankAccounts ? 'Record your first deposit' : 'Create your first bank account'}
+                 onPress={() => hasBankAccounts ? openModal('deposit') : openAccountEditor()}
+                 style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+               >
+                 <Feather name="plus" size={16} color={colors.primaryForeground} />
+                 <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>
+                   {hasBankAccounts ? 'Record first deposit' : 'Create bank account'}
+                 </Text>
+               </Pressable>
+            </View>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          const dep = item.type === 'deposit';
+          const payerLabel = txPayerLabel(item);
+          const bankCharge = item.bankCharge === true;
+          return (
+            <Pressable
+              style={({ pressed }) => [
+                styles.txRow,
+                { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <View style={[styles.txIcon, { backgroundColor: dep ? '#1a3320' : '#3a1a1a' }]}>
+                <Feather
+                  name={dep ? 'arrow-down-left' : 'arrow-up-right'}
+                  size={18}
+                  color={dep ? '#4ade80' : '#f87171'}
+                />
+              </View>
+              <View style={styles.txInfo}>
+                <Text style={[styles.txDesc, { color: colors.foreground }]} numberOfLines={1}>
+                  {item.bankTransferId
+                    ? `${dep ? 'From' : 'To'} ${item.bankTransferAccountName ?? 'bank account'}`
+                    : item.savingsGoalId
+                    ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
+                    : bankCharge ? `Bank charge: ${item.description}`
+                    : !dep && item.expenseCategory ? item.expenseCategory : item.description}
+                </Text>
+                <Text style={[styles.txMeta, { color: colors.mutedForeground }]}>
+                  {item.bankTransferId
+                    ? `Internal bank transfer · ${item.description} · `
+                    : item.savingsGoalId
+                    ? `${item.description} · `
+                    : bankCharge
+                      ? 'Excluded from household spending and reports · '
+                    : dep
+                      ? `${payerLabel} · ${item.description} · `
+                      : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
+                  {data?.accountName ? `${data.accountName} · ` : ''}
+                  {canManageAccount ? 'Edit or delete' : canEditTransaction(item) ? 'Edit today' : ''}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
+                  {dep ? '+' : '-'}KES {formatKES(item.amount)}
+                </Text>
+                <Text
+                  style={[styles.txDate, { color: colors.mutedForeground }]}
+                  testID={`transaction-date-${item.id}`}
+                >
+                  {formatBankDate(item.date)}
+                </Text>
+                {typeof item.runningBalance === 'number' && (
+                  <Text
+                    style={[styles.txMeta, { color: colors.mutedForeground, textAlign: 'right' }]}
+                    testID={`bank-running-balance-${item.id}`}
+                  >
+                    Balance KES {formatKES(item.runningBalance)}
+                  </Text>
+                )}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  {canEditTransaction(item) && <TouchableOpacity
+                    onPress={() => openEdit(item)}
+                    hitSlop={8}
+                    testID={`bank-edit-transaction-${item.id}`}
+                  >
+                    <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>}
+                  {canManageAccount && <TouchableOpacity
+                    onPress={() => handleDelete(item)}
+                    hitSlop={8}
+                    testID={`bank-delete-transaction-${item.id}`}
+                  >
+                    <Feather name="trash-2" size={16} color="#f87171" />
+                  </TouchableOpacity>}
+                </View>
+              </View>
+            </Pressable>
+          );
+        }}
+      />
+
+      {/* Transaction modal */}
+      <Modal
+        visible={accountModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !savingAccount && setAccountModalVisible(false)}
+      >
+        <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
+              {editingAccountId ? 'Personalize account' : 'Add bank account'}
+            </Text>
+            <TextInput
+              value={accountNameDraft}
+              onChangeText={setAccountNameDraft}
+              placeholder="e.g. M-Pesa, Family savings"
+              placeholderTextColor={colors.mutedForeground}
+              autoFocus
+              style={[styles.input, { color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
+              testID="bank-account-name"
+            />
+            <TextInput
+              value={accountNumberDraft}
+              onChangeText={setAccountNumberDraft}
+              placeholder="Account number (optional)"
+              placeholderTextColor={colors.mutedForeground}
               style={[styles.input, { marginTop: 12, color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
               testID="bank-account-number"
             />

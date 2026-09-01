@@ -1,4 +1,296 @@
-e before adding it.",
+import { useEffect, useState } from "react";
+import {
+  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction, useDeleteExpense,
+  useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
+  useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank, useGetGroup,
+  getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
+  getGetDashboardSummaryQueryKey, getGetSavingsGoalsQueryKey, useUpdateJointAccountOpeningBalance,
+  useGetJointAccounts, useCreateJointAccount, useUpdateJointAccount, useDeleteJointAccount,
+  getGetJointAccountsQueryKey, getGetExpensesQueryKey, useTransferBankToBank,
+} from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { formatKes, formatDate } from "@/lib/utils";
+import { Trash2, Pencil, ArrowDownLeft, ArrowUpRight, Loader2, Landmark, TrendingUp, TrendingDown, Plus, Flag } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@workspace/replit-auth-web";
+import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
+import { getProjectedBalanceAfterOutgoing } from "@/lib/bank-balance-utils";
+import { workspaceLabel } from "@/lib/workspace-identity";
+
+// "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
+const JOINT_BANK_ID = null as null;
+
+function getBankEditDeepLink() {
+  const editId = Number(new URLSearchParams(window.location.search).get("edit"));
+  return Number.isInteger(editId) && editId > 0 ? editId : null;
+}
+
+type MemberIncomeSource = {
+  id: number;
+  name: string;
+};
+
+type EditableTransaction = {
+  id: number;
+  accountId?: number | null;
+  type: string;
+  amount: number;
+  runningBalance?: number | null;
+  description: string;
+  date: string;
+  madeById?: string | null;
+  incomeSourceId?: number | null;
+  expenseCategory?: string | null;
+  bankCharge?: boolean;
+  bankTransferId?: string | null;
+  bankTransferAccountId?: number | null;
+  bankTransferAccountName?: string | null;
+  savingsGoalId?: number | null;
+  savingsGoalName?: string | null;
+  transferDirection?: string | null;
+  expenseId?: number | null;
+  contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
+};
+
+export default function Bank() {
+  const bankEditId = getBankEditDeepLink();
+  const { data: group } = useGetGroup();
+  const bankSelectionKey = group?.id ? `jamvi:bank-account:${group.id}` : null;
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const { data: accounts = [], isLoading: accountsLoading } = useGetJointAccounts();
+  const { data: account, isLoading } = useGetJointAccount(
+    selectedAccountId ? { accountId: selectedAccountId } : undefined,
+  );
+  const { data: members } = useGetMembers();
+  const { data: categories } = useGetBudgetCategories();
+  const createDeposit = useCreateDeposit();
+  const createDisbursement = useCreateDisbursement();
+  const createBankCharge = useCreateBankCharge();
+  const updateTx = useUpdateJointAccountTransaction();
+  const deleteTx = useDeleteJointAccountTransaction();
+  const deleteExpense = useDeleteExpense();
+  const transferToSavings = useTransferBankToSavings();
+  const transferFromSavings = useTransferSavingsToBank();
+  const updateOpeningBalance = useUpdateJointAccountOpeningBalance();
+  const createAccount = useCreateJointAccount();
+  const updateAccount = useUpdateJointAccount();
+  const deleteAccount = useDeleteJointAccount();
+  const transferBankToBank = useTransferBankToBank();
+  const { data: savingsGoals = [] } = useGetSavingsGoals();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isSharedWorkspace = group?.isPrivate === false;
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
+  const canManageAccount = canManageBankAccount(group);
+  const canManageShared = isSharedWorkspace && canManageAccount;
+  const canEditTransaction = (tx: EditableTransaction) =>
+    canManageAccount || (
+      tx.type === "deposit" &&
+      tx.madeById === user?.id &&
+      tx.date === new Date().toISOString().split("T")[0] &&
+      !tx.savingsGoalId &&
+      (tx.contributorSplits?.length ?? 0) === 0
+    );
+
+  const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | "bank_transfer" | "bank_charge" | null>(null);
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+
+  // Deposit attribution — null = Joint bank, string[] = named member IDs
+  // Default: Joint bank (empty array = no named depositors selected)
+  const [depositorIds, setDepositorIds] = useState<string[]>([]);
+  const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
+  const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [depositSourceKind, setDepositSourceKind] = useState<"income_source" | "other" | null>(null);
+
+  // Withdrawal attribution — null = Joint bank, string = named member ID
+  // Default: Joint bank
+  const [withdrawerId, setWithdrawerId] = useState<string | null>(JOINT_BANK_ID);
+  const [expenseCategory, setExpenseCategory] = useState("");
+  const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other">("category");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [showCategoryCreator, setShowCategoryCreator] = useState(false);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<EditableTransaction | null>(null);
+  const [transferDirection, setTransferDirection] = useState<"to_savings" | "from_savings">("to_savings");
+  const [transferGoalId, setTransferGoalId] = useState<number | null>(null);
+  const [bankTransferDestinationId, setBankTransferDestinationId] = useState<number | null>(null);
+  const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
+  const [openingBalanceDraft, setOpeningBalanceDraft] = useState("");
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [editingOpeningBalance, setEditingOpeningBalance] = useState(false);
+  const [accountNameDraft, setAccountNameDraft] = useState("");
+  const [accountNumberDraft, setAccountNumberDraft] = useState("");
+  const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
+  const [addingAccount, setAddingAccount] = useState(false);
+
+  const selectedBankAccount = accounts.find((item) => item.id === selectedAccountId) ?? null;
+  const isCreatingAccount = addingAccount || !selectedBankAccount;
+
+  useEffect(() => {
+    if (!accounts.length) {
+      setSelectedAccountId(null);
+      return;
+    }
+    let savedId: number | null = null;
+    if (bankSelectionKey) {
+      try {
+        const value = Number(localStorage.getItem(bankSelectionKey));
+        savedId = Number.isInteger(value) && value > 0 ? value : null;
+      } catch {}
+    }
+    setSelectedAccountId((current) => resolveBankAccountSelection(accounts, current, savedId));
+  }, [accounts, bankSelectionKey]);
+
+  useEffect(() => {
+    if (!bankSelectionKey || !selectedAccountId) return;
+    try { localStorage.setItem(bankSelectionKey, String(selectedAccountId)); } catch {}
+  }, [bankSelectionKey, selectedAccountId]);
+
+  useEffect(() => {
+    if (!selectedBankAccount || addingAccount) return;
+    if (editingAccountId === selectedBankAccount.id) return;
+    setEditingAccountId(selectedBankAccount.id);
+    setAccountNameDraft(selectedBankAccount.name);
+    setAccountNumberDraft(selectedBankAccount.accountNumber ?? "");
+  }, [selectedBankAccount, addingAccount, editingAccountId]);
+
+  // Income sources — only fetch when exactly one named depositor is selected
+  const singleDepositorId = depositorIds.length === 1 ? depositorIds[0] : null;
+  const { data: depositSources = [] } = useQuery<MemberIncomeSource[]>({
+    queryKey: ["income-sources", singleDepositorId],
+    queryFn: async () => {
+      if (!singleDepositorId) return [];
+      const res = await fetch(`/api/income-sources?userId=${singleDepositorId}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!singleDepositorId,
+    staleTime: 60_000,
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
+  };
+
+  const openOpeningBalanceEditor = () => {
+    setOpeningBalanceDraft(String(account?.openingBalance ?? 0));
+    setOpeningBalanceDate(account?.openingBalanceDate ?? new Date().toISOString().slice(0, 10));
+    setEditingOpeningBalance(true);
+  };
+
+  const handleOpeningBalanceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = Number(openingBalanceDraft);
+    if (!Number.isInteger(value) || value < 0) {
+      toast({
+        variant: "destructive",
+        title: "Enter a whole KES amount",
+        description: "The opening balance must be zero or more whole shillings.",
+      });
+      return;
+    }
+    try {
+      if (!selectedAccountId) throw new Error("No bank account selected");
+      await updateOpeningBalance.mutateAsync({
+        data: { openingBalance: value, openingBalanceDate, accountId: selectedAccountId },
+      });
+      setEditingOpeningBalance(false);
+      toast({
+        title: "Opening balance saved",
+        description: "The current balance now includes this starting amount.",
+      });
+      invalidate();
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Could not save opening balance",
+        description: "Please try again.",
+      });
+    }
+  };
+
+  const handleAccountSave = async () => {
+    const name = accountNameDraft.trim();
+    const accountNumber = accountNumberDraft.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Account name required", description: "Enter a name for this bank account." });
+      return;
+    }
+    try {
+      const saved = editingAccountId
+        ? await updateAccount.mutateAsync({ id: editingAccountId, data: { name, accountNumber: accountNumber || null } })
+        : await createAccount.mutateAsync({ data: { name, accountNumber: accountNumber || undefined } });
+      setSelectedAccountId(saved.id);
+      setAccountNameDraft("");
+      setAccountNumberDraft("");
+      setEditingAccountId(saved.id);
+      setAddingAccount(false);
+      invalidate();
+      toast({ title: editingAccountId ? "Account updated" : "Account added" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not save account",
+        description: error instanceof Error ? error.message : "Check the name and try again.",
+      });
+    }
+  };
+
+  const handleAccountDelete = async (id: number) => {
+    if (!confirm(`Remove this bank account from "${budgetName}"? Accounts with transaction history cannot be removed.`)) return;
+    try {
+      await deleteAccount.mutateAsync({ id });
+      if (selectedAccountId === id) setSelectedAccountId(null);
+      invalidate();
+      toast({ title: "Account removed" });
+    } catch {
+      toast({ variant: "destructive", title: "Could not remove account", description: "Accounts with transaction history must be kept." });
+    }
+  };
+
+  const startAddingAccount = () => {
+    setAddingAccount(true);
+    setEditingAccountId(null);
+    setAccountNameDraft("");
+    setAccountNumberDraft("");
+  };
+
+  const startEditingSelectedAccount = () => {
+    if (!selectedBankAccount) return;
+    setAddingAccount(false);
+    setEditingAccountId(selectedBankAccount.id);
+    setAccountNameDraft(selectedBankAccount.name);
+    setAccountNumberDraft(selectedBankAccount.accountNumber ?? "");
+  };
+
+  const handleCreateCategory = async () => {
+    if (!canManageAccount) {
+      toast({
+        variant: "destructive",
+        title: "Admin access required",
+        description: "Ask a group owner or admin to add a shared category.",
+      });
+      return;
+    }
+    const name = newCategoryName.trim();
+    if (!name) {
+      toast({
+        variant: "destructive",
+        title: "Category name required",
+        description: "Enter a category name before adding it.",
       });
       return;
     }

@@ -1,4 +1,553 @@
-ustomFetch('/api/group-invitations', {
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Alert,
+  Platform,
+  Image,
+  TextInput,
+  ActivityIndicator,
+  Modal,
+  Share,
+  ScrollView,
+  KeyboardAvoidingView,
+} from 'react-native';
+import * as Linking from 'expo-linking';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  customFetch,
+  requestPhotoUpload,
+  useCreateSharedGroup,
+  useCreateGroupInviteLink,
+  useGetGroup,
+  useGetWorkspaces,
+  useSelectWorkspace,
+  useUpdateGroup,
+  useGetBudgetCategoryRecommendations,
+  useApplyBudgetCategoryRecommendations,
+  getGetGroupQueryKey,
+  getGetWorkspacesQueryKey,
+  getGetBudgetCategoriesQueryKey,
+  getGetBudgetCategoryRecommendationsQueryKey,
+  type WorkspaceNameStyle,
+} from '@workspace/api-client-react';
+import { useColors } from '@/hooks/useColors';
+import { PageScrollView } from '@/components/PageScrollReset';
+import { useAuth } from '@/lib/auth';
+import { getDisplayName } from '@/utils/avatarHelper';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
+import {
+  activateMobileWorkspace,
+  leaveMobileSharedWorkspace,
+  switchMobileWorkspace,
+} from '@/lib/workspace';
+import { WORKSPACE_NAME_STYLES, workspaceBudgetName, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
+import { SHARED_GROUP_KINDS, sharedGroupKindDetails, type SharedGroupKind } from '@/lib/groupKinds';
+import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from '@/lib/memberLimit';
+
+type GroupMember = {
+  userId: string;
+  userName: string | null;
+  role: 'owner' | 'admin' | 'member';
+};
+type GroupInvitation = {
+  id: number;
+  email: string;
+  role: 'admin' | 'member';
+  expiresAt: string;
+  status: 'pending' | 'accepted' | 'cancelled' | 'expired';
+};
+type InviteContact = { id: number; name: string; email: string; role: 'admin' | 'member' };
+const SHARED_BUDGET_ICONS = [
+  { value: 'users', label: 'People' },
+  { value: 'home', label: 'Home' },
+  { value: 'heart', label: 'Care' },
+  { value: 'briefcase', label: 'Work' },
+  { value: 'award', label: 'Goals' },
+  { value: 'star', label: 'Star' },
+] as const;
+const SHARED_BUDGET_ACCENTS = [
+  '#011C4E', '#003383', '#087F8C', '#08B7B0', '#209E45', '#C98C00',
+  '#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669',
+] as const;
+type SharedBudgetIcon = (typeof SHARED_BUDGET_ICONS)[number]['value'];
+type SharedBudgetAccent = (typeof SHARED_BUDGET_ACCENTS)[number];
+const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
+
+function getSharedBudgetIcon(icon?: string): keyof typeof Feather.glyphMap {
+  return SHARED_BUDGET_ICONS.some((option) => option.value === icon)
+    ? icon as SharedBudgetIcon
+    : 'users';
+}
+
+function workspaceLabel(workspace: { isPrivate: boolean; name: string }): string {
+  if (workspace.isPrivate) return 'Personal budget';
+  const name = workspace.name.trim();
+  return name.toLocaleLowerCase('en-US') === 'shared budget' || !name ? 'Group' : name;
+}
+
+export default function SettingsScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [inviteEmails, setInviteEmails] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<'admin' | 'member'>('member');
+  const [managingMembers, setManagingMembers] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupSlogan, setGroupSlogan] = useState('');
+  const [groupEmoji, setGroupEmoji] = useState('');
+  const [groupNameStyle, setGroupNameStyle] = useState<WorkspaceNameStyle>('plain');
+  const [groupIcon, setGroupIcon] = useState<SharedBudgetIcon>('users');
+  const [groupAccentColor, setGroupAccentColor] = useState<SharedBudgetAccent>('#003383');
+  const [savingGroupName, setSavingGroupName] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupKind, setNewGroupKind] = useState<SharedGroupKind | null>(null);
+  const [editingGroupKind, setEditingGroupKind] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [savingDisplayName, setSavingDisplayName] = useState(false);
+  const [editingDisplayName, setEditingDisplayName] = useState(false);
+  const [editingBudgetName, setEditingBudgetName] = useState(false);
+  const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
+  const [uploadingGroupPhoto, setUploadingGroupPhoto] = useState(false);
+  const [sharingInvite, setSharingInvite] = useState(false);
+  const displayNameInputRef = useRef<TextInput>(null);
+  const budgetNameInputRef = useRef<TextInput>(null);
+
+  const topPad = Platform.OS === 'web' ? 67 : insets.top;
+
+  const { data: members = [] } = useQuery<GroupMember[]>({
+    queryKey: ['members'],
+    queryFn: () => customFetch<GroupMember[]>('/api/members'),
+    enabled: !!user?.id,
+  });
+  const { data: group } = useGetGroup();
+  const { data: workspaces = [] } = useGetWorkspaces();
+  const selectWorkspace = useSelectWorkspace();
+  const createSharedGroup = useCreateSharedGroup();
+  const createInviteLink = useCreateGroupInviteLink();
+  const updateGroup = useUpdateGroup();
+  const recommendations = useGetBudgetCategoryRecommendations({
+    query: {
+      queryKey: getGetBudgetCategoryRecommendationsQueryKey(),
+      enabled: !!group && !group.isPrivate,
+    },
+  });
+  const applyRecommendations = useApplyBudgetCategoryRecommendations();
+  useEffect(() => {
+    if (group?.name) setGroupName(group.name);
+    if (group?.icon) setGroupIcon(group.icon as SharedBudgetIcon);
+    if (group?.accentColor) setGroupAccentColor(group.accentColor as SharedBudgetAccent);
+    setGroupSlogan(group?.slogan ?? '');
+    setGroupEmoji(group?.emoji ?? '');
+    setGroupNameStyle(group?.nameStyle ?? 'plain');
+  }, [group?.name, group?.icon, group?.accentColor, group?.slogan, group?.emoji, group?.nameStyle]);
+  useEffect(() => {
+    setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
+  }, [user?.firstName, user?.lastName]);
+  useFocusEffect(
+    React.useCallback(() => () => {
+      setEditingDisplayName(false);
+      setEditingBudgetName(false);
+      setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
+      setGroupName(group?.name ?? '');
+      setGroupSlogan(group?.slogan ?? '');
+      setGroupEmoji(group?.emoji ?? '');
+      setGroupNameStyle(group?.nameStyle ?? 'plain');
+    }, [group?.name, group?.slogan, group?.emoji, group?.nameStyle, user?.firstName, user?.lastName]),
+  );
+  const canManageShared = !group?.isPrivate && members.some(
+    (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
+  );
+  const canManageWorkspace = members.some(
+    (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
+  );
+  const myMembership = members.find((member) => member.userId === user?.id);
+  const canLeaveGroup = Boolean(myMembership && myMembership.role !== 'owner');
+  const { data: invitations = [] } = useQuery<GroupInvitation[]>({
+    queryKey: ['group-invitations'],
+    queryFn: () => customFetch<GroupInvitation[]>('/api/group-invitations'),
+    enabled: !!user?.id && canManageShared,
+  });
+  const { data: inviteContacts = [] } = useQuery<InviteContact[]>({
+    queryKey: ['group-invitation-contacts'],
+    queryFn: () => customFetch<InviteContact[]>('/api/group-invitation-contacts'),
+    enabled: !!user?.id && canManageShared,
+  });
+  const handleSaveGroupName = async (closeBudgetNameEditor = false) => {
+    if (!groupName.trim()) {
+      Alert.alert('Group name required', 'Enter a group name before saving.');
+      return;
+    }
+    setSavingGroupName(true);
+    try {
+      await updateGroup.mutateAsync({
+        data: {
+          name: groupName.trim(),
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          slogan: groupSlogan.trim() || null,
+        },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+      ]);
+       Alert.alert(
+         group?.isPrivate ? 'Budget updated' : 'Shared budget updated',
+         group?.isPrivate ? 'Your budget name now appears across Jamvi.' : 'Its name and identity now appear across Jamvi.',
+       );
+      if (closeBudgetNameEditor) setEditingBudgetName(false);
+    } catch (error) {
+       Alert.alert(
+         group?.isPrivate ? 'Could not update Personal budget' : 'Could not update Shared budget',
+         error instanceof Error ? error.message : 'Use between 2 and 60 characters.',
+       );
+    } finally {
+      setSavingGroupName(false);
+    }
+  };
+
+  const handleSaveDisplayName = async () => {
+    const name = displayNameInput.trim();
+    if (!name) {
+      Alert.alert('Name required', 'Enter the name you would like people to see.');
+      return;
+    }
+    setSavingDisplayName(true);
+    try {
+      await saveDisplayName(name);
+      await queryClient.invalidateQueries();
+      Alert.alert('Name updated');
+      setEditingDisplayName(false);
+    } catch (error) {
+      Alert.alert(
+        'Could not update your name',
+        error instanceof Error ? error.message : 'Use up to 40 printable characters without line breaks.',
+      );
+    } finally {
+      setSavingDisplayName(false);
+    }
+  };
+
+  const cancelDisplayNameEdit = () => {
+    setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
+    setEditingDisplayName(false);
+  };
+  const cancelBudgetNameEdit = () => {
+    setGroupName(group?.name ?? '');
+    setGroupSlogan(group?.slogan ?? '');
+    setGroupEmoji(group?.emoji ?? '');
+    setGroupNameStyle(group?.nameStyle ?? 'plain');
+    setEditingBudgetName(false);
+  };
+  const startDisplayNameEdit = () => {
+    setDisplayNameInput([user?.firstName, user?.lastName].filter(Boolean).join(' '));
+    setEditingDisplayName(true);
+    requestAnimationFrame(() => displayNameInputRef.current?.focus());
+  };
+  const startBudgetNameEdit = () => {
+    setGroupName(group?.name ?? '');
+    setGroupSlogan(group?.slogan ?? '');
+    setGroupEmoji(group?.emoji ?? '');
+    setGroupNameStyle(group?.nameStyle ?? 'plain');
+    setEditingBudgetName(true);
+    requestAnimationFrame(() => budgetNameInputRef.current?.focus());
+  };
+
+  const handleWhatsAppInvite = async () => {
+    if (!group) return;
+    setSharingInvite(true);
+    try {
+      const created = await createInviteLink.mutateAsync();
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      if (!domain) {
+        Alert.alert('Invite link unavailable', 'Use the email invitation below or open Jamvi on the web to share a WhatsApp link.');
+        return;
+      }
+      const inviteUrl = `https://${domain}/invite/${encodeURIComponent(created.token)}`;
+      const message = `Join ${group.name || 'my Jamvi Shared budget'} using this private invite link: ${inviteUrl}`;
+      try {
+        await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(message)}`);
+      } catch {
+        await Share.share({ title: 'Share Jamvi invitation', message });
+      }
+    } catch (error) {
+      Alert.alert(
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.title : 'Could not create invite link',
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.message : error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setSharingInvite(false);
+    }
+  };
+
+  const selectAndUploadPhoto = async (): Promise<string | null> => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Photo permission needed', 'Allow access to your photo library to choose a picture.');
+      return null;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      // Photos are only used as compact workspace/profile avatars. Re-encoding
+      // the square crop avoids slow uploads from modern phone cameras.
+      quality: 0.65,
+      exif: false,
+    });
+    if (result.canceled || !result.assets[0]) return null;
+
+    const asset = result.assets[0];
+    const contentType = asset.mimeType ?? (asset.uri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) {
+      Alert.alert('Choose a different photo', 'Use a JPG, PNG, or WebP image.');
+      return null;
+    }
+    const localPhoto = await fetch(asset.uri);
+    const photoBlob = await localPhoto.blob();
+    if (photoBlob.size < 1 || photoBlob.size > MAX_PHOTO_BYTES) {
+      Alert.alert('Choose a smaller photo', 'Use an image smaller than 15 MB.');
+      return null;
+    }
+    const upload = await requestPhotoUpload({
+      contentType: contentType as 'image/jpeg' | 'image/png' | 'image/webp',
+      size: photoBlob.size,
+    });
+    const uploaded =
+      upload.uploadMethod === 'POST'
+        ? await (() => {
+            const body = new FormData();
+            for (const [key, value] of Object.entries(upload.uploadFields ?? {})) {
+              body.append(key, value);
+            }
+            body.append('file', photoBlob);
+            return fetch(upload.uploadUrl, { method: 'POST', body });
+          })()
+        : await fetch(upload.uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': contentType },
+            body: photoBlob,
+          });
+    if (!uploaded.ok) throw new Error('Could not upload your photo. Please try again.');
+    return upload.objectPath;
+  };
+
+  const handlePickProfilePhoto = async () => {
+    setUploadingProfilePhoto(true);
+    try {
+      const photoPath = await selectAndUploadPhoto();
+      if (!photoPath) return;
+      await saveProfilePhoto(photoPath);
+      Alert.alert('Profile photo updated');
+    } catch (error) {
+      Alert.alert('Could not update profile photo', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setUploadingProfilePhoto(false);
+    }
+  };
+
+  const handlePickGroupPhoto = async () => {
+    if (!group) return;
+    setUploadingGroupPhoto(true);
+    try {
+      const photoPath = await selectAndUploadPhoto();
+      if (!photoPath) return;
+      await updateGroup.mutateAsync({
+        data: {
+          name: groupName.trim() || group.name,
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          slogan: groupSlogan.trim() || null,
+          photoPath,
+        },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+      ]);
+       Alert.alert(group.isPrivate ? 'Personal budget photo updated' : 'Shared budget photo updated');
+    } catch (error) {
+      Alert.alert(
+        group.isPrivate ? 'Could not update Personal budget photo' : 'Could not update Shared budget photo',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setUploadingGroupPhoto(false);
+    }
+  };
+
+  const handleRemoveGroupPhoto = async () => {
+    if (!group) return;
+    setUploadingGroupPhoto(true);
+    try {
+      await updateGroup.mutateAsync({
+        data: {
+          name: groupName.trim() || group.name,
+          emoji: groupEmoji.trim() || null,
+          nameStyle: groupNameStyle,
+          icon: groupIcon,
+          accentColor: groupAccentColor,
+          photoPath: null,
+        },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+      ]);
+       Alert.alert(group.isPrivate ? 'Personal budget photo removed' : 'Shared budget photo removed');
+    } catch (error) {
+      Alert.alert(
+        group.isPrivate ? 'Could not remove Personal budget photo' : 'Could not remove Shared budget photo',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setUploadingGroupPhoto(false);
+    }
+  };
+
+  const refreshMembers = () => queryClient.invalidateQueries({ queryKey: ['members'] });
+  const performWorkspaceSwitch = async (groupId: number) => {
+    try {
+      await switchMobileWorkspace({
+        groupId,
+        select: (selectedGroupId) => selectWorkspace.mutateAsync({ data: { groupId: selectedGroupId } }),
+        storage: AsyncStorage,
+        resetQueries: () => queryClient.resetQueries(),
+      });
+    } catch (error) {
+      Alert.alert('Could not switch budget', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const handleSelectWorkspace = (groupId: number) => {
+    if (groupId === group?.id || selectWorkspace.isPending) return;
+    const destination = workspaces.find((workspace) => workspace.id === groupId);
+    if (!destination) return;
+
+    Alert.alert(
+      'Switch budget?',
+      `You are about to open ${workspaceLabel(destination)}. Your balances, expenses, goals, bank activity, and reports will refresh for that budget.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch budget',
+          onPress: () => void performWorkspaceSwitch(destination.id),
+        },
+      ],
+    );
+  };
+  const handleCreateSharedGroup = async () => {
+    const name = newGroupName.trim();
+    if (name.length < 2) {
+      Alert.alert('Group name required', 'Enter at least two characters before creating a group.');
+      return;
+    }
+    if (!newGroupKind) {
+      Alert.alert('Choose a budget type', 'Select the kind of Shared budget you are creating.');
+      return;
+    }
+    try {
+      const workspace = await createSharedGroup.mutateAsync({ data: { name, kind: newGroupKind } });
+      await activateMobileWorkspace({
+        groupId: workspace.id,
+        storage: AsyncStorage,
+        resetQueries: () => queryClient.resetQueries(),
+      });
+      setNewGroupName('');
+      setNewGroupKind(null);
+      setCreateGroupOpen(false);
+       Alert.alert('Shared budget created', 'Your budget records stayed private and separate.');
+    } catch (error) {
+      Alert.alert('Could not create group', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const handleSaveGroupKind = async () => {
+    if (!newGroupKind) return;
+    try {
+      await updateGroup.mutateAsync({ data: {
+        name: group?.name ?? groupName,
+        kind: newGroupKind,
+      } });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
+      ]);
+      setEditingGroupKind(false);
+    } catch (error) {
+      Alert.alert('Could not update budget type', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const handleApplyRecommendations = async () => {
+    try {
+      await applyRecommendations.mutateAsync({ data: { confirm: true } });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
+      ]);
+      Alert.alert('Recommended categories added', 'Only categories that were missing were added.');
+    } catch (error) {
+      Alert.alert('Could not add recommended categories', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const handleInvite = async () => {
+    const emails = [...new Set(inviteEmails.split(/[\s,;]+/).map((email) => email.trim().toLowerCase()).filter(Boolean))];
+    if (emails.length === 0) {
+      Alert.alert('Email addresses required', 'Enter one or more email addresses before sending invitations.');
+      return;
+    }
+    setManagingMembers(true);
+    try {
+      const result = await customFetch<{ sent: GroupInvitation[]; failed: { email: string; error: string }[] }>('/api/group-invitations/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emails,
+          role: newMemberRole,
+        }),
+      });
+      setInviteEmails('');
+      setNewMemberRole('member');
+      queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['group-invitation-contacts'] });
+      if (result.sent.length === 0) {
+        throw new Error(result.failed[0]?.error ?? 'No invitations were sent.');
+      }
+      const failureNote = result.failed.length > 0
+        ? ` ${result.failed.length} could not be sent: ${result.failed.map((item) => `${item.email} (${item.error})`).join(', ')}`
+        : '';
+      const limitFailure = result.failed.find((item) => isMemberLimitError(new Error(item.error)));
+      Alert.alert(
+        limitFailure ? MEMBER_LIMIT_PROMPT.title : result.sent.length === 1 ? 'Invitation sent' : `${result.sent.length} invitations sent`,
+        limitFailure ? `${MEMBER_LIMIT_PROMPT.message}${result.sent.length > 0 ? ' Some other invitations were sent successfully.' : ''}` : `${result.sent.map((item) => item.email).join(', ')} can sign in and accept.${failureNote}`,
+      );
+    } catch (error) {
+      Alert.alert(
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.title : 'Could not send invitation',
+        isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.message : error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setManagingMembers(false);
+    }
+  };
+  const handleQuickInvite = async (contact: InviteContact) => {
+    setManagingMembers(true);
+    try {
+      await customFetch('/api/group-invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: contact.email, role: contact.role, contactName: contact.name, saveContact: false }),
