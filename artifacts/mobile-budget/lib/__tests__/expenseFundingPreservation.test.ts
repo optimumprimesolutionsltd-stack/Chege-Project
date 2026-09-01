@@ -5,6 +5,7 @@ import {
   buildSinglePayerFundingReplacement,
   getExpenseFundingControlState,
   getFundingRemainder,
+  isFundingFulfilled,
   getNewExpenseCategoryMode,
   getProjectedCategoryBalance,
   preserveExpenseSplitsForAmount,
@@ -76,6 +77,13 @@ describe('expense funding preservation', () => {
     expect(getFundingRemainder(1000, 1000)).toBe(0);
     expect(getFundingRemainder(1000, 1200)).toBe(0);
     expect(getFundingRemainder(1000, 0)).toBe(0);
+  });
+
+  it('marks funding fulfilled once the entered portions reach the expense total', () => {
+    expect(isFundingFulfilled(1000, 999)).toBe(false);
+    expect(isFundingFulfilled(1000, 1000)).toBe(true);
+    expect(isFundingFulfilled(1000, 1200)).toBe(true);
+    expect(isFundingFulfilled(0, 1000)).toBe(false);
   });
 
   it('fills a newly selected second source from the existing primary amount', () => {

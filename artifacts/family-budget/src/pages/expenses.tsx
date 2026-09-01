@@ -65,6 +65,7 @@ import {
   getExpenseFundingControlState,
   getExpenseFundingStatus,
   getFundingRemainder,
+  isFundingFulfilled,
   getNewExpenseCategoryMode,
   getProjectedCategoryBalance,
   hasMissingPersonalFundingSource,
@@ -1277,6 +1278,7 @@ export default function Expenses() {
       hasDirectIncomeSource,
       formatAmount: formatKes,
     });
+    const fundingFulfilled = isFundingFulfilled(expenseTotal, fundingTotal);
     const originalExpense = mode === "edit"
       ? expenses?.find((expense) => expense.id === editingId)
       : undefined;
@@ -2138,12 +2140,21 @@ export default function Expenses() {
                   Historical source: {form.otherIncomeSourceLabel || "choose a saved source"}
                 </option>
               )}
-               {(mode === "add" ? addFormSources : editFormSources)?.map(src => (
-                 <option key={src.id} value={src.id} disabled={mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.includes(src.id)}>
-                    {src.name}{mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.includes(src.id) ? " — added" : ""}
+                {(mode === "add" ? addFormSources : editFormSources)?.map(src => {
+                  const sourceAlreadyAdded = mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.includes(src.id);
+                  const sourceDisabled = sourceAlreadyAdded || (fundingFulfilled && !sourceAlreadyAdded);
+                  return (
+                  <option key={src.id} value={src.id} disabled={sourceDisabled}>
+                     {src.name}{sourceAlreadyAdded ? " — added" : fundingFulfilled ? " — fully funded" : ""}
                  </option>
-              ))}
+                  );
+                })}
             </select>
+              {fundingFulfilled && mode === "add" && form.payerIds.length === 1 && (
+                <p className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-300" role="status">
+                  Fully funded. Other income sources are unavailable until you lower an existing portion.
+                </p>
+              )}
               {mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.length > 0 && (
                 <div className="space-y-2" data-testid="expense-direct-funding-portions">
                   <p className="text-xs leading-relaxed text-muted-foreground">

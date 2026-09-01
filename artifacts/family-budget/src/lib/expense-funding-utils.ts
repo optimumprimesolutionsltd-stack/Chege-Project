@@ -41,6 +41,10 @@ export function getFundingRemainder(total: number, primaryAmount: number): numbe
   return Math.max(0, total - primaryAmount);
 }
 
+export function isFundingFulfilled(total: number, fundingTotal: number): boolean {
+  return Number.isFinite(total) && total > 0 && Number.isFinite(fundingTotal) && fundingTotal >= total;
+}
+
 export function addFundingSourceWithRemainder({
   total,
   selectedSourceIds,

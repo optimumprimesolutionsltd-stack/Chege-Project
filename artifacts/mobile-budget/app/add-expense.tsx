@@ -52,6 +52,7 @@ import {
   buildSinglePayerFundingReplacement,
   getExpenseFundingControlState,
   getFundingRemainder,
+  isFundingFulfilled,
   getNewExpenseCategoryMode,
   getProjectedCategoryBalance,
   hydrateCategoryAllocations,
@@ -1094,6 +1095,12 @@ export default function AddExpenseSheet() {
     .filter((name) => name.trim().toLocaleLowerCase() !== 'other');
   const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
   const displayedCategoryAllocations = categoryAllocations;
+  const fundingExpenseTotal = Number(amount.replace(/,/g, '')) || 0;
+  const fundingBankAmount = paidFromBank ? (parseFloat(payerAmounts.__joint_bank__ || '0') || 0) : 0;
+  const fundingDirectAmount = selectedSources.length > 0
+    ? selectedSources.reduce((sum, key) => sum + (parseFloat(splitAmounts[key] || '0') || 0), 0)
+    : payerIds.reduce((sum, payerId) => sum + (parseFloat(payerAmounts[payerId] || '0') || 0), 0);
+  const fundingFulfilled = isFundingFulfilled(fundingExpenseTotal, fundingBankAmount + fundingDirectAmount);
 
   if (isEditMode && editExpensesQuery.isLoading) {
     return (
@@ -2069,8 +2076,10 @@ export default function AddExpenseSheet() {
                   const color = PALETTE[idx % PALETTE.length];
                   const key = incomeSourceKey(src.id);
                   const selected = selectedSources.includes(key);
+                  const sourceDisabled = !selected && fundingFulfilled;
                   return (
-                    <Pressable key={src.id} onPress={() => {
+                    <Pressable key={src.id} disabled={sourceDisabled} accessibilityState={{ selected, disabled: sourceDisabled }} testID={`income-source-chip-${src.id}`} onPress={() => {
+                       if (sourceDisabled) return;
                       if (isEditMode) setFundingDirty(true);
                       setSelectedSources((previous) => {
                         if (previous.includes(key)) {
@@ -2092,7 +2101,7 @@ export default function AddExpenseSheet() {
                         return selection.selectedSourceIds;
                       });
                     }}
-                      style={[styles.sourceChip, { backgroundColor: selected ? color + '22' : colors.background, borderColor: selected ? color : colors.border, borderRadius: colors.radius }]}>
+                      style={[styles.sourceChip, { backgroundColor: selected ? color + '22' : colors.background, borderColor: selected ? color : colors.border, borderRadius: colors.radius, opacity: sourceDisabled ? 0.42 : 1 }]}>
                       <Feather name="briefcase" size={13} color={selected ? color : colors.mutedForeground} />
                       <Text style={[styles.sourceChipText, { color: selected ? color : colors.foreground }]}>{src.name}</Text>
                       {selected && <Feather name="check" size={11} color={color} />}
@@ -2100,6 +2109,11 @@ export default function AddExpenseSheet() {
                   );
                 })}
               </View>
+            )}
+            {fundingFulfilled && (
+              <Text style={[styles.hintText, { color: colors.primary, marginTop: 8 }]} accessibilityLiveRegion="polite">
+                Fully funded. Other income sources are unavailable until you lower an existing portion.
+              </Text>
             )}
             <View style={styles.addSourceRow}>
               {newSourcePayerId === paidById ? (
