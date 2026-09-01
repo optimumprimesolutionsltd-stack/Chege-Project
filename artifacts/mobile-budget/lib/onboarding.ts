@@ -53,6 +53,20 @@ export const COMMON_INCOME_STREAMS = [
   "Other income",
 ] as const;
 
+export function normalizeIncomeStreamName(name: string): string {
+  return name.trim().toLocaleLowerCase("en-US");
+}
+
+export function dedupeIncomeStreamNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  return names.filter((name) => {
+    const normalized = normalizeIncomeStreamName(name);
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
 export const PURPOSE_OPTIONS = {
   personal: [
     ["student", "A student", "Balance school life, living costs, and personal goals."],
@@ -109,7 +123,7 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     selectedCategories: raw.selectedCategories.filter((item): item is string => typeof item === "string"),
     customCategories: raw.customCategories.filter((item): item is string => typeof item === "string"),
     categoryBudgets: raw.categoryBudgets && typeof raw.categoryBudgets === "object" ? raw.categoryBudgets as Record<string, string> : {},
-    selectedIncomeStreams: raw.selectedIncomeStreams.filter((item): item is string => typeof item === "string"),
+    selectedIncomeStreams: dedupeIncomeStreamNames(raw.selectedIncomeStreams.filter((item): item is string => typeof item === "string")),
     incomeAmounts: raw.incomeAmounts && typeof raw.incomeAmounts === "object" ? raw.incomeAmounts as Record<string, string> : {},
   };
 }

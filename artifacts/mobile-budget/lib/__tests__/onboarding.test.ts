@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   categoryPriority,
+  dedupeIncomeStreamNames,
   normalizeOnboardingDraft,
+  normalizeIncomeStreamName,
   onboardingDraftStorageKey,
   readOnboardingDraft,
   recommendedCategoriesForPurpose,
@@ -54,5 +56,18 @@ describe('mobile onboarding', () => {
 
     expect(normalizeOnboardingDraft({ ...draft, selectedCategories: 'Food' })).toBeNull();
     expect(normalizeOnboardingDraft({ ...draft, usageMode: 'returning' })).toBeNull();
+  });
+
+  it('deduplicates restored income streams regardless of case or surrounding whitespace', () => {
+    expect(normalizeIncomeStreamName(' Salary Or Wages ')).toBe('salary or wages');
+    expect(dedupeIncomeStreamNames([
+      'Salary or wages',
+      ' salary OR WAGES ',
+      'Freelance work',
+    ])).toEqual(['Salary or wages', 'Freelance work']);
+    expect(normalizeOnboardingDraft({
+      ...draft,
+      selectedIncomeStreams: ['Salary', ' salary '],
+    })?.selectedIncomeStreams).toEqual(['Salary']);
   });
 });

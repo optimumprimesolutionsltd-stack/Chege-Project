@@ -42,6 +42,8 @@ import {
   ONBOARDING_CATEGORY_TIERS,
   PURPOSE_OPTIONS,
   clearOnboardingDraft,
+  dedupeIncomeStreamNames,
+  normalizeIncomeStreamName,
   readOnboardingDraft,
   recommendedCategoriesForPurpose,
   saveOnboardingDraft,
@@ -477,8 +479,10 @@ function MobileOnboardingFlow({
       : [...draft.selectedCategories, category]);
   };
   const toggleIncome = (income: string) => {
-    setDraftValue('selectedIncomeStreams', draft.selectedIncomeStreams.includes(income)
-      ? draft.selectedIncomeStreams.filter((item) => item !== income)
+    const normalized = normalizeIncomeStreamName(income);
+    setError(null);
+    setDraftValue('selectedIncomeStreams', draft.selectedIncomeStreams.some((item) => normalizeIncomeStreamName(item) === normalized)
+      ? draft.selectedIncomeStreams.filter((item) => normalizeIncomeStreamName(item) !== normalized)
       : [...draft.selectedIncomeStreams, income]);
   };
   const addCustomCategory = () => {
@@ -493,8 +497,19 @@ function MobileOnboardingFlow({
   };
   const addCustomIncome = () => {
     const value = customIncomeStream.trim();
-    if (!value || draft.selectedIncomeStreams.includes(value)) return;
-    updateDraft((current) => ({ ...current, selectedIncomeStreams: [...current.selectedIncomeStreams, value] }));
+    if (!value) return;
+    const normalized = normalizeIncomeStreamName(value);
+    const existing = draft.selectedIncomeStreams.find((item) => normalizeIncomeStreamName(item) === normalized);
+    if (existing) {
+      setError(`${existing} is already selected.`);
+      return;
+    }
+    const preset = COMMON_INCOME_STREAMS.find((item) => normalizeIncomeStreamName(item) === normalized);
+    updateDraft((current) => ({
+      ...current,
+      selectedIncomeStreams: dedupeIncomeStreamNames([...current.selectedIncomeStreams, preset ?? value]),
+    }));
+    setError(preset ? `${preset} was already listed, so Jamvi selected it for you.` : null);
     setCustomIncomeStream('');
   };
   const firstName = user?.firstName?.trim();

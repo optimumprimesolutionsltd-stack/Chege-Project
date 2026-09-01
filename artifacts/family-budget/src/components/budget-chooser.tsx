@@ -31,6 +31,20 @@ const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; description:
 
 const ALL_ONBOARDING_CATEGORIES = ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories);
 const COMMON_INCOME_STREAMS = ["Salary or wages", "Business or side hustle", "Freelance or contract work", "Farming or livestock", "Rental income", "Family support or remittances", "Pension or benefits", "Other income"] as const;
+
+export function normalizeIncomeStreamName(name: string): string {
+  return name.trim().toLocaleLowerCase("en-US");
+}
+
+export function dedupeIncomeStreamNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  return names.filter((name) => {
+    const normalized = normalizeIncomeStreamName(name);
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
 const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
   student: ["Food & meals", "Accommodation", "Transport", "Tuition & fees", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
   working: ["Food", "Rent", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
@@ -142,6 +156,7 @@ export function BudgetChooser({
   const [selectedIncomeStreams, setSelectedIncomeStreams] = useState<string[]>([]);
   const [incomeAmounts, setIncomeAmounts] = useState<Record<string, string>>({});
   const [customIncomeStream, setCustomIncomeStream] = useState("");
+  const [incomeSelectionError, setIncomeSelectionError] = useState<string | null>(null);
 
   const enterApp = () => {
     if (userId) markBudgetChooserComplete(userId);
@@ -386,10 +401,25 @@ export function BudgetChooser({
     const incomeDescription = isSharedSetup
       ? "Choose the sources you expect members to contribute from. Each person can add their own source later."
       : "Choose the sources you rely on so Jamvi can help you see what is available to plan with.";
-    const toggleIncomeStream = (stream: string) => setSelectedIncomeStreams((current) => current.includes(stream) ? current.filter((item) => item !== stream) : [...current, stream]);
+    const toggleIncomeStream = (stream: string) => {
+      const normalized = normalizeIncomeStreamName(stream);
+      setIncomeSelectionError(null);
+      setSelectedIncomeStreams((current) => current.some((item) => normalizeIncomeStreamName(item) === normalized)
+        ? current.filter((item) => normalizeIncomeStreamName(item) !== normalized)
+        : [...current, stream]);
+    };
     const addCustomIncomeStream = () => {
       const stream = customIncomeStream.trim();
-      if (stream && !selectedIncomeStreams.includes(stream)) setSelectedIncomeStreams((current) => [...current, stream]);
+      if (!stream) return;
+      const normalized = normalizeIncomeStreamName(stream);
+      const existing = selectedIncomeStreams.find((item) => normalizeIncomeStreamName(item) === normalized);
+      if (existing) {
+        setIncomeSelectionError(`${existing} is already selected.`);
+        return;
+      }
+      const preset = COMMON_INCOME_STREAMS.find((item) => normalizeIncomeStreamName(item) === normalized);
+      setSelectedIncomeStreams((current) => dedupeIncomeStreamNames([...current, preset ?? stream]));
+      setIncomeSelectionError(preset ? `${preset} was already listed, so Jamvi selected it for you.` : null);
       setCustomIncomeStream("");
     };
     const finishOnboarding = async () => {
@@ -422,7 +452,8 @@ export function BudgetChooser({
                 })}
               </div>
               {selectedIncomeStreams.length > 0 ? <div className="mt-5 space-y-2"><p className="text-sm font-semibold text-foreground">Expected monthly amount (optional)</p>{selectedIncomeStreams.map((stream) => <div key={stream} className="flex items-center gap-3 rounded-xl border border-border bg-background p-3"><span className="min-w-0 flex-1 truncate text-sm text-foreground">{stream}</span><div className="flex w-36 items-center gap-2"><span className="text-sm text-muted-foreground">KES</span><Input aria-label={`Expected monthly amount for ${stream}`} inputMode="decimal" type="text" placeholder="0" value={incomeAmounts[stream] ?? ""} onChange={(event) => setIncomeAmounts((current) => ({ ...current, [stream]: event.target.value.replace(/[^0-9.]/g, "") }))} className="h-10 text-right" /></div></div>)}</div> : null}
-              <div className="mt-6 flex flex-col gap-2 sm:flex-row"><Input aria-label="Custom income stream" placeholder="Add another income stream" value={customIncomeStream} onChange={(event) => setCustomIncomeStream(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomIncomeStream(); } }} /><Button type="button" variant="outline" className="rounded-xl" onClick={addCustomIncomeStream}>Add source</Button></div>
+              <div className="mt-6 flex flex-col gap-2 sm:flex-row"><Input aria-label="Custom income stream" placeholder="Add another income stream" value={customIncomeStream} onChange={(event) => { setCustomIncomeStream(event.target.value); setIncomeSelectionError(null); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomIncomeStream(); } }} /><Button type="button" variant="outline" className="rounded-xl" onClick={addCustomIncomeStream}>Add source</Button></div>
+              {incomeSelectionError ? <p className="mt-2 text-sm text-amber-700" role="status">{incomeSelectionError}</p> : null}
               <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Income streams are private to you in a Personal budget. In a Shared budget, each member can record their own source.</p>
               <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{selectedIncomeStreams.length} income {selectedIncomeStreams.length === 1 ? "stream" : "streams"} selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={finishOnboarding}>Continue to my budgets <ChevronRight className="ml-2 h-4 w-4" /></Button></div>
             </div>

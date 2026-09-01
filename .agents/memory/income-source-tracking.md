@@ -51,6 +51,12 @@ Pattern used everywhere (web expenses, web bank, mobile add-expense, mobile bank
 2. Show source buttons; "Joint bank account" = incomeSourceId null, personal source = incomeSourceId = src.id
 3. Pass `...(incomeSourceId ? { incomeSourceId } : {})` in the mutation data with type cast `as Parameters<...>[0]['data']`
 
+Income-source names are unique per member within a workspace after trimming whitespace and ignoring case. Existing duplicate database rows may still be referenced by historical funding records, so listings collapse them to one canonical option instead of deleting or rewriting those IDs; create and rename operations reject a normalized duplicate.
+
+**Why:** Older users can have duplicate rows from previous setup paths. Deleting those rows could break historical attribution, while displaying every row makes the same income stream appear repeatedly in funding dropdowns.
+
+**How to apply:** Normalize names at API creation/rename boundaries and in web/mobile onboarding. Deduplicate restored onboarding drafts and list responses, while preserving stored rows and historical foreign-key references.
+
 ## Generated types
 
 Added to `lib/api-client-react/src/generated/api.schemas.ts`:

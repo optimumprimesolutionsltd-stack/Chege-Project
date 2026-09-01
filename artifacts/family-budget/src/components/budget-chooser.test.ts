@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { budgetChooserCompletionKey, getInitialOnboardingMode, hasCompletedBudgetChooser } from "./budget-chooser";
+import {
+  budgetChooserCompletionKey,
+  dedupeIncomeStreamNames,
+  getInitialOnboardingMode,
+  hasCompletedBudgetChooser,
+  normalizeIncomeStreamName,
+} from "./budget-chooser";
 
 describe("budget chooser completion", () => {
   let values: Map<string, string>;
@@ -45,5 +51,14 @@ describe("budget chooser completion", () => {
   it("sends completed returning users directly to budget selection", () => {
     expect(getInitialOnboardingMode(true)).toBe("returning");
     expect(getInitialOnboardingMode(false)).toBeNull();
+  });
+
+  it("deduplicates income streams regardless of case or surrounding whitespace", () => {
+    expect(normalizeIncomeStreamName(" Salary Or Wages ")).toBe("salary or wages");
+    expect(dedupeIncomeStreamNames([
+      "Salary or wages",
+      " salary OR WAGES ",
+      "Freelance work",
+    ])).toEqual(["Salary or wages", "Freelance work"]);
   });
 });
