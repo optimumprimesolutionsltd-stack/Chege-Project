@@ -77,7 +77,19 @@ router.post("/groups", async (req, res): Promise<void> => {
     return;
   }
 
-  const group = await db.transaction(async (tx) => {
+  let creationStep = "groups insert";
+  let group: {
+    id: number;
+    name: string;
+    emoji: string | null;
+    nameStyle: string;
+    icon: string;
+    accentColor: string;
+    photoPath: string | null;
+    kind: string;
+  };
+  try {
+    group = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(groupsTable)
       .values({
@@ -85,7 +97,9 @@ router.post("/groups", async (req, res): Promise<void> => {
         emoji: normalizedEmoji(parsed.data.emoji),
         nameStyle: parsed.data.nameStyle,
         kind: parsed.data.kind,
-        defaultMonthlyTarget: parsed.data.defaultMonthlyTarget ?? null,
+        ...(parsed.data.defaultMonthlyTarget !== undefined
+          ? { defaultMonthlyTarget: parsed.data.defaultMonthlyTarget }
+          : {}),
         createdByUserId: req.user!.id,
       })
       .returning({
@@ -100,6 +114,7 @@ router.post("/groups", async (req, res): Promise<void> => {
       });
     if (!created) throw new Error("Could not create group.");
 
+    creationStep = "group membership insert";
     await tx.insert(groupMembershipsTable).values({
       groupId: created.id,
       userId: req.user!.id,
@@ -108,13 +123,22 @@ router.post("/groups", async (req, res): Promise<void> => {
       // The owner is held to the same figure as everyone else.
       monthlyTarget: parsed.data.defaultMonthlyTarget ?? null,
     });
+    creationStep = "default bank account insert";
     await tx.insert(bankAccountsTable).values({
       groupId: created.id,
       name: "Bank account",
       openingBalance: 0,
     });
     return created;
-  });
+    });
+  } catch (error) {
+    req.log.error(
+      { err: error, creationStep, userId: req.user!.id, groupKind: parsed.data.kind },
+      "Could not create Shared group",
+    );
+    res.status(500).json({ error: "Could not create the Shared budget. Please try again." });
+    return;
+  }
 
   const workspace = {
     id: group.id,
