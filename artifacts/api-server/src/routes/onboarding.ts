@@ -6,6 +6,14 @@ import { setActiveWorkspaceCookie } from "../lib/activeGroup";
 
 const router = Router();
 
+function isMissingOnboardingPreferencesRelation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  return candidate.code === "42P01"
+    && typeof candidate.message === "string"
+    && candidate.message.includes("onboarding_preferences");
+}
+
 const onboardingPreferencesSchema = z.object({
   usageMode: z.enum(["personal", "shared", "both"]),
   persona: z.string().trim().min(1).max(40).nullable().optional(),
@@ -24,8 +32,21 @@ const onboardingPreferencesSchema = z.object({
 
 router.get("/onboarding/preferences", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const [preferences] = await db.select().from(onboardingPreferencesTable).where(eq(onboardingPreferencesTable.userId, req.user!.id)).limit(1);
-  res.json(preferences ?? null);
+  try {
+    const [preferences] = await db.select().from(onboardingPreferencesTable).where(eq(onboardingPreferencesTable.userId, req.user!.id)).limit(1);
+    res.json(preferences ?? null);
+  } catch (error) {
+    if (isMissingOnboardingPreferencesRelation(error)) {
+      req.log?.warn({ err: error, migrationRequired: true }, "Onboarding preferences table is not available");
+      // A missing preference is equivalent to an unstarted onboarding flow for
+      // reads. This keeps existing users from being blocked while the pending
+      // migration is applied; writes still return a precise 503 below.
+      res.json(null);
+      return;
+    }
+    req.log?.error({ err: error }, "Could not read onboarding preferences");
+    res.status(503).json({ error: "Onboarding preferences are temporarily unavailable." });
+  }
 });
 
 router.get("/onboarding/duplicate-categories", async (req, res) => {
@@ -46,9 +67,10 @@ router.put("/onboarding/preferences", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const parsed = onboardingPreferencesSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid onboarding preferences.", details: parsed.error.flatten() }); return; }
-  const values = { userId: req.user!.id, usageMode: parsed.data.usageMode, persona: parsed.data.persona ?? null, budgetDuration: parsed.data.budgetDuration, budgetStartDate: parsed.data.budgetStartDate ?? null, budgetEndDate: parsed.data.budgetEndDate ?? null, categoryNames: parsed.data.categoryNames, incomeStreams: parsed.data.incomeStreams, completed: parsed.data.completed, onboardingVersion: parsed.data.onboardingVersion, updatedAt: new Date() };
-  const [preferences] = await db.insert(onboardingPreferencesTable).values(values).onConflictDoUpdate({ target: onboardingPreferencesTable.userId, set: values }).returning();
-  if (parsed.data.completed && parsed.data.usageMode !== "shared") {
+  try {
+    const values = { userId: req.user!.id, usageMode: parsed.data.usageMode, persona: parsed.data.persona ?? null, budgetDuration: parsed.data.budgetDuration, budgetStartDate: parsed.data.budgetStartDate ?? null, budgetEndDate: parsed.data.budgetEndDate ?? null, categoryNames: parsed.data.categoryNames, incomeStreams: parsed.data.incomeStreams, completed: parsed.data.completed, onboardingVersion: parsed.data.onboardingVersion, updatedAt: new Date() };
+    const [preferences] = await db.insert(onboardingPreferencesTable).values(values).onConflictDoUpdate({ target: onboardingPreferencesTable.userId, set: values }).returning();
+    if (parsed.data.completed && parsed.data.usageMode !== "shared") {
     const personalWorkspaceId = await db.transaction(async (tx) => {
       await tx.insert(groupsTable).values({
         name: "My Budget",
@@ -61,9 +83,18 @@ router.put("/onboarding/preferences", async (req, res) => {
       await tx.insert(groupMembershipsTable).values({ groupId: workspace.id, userId: req.user!.id, role: "owner" }).onConflictDoNothing();
       return workspace.id;
     });
-    setActiveWorkspaceCookie(res, personalWorkspaceId);
+      setActiveWorkspaceCookie(res, personalWorkspaceId);
+    }
+    res.json(preferences);
+  } catch (error) {
+    if (isMissingOnboardingPreferencesRelation(error)) {
+      req.log?.error({ err: error, migrationRequired: true }, "Cannot save onboarding preferences before migration");
+      res.status(503).json({ error: "Onboarding preferences need a database migration before they can be saved." });
+      return;
+    }
+    req.log?.error({ err: error }, "Could not save onboarding preferences");
+    res.status(503).json({ error: "Onboarding preferences are temporarily unavailable." });
   }
-  res.json(preferences);
 });
 
 export default router;
