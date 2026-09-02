@@ -40,3 +40,11 @@ A clean result has:
 The process exits with status `0` only when all three totals are zero. It exits with status `1` when issues are found, status `2` when `STAGING_DATABASE_URL` is missing, and a nonzero status for connection or query failures.
 
 This verifier does not run either category merge migration and cannot update or delete data.
+
+## Pull-request automation
+
+The repository workflow runs this verifier on pull requests opened from branches in the same repository. It intentionally skips forked pull requests so an untrusted fork cannot receive the staging credential. The workflow also declares read-only repository permissions and cancels superseded runs for the same pull request.
+
+Before relying on the check, add `STAGING_DATABASE_URL` as a repository or staging-environment secret in GitHub under **Settings → Secrets and variables → Actions**. Use a staging database URL only. The workflow fails clearly when the secret is absent and never falls back to `DATABASE_URL`.
+
+Because the verifier reads the database, the staging database should contain representative data but should not be used by production services. For stronger isolation, configure the GitHub Actions secret to point to a dedicated staging database or read-only database role.
