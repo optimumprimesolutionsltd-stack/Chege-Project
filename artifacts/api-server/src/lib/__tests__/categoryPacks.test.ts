@@ -31,6 +31,15 @@ describe("category packs", () => {
     }
   });
 
+  it("does not expose legacy semantic aliases in recommendations", () => {
+    const legacyAliases = new Set(["rent", "accommodation", "food & meals", "groceries", "tuition & fees", "school fees"]);
+    for (const categories of Object.values(CATEGORY_PACKS)) {
+      for (const category of categories) {
+        expect(legacyAliases.has(category.name.toLocaleLowerCase("en-US"))).toBe(false);
+      }
+    }
+  });
+
   it("uses the family pack for legacy rows with no recognized kind", () => {
     expect(normalizedCategoryPackKind(undefined)).toBe("family");
     expect(categoryPackForKind("future-kind")).toBe(CATEGORY_PACKS.family);
