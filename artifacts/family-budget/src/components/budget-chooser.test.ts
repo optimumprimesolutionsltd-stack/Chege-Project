@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   budgetChooserCompletionKey,
+  canonicalCategoryName,
+  dedupeCategoryNames,
   dedupeIncomeStreamNames,
   getInitialOnboardingMode,
   hasCompletedBudgetChooser,
@@ -51,6 +53,11 @@ describe("budget chooser completion", () => {
   it("sends completed returning users directly to budget selection", () => {
     expect(getInitialOnboardingMode(true)).toBe("returning");
     expect(getInitialOnboardingMode(false)).toBeNull();
+  });
+
+  it("collapses semantic category aliases into one canonical recommendation", () => {
+    expect(canonicalCategoryName(" rent ")).toBe("Housing");
+    expect(dedupeCategoryNames(["Food", "Food & meals", "Groceries", "Housing", "Accommodation", "Rent"])).toEqual(["Food", "Housing"]);
   });
 
   it("deduplicates income streams regardless of case or surrounding whitespace", () => {

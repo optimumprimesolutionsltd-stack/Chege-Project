@@ -22,14 +22,44 @@ export function getInitialOnboardingMode(setupComplete: boolean): OnboardingMode
   return setupComplete ? "returning" : null;
 }
 
+const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
+  "food & meals": "Food",
+  groceries: "Food",
+  accommodation: "Housing",
+  rent: "Housing",
+  "tuition & fees": "Education",
+  "school fees": "Education",
+};
+
+export function normalizeCategoryName(name: string): string {
+  return name.trim().toLocaleLowerCase("en-US");
+}
+
+export function canonicalCategoryName(name: string): string {
+  const trimmed = name.trim();
+  return ONBOARDING_CATEGORY_ALIASES[normalizeCategoryName(trimmed)] ?? trimmed;
+}
+
+export function dedupeCategoryNames(names: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return names.reduce<string[]>((result, name) => {
+    const canonical = canonicalCategoryName(name);
+    const normalized = normalizeCategoryName(canonical);
+    if (!normalized || seen.has(normalized)) return result;
+    seen.add(normalized);
+    result.push(canonical);
+    return result;
+  }, []);
+}
+
 const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; description: string; categories: readonly string[] }[] = [
-  { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Food & meals", "Groceries", "Housing", "Accommodation", "Rent", "Utilities", "Shared bills", "Transport"] },
-  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Tuition & fees", "Books & supplies", "Family support", "Personal care", "Insurance", "School fees"] },
+  { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Housing", "Utilities", "Shared bills", "Transport"] },
+  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Books & supplies", "Family support", "Personal care", "Insurance"] },
   { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business", "Business supplies", "Stock & inventory"] },
   { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Member contributions", "Projects", "Loans", "Other"] },
 ];
 
-const ALL_ONBOARDING_CATEGORIES = ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories);
+const ALL_ONBOARDING_CATEGORIES = dedupeCategoryNames(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
 const COMMON_INCOME_STREAMS = ["Salary or wages", "Business or side hustle", "Freelance or contract work", "Farming or livestock", "Rental income", "Family support or remittances", "Pension or benefits", "Other income"] as const;
 
 export function normalizeIncomeStreamName(name: string): string {
@@ -46,12 +76,12 @@ export function dedupeIncomeStreamNames(names: string[]): string[] {
   });
 }
 const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
-  student: ["Food & meals", "Accommodation", "Transport", "Tuition & fees", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
-  working: ["Food", "Rent", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
+  student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
+  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
   business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Airtime & data", "Other"],
-  couple: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
-  friends: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Other"],
-  family: ["Groceries", "Rent", "Utilities", "Transport", "Health", "School fees", "Family support", "Insurance", "Household"],
+  couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
+  friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Other"],
+  family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
   chama: ["Member welfare", "Loans", "Member contributions", "Events", "Transport", "Projects", "Other"],
   club: ["Member contributions", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
 };
@@ -337,7 +367,7 @@ export function BudgetChooser({
   }
 
   if (showCategorySetup) {
-    const recommendedCategories = [...(onboardingPurpose ? (PURPOSE_CATEGORY_MAP[onboardingPurpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES), ...customCategories];
+    const recommendedCategories = dedupeCategoryNames([...(onboardingPurpose ? (PURPOSE_CATEGORY_MAP[onboardingPurpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES), ...customCategories]);
     const visibleTiers = ONBOARDING_CATEGORY_TIERS.map((tier) => ({ ...tier, categories: tier.categories.filter((category) => recommendedCategories.includes(category)) })).filter((tier) => tier.categories.length > 0);
     if (customCategories.length > 0) visibleTiers.push({ priority: 5, label: "Your categories", description: "Custom categories you added for your own situation.", categories: customCategories });
     const allSelected = recommendedCategories.every((category) => selectedCategories.includes(category));
@@ -345,7 +375,16 @@ export function BudgetChooser({
       setCategorySelectionError(false);
       setSelectedCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]);
     };
-    const addCustomCategory = () => { const category = customCategory.trim(); if (category && !customCategories.includes(category)) { setCustomCategories((current) => [...current, category]); setSelectedCategories((current) => [...current, category]); } setCustomCategory(""); };
+    const addCustomCategory = () => {
+      const category = customCategory.trim();
+      if (!category) return;
+      const canonical = canonicalCategoryName(category);
+      const normalized = normalizeCategoryName(canonical);
+      if (recommendedCategories.some((item) => normalizeCategoryName(item) === normalized)) return;
+      setCustomCategories((current) => dedupeCategoryNames([...current, canonical]));
+      setSelectedCategories((current) => dedupeCategoryNames([...current, canonical]));
+      setCustomCategory("");
+    };
     return (
       <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
         <section className="mx-auto w-full max-w-4xl">

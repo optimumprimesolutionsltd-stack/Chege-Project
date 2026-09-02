@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  canonicalCategoryName,
   categoryPriority,
+  dedupeCategoryNames,
   dedupeIncomeStreamNames,
   normalizeOnboardingDraft,
   normalizeIncomeStreamName,
@@ -27,11 +29,19 @@ describe('mobile onboarding', () => {
   it('recommends categories by purpose without preselecting any', () => {
     const recommended = recommendedCategoriesForPurpose('student');
 
-    expect(recommended).toContain('Tuition & fees');
+    expect(recommended).toContain('Education');
     expect(recommended).toContain('Transport');
     expect(draft.selectedCategories).toEqual([]);
-    expect(categoryPriority('Tuition & fees')).toBe(2);
+    expect(categoryPriority('Education')).toBe(2);
     expect(categoryPriority('a custom category')).toBe(4);
+  });
+
+  it('collapses semantic category aliases into one canonical recommendation', () => {
+    expect(canonicalCategoryName(' rent ')).toBe('Housing');
+    expect(dedupeCategoryNames(['Food', 'Food & meals', 'Groceries', 'Housing', 'Accommodation', 'Rent'])).toEqual(['Food', 'Housing']);
+    expect(recommendedCategoriesForPurpose('student')).toContain('Housing');
+    expect(recommendedCategoriesForPurpose('student')).not.toContain('Accommodation');
+    expect(recommendedCategoriesForPurpose('student')).not.toContain('Rent');
   });
 
   it('scopes saved drafts to the user and restores a valid draft', async () => {
@@ -56,6 +66,21 @@ describe('mobile onboarding', () => {
 
     expect(normalizeOnboardingDraft({ ...draft, selectedCategories: 'Food' })).toBeNull();
     expect(normalizeOnboardingDraft({ ...draft, usageMode: 'returning' })).toBeNull();
+  });
+
+  it('normalizes semantic aliases in restored category drafts', () => {
+    expect(normalizeOnboardingDraft({
+      ...draft,
+      selectedCategories: ['Rent', 'Accommodation', 'Housing'],
+      customCategories: [' Food & meals ', 'Groceries'],
+      categoryBudgets: { Rent: '12000', Accommodation: '9000' },
+    })?.selectedCategories).toEqual(['Housing']);
+    expect(normalizeOnboardingDraft({
+      ...draft,
+      selectedCategories: ['Rent'],
+      customCategories: [],
+      categoryBudgets: { Rent: '12000' },
+    })?.categoryBudgets).toEqual({ Housing: '12000' });
   });
 
   it('deduplicates restored income streams regardless of case or surrounding whitespace', () => {
