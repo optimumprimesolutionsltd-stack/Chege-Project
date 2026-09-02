@@ -48,3 +48,5 @@ The repository workflow runs this verifier on pull requests opened from branches
 Before relying on the check, add `STAGING_DATABASE_URL` as a repository or staging-environment secret in GitHub under **Settings → Secrets and variables → Actions**. Use a staging database URL only. The workflow fails clearly when the secret is absent and never falls back to `DATABASE_URL`.
 
 Because the verifier reads the database, the staging database should contain representative data but should not be used by production services. For stronger isolation, configure the GitHub Actions secret to point to a dedicated staging database or read-only database role.
+
+<!-- CI staging verifier smoke test -->
