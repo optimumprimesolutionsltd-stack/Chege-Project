@@ -90,6 +90,26 @@ describe("Ask Jamvi server LLM guardrails", () => {
     })).resolves.toContain("Kids offering — KES 2,000");
   });
 
+  it("answers bank questions using the live account balance", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    delete process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+    delete process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+
+    await expect(generateAskJamviResponse("What is in my bank account?", {
+      ...summary,
+      bankAccounts: [{
+        id: 1,
+        name: "Main account",
+        openingBalance: 20000,
+        openingBalanceDate: "2026-08-01",
+        balance: 29000,
+      }],
+    })).resolves.toContain("Main account (KES 29,000)");
+  });
+
   it("falls back without leaking provider error details to callers", async () => {
     delete process.env.ASK_JAMVI_API_URL;
     delete process.env.ASK_JAMVI_API_KEY;

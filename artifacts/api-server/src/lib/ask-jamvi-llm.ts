@@ -13,6 +13,10 @@ export type AskJamviSummary = {
     amount: number;
     direction: "in" | "out";
   }>;
+  bankAccounts?: Array<{ id: number; name: string; openingBalance: number; openingBalanceDate: string | null; balance: number }>;
+  incomeSources?: Array<{ id: number; name: string; expectedMonthlyAmount: number; isMain: boolean; userId: string }>;
+  contributions?: Array<{ id: number; userId: string; amount: number; month: number; year: number; note: string | null }>;
+  members?: Array<{ userId: string; monthlyTarget: number | null }>;
 };
 
 const ACTION_REQUEST = /\b(transfer|send|withdraw|deposit|pay|create|add|delete|remove|edit|change|update|save|set a budget)\b|\b(move\s+(?:money|\w+\s+\d+(?:\.\d+)?|\d+(?:\.\d+)?)\b.{0,80}\b(to|into)\b)|\bmove money\b/i;
@@ -21,11 +25,14 @@ export function isAskJamviActionRequest(question: string): boolean {
   return ACTION_REQUEST.test(question.trim());
 }
 
-type AskJamviIntent = "overview" | "spending" | "remaining" | "goals" | "income" | "ledger" | "unknown";
+type AskJamviIntent = "overview" | "spending" | "remaining" | "goals" | "income" | "ledger" | "bank" | "activity" | "workspace" | "unknown";
 
 function classifyQuestion(question: string): AskJamviIntent {
   const value = question.trim().toLocaleLowerCase("en-US");
   if (/(ledger|transaction|payment|entry|record|find|search|when did|how much did)/.test(value)) return "ledger";
+  if (/(bank|account|withdraw|cash|deposit)/.test(value)) return "bank";
+  if (/(activity|history|contribut|member|who paid)/.test(value)) return "activity";
+  if (/(workspace|budget name|personal budget|shared budget|group|category|categories|income source)/.test(value)) return "workspace";
   if (/(goal|saving|save|emergency|target)/.test(value)) return "goals";
   if (/(income|earn|deposit|received|contribution)/.test(value)) return "income";
   if (/(where|spend|spent|spending|category|categories|most)/.test(value)) return "spending";
@@ -54,6 +61,22 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
       ? `I found ${ledgerMatches.length} matching ledger ${ledgerMatches.length === 1 ? "entry" : "entries"}: ${ledgerMatches.map((entry) => `${entry.description} — ${formatKes(entry.amount)} on ${entry.date} (${entry.kind === "bank" ? "bank" : entry.category ?? "expense"})`).join("; ")}.`
       : `I could not find a matching expense or bank ledger entry in ${periodLabel}. Try the Search tab to look across all records.`;
   }
+  if (intent === "bank") {
+    const accounts = summary.bankAccounts ?? [];
+    return accounts.length > 0
+      ? `${workspace.name} has ${accounts.length} bank account${accounts.length === 1 ? "" : "s"}: ${accounts.map((account) => `${account.name} (${formatKes(account.balance)})`).join(", ")}.`
+      : `${workspace.name} does not have a bank account set up yet.`;
+  }
+  if (intent === "activity") {
+    const contributions = summary.contributions ?? [];
+    return contributions.length > 0
+      ? `${contributions.length} contribution${contributions.length === 1 ? "" : "s"} totaling ${formatKes(contributions.reduce((sum, item) => sum + item.amount, 0))} were recorded for ${periodLabel}.`
+      : `There is no contribution activity recorded for ${periodLabel}.`;
+  }
+  if (intent === "workspace") {
+    const sourceCount = summary.incomeSources?.length ?? 0;
+    return `${workspace.name} is your ${workspace.isPrivate ? "Personal budget" : "Shared budget"} with ${categories.length} budget categor${categories.length === 1 ? "y" : "ies"} and ${sourceCount} income source${sourceCount === 1 ? "" : "s"}.`;
+  }
   if (intent === "remaining") {
     return totals.remaining >= 0
       ? `${workspace.name} has ${formatKes(totals.remaining)} left for ${periodLabel}.`
@@ -72,7 +95,7 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
   }
   if (intent === "income") return `${formatKes(totals.incomeReceived)} has been recorded as income for ${periodLabel}.`;
   if (intent === "overview") return `For ${periodLabel}, you have spent ${formatKes(totals.spent)} of ${formatKes(totals.budgeted)}, leaving ${formatKes(totals.remaining)}. Income recorded: ${formatKes(totals.incomeReceived)}.`;
-  return "I can help with your overview, spending, remaining balance, income, savings goals, or ledger entries. Try asking me to find a payment or use the Search tab.";
+  return "I can help with your overview, spending, remaining balance, income, savings goals, bank accounts, activity, workspace, or ledger entries. Try asking me a question or use the Search tab.";
 }
 
 function chatCompletionsUrl(baseUrl: string): string {
@@ -146,7 +169,7 @@ export async function generateAskJamviResponse(question: string, summary: AskJam
         messages: [
           {
             role: "system",
-            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer. Answer only from the supplied budget context, including individual ledgerEntries when asked to find an expense, payment, bank transaction, amount, description, category, or date. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Never instruct or claim that you performed a financial action. If the question is not answered by the context, say so plainly and suggest the Search tab for older records.",
+            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer for the whole Jamvi app. Answer only from the supplied budget context: totals, categories, goals, ledgerEntries, bankAccounts, incomeSources, contributions, and members. Answer questions about expenses, bank accounts, income, goals, reports, activity, categories, members, and workspace details. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Never instruct or claim that you performed a financial action. If the question is not answered by the context, say so plainly and suggest the relevant app tab or Search tab for older records.",
           },
           { role: "user", content: JSON.stringify({ question, budgetContext: summary }) },
         ],

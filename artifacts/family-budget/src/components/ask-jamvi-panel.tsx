@@ -40,7 +40,7 @@ export function AskJamviPanel({ month, year, workspaceName }: Props) {
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm"><Sparkles className="h-5 w-5" /></div>
           <div className="min-w-0">
             <CardTitle className="text-lg">Ask Jamvi</CardTitle>
-            <CardDescription className="mt-1">Ask about {workspaceName ?? "this budget"}. Jamvi can explain your money, but cannot change records or move funds.</CardDescription>
+            <CardDescription className="mt-1">Ask about {workspaceName ?? "this budget"}—spending, bank accounts, income, goals, activity, categories, or reports. Jamvi can explain your money, but cannot change records or move funds.</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -50,7 +50,7 @@ export function AskJamviPanel({ month, year, workspaceName }: Props) {
           <Button type="submit" size="icon" aria-label="Ask Jamvi" disabled={!query.trim() || askMutation.isPending}><Send className="h-4 w-4" /></Button>
         </form>
         <div className="flex flex-wrap gap-2">
-          {["Find Kids offering in my ledger", "Where am I spending the most?", "How much is left?", "What are my savings goals?"].map((prompt) => <button key={prompt} type="button" onClick={() => submit(prompt)} className="rounded-full border border-primary/20 bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-primary/10">{prompt}</button>)}
+          {["Where am I spending the most?", "What is in my bank account?", "What are my savings goals?", "Who contributed this month?"].map((prompt) => <button key={prompt} type="button" onClick={() => submit(prompt)} className="rounded-full border border-primary/20 bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-primary/10">{prompt}</button>)}
         </div>
         {askMutation.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Reviewing your budget…</p>}
         {askMutation.isError && <p className="text-sm text-destructive">{askMutation.error instanceof Error ? askMutation.error.message : "Ask Jamvi could not answer right now."}</p>}

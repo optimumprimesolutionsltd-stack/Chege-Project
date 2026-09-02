@@ -473,7 +473,7 @@ export default function DashboardScreen() {
             </View>
           </View>
           <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-            Search your current budget in plain language. Ask “Where am I spending the most?” or “How much is left?” Jamvi explains your numbers but cannot change records or move money.
+            Ask about anything in this budget: spending, bank accounts, income, goals, activity, categories, or reports. Jamvi explains your numbers but cannot change records or move money.
           </Text>
           <Pressable
             testID="open-ask-jamvi"
@@ -776,7 +776,7 @@ export default function DashboardScreen() {
               )}
             </Pressable>
             <View style={styles.askPromptList}>
-              {['Find Kids offering in my ledger', 'Where am I spending the most?', 'How much is left?'].map((prompt) => (
+              {['Where am I spending the most?', 'What is in my bank account?', 'What are my savings goals?', 'Who contributed this month?'].map((prompt) => (
                 <Pressable
                   key={prompt}
                   onPress={() => void askJamvi(prompt)}

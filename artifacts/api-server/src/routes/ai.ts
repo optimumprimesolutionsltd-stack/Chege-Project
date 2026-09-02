@@ -2,9 +2,12 @@ import { Router } from "express";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
   budgetCategoriesTable,
+  bankAccountsTable,
+  contributionsTable,
   expensesTable,
   incomeSourcesTable,
   jointAccountTxTable,
+  membersTable,
   savingsGoalsTable,
   groupsTable,
 } from "@workspace/db";
@@ -22,7 +25,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
   const monthFilter = sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`;
   const transactionMonthFilter = sql`EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`;
 
-  const [group, budgetRows, expenseTotal, categoryRows, incomeRow, goals, expenseLedger, bankLedger] = await Promise.all([
+  const [group, budgetRows, expenseTotal, categoryRows, incomeRow, goals, expenseLedger, bankLedger, bankAccounts, incomeSources, contributions, members] = await Promise.all([
     db.select({ name: groupsTable.name, kind: groupsTable.kind, isPrivate: sql<boolean>`${groupsTable.privateOwnerUserId} IS NOT NULL` })
       .from(groupsTable).where(eq(groupsTable.id, groupId)).limit(1),
     db.select({ name: budgetCategoriesTable.name, budgetAmount: budgetCategoriesTable.budgetAmount, priority: budgetCategoriesTable.priority })
@@ -80,6 +83,46 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
       .where(and(eq(jointAccountTxTable.groupId, groupId), transactionMonthFilter))
       .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id))
       .limit(100),
+    db.select({
+      id: bankAccountsTable.id,
+      name: bankAccountsTable.name,
+      openingBalance: bankAccountsTable.openingBalance,
+      openingBalanceDate: bankAccountsTable.openingBalanceDate,
+      balance: sql<number>`${bankAccountsTable.openingBalance} + COALESCE((
+        SELECT SUM(
+          CASE
+            WHEN tx.type = 'deposit' THEN tx.amount
+            ELSE -tx.amount
+          END
+        )
+        FROM joint_account_transactions tx
+        WHERE tx.group_id = ${groupId}
+          AND tx.account_id = ${bankAccountsTable.id}
+      ), 0)`,
+    }).from(bankAccountsTable).where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.name),
+    db.select({
+      id: incomeSourcesTable.id,
+      name: incomeSourcesTable.name,
+      expectedMonthlyAmount: incomeSourcesTable.expectedMonthlyAmount,
+      isMain: incomeSourcesTable.isMain,
+      userId: incomeSourcesTable.userId,
+    }).from(incomeSourcesTable).where(eq(incomeSourcesTable.groupId, groupId)).orderBy(incomeSourcesTable.name),
+    db.select({
+      id: contributionsTable.id,
+      userId: contributionsTable.userId,
+      amount: contributionsTable.amount,
+      month: contributionsTable.month,
+      year: contributionsTable.year,
+      note: contributionsTable.note,
+    }).from(contributionsTable).where(and(
+      eq(contributionsTable.groupId, groupId),
+      eq(contributionsTable.month, month),
+      eq(contributionsTable.year, year),
+    )).orderBy(desc(contributionsTable.id)).limit(100),
+    db.select({
+      userId: membersTable.userId,
+      monthlyTarget: membersTable.monthlyTarget,
+    }).from(membersTable).where(eq(membersTable.groupId, groupId)).orderBy(membersTable.userId),
   ]);
 
   const spentByCategory = new Map((categoryRows.rows as Array<{ category: string; spent: string | number }>).map((row) => [row.category, Number(row.spent)]));
@@ -126,6 +169,32 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
         direction: entry.type === "deposit" ? "in" as const : "out" as const,
       })),
     ].sort((a, b) => b.date.localeCompare(a.date)),
+    bankAccounts: bankAccounts.map((account) => ({
+      id: account.id,
+      name: account.name,
+      openingBalance: Number(account.openingBalance),
+      openingBalanceDate: account.openingBalanceDate ? String(account.openingBalanceDate) : null,
+      balance: Number(account.balance),
+    })),
+    incomeSources: incomeSources.map((source) => ({
+      id: source.id,
+      name: source.name,
+      expectedMonthlyAmount: Number(source.expectedMonthlyAmount),
+      isMain: source.isMain,
+      userId: source.userId,
+    })),
+    contributions: contributions.map((contribution) => ({
+      id: contribution.id,
+      userId: contribution.userId,
+      amount: Number(contribution.amount),
+      month: contribution.month,
+      year: contribution.year,
+      note: contribution.note,
+    })),
+    members: members.map((member) => ({
+      userId: member.userId,
+      monthlyTarget: member.monthlyTarget == null ? null : Number(member.monthlyTarget),
+    })),
     guardrails: {
       readOnly: true,
       savingsAndEmergencyFundsAreGoals: true,
