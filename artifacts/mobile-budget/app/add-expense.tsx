@@ -443,7 +443,9 @@ export default function AddExpenseSheet() {
   useEffect(() => {
     if (isAdvanced || isEditMode || !user?.id) return;
     const sourceKey = normalIncomeSource ? incomeSourceKey(normalIncomeSource.id) : null;
-    setDate(todayIso());
+    if (!canManageShared && date !== todayIso()) {
+      setDate(todayIso());
+    }
     setIsRecurring(false);
     setRecurringMonthlyBudget('');
     setPaidFromBank(false);
@@ -455,7 +457,7 @@ export default function AddExpenseSheet() {
     setSelectedSources(sourceKey ? [sourceKey] : []);
     setSplitAmounts(sourceKey ? { [sourceKey]: amount } : {});
     setCategoryAllocations(category.trim() ? [{ category: category.trim(), amount }] : []);
-  }, [amount, category, isAdvanced, isEditMode, normalIncomeSource?.id, user?.id]);
+  }, [amount, canManageShared, category, date, isAdvanced, isEditMode, normalIncomeSource?.id, user?.id]);
 
   useEffect(() => {
     if (!editingExpense || editHydratedForId === editingExpense.id) return;
@@ -1234,13 +1236,13 @@ export default function AddExpenseSheet() {
         )}
 
         {/* Date comes first because it determines the month used by budgets and reports. */}
-        {isAdvanced && <View testID="expense-date-section" style={{ marginBottom: 4 }}>
+        {(isAdvanced || !isEditMode) && <View testID="expense-date-section" style={{ marginBottom: 4 }}>
           <View style={styles.labelRow}>
             <Text style={[styles.label, { color: colors.primary, marginBottom: 0 }]}>
               WHEN DID THIS HAPPEN? <Text style={{ color: '#ef4444' }}>*</Text>
             </Text>
             <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0, fontSize: 11 }]}>
-              Backdate allowed · no future dates
+              {isAdvanced ? 'Backdate allowed · no future dates' : canManageShared ? 'Choose today or an earlier date' : 'Today only for members'}
             </Text>
           </View>
           <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
@@ -1252,6 +1254,7 @@ export default function AddExpenseSheet() {
               styles.dateRow,
               { backgroundColor: colors.muted, borderColor: colors.border, borderRadius: colors.radius },
             ]}
+            testID={isAdvanced ? "expense-date-picker" : "normal-expense-date-picker"}
           >
             <Feather name="calendar" size={16} color={colors.primary} style={{ marginRight: 8 }} />
             <Text style={[styles.dateText, { color: colors.foreground, flex: 1 }]}>
@@ -1267,6 +1270,7 @@ export default function AddExpenseSheet() {
               value={new Date(date + 'T00:00:00')}
               mode="date"
               display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+              minimumDate={!canManageShared ? new Date() : undefined}
               maximumDate={new Date()}
               onChange={(_event: DateTimePickerEvent, selected?: Date) => {
                 setShowDatePicker(Platform.OS === 'ios');
@@ -1710,9 +1714,9 @@ export default function AddExpenseSheet() {
             <View testID="normal-expense-summary" style={[styles.normalSummary, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '45', borderRadius: colors.radius }]}>
               <Feather name="check-circle" size={16} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.normalSummaryTitle, { color: colors.foreground }]}>Saved as today’s expense</Text>
+                 <Text style={[styles.normalSummaryTitle, { color: colors.foreground }]}>Saved as {date === todayIso() ? 'today’s expense' : 'a backdated expense'}</Text>
                 <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 2 }]}>
-                  {category.trim() ? `Today · all of this expense goes to ${category.trim()}` : 'Today · choose a category to allocate the full expense'}
+                   {category.trim() ? `${formatDateDisplay(date)} · all of this expense goes to ${category.trim()}` : `${formatDateDisplay(date)} · choose a category to allocate the full expense`}
                   {normalIncomeSource ? ` · paid from ${normalIncomeSource.name}` : ''}
                 </Text>
                 {!sourcesLoading && !normalIncomeSource && (

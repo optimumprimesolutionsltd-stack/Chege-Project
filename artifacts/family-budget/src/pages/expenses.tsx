@@ -450,7 +450,9 @@ export default function Expenses() {
   useEffect(() => {
     if (!isAdding || isAdvancedAdd || !user?.id) return;
 
-    addForm.setDate(today);
+    if (!canManageExpenses && addForm.date !== today) {
+      addForm.setDate(today);
+    }
     addForm.setIsRecurring(false);
     addForm.setPaidFromBank(false);
     addForm.setAccountId(null);
@@ -465,8 +467,10 @@ export default function Expenses() {
   }, [
     isAdding,
     isAdvancedAdd,
+    canManageExpenses,
     user?.id,
     today,
+    addForm.date,
     addForm.category,
     addForm.amount,
     normalAddSource?.id,
@@ -1304,6 +1308,33 @@ export default function Expenses() {
               onChange={(event) => form.setAmount(event.target.value)} required className="h-14 border-secondary/70 bg-background text-xl font-bold"
               data-testid="normal-expense-amount" />
           </div>
+
+          <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="normal-expense-date-section">
+            <label className="text-sm font-bold text-primary">
+              When did this happen? <span className="text-destructive">*</span>
+            </label>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              This date decides which month includes the expense in budgets, totals, and reports.
+            </p>
+            <Input
+              type="date"
+              value={form.date}
+              onChange={(event) => form.setDate(event.target.value)}
+              required
+              disabled={!canManageExpenses}
+              min={canManageExpenses ? undefined : today}
+              max={canManageExpenses ? undefined : today}
+              aria-describedby={!canManageExpenses ? "normal-member-expense-date-help" : undefined}
+              className="h-12 bg-card"
+              data-testid="normal-expense-date"
+            />
+            {!canManageExpenses && (
+              <p id="normal-member-expense-date-help" className="text-xs text-muted-foreground">
+                Members can record and correct expenses for today only. Ask an admin to backdate.
+              </p>
+            )}
+          </div>
+
           <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/[0.04] p-4">
             <label className="text-sm font-bold text-primary">Category <span className="text-destructive">*</span></label>
             <select value={form.category} onChange={(event) => chooseCategory(form, event.target.value)} required
@@ -1323,7 +1354,7 @@ export default function Expenses() {
           <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm text-foreground" data-testid="normal-expense-assumptions">
             <p className="font-bold text-primary">Jamvi will record this as:</p>
             <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-relaxed text-muted-foreground">
-              <li>today’s expense, paid by you, not from a bank account, and not recurring;</li>
+              <li>{form.date === today ? "today’s expense" : `an expense dated ${formatDate(form.date)}`}, paid by you, not from a bank account, and not recurring;</li>
               <li>the full whole-KES amount in {form.category ? `"${form.category}"` : "the category you select"};</li>
               <li>{normalSource ? `funded in full from ${normalSource.name}${normalSource.isMain ? " (your main income source)" : ""}.` : "funded from your saved income source once you select Advanced."}</li>
             </ul>

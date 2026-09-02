@@ -514,6 +514,7 @@ export default function BankScreen() {
       }
     });
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
   };
 
   // Selecting Joint bank chip explicitly clears all named members
@@ -525,6 +526,7 @@ export default function BankScreen() {
     setDepositorIds([]);
     setDepositorAmounts({});
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
   };
 
   const handleCreateCategory = async () => {
@@ -1374,6 +1376,46 @@ export default function BankScreen() {
               returnKeyType="next"
               testID="bank-amount-input"
             />
+             {/* Date stays beside the amount so every bank entry starts with its transaction date. */}
+             <Text style={[styles.label, { color: colors.mutedForeground }]}>
+               {isDeposit ? 'Deposit date' : 'Date'}
+             </Text>
+             <Pressable
+               onPress={() => {
+                 if (canManageShared || editingTransactionId === null) setShowDatePicker(true);
+               }}
+               style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+               testID="bank-date-picker"
+             >
+               <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+               <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                 {new Date(date + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+               </Text>
+               <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+             </Pressable>
+             {isSharedWorkspace && !canManageShared && editingTransactionId === null && (
+               <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                 Shared-budget members can record bank deposits for today only.
+               </Text>
+             )}
+             {showDatePicker && (
+               <DateTimePicker
+                 value={new Date(date + 'T00:00:00')}
+                 mode="date"
+                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                 minimumDate={isSharedWorkspace && !canManageShared ? new Date() : undefined}
+                 maximumDate={new Date()}
+                 onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                   setShowDatePicker(Platform.OS === 'ios');
+                   if (selected) {
+                     const y = selected.getFullYear();
+                     const m = String(selected.getMonth() + 1).padStart(2, '0');
+                     const d = String(selected.getDate()).padStart(2, '0');
+                     setDate(`${y}-${m}-${d}`);
+                   }
+                 }}
+               />
+             )}
             {projectedBalance !== null && projectedBalance < 0 && (
               <View
                 style={styles.negativeBalanceWarning}
@@ -1629,8 +1671,8 @@ export default function BankScreen() {
               </>
             )}
 
-            {/* Income source — only when exactly one named depositor is selected */}
-            {isDeposit && singleDepositorId && (
+            {/* Saved income sources are for one named depositor; Joint bank can choose Other. */}
+            {isDeposit && (singleDepositorId || depositorIds.length === 0) && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
                   Where did this money come from?{' '}
@@ -2016,39 +2058,6 @@ export default function BankScreen() {
                   testID="bank-description-input"
                 />
               </>
-            )}
-
-            {/* Date */}
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>{isDeposit ? 'Deposit date' : 'Date'}</Text>
-            <Pressable
-              onPress={() => {
-                if (canManageShared || editingTransactionId === null) setShowDatePicker(true);
-              }}
-              style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-              testID="bank-date-picker"
-            >
-              <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
-              <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
-                {new Date(date + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </Text>
-              <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
-            </Pressable>
-            {showDatePicker && (
-              <DateTimePicker
-                value={new Date(date + 'T00:00:00')}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                maximumDate={new Date()}
-                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
-                  setShowDatePicker(Platform.OS === 'ios');
-                  if (selected) {
-                    const y = selected.getFullYear();
-                    const m = String(selected.getMonth() + 1).padStart(2, '0');
-                    const d = String(selected.getDate()).padStart(2, '0');
-                    setDate(`${y}-${m}-${d}`);
-                  }
-                }}
-              />
             )}
 
             {/* Submit */}

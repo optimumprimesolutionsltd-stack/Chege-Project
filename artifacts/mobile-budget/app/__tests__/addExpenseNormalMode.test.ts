@@ -11,13 +11,13 @@ describe('mobile normal expense mode', () => {
     expect(source).toContain('testID="expense-mode-advanced"');
   });
 
-  it('synchronizes Normal mode hidden fields to a simple full allocation', () => {
+  it('synchronizes Normal mode hidden fields without overwriting the chosen date', () => {
     const synchronization = source.slice(
       source.indexOf('// Keep the values hidden by Normal mode deterministic'),
       source.indexOf('const handleCreateIncomeSource'),
     );
 
-    expect(synchronization).toContain('setDate(todayIso())');
+    expect(source).toContain('const [date, setDate] = useState(todayIso())');
     expect(synchronization).toContain('setIsRecurring(false)');
     expect(synchronization).toContain('setPaidFromBank(false)');
     expect(synchronization).toContain('setAllowMixedFunding(false)');
@@ -27,7 +27,7 @@ describe('mobile normal expense mode', () => {
   });
 
   it('keeps advanced-only controls out of Normal and blocks missing saved income sources', () => {
-    expect(source).toContain('{isAdvanced && <View testID="expense-date-section"');
+    expect(source).toContain('{(isAdvanced || !isEditMode) && <View testID="expense-date-section"');
     expect(source).toContain('{isAdvanced && categoryAllocations.length > 0 && (');
     expect(source).toContain('{isAdvanced && <>');
     expect(source).toContain('{isAdvanced && (canManageShared || selectablePayers.length > 0) && (');

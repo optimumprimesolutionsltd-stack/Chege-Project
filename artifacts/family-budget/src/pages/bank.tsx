@@ -1026,11 +1026,17 @@ export default function Bank() {
                     data-testid="input-date"
                     type="date"
                     value={date}
+                    min={isSharedWorkspace && !canManageShared ? new Date().toISOString().slice(0, 10) : undefined}
                     onChange={e => setDate(e.target.value)}
                     required
                     disabled={isSharedWorkspace && !canManageShared && editingTransaction !== null}
                     className="h-12 bg-card"
                   />
+                  {isSharedWorkspace && !canManageShared && editingTransaction === null && (
+                    <p className="text-xs text-muted-foreground">
+                      Shared-budget members can record bank deposits for today only.
+                    </p>
+                  )}
                   {isSharedWorkspace && !canManageShared && editingTransaction !== null && (
                     <p className="text-xs text-muted-foreground">
                       Members can correct this deposit today, but only an admin can change its date.
@@ -1209,6 +1215,7 @@ export default function Bank() {
                           onClick={() => {
                             setDepositorIds([]);
                             setIncomeSourceId(null);
+                             setDepositSourceKind(null);
                             setDepositorAmounts({});
                           }}
                           className={`h-12 rounded-xl border text-base font-semibold transition-colors ${
@@ -1236,6 +1243,7 @@ export default function Bank() {
                                     : [...prev, m.userId]
                                 );
                                 setIncomeSourceId(null);
+                                 setDepositSourceKind(null);
                               }}
                               className={`h-12 rounded-xl border text-base font-semibold transition-colors ${
                                 selected
@@ -1288,8 +1296,8 @@ export default function Bank() {
                       })()}
                     </div>
 
-                    {/* Income source — only for exactly one named depositor */}
-                    {singleDepositorId && (
+                    {/* Income source — saved sources for one named depositor, or Other for Joint bank */}
+                    {(singleDepositorId || depositorIds.length === 0) && (
                       <div className="space-y-2 sm:col-span-2">
                         <label className="text-sm font-semibold text-foreground">
                           Where did this money come from?{" "}
@@ -1318,7 +1326,9 @@ export default function Bank() {
                           <option value="other">Other — add narration</option>
                         </select>
                         <p className="text-xs text-muted-foreground">
-                          Select a saved stream or choose Other and add a narration.
+                          {singleDepositorId
+                            ? "Select a saved stream or choose Other and add a narration."
+                            : "This deposit is attributed to the Joint bank. Choose Other to explain a non-salary source."}
                         </p>
                       </div>
                     )}
