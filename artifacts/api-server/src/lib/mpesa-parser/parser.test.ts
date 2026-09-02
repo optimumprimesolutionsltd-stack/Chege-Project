@@ -631,4 +631,60 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "large agent cash deposit",
+      message:
+        "TESTDEPOSIT1 Confirmed. On 5/8/26 at 5:00 PM Give Ksh80,000.00 cash to SAMPLE AGENT - SAMPLE LOCATION New M-PESA balance is Ksh80,402.67. You can now access M-PESA via *334#",
+      transactionId: "TESTDEPOSIT1",
+      counterparty: "SAMPLE AGENT - SAMPLE LOCATION",
+      date: "2026-08-05",
+      time: "17:00",
+      amount: 80000,
+      balance: 80402.67,
+    },
+    {
+      name: "small agent cash deposit",
+      message:
+        "TESTDEPOSIT2 Confirmed. On 28/8/26 at 6:30 PM Give Ksh500.00 cash to SAMPLE AGENT - SAMPLE LOCATION New M-PESA balance is Ksh500.00. You can now access M-PESA via *334#",
+      transactionId: "TESTDEPOSIT2",
+      counterparty: "SAMPLE AGENT - SAMPLE LOCATION",
+      date: "2026-08-28",
+      time: "18:30",
+      amount: 500,
+      balance: 500,
+    },
+    {
+      name: "agent cash deposit with a different balance",
+      message:
+        "TESTDEPOSIT3 Confirmed. On 3/4/26 at 9:24 AM Give Ksh2,950.00 cash to SAMPLE AGENT - SAMPLE LOCATION New M-PESA balance is Ksh71,014.66. You can now access M-PESA via *334#",
+      transactionId: "TESTDEPOSIT3",
+      counterparty: "SAMPLE AGENT - SAMPLE LOCATION",
+      date: "2026-04-03",
+      time: "09:24",
+      amount: 2950,
+      balance: 71014.66,
+    },
+  ])("recognizes $name as a cash deposit", ({ message, transactionId, counterparty, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "cash_deposit",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: counterparty,
+        accountReference: null,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: null,
+      },
+    });
+  });
 });

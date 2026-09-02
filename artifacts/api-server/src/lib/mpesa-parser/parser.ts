@@ -79,7 +79,9 @@ function detectTransactionType(
   if (purchaseCategory) return "airtime_purchase";
   if (/\bairtime\b/.test(lower)) return "airtime_purchase";
   if (/(?:\b|[ap]m)withdraw(?:al)?\b|\batm\b/.test(lower)) return "cash_withdrawal";
-  if (/\bdeposit(?:ed)?\b/.test(lower)) return "cash_deposit";
+  if (/\bdeposit(?:ed)?\b|\bgive\s+(?:ksh|kes)\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?\s+cash\s+to\b/.test(lower)) {
+    return "cash_deposit";
+  }
   if (/\b(?:bank to|m[- ]?pesa to bank|bank transfer)\b/.test(lower)) return "bank_transfer";
   if (/\bpaybill\b|\baccount number\b|\bfor\s+account\b/.test(lower)) return "paybill_payment";
   if (/\bsent\s+to\b/.test(lower)) return "person_payment";
@@ -105,6 +107,14 @@ function extractCounterparty(message: string): string | null {
   if (withdrawalMatch) {
     const withdrawalValue = withdrawalMatch[1].trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
     return withdrawalValue || null;
+  }
+
+  const depositMatch = message.match(
+    /\bgive\s+(?:ksh|kes)\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?\s+cash\s+to\s+(.+?)(?=\s+new\s+m[- ]?pesa\s+balance\b|$)/i,
+  );
+  if (depositMatch) {
+    const depositValue = depositMatch[1].trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+    return depositValue || null;
   }
 
   const match = message.match(
