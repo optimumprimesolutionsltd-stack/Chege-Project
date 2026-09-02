@@ -58,6 +58,8 @@ function parseTime(message: string): string | null {
 function detectPurchaseCategory(message: string): MpesaPurchaseCategory {
   const lower = message.toLowerCase();
   if (/\bpostpaid\s+bundles?\b/.test(lower)) return "postpaid_bundle";
+  if (/\bsafaricom\s+offers\b.*\baccount\s+tunukiwa\b/.test(lower)) return "minutes";
+  if (/\bsafaricom\s+data\s+bundles\b.*\baccount\s+talkmore\b/.test(lower)) return "minutes";
   return null;
 }
 

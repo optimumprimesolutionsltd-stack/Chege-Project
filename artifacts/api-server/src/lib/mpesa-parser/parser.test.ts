@@ -110,4 +110,59 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "Tunukiwa minutes offer",
+      message:
+        "TESTMIN1 Confirmed. Ksh20.00 sent to Safaricom Offers for account Tunukiwa on 2/9/26 at 9:18 AM. New M-PESA balance is Ksh65.27. Transaction cost, Ksh0.00.",
+      transactionId: "TESTMIN1",
+      merchant: "Safaricom Offers",
+      date: "2026-09-02",
+      time: "09:18",
+      amount: 20,
+      balance: 65.27,
+    },
+    {
+      name: "Tunukiwa minutes offer with a different amount",
+      message:
+        "TESTMIN2 Confirmed. Ksh53.00 sent to Safaricom Offers for account Tunukiwa on 4/3/26 at 6:11 PM. New M-PESA balance is Ksh8,071.87. Transaction cost, Ksh0.00.",
+      transactionId: "TESTMIN2",
+      merchant: "Safaricom Offers",
+      date: "2026-03-04",
+      time: "18:11",
+      amount: 53,
+      balance: 8071.87,
+    },
+    {
+      name: "Talkmore minutes offer labelled as data bundles",
+      message:
+        "TESTMIN3 Confirmed. Ksh200.00 sent to SAFARICOM DATA BUNDLES for account Talkmore on 30/8/26 at 8:38 AM. New M-PESA balance is Ksh2,180.73. Transaction cost, Ksh0.00.",
+      transactionId: "TESTMIN3",
+      merchant: "SAFARICOM DATA BUNDLES",
+      date: "2026-08-30",
+      time: "08:38",
+      amount: 200,
+      balance: 2180.73,
+    },
+  ])("recognizes $name as a minutes purchase", ({ message, transactionId, merchant, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "airtime_purchase",
+        purchaseCategory: "minutes",
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: merchant,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
 });
