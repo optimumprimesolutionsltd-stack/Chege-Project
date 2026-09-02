@@ -80,9 +80,9 @@ function detectTransactionType(
   if (/\bwithdraw(?:al)?\b|\batm\b/.test(lower)) return "cash_withdrawal";
   if (/\bdeposit(?:ed)?\b/.test(lower)) return "cash_deposit";
   if (/\b(?:bank to|m[- ]?pesa to bank|bank transfer)\b/.test(lower)) return "bank_transfer";
-  if (/\bpaybill\b|\baccount number\b/.test(lower)) return "paybill_payment";
+  if (/\bpaybill\b|\baccount number\b|\bfor\s+account\b/.test(lower)) return "paybill_payment";
   if (/\bsent\s+to\b/.test(lower)) return "person_payment";
-  if (/\bpaid to\b.*\b(?:market|mall|express|supermarket|shop|store|restaurant|hotel|pharmacy)\b/.test(lower)) {
+  if (/\bpaid to\b.*\b(?:market|mall|express|supermarket|shop|store|restaurant|hotel|pharmacy|dishes)\b/.test(lower)) {
     return "merchant_payment";
   }
   if (/\bpaid to\s+[A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){2,}\s*(?:\.|\bon\b)/i.test(message)) {
@@ -96,7 +96,15 @@ function detectTransactionType(
 
 function extractCounterparty(message: string): string | null {
   const match = message.match(
-    /\b(?:paid to|sent to|received from|transferred to|from)\s+([A-Za-z][A-Za-z0-9 &'./-]{1,70}?)(?=\s+(?:on|at|for|account|number|new balance|balance|fee)\b|\s+<PHONE>|[.,]|$)/i,
+    /\b(?:paid to|sent to|received from|transferred to|from)\s+([A-Za-z][A-Za-z0-9 &'./-]{1,70}?)(?=\s+(?:on|at|for\s+account|new balance|balance|fee)\b|\s+<PHONE>|[.,]|$)/i,
+  );
+  const value = match?.[1]?.trim().replace(/\s+/g, " ");
+  return value ? value : null;
+}
+
+function extractAccountReference(message: string): string | null {
+  const match = message.match(
+    /\bfor\s+account\s+([A-Za-z0-9][A-Za-z0-9 _./-]{0,70}?)(?=\s+on\b|\s+new\s+m[- ]?pesa\b|\s+transaction\s+cost\b|\s+amount\s+you\s+can\s+transact\b|[.,]|$)/i,
   );
   const value = match?.[1]?.trim().replace(/\s+/g, " ");
   return value ? value : null;
@@ -157,6 +165,7 @@ export function parseMpesaMessage(message: string): ParseResult {
     amount,
     currency: amount !== null ? "KES" : null,
     merchantOrCounterparty: extractCounterparty(normalizedMessage),
+    accountReference: extractAccountReference(normalizedMessage),
     phoneNumber: null,
     date: parseDate(normalizedMessage),
     time: parseTime(normalizedMessage),

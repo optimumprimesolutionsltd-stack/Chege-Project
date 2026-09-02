@@ -113,6 +113,7 @@ export function ParseResult({ result, isLoading }: ParseResultProps) {
               <Field label="Transaction ID" value={tx.transactionId} />
               <Field label="Amount" value={tx.amount !== null ? `${tx.currency || 'KES'} ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : null} />
               <Field label="Merchant/Counterparty" value={tx.merchantOrCounterparty} />
+              <Field label="Account Reference" value={tx.accountReference} />
               <Field label="Phone Number" value={tx.phoneNumber} />
               <Field label="Date" value={tx.date} />
               <Field label="Time" value={tx.time} />

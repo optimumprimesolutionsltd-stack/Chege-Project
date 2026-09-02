@@ -1828,6 +1828,8 @@ components:
           type: ["string", "null"]
         merchantOrCounterparty:
           type: ["string", "null"]
+        accountReference:
+          type: ["string", "null"]
         phoneNumber:
           type: ["string", "null"]
         date:
@@ -1855,6 +1857,7 @@ components:
         - amount
         - currency
         - merchantOrCounterparty
+        - accountReference
         - phoneNumber
         - date
         - time

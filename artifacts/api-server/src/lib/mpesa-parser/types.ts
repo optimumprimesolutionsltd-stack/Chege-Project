@@ -30,6 +30,7 @@ export interface MpesaTransaction {
   amount: number | null;
   currency: string | null;
   merchantOrCounterparty: string | null;
+  accountReference: string | null;
   phoneNumber: string | null;
   date: string | null;
   time: string | null;

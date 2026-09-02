@@ -23,6 +23,8 @@ export interface MpesaTransaction {
   /** @nullable */
   merchantOrCounterparty: string | null;
   /** @nullable */
+  accountReference: string | null;
+  /** @nullable */
   phoneNumber: string | null;
   /** @nullable */
   date: Date | null;

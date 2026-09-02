@@ -423,6 +423,17 @@ describe("M-Pesa parser foundation", () => {
       amount: 3000,
       balance: 206.52,
     },
+    {
+      name: "restaurant-style merchant payment",
+      message:
+        "TESTMERCHANT4 Confirmed. Ksh350.00 paid to SAMPLE AFRICAN DISHES. on 30/10/25 at 12:21 PM.New M-PESA balance is Ksh13,446.18. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,030.00. Save frequent Tills for quick payment on M-PESA app <LINK>",
+      transactionId: "TESTMERCHANT4",
+      merchant: "SAMPLE AFRICAN DISHES",
+      date: "2025-10-30",
+      time: "12:21",
+      amount: 350,
+      balance: 13446.18,
+    },
   ])("recognizes $name as a merchant payment", ({ message, transactionId, merchant, date, time, amount, balance }) => {
     const result = parseMpesaMessage(message);
 
@@ -440,6 +451,68 @@ describe("M-Pesa parser foundation", () => {
         time,
         mpesaBalance: balance,
         fee: 0,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "explicit Paybill wording",
+      message:
+        "TESTPAYBILL1 Confirmed. Ksh3,000.00 sent to SAMPLE PAYBILL ACCOUNT for account SAMPLE ACCOUNT on 1/9/26 at 1:49 PM New M-PESA balance is Ksh9,474.59. Transaction cost, Ksh25.00.Amount you can transact within the day is 494,000.00. See all your balances now <LINK>",
+      transactionId: "TESTPAYBILL1",
+      recipient: "SAMPLE PAYBILL ACCOUNT",
+      accountReference: "SAMPLE ACCOUNT",
+      date: "2026-09-01",
+      time: "13:49",
+      amount: 3000,
+      balance: 9474.59,
+      fee: 25,
+    },
+    {
+      name: "business account payment without the Paybill label",
+      message:
+        "TESTPAYBILL2 Confirmed. Ksh1,000.00 sent to SAMPLE DISTRIBUTORS LTD for account SAMPLE ACCOUNT on 17/7/26 at 4:54 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh10.00.Amount you can transact within the day is 496,175.00. Download My OneApp on <LINK>",
+      transactionId: "TESTPAYBILL2",
+      recipient: "SAMPLE DISTRIBUTORS LTD",
+      accountReference: "SAMPLE ACCOUNT",
+      date: "2026-07-17",
+      time: "16:54",
+      amount: 1000,
+      balance: 0,
+      fee: 10,
+    },
+    {
+      name: "bank Paybill account payment",
+      message:
+        "TESTPAYBILL3 Confirmed. Ksh3,000.00 sent to SAMPLE KCB for account SAMPLE ACCOUNT on 30/8/26 at 12:42 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh25.00.Amount you can transact within the day is 495,980.00. See all your balances now <LINK>",
+      transactionId: "TESTPAYBILL3",
+      recipient: "SAMPLE KCB",
+      accountReference: "SAMPLE ACCOUNT",
+      date: "2026-08-30",
+      time: "12:42",
+      amount: 3000,
+      balance: 0,
+      fee: 25,
+    },
+  ])("recognizes $name as an outgoing Paybill payment", ({ message, transactionId, recipient, accountReference, date, time, amount, balance, fee }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "paybill_payment",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: recipient,
+        accountReference,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee,
       },
     });
   });

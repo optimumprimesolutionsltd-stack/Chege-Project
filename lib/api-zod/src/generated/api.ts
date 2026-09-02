@@ -28,6 +28,7 @@ export const ParseMpesaMessageResponse = zod.object({
   "amount": zod.number().nullable(),
   "currency": zod.string().nullable(),
   "merchantOrCounterparty": zod.string().nullable(),
+  "accountReference": zod.string().nullable(),
   "phoneNumber": zod.string().nullable(),
   "date": zod.coerce.date().nullable(),
   "time": zod.string().nullable(),
