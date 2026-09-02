@@ -21,34 +21,42 @@ const legacyPredicate = `lower(btrim(name)) IN ('rent', 'accommodation')`;
 const legacyQueries = [
   {
     source: "budget_categories",
+    relation: "budget_categories",
     sql: `SELECT count(*)::int AS count FROM budget_categories WHERE ${legacyPredicate}`,
   },
   {
     source: "expenses",
+    relation: "expenses",
     sql: `SELECT count(*)::int AS count FROM expenses WHERE lower(btrim(category)) IN ('rent', 'accommodation')`,
   },
   {
     source: "expense_category_allocations",
+    relation: "expense_category_allocations",
     sql: `SELECT count(*)::int AS count FROM expense_category_allocations WHERE lower(btrim(category)) IN ('rent', 'accommodation')`,
   },
   {
     source: "joint_account_transactions",
+    relation: "joint_account_transactions",
     sql: `SELECT count(*)::int AS count FROM joint_account_transactions WHERE lower(btrim(expense_category)) IN ('rent', 'accommodation')`,
   },
   {
     source: "budget_plan_categories",
+    relation: "budget_plan_categories",
     sql: `SELECT count(*)::int AS count FROM budget_plan_categories WHERE lower(btrim(category_name)) IN ('rent', 'accommodation')`,
   },
   {
     source: "onboarding_category_selections",
+    relation: "onboarding_category_selections",
     sql: `SELECT count(*)::int AS count FROM onboarding_category_selections WHERE lower(btrim(name)) IN ('rent', 'accommodation')`,
   },
   {
     source: "onboarding_budget_allocations",
+    relation: "onboarding_budget_allocations",
     sql: `SELECT count(*)::int AS count FROM onboarding_budget_allocations WHERE lower(btrim(category_name)) IN ('rent', 'accommodation')`,
   },
   {
     source: "onboarding_preferences.category_names",
+    relation: "onboarding_preferences",
     sql: `
       SELECT count(*)::int AS count
       FROM onboarding_preferences
@@ -64,6 +72,7 @@ const legacyQueries = [
 const foreignKeyQueries = [
   {
     relationship: "expense_category_allocations -> expenses",
+    relation: "expense_category_allocations",
     sql: `
       SELECT count(*)::int AS count
       FROM expense_category_allocations allocation
@@ -75,6 +84,7 @@ const foreignKeyQueries = [
   },
   {
     relationship: "budget_plan_categories -> budget_plans",
+    relation: "budget_plan_categories",
     sql: `
       SELECT count(*)::int AS count
       FROM budget_plan_categories plan_category
@@ -84,6 +94,7 @@ const foreignKeyQueries = [
   },
   {
     relationship: "budget_plan_categories -> budget_categories",
+    relation: "budget_plan_categories",
     sql: `
       SELECT count(*)::int AS count
       FROM budget_plan_categories plan_category
@@ -97,6 +108,7 @@ const foreignKeyQueries = [
   },
   {
     relationship: "joint_account_transactions -> expenses",
+    relation: "joint_account_transactions",
     sql: `
       SELECT count(*)::int AS count
       FROM joint_account_transactions transaction
@@ -110,6 +122,7 @@ const foreignKeyQueries = [
   },
   {
     relationship: "onboarding_category_selections -> onboarding_preferences",
+    relation: "onboarding_category_selections",
     sql: `
       SELECT count(*)::int AS count
       FROM onboarding_category_selections selection
@@ -122,6 +135,7 @@ const foreignKeyQueries = [
   },
   {
     relationship: "onboarding_budget_allocations -> onboarding_preferences",
+    relation: "onboarding_budget_allocations",
     sql: `
       SELECT count(*)::int AS count
       FROM onboarding_budget_allocations allocation
@@ -133,6 +147,14 @@ const foreignKeyQueries = [
     `,
   },
 ];
+
+async function relationExists(client: pg.PoolClient, relation: string): Promise<boolean> {
+  const result = await client.query<{ exists: boolean }>(
+    "SELECT to_regclass($1) IS NOT NULL AS exists",
+    [`public.${relation}`],
+  );
+  return Boolean(result.rows[0]?.exists);
+}
 
 async function countRows(client: pg.PoolClient, sql: string): Promise<number> {
   const result = await client.query<{ count: number }>(sql);
@@ -153,11 +175,16 @@ async function main(): Promise<void> {
       "SELECT current_database() AS database, current_user AS user",
     );
 
-    const legacyRows = Object.fromEntries(
-      await Promise.all(
-        legacyQueries.map(async ({ source, sql }) => [source, await countRows(client, sql)] as const),
-      ),
-    );
+    const legacyRows: Record<string, number> = {};
+    const skippedChecks: string[] = [];
+    for (const { source, relation, sql } of legacyQueries) {
+      if (!(await relationExists(client, relation))) {
+        legacyRows[source] = 0;
+        skippedChecks.push(`${source} (table ${relation} is absent)`);
+        continue;
+      }
+      legacyRows[source] = await countRows(client, sql);
+    }
 
     const duplicateCategories = await client.query<{
       group_id: number | null;
@@ -178,11 +205,15 @@ async function main(): Promise<void> {
       ORDER BY group_id, normalized_name
     `);
 
-    const foreignKeyViolations = Object.fromEntries(
-      await Promise.all(
-        foreignKeyQueries.map(async ({ relationship, sql }) => [relationship, await countRows(client, sql)] as const),
-      ),
-    );
+    const foreignKeyViolations: Record<string, number> = {};
+    for (const { relationship, relation, sql } of foreignKeyQueries) {
+      if (!(await relationExists(client, relation))) {
+        foreignKeyViolations[relationship] = 0;
+        skippedChecks.push(`${relationship} (table ${relation} is absent)`);
+        continue;
+      }
+      foreignKeyViolations[relationship] = await countRows(client, sql);
+    }
 
     const legacyTotal = Object.values(legacyRows).reduce((total, count) => total + count, 0);
     const foreignKeyTotal = Object.values(foreignKeyViolations).reduce((total, count) => total + count, 0);
@@ -202,6 +233,7 @@ async function main(): Promise<void> {
       duplicateTotal,
       foreignKeyViolations,
       foreignKeyTotal,
+      skippedChecks,
       passed,
     }, null, 2));
 
