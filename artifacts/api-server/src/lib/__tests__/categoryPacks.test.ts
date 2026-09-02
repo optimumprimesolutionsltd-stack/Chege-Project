@@ -15,6 +15,7 @@ import {
   CATEGORY_PACKS,
   categoryPackForKind,
   normalizedCategoryPackKind,
+  priorityTiersForKind,
 } from "../categoryPacks.js";
 
 describe("category packs", () => {
@@ -43,5 +44,18 @@ describe("category packs", () => {
   it("uses the family pack for legacy rows with no recognized kind", () => {
     expect(normalizedCategoryPackKind(undefined)).toBe("family");
     expect(categoryPackForKind("future-kind")).toBe(CATEGORY_PACKS.family);
+  });
+
+  it("uses Chama language instead of household language for Chama priority tiers", () => {
+    const labels = priorityTiersForKind("chama").map((tier) => tier.label);
+    expect(labels).toEqual([
+      "Core Commitments",
+      "Welfare & Administration",
+      "Operations & Transport",
+      "Communication & Growth",
+      "Flexible Spending",
+    ]);
+    expect(labels).not.toContain("Survival Essentials");
+    expect(labels).not.toContain("Health & Education");
   });
 });

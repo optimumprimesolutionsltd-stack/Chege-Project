@@ -2,6 +2,7 @@ import { createInsertSchema } from "drizzle-zod";
 import {
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   serial,
@@ -98,6 +99,13 @@ export const groupsTable = pgTable(
     // always empty. Null means the group does not work to a fixed amount -
     // families and one-off groups usually do not.
     defaultMonthlyTarget: integer("default_monthly_target"),
+    // Workspace-specific names and explanations for the five budget priority
+    // tiers. Null means the group-kind defaults are used.
+    priorityTiers: jsonb("priority_tiers").$type<Array<{
+      priority: number;
+      label: string;
+      description: string;
+    }>>(),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),

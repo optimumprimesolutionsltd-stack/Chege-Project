@@ -19,6 +19,7 @@ import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
 import Parity from '@/pages/parity';
 import IncomeStreamsReport from '@/pages/income-streams-report';
+import SearchPage from '@/pages/search';
 import InvitePage from '@/pages/invite';
 import JoinGroupPage from '@/pages/join-group';
 import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal';
@@ -116,6 +117,7 @@ function AuthenticatedApp() {
         <Route path="/savings-goals" component={SavingsGoals} />
         <Route path="/bank" component={Bank} />
         <Route path="/reports" component={IncomeStreamsReport} />
+        <Route path="/search" component={SearchPage} />
         <Route path="/settings" component={Settings} />
         <Route path="/invite/:token" component={InvitePage} />
         <Route path="/join/:token" component={JoinGroupPage} />

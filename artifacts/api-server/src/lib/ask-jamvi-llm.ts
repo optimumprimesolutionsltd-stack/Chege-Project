@@ -4,6 +4,15 @@ export type AskJamviSummary = {
   totals: { budgeted: number; spent: number; remaining: number; incomeReceived: number };
   categories: Array<{ name: string; budgeted: number; spent: number; remaining: number }>;
   goals: Array<{ name: string; targetAmount: number; currentAmount: number; remaining: number; deadline: string | null }>;
+  ledgerEntries?: Array<{
+    kind: "expense" | "bank";
+    id: number;
+    date: string;
+    description: string;
+    category: string | null;
+    amount: number;
+    direction: "in" | "out";
+  }>;
 };
 
 const ACTION_REQUEST = /\b(transfer|send|withdraw|deposit|pay|create|add|delete|remove|edit|change|update|save|set a budget)\b|\b(move\s+(?:money|\w+\s+\d+(?:\.\d+)?|\d+(?:\.\d+)?)\b.{0,80}\b(to|into)\b)|\bmove money\b/i;
@@ -12,10 +21,11 @@ export function isAskJamviActionRequest(question: string): boolean {
   return ACTION_REQUEST.test(question.trim());
 }
 
-type AskJamviIntent = "overview" | "spending" | "remaining" | "goals" | "income" | "unknown";
+type AskJamviIntent = "overview" | "spending" | "remaining" | "goals" | "income" | "ledger" | "unknown";
 
 function classifyQuestion(question: string): AskJamviIntent {
   const value = question.trim().toLocaleLowerCase("en-US");
+  if (/(ledger|transaction|payment|entry|record|find|search|when did|how much did)/.test(value)) return "ledger";
   if (/(goal|saving|save|emergency|target)/.test(value)) return "goals";
   if (/(income|earn|deposit|received|contribution)/.test(value)) return "income";
   if (/(where|spend|spent|spending|category|categories|most)/.test(value)) return "spending";
@@ -28,9 +38,22 @@ const formatKes = (amount: number) => `KES ${Math.round(amount).toLocaleString("
 
 export function generateAskJamviFallback(question: string, summary: AskJamviSummary): string {
   const intent = classifyQuestion(question);
-  const { totals, categories, goals, workspace, period } = summary;
+  const { totals, categories, goals, workspace, period, ledgerEntries = [] } = summary;
   const periodLabel = new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric" })
     .format(new Date(period.year, period.month - 1, 1));
+  const searchTerms = question.toLocaleLowerCase("en-US")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((term) => term.length > 2 && !["find", "search", "ledger", "entry", "payment", "transaction", "record", "about", "this", "that", "when", "much"].includes(term));
+  const ledgerMatches = ledgerEntries.filter((entry) => {
+    const haystack = `${entry.description} ${entry.category ?? ""} ${entry.date} ${entry.amount}`.toLocaleLowerCase("en-US");
+    return searchTerms.length > 0 && searchTerms.every((term) => haystack.includes(term));
+  }).slice(0, 3);
+  if (intent === "ledger" || (intent === "unknown" && ledgerMatches.length > 0)) {
+    return ledgerMatches.length > 0
+      ? `I found ${ledgerMatches.length} matching ledger ${ledgerMatches.length === 1 ? "entry" : "entries"}: ${ledgerMatches.map((entry) => `${entry.description} — ${formatKes(entry.amount)} on ${entry.date} (${entry.kind === "bank" ? "bank" : entry.category ?? "expense"})`).join("; ")}.`
+      : `I could not find a matching expense or bank ledger entry in ${periodLabel}. Try the Search tab to look across all records.`;
+  }
   if (intent === "remaining") {
     return totals.remaining >= 0
       ? `${workspace.name} has ${formatKes(totals.remaining)} left for ${periodLabel}.`
@@ -49,7 +72,7 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
   }
   if (intent === "income") return `${formatKes(totals.incomeReceived)} has been recorded as income for ${periodLabel}.`;
   if (intent === "overview") return `For ${periodLabel}, you have spent ${formatKes(totals.spent)} of ${formatKes(totals.budgeted)}, leaving ${formatKes(totals.remaining)}. Income recorded: ${formatKes(totals.incomeReceived)}.`;
-  return "I can help with your overview, spending, remaining balance, income, or savings goals. Try asking one of those.";
+  return "I can help with your overview, spending, remaining balance, income, savings goals, or ledger entries. Try asking me to find a payment or use the Search tab.";
 }
 
 function chatCompletionsUrl(baseUrl: string): string {
@@ -123,7 +146,7 @@ export async function generateAskJamviResponse(question: string, summary: AskJam
         messages: [
           {
             role: "system",
-            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer. Answer only from the supplied budget context. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Never instruct or claim that you performed a financial action. If the question is not answered by the context, say so plainly.",
+            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer. Answer only from the supplied budget context, including individual ledgerEntries when asked to find an expense, payment, bank transaction, amount, description, category, or date. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Never instruct or claim that you performed a financial action. If the question is not answered by the context, say so plainly and suggest the Search tab for older records.",
           },
           { role: "user", content: JSON.stringify({ question, budgetContext: summary }) },
         ],

@@ -917,18 +917,18 @@ export default function BankScreen() {
         ) : (
           <>
             <Text style={styles.balanceLabel}>Closing balance</Text>
-            <Text style={styles.balance}>KES {formatKES(data?.balance)}</Text>
+            <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.balance)}</Text>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Feather name="arrow-down-circle" size={14} color="#4ade80" />
                 <Text style={styles.statLabel}>Deposits</Text>
-                <Text style={styles.statValue}>KES {formatKES(data?.totalDeposits)}</Text>
+                <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDeposits)}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Feather name="arrow-up-circle" size={14} color="#f87171" />
                 <Text style={styles.statLabel}>Withdrawn</Text>
-                <Text style={styles.statValue}>KES {formatKES(data?.totalDisbursements)}</Text>
+                <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDisbursements)}</Text>
               </View>
             </View>
             <View style={styles.openingBalanceRow}>

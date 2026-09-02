@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { budgetCategoriesTable, expensesTable, expenseCategoryAllocationsTable, groupsTable, jointAccountTxTable } from "@workspace/db";
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   ApplyBudgetCategoryRecommendationsBody,
@@ -9,10 +9,29 @@ import {
   GetBudgetCategoryRecommendationsResponse,
 } from "@workspace/api-zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { categoryPackForKind, categoryPackRows, normalizedCategoryPackKind } from "../lib/categoryPacks";
+import { categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind } from "../lib/categoryPacks";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
+const priorityTierSchema = z.object({
+  priority: z.number().int().min(1).max(5),
+  label: z.string().trim().min(1).max(50),
+  description: z.string().trim().min(1).max(180),
+});
+const editablePriorityTiersSchema = z.object({
+  tiers: z.array(priorityTierSchema).length(5).refine(
+    (tiers) => new Set(tiers.map((tier) => tier.priority)).size === 5,
+    "Each priority tier must appear exactly once.",
+  ),
+});
+
+function resolvedPriorityTiers(
+  kind: string | null | undefined,
+  saved: unknown,
+) {
+  const parsed = z.array(priorityTierSchema).length(5).safeParse(saved);
+  return parsed.success ? parsed.data : priorityTiersForKind(kind);
+}
 
 function isReservedBudgetCategoryName(name: string) {
   return name.trim().toLocaleLowerCase() === UNCATEGORIZED_CATEGORY.toLocaleLowerCase();
@@ -57,6 +76,59 @@ router.get("/budget-categories", async (req, res) => {
     .where(and(eq(budgetCategoriesTable.groupId, groupId), eq(budgetCategoriesTable.isArchived, false)))
     .orderBy(asc(budgetCategoriesTable.priority), asc(budgetCategoriesTable.name));
   res.json(categories);
+});
+
+router.get("/budget-priority-tiers", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const [group] = await db
+    .select({ kind: groupsTable.kind, priorityTiers: groupsTable.priorityTiers })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+  if (!group) { res.status(404).json({ error: "Active budget not found." }); return; }
+  res.json({ tiers: resolvedPriorityTiers(group.kind, group.priorityTiers) });
+});
+
+router.put("/budget-priority-tiers", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null || !requireGroupManager(req, res)) return;
+  const parsed = editablePriorityTiersSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Provide five named priority tiers in the order they should appear." });
+    return;
+  }
+
+  const orderedTiers = parsed.data.tiers.map((tier, index) => ({
+    priority: index + 1,
+    label: tier.label,
+    description: tier.description,
+  }));
+
+  await db.transaction(async (tx) => {
+    // Stage the five current priority values out of range, then put each tier's
+    // categories into its new position. This keeps a reordered tier and all of
+    // its ledger categories together.
+    await tx.update(budgetCategoriesTable)
+      .set({ priority: sql`${budgetCategoriesTable.priority} + 100` })
+      .where(and(
+        eq(budgetCategoriesTable.groupId, groupId),
+        inArray(budgetCategoriesTable.priority, [1, 2, 3, 4, 5]),
+      ));
+    for (const [index, tier] of parsed.data.tiers.entries()) {
+      await tx.update(budgetCategoriesTable)
+        .set({ priority: index + 1 })
+        .where(and(
+          eq(budgetCategoriesTable.groupId, groupId),
+          eq(budgetCategoriesTable.priority, tier.priority + 100),
+        ));
+    }
+    await tx.update(groupsTable)
+      .set({ priorityTiers: orderedTiers })
+      .where(eq(groupsTable.id, groupId));
+  });
+
+  res.json({ tiers: orderedTiers });
 });
 
 router.get("/budget-categories/recommendations", async (req, res) => {

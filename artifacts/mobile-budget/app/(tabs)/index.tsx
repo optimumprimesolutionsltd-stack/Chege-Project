@@ -750,7 +750,7 @@ export default function DashboardScreen() {
               value={askQuery}
               onChangeText={setAskQuery}
               onSubmitEditing={() => void askJamvi()}
-              placeholder="Ask about your budget…"
+              placeholder="Ask about totals or find a ledger entry…"
               placeholderTextColor={colors.mutedForeground}
               style={[styles.askInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
               accessibilityLabel="Ask Jamvi a question"
@@ -776,7 +776,7 @@ export default function DashboardScreen() {
               )}
             </Pressable>
             <View style={styles.askPromptList}>
-              {['How am I doing this month?', 'Where am I spending the most?', 'How much is left?'].map((prompt) => (
+              {['Find Kids offering in my ledger', 'Where am I spending the most?', 'How much is left?'].map((prompt) => (
                 <Pressable
                   key={prompt}
                   onPress={() => void askJamvi(prompt)}

@@ -32,6 +32,10 @@ function NativeTabLayout({ showReports }: { showReports: boolean }) {
         <Icon sf={{ default: 'target', selected: 'target' }} />
         <Label>Goals</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="search">
+        <Icon sf={{ default: 'magnifyingglass', selected: 'magnifyingglass' }} />
+        <Label>Search</Label>
+      </NativeTabs.Trigger>
       {showReports && (
         <NativeTabs.Trigger name="reports">
           <Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} />
@@ -134,6 +138,18 @@ function ClassicTabLayout({ showReports }: { showReports: boolean }) {
               <SymbolView name="target" tintColor={color} size={24} />
             ) : (
               <Feather name="target" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="magnifyingglass" tintColor={color} size={24} />
+            ) : (
+              <Feather name="search" size={22} color={color} />
             ),
         }}
       />

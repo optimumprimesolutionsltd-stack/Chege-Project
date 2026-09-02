@@ -46,11 +46,11 @@ export function AskJamviPanel({ month, year, workspaceName }: Props) {
       </CardHeader>
       <CardContent className="space-y-4 p-4 sm:p-5">
         <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); submit(query); }}>
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask about your budget…" aria-label="Ask Jamvi a question" />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask about totals or find a ledger entry…" aria-label="Ask Jamvi a question" />
           <Button type="submit" size="icon" aria-label="Ask Jamvi" disabled={!query.trim() || askMutation.isPending}><Send className="h-4 w-4" /></Button>
         </form>
         <div className="flex flex-wrap gap-2">
-          {["How am I doing this month?", "Where am I spending the most?", "How much is left?", "What are my savings goals?"].map((prompt) => <button key={prompt} type="button" onClick={() => submit(prompt)} className="rounded-full border border-primary/20 bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-primary/10">{prompt}</button>)}
+          {["Find Kids offering in my ledger", "Where am I spending the most?", "How much is left?", "What are my savings goals?"].map((prompt) => <button key={prompt} type="button" onClick={() => submit(prompt)} className="rounded-full border border-primary/20 bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-primary/10">{prompt}</button>)}
         </div>
         {askMutation.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Reviewing your budget…</p>}
         {askMutation.isError && <p className="text-sm text-destructive">{askMutation.error instanceof Error ? askMutation.error.message : "Ask Jamvi could not answer right now."}</p>}

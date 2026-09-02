@@ -68,6 +68,28 @@ describe("Ask Jamvi server LLM guardrails", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("finds a matching expense ledger entry without an AI provider", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    delete process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+    delete process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+
+    await expect(generateAskJamviResponse("Find Kids offering in my ledger", {
+      ...summary,
+      ledgerEntries: [{
+        kind: "expense",
+        id: 17,
+        date: "2026-08-17",
+        description: "Kids offering",
+        category: "Welfare",
+        amount: 2000,
+        direction: "out",
+      }],
+    })).resolves.toContain("Kids offering — KES 2,000");
+  });
+
   it("falls back without leaking provider error details to callers", async () => {
     delete process.env.ASK_JAMVI_API_URL;
     delete process.env.ASK_JAMVI_API_KEY;

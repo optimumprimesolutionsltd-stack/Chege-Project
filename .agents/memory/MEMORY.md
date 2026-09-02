@@ -51,3 +51,4 @@
 - [M-Pesa parser staging](mpesa-parser-staging.md) — keep the lab deterministic and separate; add one message family at a time from anonymized examples, never guessed formats.
 - [Bank amount precision](bank-amount-precision.md) — bank balances and ledger entries support two-decimal KES; savings-goal transfers remain whole KES until goal storage changes.
 - [Workspace switch confirmation lifecycle](workspace-switch-confirmation-lifecycle.md) — do not close a mobile shell before its locally owned confirmation finishes; unmounting cancels the switch.
+- [Ask Jamvi ledger search](ask-jamvi-ledger-search.md) — Ask Jamvi searches current-month ledger context; Search tabs find broader workspace records; both stay read-only and workspace-scoped.
