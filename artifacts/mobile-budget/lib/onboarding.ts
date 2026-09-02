@@ -13,18 +13,48 @@ export type MobileOnboardingDraft = {
   incomeAmounts: Record<string, string>;
 };
 
+const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
+  "food & meals": "Food",
+  groceries: "Food",
+  accommodation: "Housing",
+  rent: "Housing",
+  "tuition & fees": "Education",
+  "school fees": "Education",
+};
+
+export function normalizeCategoryName(name: string): string {
+  return name.trim().toLocaleLowerCase("en-US");
+}
+
+export function canonicalCategoryName(name: string): string {
+  const trimmed = name.trim();
+  return ONBOARDING_CATEGORY_ALIASES[normalizeCategoryName(trimmed)] ?? trimmed;
+}
+
+export function dedupeCategoryNames(names: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return names.reduce<string[]>((result, name) => {
+    const canonical = canonicalCategoryName(name);
+    const normalized = normalizeCategoryName(canonical);
+    if (!normalized || seen.has(normalized)) return result;
+    seen.add(normalized);
+    result.push(canonical);
+    return result;
+  }, []);
+}
+
 export const ONBOARDING_CATEGORY_TIERS = [
   {
     priority: 1,
     label: "Essentials",
     description: "The costs that keep life moving.",
-    categories: ["Food", "Food & meals", "Groceries", "Housing", "Accommodation", "Rent", "Utilities", "Shared bills", "Transport"],
+    categories: ["Food", "Housing", "Utilities", "Shared bills", "Transport"],
   },
   {
     priority: 2,
     label: "Important",
     description: "Regular needs worth planning for.",
-    categories: ["Health", "Education", "Tuition & fees", "Books & supplies", "Family support", "Personal care", "Insurance", "School fees"],
+    categories: ["Health", "Education", "Books & supplies", "Family support", "Personal care", "Insurance"],
   },
   {
     priority: 3,
@@ -40,7 +70,7 @@ export const ONBOARDING_CATEGORY_TIERS = [
   },
 ] as const;
 
-export const ALL_ONBOARDING_CATEGORIES = ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories);
+export const ALL_ONBOARDING_CATEGORIES = dedupeCategoryNames(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
 
 export const COMMON_INCOME_STREAMS = [
   "Salary or wages",
@@ -85,12 +115,12 @@ export const PURPOSE_OPTIONS = {
 } as const;
 
 const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
-  student: ["Food & meals", "Accommodation", "Transport", "Tuition & fees", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
-  working: ["Food", "Rent", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
+  student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
+  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
   business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Airtime & data", "Other"],
-  couple: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
-  friends: ["Food & meals", "Rent", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data"],
-  family: ["Groceries", "Rent", "Utilities", "Transport", "Health", "School fees", "Family support", "Insurance", "Household"],
+  couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
+  friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data"],
+  family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
   chama: ["Member welfare", "Loans", "Member contributions", "Events", "Transport", "Projects", "Other"],
   club: ["Member contributions", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
 };
@@ -102,11 +132,12 @@ export function onboardingDraftStorageKey(userId: string): string {
 }
 
 export function recommendedCategoriesForPurpose(purpose: string | null): string[] {
-  return [...(purpose ? (PURPOSE_CATEGORY_MAP[purpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES)];
+  return dedupeCategoryNames(purpose ? (PURPOSE_CATEGORY_MAP[purpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES);
 }
 
 export function categoryPriority(category: string): number {
-  return ONBOARDING_CATEGORY_TIERS.find((tier) => tier.categories.some((item) => item === category))?.priority ?? 4;
+  const canonical = canonicalCategoryName(category);
+  return ONBOARDING_CATEGORY_TIERS.find((tier) => tier.categories.some((item) => item === canonical))?.priority ?? 4;
 }
 
 export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft | null {
@@ -115,14 +146,27 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
   if (raw.usageMode !== "personal" && raw.usageMode !== "shared" && raw.usageMode !== "both") return null;
   if (raw.budgetDuration !== "ongoing" && raw.budgetDuration !== "week" && raw.budgetDuration !== "month" && raw.budgetDuration !== "quarter" && raw.budgetDuration !== "custom") return null;
   if (!Array.isArray(raw.selectedCategories) || !Array.isArray(raw.customCategories) || !Array.isArray(raw.selectedIncomeStreams)) return null;
+  const persona = typeof raw.persona === "string" ? raw.persona : null;
+  const selectedCategories = dedupeCategoryNames(raw.selectedCategories.filter((item): item is string => typeof item === "string"));
+  const recommendedCategories = recommendedCategoriesForPurpose(persona);
+  const customCategories = dedupeCategoryNames(raw.customCategories.filter((item): item is string => typeof item === "string"))
+    .filter((category) => !recommendedCategories.some((item) => normalizeCategoryName(item) === normalizeCategoryName(category)));
+  const categoryBudgets = raw.categoryBudgets && typeof raw.categoryBudgets === "object"
+    ? Object.entries(raw.categoryBudgets as Record<string, unknown>).reduce<Record<string, string>>((result, [name, amount]) => {
+      if (typeof amount !== "string") return result;
+      const canonical = canonicalCategoryName(name);
+      if (!(canonical in result)) result[canonical] = amount;
+      return result;
+    }, {})
+    : {};
   return {
     usageMode: raw.usageMode,
-    persona: typeof raw.persona === "string" ? raw.persona : null,
+    persona,
     budgetDuration: raw.budgetDuration,
     customEndDate: typeof raw.customEndDate === "string" ? raw.customEndDate : "",
-    selectedCategories: raw.selectedCategories.filter((item): item is string => typeof item === "string"),
-    customCategories: raw.customCategories.filter((item): item is string => typeof item === "string"),
-    categoryBudgets: raw.categoryBudgets && typeof raw.categoryBudgets === "object" ? raw.categoryBudgets as Record<string, string> : {},
+    selectedCategories,
+    customCategories,
+    categoryBudgets,
     selectedIncomeStreams: dedupeIncomeStreamNames(raw.selectedIncomeStreams.filter((item): item is string => typeof item === "string")),
     incomeAmounts: raw.incomeAmounts && typeof raw.incomeAmounts === "object" ? raw.incomeAmounts as Record<string, string> : {},
   };

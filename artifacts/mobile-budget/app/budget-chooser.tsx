@@ -41,8 +41,11 @@ import {
   COMMON_INCOME_STREAMS,
   ONBOARDING_CATEGORY_TIERS,
   PURPOSE_OPTIONS,
+  canonicalCategoryName,
   clearOnboardingDraft,
+  dedupeCategoryNames,
   dedupeIncomeStreamNames,
+  normalizeCategoryName,
   normalizeIncomeStreamName,
   readOnboardingDraft,
   recommendedCategoriesForPurpose,
@@ -404,7 +407,7 @@ function MobileOnboardingFlow({
   }, [user?.id]);
 
   const recommendedCategories = useMemo(
-    () => [...new Set([...recommendedCategoriesForPurpose(draft.persona), ...draft.customCategories])],
+    () => dedupeCategoryNames([...recommendedCategoriesForPurpose(draft.persona), ...draft.customCategories]),
     [draft.persona, draft.customCategories],
   );
   const visibleTiers = useMemo(() => {
@@ -487,11 +490,17 @@ function MobileOnboardingFlow({
   };
   const addCustomCategory = () => {
     const value = customCategory.trim();
-    if (!value || draft.customCategories.includes(value)) return;
+    if (!value) return;
+    const canonical = canonicalCategoryName(value);
+    const normalized = normalizeCategoryName(canonical);
+    if (recommendedCategories.some((item) => normalizeCategoryName(item) === normalized)) {
+      setError(`${canonical} is already in the recommended categories.`);
+      return;
+    }
     updateDraft((current) => ({
       ...current,
-      customCategories: [...current.customCategories, value],
-      selectedCategories: [...current.selectedCategories, value],
+      customCategories: dedupeCategoryNames([...current.customCategories, canonical]),
+      selectedCategories: dedupeCategoryNames([...current.selectedCategories, canonical]),
     }));
     setCustomCategory('');
   };
