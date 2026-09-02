@@ -60,6 +60,10 @@ function detectPurchaseCategory(message: string): MpesaPurchaseCategory {
   if (/\bpostpaid\s+bundles?\b/.test(lower)) return "postpaid_bundle";
   if (/\bsafaricom\s+offers\b.*\baccount\s+tunukiwa\b/.test(lower)) return "minutes";
   if (/\bsafaricom\s+data\s+bundles\b.*\baccount\s+talkmore\b/.test(lower)) return "minutes";
+  if (/\bbought\s+(?:ksh|kes)\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?\s+of\s+airtime\b/.test(lower)) {
+    return "airtime";
+  }
+  if (/\bdirect\s+pay\s+04\b/.test(lower)) return "airtime";
   return null;
 }
 

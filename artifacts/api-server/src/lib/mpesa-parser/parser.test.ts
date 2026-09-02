@@ -165,4 +165,59 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "direct pay airtime confirmation",
+      message:
+        "TESTAIRTIME1 Confirmed. Ksh23.00 sent to DIRECT PAY 04 for account SAMPLE ACCOUNT on 31/8/26 at 5:57 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.Amount you can transact within the day is 499,806.00. See all your balances now <LINK>",
+      transactionId: "TESTAIRTIME1",
+      merchant: "DIRECT PAY 04",
+      date: "2026-08-31",
+      time: "17:57",
+      amount: 23,
+      balance: 0,
+    },
+    {
+      name: "explicit airtime purchase",
+      message:
+        "TESTAIRTIME2 confirmed.You bought Ksh20.00 of airtime on 13/3/26 at 9:18 PM.New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,009.00. Start Investing today with Ziidi MMF & earn daily. Dial *334#.",
+      transactionId: "TESTAIRTIME2",
+      merchant: null,
+      date: "2026-03-13",
+      time: "21:18",
+      amount: 20,
+      balance: 0,
+    },
+    {
+      name: "explicit airtime purchase with a different amount",
+      message:
+        "TESTAIRTIME3 confirmed.You bought Ksh10.00 of airtime on 20/3/26 at 2:34 PM.New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,806.00. Start Investing today with Ziidi MMF & earn daily. Dial *334#.",
+      transactionId: "TESTAIRTIME3",
+      merchant: null,
+      date: "2026-03-20",
+      time: "14:34",
+      amount: 10,
+      balance: 0,
+    },
+  ])("recognizes $name as a regular airtime purchase", ({ message, transactionId, merchant, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "airtime_purchase",
+        purchaseCategory: "airtime",
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: merchant,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
 });
