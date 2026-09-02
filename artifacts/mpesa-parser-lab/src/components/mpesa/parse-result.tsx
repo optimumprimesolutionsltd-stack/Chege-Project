@@ -111,6 +111,7 @@ export function ParseResult({ result, isLoading }: ParseResultProps) {
               <Field label="Transaction Type" value={tx.transactionType} />
               <Field label="Purchase Category" value={tx.purchaseCategory} />
               <Field label="Transaction ID" value={tx.transactionId} />
+              <Field label="Original Transaction ID" value={tx.originalTransactionId} />
               <Field label="Amount" value={tx.amount !== null ? `${tx.currency || 'KES'} ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : null} />
               <Field label="Merchant/Counterparty/Agent" value={tx.merchantOrCounterparty} />
               <Field label="Account Reference" value={tx.accountReference} />

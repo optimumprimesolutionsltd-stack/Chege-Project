@@ -13,6 +13,8 @@ export interface MpesaTransaction {
   /** @nullable */
   transactionId: string | null;
   /** @nullable */
+  originalTransactionId: string | null;
+  /** @nullable */
   transactionType: MpesaTransactionTransactionType;
   /** @nullable */
   purchaseCategory: MpesaTransactionPurchaseCategory;

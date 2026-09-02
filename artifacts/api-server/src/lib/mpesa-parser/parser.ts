@@ -10,6 +10,7 @@ import { hasMpesaSignals, normalizeMpesaMessage } from "./normalize";
 
 const amountPattern = /\b(?:ksh|kes)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i;
 const transactionIdPattern = /\b([A-Z0-9]{8,15})\s+confirmed\b/i;
+const reversalPattern = /\breversal\s+of\s+transaction\s+([A-Z0-9]{8,15})\b.*?\bhas\s+been\s+successfully\s+reversed\b/i;
 const datePatterns = [
   /\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})\b/,
   /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/i,
@@ -74,7 +75,7 @@ function detectTransactionType(
   purchaseCategory: MpesaPurchaseCategory,
 ): MpesaTransactionType | null {
   const lower = message.toLowerCase();
-  if (/\brevers(?:ed|al)\b/.test(lower)) return "reversal";
+  if (reversalPattern.test(message)) return "reversal";
   if (/\bfailed\b|\bcould not\b|\bunsuccessful\b/.test(lower)) return "failed";
   if (purchaseCategory) return "airtime_purchase";
   if (/\bairtime\b/.test(lower)) return "airtime_purchase";
@@ -166,6 +167,7 @@ export function parseMpesaMessage(message: string): ParseResult {
   }
 
   const transactionId = normalizedMessage.match(transactionIdPattern)?.[1]?.toUpperCase() ?? null;
+  const originalTransactionId = normalizedMessage.match(reversalPattern)?.[1]?.toUpperCase() ?? null;
   const amountMatch = normalizedMessage.match(amountPattern);
   const amount = parseMoney(amountMatch?.[1]);
   const purchaseCategory = detectPurchaseCategory(normalizedMessage);
@@ -174,6 +176,9 @@ export function parseMpesaMessage(message: string): ParseResult {
   const warnings: string[] = [];
 
   if (!transactionId) warnings.push("Transaction ID was not found.");
+  if (transactionType === "reversal" && !originalTransactionId) {
+    warnings.push("Original transaction ID was not found for this reversal.");
+  }
   if (amount === null) warnings.push("A positive KSh amount was not found.");
   if (!transactionType) warnings.push("Transaction type is not recognized by the foundation parser.");
   if (/\b(?:07\d{8}|254\d{9})\b/.test(message)) {
@@ -182,6 +187,7 @@ export function parseMpesaMessage(message: string): ParseResult {
 
   const transaction: MpesaTransaction = {
     transactionId,
+    originalTransactionId,
     transactionType,
     purchaseCategory,
     amount,
@@ -192,7 +198,7 @@ export function parseMpesaMessage(message: string): ParseResult {
     date: parseDate(normalizedMessage),
     time: parseTime(normalizedMessage),
     mpesaBalance: parseMoney(
-      normalizedMessage.match(/\b(?:new\s+)?m[- ]?pesa balance(?:\s+is)?\s*(?:ksh|kes)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i)?.[1],
+      normalizedMessage.match(/\b(?:new\s+)?m[- ]?pesa(?:\s+account)?\s+balance(?:\s+is)?\s*(?:ksh|kes)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i)?.[1],
       true,
     ),
     fee: parseMoney(

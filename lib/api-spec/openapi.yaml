@@ -1816,6 +1816,8 @@ components:
       properties:
         transactionId:
           type: ["string", "null"]
+        originalTransactionId:
+          type: ["string", "null"]
         transactionType:
           type: ["string", "null"]
           enum: [person_payment, person_receipt, merchant_payment, paybill_payment, airtime_purchase, cash_withdrawal, cash_deposit, bank_transfer, bank_receipt, reversal, failed, other, null]
@@ -1852,6 +1854,7 @@ components:
             type: string
       required:
         - transactionId
+        - originalTransactionId
         - transactionType
         - purchaseCategory
         - amount

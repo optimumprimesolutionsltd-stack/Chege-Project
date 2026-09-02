@@ -687,4 +687,61 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "small reversal",
+      message:
+        "TESTREVERSAL1 confirmed. Reversal of transaction TESTORIGINAL1 has been successfully reversed on 13/8/26 at 11:00 AM and Ksh1.00 is credited to your M-PESA account. New M-PESA account balance is Ksh1.00.",
+      transactionId: "TESTREVERSAL1",
+      originalTransactionId: "TESTORIGINAL1",
+      date: "2026-08-13",
+      time: "11:00",
+      amount: 1,
+      balance: 1,
+    },
+    {
+      name: "reversal with a decimal balance",
+      message:
+        "TESTREVERSAL2 confirmed. Reversal of transaction TESTORIGINAL2 has been successfully reversed on 13/8/26 at 4:00 PM and Ksh2.00 is credited to your M-PESA account. New M-PESA account balance is Ksh4,555.10.",
+      transactionId: "TESTREVERSAL2",
+      originalTransactionId: "TESTORIGINAL2",
+      date: "2026-08-13",
+      time: "16:00",
+      amount: 2,
+      balance: 4555.1,
+    },
+    {
+      name: "large reversal with a precise time",
+      message:
+        "TESTREVERSAL3 confirmed. Reversal of transaction TESTORIGINAL3 has been successfully reversed on 3/1/26 at 10:41 AM and Ksh3,500.00 is credited to your M-PESA account. New M-PESA account balance is Ksh35,793.28.",
+      transactionId: "TESTREVERSAL3",
+      originalTransactionId: "TESTORIGINAL3",
+      date: "2026-01-03",
+      time: "10:41",
+      amount: 3500,
+      balance: 35793.28,
+    },
+  ])("recognizes $name", ({ message, transactionId, originalTransactionId, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        originalTransactionId,
+        transactionType: "reversal",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: null,
+        accountReference: null,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: null,
+      },
+    });
+  });
 });
