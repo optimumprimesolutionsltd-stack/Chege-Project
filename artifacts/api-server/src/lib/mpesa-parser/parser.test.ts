@@ -572,4 +572,63 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "agent withdrawal with market location",
+      message:
+        "TESTWITHDRAW1 Confirmed.on 30/8/26 at 10:12 AMWithdraw Ksh800.00 from SAMPLE AGENT CODE - SAMPLE MARKET CENTRE New M-PESA balance is Ksh1,351.73. Transaction cost, Ksh29.00. Amount you can transact within the day is 499,000.00. Get a Lipa Na M-PESA Till online: <LINK>",
+      transactionId: "TESTWITHDRAW1",
+      counterparty: "SAMPLE AGENT CODE - SAMPLE MARKET CENTRE",
+      date: "2026-08-30",
+      time: "10:12",
+      amount: 800,
+      balance: 1351.73,
+      fee: 29,
+    },
+    {
+      name: "electronics agent withdrawal",
+      message:
+        "TESTWITHDRAW2 Confirmed.on 18/2/25 at 7:52 PMWithdraw Ksh3,000.00 from SAMPLE AGENT CODE - SAMPLE ELECTRONICS SAMPLE MARKET New M-PESA balance is Ksh3,088.99. Transaction cost, Ksh52.00. Amount you can transact within the day is 495,600.00. To move money from bank to M-PESA, dial *334#>Withdraw>From Bank to MPESA",
+      transactionId: "TESTWITHDRAW2",
+      counterparty: "SAMPLE AGENT CODE - SAMPLE ELECTRONICS SAMPLE MARKET",
+      date: "2025-02-18",
+      time: "19:52",
+      amount: 3000,
+      balance: 3088.99,
+      fee: 52,
+    },
+    {
+      name: "engineering contractor agent withdrawal",
+      message:
+        "TESTWITHDRAW3 Confirmed.on 14/2/25 at 12:49 PMWithdraw Ksh4,000.00 from SAMPLE AGENT CODE - SAMPLE ENGINEERING CONTRACTORS SAMPLE ROAD New M-PESA balance is Ksh2,589.97. Transaction cost, Ksh69.00. Amount you can transact within the day is 493,850.00. To move money from bank to M-PESA, dial *334#>Withdraw>From Bank to MPESA",
+      transactionId: "TESTWITHDRAW3",
+      counterparty: "SAMPLE AGENT CODE - SAMPLE ENGINEERING CONTRACTORS SAMPLE ROAD",
+      date: "2025-02-14",
+      time: "12:49",
+      amount: 4000,
+      balance: 2589.97,
+      fee: 69,
+    },
+  ])("recognizes $name as a cash withdrawal", ({ message, transactionId, counterparty, date, time, amount, balance, fee }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "cash_withdrawal",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: counterparty,
+        accountReference: null,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee,
+      },
+    });
+  });
 });

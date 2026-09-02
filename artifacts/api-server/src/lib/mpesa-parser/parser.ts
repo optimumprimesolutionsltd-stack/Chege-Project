@@ -15,6 +15,7 @@ const datePatterns = [
   /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/i,
 ];
 const timePattern = /\b([01]?\d|2[0-3]):([0-5]\d)(?:\s*([AP]M))?\b/i;
+const attachedMeridiemTimePattern = /\b([01]?\d|2[0-3]):([0-5]\d)\s*([AP]M)(?=\s|withdraw\b)/i;
 
 const monthNumbers: Record<string, string> = {
   jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
@@ -44,7 +45,7 @@ function parseDate(message: string): string | null {
 }
 
 function parseTime(message: string): string | null {
-  const match = message.match(timePattern);
+  const match = message.match(attachedMeridiemTimePattern) ?? message.match(timePattern);
   if (!match) return null;
   let hour = Number(match[1]);
   if (match[3]) {
@@ -77,7 +78,7 @@ function detectTransactionType(
   if (/\bfailed\b|\bcould not\b|\bunsuccessful\b/.test(lower)) return "failed";
   if (purchaseCategory) return "airtime_purchase";
   if (/\bairtime\b/.test(lower)) return "airtime_purchase";
-  if (/\bwithdraw(?:al)?\b|\batm\b/.test(lower)) return "cash_withdrawal";
+  if (/(?:\b|[ap]m)withdraw(?:al)?\b|\batm\b/.test(lower)) return "cash_withdrawal";
   if (/\bdeposit(?:ed)?\b/.test(lower)) return "cash_deposit";
   if (/\b(?:bank to|m[- ]?pesa to bank|bank transfer)\b/.test(lower)) return "bank_transfer";
   if (/\bpaybill\b|\baccount number\b|\bfor\s+account\b/.test(lower)) return "paybill_payment";
@@ -98,6 +99,14 @@ function detectTransactionType(
 }
 
 function extractCounterparty(message: string): string | null {
+  const withdrawalMatch = message.match(
+    /(?:\b|[ap]m)withdraw\s+(?:ksh|kes)\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?\s+from\s+(.+?)(?=\s+new\s+m[- ]?pesa\s+balance\b|$)/i,
+  );
+  if (withdrawalMatch) {
+    const withdrawalValue = withdrawalMatch[1].trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+    return withdrawalValue || null;
+  }
+
   const match = message.match(
     /\b(?:paid to|sent to|received from|transferred to|from)\s+([A-Za-z][A-Za-z0-9 &'./-]{1,70}?)(?=\s+(?:on|at|for\s+account|new balance|balance|fee)\b|\s+<PHONE>|[.,]|$)/i,
   );
