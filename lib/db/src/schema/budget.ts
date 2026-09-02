@@ -1,4 +1,5 @@
-import { pgTable, serial, text, integer, numeric, boolean, date, timestamp, index, unique, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean, date, timestamp, index, unique, uniqueIndex, check, foreignKey } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { groupsTable } from "./groups";
 
 // Workspace-owned bank accounts. Legacy ledger history is attached to a
@@ -53,7 +54,12 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   activeMonth: integer("active_month"),
   activeYear: integer("active_year"),
 }, (table) => [
-  unique("budget_categories_group_name_unique").on(table.groupId, table.name),
+  check(
+    "budget_categories_name_valid_check",
+    sql`btrim(${table.name}) <> '' AND char_length(${table.name}) <= 80`,
+  ),
+  uniqueIndex("budget_categories_group_name_normalized_unique")
+    .on(table.groupId, sql`lower(btrim(${table.name}))`),
   index("budget_categories_group_priority_idx").on(table.groupId, table.priority),
 ]);
 
