@@ -9,7 +9,7 @@ vi.mock('@workspace/api-client-react', () => ({
   },
 }));
 
-import { applyMobileOnboardingToWorkspace, saveMobileOnboardingPreferences } from '../onboarding-api';
+import { applyMobileOnboardingToWorkspace, saveMobileOnboardingPreferences, saveMobileOnboardingProgress } from '../onboarding-api';
 import type { MobileOnboardingDraft } from '../onboarding';
 
 const draftFor = (usageMode: MobileOnboardingDraft['usageMode']): MobileOnboardingDraft => ({
@@ -69,5 +69,16 @@ describe('mobile onboarding API paths', () => {
     expect(preferenceBody.usageMode).toBe('both');
     expect(planBody.categories).toHaveLength(2);
     expect(planBody.categories[0].plannedAmount).toBe(12000);
+  });
+
+  it('marks a saved in-progress setup as incomplete until the final step', async () => {
+    await saveMobileOnboardingProgress({ ...draftFor('personal'), lastStep: 4 });
+
+    const preferenceBody = JSON.parse(customFetch.mock.calls[0][1].body);
+    expect(preferenceBody).toMatchObject({
+      usageMode: 'personal',
+      categoryNames: ['Food', 'Transport'],
+      completed: false,
+    });
   });
 });

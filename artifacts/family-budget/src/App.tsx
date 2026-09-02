@@ -23,8 +23,8 @@ import SearchPage from '@/pages/search';
 import InvitePage from '@/pages/invite';
 import JoinGroupPage from '@/pages/join-group';
 import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal';
-import { BudgetChooser, hasCompletedBudgetChooser } from '@/components/budget-chooser';
-import { shouldShowBudgetChooser } from '@/lib/budget-chooser-routing';
+import { BudgetChooser, hasCompletedBudgetChooser, hasSavedOnboardingDraft } from '@/components/budget-chooser';
+import { hasFinishedOnboarding, shouldShowBudgetChooser } from '@/lib/budget-chooser-routing';
 import { getGetWorkspacesQueryKey, useGetWorkspaces } from '@workspace/api-client-react';
 import { routePath } from '@/lib/base-path';
 
@@ -242,7 +242,14 @@ function MainRouter() {
   // The local flag remains a fallback for older accounts that completed setup
   // before onboarding preferences were persisted.
   const hasExistingBudget = workspaces.length > 0;
-  const completedBudgetChooser = Boolean(onboardingPreferences?.completed) || hasCompletedBudgetChooser(user?.id ?? '') || hasExistingBudget;
+  const serverCompletedOnboarding = Boolean(onboardingPreferences?.completed);
+  const completedBudgetChooser = hasFinishedOnboarding({
+    serverCompleted: serverCompletedOnboarding,
+    serverStarted: onboardingPreferences?.completed === false,
+    localCompleted: hasCompletedBudgetChooser(user?.id ?? ''),
+    hasExistingBudget,
+    hasSavedDraft: hasSavedOnboardingDraft(user?.id ?? ''),
+  });
   const chooserRoute = shouldShowBudgetChooser({
     pathname: window.location.pathname,
     basePath: import.meta.env.BASE_URL,

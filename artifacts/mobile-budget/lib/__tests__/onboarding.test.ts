@@ -19,6 +19,7 @@ describe('mobile onboarding', () => {
     persona: 'student',
     budgetDuration: 'month',
     customEndDate: '',
+    lastStep: 0,
     selectedCategories: [],
     customCategories: [],
     categoryBudgets: {},

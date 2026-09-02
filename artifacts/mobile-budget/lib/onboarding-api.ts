@@ -32,6 +32,26 @@ export async function saveMobileOnboardingPreferences(
   });
 }
 
+export async function saveMobileOnboardingProgress(
+  draft: MobileOnboardingDraft,
+): Promise<void> {
+  await customFetch("/api/onboarding/preferences", {
+    method: "PUT",
+    responseType: "json",
+    body: JSON.stringify({
+      usageMode: draft.usageMode,
+      persona: draft.persona,
+      budgetDuration: draft.budgetDuration,
+      budgetStartDate: today(),
+      budgetEndDate: draft.budgetDuration === "custom" ? draft.customEndDate : null,
+      categoryNames: draft.selectedCategories,
+      incomeStreams: draft.selectedIncomeStreams,
+      completed: false,
+      onboardingVersion: 1,
+    }),
+  });
+}
+
 export async function applyMobileOnboardingToWorkspace({
   workspace,
   draft,

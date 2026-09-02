@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetWorkspacesQueryKey,
@@ -16,7 +16,22 @@ import { Input } from "@/components/ui/input";
 import { getBudgetIncomeCheck, getKnownIncomeTotal } from "@/lib/onboarding-budget-utils";
 
 const CHOOSER_STORAGE_PREFIX = "jamvi:budget-chooser:completed:";
+const ONBOARDING_DRAFT_STORAGE_PREFIX = "jamvi:onboarding-draft:";
 type OnboardingMode = "personal" | "shared" | "both" | "returning";
+type SetupMode = Exclude<OnboardingMode, "returning">;
+type OnboardingStage = "purpose" | "duration" | "categories" | "income" | "category-budgets";
+type WebOnboardingDraft = {
+  mode: SetupMode;
+  stage: OnboardingStage;
+  purpose: string | null;
+  duration: "ongoing" | "week" | "month" | "quarter" | "custom" | null;
+  customEndDate: string;
+  selectedCategories: string[];
+  customCategories: string[];
+  categoryBudgets: Record<string, string>;
+  selectedIncomeStreams: string[];
+  incomeAmounts: Record<string, string>;
+};
 
 export function getInitialOnboardingMode(setupComplete: boolean): OnboardingMode | null {
   return setupComplete ? "returning" : null;
@@ -90,6 +105,44 @@ export function budgetChooserCompletionKey(userId: string) {
   return `${CHOOSER_STORAGE_PREFIX}${encodeURIComponent(userId)}`;
 }
 
+export function onboardingDraftStorageKey(userId: string) {
+  return `${ONBOARDING_DRAFT_STORAGE_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+export function hasSavedOnboardingDraft(userId: string): boolean {
+  if (!userId) return false;
+  try {
+    return Boolean(window.localStorage.getItem(onboardingDraftStorageKey(userId)));
+  } catch {
+    return false;
+  }
+}
+
+function readOnboardingDraft(userId: string): WebOnboardingDraft | null {
+  if (!userId) return null;
+  try {
+    const raw = window.localStorage.getItem(onboardingDraftStorageKey(userId));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<WebOnboardingDraft>;
+    if (value.mode !== "personal" && value.mode !== "shared" && value.mode !== "both") return null;
+    if (!["purpose", "duration", "categories", "income", "category-budgets"].includes(value.stage ?? "")) return null;
+    return {
+      mode: value.mode,
+      stage: value.stage as OnboardingStage,
+      purpose: typeof value.purpose === "string" ? value.purpose : null,
+      duration: value.duration === "ongoing" || value.duration === "week" || value.duration === "month" || value.duration === "quarter" || value.duration === "custom" ? value.duration : null,
+      customEndDate: typeof value.customEndDate === "string" ? value.customEndDate : "",
+      selectedCategories: Array.isArray(value.selectedCategories) ? value.selectedCategories.filter((item): item is string => typeof item === "string") : [],
+      customCategories: Array.isArray(value.customCategories) ? value.customCategories.filter((item): item is string => typeof item === "string") : [],
+      categoryBudgets: value.categoryBudgets && typeof value.categoryBudgets === "object" ? value.categoryBudgets : {},
+      selectedIncomeStreams: Array.isArray(value.selectedIncomeStreams) ? value.selectedIncomeStreams.filter((item): item is string => typeof item === "string") : [],
+      incomeAmounts: value.incomeAmounts && typeof value.incomeAmounts === "object" ? value.incomeAmounts : {},
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function hasCompletedBudgetChooser(userId: string): boolean {
   try {
     return window.localStorage.getItem(budgetChooserCompletionKey(userId)) === "true";
@@ -160,6 +213,11 @@ export function BudgetChooser({
         body: JSON.stringify({ usageMode: "personal", persona: null, budgetDuration: "ongoing", budgetStartDate: null, budgetEndDate: null, categoryNames: [], incomeStreams: [], completed: true, onboardingVersion: 1 }),
       });
       if (!response.ok) throw new Error("Could not skip setup right now.");
+      try {
+        window.localStorage.removeItem(onboardingDraftStorageKey(userId));
+      } catch {
+        // The server completion record remains authoritative.
+      }
       markBudgetChooserComplete(userId);
       window.location.assign(import.meta.env.BASE_URL);
     } catch {
@@ -169,7 +227,8 @@ export function BudgetChooser({
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
   const [sharedBudgetName, setSharedBudgetName] = useState("");
   const [sharedBudgetKind, setSharedBudgetKind] = useState<SharedGroupKind | null>(null);
-  const [onboardingMode, setOnboardingMode] = useState<OnboardingMode | null>(() => getInitialOnboardingMode(setupComplete));
+  const [savedOnboardingDraft, setSavedOnboardingDraft] = useState<WebOnboardingDraft | null>(() => readOnboardingDraft(userId));
+  const [onboardingMode, setOnboardingMode] = useState<OnboardingMode | null>(() => readOnboardingDraft(userId) ? null : getInitialOnboardingMode(setupComplete));
   const [showPurposeSetup, setShowPurposeSetup] = useState(false);
   const [onboardingPurpose, setOnboardingPurpose] = useState<string | null>(null);
   const [showDurationSetup, setShowDurationSetup] = useState(false);
@@ -188,10 +247,97 @@ export function BudgetChooser({
   const [customIncomeStream, setCustomIncomeStream] = useState("");
   const [incomeSelectionError, setIncomeSelectionError] = useState<string | null>(null);
 
+  const activeOnboardingStage: OnboardingStage = showCategoryBudgetSetup
+    ? "category-budgets"
+    : showIncomeSetup
+      ? "income"
+      : showCategorySetup
+        ? "categories"
+        : showDurationSetup
+          ? "duration"
+          : "purpose";
+
+  useEffect(() => {
+    if (!userId || !onboardingMode || onboardingMode === "returning") return;
+    const draft: WebOnboardingDraft = {
+      mode: onboardingMode,
+      stage: activeOnboardingStage,
+      purpose: onboardingPurpose,
+      duration: budgetDuration,
+      customEndDate,
+      selectedCategories,
+      customCategories,
+      categoryBudgets,
+      selectedIncomeStreams,
+      incomeAmounts,
+    };
+    try {
+      window.localStorage.setItem(onboardingDraftStorageKey(userId), JSON.stringify(draft));
+    } catch {
+      // The server-side incomplete marker still keeps onboarding from being skipped.
+    }
+  }, [activeOnboardingStage, budgetDuration, categoryBudgets, customCategories, customEndDate, incomeAmounts, onboardingMode, onboardingPurpose, selectedCategories, selectedIncomeStreams, userId]);
+
   const enterApp = () => {
-    if (userId) markBudgetChooserComplete(userId);
+    if (userId) {
+      markBudgetChooserComplete(userId);
+      try {
+        window.localStorage.removeItem(onboardingDraftStorageKey(userId));
+      } catch {
+        // Completion is also stored on the server.
+      }
+    }
     queryClient.clear();
     window.location.reload();
+  };
+
+  const saveOnboardingPreferences = async (completed: boolean) => {
+    if (!onboardingMode || onboardingMode === "returning") return;
+    const response = await fetch("/api/onboarding/preferences", {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        usageMode: onboardingMode,
+        persona: onboardingPurpose,
+        budgetDuration: budgetDuration ?? "month",
+        budgetEndDate: budgetDuration === "custom" ? customEndDate : null,
+        categoryNames: selectedCategories,
+        incomeStreams: selectedIncomeStreams,
+        completed,
+        onboardingVersion: 1,
+      }),
+    });
+    if (!response.ok) throw new Error(completed ? "Could not finish setup right now." : "Could not save setup progress right now.");
+  };
+
+  const resumeOnboarding = () => {
+    if (!savedOnboardingDraft) return;
+    const draft = savedOnboardingDraft;
+    setOnboardingMode(draft.mode);
+    setOnboardingPurpose(draft.purpose);
+    setBudgetDuration(draft.duration);
+    setCustomEndDate(draft.customEndDate);
+    setSelectedCategories(draft.selectedCategories);
+    setCustomCategories(draft.customCategories);
+    setCategoryBudgets(draft.categoryBudgets);
+    setSelectedIncomeStreams(draft.selectedIncomeStreams);
+    setIncomeAmounts(draft.incomeAmounts);
+    setShowPurposeSetup(draft.stage === "purpose");
+    setShowDurationSetup(draft.stage === "duration");
+    setShowCategorySetup(draft.stage === "categories");
+    setShowIncomeSetup(draft.stage === "income");
+    setShowCategoryBudgetSetup(draft.stage === "category-budgets");
+    setSavedOnboardingDraft(null);
+  };
+
+  const startOnboardingAgain = () => {
+    try {
+      window.localStorage.removeItem(onboardingDraftStorageKey(userId));
+    } catch {
+      // Starting over still works in memory for this visit.
+    }
+    setSavedOnboardingDraft(null);
   };
 
   const goBackToUsageMode = () => {
@@ -308,6 +454,38 @@ export function BudgetChooser({
   const selectedName = selectedWorkspace?.isPrivate ? "Personal budget" : selectedWorkspace ? workspaceLabel(selectedWorkspace) : "";
 
   if (!onboardingMode) {
+    if (savedOnboardingDraft) {
+      const stageLabels: Record<OnboardingStage, string> = {
+        purpose: "your budget purpose",
+        duration: "your budget duration",
+        categories: "the categories you want to track",
+        income: "your income streams",
+        "category-budgets": "your category plan",
+      };
+      return (
+        <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
+          <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-2xl items-center">
+            <div className="w-full overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
+              <header className="border-b border-primary/10 bg-primary px-6 py-8 text-primary-foreground sm:px-10 sm:py-10">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Your setup is saved</p>
+                <h1 className="mt-2 font-display text-3xl font-bold sm:text-5xl">Welcome back{user.firstName ? `, ${user.firstName}` : ""}.</h1>
+                <p className="mt-3 text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Continue from {stageLabels[savedOnboardingDraft.stage]}. Your earlier answers are still here.</p>
+              </header>
+              <div className="p-6 sm:p-10">
+                <div className="rounded-2xl border border-primary/20 bg-primary/[0.05] p-5">
+                  <h2 className="font-display text-xl font-bold text-foreground">Why finish personalizing Jamvi?</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Your answers help Jamvi recommend useful categories, organize priorities, understand your income streams, and prepare a budget plan that fits your life or group. You can change everything later.</p>
+                </div>
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                  <Button type="button" className="h-12 flex-1 rounded-xl" onClick={resumeOnboarding}>Continue setup <ChevronRight className="ml-2 h-4 w-4" /></Button>
+                  <Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={startOnboardingAgain}>Start again</Button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      );
+    }
     return (
       <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">
         <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-3xl items-center">
@@ -321,6 +499,7 @@ export function BudgetChooser({
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">First, a quick question</p>
               <h2 className="mt-2 font-display text-2xl font-bold text-foreground">How will you use Jamvi?</h2>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">This helps us take you to the right starting point. You can always add another budget later.</p>
+              <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/[0.05] p-4"><p className="font-semibold text-foreground">Personalize Jamvi in a few quick steps</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Jamvi will recommend categories, priorities, income streams, and a starting plan that fit your needs. Everything remains editable later.</p></div>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {([
                   ["personal", "My money", "A private budget for my income, spending, and goals.", Wallet],
@@ -451,7 +630,7 @@ export function BudgetChooser({
     const setCategoryBudget = (category: string, amount: string) => setCategoryBudgets((current) => ({ ...current, [category]: amount.replace(/[^0-9.]/g, "") }));
     return (
       <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10"><section className="mx-auto w-full max-w-3xl"><div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl"><header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9"><p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 6 of 6 · Approve your budget plan</p><h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, how much will you plan for each category?` : "How much will you plan for each category?"}</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Set an amount for the categories you selected. These are plans, not restrictions—you can adjust them anytime.</p></header><div className="p-6 sm:p-10">{selectedCategories.length > 0 ? <div className="space-y-3">{selectedCategories.map((category) => <div key={category} className="flex items-center gap-3 rounded-xl border border-border bg-background p-3"><label htmlFor={`budget-${category}`} className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{category}</label><div className="flex w-36 items-center gap-2"><span className="text-sm text-muted-foreground">KES</span><Input id={`budget-${category}`} inputMode="decimal" type="text" placeholder="0" value={categoryBudgets[category] ?? ""} onChange={(event) => setCategoryBudget(category, event.target.value)} className="h-10 text-right" /></div></div>)}</div> : <div className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">You did not select expense categories. You can add them later from your Budget page.</div>}<div className={`mt-5 rounded-xl border px-4 py-3 text-sm leading-relaxed ${incomeCheck.status === "above-income" ? "border-amber-500/40 bg-amber-500/10 text-foreground" : "border-primary/20 bg-primary/[0.04] text-muted-foreground"}`} role={incomeCheck.status === "above-income" ? "alert" : "status"}><span className="font-semibold text-foreground">{incomeCheck.status === "above-income" ? "Review this plan: " : "Income check: "}</span>{incomeCheck.message}</div>
- <div className="mt-6 flex items-center justify-between rounded-xl bg-primary/[0.05] px-4 py-3"><span className="text-sm font-semibold text-muted-foreground">Planned total</span><span className="font-display text-xl font-bold text-foreground">KES {totalBudget.toLocaleString("en-KE")}</span></div><div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={goBackToIncome} data-testid="onboarding-back-to-income">Back</Button><div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end"><p className="text-xs text-muted-foreground">Amounts can be changed later</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:category-budgets:${encodeURIComponent(userId)}`, JSON.stringify(categoryBudgets)); } catch { /* Continue even when storage is unavailable. */ } setShowCategoryBudgetSetup(false); }}>Approve budget and continue <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></div></div></section></main>
+ <div className="mt-6 flex items-center justify-between rounded-xl bg-primary/[0.05] px-4 py-3"><span className="text-sm font-semibold text-muted-foreground">Planned total</span><span className="font-display text-xl font-bold text-foreground">KES {totalBudget.toLocaleString("en-KE")}</span></div>{selectionError ? <p className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">{selectionError}</p> : null}<div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={goBackToIncome} data-testid="onboarding-back-to-income">Back</Button><div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end"><p className="text-xs text-muted-foreground">Amounts can be changed later</p><Button type="button" className="h-12 rounded-xl px-6" onClick={() => void (async () => { setSelectionError(null); try { await saveOnboardingPreferences(true); try { window.localStorage.setItem(`jamvi:onboarding:category-budgets:${encodeURIComponent(userId)}`, JSON.stringify(categoryBudgets)); window.localStorage.removeItem(onboardingDraftStorageKey(userId)); } catch { /* The server completion record remains authoritative. */ } setShowCategoryBudgetSetup(false); } catch (error) { setSelectionError(error instanceof Error ? error.message : "Could not finish setup right now."); } })()}>Approve budget and continue <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></div></div></section></main>
     );
   }
 
@@ -483,12 +662,13 @@ export function BudgetChooser({
       setCustomIncomeStream("");
     };
     const finishOnboarding = async () => {
-      await fetch("/api/onboarding/preferences", {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usageMode: onboardingMode, persona: onboardingPurpose, budgetDuration, budgetEndDate: budgetDuration === "custom" ? customEndDate : null, categoryNames: selectedCategories, incomeStreams: selectedIncomeStreams, completed: true, onboardingVersion: 1 }),
-      }).catch(() => undefined);
+      setSelectionError(null);
+      try {
+        await saveOnboardingPreferences(false);
+      } catch (error) {
+        setSelectionError(error instanceof Error ? error.message : "Could not save setup progress right now.");
+        return;
+      }
       try {
         window.localStorage.setItem(`jamvi:onboarding:income-streams:${encodeURIComponent(userId)}`, JSON.stringify(selectedIncomeStreams));
       } catch { /* Continue even when storage is unavailable. */ }

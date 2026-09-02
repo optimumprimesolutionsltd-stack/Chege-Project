@@ -6,6 +6,7 @@ export type MobileOnboardingDraft = {
   persona: string | null;
   budgetDuration: MobileBudgetDuration;
   customEndDate: string;
+  lastStep?: number;
   selectedCategories: string[];
   customCategories: string[];
   categoryBudgets: Record<string, string>;
@@ -166,6 +167,7 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     persona,
     budgetDuration: raw.budgetDuration,
     customEndDate: typeof raw.customEndDate === "string" ? raw.customEndDate : "",
+    lastStep: typeof raw.lastStep === "number" && Number.isInteger(raw.lastStep) ? Math.max(0, Math.min(5, raw.lastStep)) : 0,
     selectedCategories,
     customCategories,
     categoryBudgets,

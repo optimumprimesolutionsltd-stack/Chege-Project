@@ -6,7 +6,9 @@ import {
   dedupeIncomeStreamNames,
   getInitialOnboardingMode,
   hasCompletedBudgetChooser,
+  hasSavedOnboardingDraft,
   normalizeIncomeStreamName,
+  onboardingDraftStorageKey,
 } from "./budget-chooser";
 
 describe("budget chooser completion", () => {
@@ -20,6 +22,7 @@ describe("budget chooser completion", () => {
         localStorage: {
           getItem: (key: string) => values.get(key) ?? null,
           setItem: (key: string, value: string) => values.set(key, value),
+          removeItem: (key: string) => values.delete(key),
         },
       },
     });
@@ -34,6 +37,12 @@ describe("budget chooser completion", () => {
     window.localStorage.setItem(budgetChooserCompletionKey("member/a"), "true");
     expect(hasCompletedBudgetChooser("member/a")).toBe(true);
     expect(hasCompletedBudgetChooser("member b")).toBe(false);
+  });
+
+  it("recognizes an unfinished user-specific onboarding draft", () => {
+    window.localStorage.setItem(onboardingDraftStorageKey("member/a"), JSON.stringify({ stage: "income" }));
+    expect(hasSavedOnboardingDraft("member/a")).toBe(true);
+    expect(hasSavedOnboardingDraft("member b")).toBe(false);
   });
 
   it("does not bypass the chooser when browser storage cannot be read", () => {
