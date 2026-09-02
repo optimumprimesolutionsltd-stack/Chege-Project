@@ -10,8 +10,9 @@ describe("workspace kind API contracts", () => {
     expect(CreateSharedGroupBody.parse({ name: "Household" }).kind).toBe("family");
   });
 
-  it("accepts the new team and other workspace kinds on create and update", () => {
+  it("accepts team, Student group, and other workspace kinds on create and update", () => {
     expect(CreateSharedGroupBody.parse({ name: "Delivery team", kind: "team" }).kind).toBe("team");
+    expect(CreateSharedGroupBody.parse({ name: "Campus welfare", kind: "student_group" }).kind).toBe("student_group");
     expect(UpdateGroupBody.parse({ name: "Anything", kind: "other" }).kind).toBe("other");
   });
 

@@ -421,8 +421,8 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                {hasExistingSharedBudget
-                 ? "Create a separate Shared budget for another family, chama, club, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
-                 : "Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
+                 ? "Create a separate Shared budget for another family, chama, club, student group, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
+                 : "Create a Shared budget for your family, chama, club, student group, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
             </p>
              <p className="mt-2 text-xs font-medium text-foreground/70">
                Name it, create it, then invite the people who should share it.

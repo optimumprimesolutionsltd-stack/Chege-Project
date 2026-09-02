@@ -526,7 +526,7 @@ function MobileOnboardingFlow({
   const stepTitles = ['Your starting point', 'Make it yours', 'Choose your horizon', 'Personalize your budget', 'Add income streams', 'Set your plan'];
   const modeOptions: Array<[MobileOnboardingMode, string, string]> = [
     ['personal', 'My money', 'A private budget for my income, spending, and goals.'],
-    ['shared', 'Money with others', 'A shared budget for a family, chama, club, or team.'],
+    ['shared', 'Money with others', 'A shared budget for a family, chama, club, student group, or team.'],
     ['both', 'Both', 'Keep my personal money private and manage shared money too.'],
   ];
   const purposeOptions = draft.usageMode === 'shared' ? PURPOSE_OPTIONS.shared : PURPOSE_OPTIONS.personal;

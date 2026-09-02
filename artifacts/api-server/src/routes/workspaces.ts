@@ -42,7 +42,7 @@ async function availableWorkspaces(userId: string) {
       photoUrl: isPrivate ? null : await resolvePhotoUrl(row.photoPath).catch(() => null),
       slogan: row.slogan,
       isPrivate,
-      kind: (row.kind ?? "family") as "personal" | "family" | "chama" | "club" | "team" | "other",
+      kind: (row.kind ?? "family") as "personal" | "family" | "chama" | "club" | "team" | "student_group" | "other",
       role: row.role as "owner" | "admin" | "member",
     };
   }));

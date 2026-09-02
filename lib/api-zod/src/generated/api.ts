@@ -417,7 +417,7 @@ export const CreateBudgetCategoryResponse = zod.object({
  * @summary Preview category recommendations for the active workspace
  */
 export const GetBudgetCategoryRecommendationsResponse = zod.object({
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "existing": zod.array(zod.object({
   "name": zod.string(),
   "budgetAmount": zod.number(),
@@ -445,7 +445,7 @@ export const ApplyBudgetCategoryRecommendationsBody = zod.object({
 }).describe('Applies only missing recommendations; existing categories are never changed.')
 
 export const ApplyBudgetCategoryRecommendationsResponse = zod.object({
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "existing": zod.array(zod.object({
   "name": zod.string(),
   "budgetAmount": zod.number(),
@@ -1707,7 +1707,7 @@ export const GetWorkspacesResponseItem = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(getWorkspacesResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
 export const GetWorkspacesResponse = zod.array(GetWorkspacesResponseItem)
@@ -1736,7 +1736,7 @@ export const SelectWorkspaceResponse = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(selectWorkspaceResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
 
@@ -1758,7 +1758,7 @@ export const CreateSharedGroupBody = zod.object({
   "name": zod.string().min(createSharedGroupBodyNameMin).max(createSharedGroupBodyNameMax),
   "emoji": zod.string().max(createSharedGroupBodyEmojiMax).nullish(),
   "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']).optional(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']).default(createSharedGroupBodyKindDefault),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']).default(createSharedGroupBodyKindDefault),
   "defaultMonthlyTarget": zod.number().min(createSharedGroupBodyDefaultMonthlyTargetMin).nullish().describe('What each member is expected to contribute per month, in KES. Members who join inherit it as their own target. Null means the group does not work to a fixed amount.')
 })
 
@@ -1778,7 +1778,7 @@ export const CreateSharedGroupResponse = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(createSharedGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
 
@@ -2061,7 +2061,7 @@ export const GetGroupResponse = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(getGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })
@@ -2090,7 +2090,7 @@ export const UpdateGroupBody = zod.object({
   "accentColor": zod.enum(['#011C4E', '#003383', '#087F8C', '#08B7B0', '#209E45', '#C98C00', '#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']).optional(),
   "photoPath": zod.string().regex(updateGroupBodyPhotoPathRegExp).nullish(),
   "slogan": zod.string().max(updateGroupBodySloganMax).nullish(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']).optional(),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']).optional(),
   "defaultMonthlyTarget": zod.number().min(updateGroupBodyDefaultMonthlyTargetMin).nullish().describe('What each member is expected to contribute per month, in KES. Changing it does not alter targets already set on existing members; it applies to whoever joins next.')
 })
 
@@ -2110,7 +2110,7 @@ export const UpdateGroupResponse = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(updateGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })

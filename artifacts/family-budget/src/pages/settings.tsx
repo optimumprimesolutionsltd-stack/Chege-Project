@@ -1011,7 +1011,7 @@ export default function Settings() {
                ? "Only you have access to your Personal budget. Shared budgets remain separate."
               : canManageShared
                 ? "You can change any non-owner between Admin and Member or remove their access. The group owner is protected."
-              : "The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups."}
+              : "The people listed here have access to this budget. Works for families, chamas, clubs, student groups, teams, and other shared groups."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 px-4 pb-4 sm:px-6 sm:pb-6">

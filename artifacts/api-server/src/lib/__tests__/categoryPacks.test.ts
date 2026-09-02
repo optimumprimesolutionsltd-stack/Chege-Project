@@ -7,6 +7,7 @@ vi.mock("@workspace/db", () => ({
     CHAMA: "chama",
     CLUB: "club",
     TEAM: "team",
+    STUDENT_GROUP: "student_group",
     OTHER: "other",
   },
 }));
@@ -21,7 +22,7 @@ import {
 describe("category packs", () => {
   it("provides expense-only recommendations for every supported workspace kind", () => {
     expect(Object.keys(CATEGORY_PACKS)).toEqual(
-      expect.arrayContaining(["personal", "family", "chama", "club", "team", "other"]),
+      expect.arrayContaining(["personal", "family", "chama", "club", "team", "student_group", "other"]),
     );
     for (const categories of Object.values(CATEGORY_PACKS)) {
       expect(categories).not.toHaveLength(0);
@@ -57,5 +58,25 @@ describe("category packs", () => {
     ]);
     expect(labels).not.toContain("Survival Essentials");
     expect(labels).not.toContain("Health & Education");
+  });
+
+  it("uses student-specific expenses and priority language for Student groups", () => {
+    expect(categoryPackForKind("student_group").map((category) => category.name)).toEqual([
+      "School fees & classes",
+      "Books & supplies",
+      "Meals",
+      "Transport",
+      "Airtime & data",
+      "Events & activities",
+      "Welfare",
+      "Administration",
+    ]);
+    expect(priorityTiersForKind("student_group").map((tier) => tier.label)).toEqual([
+      "Academic Commitments",
+      "Student Welfare",
+      "Group Operations",
+      "Activities & Growth",
+      "Flexible Spending",
+    ]);
   });
 });

@@ -3,7 +3,7 @@ name: Group-aware category packs
 description: Non-destructive rules for adapting expense categories to a Shared budget's group type.
 ---
 
-Shared budgets use their declared group type to choose an expense-only starter pack. Contributions, deposits, and member payments remain in their own ledgers rather than appearing as spending categories.
+Shared budgets use their declared group type to choose an expense-only starter pack. Contributions, deposits, and member payments remain in their own ledgers rather than appearing as spending categories. Student groups are a first-class shared type, distinct from the Personal budget's student persona, with academic, welfare, operations, and activity-oriented defaults.
 
 Priority-tier headings must also match the declared group type. Household wording is not an acceptable fallback for a recognized Chama, club, or team. Managers can customize tier names, explanations, and order per workspace; moving a tier moves its assigned categories with it.
 

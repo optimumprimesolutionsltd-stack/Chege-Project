@@ -110,6 +110,7 @@ export const PURPOSE_OPTIONS = {
     ["family", "A family", "Coordinate home costs, school, health, and support."],
     ["chama", "A chama or welfare group", "Track contributions, welfare, loans, and group plans."],
     ["club", "A club, church, or team", "Manage membership money, events, and projects."],
+    ["student_group", "A student group", "Share school, welfare, class, or campus costs."],
     ["other", "Something else", "Tell Jamvi what matters to your group."],
   ],
 } as const;
@@ -123,6 +124,7 @@ const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
   family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
   chama: ["Member welfare", "Loans", "Member contributions", "Events", "Transport", "Projects", "Other"],
   club: ["Member contributions", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
+  student_group: ["School fees & classes", "Books & supplies", "Meals", "Transport", "Airtime & data", "Events & activities", "Welfare", "Administration"],
 };
 
 const ONBOARDING_DRAFT_STORAGE_PREFIX = "jamvi:onboarding-draft:";

@@ -3009,7 +3009,7 @@ components:
 
     GroupKind:
       type: string
-      enum: [personal, family, chama, club, team, other]
+      enum: [personal, family, chama, club, team, student_group, other]
 
     UpdateMemberRoleInput:
       type: object

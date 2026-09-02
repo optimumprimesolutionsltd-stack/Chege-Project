@@ -29,6 +29,7 @@ export const GROUP_KIND = {
   CHAMA: "chama",
   CLUB: "club",
   TEAM: "team",
+  STUDENT_GROUP: "student_group",
   OTHER: "other",
 } as const;
 

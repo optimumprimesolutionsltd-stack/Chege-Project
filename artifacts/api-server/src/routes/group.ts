@@ -150,7 +150,7 @@ router.post("/groups", async (req, res): Promise<void> => {
     photoUrl: null,
     slogan: null,
     isPrivate: false,
-    kind: group.kind as "personal" | "family" | "chama" | "club" | "team" | "other",
+    kind: group.kind as "personal" | "family" | "chama" | "club" | "team" | "student_group" | "other",
     role: "owner" as const,
   };
   setActiveWorkspaceCookie(res, group.id);

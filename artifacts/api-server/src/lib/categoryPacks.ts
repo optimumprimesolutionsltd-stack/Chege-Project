@@ -43,6 +43,13 @@ const ORGANISATION_PRIORITY_TIERS: Record<Exclude<GroupKind, "personal" | "famil
     { priority: 4, label: "Growth", description: "Improvements and expansion that can follow core work." },
     { priority: 5, label: "Flexible Spending", description: "Optional costs that can wait when funds are limited." },
   ],
+  student_group: [
+    { priority: 1, label: "Academic Commitments", description: "Fees, classes, books, and required learning costs." },
+    { priority: 2, label: "Student Welfare", description: "Meals, emergency help, health, and member support." },
+    { priority: 3, label: "Group Operations", description: "Transport, communication, administration, and coordination." },
+    { priority: 4, label: "Activities & Growth", description: "Events, projects, competitions, and development." },
+    { priority: 5, label: "Flexible Spending", description: "Optional costs that can wait when funds are limited." },
+  ],
   other: [
     { priority: 1, label: "Core Commitments", description: "The group's most important obligations." },
     { priority: 2, label: "Operations", description: "Services and costs that keep the group running." },
@@ -93,6 +100,16 @@ export const CATEGORY_PACKS: Record<GroupKind, readonly CategoryPackItem[]> = {
     { name: "Operations", budgetAmount: 0, priority: 2, color: "#059669" },
     { name: "Travel", budgetAmount: 0, priority: 2, color: "#8B5CF6" },
     { name: "Training", budgetAmount: 0, priority: 3, color: "#3B82F6" },
+  ],
+  student_group: [
+    { name: "School fees & classes", budgetAmount: 0, priority: 1, color: "#2563EB" },
+    { name: "Books & supplies", budgetAmount: 0, priority: 1, color: "#7C3AED" },
+    { name: "Meals", budgetAmount: 0, priority: 2, color: "#F97316" },
+    { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6" },
+    { name: "Airtime & data", budgetAmount: 0, priority: 3, color: "#0891B2" },
+    { name: "Events & activities", budgetAmount: 0, priority: 4, color: "#DB2777" },
+    { name: "Welfare", budgetAmount: 0, priority: 2, color: "#059669" },
+    { name: "Administration", budgetAmount: 0, priority: 3, color: "#6B7280" },
   ],
   other: [
     { name: "Supplies", budgetAmount: 0, priority: 1, color: "#F97316" },

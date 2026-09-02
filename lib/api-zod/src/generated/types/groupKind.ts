@@ -15,5 +15,6 @@ export const GroupKind = {
   chama: 'chama',
   club: 'club',
   team: 'team',
+  student_group: 'student_group',
   other: 'other',
 } as const;
