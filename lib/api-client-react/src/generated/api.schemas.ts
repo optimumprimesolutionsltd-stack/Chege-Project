@@ -5,6 +5,99 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+export interface ParseMpesaMessageInput {
+  /**
+     * An anonymized M-Pesa message. Do not include real phone numbers or other personal information.
+     * @minLength 1
+     * @maxLength 20000
+     */
+  message: string;
+}
+
+/**
+ * @nullable
+ */
+export type MpesaTransactionTransactionType = typeof MpesaTransactionTransactionType[keyof typeof MpesaTransactionTransactionType] | null;
+
+
+export const MpesaTransactionTransactionType = {
+  person_payment: 'person_payment',
+  person_receipt: 'person_receipt',
+  merchant_payment: 'merchant_payment',
+  paybill_payment: 'paybill_payment',
+  airtime_purchase: 'airtime_purchase',
+  cash_withdrawal: 'cash_withdrawal',
+  cash_deposit: 'cash_deposit',
+  bank_transfer: 'bank_transfer',
+  reversal: 'reversal',
+  failed: 'failed',
+  other: 'other',
+} as const;
+
+export type MpesaTransactionConfidence = typeof MpesaTransactionConfidence[keyof typeof MpesaTransactionConfidence];
+
+
+export const MpesaTransactionConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+  none: 'none',
+} as const;
+
+export interface MpesaTransaction {
+  /** @nullable */
+  transactionId: string | null;
+  /** @nullable */
+  transactionType: MpesaTransactionTransactionType;
+  /** @nullable */
+  amount: number | null;
+  /** @nullable */
+  currency: string | null;
+  /** @nullable */
+  merchantOrCounterparty: string | null;
+  /** @nullable */
+  phoneNumber: string | null;
+  /** @nullable */
+  date: string | null;
+  /** @nullable */
+  time: string | null;
+  /** @nullable */
+  mpesaBalance: number | null;
+  /** @nullable */
+  fee: number | null;
+  parserVersion: string;
+  confidence: MpesaTransactionConfidence;
+  parseWarnings: string[];
+}
+
+export type MpesaParseResultStatus = typeof MpesaParseResultStatus[keyof typeof MpesaParseResultStatus];
+
+
+export const MpesaParseResultStatus = {
+  parsed: 'parsed',
+  unsupported: 'unsupported',
+  invalid: 'invalid',
+} as const;
+
+export type MpesaParseResultConfidence = typeof MpesaParseResultConfidence[keyof typeof MpesaParseResultConfidence];
+
+
+export const MpesaParseResultConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+  none: 'none',
+} as const;
+
+export interface MpesaParseResult {
+  status: MpesaParseResultStatus;
+  transaction: MpesaTransaction | null;
+  confidence: MpesaParseResultConfidence;
+  warnings: string[];
+  /** Normalized text returned for debugging parser rules; personal-looking numbers are redacted. */
+  normalizedMessage: string;
+}
+
 export interface IncomeSource {
   id: number;
   userId: string;
@@ -955,7 +1048,7 @@ export interface SavingsGoal {
 export interface DepositContributorSplit {
   /** Household member who supplied this deposit portion. */
   userId: string;
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /** @minimum 1 */
   incomeSourceId?: number;
@@ -1055,7 +1148,7 @@ export interface OpeningBalanceInput {
   openingBalance: number;
   openingBalanceDate?: string;
   /**
-     * Manual starting balance in whole KES
+     * Manual starting balance in KES, with up to two decimal places
      * @minimum 1
      */
   accountId?: number;
@@ -1074,8 +1167,8 @@ export const DepositInputSourceKind = {
 
 export interface DepositInput {
   /**
-     * Whole KES only; must be a positive integer amount
-     * @minimum 1
+     * Positive KES amount with up to two decimal places
+     * @minimum 0.01
      */
   amount: number;
   description: string;
@@ -1092,7 +1185,7 @@ export interface DepositInput {
   incomeSourceId?: number;
   /** Choose other only when the required description is a narration. */
   sourceKind?: DepositInputSourceKind;
-  /** Whole-KES household contributor portions that must equal amount exactly. */
+  /** Household contributor portions, with up to two decimal places, that must equal amount exactly. */
   contributorSplits?: DepositContributorSplit[];
   /** @minimum 1 */
   accountId?: number;
@@ -1111,8 +1204,8 @@ export const DisbursementInputDestinationKind = {
 
 export interface DisbursementInput {
   /**
-     * Whole KES only; must be a positive integer amount
-     * @minimum 1
+     * Positive KES amount with up to two decimal places
+     * @minimum 0.01
      */
   amount: number;
   description?: string;
@@ -1131,7 +1224,7 @@ export interface DisbursementInput {
 }
 
 export interface BankChargeInput {
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /**
      * Required explanation from the bank statement, for example monthly account fee
@@ -1172,7 +1265,7 @@ export const UpdateJointAccountTransactionInputTransferDirection = {
 } as const;
 
 export interface UpdateJointAccountTransactionInput {
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /** Optional supporting detail; withdrawals fall back to their category */
   description?: string;
@@ -1210,7 +1303,10 @@ export interface UpdateJointAccountTransactionInput {
 }
 
 export interface SavingsTransferInput {
-  /** @minimum 1 */
+  /**
+     * Savings goals currently use whole KES amounts
+     * @minimum 1
+     */
   amount: number;
   /** @minimum 1 */
   goalId: number;
@@ -1231,7 +1327,7 @@ export interface BankToBankTransferInput {
   sourceAccountId: number;
   /** @minimum 1 */
   destinationAccountId: number;
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /**
      * @minLength 1

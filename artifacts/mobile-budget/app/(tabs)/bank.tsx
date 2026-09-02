@@ -110,6 +110,17 @@ type MemberIncomeSource = {
   name: string;
 };
 
+function parseBankAmount(value: string): number | null {
+  const normalized = value.trim().replace(/,/g, '');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toCents(value: number): number {
+  return Math.round(value * 100);
+}
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -392,9 +403,9 @@ export default function BankScreen() {
   };
 
   const handleOpeningBalanceSubmit = async () => {
-    const value = Number(openingBalanceDraft);
-    if (!Number.isInteger(value) || value < 0) {
-      Alert.alert('Enter a whole KES amount', 'The opening balance must be zero or more whole shillings.');
+    const value = parseBankAmount(openingBalanceDraft);
+    if (value === null || value < 0) {
+      Alert.alert('Enter a valid KES amount', 'Use zero or more, with up to two decimal places.');
       return;
     }
 
@@ -555,13 +566,13 @@ export default function BankScreen() {
   const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
 
   const handleSubmit = async () => {
-    const parsed = parseFloat(amount.replace(/,/g, ''));
-    if (!parsed || parsed <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
+    const parsed = parseBankAmount(amount);
+    if (parsed === null || parsed <= 0) {
+      Alert.alert('Invalid amount', 'Enter an amount greater than zero with up to two decimal places.');
       return;
     }
-    if (!Number.isInteger(parsed)) {
-      Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
+    if (txType === 'transfer' && !Number.isInteger(parsed)) {
+      Alert.alert('Use whole KES for savings', 'Savings-goal transfers currently use whole shillings.');
       return;
     }
     if (!selectedAccountId) {
@@ -677,7 +688,7 @@ export default function BankScreen() {
         const contributorSplits = txType === 'deposit' && validDepositorIds.length > 1
           ? validDepositorIds.map((userId) => ({
               userId,
-              amount: parseFloat(depositorAmounts[userId] || '0') || 0,
+              amount: parseBankAmount(depositorAmounts[userId] || '') ?? 0,
               ...(() => {
                 const existingSourceId = editingTransaction?.contributorSplits
                   ?.find((split) => split.userId === userId)
@@ -712,20 +723,20 @@ export default function BankScreen() {
         if (isMultiDepositor) {
           // Multiple named depositors: validate split sums match total
           const splitTotal = validDepositorIds.reduce(
-            (s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0
+            (s, id) => s + (parseBankAmount(depositorAmounts[id] || '') ?? 0), 0
           );
           const splitAmounts = validDepositorIds.map(
-            id => parseFloat(depositorAmounts[id] || '0') || 0,
+            id => parseBankAmount(depositorAmounts[id] || ''),
           );
-          if (splitAmounts.some(portion => !Number.isInteger(portion) || portion <= 0)) {
+          if (splitAmounts.some(portion => portion === null || portion <= 0)) {
             Alert.alert(
               'Enter every amount',
-              'Each depositor portion must be a positive whole-shilling amount.',
+              'Each depositor portion must be positive with up to two decimal places.',
             );
             setSubmitting(false);
             return;
           }
-          if (splitTotal !== parsed) {
+          if (splitAmounts.reduce<number>((sum, portion) => sum + toCents(portion ?? 0), 0) !== toCents(parsed)) {
             Alert.alert(
               "Amounts don't add up",
               `Depositor portions total KES ${splitTotal.toLocaleString()} but the deposit is KES ${parsed.toLocaleString()}.`,
@@ -740,7 +751,7 @@ export default function BankScreen() {
               date,
               contributorSplits: validDepositorIds.map((userId) => ({
                 userId,
-                amount: parseFloat(depositorAmounts[userId] || '0') || 0,
+                amount: parseBankAmount(depositorAmounts[userId] || '') ?? 0,
               })),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
               accountId: selectedAccountId ?? undefined,
@@ -816,14 +827,14 @@ export default function BankScreen() {
   const isTransfer = txType === 'transfer';
   const isBankCharge = txType === 'bank_charge';
   const isBankTransfer = txType === 'bank_transfer';
-  const parsedOutgoingAmount = Number(amount.replace(/,/g, ''));
+  const parsedOutgoingAmount = parseBankAmount(amount);
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
   const isOutgoingTransaction = isWithdrawal || isBankCharge || isBankTransfer || (isTransfer && transferDirection === 'to_savings');
   const projectedBalance = isOutgoingTransaction &&
     data &&
-    Number.isInteger(parsedOutgoingAmount) &&
+    parsedOutgoingAmount !== null &&
     parsedOutgoingAmount > 0
     ? getProjectedBalanceAfterOutgoing(
         data.balance,
@@ -1357,7 +1368,7 @@ export default function BankScreen() {
               ]}
               placeholder="e.g. 5000"
               placeholderTextColor={colors.mutedForeground}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               value={amount}
               onChangeText={setAmount}
               returnKeyType="next"
@@ -1469,7 +1480,7 @@ export default function BankScreen() {
                 </View>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
                 <TextInput style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]} placeholder="e.g. Move operating funds" placeholderTextColor={colors.mutedForeground} value={description} onChangeText={setDescription} maxLength={200} testID="bank-to-bank-narration" />
-                {selectedAccount && bankTransferDestinationId && Number.isInteger(parsedOutgoingAmount) && parsedOutgoingAmount > 0 && (
+                {selectedAccount && bankTransferDestinationId && parsedOutgoingAmount !== null && parsedOutgoingAmount > 0 && (
                   <Text style={[styles.managerGuidance, { color: colors.mutedForeground }]} testID="bank-transfer-preview">
                     {selectedAccount.name}: KES {formatKES(data?.balance)} → KES {formatKES((data?.balance ?? 0) - parsedOutgoingAmount)}. {accounts.find((candidate) => candidate.id === bankTransferDestinationId)?.name} receives KES {formatKES(parsedOutgoingAmount)}.
                   </Text>
@@ -1560,7 +1571,7 @@ export default function BankScreen() {
                 {validDepositorIds.length > 1 && (() => {
                   const total = parseFloat(amount.replace(/,/g, '')) || 0;
                   const splitTotal = validDepositorIds.reduce(
-                    (s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0
+                    (s, id) => s + (parseBankAmount(depositorAmounts[id] || '') ?? 0), 0
                   );
                   const diff = total - splitTotal;
                   return (
@@ -1587,7 +1598,7 @@ export default function BankScreen() {
                                 paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
                                 fontFamily: 'Inter_400Regular',
                               }}
-                              keyboardType="numeric"
+                              keyboardType="decimal-pad"
                               placeholder="0"
                               placeholderTextColor={colors.mutedForeground}
                               value={depositorAmounts[did] || ''}
@@ -2090,7 +2101,7 @@ export default function BankScreen() {
             <TextInput
               value={openingBalanceDraft}
               onChangeText={setOpeningBalanceDraft}
-              keyboardType="number-pad"
+              keyboardType="decimal-pad"
               editable={!savingOpeningBalance}
               style={[
                 styles.input,

@@ -11,7 +11,7 @@ export interface OpeningBalanceInput {
   openingBalance: number;
   openingBalanceDate?: Date;
   /**
-     * Manual starting balance in whole KES
+     * Manual starting balance in KES, with up to two decimal places
      * @minimum 1
      */
   accountId?: number;

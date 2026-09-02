@@ -32,8 +32,35 @@ tags:
     description: Income source presets per household member
   - name: storage
     description: Private photo upload operations
+  - name: parser
+    description: Standalone M-Pesa message parsing laboratory
 
 paths:
+  /parse:
+    post:
+      operationId: parseMpesaMessage
+      tags: [parser]
+      summary: Parse an anonymized M-Pesa confirmation message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParseMpesaMessageInput"
+      responses:
+        "200":
+          description: Parse result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MpesaParseResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /healthz:
     get:
       operationId: healthCheck
@@ -1773,6 +1800,93 @@ components:
       schema:
         type: string
   schemas:
+    ParseMpesaMessageInput:
+      type: object
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          description: An anonymized M-Pesa message. Do not include real phone numbers or other personal information.
+      required:
+        - message
+
+    MpesaTransaction:
+      type: object
+      properties:
+        transactionId:
+          type: ["string", "null"]
+        transactionType:
+          type: ["string", "null"]
+          enum: [person_payment, person_receipt, merchant_payment, paybill_payment, airtime_purchase, cash_withdrawal, cash_deposit, bank_transfer, reversal, failed, other, null]
+        amount:
+          type: ["number", "null"]
+        currency:
+          type: ["string", "null"]
+        merchantOrCounterparty:
+          type: ["string", "null"]
+        phoneNumber:
+          type: ["string", "null"]
+        date:
+          type: ["string", "null"]
+          format: date
+        time:
+          type: ["string", "null"]
+        mpesaBalance:
+          type: ["number", "null"]
+        fee:
+          type: ["number", "null"]
+        parserVersion:
+          type: string
+        confidence:
+          type: string
+          enum: [high, medium, low, none]
+        parseWarnings:
+          type: array
+          items:
+            type: string
+      required:
+        - transactionId
+        - transactionType
+        - amount
+        - currency
+        - merchantOrCounterparty
+        - phoneNumber
+        - date
+        - time
+        - mpesaBalance
+        - fee
+        - parserVersion
+        - confidence
+        - parseWarnings
+
+    MpesaParseResult:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [parsed, unsupported, invalid]
+        transaction:
+          oneOf:
+            - $ref: "#/components/schemas/MpesaTransaction"
+            - type: "null"
+        confidence:
+          type: string
+          enum: [high, medium, low, none]
+        warnings:
+          type: array
+          items:
+            type: string
+        normalizedMessage:
+          type: string
+          description: Normalized text returned for debugging parser rules; personal-looking numbers are redacted.
+      required:
+        - status
+        - transaction
+        - confidence
+        - warnings
+        - normalizedMessage
+
     IncomeSource:
       type: object
       properties:
@@ -3046,7 +3160,7 @@ components:
         openingBalance:
           type: number
           minimum: 0
-          multipleOf: 1
+          multipleOf: 0.01
         openingBalanceDate:
           type: string
           format: date
@@ -3062,14 +3176,14 @@ components:
         openingBalance:
           type: number
           minimum: 0
-          multipleOf: 1
+          multipleOf: 0.01
         openingBalanceDate:
           type: string
           format: date
         accountId:
           type: number
           minimum: 1
-          description: Manual starting balance in whole KES
+          description: Manual starting balance in KES, with up to two decimal places
       required:
         - openingBalance
 
@@ -3078,9 +3192,9 @@ components:
       properties:
         amount:
           type: number
-          minimum: 1
-          multipleOf: 1
-          description: Whole KES only; must be a positive integer amount
+          minimum: 0.01
+          multipleOf: 0.01
+          description: Positive KES amount with up to two decimal places
         description:
           type: string
         date:
@@ -3104,7 +3218,7 @@ components:
           description: Choose other only when the required description is a narration.
         contributorSplits:
           type: array
-          description: Whole-KES household contributor portions that must equal amount exactly.
+          description: Household contributor portions, with up to two decimal places, that must equal amount exactly.
           items:
             $ref: "#/components/schemas/DepositContributorSplit"
         accountId:
@@ -3123,8 +3237,8 @@ components:
           description: Household member who supplied this deposit portion.
         amount:
           type: number
-          minimum: 1
-          multipleOf: 1
+          minimum: 0.01
+          multipleOf: 0.01
         incomeSourceId:
           type: number
           minimum: 1
@@ -3135,9 +3249,9 @@ components:
       properties:
         amount:
           type: number
-          minimum: 1
-          multipleOf: 1
-          description: Whole KES only; must be a positive integer amount
+          minimum: 0.01
+          multipleOf: 0.01
+          description: Positive KES amount with up to two decimal places
         description:
           type: string
         date:
@@ -3169,8 +3283,8 @@ components:
       properties:
         amount:
           type: number
-          minimum: 1
-          multipleOf: 1
+          minimum: 0.01
+          multipleOf: 0.01
         narration:
           type: string
           minLength: 1
@@ -3192,8 +3306,8 @@ components:
       properties:
         amount:
           type: number
-          minimum: 1
-          multipleOf: 1
+          minimum: 0.01
+          multipleOf: 0.01
         description:
           type: string
           description: Optional supporting detail; withdrawals fall back to their category
@@ -3249,6 +3363,7 @@ components:
           type: number
           minimum: 1
           multipleOf: 1
+          description: Savings goals currently use whole KES amounts
         goalId:
           type: number
           minimum: 1
@@ -3281,8 +3396,8 @@ components:
           minimum: 1
         amount:
           type: number
-          minimum: 1
-          multipleOf: 1
+          minimum: 0.01
+          multipleOf: 0.01
         narration:
           type: string
           minLength: 1
@@ -3319,7 +3434,7 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
         accountNumber: { type: string, minLength: 1, maxLength: 40 }
-        openingBalance: { type: number, minimum: 0, multipleOf: 1 }
+        openingBalance: { type: number, minimum: 0, multipleOf: 0.01 }
         openingBalanceDate: { type: string, format: date }
       required: [name]
 
@@ -3328,7 +3443,7 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
         accountNumber: { type: ["string", "null"], minLength: 1, maxLength: 40 }
-        openingBalance: { type: number, minimum: 0, multipleOf: 1 }
+        openingBalance: { type: number, minimum: 0, multipleOf: 0.01 }
         openingBalanceDate: { type: string, format: date }
 
     SavingsGoalInput:

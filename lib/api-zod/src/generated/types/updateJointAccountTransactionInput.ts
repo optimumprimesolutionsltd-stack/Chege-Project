@@ -11,7 +11,7 @@ import type { UpdateJointAccountTransactionInputSourceKind } from './updateJoint
 import type { UpdateJointAccountTransactionInputTransferDirection } from './updateJointAccountTransactionInputTransferDirection';
 
 export interface UpdateJointAccountTransactionInput {
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /** Optional supporting detail; withdrawals fall back to their category */
   description?: string;

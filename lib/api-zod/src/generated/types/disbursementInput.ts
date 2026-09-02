@@ -9,8 +9,8 @@ import type { DisbursementInputDestinationKind } from './disbursementInputDestin
 
 export interface DisbursementInput {
   /**
-     * Whole KES only; must be a positive integer amount
-     * @minimum 1
+     * Positive KES amount with up to two decimal places
+     * @minimum 0.01
      */
   amount: number;
   description?: string;

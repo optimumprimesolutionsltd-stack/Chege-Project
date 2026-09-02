@@ -22,6 +22,8 @@ import {
 } from "../lib/activeGroup";
 
 const router = Router();
+const PositiveBankAmount = z.number().finite().positive().multipleOf(0.01);
+const NonNegativeBankAmount = z.number().finite().nonnegative().multipleOf(0.01);
 
 function currentBusinessDate(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -63,7 +65,7 @@ async function validateIncomeSourceOwner(
 }
 
 const DepositInput = z.object({
-  amount: z.number().int().positive(),
+  amount: PositiveBankAmount,
   description: z.string().min(1),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -71,14 +73,14 @@ const DepositInput = z.object({
   sourceKind: z.enum(["income_source", "other"]).optional(),
   contributorSplits: z.array(z.object({
     userId: z.string().min(1),
-    amount: z.number().int().positive(),
+    amount: PositiveBankAmount,
     incomeSourceId: z.number().int().positive().optional(),
   })).min(1).optional(),
   accountId: z.number().int().positive().optional(),
 });
 
 const DisbursementInput = z.object({
-  amount: z.number().int().positive(),
+  amount: PositiveBankAmount,
   description: z.string().trim().max(200).optional().default(""),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -88,14 +90,14 @@ const DisbursementInput = z.object({
 });
 
 const BankChargeInput = z.object({
-  amount: z.number().int().positive(),
+  amount: PositiveBankAmount,
   narration: z.string().trim().min(1).max(200),
   date: z.string().min(1),
   accountId: z.number().int().positive().optional(),
 });
 
 const UpdateJointAccountInput = z.object({
-  amount: z.number().int().positive(),
+  amount: PositiveBankAmount,
   description: z.string().trim().max(200).optional(),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -105,7 +107,7 @@ const UpdateJointAccountInput = z.object({
   destinationKind: z.enum(["category", "other"]).optional(),
   contributorSplits: z.array(z.object({
     userId: z.string().min(1),
-    amount: z.number().int().positive(),
+    amount: PositiveBankAmount,
     incomeSourceId: z.number().int().positive().nullable().optional(),
   })).optional(),
   transferDirection: z.enum(["to_savings", "from_savings"]).optional(),
@@ -113,11 +115,19 @@ const UpdateJointAccountInput = z.object({
   narration: z.string().trim().min(1).max(200).optional(),
   accountId: z.number().int().positive().optional(),
   bankCharge: z.boolean().optional(),
+}).superRefine((value, ctx) => {
+  if (value.transferDirection && !Number.isInteger(value.amount)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["amount"],
+      message: "Savings-goal transfers must use whole KES amounts.",
+    });
+  }
 });
 
 const IdParam = z.object({ id: z.coerce.number().int().positive() });
 const OpeningBalanceInput = z.object({
-  openingBalance: z.number().int().nonnegative(),
+  openingBalance: NonNegativeBankAmount,
   openingBalanceDate: z.string().date().optional(),
   accountId: z.number().int().positive().optional(),
 });
@@ -132,20 +142,20 @@ const SavingsTransferInput = z.object({
 const BankToBankTransferInput = z.object({
   sourceAccountId: z.number().int().positive(),
   destinationAccountId: z.number().int().positive(),
-  amount: z.number().int().positive(),
+  amount: PositiveBankAmount,
   narration: z.string().trim().min(1).max(200),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 const AccountInput = z.object({
   name: z.string().trim().min(1).max(80),
   accountNumber: z.string().trim().min(1).max(40).optional(),
-  openingBalance: z.number().int().nonnegative().optional(),
+  openingBalance: NonNegativeBankAmount.optional(),
   openingBalanceDate: z.string().date().optional(),
 });
 const AccountUpdateInput = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   accountNumber: z.string().trim().min(1).max(40).nullable().optional(),
-  openingBalance: z.number().int().nonnegative().optional(),
+  openingBalance: NonNegativeBankAmount.optional(),
   openingBalanceDate: z.string().date().optional(),
 }).refine((value) => value.name !== undefined || value.accountNumber !== undefined || value.openingBalance !== undefined || value.openingBalanceDate !== undefined, {
   message: "Provide a name, account number, opening balance, or opening balance date.",
@@ -158,15 +168,15 @@ const accountColumns = {
   name: bankAccountsTable.name,
   accountNumber: bankAccountsTable.accountNumber,
   openingBalance: bankAccountsTable.openingBalance,
+  openingBalanceDate: bankAccountsTable.openingBalanceDate,
   createdAt: bankAccountsTable.createdAt,
 };
 
 type AccountRecord = Awaited<ReturnType<typeof selectWorkspaceAccounts>>[number];
 
 async function selectWorkspaceAccounts(groupId: number) {
-  const accounts = await db.select(accountColumns).from(bankAccountsTable)
+  return db.select(accountColumns).from(bankAccountsTable)
     .where(eq(bankAccountsTable.groupId, groupId)).orderBy(bankAccountsTable.createdAt);
-  return accounts.map((account) => ({ ...account, openingBalanceDate: null as string | null }));
 }
 
 async function resolveAccountId(accountId: number | undefined, groupId: number): Promise<number | null> {
@@ -313,9 +323,10 @@ router.post("/joint-accounts", async (req, res): Promise<void> => {
       name: parsed.data.name,
       accountNumber: parsed.data.accountNumber,
       openingBalance: parsed.data.openingBalance ?? 0,
+      openingBalanceDate: parsed.data.openingBalanceDate ?? currentBusinessDate(),
     }).onConflictDoNothing().returning(accountColumns);
     if (!account) { res.status(409).json({ error: "An account with this name already exists." }); return; }
-    res.status(201).json(serializeAccount({ ...account, openingBalanceDate: null }));
+    res.status(201).json(serializeAccount(account));
   } catch (error) {
     req.log.error({ err: error, groupId }, "Could not create bank account");
     res.status(500).json({ error: "Could not create the bank account. Please try again." });
@@ -415,7 +426,7 @@ router.patch("/joint-account/opening-balance", async (req, res): Promise<void> =
 
   const parsed = OpeningBalanceInput.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Opening balance must be a whole KES amount of zero or more." });
+    res.status(400).json({ error: "Opening balance must be zero or more, with no more than two decimal places." });
     return;
   }
 

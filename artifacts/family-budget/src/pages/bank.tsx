@@ -56,6 +56,17 @@ type EditableTransaction = {
   contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
 };
 
+function parseBankAmount(value: string): number | null {
+  const normalized = value.trim().replace(/,/g, "");
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toCents(value: number): number {
+  return Math.round(value * 100);
+}
+
 export default function Bank() {
   const bankEditId = getBankEditDeepLink();
   const { data: group } = useGetGroup();
@@ -193,12 +204,12 @@ export default function Bank() {
 
   const handleOpeningBalanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const value = Number(openingBalanceDraft);
-    if (!Number.isInteger(value) || value < 0) {
+    const value = parseBankAmount(openingBalanceDraft);
+    if (value === null || value < 0) {
       toast({
         variant: "destructive",
-        title: "Enter a whole KES amount",
-        description: "The opening balance must be zero or more whole shillings.",
+        title: "Enter a valid KES amount",
+        description: "Use zero or more, with up to two decimal places.",
       });
       return;
     }
@@ -213,11 +224,11 @@ export default function Bank() {
         description: "The current balance now includes this starting amount.",
       });
       invalidate();
-    } catch {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Could not save opening balance",
-        description: "Please try again.",
+        description: error instanceof Error ? error.message : "Please try again.",
       });
     }
   };
@@ -457,12 +468,20 @@ export default function Bank() {
       return;
     }
 
-    const total = Number(amount);
-    if (!Number.isInteger(total) || total <= 0) {
+    const total = parseBankAmount(amount);
+    if (total === null || total <= 0) {
       toast({
         variant: "destructive",
-        title: "Enter a whole KES amount",
-        description: "Bank transactions are recorded in whole shillings.",
+        title: "Enter a valid KES amount",
+        description: "Use a positive amount with up to two decimal places.",
+      });
+      return;
+    }
+    if (mode === "transfer" && !Number.isInteger(total)) {
+      toast({
+        variant: "destructive",
+        title: "Use whole KES for savings",
+        description: "Savings-goal transfers currently use whole shillings.",
       });
       return;
     }
@@ -478,17 +497,18 @@ export default function Bank() {
     const isMultiDepositor = depositorIds.length > 1;
 
     if (mode === "deposit" && isMultiDepositor) {
-      const splitAmounts = depositorIds.map((id) => Number(depositorAmounts[id] || 0));
-      if (splitAmounts.some((portion) => !Number.isInteger(portion) || portion <= 0)) {
+      const splitAmounts = depositorIds.map((id) => parseBankAmount(depositorAmounts[id] || ""));
+      if (splitAmounts.some((portion) => portion === null || portion <= 0)) {
         toast({
           variant: "destructive",
           title: "Enter every depositor's amount",
-          description: "Each portion must be a positive whole-shilling amount.",
+          description: "Each portion must be positive with up to two decimal places.",
         });
         return;
       }
-      const splitTotal = splitAmounts.reduce((sum, portion) => sum + portion, 0);
-      if (splitTotal !== total) {
+      const validSplitAmounts = splitAmounts as number[];
+      const splitTotal = validSplitAmounts.reduce((sum, portion) => sum + portion, 0);
+      if (validSplitAmounts.reduce((sum, portion) => sum + toCents(portion), 0) !== toCents(total)) {
         toast({
           variant: "destructive",
           title: "Amounts don't add up",
@@ -553,7 +573,7 @@ export default function Bank() {
         const contributorSplits = depositorIds.length > 1
           ? depositorIds.map((userId) => ({
               userId,
-              amount: Number(depositorAmounts[userId] || 0),
+              amount: parseBankAmount(depositorAmounts[userId] || "") ?? 0,
               ...(() => {
                 const existingSourceId = editingTransaction.contributorSplits
                   ?.find((split) => split.userId === userId)
@@ -590,7 +610,7 @@ export default function Bank() {
               date,
               contributorSplits: depositorIds.map((userId) => ({
                 userId,
-                amount: Number(depositorAmounts[userId] || 0),
+                amount: parseBankAmount(depositorAmounts[userId] || "") ?? 0,
               })),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
               accountId: selectedAccountId ?? undefined,
@@ -601,7 +621,7 @@ export default function Bank() {
           const madeById = !isSharedWorkspace ? user?.id : depositorIds.length === 1 ? depositorIds[0] : null;
           await createDeposit.mutateAsync({
             data: {
-              amount: Number(amount),
+              amount: total,
               description,
               date,
               madeById,
@@ -675,12 +695,12 @@ export default function Bank() {
 
   const isPending = createDeposit.isPending || createDisbursement.isPending || createBankCharge.isPending || updateTx.isPending ||
     transferToSavings.isPending || transferFromSavings.isPending || transferBankToBank.isPending || addingCategory;
-  const outgoingAmount = Number(amount);
+  const outgoingAmount = parseBankAmount(amount);
   const isOutgoingTransaction = mode === "disbursement" || mode === "bank_charge" ||
     mode === "bank_transfer" || (mode === "transfer" && transferDirection === "to_savings");
   const projectedBalance = isOutgoingTransaction &&
     account &&
-    Number.isInteger(outgoingAmount) &&
+    outgoingAmount !== null &&
     outgoingAmount > 0
     ? getProjectedBalanceAfterOutgoing(
         account.balance,
@@ -817,7 +837,7 @@ export default function Bank() {
                   data-testid="input-opening-balance"
                   type="number"
                   min="0"
-                  step="1"
+                  step="0.01"
                   value={openingBalanceDraft}
                   onChange={(e) => setOpeningBalanceDraft(e.target.value)}
                   className="h-12 text-lg bg-card"
@@ -996,7 +1016,7 @@ export default function Bank() {
                     onChange={e => setAmount(e.target.value)}
                     required
                     min="1"
-                    step="1"
+                    step="0.01"
                     className="h-12 text-lg bg-card"
                   />
                 </div>
@@ -1159,7 +1179,7 @@ export default function Bank() {
                     <label className="text-sm font-semibold">Narration <span className="text-destructive">*</span></label>
                     <Input data-testid="input-bank-transfer-narration" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Move operating funds" maxLength={200} />
                   </div>
-                  {account && bankTransferDestinationId && Number.isInteger(outgoingAmount) && outgoingAmount > 0 && (
+                  {account && bankTransferDestinationId && outgoingAmount !== null && outgoingAmount > 0 && (
                     <div className="rounded-lg border bg-card p-3 text-sm" data-testid="bank-transfer-preview">
                       <strong>{account.accountName}</strong>: {formatKes(account.balance)} → {formatKes(account.balance - outgoingAmount)}
                       <br />
@@ -1231,8 +1251,8 @@ export default function Bank() {
 
                       {/* Per-depositor split rows — only when multiple named depositors */}
                       {depositorIds.length > 1 && (() => {
-                        const total = Number(amount) || 0;
-                        const splitTotal = depositorIds.reduce((s, id) => s + (Number(depositorAmounts[id] || 0)), 0);
+                        const total = parseBankAmount(amount) ?? 0;
+                        const splitTotal = depositorIds.reduce((s, id) => s + (parseBankAmount(depositorAmounts[id] || "") ?? 0), 0);
                         const diff = total - splitTotal;
                         return (
                           <div className="mt-3 space-y-2">
@@ -1249,7 +1269,7 @@ export default function Bank() {
                                     type="number"
                                     placeholder="0"
                                      min="1"
-                                     step="1"
+                                    step="0.01"
                                     data-testid={`input-depositor-amount-${did}`}
                                     value={depositorAmounts[did] ?? ""}
                                     onChange={e => setDepositorAmounts(prev => ({ ...prev, [did]: e.target.value }))}

@@ -159,23 +159,23 @@ beforeEach(() => {
 });
 
 // ===========================================================================
-// 1. Whole-KES enforcement
+// 1. Money precision enforcement
 // ===========================================================================
-describe("whole-KES enforcement — decimal amounts rejected", () => {
-  it("joint deposit with decimal amount → 400", async () => {
+describe("bank precision and whole-KES savings enforcement", () => {
+  it("joint deposit with more than two decimal places → 400", async () => {
     const res = await request(app)
       .post("/joint-account/deposit")
-      .send({ amount: 100.5, description: "x", date: "2024-01-01" });
+      .send({ amount: 100.555, description: "x", date: "2024-01-01" });
     expect(res.status).toBe(400);
     // Transaction/insert must never run for an invalid payload.
     expect(mockedDb.transaction).not.toHaveBeenCalled();
     expect(mockedDb.insert).not.toHaveBeenCalled();
   });
 
-  it("joint disbursement with decimal amount → 400", async () => {
+  it("joint disbursement with more than two decimal places → 400", async () => {
     const res = await request(app)
       .post("/joint-account/disbursement")
-      .send({ amount: 0.99, description: "x", date: "2024-01-01" });
+      .send({ amount: 0.999, description: "x", date: "2024-01-01" });
     expect(res.status).toBe(400);
   });
 

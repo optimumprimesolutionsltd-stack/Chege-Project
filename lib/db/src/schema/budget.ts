@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, boolean, date, timestamp, index, unique, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean, date, timestamp, index, unique, foreignKey } from "drizzle-orm/pg-core";
 import { groupsTable } from "./groups";
 
 // Workspace-owned bank accounts. Legacy ledger history is attached to a
@@ -8,7 +8,7 @@ export const bankAccountsTable = pgTable("bank_accounts", {
   groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   accountNumber: text("account_number"),
-  openingBalance: integer("opening_balance").notNull().default(0),
+  openingBalance: numeric("opening_balance", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
   openingBalanceDate: date("opening_balance_date", { mode: "string" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
@@ -155,7 +155,7 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
   type: text("type").notNull(), // 'deposit' | 'disbursement'
-  amount: integer("amount").notNull(), // in KES
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(), // in KES
   description: text("description").notNull(),
   madeById: text("made_by_id"), // userId for deposits; null ok for disbursements
   incomeSourceId: integer("income_source_id"), // which income source funded this deposit
@@ -189,7 +189,7 @@ export const jointAccountDepositSplitsTable = pgTable("joint_account_deposit_spl
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
   transactionId: integer("transaction_id").notNull().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull(),
-  amount: integer("amount").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   incomeSourceId: integer("income_source_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [

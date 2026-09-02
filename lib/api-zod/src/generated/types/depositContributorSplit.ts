@@ -9,7 +9,7 @@
 export interface DepositContributorSplit {
   /** Household member who supplied this deposit portion. */
   userId: string;
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /** @minimum 1 */
   incomeSourceId?: number;

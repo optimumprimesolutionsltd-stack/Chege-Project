@@ -10,8 +10,8 @@ import type { DepositInputSourceKind } from './depositInputSourceKind';
 
 export interface DepositInput {
   /**
-     * Whole KES only; must be a positive integer amount
-     * @minimum 1
+     * Positive KES amount with up to two decimal places
+     * @minimum 0.01
      */
   amount: number;
   description: string;
@@ -28,7 +28,7 @@ export interface DepositInput {
   incomeSourceId?: number;
   /** Choose other only when the required description is a narration. */
   sourceKind?: DepositInputSourceKind;
-  /** Whole-KES household contributor portions that must equal amount exactly. */
+  /** Household contributor portions, with up to two decimal places, that must equal amount exactly. */
   contributorSplits?: DepositContributorSplit[];
   /** @minimum 1 */
   accountId?: number;
