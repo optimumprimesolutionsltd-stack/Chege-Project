@@ -50,3 +50,4 @@
 - [Destructive prompt budget context](destructive-prompt-budget-context.md) — deletion, removal, and leave confirmations must name the affected budget to prevent cross-workspace mistakes.
 - [M-Pesa parser staging](mpesa-parser-staging.md) — keep the lab deterministic and separate; add one message family at a time from anonymized examples, never guessed formats.
 - [Bank amount precision](bank-amount-precision.md) — bank balances and ledger entries support two-decimal KES; savings-goal transfers remain whole KES until goal storage changes.
+- [Workspace switch confirmation lifecycle](workspace-switch-confirmation-lifecycle.md) — do not close a mobile shell before its locally owned confirmation finishes; unmounting cancels the switch.

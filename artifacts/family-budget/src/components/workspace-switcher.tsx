@@ -62,7 +62,6 @@ export function WorkspaceSwitcher({
     const destination = workspaces.find((workspace) => workspace.id === groupId);
     if (destination) {
       setSwitchError(null);
-      onWorkspaceSwitchRequested?.();
       setPendingWorkspace(destination);
     }
   };
@@ -71,6 +70,7 @@ export function WorkspaceSwitcher({
     if (!pendingWorkspace || selectWorkspace.isPending) return;
     try {
       await selectWorkspace.mutateAsync({ data: { groupId: pendingWorkspace.id } });
+      onWorkspaceSwitchRequested?.();
       // All financial queries use the active workspace. Reloading prevents any
       // cached value from the previously selected budget from being shown.
       window.location.reload();

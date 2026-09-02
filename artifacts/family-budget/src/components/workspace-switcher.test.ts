@@ -12,7 +12,10 @@ describe("workspace switcher", () => {
     expect(switcherSource).toContain('className="z-[100] w-[calc(100%-2rem)] rounded-2xl sm:w-full"');
   });
 
-  it("lets the mobile shell close before the budget confirmation opens", () => {
-    expect(switcherSource).toContain("onWorkspaceSwitchRequested?.();");
+  it("keeps the confirmation mounted until the mobile switch succeeds", () => {
+    const confirmationIndex = switcherSource.indexOf("await selectWorkspace.mutateAsync");
+    const closeMenuIndex = switcherSource.indexOf("onWorkspaceSwitchRequested?.();");
+    expect(confirmationIndex).toBeGreaterThan(-1);
+    expect(closeMenuIndex).toBeGreaterThan(confirmationIndex);
   });
 });
