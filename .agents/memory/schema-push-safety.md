@@ -10,3 +10,5 @@ When the schema push tool proposes truncating a populated table to reconcile an 
 **How to apply:** Prefer the normal push when it is non-destructive. If it requests a truncation, stop, preserve existing data, and use the database tooling to apply a reviewed additive migration only. Production schema changes continue through the Publish flow.
 
 For first-time workspace failures, also compare the application model with the live development table before blaming authentication. A missing additive workspace field can surface as a generic server error only when the first Personal budget is created.
+
+If Publish proposes dropping populated production tables that the current schema still defines, compare development and production before approving. Restore missing development tables with their reviewed additive migrations, then cancel the stale publish attempt and start a fresh one so Replit recalculates the diff.
