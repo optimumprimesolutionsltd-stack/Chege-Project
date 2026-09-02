@@ -20,6 +20,7 @@ import {
   requireGroupManager,
   requireMemberSelfAttribution,
 } from "../lib/activeGroup";
+import { canonicalExpenseCategoryName } from "../lib/categoryNames";
 
 const router = Router();
 const PositiveBankAmount = z.number().finite().positive().multipleOf(0.01);
@@ -538,7 +539,8 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   if (!requireMemberSelfAttribution(req, res, [parsed.data.madeById])) return;
 
-  const { amount, description, date, expenseCategory, destinationKind } = parsed.data;
+  const { amount, description, date, destinationKind } = parsed.data;
+  const expenseCategory = canonicalExpenseCategoryName(parsed.data.expenseCategory);
   if (destinationKind === "other" && !description.trim()) {
     res.status(400).json({ error: "Add a narration for an Other destination." });
     return;
@@ -1079,7 +1081,7 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const expenseCategory = parsed.data.expenseCategory ?? existing.expenseCategory;
+  const expenseCategory = canonicalExpenseCategoryName(parsed.data.expenseCategory ?? existing.expenseCategory ?? "");
   if (!expenseCategory) {
     res.status(400).json({ error: "Choose a valid budget category." });
     return;
