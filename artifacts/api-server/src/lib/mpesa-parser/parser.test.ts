@@ -333,4 +333,59 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "received payment with no fee line",
+      message:
+        "TESTRECEIVE1 Confirmed.You have received Ksh1,000.00 from SAMPLE PERSON <PHONE> on 21/10/25 at 9:24 PM  New M-PESA balance is Ksh1,000.00. Earn interest daily on Ziidi MMF,Dial *334#",
+      transactionId: "TESTRECEIVE1",
+      sender: "SAMPLE PERSON",
+      date: "2025-10-21",
+      time: "21:24",
+      amount: 1000,
+      balance: 1000,
+    },
+    {
+      name: "received payment with a larger amount",
+      message:
+        "TESTRECEIVE2 Confirmed.You have received Ksh3,500.00 from SAMPLE PERSON <PHONE> on 22/10/25 at 3:31 PM  New M-PESA balance is Ksh3,500.00. Earn interest daily on Ziidi MMF,Dial *334#",
+      transactionId: "TESTRECEIVE2",
+      sender: "SAMPLE PERSON",
+      date: "2025-10-22",
+      time: "15:31",
+      amount: 3500,
+      balance: 3500,
+    },
+    {
+      name: "received payment with a different amount and date",
+      message:
+        "TESTRECEIVE3 Confirmed.You have received Ksh35,000.00 from SAMPLE PERSON <PHONE> on 31/10/25 at 5:37 PM  New M-PESA balance is Ksh35,000.00. Earn interest daily on Ziidi MMF,Dial *334#",
+      transactionId: "TESTRECEIVE3",
+      sender: "SAMPLE PERSON",
+      date: "2025-10-31",
+      time: "17:37",
+      amount: 35000,
+      balance: 35000,
+    },
+  ])("recognizes $name as an incoming person-to-person payment", ({ message, transactionId, sender, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "person_receipt",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: sender,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: null,
+      },
+    });
+  });
 });

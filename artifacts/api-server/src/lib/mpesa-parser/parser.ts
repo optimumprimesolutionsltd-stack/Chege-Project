@@ -86,7 +86,7 @@ function detectTransactionType(
     return "person_payment";
   }
   if (/\b(?:till|merchant|paid to)\b/.test(lower)) return "merchant_payment";
-  if (/\b(?:received|credited|from)\b/.test(lower)) return "person_receipt";
+  if (/\b(?:received|credited)\b/.test(lower)) return "person_receipt";
   if (/\b(?:sent|send|transferred|to)\b/.test(lower)) return "person_payment";
   return null;
 }
