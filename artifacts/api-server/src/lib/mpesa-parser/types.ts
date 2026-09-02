@@ -13,11 +13,20 @@ export type MpesaTransactionType =
   | "failed"
   | "other";
 
+export type MpesaPurchaseCategory =
+  | "postpaid_bundle"
+  | "minutes"
+  | "airtime"
+  | "gift"
+  | "wifi"
+  | null;
+
 export type ParserConfidence = "high" | "medium" | "low" | "none";
 
 export interface MpesaTransaction {
   transactionId: string | null;
   transactionType: MpesaTransactionType | null;
+  purchaseCategory: MpesaPurchaseCategory;
   amount: number | null;
   currency: string | null;
   merchantOrCounterparty: string | null;

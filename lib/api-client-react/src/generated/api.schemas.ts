@@ -34,6 +34,20 @@ export const MpesaTransactionTransactionType = {
   other: 'other',
 } as const;
 
+/**
+ * @nullable
+ */
+export type MpesaTransactionPurchaseCategory = typeof MpesaTransactionPurchaseCategory[keyof typeof MpesaTransactionPurchaseCategory] | null;
+
+
+export const MpesaTransactionPurchaseCategory = {
+  postpaid_bundle: 'postpaid_bundle',
+  minutes: 'minutes',
+  airtime: 'airtime',
+  gift: 'gift',
+  wifi: 'wifi',
+} as const;
+
 export type MpesaTransactionConfidence = typeof MpesaTransactionConfidence[keyof typeof MpesaTransactionConfidence];
 
 
@@ -49,6 +63,8 @@ export interface MpesaTransaction {
   transactionId: string | null;
   /** @nullable */
   transactionType: MpesaTransactionTransactionType;
+  /** @nullable */
+  purchaseCategory: MpesaTransactionPurchaseCategory;
   /** @nullable */
   amount: number | null;
   /** @nullable */

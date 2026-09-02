@@ -24,6 +24,7 @@ export const ParseMpesaMessageResponse = zod.object({
   "transaction": zod.union([zod.object({
   "transactionId": zod.string().nullable(),
   "transactionType": zod.union([zod.literal('person_payment'),zod.literal('person_receipt'),zod.literal('merchant_payment'),zod.literal('paybill_payment'),zod.literal('airtime_purchase'),zod.literal('cash_withdrawal'),zod.literal('cash_deposit'),zod.literal('bank_transfer'),zod.literal('reversal'),zod.literal('failed'),zod.literal('other'),zod.literal(null)]).nullable(),
+  "purchaseCategory": zod.union([zod.literal('postpaid_bundle'),zod.literal('minutes'),zod.literal('airtime'),zod.literal('gift'),zod.literal('wifi'),zod.literal(null)]).nullable(),
   "amount": zod.number().nullable(),
   "currency": zod.string().nullable(),
   "merchantOrCounterparty": zod.string().nullable(),

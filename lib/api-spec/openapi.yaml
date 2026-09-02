@@ -1819,6 +1819,9 @@ components:
         transactionType:
           type: ["string", "null"]
           enum: [person_payment, person_receipt, merchant_payment, paybill_payment, airtime_purchase, cash_withdrawal, cash_deposit, bank_transfer, reversal, failed, other, null]
+        purchaseCategory:
+          type: ["string", "null"]
+          enum: [postpaid_bundle, minutes, airtime, gift, wifi, null]
         amount:
           type: ["number", "null"]
         currency:
@@ -1848,6 +1851,7 @@ components:
       required:
         - transactionId
         - transactionType
+        - purchaseCategory
         - amount
         - currency
         - merchantOrCounterparty

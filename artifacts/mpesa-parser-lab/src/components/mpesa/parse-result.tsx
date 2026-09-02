@@ -109,6 +109,7 @@ export function ParseResult({ result, isLoading }: ParseResultProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               {/* Only render fields that are not null/empty */}
               <Field label="Transaction Type" value={tx.transactionType} />
+              <Field label="Purchase Category" value={tx.purchaseCategory} />
               <Field label="Transaction ID" value={tx.transactionId} />
               <Field label="Amount" value={tx.amount !== null ? `${tx.currency || 'KES'} ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : null} />
               <Field label="Merchant/Counterparty" value={tx.merchantOrCounterparty} />

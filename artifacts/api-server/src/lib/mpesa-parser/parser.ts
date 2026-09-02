@@ -1,6 +1,7 @@
 import {
   MPESA_PARSER_VERSION,
   type MpesaTransaction,
+  type MpesaPurchaseCategory,
   type MpesaTransactionType,
   type ParseResult,
   type ParserConfidence,
@@ -54,10 +55,20 @@ function parseTime(message: string): string | null {
   return `${String(hour).padStart(2, "0")}:${match[2]}`;
 }
 
-function detectTransactionType(message: string): MpesaTransactionType | null {
+function detectPurchaseCategory(message: string): MpesaPurchaseCategory {
+  const lower = message.toLowerCase();
+  if (/\bpostpaid\s+bundles?\b/.test(lower)) return "postpaid_bundle";
+  return null;
+}
+
+function detectTransactionType(
+  message: string,
+  purchaseCategory: MpesaPurchaseCategory,
+): MpesaTransactionType | null {
   const lower = message.toLowerCase();
   if (/\brevers(?:ed|al)\b/.test(lower)) return "reversal";
   if (/\bfailed\b|\bcould not\b|\bunsuccessful\b/.test(lower)) return "failed";
+  if (purchaseCategory) return "airtime_purchase";
   if (/\bairtime\b/.test(lower)) return "airtime_purchase";
   if (/\bwithdraw(?:al)?\b|\batm\b/.test(lower)) return "cash_withdrawal";
   if (/\bdeposit(?:ed)?\b/.test(lower)) return "cash_deposit";
@@ -113,7 +124,8 @@ export function parseMpesaMessage(message: string): ParseResult {
   const transactionId = normalizedMessage.match(transactionIdPattern)?.[1]?.toUpperCase() ?? null;
   const amountMatch = normalizedMessage.match(amountPattern);
   const amount = parseMoney(amountMatch?.[1]);
-  const transactionType = detectTransactionType(normalizedMessage);
+  const purchaseCategory = detectPurchaseCategory(normalizedMessage);
+  const transactionType = detectTransactionType(normalizedMessage, purchaseCategory);
   const confidence = confidenceFor(transactionId, amount, transactionType);
   const warnings: string[] = [];
 
@@ -127,6 +139,7 @@ export function parseMpesaMessage(message: string): ParseResult {
   const transaction: MpesaTransaction = {
     transactionId,
     transactionType,
+    purchaseCategory,
     amount,
     currency: amount !== null ? "KES" : null,
     merchantOrCounterparty: extractCounterparty(normalizedMessage),

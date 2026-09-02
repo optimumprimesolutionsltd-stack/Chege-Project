@@ -35,6 +35,7 @@ describe("M-Pesa parser foundation", () => {
     expect(result.transaction).toMatchObject({
       transactionId: "TEST1234",
       transactionType: "merchant_payment",
+      purchaseCategory: null,
       amount: 1250,
       currency: "KES",
       merchantOrCounterparty: "SAMPLE MARKET",
@@ -59,5 +60,54 @@ describe("M-Pesa parser foundation", () => {
     const result = parseMpesaMessage("TEST1234 Confirmed. Ksh0.00 paid to SAMPLE SHOP.");
     expect(result.transaction?.amount).toBeNull();
     expect(result.warnings).toContain("A positive KSh amount was not found.");
+  });
+
+  it.each([
+    {
+      name: "standard postpaid bundle wording",
+      message:
+        "TESTAIR1 Confirmed. Ksh20.00 sent to SAMPLE POSTPAID BUNDLES for account SAMPLE DATA DAILY on 31/8/26 at 9:08 PM. New M-PESA balance is Ksh12,024.59. Transaction cost, Ksh0.00.",
+      transactionId: "TESTAIR1",
+      date: "2026-08-31",
+      time: "21:08",
+      balance: 12024.59,
+    },
+    {
+      name: "postpaid bundle with appended account notices",
+      message:
+        "TESTAIR2 Confirmed. Ksh20.00 sent to SAMPLE POSTPAID BUNDLES for account SAMPLE DATA DAILY on 30/8/26 at 3:16 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.Amount you can transact within the day is 499,555.00. See all your balances now <LINK>",
+      transactionId: "TESTAIR2",
+      date: "2026-08-30",
+      time: "15:16",
+      balance: 0,
+    },
+    {
+      name: "postpaid bundle with a different offer",
+      message:
+        "TESTAIR3 Confirmed. Ksh30.00 sent to SAMPLE POSTPAID BUNDLES for account SAMPLE MIDNIGHT OFFERS on 1/9/26 at 11:08 AM. New M-PESA balance is Ksh2,436.27. Transaction cost, Ksh0.00.",
+      transactionId: "TESTAIR3",
+      date: "2026-09-01",
+      time: "11:08",
+      balance: 2436.27,
+    },
+  ])("recognizes $name as a postpaid bundle purchase", ({ message, transactionId, date, time, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "airtime_purchase",
+        purchaseCategory: "postpaid_bundle",
+        amount: expect.any(Number),
+        currency: "KES",
+        merchantOrCounterparty: "SAMPLE POSTPAID BUNDLES",
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
   });
 });

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MpesaTransactionConfidence } from './mpesaTransactionConfidence';
+import type { MpesaTransactionPurchaseCategory } from './mpesaTransactionPurchaseCategory';
 import type { MpesaTransactionTransactionType } from './mpesaTransactionTransactionType';
 
 export interface MpesaTransaction {
@@ -13,6 +14,8 @@ export interface MpesaTransaction {
   transactionId: string | null;
   /** @nullable */
   transactionType: MpesaTransactionTransactionType;
+  /** @nullable */
+  purchaseCategory: MpesaTransactionPurchaseCategory;
   /** @nullable */
   amount: number | null;
   /** @nullable */

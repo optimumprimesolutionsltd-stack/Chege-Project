@@ -99,6 +99,7 @@ export * from './mpesaParseResultConfidence';
 export * from './mpesaParseResultStatus';
 export * from './mpesaTransaction';
 export * from './mpesaTransactionConfidence';
+export * from './mpesaTransactionPurchaseCategory';
 export * from './mpesaTransactionTransactionType';
 export * from './openingBalance';
 export * from './openingBalanceInput';
