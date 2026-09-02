@@ -516,4 +516,60 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "bank app receipt",
+      message:
+        "TESTBANK1 Confirmed.You have received Ksh8,800.00 from SAMPLE BANK LIMITED - APP on 1/9/26 at 1:46 PM. New M-PESA balance is Ksh11,141.27. Buy goods with M-PESA.",
+      transactionId: "TESTBANK1",
+      sender: "SAMPLE BANK LIMITED - APP",
+      date: "2026-09-01",
+      time: "13:46",
+      amount: 8800,
+      balance: 11141.27,
+    },
+    {
+      name: "bulk account receipt",
+      message:
+        "TESTBANK2 Confirmed.You have received Ksh1,500.00 from SAMPLE BANK BULK ACCOUNT SAMPLE ACCOUNT on 29/8/26 at 4:58 PM New M-PESA balance is Ksh1,500.00. Separate personal and business funds through Pochi la Biashara on *334#.",
+      transactionId: "TESTBANK2",
+      sender: "SAMPLE BANK BULK ACCOUNT SAMPLE ACCOUNT",
+      date: "2026-08-29",
+      time: "16:58",
+      amount: 1500,
+      balance: 1500,
+    },
+    {
+      name: "bank receipt with a short source label",
+      message:
+        "TESTBANK3 Confirmed.You have received Ksh1,000.00 from SAMPLE KCB SAMPLE ACCOUNT on 23/7/26 at 7:26 PM New M-PESA balance is Ksh1,000.00. Separate personal and business funds through Pochi la Biashara on *334#.",
+      transactionId: "TESTBANK3",
+      sender: "SAMPLE KCB SAMPLE ACCOUNT",
+      date: "2026-07-23",
+      time: "19:26",
+      amount: 1000,
+      balance: 1000,
+    },
+  ])("recognizes $name as an incoming bank payment", ({ message, transactionId, sender, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "bank_receipt",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: sender,
+        accountReference: null,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: null,
+      },
+    });
+  });
 });

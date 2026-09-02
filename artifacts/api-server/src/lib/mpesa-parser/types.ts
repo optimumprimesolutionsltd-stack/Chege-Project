@@ -9,6 +9,7 @@ export type MpesaTransactionType =
   | "cash_withdrawal"
   | "cash_deposit"
   | "bank_transfer"
+  | "bank_receipt"
   | "reversal"
   | "failed"
   | "other";

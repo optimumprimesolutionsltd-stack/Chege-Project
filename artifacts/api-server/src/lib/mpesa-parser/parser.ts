@@ -89,6 +89,9 @@ function detectTransactionType(
     return "person_payment";
   }
   if (/\b(?:tills?|merchant|paid to)\b/.test(lower)) return "merchant_payment";
+  if (/\b(?:received|credited)\b/.test(lower) && /\b(?:bank|bulk\s+account|im\s+bank|equity|kcb)\b/.test(lower)) {
+    return "bank_receipt";
+  }
   if (/\b(?:received|credited)\b/.test(lower)) return "person_receipt";
   if (/\b(?:sent|send|transferred|to)\b/.test(lower)) return "person_payment";
   return null;

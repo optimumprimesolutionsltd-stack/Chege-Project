@@ -21,6 +21,7 @@ export const MpesaTransactionTransactionType = {
   cash_withdrawal: 'cash_withdrawal',
   cash_deposit: 'cash_deposit',
   bank_transfer: 'bank_transfer',
+  bank_receipt: 'bank_receipt',
   reversal: 'reversal',
   failed: 'failed',
   other: 'other',
