@@ -220,4 +220,59 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "home internet payment without a space in provider name",
+      message:
+        "TESTWIFI1 Confirmed. Ksh1,500.00 sent to SAFARICOMHOME for account SAMPLE ACCOUNT on 1/9/26 at 11:15 PM. New M-PESA balance is Ksh200.27. Transaction cost, Ksh0.00.",
+      transactionId: "TESTWIFI1",
+      merchant: "SAFARICOMHOME",
+      date: "2026-09-01",
+      time: "23:15",
+      amount: 1500,
+      balance: 200.27,
+    },
+    {
+      name: "home internet payment with a space in provider name",
+      message:
+        "TESTWIFI2 Confirmed. Ksh2,999.00 sent to SAFARICOMHOME for account SAMPLE ACCOUNT on 4/3/26 at 5:50 PM. New M-PESA balance is Ksh8,124.87. Transaction cost, Ksh0.00.",
+      transactionId: "TESTWIFI2",
+      merchant: "SAFARICOMHOME",
+      date: "2026-03-04",
+      time: "17:50",
+      amount: 2999,
+      balance: 8124.87,
+    },
+    {
+      name: "home internet payment with appended account notices",
+      message:
+        "TESTWIFI3 Confirmed. Ksh2,999.00 sent to Safaricom Home for account SAMPLE ACCOUNT on 3/4/26 at 6:47 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.Amount you can transact within the day is 487,771.00. Save frequent paybills for quick payment on M-PESA app <LINK>",
+      transactionId: "TESTWIFI3",
+      merchant: "Safaricom Home",
+      date: "2026-04-03",
+      time: "18:47",
+      amount: 2999,
+      balance: 0,
+    },
+  ])("recognizes $name as a Wi-Fi purchase", ({ message, transactionId, merchant, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "airtime_purchase",
+        purchaseCategory: "wifi",
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: merchant,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
 });
