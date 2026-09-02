@@ -275,4 +275,62 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "sent to a person with a phone number",
+      message:
+        "TESTSEND1 Confirmed. Ksh70.00 sent to SAMPLE PERSON <PHONE> on 2/9/26 at 9:50 AM. New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,890.00. See all your balances now <LINK>",
+      transactionId: "TESTSEND1",
+      recipient: "SAMPLE PERSON",
+      date: "2026-09-02",
+      time: "09:50",
+      amount: 70,
+      balance: 0,
+      fee: 0,
+    },
+    {
+      name: "sent to a person with a non-zero fee",
+      message:
+        "TESTSEND2 Confirmed. Ksh150.00 sent to SAMPLE PERSON <PHONE> on 1/9/26 at 6:51 PM. New M-PESA balance is Ksh7,082.59. Transaction cost, Ksh7.00. Amount you can transact within the day is 491,650.00. See all your balances now <LINK>",
+      transactionId: "TESTSEND2",
+      recipient: "SAMPLE PERSON",
+      date: "2026-09-01",
+      time: "18:51",
+      amount: 150,
+      balance: 7082.59,
+      fee: 7,
+    },
+    {
+      name: "paid to a full personal name",
+      message:
+        "TESTSEND3 Confirmed. Ksh120.00 paid to SAMPLE PERSON FULL NAME. on 30/10/25 at 6:01 PM.New M-PESA balance is Ksh248.18. Transaction cost, Ksh0.00. Amount you can transact within the day is 485,865.00. Save frequent Tills for quick payment on M-PESA app <LINK>",
+      transactionId: "TESTSEND3",
+      recipient: "SAMPLE PERSON FULL NAME",
+      date: "2025-10-30",
+      time: "18:01",
+      amount: 120,
+      balance: 248.18,
+      fee: 0,
+    },
+  ])("recognizes $name as a person-to-person payment", ({ message, transactionId, recipient, date, time, amount, balance, fee }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "person_payment",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: recipient,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee,
+      },
+    });
+  });
 });

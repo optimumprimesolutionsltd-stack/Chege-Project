@@ -81,6 +81,10 @@ function detectTransactionType(
   if (/\bdeposit(?:ed)?\b/.test(lower)) return "cash_deposit";
   if (/\b(?:bank to|m[- ]?pesa to bank|bank transfer)\b/.test(lower)) return "bank_transfer";
   if (/\bpaybill\b|\baccount number\b/.test(lower)) return "paybill_payment";
+  if (/\bsent\s+to\b/.test(lower)) return "person_payment";
+  if (/\bpaid to\s+[A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){2,}\s*(?:\.|\bon\b)/i.test(message)) {
+    return "person_payment";
+  }
   if (/\b(?:till|merchant|paid to)\b/.test(lower)) return "merchant_payment";
   if (/\b(?:received|credited|from)\b/.test(lower)) return "person_receipt";
   if (/\b(?:sent|send|transferred|to)\b/.test(lower)) return "person_payment";
@@ -89,7 +93,7 @@ function detectTransactionType(
 
 function extractCounterparty(message: string): string | null {
   const match = message.match(
-    /\b(?:paid to|sent to|received from|transferred to|from)\s+([A-Za-z][A-Za-z0-9 &'./-]{1,70}?)(?=\s+(?:on|at|for|account|number|new balance|balance|fee)\b|[.,]|$)/i,
+    /\b(?:paid to|sent to|received from|transferred to|from)\s+([A-Za-z][A-Za-z0-9 &'./-]{1,70}?)(?=\s+(?:on|at|for|account|number|new balance|balance|fee)\b|\s+<PHONE>|[.,]|$)/i,
   );
   const value = match?.[1]?.trim().replace(/\s+/g, " ");
   return value ? value : null;
