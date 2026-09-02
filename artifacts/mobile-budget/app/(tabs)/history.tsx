@@ -48,6 +48,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
+import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
@@ -70,10 +71,6 @@ function todayIso(): string {
 
 function formatKES(n: number) {
   return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
-}
-
-function formatDate(s: string) {
-  return new Date(s).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 type Expense = {

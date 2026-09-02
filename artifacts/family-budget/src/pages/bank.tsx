@@ -784,7 +784,7 @@ export default function Bank() {
                 <Landmark className="w-6 h-6 opacity-80" />
                 <p className="text-sm font-medium opacity-80">Closing balance</p>
               </div>
-                <p className="text-4xl font-display font-bold" data-testid="bank-balance">{formatKes(account?.balance ?? 0)}</p>
+                <p className="whitespace-nowrap font-display text-[clamp(1.8rem,8vw,2.25rem)] font-bold leading-tight" data-testid="bank-balance">{formatKes(account?.balance ?? 0)}</p>
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="opacity-75">
                     Opening balance: <span className="font-semibold">{formatKes(account?.openingBalance ?? 0)}</span>
@@ -805,11 +805,11 @@ export default function Bank() {
               <div className="flex gap-6 pt-2 border-t border-primary-foreground/20">
                 <div>
                   <p className="text-xs opacity-70 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Total In</p>
-                  <p className="text-lg font-semibold font-mono">{formatKes(account?.totalDeposits ?? 0)}</p>
+                   <p className="whitespace-nowrap text-lg font-semibold font-mono">{formatKes(account?.totalDeposits ?? 0)}</p>
                 </div>
                 <div>
                   <p className="text-xs opacity-70 flex items-center gap-1"><TrendingDown className="w-3 h-3" /> Total Out</p>
-                  <p className="text-lg font-semibold font-mono">{formatKes(account?.totalDisbursements ?? 0)}</p>
+                   <p className="whitespace-nowrap text-lg font-semibold font-mono">{formatKes(account?.totalDisbursements ?? 0)}</p>
                 </div>
               </div>
             </div>
@@ -1461,7 +1461,7 @@ export default function Bank() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <div className="text-right">
-                      <p className={`font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
+                       <p className={`whitespace-nowrap font-display font-bold text-lg ${isDeposit ? "text-green-600" : "text-destructive"}`}>
                         {isDeposit ? "+" : "-"}{formatKes(tx.amount)}
                       </p>
                       <time
@@ -1472,7 +1472,7 @@ export default function Bank() {
                         {formatDate(tx.date)}
                       </time>
                       {typeof tx.runningBalance === "number" && (
-                        <p className="text-xs text-muted-foreground" data-testid={`running-balance-${tx.id}`}>
+                         <p className="whitespace-nowrap text-xs text-muted-foreground" data-testid={`running-balance-${tx.id}`}>
                           Balance {formatKes(tx.runningBalance)}
                         </p>
                       )}

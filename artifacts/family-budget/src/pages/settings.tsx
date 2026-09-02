@@ -32,6 +32,7 @@ import { applyAppearance, readAppearance, saveAppearance, type Appearance } from
 import { appPath } from "@/lib/base-path";
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from "@/lib/member-limit";
 import { workspaceLabel } from "@/lib/workspace-identity";
+import { formatDate } from "@/lib/utils";
 
 type GroupInvitation = {
   id: number;
@@ -1194,7 +1195,7 @@ export default function Settings() {
                 <div key={invitation.id} className="flex flex-col gap-3 rounded-xl border border-border/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{invitation.email}</p>
-                    <p className="text-xs text-muted-foreground">{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground">{invitation.role} · expires {formatDate(invitation.expiresAt)}</p>
                   </div>
                   <div className="flex items-center justify-end gap-1 sm:shrink-0">
                     <Button variant="ghost" size="icon" aria-label={`Resend invitation to ${invitation.email}`} onClick={() => resendInvitation(invitation)}>

@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 import { getExpenseActivityEditHref } from '@/lib/expenseEditLink';
+import { formatDisplayDate } from '@/lib/displayFormat';
 
 export interface ActivityItem {
   id: string;
@@ -48,11 +49,6 @@ const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Communication: 'phone',
 };
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
-}
-
 export default function ActivityCard({ item, colors }: Props) {
   const isExpense = item.type === ACTIVITY_TYPE.EXPENSE;
   const isSavings = item.type === ACTIVITY_TYPE.SAVINGS;
@@ -88,7 +84,7 @@ export default function ActivityCard({ item, colors }: Props) {
           {item.description}
         </Text>
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-          {item.userName ?? (isExpense ? 'Joint bank' : 'Unknown')} · {formatDate(item.date)}
+          {item.userName ?? (isExpense ? 'Joint bank' : 'Unknown')} · {formatDisplayDate(item.date)}
           {expenseEditHref ? ' · Edit expense' : ''}
         </Text>
       </View>

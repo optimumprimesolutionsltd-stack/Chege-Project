@@ -6,7 +6,7 @@ import { useGetGroup } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatDate, formatKes } from "@/lib/utils";
 
 type SearchTab = "all" | "expenses" | "bank" | "goals" | "income";
 type SearchResult = {
@@ -133,10 +133,10 @@ export default function SearchPage() {
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-foreground">{item.title}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">{item.subtitle}{item.date ? ` · ${String(item.date).slice(0, 10)}` : ""}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{item.subtitle}{item.date ? ` · ${formatDate(String(item.date))}` : ""}</span>
                 </span>
-                <span className={cn("shrink-0 text-sm font-bold", item.direction === "in" ? "text-success" : "text-foreground")}>
-                  {item.direction === "in" ? "+" : ""}KES {Number(item.amount).toLocaleString("en-KE")}
+                <span className={cn("shrink-0 whitespace-nowrap text-sm font-bold", item.direction === "in" ? "text-success" : "text-foreground")}>
+                  {item.direction === "in" ? "+" : ""}{formatKes(Number(item.amount))}
                 </span>
               </button>
             );

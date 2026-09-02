@@ -49,16 +49,11 @@ import {
   useGetGroup,
   type SavingsGoalContribution,
 } from '@workspace/api-client-react';
+import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
   return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
-}
-
-function formatDate(s?: string | null): string {
-  if (!s) return '';
-  const d = new Date(s);
-  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function dateToYMD(d: Date): string {

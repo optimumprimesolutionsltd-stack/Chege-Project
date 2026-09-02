@@ -734,7 +734,7 @@ export default function DashboardScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.askModalTitle, { color: colors.foreground }]}>Ask Jamvi</Text>
                   <Text style={[styles.askModalSubtitle, { color: colors.mutedForeground }]}>
-                    Answers are read-only and limited to this budget.
+                    Ask about this month or your available history across this budget. Answers stay read-only.
                   </Text>
                 </View>
               </View>
@@ -750,7 +750,7 @@ export default function DashboardScreen() {
               value={askQuery}
               onChangeText={setAskQuery}
               onSubmitEditing={() => void askJamvi()}
-              placeholder="Ask about totals or find a ledger entry…"
+              placeholder="Ask about history, reports, goals, banks, or any ledger…"
               placeholderTextColor={colors.mutedForeground}
               style={[styles.askInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
               accessibilityLabel="Ask Jamvi a question"
@@ -776,7 +776,7 @@ export default function DashboardScreen() {
               )}
             </Pressable>
             <View style={styles.askPromptList}>
-              {['Where am I spending the most?', 'What is in my bank account?', 'What are my savings goals?', 'Who contributed this month?'].map((prompt) => (
+              {['How did this month compare with my history?', 'How much have I spent on rent?', 'What is in each bank account?', 'Which goals need attention?', 'Who has contributed?', 'What are my highest spending categories?'].map((prompt) => (
                 <Pressable
                   key={prompt}
                   onPress={() => void askJamvi(prompt)}

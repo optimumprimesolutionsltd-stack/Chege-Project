@@ -110,10 +110,13 @@ describe("dashboard quick actions", () => {
     expect(expenseFormSource).toContain('data-testid="quick-expense-normal-amount"');
     expect(expenseFormSource).toContain('data-testid="quick-expense-normal-description"');
     expect(expenseFormSource).toContain('data-testid="quick-expense-normal-category"');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-date-section"');
+    expect(expenseFormSource).toContain('id="quick-expense-normal-date"');
+    expect(expenseFormSource).toContain('onChange={event => setDate(event.target.value)}');
     expect(expenseFormSource).toContain('const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];');
     expect(expenseFormSource).toContain('setCategoryAllocations(category.trim()');
     expect(expenseFormSource).toContain('setDirectPortion(amount);');
-    expect(expenseFormSource).toContain('setDate(today);');
+    expect(expenseFormSource).not.toContain('Use Advanced for dates');
     expect(expenseFormSource).toContain('setIsRecurring(false);');
     expect(expenseFormSource).toContain('setPaidFromBank(false);');
     expect(expenseFormSource).toContain('No income source is available for quick log.');

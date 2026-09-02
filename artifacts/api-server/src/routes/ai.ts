@@ -25,7 +25,7 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
   const monthFilter = sql`EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`;
   const transactionMonthFilter = sql`EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`;
 
-  const [group, budgetRows, expenseTotal, categoryRows, incomeRow, goals, expenseLedger, bankLedger, bankAccounts, incomeSources, contributions, members] = await Promise.all([
+  const [group, budgetRows, expenseTotal, categoryRows, incomeRow, goals, expenseLedger, bankLedger, bankAccounts, incomeSources, contributions, members, allExpenseLedger, allBankLedger, allTimeExpenseTotal, allTimeIncomeTotal, allTimeCategoryRows, allContributions] = await Promise.all([
     db.select({ name: groupsTable.name, kind: groupsTable.kind, isPrivate: sql<boolean>`${groupsTable.privateOwnerUserId} IS NOT NULL` })
       .from(groupsTable).where(eq(groupsTable.id, groupId)).limit(1),
     db.select({ name: budgetCategoriesTable.name, budgetAmount: budgetCategoriesTable.budgetAmount, priority: budgetCategoriesTable.priority })
@@ -123,6 +123,64 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
       userId: membersTable.userId,
       monthlyTarget: membersTable.monthlyTarget,
     }).from(membersTable).where(eq(membersTable.groupId, groupId)).orderBy(membersTable.userId),
+    db.select({
+      id: expensesTable.id,
+      date: expensesTable.date,
+      description: expensesTable.description,
+      category: expensesTable.category,
+      amount: expensesTable.amount,
+    }).from(expensesTable)
+      .where(eq(expensesTable.groupId, groupId))
+      .orderBy(desc(expensesTable.date), desc(expensesTable.id))
+      .limit(250),
+    db.select({
+      id: jointAccountTxTable.id,
+      date: jointAccountTxTable.date,
+      description: jointAccountTxTable.description,
+      category: jointAccountTxTable.expenseCategory,
+      amount: jointAccountTxTable.amount,
+      type: jointAccountTxTable.type,
+    }).from(jointAccountTxTable)
+      .where(eq(jointAccountTxTable.groupId, groupId))
+      .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id))
+      .limit(250),
+    db.select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
+      .from(expensesTable)
+      .where(eq(expensesTable.groupId, groupId)),
+    db.select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
+      .from(jointAccountTxTable)
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.bankTransferId} IS NULL`),
+    db.execute(sql`
+      SELECT category, COALESCE(SUM(amount), 0) AS spent
+      FROM (
+        SELECT e.category, e.amount
+        FROM expenses e
+        WHERE e.group_id = ${groupId}
+          AND NOT EXISTS (
+            SELECT 1 FROM expense_category_allocations a
+            WHERE a.expense_id = e.id AND a.group_id = ${groupId}
+          )
+        UNION ALL
+        SELECT a.category, a.amount
+        FROM expense_category_allocations a
+        INNER JOIN expenses e ON e.id = a.expense_id AND e.group_id = a.group_id
+        WHERE a.group_id = ${groupId}
+      ) entries
+      GROUP BY category
+      ORDER BY spent DESC, category ASC
+      LIMIT 100
+    `),
+    db.select({
+      id: contributionsTable.id,
+      userId: contributionsTable.userId,
+      amount: contributionsTable.amount,
+      month: contributionsTable.month,
+      year: contributionsTable.year,
+      note: contributionsTable.note,
+    }).from(contributionsTable)
+      .where(eq(contributionsTable.groupId, groupId))
+      .orderBy(desc(contributionsTable.id))
+      .limit(250),
   ]);
 
   const spentByCategory = new Map((categoryRows.rows as Array<{ category: string; spent: string | number }>).map((row) => [row.category, Number(row.spent)]));
@@ -136,12 +194,42 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
   const budgeted = categories.reduce((sum, row) => sum + row.budgeted, 0);
   const spent = Number(expenseTotal[0]?.total ?? 0);
   const income = Number(incomeRow[0]?.total ?? 0);
+  const allTimeCategories = (allTimeCategoryRows.rows as Array<{ category: string; spent: string | number }>).map((row) => ({
+    name: row.category,
+    spent: Number(row.spent),
+  }));
+  const allLedgerEntries = [
+    ...allExpenseLedger.map((entry) => ({
+      kind: "expense" as const,
+      id: entry.id,
+      date: String(entry.date),
+      description: entry.description,
+      category: entry.category,
+      amount: Number(entry.amount),
+      direction: "out" as const,
+    })),
+    ...allBankLedger.map((entry) => ({
+      kind: "bank" as const,
+      id: entry.id,
+      date: String(entry.date),
+      description: entry.description,
+      category: entry.category,
+      amount: Number(entry.amount),
+      direction: entry.type === "deposit" ? "in" as const : "out" as const,
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 500);
 
   res.json({
     period: { month, year, currency: "KES" },
     workspace: group[0] ?? { name: "Current budget", kind: "unknown", isPrivate: false },
     totals: { budgeted, spent, remaining: budgeted - spent, incomeReceived: income },
     categories,
+    allLedgerEntries,
+    allTimeTotals: {
+      spent: Number(allTimeExpenseTotal[0]?.total ?? 0),
+      incomeReceived: Number(allTimeIncomeTotal[0]?.total ?? 0),
+    },
+    allTimeCategories,
     goals: goals.map((goal) => ({
       name: goal.name,
       targetAmount: Number(goal.targetAmount),
@@ -184,6 +272,14 @@ router.get("/ai/budget-summary", async (req, res): Promise<void> => {
       userId: source.userId,
     })),
     contributions: contributions.map((contribution) => ({
+      id: contribution.id,
+      userId: contribution.userId,
+      amount: Number(contribution.amount),
+      month: contribution.month,
+      year: contribution.year,
+      note: contribution.note,
+    })),
+    allContributions: allContributions.map((contribution) => ({
       id: contribution.id,
       userId: contribution.userId,
       amount: Number(contribution.amount),

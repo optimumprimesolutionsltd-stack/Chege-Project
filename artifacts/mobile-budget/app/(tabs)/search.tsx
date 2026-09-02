@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
+import { formatDisplayDate } from '@/lib/displayFormat';
 
 type SearchTab = 'all' | 'expenses' | 'bank' | 'goals' | 'income';
 type SearchResult = {
@@ -139,9 +140,9 @@ export default function SearchScreen() {
               </View>
               <View style={styles.resultCopy}>
                 <Text numberOfLines={1} style={[styles.resultTitle, { color: colors.foreground }]}>{item.title}</Text>
-                <Text numberOfLines={2} style={[styles.resultSubtitle, { color: colors.mutedForeground }]}>{item.subtitle}{item.date ? ` · ${String(item.date).slice(0, 10)}` : ''}</Text>
+                 <Text numberOfLines={2} style={[styles.resultSubtitle, { color: colors.mutedForeground }]}>{item.subtitle}{item.date ? ` · ${formatDisplayDate(item.date)}` : ''}</Text>
               </View>
-              <Text numberOfLines={1} style={[styles.amount, { color: item.direction === 'in' ? colors.success : colors.foreground }]}>
+               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[styles.amount, { color: item.direction === 'in' ? colors.success : colors.foreground }]}>
                 {item.direction === 'in' ? '+' : ''}KES {Number(item.amount).toLocaleString('en-KE')}
               </Text>
             </Pressable>

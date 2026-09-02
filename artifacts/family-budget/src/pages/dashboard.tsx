@@ -733,11 +733,11 @@ function ExpenseForm({
   const normalPayerId = currentUserId || (selectableMembers.length === 1 ? selectableMembers[0].userId : "");
   const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];
 
-  // Normal quick log deliberately has just one path: today's direct expense,
-  // paid by the current member from their primary saved income source.
+  // Normal quick log keeps one funding path: a direct expense paid by the
+  // current member from their primary saved income source. The date remains
+  // editable so Standard and Advanced apply the same date semantics.
   useEffect(() => {
     if (formMode !== "normal") return;
-    setDate(today);
     setIsRecurring(false);
     setPaidFromBank(false);
     setAllowMixedFunding(false);
@@ -1284,7 +1284,7 @@ function ExpenseForm({
       <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 p-2">
         <div>
           <p className="text-sm font-bold text-foreground">Quick log mode</p>
-          <p className="text-xs text-muted-foreground">Use Advanced for dates, splits, bank funding, notes, or recurring expenses.</p>
+          <p className="text-xs text-muted-foreground">Standard keeps the essentials simple. Use Advanced for splits, bank funding, notes, or recurring expenses.</p>
         </div>
         <Button
           type="button"
@@ -1344,8 +1344,26 @@ function ExpenseForm({
               ))}
             </select>
           </div>
+          <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="quick-expense-normal-date-section">
+            <label htmlFor="quick-expense-normal-date" className="text-sm font-bold text-primary">
+              When did this happen? <span className="text-destructive">*</span>
+            </label>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              This date decides which month includes the expense in budgets, totals, and reports.
+            </p>
+            <Input
+              id="quick-expense-normal-date"
+              type="date"
+              value={date}
+              onChange={event => setDate(event.target.value)}
+              max={isSharedWorkspace && !canManageShared ? today : undefined}
+              required
+              className="h-11 bg-card"
+            />
+            {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
+          </div>
           <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            This logs today’s expense as a one-time direct payment by you, assigns the full whole-KES amount to this category, and uses your main income source{normalIncomeSource ? ` (${normalIncomeSource.name})` : ""}.
+            This logs a one-time direct payment by you on the selected date, assigns the full whole-KES amount to this category, and uses your main income source{normalIncomeSource ? ` (${normalIncomeSource.name})` : ""}.
           </div>
           {!isIncomeSourcesLoading && !normalIncomeSource && (
             <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
@@ -2909,7 +2927,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-1">
                 <p className="font-semibold text-foreground">{nearestGoal.name}</p>
                 {nearestGoal.deadline && (
-                  <p className="text-xs text-muted-foreground">by {new Date(nearestGoal.deadline).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  <p className="text-xs text-muted-foreground">by {formatDate(nearestGoal.deadline)}</p>
                 )}
               </div>
               <div className="flex justify-between text-sm mb-1">

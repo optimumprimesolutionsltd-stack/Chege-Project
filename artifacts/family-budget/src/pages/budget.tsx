@@ -13,7 +13,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatKes, formatMonthYear } from "@/lib/utils";
+import { formatDate, formatKes, formatMonthYear } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -1004,11 +1004,7 @@ export default function Budget() {
                     <div className="min-w-0">
                       <p className="font-medium">{entry.description}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {new Date(`${entry.date.slice(0, 10)}T12:00:00`).toLocaleDateString("en-KE", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
+                        {formatDate(entry.date)}
                         {" · "}{entry.payerName}
                         {ledgerCategory?.isBudgeted ? null : <>{" · "}{entry.category}</>}
                         {entry.source === "bank_disbursement" ? " · Joint bank disbursement" : null}

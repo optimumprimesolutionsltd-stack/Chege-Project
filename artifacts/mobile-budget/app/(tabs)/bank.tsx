@@ -57,6 +57,7 @@ import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
 import { getProjectedBalanceAfterOutgoing } from '@/lib/bankBalance';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
+import { formatDisplayDate } from '@/lib/displayFormat';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -74,10 +75,7 @@ function formatDateTime(s?: string | null): string {
 }
 
 function formatBankDate(s?: string | null): string {
-  if (!s) return 'Date unavailable';
-  const datePart = s.slice(0, 10);
-  const d = new Date(`${datePart}T00:00:00`);
-  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatDisplayDate(s);
 }
 
 type Tx = {
@@ -934,10 +932,10 @@ export default function BankScreen() {
             <View style={styles.openingBalanceRow}>
               <View>
                 <Text style={styles.openingBalanceLabel}>Opening balance</Text>
-                <Text style={styles.openingBalanceValue}>KES {formatKES(data?.openingBalance)}</Text>
+                 <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.openingBalance)}</Text>
                 {data?.openingBalanceDate && (
                   <Text style={styles.openingBalanceDate}>
-                    As of {new Date(data.openingBalanceDate + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                     As of {formatDisplayDate(data.openingBalanceDate)}
                   </Text>
                 )}
               </View>
@@ -1101,7 +1099,7 @@ export default function BankScreen() {
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
+                 <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
                   {dep ? '+' : '-'}KES {formatKES(item.amount)}
                 </Text>
                 <Text
@@ -1111,7 +1109,10 @@ export default function BankScreen() {
                   {formatBankDate(item.date)}
                 </Text>
                 {typeof item.runningBalance === 'number' && (
-                  <Text
+                   <Text
+                     numberOfLines={1}
+                     adjustsFontSizeToFit
+                     minimumFontScale={0.72}
                     style={[styles.txMeta, { color: colors.mutedForeground, textAlign: 'right' }]}
                     testID={`bank-running-balance-${item.id}`}
                   >

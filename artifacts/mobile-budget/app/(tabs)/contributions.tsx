@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import {
@@ -47,12 +48,6 @@ type IncomeStreamFunding = {
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
   return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
-}
-
-function formatDate(s?: string | null): string {
-  if (!s) return '';
-  const d = new Date(s);
-  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
 }
 
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {

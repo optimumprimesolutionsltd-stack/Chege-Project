@@ -16,6 +16,13 @@ describe("Ask Jamvi server LLM guardrails", () => {
     expect(isAskJamviActionRequest(question)).toBe(true);
   });
 
+  it.each(["How much did I deposit?", "What did I withdraw last month?", "How much have I paid for rent?", "Show my savings history"])(
+    "keeps read-only history questions available: %s",
+    (question) => {
+      expect(isAskJamviActionRequest(question)).toBe(false);
+    },
+  );
+
   it("answers action requests without calling the model", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const answer = await generateAskJamviResponse("Transfer KES 500", summary);
@@ -38,6 +45,7 @@ describe("Ask Jamvi server LLM guardrails", () => {
     expect(body.messages[1].content).toContain("How much is left?");
     expect(body.messages[1].content).toContain("Personal budget");
     expect(body.messages[0].content).toContain("Never instruct or claim");
+    expect(body.messages[0].content).toContain("bounded all-time ledger history");
     expect(body.max_completion_tokens).toBe(8192);
   });
 
@@ -108,6 +116,43 @@ describe("Ask Jamvi server LLM guardrails", () => {
         balance: 29000,
       }],
     })).resolves.toContain("Main account (KES 29,000)");
+  });
+
+  it("finds historical ledger records outside the selected month", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    delete process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+    delete process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+
+    await expect(generateAskJamviResponse("How much did I pay for school fees?", {
+      ...summary,
+      ledgerEntries: [],
+      allLedgerEntries: [{
+        kind: "expense",
+        id: 18,
+        date: "2025-01-12",
+        description: "Term one fees",
+        category: "School fees",
+        amount: 18000,
+        direction: "out",
+      }],
+    })).resolves.toContain("Term one fees — KES 18,000");
+  });
+
+  it("summarizes current and all-time report totals without an AI provider", async () => {
+    delete process.env.ASK_JAMVI_API_URL;
+    delete process.env.ASK_JAMVI_API_KEY;
+    delete process.env.BUILT_IN_FORGE_API_URL;
+    delete process.env.BUILT_IN_FORGE_API_KEY;
+    delete process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+    delete process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+
+    await expect(generateAskJamviResponse("Show me an all time report", {
+      ...summary,
+      allTimeTotals: { spent: 92000, incomeReceived: 140000 },
+    })).resolves.toContain("Across all available history, spending is KES 92,000");
   });
 
   it("falls back without leaking provider error details to callers", async () => {

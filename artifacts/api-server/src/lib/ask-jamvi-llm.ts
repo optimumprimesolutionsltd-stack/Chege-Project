@@ -1,8 +1,8 @@
 export type AskJamviSummary = {
   period: { month: number; year: number; currency: string };
-  workspace: { name: string; isPrivate: boolean };
+  workspace: { name: string; isPrivate: boolean; kind?: string };
   totals: { budgeted: number; spent: number; remaining: number; incomeReceived: number };
-  categories: Array<{ name: string; budgeted: number; spent: number; remaining: number }>;
+  categories: Array<{ name: string; budgeted: number; spent: number; remaining: number; priority?: number }>;
   goals: Array<{ name: string; targetAmount: number; currentAmount: number; remaining: number; deadline: string | null }>;
   ledgerEntries?: Array<{
     kind: "expense" | "bank";
@@ -13,22 +13,35 @@ export type AskJamviSummary = {
     amount: number;
     direction: "in" | "out";
   }>;
+  allLedgerEntries?: Array<{
+    kind: "expense" | "bank";
+    id: number;
+    date: string;
+    description: string;
+    category: string | null;
+    amount: number;
+    direction: "in" | "out";
+  }>;
+  allTimeTotals?: { spent: number; incomeReceived: number };
+  allTimeCategories?: Array<{ name: string; spent: number }>;
   bankAccounts?: Array<{ id: number; name: string; openingBalance: number; openingBalanceDate: string | null; balance: number }>;
   incomeSources?: Array<{ id: number; name: string; expectedMonthlyAmount: number; isMain: boolean; userId: string }>;
   contributions?: Array<{ id: number; userId: string; amount: number; month: number; year: number; note: string | null }>;
+  allContributions?: Array<{ id: number; userId: string; amount: number; month: number; year: number; note: string | null }>;
   members?: Array<{ userId: string; monthlyTarget: number | null }>;
 };
 
-const ACTION_REQUEST = /\b(transfer|send|withdraw|deposit|pay|create|add|delete|remove|edit|change|update|save|set a budget)\b|\b(move\s+(?:money|\w+\s+\d+(?:\.\d+)?|\d+(?:\.\d+)?)\b.{0,80}\b(to|into)\b)|\bmove money\b/i;
+const ACTION_REQUEST = /^(?:please\s+)?(?:transfer|send|withdraw|deposit|pay|create|add|delete|remove|edit|change|update|save|set)\b|\b(?:can|could|would|will)\s+you\s+(?:transfer|send|withdraw|deposit|pay|create|add|delete|remove|edit|change|update|save|set)\b|\bmove\s+(?:money|\w+\s+\d+(?:\.\d+)?|\d+(?:\.\d+)?)\b.{0,80}\b(to|into)\b|\bmove money\b/i;
 
 export function isAskJamviActionRequest(question: string): boolean {
   return ACTION_REQUEST.test(question.trim());
 }
 
-type AskJamviIntent = "overview" | "spending" | "remaining" | "goals" | "income" | "ledger" | "bank" | "activity" | "workspace" | "unknown";
+type AskJamviIntent = "overview" | "spending" | "remaining" | "goals" | "income" | "ledger" | "bank" | "activity" | "workspace" | "report" | "unknown";
 
 function classifyQuestion(question: string): AskJamviIntent {
   const value = question.trim().toLocaleLowerCase("en-US");
+  if (/(report|trend|compare|comparison|month over month|year over year|average|history|historical|this year|last year|all time|over time)/.test(value)) return "report";
   if (/(ledger|transaction|payment|entry|record|find|search|when did|how much did)/.test(value)) return "ledger";
   if (/(bank|account|withdraw|cash|deposit)/.test(value)) return "bank";
   if (/(activity|history|contribut|member|who paid)/.test(value)) return "activity";
@@ -46,20 +59,37 @@ const formatKes = (amount: number) => `KES ${Math.round(amount).toLocaleString("
 export function generateAskJamviFallback(question: string, summary: AskJamviSummary): string {
   const intent = classifyQuestion(question);
   const { totals, categories, goals, workspace, period, ledgerEntries = [] } = summary;
+  const allLedgerEntries = summary.allLedgerEntries ?? ledgerEntries;
   const periodLabel = new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric" })
     .format(new Date(period.year, period.month - 1, 1));
   const searchTerms = question.toLocaleLowerCase("en-US")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
-    .filter((term) => term.length > 2 && !["find", "search", "ledger", "entry", "payment", "transaction", "record", "about", "this", "that", "when", "much"].includes(term));
-  const ledgerMatches = ledgerEntries.filter((entry) => {
+    .filter((term) => term.length > 2 && ![
+      "find", "search", "ledger", "entry", "entries", "payment", "payments", "transaction", "transactions", "record", "records",
+      "about", "this", "that", "when", "much", "what", "where", "which", "show", "tell", "please", "did", "have", "has",
+      "been", "was", "were", "from", "with", "into", "over", "last", "month", "year", "all", "time", "spent", "spending",
+      "expense", "expenses", "bank", "account", "accounts", "money", "income", "received", "contribution", "contributions",
+      "how", "for", "the", "and", "pay", "paid", "deposit", "deposited", "withdraw", "withdrew", "withdrawn",
+    ].includes(term));
+  const ledgerMatches = allLedgerEntries.filter((entry) => {
     const haystack = `${entry.description} ${entry.category ?? ""} ${entry.date} ${entry.amount}`.toLocaleLowerCase("en-US");
     return searchTerms.length > 0 && searchTerms.every((term) => haystack.includes(term));
-  }).slice(0, 3);
+  }).slice(0, 5);
   if (intent === "ledger" || (intent === "unknown" && ledgerMatches.length > 0)) {
+    const asksAboutDeposits = /\b(deposit|deposited|deposits)\b/i.test(question);
+    const asksAboutWithdrawals = /\b(withdraw|withdrew|withdrawn|withdrawals)\b/i.test(question);
+    if (searchTerms.length === 0 && (asksAboutDeposits || asksAboutWithdrawals)) {
+      const direction = asksAboutDeposits ? "in" : "out";
+      const matchingBankEntries = allLedgerEntries.filter((entry) => entry.kind === "bank" && entry.direction === direction);
+      const total = matchingBankEntries.reduce((sum, entry) => sum + entry.amount, 0);
+      return matchingBankEntries.length > 0
+        ? `Across the available bank history, ${matchingBankEntries.length} ${asksAboutDeposits ? "deposit" : "withdrawal"}${matchingBankEntries.length === 1 ? "" : "s"} total ${formatKes(total)}.`
+        : `I could not find a ${asksAboutDeposits ? "deposit" : "withdrawal"} in the available bank history.`;
+    }
     return ledgerMatches.length > 0
-      ? `I found ${ledgerMatches.length} matching ledger ${ledgerMatches.length === 1 ? "entry" : "entries"}: ${ledgerMatches.map((entry) => `${entry.description} — ${formatKes(entry.amount)} on ${entry.date} (${entry.kind === "bank" ? "bank" : entry.category ?? "expense"})`).join("; ")}.`
-      : `I could not find a matching expense or bank ledger entry in ${periodLabel}. Try the Search tab to look across all records.`;
+      ? `I found ${ledgerMatches.length} matching ledger ${ledgerMatches.length === 1 ? "entry" : "entries"} totaling ${formatKes(ledgerMatches.reduce((sum, entry) => sum + entry.amount, 0))}: ${ledgerMatches.map((entry) => `${entry.description} — ${formatKes(entry.amount)} on ${entry.date} (${entry.kind === "bank" ? "bank" : entry.category ?? "expense"})`).join("; ")}.`
+      : `I could not find a matching expense or bank ledger entry in the available history. Try the Search tab for older records beyond Ask Jamvi's bounded context.`;
   }
   if (intent === "bank") {
     const accounts = summary.bankAccounts ?? [];
@@ -68,7 +98,7 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
       : `${workspace.name} does not have a bank account set up yet.`;
   }
   if (intent === "activity") {
-    const contributions = summary.contributions ?? [];
+    const contributions = summary.allContributions ?? summary.contributions ?? [];
     return contributions.length > 0
       ? `${contributions.length} contribution${contributions.length === 1 ? "" : "s"} totaling ${formatKes(contributions.reduce((sum, item) => sum + item.amount, 0))} were recorded for ${periodLabel}.`
       : `There is no contribution activity recorded for ${periodLabel}.`;
@@ -94,8 +124,14 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
       : "You have no savings goals yet. Savings and Emergency Fund items stay separate from expenses.";
   }
   if (intent === "income") return `${formatKes(totals.incomeReceived)} has been recorded as income for ${periodLabel}.`;
+  if (intent === "report") {
+    const allTime = summary.allTimeTotals;
+    return allTime
+      ? `For ${periodLabel}, spending is ${formatKes(totals.spent)} with ${formatKes(totals.incomeReceived)} recorded income. Across all available history, spending is ${formatKes(allTime.spent)} and recorded income is ${formatKes(allTime.incomeReceived)}.`
+      : `For ${periodLabel}, spending is ${formatKes(totals.spent)} with ${formatKes(totals.incomeReceived)} recorded income.`;
+  }
   if (intent === "overview") return `For ${periodLabel}, you have spent ${formatKes(totals.spent)} of ${formatKes(totals.budgeted)}, leaving ${formatKes(totals.remaining)}. Income recorded: ${formatKes(totals.incomeReceived)}.`;
-  return "I can help with your overview, spending, remaining balance, income, savings goals, bank accounts, activity, workspace, or ledger entries. Try asking me a question or use the Search tab.";
+  return "I can explain your current or historical spending, budget categories and priorities, income sources, contributions, bank accounts, savings goals, activity, reports, members, and workspace details. I stay read-only and only use this budget’s data.";
 }
 
 function chatCompletionsUrl(baseUrl: string): string {
@@ -169,7 +205,7 @@ export async function generateAskJamviResponse(question: string, summary: AskJam
         messages: [
           {
             role: "system",
-            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer for the whole Jamvi app. Answer only from the supplied budget context: totals, categories, goals, ledgerEntries, bankAccounts, incomeSources, contributions, and members. Answer questions about expenses, bank accounts, income, goals, reports, activity, categories, members, and workspace details. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Never instruct or claim that you performed a financial action. If the question is not answered by the context, say so plainly and suggest the relevant app tab or Search tab for older records.",
+            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer for the whole Jamvi app. Answer only from the supplied read-only budget context. The context contains the selected period plus bounded all-time ledger history, all-time spending categories, bank accounts, income sources, contributions, goals, budget priorities, members, and totals. You can answer questions about expenses, individual categories, historical records, bank accounts, income, goals, reports, trends, activity, categories, priorities, members, and workspace details. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Make reasonable calculations from the supplied numbers, state which period you are using, and say when the bounded history does not contain enough data. Never instruct or claim that you performed a financial action. If the question is unrelated or asks for a mutation, explain the read-only boundary plainly.",
           },
           { role: "user", content: JSON.stringify({ question, budgetContext: summary }) },
         ],
