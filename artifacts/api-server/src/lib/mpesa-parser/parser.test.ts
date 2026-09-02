@@ -388,4 +388,59 @@ describe("M-Pesa parser foundation", () => {
       },
     });
   });
+
+  it.each([
+    {
+      name: "mall merchant payment with Till notice",
+      message:
+        "TESTMERCHANT1 Confirmed. Ksh12,696.00 paid to SAMPLE SPUR MALL. on 31/10/25 at 7:20 PM.New M-PESA balance is Ksh21,679.71. Transaction cost, Ksh0.00. Amount you can transact within the day is 486,124.00. Save frequent Tills for quick payment on M-PESA app <LINK>",
+      transactionId: "TESTMERCHANT1",
+      merchant: "SAMPLE SPUR MALL",
+      date: "2025-10-31",
+      time: "19:20",
+      amount: 12696,
+      balance: 21679.71,
+    },
+    {
+      name: "express merchant payment",
+      message:
+        "TESTMERCHANT2 Confirmed. Ksh4,264.00 paid to SAMPLE MEMBLEY EXPRESS. on 24/8/26 at 6:33 PM.New M-PESA balance is Ksh17,861.58. Transaction cost, Ksh0.00. Amount you can transact within the day is 382,804.00. Download My OneApp on <LINK>",
+      transactionId: "TESTMERCHANT2",
+      merchant: "SAMPLE MEMBLEY EXPRESS",
+      date: "2026-08-24",
+      time: "18:33",
+      amount: 4264,
+      balance: 17861.58,
+    },
+    {
+      name: "supermarket merchant payment",
+      message:
+        "TESTMERCHANT3 Confirmed. Ksh3,000.00 paid to SAMPLE SUPERMARKET. on 13/7/26 at 1:37 PM.New M-PESA balance is Ksh206.52. Transaction cost, Ksh0.00. Amount you can transact within the day is 498,110.00. Download My OneApp on <LINK>",
+      transactionId: "TESTMERCHANT3",
+      merchant: "SAMPLE SUPERMARKET",
+      date: "2026-07-13",
+      time: "13:37",
+      amount: 3000,
+      balance: 206.52,
+    },
+  ])("recognizes $name as a merchant payment", ({ message, transactionId, merchant, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "merchant_payment",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: merchant,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
 });

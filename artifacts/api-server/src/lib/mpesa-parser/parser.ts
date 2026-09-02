@@ -82,10 +82,13 @@ function detectTransactionType(
   if (/\b(?:bank to|m[- ]?pesa to bank|bank transfer)\b/.test(lower)) return "bank_transfer";
   if (/\bpaybill\b|\baccount number\b/.test(lower)) return "paybill_payment";
   if (/\bsent\s+to\b/.test(lower)) return "person_payment";
+  if (/\bpaid to\b.*\b(?:market|mall|express|supermarket|shop|store|restaurant|hotel|pharmacy)\b/.test(lower)) {
+    return "merchant_payment";
+  }
   if (/\bpaid to\s+[A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){2,}\s*(?:\.|\bon\b)/i.test(message)) {
     return "person_payment";
   }
-  if (/\b(?:till|merchant|paid to)\b/.test(lower)) return "merchant_payment";
+  if (/\b(?:tills?|merchant|paid to)\b/.test(lower)) return "merchant_payment";
   if (/\b(?:received|credited)\b/.test(lower)) return "person_receipt";
   if (/\b(?:sent|send|transferred|to)\b/.test(lower)) return "person_payment";
   return null;
