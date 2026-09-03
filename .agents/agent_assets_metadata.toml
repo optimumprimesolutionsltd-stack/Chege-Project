@@ -1,0 +1,44 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "KXsr0m9P_wO6850tGXZGL"
+uri = "file://screenshots/jamvi-pricing.jpg"
+type = "image"
+title = "Jamvi Pricing — Desktop"
+description = "Desktop preview of the seven approved Jamvi packages, comparison table, and pricing guidance."
+logical_id = "89575e90-1873-4226-a6b5-252fe852f80b"
+content_hash = "sha256:4772d71ea4efbcbe305a83e613acf99e3bb85d78586e72711bb5a51c94598bf6"
+size = 325293
+mtime_ms = 1788419868535
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:fe31a091-a4ed-426d-b193-7f5e5c036bb9/89575e90-1873-4226-a6b5-252fe852f80b/fc4c1c52-b43c-4b1d-85b2-1f7df0cf6670"
+storage_version_token = "1788419907976889"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "k4fq-v7ICYNpU5-2KJtTm"
+uri = "file://screenshots/jamvi-pricing-mobile.jpg"
+type = "image"
+title = "Jamvi Pricing — Mobile"
+description = "Mobile-width preview showing the responsive package cards and Most popular treatment."
+logical_id = "d3a3bf47-71f4-47df-9c4f-5769a5269ff9"
+content_hash = "sha256:e94e90ad7eb16d18adead544515f552eab9519a8b353ec5aba9597d2b77447a2"
+size = 118116
+mtime_ms = 1788419884127
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:fe31a091-a4ed-426d-b193-7f5e5c036bb9/d3a3bf47-71f4-47df-9c4f-5769a5269ff9/87691e07-dd77-44e9-b113-b0d6a27aece3"
+storage_version_token = "1788419908787078"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "CfoV2HxVdkTUxZh9RBipE"
+uri = "file://screenshots/jamvi-home.jpg"
+type = "image"
+title = "Jamvi Homepage"
+description = "Updated homepage message for Personal Free and one subscription per Shared group."
+logical_id = "e3592c1e-68c7-4ed4-b165-3dd65be46fc7"
+content_hash = "sha256:8d9f81245dbfa957b3f6836b2c229a8d24512482481f6b1614d977b60422eba7"
+size = 157444
+mtime_ms = 1788419872139
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:fe31a091-a4ed-426d-b193-7f5e5c036bb9/e3592c1e-68c7-4ed4-b165-3dd65be46fc7/f5929a3b-5ae4-4bd3-b91d-b0d4b00033f7"
+storage_version_token = "1788419909675701"
+content_type = "image/jpeg"

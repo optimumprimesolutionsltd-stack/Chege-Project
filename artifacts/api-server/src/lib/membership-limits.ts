@@ -1,5 +1,6 @@
 import { db, groupMembershipsTable, groupsTable, GROUP_PLAN } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
+import { resolveGroupEntitlements } from "./subscription-catalog";
 
 type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -15,6 +16,11 @@ type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[
  */
 export const FREE_MEMBER_LIMIT = Number(process.env.FREE_MEMBER_LIMIT ?? 6);
 
+type EntitlementResolver = (
+  groupId: number,
+  tx: DbOrTransaction,
+) => Promise<{ memberLimit: number | null }>;
+
 /**
  * Whether one more person can join this workspace.
  *
@@ -29,6 +35,7 @@ export const FREE_MEMBER_LIMIT = Number(process.env.FREE_MEMBER_LIMIT ?? 6);
 export async function hasMemberCapacity(
   tx: DbOrTransaction,
   groupId: number,
+  resolveEntitlements: EntitlementResolver = resolveGroupEntitlements,
 ): Promise<boolean> {
   const [group] = await tx
     .select({ plan: groupsTable.plan })
@@ -41,16 +48,18 @@ export async function hasMemberCapacity(
   if (!group) return true;
   if (group.plan !== GROUP_PLAN.FREE) return true;
 
+  const entitlements = await resolveEntitlements(groupId, tx);
+  if (entitlements.memberLimit === null) return true;
+
   const [row] = await tx
     .select({ count: sql<number>`COUNT(*)` })
     .from(groupMembershipsTable)
     .where(eq(groupMembershipsTable.groupId, groupId));
 
-  return Number(row?.count ?? 0) < FREE_MEMBER_LIMIT;
+  return Number(row?.count ?? 0) < entitlements.memberLimit;
 }
 
-/** Wording shown when a workspace is full. Kept here so every route says the
- *  same thing, and so the number never drifts from the limit above. */
-export function memberLimitMessage(): string {
-  return `This workspace is full. Free workspaces hold up to ${FREE_MEMBER_LIMIT} people.`;
+/** Wording shown when a workspace is full. */
+export function memberLimitMessage(memberLimit = FREE_MEMBER_LIMIT): string {
+  return `This Shared budget is full. Its current package supports up to ${memberLimit} members.`;
 }

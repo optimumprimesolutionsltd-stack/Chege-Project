@@ -90,15 +90,20 @@ export default function Terms() {
 
       <h2>6. Free and paid plans</h2>
       <p>
-        A free workspace holds up to six people, counting the owner. If a group
-        outgrows that, it needs a paid plan to add anyone further. A group that is
-        already larger than the limit keeps working and simply cannot grow —
-        nobody is removed because of a rule introduced after they joined.
+        Every account includes one Personal budget free permanently. Shared
+        budgets use one group subscription chosen by the owner or administrator;
+        invited members do not pay individually. Each package has its own member
+        limit. Nobody is removed automatically when a group reaches its limit.
       </p>
       <p>
         Current prices and what each plan includes are shown on our{" "}
         <a href="/pricing">Pricing page</a>. We will give reasonable notice
         before changing the price of a plan you are already on.
+      </p>
+      <p>
+        Payment processing is not active yet. Selecting a package during this
+        phase does not by itself create a paid or active subscription, and Jamvi
+        will not charge you automatically.
       </p>
 
       <h2>7. Your records belong to you</h2>

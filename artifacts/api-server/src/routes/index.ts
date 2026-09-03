@@ -19,6 +19,10 @@ import onboardingRouter from "./onboarding";
 import budgetPlansRouter from "./budget-plans";
 import aiRouter from "./ai";
 import parserRouter from "./parser";
+import {
+  publicSubscriptionPlansRouter,
+  subscriptionPlansRouter,
+} from "./subscription-plans";
 import { requireMember } from "../middlewares/requireMember";
 
 const router: IRouter = Router();
@@ -30,6 +34,7 @@ router.use(publicInvitationsRouter);
 router.use(publicInviteLinksRouter);
 router.use(onboardingRouter);
 router.use(parserRouter);
+router.use(publicSubscriptionPlansRouter);
 
 // Apply member check to everything else
 router.use(requireMember);
@@ -50,5 +55,6 @@ router.use(inviteLinksRouter);
 router.use(photoStorageRouter);
 router.use(budgetPlansRouter);
 router.use(aiRouter);
+router.use(subscriptionPlansRouter);
 
 export default router;

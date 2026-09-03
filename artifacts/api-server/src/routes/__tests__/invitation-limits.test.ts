@@ -16,6 +16,10 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../lib/subscription-catalog", () => ({
+  resolveGroupEntitlements: vi.fn(async () => ({ memberLimit: 6 })),
+}));
+
 vi.mock("@workspace/db", () => {
   const table = (name: string) => new Proxy({}, {
     get: (_, property) => ({ _table: name, _column: String(property) }),
