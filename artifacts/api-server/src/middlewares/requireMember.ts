@@ -22,6 +22,7 @@ import {
   clearActiveWorkspaceCookie,
   LEGACY_ACTIVE_WORKSPACE_COOKIE,
 } from "../lib/activeGroup";
+import { ensurePersonalWorkspace } from "../lib/personalWorkspace";
 
 const LEGACY_GROUP_KEY = "initial-shared-budget";
 const LEGACY_GROUP_NAME = "Shared budget";
@@ -198,7 +199,12 @@ export async function requireMember(
   try {
     const userId = req.user.id;
     await ensureAuthenticatedUser(userId);
+    // Preserve the one-time legacy adoption order: adopting after creating a
+    // Personal membership would make an established legacy ledger unreachable.
     await adoptLegacyGroup(userId);
+    // Workspace discovery and every Shared-budget mutation pass through this
+    // middleware, so no signed-in person can create a group-only account.
+    await ensurePersonalWorkspace(userId);
     const headerWorkspaceId = typeof req.get === "function"
       ? req.get("x-jamvi-workspace")
       : undefined;

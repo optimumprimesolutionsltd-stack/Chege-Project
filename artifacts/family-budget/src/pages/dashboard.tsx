@@ -59,6 +59,7 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
 import { getActivityEditLink, getActivityRecordTarget, type ActivityEditItem } from "@/lib/activity-edit-utils";
 import { AskJamviPanel } from "@/components/ask-jamvi-panel";
+import { WorkspaceSetupGuide } from "@/components/workspace-setup-guide";
 import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
 import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder, getProjectedCategoryBalance } from "@/lib/expense-funding-utils";
@@ -2552,6 +2553,8 @@ export default function Dashboard() {
           </p>
         </section>
       </div>
+
+       <WorkspaceSetupGuide userId={user?.id} />
 
       <AskJamviPanel month={month} year={year} workspaceName={group?.name ?? undefined} />
 

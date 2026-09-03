@@ -201,6 +201,10 @@ vi.mock("@workspace/db", () => ({
     CHAMA: "chama",
     CLUB: "club",
   },
+  GROUP_PLAN: {
+    FREE: "free",
+    PAID: "paid",
+  },
   groupsTable,
   membersTable,
   groupMembershipsTable,
@@ -269,7 +273,7 @@ describe("requireMember", () => {
     vi.clearAllMocks();
   });
 
-  it("leaves a new authenticated person without a workspace", async () => {
+  it("provisions a free Personal budget for a new authenticated person", async () => {
     const req = authenticatedRequest("first-member");
     const next = vi.fn();
 
@@ -278,10 +282,13 @@ describe("requireMember", () => {
     expect(next).toHaveBeenCalledOnce();
     expect(legacyMemberIds.has("first-member")).toBe(false);
     expect(req.group).toBeUndefined();
-    expect(privateWorkspaceIds.has("first-member")).toBe(false);
+    expect(privateWorkspaceIds.has("first-member")).toBe(true);
+    expect(memberships.get("first-member")).toEqual([
+      expect.objectContaining({ role: "owner" }),
+    ]);
   });
 
-  it("persists a fresh authenticated user without provisioning a Personal budget", async () => {
+  it("persists a fresh authenticated user before provisioning their Personal budget", async () => {
     const req = authenticatedRequest("fresh-user");
     const next = vi.fn();
 
@@ -289,8 +296,10 @@ describe("requireMember", () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect(persistedUserIds.has("fresh-user")).toBe(true);
-    expect(privateWorkspaceIds.has("fresh-user")).toBe(false);
-    expect(memberships.get("fresh-user")).toBeUndefined();
+    expect(privateWorkspaceIds.has("fresh-user")).toBe(true);
+    expect(memberships.get("fresh-user")).toEqual([
+      expect.objectContaining({ role: "owner" }),
+    ]);
   });
 
   it("reuses an existing group membership without re-adopting the ledger", async () => {
@@ -304,7 +313,7 @@ describe("requireMember", () => {
     expect(tx.update).not.toHaveBeenCalled();
   });
 
-  it("does not restore a removed member or provision a private workspace", async () => {
+  it("does not restore a removed Shared membership while still providing a Personal budget", async () => {
     groupExists = true;
     legacyMemberIds.add("removed-member");
     const req = authenticatedRequest("removed-member");
@@ -314,7 +323,11 @@ describe("requireMember", () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect(req.group).toBeUndefined();
-    expect(memberships.get("removed-member")).toBeUndefined();
+    const personalId = privateWorkspaceIds.get("removed-member");
+    expect(personalId).toBeDefined();
+    expect(memberships.get("removed-member")).toEqual([
+      expect.objectContaining({ groupId: personalId, role: "owner" }),
+    ]);
   });
 
   it("forbids financial routes for a removed member without a selected workspace", async () => {
@@ -324,7 +337,10 @@ describe("requireMember", () => {
     const res = await request(protectedApp("removed-member")).get("/protected");
 
     expect(res.status).toBe(403);
-    expect(memberships.get("removed-member")).toBeUndefined();
+    const personalId = privateWorkspaceIds.get("removed-member");
+    expect(memberships.get("removed-member")).toEqual([
+      expect.objectContaining({ groupId: personalId, role: "owner" }),
+    ]);
   });
 
   it("uses a selected shared workspace only when the signed-in person is still a member", async () => {

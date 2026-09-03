@@ -3,6 +3,7 @@ import { db, onboardingPreferencesTable, budgetCategoriesTable, groupMemberships
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { setActiveWorkspaceCookie } from "../lib/activeGroup";
+import { ensurePersonalWorkspace } from "../lib/personalWorkspace";
 
 const router = Router();
 
@@ -70,20 +71,11 @@ router.put("/onboarding/preferences", async (req, res) => {
   try {
     const values = { userId: req.user!.id, usageMode: parsed.data.usageMode, persona: parsed.data.persona ?? null, budgetDuration: parsed.data.budgetDuration, budgetStartDate: parsed.data.budgetStartDate ?? null, budgetEndDate: parsed.data.budgetEndDate ?? null, categoryNames: parsed.data.categoryNames, incomeStreams: parsed.data.incomeStreams, completed: parsed.data.completed, onboardingVersion: parsed.data.onboardingVersion, updatedAt: new Date() };
     const [preferences] = await db.insert(onboardingPreferencesTable).values(values).onConflictDoUpdate({ target: onboardingPreferencesTable.userId, set: values }).returning();
-    if (parsed.data.completed && parsed.data.usageMode !== "shared") {
-    const personalWorkspaceId = await db.transaction(async (tx) => {
-      await tx.insert(groupsTable).values({
-        name: "My Budget",
-        kind: "personal",
-        privateOwnerUserId: req.user!.id,
-        createdByUserId: req.user!.id,
-      }).onConflictDoNothing();
-      const [workspace] = await tx.select({ id: groupsTable.id }).from(groupsTable).where(eq(groupsTable.privateOwnerUserId, req.user!.id)).limit(1);
-      if (!workspace) throw new Error("Could not establish the Personal budget.");
-      await tx.insert(groupMembershipsTable).values({ groupId: workspace.id, userId: req.user!.id, role: "owner" }).onConflictDoNothing();
-      return workspace.id;
-    });
-      setActiveWorkspaceCookie(res, personalWorkspaceId);
+    if (parsed.data.completed) {
+      const personalWorkspaceId = await ensurePersonalWorkspace(req.user!.id);
+      if (parsed.data.usageMode !== "shared") {
+        setActiveWorkspaceCookie(res, personalWorkspaceId);
+      }
     }
     res.json(preferences);
   } catch (error) {

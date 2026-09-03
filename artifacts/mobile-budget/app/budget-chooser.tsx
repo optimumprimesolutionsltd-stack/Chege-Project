@@ -262,12 +262,32 @@ export default function BudgetChooserScreen() {
             <Text style={[styles.sectionLabel, { color: colors.brandTeal }]}>YOUR BUDGETS</Text>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Choose a budget</Text>
             <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>Click a budget to open it.</Text>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PERSONAL BUDGET</Text>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PERSONAL BUDGET · FREE</Text>
             {privateWorkspace ? workspaceRow(privateWorkspace, true) : (
               <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.createCardCopy}>
-                  <Text style={[styles.createTitle, { color: colors.foreground }]}>Start a Shared budget</Text>
-                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>Name it, choose its purpose, and start managing money right away.</Text>
+                  <Text style={[styles.createTitle, { color: colors.foreground }]}>Preparing your Personal budget</Text>
+                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>Every Jamvi account starts with a free, private Personal budget before Shared budgets are added.</Text>
+                </View>
+                <Pressable
+                  testID="retry-personal-budget"
+                  accessibilityRole="button"
+                  accessibilityLabel="Check for Personal budget again"
+                  onPress={() => void refetchWorkspaces()}
+                  style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+                >
+                  <Feather name="refresh-cw" size={18} color={colors.primaryForeground} />
+                  <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Check again</Text>
+                </Pressable>
+              </View>
+            )}
+
+            <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGETS</Text></View>
+            {sharedWorkspaces.length ? sharedWorkspaces.map((workspace) => workspaceRow(workspace)) : privateWorkspace ? (
+              <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.createCardCopy}>
+                  <Text style={[styles.createTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
+                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>It stays separate from your free Personal budget and is visible only to its members.</Text>
                 </View>
                 <Pressable
                   testID="create-shared-budget"
@@ -280,10 +300,7 @@ export default function BudgetChooserScreen() {
                   <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared budget</Text>
                 </Pressable>
               </View>
-            )}
-
-            <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGETS</Text></View>
-            {sharedWorkspaces.length ? sharedWorkspaces.map((workspace) => workspaceRow(workspace)) : <Text style={[styles.empty, { color: colors.mutedForeground }]}>No shared budgets are available yet.</Text>}
+            ) : <Text style={[styles.empty, { color: colors.mutedForeground }]}>Your free Personal budget must be ready before you can add a Shared budget.</Text>}
             {workspaceError ? <Text style={[styles.errorText, { color: colors.destructive }]}>Could not load your budgets. Pull down or reopen the app to try again.</Text> : null}
           </>
         )}
@@ -541,7 +558,7 @@ function MobileOnboardingFlow({
   const stepTitles = ['Your starting point', 'Make it yours', 'Choose your horizon', 'Personalize your budget', 'Add income streams', 'Set your plan'];
   const modeOptions: Array<[MobileOnboardingMode, string, string]> = [
     ['personal', 'My money', 'A private budget for my income, spending, and goals.'],
-    ['shared', 'Money with others', 'A shared budget for a family, chama, club, student group, or team.'],
+    ['shared', 'Money with others', 'Set up a group budget first; your free Personal budget stays private.'],
     ['both', 'Both', 'Keep my personal money private and manage shared money too.'],
   ];
   const purposeOptions = draft.usageMode === 'shared' ? PURPOSE_OPTIONS.shared : PURPOSE_OPTIONS.personal;
@@ -559,7 +576,7 @@ function MobileOnboardingFlow({
         <View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="sliders" size={22} color={colors.primaryForeground} /></View>
         <Text style={[styles.eyebrow, { color: colors.brandTeal }]}>WELCOME TO JAMVI · STEP {step + 1} OF 6</Text>
         <Text style={[styles.onboardingTitle, { color: colors.foreground }]}>{headingName}{stepTitles[step]}</Text>
-        <Text style={[styles.onboardingIntro, { color: colors.mutedForeground }]}>Answer a few questions first so your budget is ready when you open the app.</Text>
+        <Text style={[styles.onboardingIntro, { color: colors.mutedForeground }]}>Every Jamvi account includes a free, private Personal budget. Answer a few questions so the budget you use first is ready.</Text>
         <View style={[styles.benefitsCard, { backgroundColor: colors.accent, borderColor: colors.primary + '45' }]}>
           <Text style={[styles.choiceTitle, { color: colors.foreground }]}>
             {restoredDraft ? 'Welcome back — your setup is saved.' : 'Why personalize your setup?'}

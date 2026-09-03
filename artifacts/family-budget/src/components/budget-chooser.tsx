@@ -498,12 +498,12 @@ export function BudgetChooser({
             <div className="p-6 sm:p-10">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">First, a quick question</p>
               <h2 className="mt-2 font-display text-2xl font-bold text-foreground">How will you use Jamvi?</h2>
-              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">This helps us take you to the right starting point. You can always add another budget later.</p>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Every Jamvi account includes a free, private Personal budget. This choice helps us decide what to set up first.</p>
               <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/[0.05] p-4"><p className="font-semibold text-foreground">Personalize Jamvi in a few quick steps</p><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Jamvi will recommend categories, priorities, income streams, and a starting plan that fit your needs. Everything remains editable later.</p></div>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {([
                   ["personal", "My money", "A private budget for my income, spending, and goals.", Wallet],
-                  ["shared", "Money with others", "A shared budget for a family, chama, club, student group, or team.", UsersRound],
+                  ["shared", "Money with others", "Set up a group budget first; your free Personal budget stays private.", UsersRound],
                   ["both", "Both", "Keep my personal money private and manage shared money too.", Heart],
                 ] as const).map(([value, title, description, Icon]) => (
                   <button key={value} type="button" onClick={() => { setOnboardingMode(value); setShowPurposeSetup(true); }} className="group rounded-2xl border border-border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -723,7 +723,7 @@ export function BudgetChooser({
               </button> : null}
             </div>
             <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{onboardingHeading}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your private and Shared budgets stay separate in Jamvi.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your free Personal budget is always private. Shared budgets stay separate and are visible only to their members.</p>
           </header>
 
           <div className="p-6 sm:p-10">
@@ -744,12 +744,12 @@ export function BudgetChooser({
 
                     <div className="mt-6 border-l-2 border-border pl-4">
                     <div className="mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-bold text-foreground">Personal budget</h3></div>
-                    {personal.length ? <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} personalPhotoUrl={user.profileImageUrl} label="Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">You do not need a Personal budget to get started. Create or open a Shared budget below.</p>}
+                    {personal.length ? <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} personalPhotoUrl={user.profileImageUrl} label="Free · Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground"><p>Jamvi is preparing your free Personal budget before you continue.</p><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refetchWorkspaces()}>Check again</Button></div>}
                   </div>
 
                   <div className="mt-7 border-l-2 border-border pl-4">
                     <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#087F8C]" /><h3 className="text-sm font-bold text-foreground">Shared budgets</h3></div>
-                      {personal.length === 0 ? (
+                      {personal.length > 0 && shared.length === 0 && (onboardingMode === "shared" || onboardingMode === "both") ? (
                         <StandaloneSharedBudgetForm
                           name={sharedBudgetName}
                           kind={sharedBudgetKind}
@@ -760,7 +760,7 @@ export function BudgetChooser({
                           onSubmit={createStandaloneSharedBudget}
                         />
                       ) : null}
-                    {shared.length ? <div className="grid gap-3">{shared.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label={groupKindPresentation(workspace.kind).label} selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No Shared budgets yet. Create one or open an invitation link.</p>}
+                    {shared.length ? <div className="grid gap-3">{shared.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label={groupKindPresentation(workspace.kind).label} selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : personal.length > 0 && (onboardingMode === "shared" || onboardingMode === "both") ? null : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No Shared budgets yet. Open your Personal budget to create one, or use an invitation link to join an existing group.</p>}
                   </div>
                 </div>
 

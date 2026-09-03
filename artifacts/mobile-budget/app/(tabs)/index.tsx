@@ -31,6 +31,7 @@ import { useAuth } from '@/lib/auth';
 import BudgetRing from '@/components/BudgetRing';
 import ActivityCard from '@/components/ActivityCard';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
+import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import {
@@ -388,6 +389,8 @@ export default function DashboardScreen() {
               </Text>
             </View>
           </View>
+
+           <WorkspaceSetupGuide />
 
           {isSharedWorkspace && (
             <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

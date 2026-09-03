@@ -52,3 +52,4 @@
 - [Bank amount precision](bank-amount-precision.md) — bank balances and ledger entries support two-decimal KES; savings-goal transfers remain whole KES until goal storage changes.
 - [Workspace switch confirmation lifecycle](workspace-switch-confirmation-lifecycle.md) — do not close a mobile shell before its locally owned confirmation finishes; unmounting cancels the switch.
 - [Ask Jamvi ledger search](ask-jamvi-ledger-search.md) — Ask Jamvi searches current-month ledger context; Search tabs find broader workspace records; both stay read-only and workspace-scoped.
+- [Free Personal budget invariant](free-personal-budget-invariant.md) — every login owns one free Personal budget; Shared budgets are optional additions, never the only budget

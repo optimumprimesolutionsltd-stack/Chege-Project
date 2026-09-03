@@ -46,7 +46,7 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Budget chooser before Home",
     web: "done",
     mobile: "done",
-    note: "First authenticated entry lets users choose Personal or a member Shared budget before financial details load; returning users can continue directly",
+    note: "Every login gets one free Personal budget before Shared budgets can be created; both platforms keep Personal and Shared records separate",
   },
   {
     category: "Core screens",
