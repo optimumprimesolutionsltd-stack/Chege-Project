@@ -339,6 +339,65 @@ function SharedGroupsFooter() {
   return <CreateSharedGroupCard hasExistingSharedBudget={sharedWorkspaces.length > 0} />;
 }
 
+type QuickLogMode = "simple" | "advanced";
+
+/**
+ * Standard/Advanced switch shared by the quick-log forms.
+ *
+ * Standard shows only the fields a daily entry needs; Advanced reveals the
+ * rest. The button is labelled with the mode it switches to, which is how the
+ * expense form has always presented it.
+ */
+function QuickLogModeCard({
+  mode,
+  onChange,
+  hint,
+}: {
+  mode: QuickLogMode;
+  onChange: (next: QuickLogMode) => void;
+  hint: string;
+}) {
+  const options: Array<{ value: QuickLogMode; label: string }> = [
+    { value: "simple", label: "Simple" },
+    { value: "advanced", label: "Advanced" },
+  ];
+  return (
+    <div className="space-y-2.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+      <div>
+        <p className="text-sm font-semibold text-foreground">Quick log mode</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{hint}</p>
+      </div>
+      {/* A switch rather than a single button, so the label on screen is the
+          mode you are in rather than the one you would move to. */}
+      <div
+        role="group"
+        aria-label="Quick log mode"
+        className="grid grid-cols-2 gap-1 rounded-lg border border-border/60 bg-card p-1"
+      >
+        {options.map((option) => {
+          const selected = mode === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              data-testid={`quick-log-mode-${option.value}`}
+              onClick={() => onChange(option.value)}
+              className={`h-9 rounded-md text-sm font-semibold transition-colors ${
+                selected
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted/60"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Quick Action: Bank Deposit ────────────────────────────────────────────────
 function IncomeForm({
   onDone,
@@ -356,6 +415,7 @@ function IncomeForm({
   const [madeById, setMadeById] = useState<string>("");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [date, setDate] = useState(localDateInputValue());
+  const [logMode, setLogMode] = useState<QuickLogMode>("simple");
   const { data: members = [] } = useGetMembers();
   const today = localDateInputValue();
   const selectedDepositorId = canManageShared ? madeById : currentUserId ?? "";
@@ -430,6 +490,14 @@ function IncomeForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <QuickLogModeCard
+        mode={logMode}
+        onChange={(next) => {
+          if (next === "simple") setIncomeSourceId(null);
+          setLogMode(next);
+        }}
+        hint="Simple keeps the essentials to hand. Use Advanced to tie this deposit to an income source."
+      />
       {canManageShared ? (
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
@@ -481,7 +549,7 @@ function IncomeForm({
         )}
       </div>
       {/* Income source */}
-      {incomeSources && incomeSources.length > 0 && (
+      {logMode === "advanced" && incomeSources && incomeSources.length > 0 && (
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Income source <span className="text-muted-foreground font-normal">(optional)</span></label>
           <div className="flex flex-wrap gap-2">
@@ -550,6 +618,7 @@ function ExpenseForm({
   const [recurringMonthlyBudget, setRecurringMonthlyBudget] = useState("");
   const [uncategorizedSaveOpen, setUncategorizedSaveOpen] = useState(false);
   const [date, setDate] = useState(localDateInputValue());
+  const [logMode, setLogMode] = useState<QuickLogMode>("simple");
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const { data: bankAccounts = [] } = useGetJointAccounts();
@@ -577,6 +646,7 @@ function ExpenseForm({
   const qc = useQueryClient();
   const { toast } = useToast();
   const today = localDateInputValue();
+  const simpleIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];
   const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
   const bankLabel = "Bank account";
   const isOtherCategory = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
@@ -704,6 +774,28 @@ function ExpenseForm({
     const url = `${appPath("/budget", import.meta.env.BASE_URL)}?recurringSetup=1&returnTo=dashboard&categorySetup=${makeRecurring ? "recurring" : "other"}&category=${encodeURIComponent(recurringCategory)}&expenseAmount=${encodeURIComponent(amount)}`;
     window.location.assign(url);
   };
+
+  useEffect(() => {
+    if (logMode !== "simple") return;
+    setPaidFromBank(false);
+    setAllowMixedFunding(false);
+    setAdditionalDirectPortions([]);
+    setBankPortion("");
+    setSelectedBankAccountId(null);
+    setNotes("");
+    setIsRecurring(false);
+    if (isSharedWorkspace && currentUserId) setPaidBy(currentUserId);
+  }, [logMode, isSharedWorkspace, currentUserId]);
+
+  useEffect(() => {
+    if (logMode !== "simple") return;
+    setDirectPortion(amount);
+  }, [logMode, amount]);
+
+  useEffect(() => {
+    if (logMode !== "simple") return;
+    setIncomeSourceId(simpleIncomeSource?.id ?? null);
+  }, [logMode, simpleIncomeSource?.id]);
 
   useEffect(() => {
     if (!paidFromBank || !allowMixedFunding) return;
@@ -1039,12 +1131,19 @@ function ExpenseForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <QuickLogModeCard
+        mode={logMode}
+        onChange={setLogMode}
+        hint="Simple keeps the essentials to hand. Use Advanced for splits, bank funding, notes, or recurring expenses."
+      />
+       {logMode === "advanced" && (
        <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
          <p className="text-sm font-semibold text-foreground">1. Record the expense</p>
          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
            Enter the total once, then show what it covered and where the money came from.
          </p>
        </div>
+       )}
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
@@ -1062,6 +1161,24 @@ function ExpenseForm({
              />
            </div>
          )}
+         {logMode === "simple" && (
+           <div className="space-y-1.5 sm:col-span-2 lg:col-span-4">
+             <label className="text-sm font-semibold text-foreground">Category</label>
+             <select
+               data-testid="quick-expense-simple-category"
+               value={category}
+               onChange={e => {
+                 setCategory(e.target.value);
+                 setCategoryAllocations([{ category: e.target.value, amount }]);
+               }}
+               className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+             >
+               <option value="">Select a category</option>
+               {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+             </select>
+           </div>
+         )}
+         {logMode === "advanced" && (
          <div className="space-y-3 sm:col-span-2 lg:col-span-4 rounded-xl border border-border/60 bg-card p-4">
            <div>
               <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
@@ -1225,9 +1342,10 @@ function ExpenseForm({
               </Button>
             )}
         </div>
+         )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-         {!isOtherCategory && (
+         {logMode === "advanced" && !isOtherCategory && (
            <div className="space-y-1.5">
              <label className="text-sm font-semibold text-foreground">
                Notes <span className="font-normal text-muted-foreground">(optional)</span>
@@ -1252,6 +1370,7 @@ function ExpenseForm({
           {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
         </div>
       </div>
+      {logMode === "advanced" && (
       <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
         <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
           <div>
@@ -1624,6 +1743,14 @@ function ExpenseForm({
           )}
         </div>
       </div>
+      )}
+      {logMode === "simple" && (
+        <p className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+          This logs a one-time direct payment by you on the selected date, assigns
+          the full whole-KES amount to this category
+          {simpleIncomeSource ? `, and uses your income source (${simpleIncomeSource.name})` : ""}.
+        </p>
+      )}
       <div className="flex gap-3">
         <Button type="submit" className="h-11 rounded-xl bg-warning px-6 text-warning-foreground hover:bg-warning/90" disabled={createExpense.isPending}>
           {createExpense.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}

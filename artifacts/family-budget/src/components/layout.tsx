@@ -83,9 +83,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My budget', icon: LayoutDashboard },
+    { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Overview', icon: LayoutDashboard },
     { href: '/expenses', label: isSharedWorkspace ? 'Group Expenses' : 'My Expenses', icon: Receipt },
-    { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My budget', icon: PieChart },
+    { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My Budget', icon: PieChart },
     { href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity },
     { href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target },
     { href: '/bank', label: 'Bank accounts', icon: Landmark },
