@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction,
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
@@ -97,8 +97,10 @@ export default function Bank() {
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
-  // Deposit attribution — null = Joint bank, string[] = named member IDs
-  // Default: Joint bank (empty array = no named depositors selected)
+  // Deposit attribution — string[] of named member IDs, one entry per depositor.
+  // Empty means nobody is picked yet; a shared-workspace deposit cannot be saved
+  // that way. Older Joint bank deposits still load empty and must be attributed
+  // to a member before they can be re-saved.
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
   const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
@@ -122,6 +124,15 @@ export default function Bank() {
   const [accountNameDraft, setAccountNameDraft] = useState("");
   const [accountNumberDraft, setAccountNumberDraft] = useState("");
   const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
+
+  // The transaction form replaces the action buttons at the top of the page. On a
+  // phone the edit pencil sits far below that, so opening one looked like nothing
+  // happened — bring the form into view whenever it opens.
+  const formCardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!mode) return;
+    formCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [mode, editingTransaction?.id]);
 
   useEffect(() => {
     if (!accounts.length) {
@@ -435,6 +446,15 @@ export default function Bank() {
 
     const isMultiDepositor = depositorIds.length > 1;
 
+    if (mode === "deposit" && isSharedWorkspace && depositorIds.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Choose who is depositing",
+        description: "Pick the member whose money this is — select more than one to split it.",
+      });
+      return;
+    }
+
     if (mode === "deposit" && isMultiDepositor) {
       const splitAmounts = depositorIds.map((id) => Number(depositorAmounts[id] || 0));
       if (splitAmounts.some((portion) => !Number.isInteger(portion) || portion <= 0)) {
@@ -555,7 +575,7 @@ export default function Bank() {
             },
           });
         } else {
-          // Single named depositor or Joint bank (null)
+          // Single named depositor; a personal workspace attributes to the signed-in user.
           const madeById = !isSharedWorkspace ? user?.id : depositorIds.length === 1 ? depositorIds[0] : null;
           await createDeposit.mutateAsync({
             data: {
@@ -831,7 +851,7 @@ export default function Bank() {
           </Button>
         </div>
       ) : (
-        <Card className="border-none shadow-md bg-accent/20">
+        <Card ref={formCardRef} className="border-none shadow-md bg-accent/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">
               {editingTransaction
@@ -1047,27 +1067,9 @@ export default function Bank() {
                         <p className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
                           This deposit will be recorded in your name and kept in your Personal budget.
                         </p>
-                      ) : <div className="grid grid-cols-3 gap-2" data-testid="deposit-attribution">
-                        {/* Joint bank chip — mutually exclusive with named members */}
-                        {canManageShared && <button
-                          key="joint-bank"
-                          type="button"
-                          data-testid="chip-joint-bank-deposit"
-                          onClick={() => {
-                            setDepositorIds([]);
-                            setIncomeSourceId(null);
-                            setDepositorAmounts({});
-                          }}
-                          className={`h-12 rounded-xl border text-base font-semibold transition-colors ${
-                            depositorIds.length === 0
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "bg-card border-input text-foreground hover:bg-muted/40"
-                          }`}
-                        >
-                          Joint bank
-                        </button>}
-
-                        {/* Named member chips */}
+                      ) : <div className="grid grid-cols-2 gap-2" data-testid="deposit-attribution">
+                        {/* Named member chips — a deposit always belongs to a
+                            person, so there is no "Joint bank" option here. */}
                         {(canManageShared ? (members ?? []) : (members ?? []).filter((m) => m.userId === user?.id)).map(m => {
                           const name = m.userName?.split(' ')[0] ?? 'Member';
                           const selected = depositorIds.includes(m.userId);

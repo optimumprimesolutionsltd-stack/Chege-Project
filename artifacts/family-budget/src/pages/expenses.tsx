@@ -1169,16 +1169,17 @@ export default function Expenses() {
     }
     try {
       await deleteExpense.mutateAsync({ id });
-      toast({ title: "Expense deleted" });
-      setDeleteTarget(null);
-      if (editingId === id) {
-        setEditingId(null);
-        clearEditDeepLink();
-      }
-      invalidate();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete expense." });
+      return;
     }
+    toast({ title: "Expense deleted" });
+    setDeleteTarget(null);
+    if (editingId === id) {
+      setEditingId(null);
+      clearEditDeepLink();
+    }
+    invalidate();
   };
 
   const handleApplyRecurring = async () => {
@@ -2564,6 +2565,19 @@ export default function Expenses() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep expense</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="button-edit-from-delete-prompt"
+              disabled={deleteExpense.isPending}
+              onClick={() => {
+                const target = deleteTarget;
+                setDeleteTarget(null);
+                if (target) startEdit(target);
+              }}
+            >
+              Edit expense
+            </Button>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteExpense.isPending}

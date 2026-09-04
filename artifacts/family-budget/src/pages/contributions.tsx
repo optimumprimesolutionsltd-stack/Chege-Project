@@ -20,12 +20,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatKes, formatMonthYear } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, Calendar, TrendingUp } from "lucide-react";
+import { ArrowLeft, ArrowRight, Calendar, ChevronDown, ChevronUp, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
+  if (recordType === "deposit") return "Joint Bank deposit";
+  if (recordType === "savings") return "Savings addition";
+  return "Personal expense";
+}
 
 type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
 type IncomeStream = {
@@ -265,6 +271,7 @@ export default function Contributions() {
   const [editor, setEditor] = useState<ContributionEditor | null>(null);
   const [contributionToRemove, setContributionToRemove] = useState<Contribution | null>(null);
   const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
+  const [showUnattributedRecords, setShowUnattributedRecords] = useState(false);
 
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
@@ -649,10 +656,49 @@ export default function Contributions() {
 
       {unattributedFunding && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-foreground">
-          <p className="font-semibold">Unattributed funding: {formatKes(unattributedFunding.total)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            This funding has no selected income source, so it is kept separate from each member’s income plan.
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-semibold">Unattributed funding: {formatKes(unattributedFunding.total)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                This funding has no selected income source, so it is kept separate from each member’s income plan.
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-expanded={showUnattributedRecords}
+              aria-controls="contributions-unattributed-records"
+              onClick={() => setShowUnattributedRecords((isOpen) => !isOpen)}
+              data-testid="toggle-unattributed-funding-records"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-amber-500/40 bg-card px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-amber-500/10"
+            >
+              {showUnattributedRecords ? "Hide records" : `See ${unattributedFunding.transactionCount} ${unattributedFunding.transactionCount === 1 ? "record" : "records"}`}
+              {showUnattributedRecords ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </div>
+          {showUnattributedRecords && (
+            <div id="contributions-unattributed-records" className="mt-4 rounded-xl border border-amber-500/25 bg-card/70 p-3">
+              <p className="mb-2 text-xs text-muted-foreground">
+                These entries are the source of the unattributed total for {formatMonthYear(month, year)}.
+              </p>
+              {unattributedFunding.entries.length === 0 ? (
+                <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+                  No record details are available yet. Refresh and try again.
+                </p>
+              ) : (
+                <div className="divide-y divide-border/60">
+                  {unattributedFunding.entries.map((entry) => (
+                    <div key={`${entry.recordType}-${entry.recordId}-${entry.amount}`} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                      <div className="min-w-0">
+                        <p className="break-words font-medium">{entry.description}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{fundingEntryLabel(entry.recordType)} · {formatDate(entry.date)}</p>
+                      </div>
+                      <p className="shrink-0 font-semibold">{formatKes(entry.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
