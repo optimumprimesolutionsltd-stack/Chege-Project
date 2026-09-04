@@ -110,6 +110,20 @@
     {
       "idx": 15,
       "version": "7",
+      "when": 1788314356000,
+      "tag": "0015_bank_dates_and_decimals",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788366778000,
+      "tag": "0016_editable_priority_tiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
       "when": 1788419200000,
       "tag": "0017_subscription_packages",
       "breakpoints": true
