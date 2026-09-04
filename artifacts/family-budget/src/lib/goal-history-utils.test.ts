@@ -41,20 +41,20 @@ describe("filterByDateRange", () => {
 
   it("filters out contributions before fromDate (inclusive boundary)", () => {
     const contributions = [
-      makeContribution({ createdAt: "2026-01-31T23:59:59Z" }), // excluded
-      makeContribution({ createdAt: "2026-02-01T00:00:00Z" }), // on boundary — included
-      makeContribution({ createdAt: "2026-03-15T12:00:00Z" }), // included
+      makeContribution({ createdAt: "2026-01-31T23:59:59" }), // excluded
+      makeContribution({ createdAt: "2026-02-01T00:00:00" }), // on boundary — included
+      makeContribution({ createdAt: "2026-03-15T12:00:00" }), // included
     ];
     const result = filterByDateRange(contributions, "2026-02-01", "");
     expect(result).toHaveLength(2);
-    expect(result.map((c) => c.createdAt)).not.toContain("2026-01-31T23:59:59Z");
+    expect(result.map((c) => c.createdAt)).not.toContain("2026-01-31T23:59:59");
   });
 
   it("filters out contributions after toDate (inclusive boundary)", () => {
     const contributions = [
-      makeContribution({ createdAt: "2026-02-28T20:00:00Z" }), // included
-      makeContribution({ createdAt: "2026-02-28T23:59:59.999Z" }), // last representable instant — included
-      makeContribution({ createdAt: "2026-03-01T00:00:00Z" }), // excluded
+      makeContribution({ createdAt: "2026-02-28T20:00:00" }), // included
+      makeContribution({ createdAt: "2026-02-28T23:59:59.999" }), // last representable instant — included
+      makeContribution({ createdAt: "2026-03-01T00:00:00" }), // excluded
     ];
     const result = filterByDateRange(contributions, "", "2026-02-28");
     expect(result).toHaveLength(2);
@@ -246,9 +246,9 @@ describe("getChipRange", () => {
 
   it("filterByDateRange respects chip range — keeps only contributions in this-month window", () => {
     const contributions = [
-      makeContribution({ createdAt: "2026-07-31T23:00:00Z" }), // last month — excluded
-      makeContribution({ createdAt: "2026-08-01T00:00:00Z" }), // first of this month — included
-      makeContribution({ createdAt: "2026-08-10T11:59:59Z" }), // today — included
+      makeContribution({ createdAt: "2026-07-31T23:00:00" }), // last month — excluded
+      makeContribution({ createdAt: "2026-08-01T00:00:00" }), // first of this month — included
+      makeContribution({ createdAt: "2026-08-10T11:59:59" }), // today — included
     ];
     const { from, to } = getChipRange("this-month", now);
     const result = filterByDateRange(contributions, from, to);

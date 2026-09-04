@@ -11,6 +11,51 @@
 > Pull first, and if a push is rejected, pull and rebase. Never force-push
 > `main`.
 
+> **Never run `drizzle-kit push` or `migrate` against the production database.**
+>
+> `push` diffs your schema against a database and changes it immediately,
+> writing no file and no journal entry. Someone pushed at production once: the
+> schema moved to 0010 while the journal stayed at 0004, so every later
+> migration counted as pending and `migrate` died trying to create a table that
+> already existed — silently, because drizzle-kit prints nothing when a
+> migration fails.
+>
+> Worse, `push` infers intent from a diff. Rename a column in the schema and it
+> sees one column gone and one arrived; it can drop the old one and take every
+> value with it.
+>
+> In this workspace, `push` against the development database is fine and fast.
+> But after any schema change also run:
+>
+>     pnpm --filter @workspace/db run generate
+>
+> and commit the generated `.sql`. That file is the only thing that can carry
+> the change to production, where a human applies it with `migrate`.
+
+> **Two agents work on this repository. Stay on your side.**
+>
+> Claude Code works on the same `main` branch from a separate machine. It has
+> no persistent workspace, pulls before every edit, and can reach production —
+> Render, Cloudflare, the database — which this workspace cannot. It cannot run
+> the app, because the native CSS and bundler binaries are stripped on its
+> platform.
+>
+> You build features: screens, the API, the database, anything that needs the
+> app actually running. It handles infrastructure, the marketing website,
+> deployment, tests and production access.
+
+> **Never push a wholesale sync of this workspace over `main`.**
+>
+> On 31 August a commit titled "Sync verified Jamvi optional expense
+> categories" pushed this workspace's entire state over the branch. It reverted
+> a homepage rewrite, a form fix on three surfaces, the sign-in redirects, the
+> deploy gate, three database scripts, and the two rules above — including the
+> rule telling you not to do it. Because the deploy gate went with it, the
+> revert deployed itself to production.
+>
+> Commit the files you actually changed. If `git push` is rejected, pull and
+> rebase; never resolve it by replacing the branch with your copy.
+
 A household budget tracker for families, couples, or individuals. Any number of household members can sign in, track expenses, record contributions, set savings goals, and monitor spending — all together in one place.
 
 ## Run & Operate

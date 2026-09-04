@@ -518,12 +518,13 @@ function IncomeForm({
   const [description, setDescription] = useState("");
   const [madeById, setMadeById] = useState<string>("");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
+  const [date, setDate] = useState(localDateInputValue());
   const { data: members = [] } = useGetMembers();
+  const today = localDateInputValue();
   const selectedDepositorId = canManageShared ? madeById : currentUserId ?? "";
   const createDeposit = useCreateDeposit();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const now = new Date();
 
   const { data: incomeSources } = useQuery<IncomeSource[]>({
     queryKey: ["income-sources", selectedDepositorId],
@@ -570,7 +571,7 @@ function IncomeForm({
         data: {
           amount: amt,
           description: description.trim() || "Deposit",
-          date: now.toISOString().split("T")[0],
+          date,
           madeById: selectedDepositorId,
           ...(incomeSourceId ? { incomeSourceId } : {}),
         } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
@@ -628,6 +629,19 @@ function IncomeForm({
           <label className="text-sm font-semibold text-foreground">Description <span className="text-muted-foreground font-normal">(optional)</span></label>
           <Input placeholder="e.g. Salary, rental income…" value={description} onChange={e => setDescription(e.target.value)} className="h-12 bg-card" />
         </div>
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-sm font-semibold text-foreground">Date</label>
+        <Input
+          type="date"
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          max={isSharedWorkspace && !canManageShared ? today : undefined}
+          className="h-12 bg-card text-base"
+        />
+        {isSharedWorkspace && !canManageShared && (
+          <p className="text-xs text-muted-foreground">Members can record deposits for today only.</p>
+        )}
       </div>
       {/* Income source */}
       {incomeSources && incomeSources.length > 0 && (
@@ -2877,20 +2891,20 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-3 sm:gap-4">
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Balance</p>
-                <p className="text-lg sm:text-2xl font-display font-bold text-sky-600 dark:text-sky-400 break-all">
+                <p className="whitespace-nowrap tabular-nums text-base min-[400px]:text-lg sm:text-2xl font-display font-bold text-sky-600 dark:text-sky-400">
                   {bankAccount ? formatKes(bankAccount.balance) : "—"}
                 </p>
               </div>
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Deposited</p>
-                <p className="break-all text-sm font-semibold text-success sm:text-lg">
+                <p className="whitespace-nowrap tabular-nums text-xs min-[400px]:text-sm font-semibold text-success sm:text-lg">
                   +{formatKes(monthlyDeposited)}
                 </p>
                 <p className="text-xs text-muted-foreground">this month</p>
               </div>
               <div className="space-y-0.5">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Disbursed</p>
-                <p className="text-sm sm:text-lg font-semibold text-rose-600 dark:text-rose-400 break-all">
+                <p className="whitespace-nowrap tabular-nums text-xs min-[400px]:text-sm sm:text-lg font-semibold text-rose-600 dark:text-rose-400">
                   -{formatKes(monthlyDisbursed)}
                 </p>
                 <p className="text-xs text-muted-foreground">this month</p>

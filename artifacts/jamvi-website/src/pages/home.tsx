@@ -12,7 +12,7 @@ export default function Home() {
 
   useSeo({
     title: "Gather Around Your Money",
-    description: "Jamvi brings clarity, trust, and warmth to personal budgets and shared money. Track everyday spending or manage a chama with confidence.",
+    description: "Jamvi keeps your own budget and the ones you share in one place — with a partner, a family, flatmates, or a chama. Built in Kenya, for Kenyan money.",
   });
 
   const fadeUp: Variants = {
@@ -77,40 +77,75 @@ export default function Home() {
               className="relative lg:h-[600px] flex items-center justify-center"
             >
               {/* Abstract decorative graphic representing the "mat" (Jamvi) and connection */}
-              <div className="relative w-full max-w-md aspect-square">
+              {/* Taller than a square on purpose: the card is absolutely positioned
+                  inside this box, so the box gives it height, and the progress bar
+                  and rows do not fit a square. */}
+              <div className="relative w-full max-w-md aspect-[4/5]">
                 <div className="absolute inset-0 bg-primary rounded-[3rem] rotate-6 opacity-5 shadow-2xl"></div>
                 <div className="absolute inset-0 bg-secondary rounded-[3rem] -rotate-3 opacity-10 shadow-xl"></div>
                 <div className="absolute inset-0 bg-white rounded-[2.5rem] border border-border shadow-2xl overflow-hidden flex flex-col p-6">
-                  
-                  {/* Mockup UI representation */}
-                  <div className="flex items-center justify-between mb-8">
+
+                  {/*
+                    A household, not a chama, and progress rather than a balance.
+                    A big figure above credits and debits is the grammar of a
+                    banking app and reads as money Jamvi holds, which it never
+                    does. And most people arriving here are not in a chama — they
+                    share money with a partner, a family or a flat. Showing them
+                    their own life converts better than showing them a committee.
+                  */}
+                  <div className="flex items-start justify-between mb-6">
                     <div>
-                      <div className="text-sm font-bold text-foreground/50 uppercase tracking-wider mb-1">CHAMA FUND</div>
-                      <div className="text-3xl font-serif font-bold text-primary">KES 45,000</div>
+                      <div className="text-xs font-bold text-foreground/50 uppercase tracking-wider mb-2">
+                        The House · September
+                      </div>
+                      <div className="text-3xl font-serif font-bold text-primary leading-none">
+                        KES 12,400
+                      </div>
+                      <div className="text-sm font-medium text-foreground/60 mt-1">
+                        recorded of KES 20,000 for rent and bills
+                      </div>
                     </div>
-                    <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground">
+                    <div className="w-12 h-12 shrink-0 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground">
                       <Users className="w-6 h-6" />
                     </div>
                   </div>
-                  
-                  <div className="space-y-4">
+
+                  <div className="mb-6">
+                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                      <div className="h-full w-[62%] rounded-full bg-secondary"></div>
+                    </div>
+                    <div className="mt-2 text-xs font-bold text-foreground/60">
+                      3 of 4 have added theirs
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
                     {[
-                      { name: "Monthly Contribution", amount: "+ KES 5,000", by: "Nanjala", color: "bg-secondary" },
-                      { name: "Venue Booking", amount: "- KES 1,500", by: "Shared", color: "bg-accent" },
-                      { name: "Emergency Fund", amount: "+ KES 2,000", by: "Ochieng", color: "bg-primary" },
+                      { by: "Chege", amount: "KES 5,000", done: true, color: "bg-secondary" },
+                      { by: "Nanjala", amount: "KES 5,000", done: true, color: "bg-primary" },
+                      { by: "Wanjiru", amount: "KES 5,000", done: false, color: "bg-accent" },
                     ].map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-muted/50">
+                      <div key={i} className="flex items-center justify-between p-3 rounded-2xl bg-muted/50">
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center text-white text-sm font-bold`}>
                             {item.by.charAt(0)}
                           </div>
                           <div>
-                            <div className="font-bold text-foreground">{item.name}</div>
-                            <div className="text-xs text-foreground/60 font-medium">{item.by}</div>
+                            <div className="font-bold text-foreground">{item.by}</div>
+                            <div className="text-xs text-foreground/60 font-medium">
+                              {item.done ? "Recorded 3 Sep" : "Not yet recorded"}
+                            </div>
                           </div>
                         </div>
-                        <div className={`font-bold ${item.amount.startsWith('+') ? 'text-secondary' : 'text-primary'}`}>
-                          {item.amount}
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold ${item.done ? "text-foreground" : "text-foreground/40"}`}>
+                            {item.amount}
+                          </span>
+                          {item.done ? (
+                            <CheckCircle2 className="w-5 h-5 text-secondary" />
+                          ) : (
+                            <span className="w-5 h-5 rounded-full border-2 border-foreground/20 inline-block"></span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -118,7 +153,7 @@ export default function Home() {
 
                   <div className="mt-auto pt-6">
                     <div className="h-12 w-full bg-primary rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md">
-                      Add Contribution
+                      Record a payment
                     </div>
                   </div>
 
@@ -159,22 +194,22 @@ export default function Home() {
             {[
               {
                 icon: Wallet,
-                title: "Personal Clarity",
-                desc: "Track your income, organize expenses, and set personal goals. See exactly where your KES is going every month.",
+                title: "Your own money, clear",
+                desc: "Track what comes in, organise what goes out, set your own goals. See exactly where your KES went this month — no group required.",
                 color: "text-primary",
                 bg: "bg-primary/10"
               },
               {
                 icon: Users,
-                title: "Shared Spaces",
-                desc: "Create shared budgets for your family, church group, or chama. Everyone sees the balance and history in real-time.",
+                title: "Shared, without the arguments",
+                desc: "A budget the two of you, the four of you, or the whole chama can see. The same history for everyone, so nobody has to remember who paid what.",
                 color: "text-secondary",
                 bg: "bg-secondary/10"
               },
               {
                 icon: Target,
-                title: "Goal Tracking",
-                desc: "Working towards a plot of land or a holiday? Set collective goals and let members contribute directly to the target.",
+                title: "Saving towards something",
+                desc: "A deposit, a trip, a plot. Set the target once and watch it fill as people add to it, with everyone seeing how far there is to go.",
                 color: "text-accent",
                 bg: "bg-accent/10"
               }
@@ -227,23 +262,23 @@ export default function Home() {
               <div className="bg-white text-foreground p-8 rounded-[2.5rem] shadow-2xl relative">
                 <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
                   <h3 className="font-bold font-serif text-xl">Recent Activity</h3>
-                  <span className="text-sm font-bold text-secondary">April 2024</span>
+                  <span className="text-sm font-bold text-secondary">September</span>
                 </div>
                 <div className="space-y-5">
                   <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground font-bold flex-shrink-0">M</div>
+                    <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent-foreground font-bold flex-shrink-0">N</div>
                     <div>
-                      <p className="font-bold">Maina contributed to Plot Fund</p>
-                      <p className="text-sm text-foreground/60">"May contribution, early!"</p>
-                      <p className="text-secondary font-bold mt-1">+ KES 10,000</p>
+                      <p className="font-bold">Nanjala added her share of rent</p>
+                      <p className="text-sm text-foreground/60">"Sent this morning"</p>
+                      <p className="text-secondary font-bold mt-1">KES 5,000</p>
                     </div>
                   </div>
                   <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold flex-shrink-0">S</div>
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold flex-shrink-0">G</div>
                     <div>
-                      <p className="font-bold">Stationery Expense</p>
-                      <p className="text-sm text-foreground/60">Paid by Wanjiku</p>
-                      <p className="text-primary font-bold mt-1">- KES 2,400</p>
+                      <p className="font-bold">Groceries</p>
+                      <p className="text-sm text-foreground/60">Paid by Chege, split four ways</p>
+                      <p className="text-primary font-bold mt-1">KES 2,400</p>
                     </div>
                   </div>
                 </div>
