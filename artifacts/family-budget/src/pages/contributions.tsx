@@ -14,6 +14,7 @@ import {
   getGetDashboardPeriodTotalsQueryKey,
   type Contribution,
 } from "@workspace/api-client-react";
+import { Link } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -294,7 +295,9 @@ export default function Contributions() {
   };
 
   const openContributionLedger = () => {
-    document.getElementById("contribution-ledger")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const ledger = document.getElementById("contribution-ledger");
+    ledger?.scrollIntoView({ behavior: "smooth", block: "start" });
+    ledger?.focus({ preventScroll: true });
   };
 
   useEffect(() => {
@@ -465,7 +468,7 @@ export default function Contributions() {
       </div>
 
       {/* Contribution records */}
-      <Card id="contribution-ledger" className="scroll-mt-6 border-none shadow-md">
+      <Card id="contribution-ledger" tabIndex={-1} className="scroll-mt-6 border-none shadow-md outline-none">
         <CardContent className="pt-5">
           <div className="flex flex-col gap-1 border-b border-border/60 pb-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -493,9 +496,16 @@ export default function Contributions() {
                 We couldn’t load contribution records. Refresh the page and try again.
               </p>
             ) : contributions?.length === 0 ? (
-              <p className="rounded-xl bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
-                No contribution records have been added for this month.
-              </p>
+              <div className="rounded-xl bg-muted/50 px-3 py-4 text-sm text-muted-foreground" data-testid="contribution-ledger-empty">
+                <p>No contribution records have been added for this month.</p>
+                {totalContrib > 0 && (
+                  <p className="mt-2">
+                    The {formatKes(totalContrib)} shown in Group total came from bank deposits and
+                    other recorded funding, which are not contribution records. Those entries are in{" "}
+                    <Link href="/activity" className="font-semibold text-primary hover:underline">Activity</Link>.
+                  </p>
+                )}
+              </div>
             ) : contributions?.map((contribution) => {
               const isEditing = editor?.id === contribution.id;
               const mayEdit = canEditContribution(contribution);
