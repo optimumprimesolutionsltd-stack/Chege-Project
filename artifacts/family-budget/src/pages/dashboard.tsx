@@ -513,7 +513,7 @@ function IncomeForm({
   canManageShared: boolean;
   isSharedWorkspace: boolean;
 }) {
-  const [formMode, setFormMode] = useState<"normal" | "advanced">("normal");
+  const [formMode, setFormMode] = useState<"simple" | "advanced">("simple");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [madeById, setMadeById] = useState<string>("");
@@ -685,7 +685,7 @@ function ExpenseForm({
   canUseBankFunding: boolean;
   isSharedWorkspace: boolean;
 }) {
-  const [formMode, setFormMode] = useState<"normal" | "advanced">("normal");
+  const [formMode, setFormMode] = useState<"simple" | "advanced">("simple");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
@@ -748,11 +748,11 @@ function ExpenseForm({
   const normalPayerId = currentUserId || (selectableMembers.length === 1 ? selectableMembers[0].userId : "");
   const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];
 
-  // Normal quick log keeps one funding path: a direct expense paid by the
+  // Simple quick log keeps one funding path: a direct expense paid by the
   // current member from their primary saved income source. The date remains
-  // editable so Standard and Advanced apply the same date semantics.
+  // editable so Simple and Advanced apply the same date semantics.
   useEffect(() => {
-    if (formMode !== "normal") return;
+    if (formMode !== "simple") return;
     setIsRecurring(false);
     setPaidFromBank(false);
     setAllowMixedFunding(false);
@@ -1084,7 +1084,7 @@ function ExpenseForm({
       });
       return;
     }
-    if (formMode === "normal" && !category.trim()) {
+    if (formMode === "simple" && !category.trim()) {
       toast({
         variant: "destructive",
         title: "Choose a category",
@@ -1092,7 +1092,7 @@ function ExpenseForm({
       });
       return;
     }
-    if (formMode === "normal" && !normalIncomeSource) {
+    if (formMode === "simple" && !normalIncomeSource) {
       toast({
         variant: "destructive",
         title: "Income source required",
@@ -1299,20 +1299,33 @@ function ExpenseForm({
       <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 p-2">
         <div>
           <p className="text-sm font-bold text-foreground">Quick log mode</p>
-          <p className="text-xs text-muted-foreground">Standard keeps the essentials simple. Use Advanced for splits, bank funding, notes, or recurring expenses.</p>
+          <p className="text-xs text-muted-foreground">Simple keeps the essentials to hand. Use Advanced for splits, bank funding, notes, or recurring expenses.</p>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant={formMode === "advanced" ? "default" : "outline"}
-          onClick={() => setFormMode(formMode === "normal" ? "advanced" : "normal")}
-          data-testid="quick-expense-mode-toggle"
+        <div
+          role="group"
+          aria-label="Quick log mode"
+          className="grid shrink-0 grid-cols-2 gap-1 rounded-lg border border-border/60 bg-card p-1"
         >
-          {formMode === "normal" ? "Advanced" : "Normal"}
-        </Button>
+          {([["simple", "Simple"], ["advanced", "Advanced"]] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={formMode === value}
+              data-testid={`quick-expense-mode-${value}`}
+              onClick={() => setFormMode(value)}
+              className={`h-8 rounded-md px-3 text-sm font-semibold transition-colors ${
+                formMode === value
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted/60"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
-      {formMode === "normal" ? (
-        <div className="space-y-4" data-testid="quick-expense-normal-form">
+      {formMode === "simple" ? (
+        <div className="space-y-4" data-testid="quick-expense-simple-form">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
             <Input
@@ -1325,7 +1338,7 @@ function ExpenseForm({
               required
               autoFocus
               className="h-12 bg-card text-lg font-semibold"
-              data-testid="quick-expense-normal-amount"
+              data-testid="quick-expense-simple-amount"
             />
           </div>
           <div className="space-y-1.5">
@@ -1336,7 +1349,7 @@ function ExpenseForm({
               onChange={(event) => setDescription(event.target.value)}
               required
               className="h-12 bg-card"
-              data-testid="quick-expense-normal-description"
+              data-testid="quick-expense-simple-description"
             />
           </div>
           <div className="space-y-1.5">
@@ -1351,7 +1364,7 @@ function ExpenseForm({
               }}
               required
               className="h-12 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              data-testid="quick-expense-normal-category"
+              data-testid="quick-expense-simple-category"
             >
               <option value="">Select a category</option>
               {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => (
@@ -1359,15 +1372,15 @@ function ExpenseForm({
               ))}
             </select>
           </div>
-          <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="quick-expense-normal-date-section">
-            <label htmlFor="quick-expense-normal-date" className="text-sm font-bold text-primary">
+          <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="quick-expense-simple-date-section">
+            <label htmlFor="quick-expense-simple-date" className="text-sm font-bold text-primary">
               When did this happen? <span className="text-destructive">*</span>
             </label>
             <p className="text-xs leading-relaxed text-muted-foreground">
               This date decides which month includes the expense in budgets, totals, and reports.
             </p>
             <Input
-              id="quick-expense-normal-date"
+              id="quick-expense-simple-date"
               type="date"
               value={date}
               onChange={event => setDate(event.target.value)}
@@ -2135,7 +2148,7 @@ function ExpenseForm({
         <Button
           type="submit"
           className="h-11 rounded-xl bg-warning px-6 text-warning-foreground hover:bg-warning/90"
-          disabled={createExpense.isPending || (formMode === "normal" && (isIncomeSourcesLoading || !normalIncomeSource))}
+          disabled={createExpense.isPending || (formMode === "simple" && (isIncomeSourcesLoading || !normalIncomeSource))}
         >
           {createExpense.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           Log Expense

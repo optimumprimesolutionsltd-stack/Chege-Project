@@ -104,14 +104,14 @@ describe("dashboard quick actions", () => {
     expect(expenseFormSource).toContain('Jamvi will take you to Budget to ask for the average monthly amount.');
   });
 
-  it("starts Dashboard quick expense log in Normal mode with one-category direct funding assumptions", () => {
-    expect(expenseFormSource).toContain('useState<"normal" | "advanced">("normal")');
-    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-form"');
-    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-amount"');
-    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-description"');
-    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-category"');
-    expect(expenseFormSource).toContain('data-testid="quick-expense-normal-date-section"');
-    expect(expenseFormSource).toContain('id="quick-expense-normal-date"');
+  it("starts Dashboard quick expense log in Simple mode with one-category direct funding assumptions", () => {
+    expect(expenseFormSource).toContain('useState<"simple" | "advanced">("simple")');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-simple-form"');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-simple-amount"');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-simple-description"');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-simple-category"');
+    expect(expenseFormSource).toContain('data-testid="quick-expense-simple-date-section"');
+    expect(expenseFormSource).toContain('id="quick-expense-simple-date"');
     expect(expenseFormSource).toContain('onChange={event => setDate(event.target.value)}');
     expect(expenseFormSource).toContain('const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];');
     expect(expenseFormSource).toContain('setCategoryAllocations(category.trim()');
