@@ -41,6 +41,9 @@ describe("mobile bank transaction display", () => {
   it("stores and displays the opening balance date", () => {
     expect(bankScreenSource).toContain('testID="bank-opening-balance-date"');
     expect(bankScreenSource).toContain("openingBalance: value, openingBalanceDate");
-    expect(bankScreenSource).toContain("As of {new Date(data.openingBalanceDate");
+    // Rendered through the shared helper rather than an inline new Date(): it
+    // anchors a bare YYYY-MM-DD at midday, so the date shown cannot drift a day
+    // either side of UTC.
+    expect(bankScreenSource).toContain("As of {formatDisplayDate(data.openingBalanceDate");
   });
 });
