@@ -16,7 +16,7 @@ import {
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,15 @@ function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
   if (recordType === "savings") return "Savings addition";
   return "Personal expense";
 }
+
+type DepositContribution = {
+  userId: string;
+  userName: string;
+  amount: number;
+  transactionId: number;
+  date: string;
+  description: string;
+};
 
 type MemberContrib = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
 type IncomeStream = {
@@ -274,6 +283,22 @@ export default function Contributions() {
   const [openedDeepLinkId, setOpenedDeepLinkId] = useState<number | null>(null);
   const [showUnattributedRecords, setShowUnattributedRecords] = useState(false);
 
+  // A deposit attributed to a member is that member's contribution, and the
+  // dashboard total has always counted it. The ledger reads contributionsTable,
+  // which holds only manual entries, so these have to be fetched alongside for
+  // the list to show what the total above it adds up.
+  const { data: depositContributions = [] } = useQuery<DepositContribution[]>({
+    queryKey: ["contribution-deposits", month, year],
+    queryFn: async () => {
+      const response = await fetch(`/api/contributions/deposits?month=${month}&year=${year}`, {
+        credentials: "include",
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    staleTime: 30_000,
+  });
+
   const handlePrevMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1); };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1); };
 
@@ -478,7 +503,7 @@ export default function Contributions() {
               </p>
             </div>
             <p className="text-xs font-medium text-muted-foreground">
-              {contributions?.length ?? 0} recorded
+              {(contributions?.length ?? 0) + depositContributions.length} recorded
             </p>
           </div>
 
@@ -495,13 +520,13 @@ export default function Contributions() {
               <p className="rounded-xl bg-destructive/10 px-3 py-3 text-sm text-destructive">
                 We couldn’t load contribution records. Refresh the page and try again.
               </p>
-            ) : contributions?.length === 0 ? (
+            ) : contributions?.length === 0 && depositContributions.length === 0 ? (
               <div className="rounded-xl bg-muted/50 px-3 py-4 text-sm text-muted-foreground" data-testid="contribution-ledger-empty">
-                <p>No contribution records have been added for this month.</p>
+                <p>Nothing has been recorded for this month yet.</p>
                 {totalContrib > 0 && (
                   <p className="mt-2">
-                    The {formatKes(totalContrib)} shown in Group total came from bank deposits and
-                    other recorded funding, which are not contribution records. Those entries are in{" "}
+                    The {formatKes(totalContrib)} shown in Group total came from savings additions or
+                    personal expense funding rather than deposits. Those entries are in{" "}
                     <Link href="/activity" className="font-semibold text-primary hover:underline">Activity</Link>.
                   </p>
                 )}
@@ -610,6 +635,38 @@ export default function Contributions() {
                 </div>
               );
             })}
+            {depositContributions.map((deposit) => (
+              <div
+                key={`deposit-${deposit.transactionId}-${deposit.userId}`}
+                className="rounded-xl border border-border/70 p-3 sm:p-4"
+                data-testid={`ledger-deposit-${deposit.transactionId}`}
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <p className="font-semibold text-foreground">{deposit.userName}</p>
+                      <p className="font-display text-lg font-bold text-primary">{formatKes(deposit.amount)}</p>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        Bank deposit
+                      </span>
+                    </div>
+                    <p className="mt-1 break-words text-sm text-muted-foreground">
+                      {formatDate(deposit.date)}
+                      {deposit.description ? ` · ${deposit.description}` : ""}
+                    </p>
+                  </div>
+                  {/* Edited where it lives. This row is a view of a bank
+                      transaction, so it links there rather than offering an
+                      edit the ledger cannot carry out. */}
+                  <Link
+                    href={`/bank?edit=${deposit.transactionId}`}
+                    className="shrink-0 text-sm font-semibold text-primary hover:underline"
+                  >
+                    Open in Bank →
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

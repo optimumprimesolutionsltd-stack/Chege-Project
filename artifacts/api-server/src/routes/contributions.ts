@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { contributionsTable, usersTable, groupMembershipsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   CreateContributionBody,
   GetContributionsQueryParams,
@@ -73,6 +73,71 @@ router.get("/contributions", async (req, res): Promise<void> => {
       createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
     })),
   );
+});
+
+/**
+ * Bank deposits, as they appear in the contribution ledger.
+ *
+ * A deposit attributed to a member is that member's contribution, and the
+ * dashboard has always counted it that way — memberContributions sums deposits
+ * alongside personal expense funding and savings additions. The ledger did not,
+ * because it reads only contributionsTable, which holds manually entered
+ * records. So a group could show KES 26,000 contributed above a ledger saying
+ * "0 recorded", both numbers correct and the pair nonsense.
+ *
+ * These entries are read-only here. They belong to a bank transaction, so the
+ * ledger links to it rather than offering an edit it cannot honour.
+ *
+ * The filters match the dashboard's deposit query exactly, so the ledger and
+ * the total it sits under can never disagree: real deposits only, no leg of a
+ * bank-to-bank transfer, and nothing left unattributed — a deposit with no
+ * member is Shared budget funding, not anyone's contribution.
+ */
+router.get("/contributions/deposits", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const parsed = GetContributionsQueryParams.safeParse(req.query);
+  const { month, year } = parsed.success ? parsed.data : {};
+  if (month === undefined || year === undefined) {
+    res.status(400).json({ error: "month and year are required." });
+    return;
+  }
+
+  const rows = await db.execute(sql`
+    SELECT COALESCE(s.user_id, t.made_by_id) AS "userId",
+           COALESCE(u.first_name, u.email) AS "userName",
+           COALESCE(s.amount, t.amount) AS amount,
+           t.id AS "transactionId",
+           t.date::text AS date,
+           t.description AS description
+    FROM joint_account_transactions t
+    LEFT JOIN joint_account_deposit_splits s ON s.transaction_id = t.id
+    LEFT JOIN users u ON u.id = COALESCE(s.user_id, t.made_by_id)
+    WHERE t.group_id = ${groupId}
+      AND t.type = 'deposit'
+      AND t.bank_transfer_id IS NULL
+      AND COALESCE(s.user_id, t.made_by_id) IS NOT NULL
+      AND EXTRACT(MONTH FROM t.date) = ${Math.round(month)}
+      AND EXTRACT(YEAR FROM t.date) = ${Math.round(year)}
+    ORDER BY t.date DESC, t.id DESC
+  `);
+
+  res.json((rows.rows as Array<{
+    userId: string;
+    userName: string | null;
+    amount: string | number;
+    transactionId: number;
+    date: string;
+    description: string;
+  }>).map((row) => ({
+    userId: row.userId,
+    userName: displayName({ firstName: row.userName, email: null }),
+    amount: Number(row.amount),
+    transactionId: Number(row.transactionId),
+    date: row.date,
+    description: row.description,
+  })));
 });
 
 router.post("/contributions", async (req, res): Promise<void> => {
