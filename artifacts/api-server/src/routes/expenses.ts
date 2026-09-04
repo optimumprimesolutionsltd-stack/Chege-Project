@@ -26,6 +26,7 @@ import {
   requireMemberSelfAttribution,
   requireSharedTransactionEligibility,
 } from "../lib/activeGroup";
+import { canonicalExpenseCategoryName, normalizeExpenseCategoryName } from "../lib/categoryNames";
 
 const router = Router();
 
@@ -59,7 +60,7 @@ function isUncategorizedCategory(category: string) {
 }
 
 function categoryForStorage(category: string | undefined) {
-  const normalized = category?.trim() ?? "";
+  const normalized = canonicalExpenseCategoryName(category ?? "");
   return normalized || UNCATEGORIZED_CATEGORY;
 }
 
@@ -124,11 +125,16 @@ async function validateCategoryAllocations(
   }
   const parsed = z.array(CategoryAllocationSchema).min(1).safeParse(raw);
   if (!parsed.success) return { category: storageCategory, error: "Each category allocation needs a category and a positive whole-KES amount." };
-  const allocations = parsed.data;
+  const allocations = parsed.data.map((allocation) => ({
+    ...allocation,
+    category: canonicalExpenseCategoryName(allocation.category),
+  }));
   if (!allowInternalSentinel && allocations.some((allocation) => isReservedExpenseCategory(allocation.category))) {
     return { category: storageCategory, error: `"${UNCATEGORIZED_CATEGORY}" is reserved for uncategorized expenses.` };
   }
-  const resolvedCategory = category?.trim() || allocations[0].category;
+  const resolvedCategory = categoryForStorage(category) === UNCATEGORIZED_CATEGORY
+    ? allocations[0].category
+    : categoryForStorage(category);
   if (allocations.reduce((sum, allocation) => sum + allocation.amount, 0) !== amount) {
     return { category: storageCategory, error: "Category allocations must equal the expense total exactly." };
   }
@@ -137,7 +143,7 @@ async function validateCategoryAllocations(
   }
   const seen = new Set<string>();
   for (const allocation of allocations) {
-    const key = allocation.category.toLocaleLowerCase();
+    const key = normalizeExpenseCategoryName(allocation.category);
     if (seen.has(key)) return { category: storageCategory, error: "Each category can be allocated only once." };
     seen.add(key);
   }

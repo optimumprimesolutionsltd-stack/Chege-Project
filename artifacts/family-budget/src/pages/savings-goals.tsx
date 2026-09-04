@@ -57,6 +57,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
+import { workspaceLabel } from "@/lib/workspace-identity";
 
 function GoalProgress({ current, target }: { current: number; target: number }) {
   const pct = target > 0 ? Math.min((current / target) * 100, 100) : 0;
@@ -370,6 +371,7 @@ export default function SavingsGoals() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { data: group } = useGetGroup();
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
   const { data: members = [] } = useGetMembers();
   const sharedTransactionsLocked =
     group?.canRecordSharedTransactions === false && members.length < 2;
@@ -756,12 +758,12 @@ export default function SavingsGoals() {
       toast({
         variant: "destructive",
         title: "Admin access required",
-        description: "Only an owner or admin can delete a shared contribution.",
+        description: `Only an owner or admin can delete a shared contribution from "${budgetName}".`,
       });
       return;
     }
     const entryLabel = contribution.note != null ? "this balance correction" : "this contribution";
-    if (!confirm(`Delete ${entryLabel} from "${goal.name}"? The goal balance will be updated.`)) return;
+    if (!confirm(`Delete ${entryLabel} from "${goal.name}" in "${budgetName}"? The goal balance will be updated.`)) return;
 
     try {
       await deleteContribution.mutateAsync({ id: goal.id, contributionId: contribution.id });
@@ -1412,11 +1414,11 @@ export default function SavingsGoals() {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this savings goal?</AlertDialogTitle>
+            <AlertDialogTitle>{`Remove this savings goal from "${budgetName}"?`}</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget
-                ? `"${deleteTarget.name}", its contribution history, and its saved balance will be removed. This cannot be undone.`
-                : "This savings goal will be removed."}
+                ? `"${deleteTarget.name}", its contribution history, and its saved balance will be removed from "${budgetName}". This cannot be undone.`
+                : `This savings goal will be removed from "${budgetName}".`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

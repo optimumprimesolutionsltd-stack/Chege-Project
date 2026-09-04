@@ -33,6 +33,7 @@
 - [All-round onboarding](all-round-onboarding.md) — setup guidance should cover the complete workspace journey, not only budgets or goals.
 - [Manual bank opening balance](manual-bank-opening-balance.md) — bank balances start from an explicit workspace-level amount, not inferred from transaction history.
 - [GitHub history sync](github-history-sync.md) — GitHub OAuth connects through the API proxy, not the shell Git credential helper.
+- [GitHub connector batch writes](github-connector-batch-writes.md) — upload many Git blobs in small connector calls, then create the tree, commit, and ref update separately.
 - [Private photo personalization](private-photo-personalization.md) — Personal budget reuses the owner’s profile photo; Shared budgets keep independent private photos.
 - [Member money-record corrections](member-money-record-corrections.md) — members can correct only their own current-day personal money records; managers handle all removals and historical/shared changes.
 - [Render single-service hosting](render-single-service-hosting.md) — production keeps the web app and API in one Render service for same-origin sessions, OAuth, and API calls.
@@ -43,3 +44,12 @@
 - [Iterative expense funding](iterative-expense-funding.md) — expense funding is not capped at two portions; keep accepting sources and showing the live remainder until fully funded.
 - [Recurring expense budget handoff](recurring-expense-budget-handoff.md) — marking a new expense recurring opens Budget to collect the average monthly amount, then restores the draft.
 - [Mixed expense funding controls](mixed-expense-funding-controls.md) — bank/direct UI must use explicit mixed-mode state, not infer bank-only mode from hidden payer IDs.
+- [Manual category allocations](manual-category-allocations.md) — expense category amounts always start blank, stay independent of the expense total, and are required before categorized saves.
+- [Managed OpenAI response compatibility](managed-openai-response-compatibility.md) — managed routing omits a hardcoded `/v1`; allow current GPT-5 token budgets and structured text responses.
+- [Normal expense entry](normal-expense-entry.md) — new expenses default to a three-field Normal flow; Advanced preserves explicit funding, allocation, date, notes, and recurring controls.
+- [Destructive prompt budget context](destructive-prompt-budget-context.md) — deletion, removal, and leave confirmations must name the affected budget to prevent cross-workspace mistakes.
+- [M-Pesa parser staging](mpesa-parser-staging.md) — keep the lab deterministic and separate; add one message family at a time from anonymized examples, never guessed formats.
+- [Bank amount precision](bank-amount-precision.md) — bank balances and ledger entries support two-decimal KES; savings-goal transfers remain whole KES until goal storage changes.
+- [Workspace switch confirmation lifecycle](workspace-switch-confirmation-lifecycle.md) — do not close a mobile shell before its locally owned confirmation finishes; unmounting cancels the switch.
+- [Ask Jamvi ledger search](ask-jamvi-ledger-search.md) — Ask Jamvi searches current-month ledger context; Search tabs find broader workspace records; both stay read-only and workspace-scoped.
+- [Free Personal budget invariant](free-personal-budget-invariant.md) — every login owns one free Personal budget; Shared budgets are optional additions, never the only budget

@@ -90,6 +90,10 @@ export function getFundingRemainder(total: number, primaryAmount: number): numbe
   return Math.max(0, total - primaryAmount);
 }
 
+export function isFundingFulfilled(total: number, fundingTotal: number): boolean {
+  return Number.isFinite(total) && total > 0 && Number.isFinite(fundingTotal) && fundingTotal >= total;
+}
+
 export function addFundingSourceWithRemainder({
   total,
   selectedSourceIds,
@@ -110,6 +114,37 @@ export function addFundingSourceWithRemainder({
   return remainder > 0 ? { ...amounts, [newSourceId]: String(remainder) } : amounts;
 }
 
+export function addIncomeSourceToSelection({
+  selectedSourceIds,
+  amounts,
+  existingSourceId,
+  existingAmount,
+  newSourceId,
+}: {
+  selectedSourceIds: string[];
+  amounts: Record<string, string>;
+  existingSourceId?: number | null;
+  existingAmount?: string;
+  newSourceId: string;
+}) {
+  const nextSelectedSourceIds = [...selectedSourceIds];
+  const nextAmounts = { ...amounts };
+  const existingSourceKey = existingSourceId ? `source:${existingSourceId}` : null;
+
+  // A one-source expense keeps its amount in payerAmounts until a second
+  // source is selected. Migrate that source before adding the new row.
+  if (existingSourceKey && !nextSelectedSourceIds.includes(existingSourceKey)) {
+    nextSelectedSourceIds.unshift(existingSourceKey);
+    nextAmounts[existingSourceKey] = existingAmount ?? '';
+  }
+  if (!nextSelectedSourceIds.includes(newSourceId)) {
+    nextSelectedSourceIds.push(newSourceId);
+    nextAmounts[newSourceId] = '';
+  }
+
+  return { selectedSourceIds: nextSelectedSourceIds, amounts: nextAmounts };
+}
+
 export function getNewExpenseCategoryMode({
   addToBudget,
   canManageCategories,
@@ -118,6 +153,27 @@ export function getNewExpenseCategoryMode({
   canManageCategories: boolean;
 }) {
   return addToBudget && canManageCategories ? 'budgeted' as const : 'unbudgeted' as const;
+}
+
+export function getProjectedCategoryBalance({
+  budgetAmount,
+  spentAmount,
+  allocationAmount,
+  previousAllocationAmount = 0,
+}: {
+  budgetAmount: number;
+  spentAmount: number;
+  allocationAmount: number;
+  previousAllocationAmount?: number;
+}) {
+  const projectedSpent = spentAmount - previousAllocationAmount + allocationAmount;
+  const difference = budgetAmount - projectedSpent;
+  return {
+    projectedSpent,
+    remaining: Math.max(0, difference),
+    overBy: Math.max(0, -difference),
+    isOverBudget: difference < 0,
+  };
 }
 
 export function getCategoryAllocationStatus(

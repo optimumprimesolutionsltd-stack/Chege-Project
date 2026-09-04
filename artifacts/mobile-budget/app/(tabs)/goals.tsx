@@ -31,6 +31,7 @@ import { useAuth } from '@/lib/auth';
 import { deriveContributorTotals, applyDateFilter, isCorrectionRow, MANUAL_ADJUSTMENT_NOTE } from '@/utils/contributorTotals';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { buildCascadePreview, parseWholeKesAmount } from '@/utils/cascadePreview';
+import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import {
   useGetSavingsGoals,
   useCreateSavingsGoal,
@@ -48,16 +49,11 @@ import {
   useGetGroup,
   type SavingsGoalContribution,
 } from '@workspace/api-client-react';
+import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
   return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
-}
-
-function formatDate(s?: string | null): string {
-  if (!s) return '';
-  const d = new Date(s);
-  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function dateToYMD(d: Date): string {
@@ -439,12 +435,12 @@ export default function GoalsScreen() {
 
   const confirmDeleteGoal = (goal: SavingsGoal) => {
     if (!canManageShared) {
-      Alert.alert('Admin access required', 'Ask a group owner or admin to delete this shared savings goal.');
+      Alert.alert('Admin access required', `Ask a group owner or admin to delete this shared savings goal from "${workspaceBudgetName(group)}".`);
       return;
     }
     Alert.alert(
       'Delete Goal',
-      `Are you sure you want to delete "${goal.name}"? This cannot be undone.`,
+      `Delete "${goal.name}" from "${workspaceBudgetName(group)}"? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -694,7 +690,7 @@ export default function GoalsScreen() {
     const entryLabel = contribution.note != null ? 'balance correction' : 'contribution';
     Alert.alert(
       `Remove ${entryLabel}?`,
-      `This entry will be removed from "${historyGoal.name}", and the goal balance will be recalculated.`,
+      `Remove this ${entryLabel} from "${historyGoal.name}" in "${workspaceBudgetName(group)}"? The goal balance will be recalculated.`,
       [
         { text: 'Keep entry', style: 'cancel' },
         {

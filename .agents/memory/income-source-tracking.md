@@ -48,8 +48,20 @@ Contributions are now **derived**, not manually recorded:
 
 Pattern used everywhere (web expenses, web bank, mobile add-expense, mobile bank):
 1. `useQuery(['income-sources', userId], fetch /api/income-sources?userId=...)` — direct fetch, no generated hook
-2. Show source buttons; "Joint bank account" = incomeSourceId null, personal source = incomeSourceId = src.id
-3. Pass `...(incomeSourceId ? { incomeSourceId } : {})` in the mutation data with type cast `as Parameters<...>[0]['data']`
+2. Show source buttons; "Joint bank account" = incomeSourceId null, personal source = incomeSourceId = src.id, and "Other" records a narrated source without creating a saved income source
+3. Pass `...(incomeSourceId ? { incomeSourceId } : {})` and `...(sourceKind ? { sourceKind } : {})` in the mutation data with type cast `as Parameters<...>[0]['data']`
+
+Income-source names are unique per member within a workspace after trimming whitespace and ignoring case. Existing duplicate database rows may still be referenced by historical funding records, so listings collapse them to one canonical option instead of deleting or rewriting those IDs; create and rename operations reject a normalized duplicate.
+
+**Why:** Older users can have duplicate rows from previous setup paths. Deleting those rows could break historical attribution, while displaying every row makes the same income stream appear repeatedly in funding dropdowns.
+
+**How to apply:** Normalize names at API creation/rename boundaries and in web/mobile onboarding. Deduplicate restored onboarding drafts and list responses, while preserving stored rows and historical foreign-key references.
+
+For a Joint bank deposit, keep “Other” available even though there is no individual income-source list. It should use the existing narration as context and leave `incomeSourceId` null.
+
+**Why:** Joint funds may come from a gift, refund, sale, or another source that should be explained without falsely assigning it to a member’s saved income stream.
+
+**How to apply:** Show saved sources only for a single named depositor; show “Other” for both named and Joint bank deposits, and clear stale source selection when attribution changes.
 
 ## Generated types
 

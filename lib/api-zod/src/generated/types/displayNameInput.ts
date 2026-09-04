@@ -7,5 +7,10 @@
  */
 
 export interface DisplayNameInput {
+  /**
+     * Printable Unicode display name without control characters or line breaks
+     * @minLength 1
+     * @maxLength 40
+     */
   name: string;
 }

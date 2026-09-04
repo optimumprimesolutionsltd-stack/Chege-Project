@@ -2,86 +2,87 @@ import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useSegments } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 
-const FAB_ACTIONS = [
-  { icon: 'plus-circle' as const, label: 'Expense',  color: '#4ade80', bg: '#1a3320', route: '/add-expense'         },
-  { icon: 'credit-card' as const, label: 'Deposit / Withdraw',  color: '#f97316', bg: '#2a1c0a', route: '/(tabs)/bank' },
-  { icon: 'target'      as const, label: 'Save to Goal', color: '#f472b6', bg: '#2a0a1a', route: '/(tabs)/goals?shortcut=contribute' },
+const MAIN_ACTIONS = [
+  { icon: 'plus-circle' as const, label: 'Expense', route: '/add-expense' },
+  { icon: 'credit-card' as const, label: 'Banking' },
+  { icon: 'target' as const, label: 'Save', route: '/(tabs)/goals?shortcut=contribute' },
+  { icon: 'bar-chart-2' as const, label: 'Budget', route: '/(tabs)/budget' },
 ];
 
-/** Persistent floating action button — rendered at the tab-layout level so it appears on every screen. */
+const BANKING_ACTIONS = [
+  { icon: 'arrow-down-left' as const, label: 'Deposit', hint: 'Add money to a bank account', route: '/(tabs)/bank?shortcut=deposit' },
+  { icon: 'arrow-up-right' as const, label: 'Withdraw', hint: 'Take money out of a bank account', route: '/(tabs)/bank?shortcut=withdraw' },
+  { icon: 'repeat' as const, label: 'Transfer', hint: 'Move money between accounts or goals', route: '/(tabs)/bank?shortcut=bank-transfer' },
+];
+
+/** Persistent action footer — rendered at the tab-layout level so it appears on every screen. */
 export function GlobalFAB() {
-  const [open, setOpen] = useState(false);
+  const [bankingOpen, setBankingOpen] = useState(false);
   const router = useRouter();
-  const segments = useSegments();
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
-  const fabBottom  = Platform.OS === 'web' ? 100 : insets.bottom + 70;
-  const menuBottom = Platform.OS === 'web' ? 166 : insets.bottom + 136;
-  const isTabHome = segments[0] === '(tabs)' && segments.length === 1;
-  const goHome = () => {
-    setOpen(false);
-    router.replace('/(tabs)');
+  // Keep the action footer above the navigator's tab bar and device home indicator.
+  const footerBottom = Platform.OS === 'web' ? 84 : insets.bottom + 68;
+  const openRoute = (route: string) => {
+    setBankingOpen(false);
+    router.push(route as any);
   };
 
   return (
     <>
-      {/* Backdrop — closes menu on outside tap */}
-      {open && (
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
-      )}
+      {bankingOpen && <Pressable style={styles.backdrop} onPress={() => setBankingOpen(false)} />}
 
-      {/* Action menu */}
-      {open && (
-        <View style={[styles.menu, { bottom: menuBottom }]}>
-          {FAB_ACTIONS.map((action) => (
+      {bankingOpen && (
+        <View style={[styles.bankingMenu, { bottom: footerBottom + 72, backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.bankingMenuTitle, { color: colors.foreground }]}>Banking</Text>
+          <Text style={[styles.bankingMenuSubtitle, { color: colors.mutedForeground }]}>Choose what you want to do with your money.</Text>
+          {BANKING_ACTIONS.map((action) => (
             <Pressable
               key={action.label}
-              testID={`global-shortcut-${action.label.toLowerCase().replace(/\s+/g, '-')}`}
+              testID={`global-banking-${action.label.toLowerCase()}`}
               accessibilityRole="button"
-              accessibilityLabel={`Open ${action.label}`}
-              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => { setOpen(false); router.push(action.route as any); }}
+              accessibilityLabel={`Open Banking ${action.label}`}
+              style={({ pressed }) => [styles.bankingMenuItem, { backgroundColor: pressed ? colors.muted : 'transparent' }]}
+              onPress={() => openRoute(action.route)}
             >
-              <View style={[styles.menuIcon, { backgroundColor: action.bg }]}>
-                <Feather name={action.icon} size={18} color={action.color} />
+              <View style={[styles.bankingMenuIcon, { backgroundColor: `${colors.primary}18` }]}>
+                <Feather name={action.icon} size={17} color={colors.primary} />
               </View>
-              <Text style={[styles.menuLabel, { color: colors.foreground }]}>{action.label}</Text>
+              <View style={styles.bankingMenuCopy}>
+                <Text style={[styles.bankingMenuItemLabel, { color: colors.foreground }]}>{action.label}</Text>
+                <Text style={[styles.bankingMenuItemHint, { color: colors.mutedForeground }]}>{action.hint}</Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
             </Pressable>
           ))}
         </View>
       )}
 
-      {!isTabHome && (
-        <Pressable
-          testID="global-home"
-          accessibilityRole="button"
-          accessibilityLabel="Go to Home"
-          style={[
-            styles.homePill,
-            { bottom: fabBottom, backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-          onPress={goHome}
-        >
-          <Feather name="home" size={17} color={colors.primary} />
-          <Text style={[styles.homePillText, { color: colors.foreground }]}>Home</Text>
-        </Pressable>
-      )}
-
-      {/* FAB button */}
-      <Pressable
-        testID="global-quick-actions"
-        accessibilityRole="button"
-        accessibilityLabel={open ? 'Close quick actions' : 'Open quick actions'}
-        style={[styles.fab, { bottom: fabBottom, backgroundColor: open ? colors.foreground : colors.secondary }]}
-        onPress={() => setOpen((o) => !o)}
-        hitSlop={8}
-      >
-        <Feather name={open ? 'x' : 'plus'} size={28} color={open ? colors.background : '#fff'} />
-      </Pressable>
+      <View style={[styles.actionFooter, { bottom: footerBottom, backgroundColor: colors.card, borderColor: colors.border }]}>
+        {MAIN_ACTIONS.map((action) => {
+          const isBanking = action.label === 'Banking';
+          return (
+            <Pressable
+              key={action.label}
+              testID={`global-footer-${action.label.toLowerCase()}`}
+              accessibilityRole="button"
+              accessibilityLabel={isBanking ? 'Open Banking actions' : `Open ${action.label}`}
+              style={({ pressed }) => [
+                styles.actionItem,
+                { backgroundColor: isBanking && bankingOpen ? `${colors.primary}18` : 'transparent', opacity: pressed ? 0.7 : 1 },
+              ]}
+              onPress={() => isBanking ? setBankingOpen((open) => !open) : openRoute(action.route!)}
+            >
+              <Feather name={action.icon} size={20} color={isBanking && bankingOpen ? colors.primary : colors.mutedForeground} />
+              <Text style={[styles.actionLabel, { color: isBanking && bankingOpen ? colors.primary : colors.foreground }]}>{action.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </>
   );
 }
@@ -91,73 +92,91 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 99,
   },
-  fab: {
+  actionFooter: {
     position: 'absolute',
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+    left: 12,
+    right: 12,
+    minHeight: 64,
+    borderRadius: 20,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    padding: 6,
     zIndex: 100,
     shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  actionItem: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    gap: 3,
+  },
+  actionLabel: {
+    fontSize: 10,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  bankingMenu: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 10,
+    zIndex: 102,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 10,
   },
-  menu: {
-    position: 'absolute',
-    right: 12,
-    zIndex: 100,
-    gap: 8,
+  bankingMenuTitle: {
+    fontSize: 17,
+    fontFamily: 'Inter_700Bold',
+    marginHorizontal: 6,
+    marginTop: 3,
   },
-  menuItem: {
+  bankingMenuSubtitle: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: 'Inter_400Regular',
+    marginHorizontal: 6,
+    marginTop: 3,
+    marginBottom: 7,
+  },
+  bankingMenuItem: {
+    minHeight: 54,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
+    gap: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
-  menuIcon: {
-    width: 36,
-    height: 36,
+  bankingMenuIcon: {
+    width: 34,
+    height: 34,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuLabel: {
-    fontSize: 15,
+  bankingMenuCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  bankingMenuItemLabel: {
+    fontSize: 14,
     fontFamily: 'Inter_600SemiBold',
   },
-  homePill: {
-    position: 'absolute',
-    right: 88,
-    minWidth: 76,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    paddingHorizontal: 12,
-    zIndex: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 7,
-    elevation: 7,
-  },
-  homePillText: {
-    fontSize: 13,
-    fontFamily: 'Inter_700Bold',
+  bankingMenuItemHint: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 1,
   },
 });

@@ -37,7 +37,7 @@ export default function FAQ() {
     },
     {
       question: "What happens if our chama grows beyond 6 people?",
-      answer: "If you're on the Free tier, groups are limited to 6 members. If your chama grows larger, you'll need to upgrade the group workspace to Chama Pro, which allows unlimited members for a small flat monthly fee."
+      answer: "Every user gets one Personal budget free permanently. Shared budgets use one group subscription chosen by the owner or administrator. Member limits depend on that Shared package, and invited members do not pay individually."
     },
     {
       question: "Does Jamvi offer a non-profit discount?",

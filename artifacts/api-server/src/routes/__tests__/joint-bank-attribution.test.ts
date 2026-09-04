@@ -196,7 +196,7 @@ describe("multiple-account legacy fallback", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
-      accountId: 7,
+      accountId: null,
       accountName: "All accounts",
       openingBalance: 350,
       totalDeposits: 60,
@@ -213,8 +213,8 @@ describe("multiple-account legacy fallback", () => {
         { id: 8, name: "Savings buffer", openingBalance: 250 },
       ]))
       .mockImplementationOnce(() => makeSelectChainWith([
-        { id: 2, groupId: 1, accountId: 8, type: "deposit", amount: 80, description: "Deposit", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() },
         { id: 3, groupId: 1, accountId: 8, type: "disbursement", amount: 30, description: "Spend", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-02", createdAt: new Date() },
+        { id: 2, groupId: 1, accountId: 8, type: "deposit", amount: 80, description: "Deposit", madeById: null, incomeSourceId: null, expenseCategory: null, savingsGoalId: null, transferDirection: null, expenseId: null, date: "2024-06-01", createdAt: new Date() },
       ]));
 
     const res = await request(jointApp).get("/joint-account?accountId=8");
@@ -229,6 +229,10 @@ describe("multiple-account legacy fallback", () => {
       balance: 300,
       closingBalance: 300,
     });
+    expect(res.body.transactions).toEqual([
+      expect.objectContaining({ id: 3, runningBalance: 300 }),
+      expect.objectContaining({ id: 2, runningBalance: 330 }),
+    ]);
   });
 });
 

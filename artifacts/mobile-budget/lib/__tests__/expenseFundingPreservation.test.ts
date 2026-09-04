@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   addFundingSourceWithRemainder,
+  addIncomeSourceToSelection,
   buildSinglePayerFundingReplacement,
   getExpenseFundingControlState,
   getFundingRemainder,
+  isFundingFulfilled,
   getNewExpenseCategoryMode,
+  getProjectedCategoryBalance,
   preserveExpenseSplitsForAmount,
 } from '../expenseFundingPreservation';
 
@@ -76,6 +79,13 @@ describe('expense funding preservation', () => {
     expect(getFundingRemainder(1000, 0)).toBe(0);
   });
 
+  it('marks funding fulfilled once the entered portions reach the expense total', () => {
+    expect(isFundingFulfilled(1000, 999)).toBe(false);
+    expect(isFundingFulfilled(1000, 1000)).toBe(true);
+    expect(isFundingFulfilled(1000, 1200)).toBe(true);
+    expect(isFundingFulfilled(0, 1000)).toBe(false);
+  });
+
   it('fills a newly selected second source from the existing primary amount', () => {
     expect(addFundingSourceWithRemainder({
       total: 1000,
@@ -130,9 +140,62 @@ describe('expense funding preservation', () => {
     })).toEqual({ primary: '1200' });
   });
 
+  it('migrates the existing single-source amount before adding a new source row', () => {
+    expect(addIncomeSourceToSelection({
+      selectedSourceIds: [],
+      amounts: {},
+      existingSourceId: 7,
+      existingAmount: '5000',
+      newSourceId: 'source:12',
+    })).toEqual({
+      selectedSourceIds: ['source:7', 'source:12'],
+      amounts: { 'source:7': '5000', 'source:12': '' },
+    });
+  });
+
+  it('preserves already selected source amounts when adding another source', () => {
+    expect(addIncomeSourceToSelection({
+      selectedSourceIds: ['source:7'],
+      amounts: { 'source:7': '5000' },
+      existingSourceId: 7,
+      existingAmount: '5000',
+      newSourceId: 'source:12',
+    })).toEqual({
+      selectedSourceIds: ['source:7', 'source:12'],
+      amounts: { 'source:7': '5000', 'source:12': '' },
+    });
+  });
+
   it('keeps a named category unbudgeted unless a manager explicitly adds it', () => {
     expect(getNewExpenseCategoryMode({ addToBudget: false, canManageCategories: true })).toBe('unbudgeted');
     expect(getNewExpenseCategoryMode({ addToBudget: true, canManageCategories: false })).toBe('unbudgeted');
     expect(getNewExpenseCategoryMode({ addToBudget: true, canManageCategories: true })).toBe('budgeted');
+  });
+
+  it('projects the category running balance after the entered allocation', () => {
+    expect(getProjectedCategoryBalance({
+      budgetAmount: 10_000,
+      spentAmount: 4_000,
+      allocationAmount: 2_500,
+    })).toEqual({
+      projectedSpent: 6_500,
+      remaining: 3_500,
+      overBy: 0,
+      isOverBudget: false,
+    });
+  });
+
+  it('removes the saved allocation before previewing an edited expense', () => {
+    expect(getProjectedCategoryBalance({
+      budgetAmount: 10_000,
+      spentAmount: 9_000,
+      previousAllocationAmount: 2_000,
+      allocationAmount: 4_000,
+    })).toEqual({
+      projectedSpent: 11_000,
+      remaining: 0,
+      overBy: 1_000,
+      isOverBudget: true,
+    });
   });
 });

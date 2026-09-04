@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -36,3 +43,30 @@ jobs:
 
       - name: API test suite
         run: pnpm --filter @workspace/api-server run test
+
+  staging-category-verification:
+    name: Verify staging category integrity
+    # Do not expose the staging credential to code from forked repositories.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --config.strictDepBuilds=false
+      - name: Require staging secret
+        run: |
+          if [ -z "$STAGING_DATABASE_URL" ]; then
+            echo "::error::Repository secret STAGING_DATABASE_URL is not configured. Add it before relying on this PR check."
+            exit 1
+          fi
+          echo "Staging database secret is configured."
+      - name: Verify staging category integrity
+        run: pnpm --filter @workspace/scripts verify:staging-categories

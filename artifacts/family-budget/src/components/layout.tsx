@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [location]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileMenuOpen]);
 
   useEffect(() => {
     const guardedUrl = window.location.href;
@@ -56,6 +65,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location, navigate]);
 
   const isSharedWorkspace = group?.isPrivate === false;
+  const workspaceContextLabel = group ? (isSharedWorkspace ? 'Shared budget' : 'Personal budget') : 'Select a budget';
   const activeWorkspaceRole = group?.role ?? (group?.isPrivate ? 'owner' : 'member');
   const activeWorkspaceRoleLabel = activeWorkspaceRole === 'owner'
     ? 'Owner'
@@ -90,6 +100,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target },
     { href: '/bank', label: 'Bank accounts', icon: Landmark },
     { href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 },
+    { href: '/search', label: 'Search', icon: Search },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
@@ -103,7 +114,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="mt-2 min-w-0">
             <span className="block text-[11px] font-medium text-sidebar-foreground/70">Personal & shared money, together</span>
-            <span className="block truncate text-xs text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
+            <span className="mt-1 flex items-center gap-1.5 truncate text-xs text-sidebar-foreground/60"><span className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', isSharedWorkspace ? 'bg-[#087F8C]' : 'bg-sidebar-primary')} aria-hidden="true" />{group ? workspaceLabel(group) : 'My budget'}</span>
+            <span className="mt-1 inline-flex rounded-full border border-sidebar-border bg-sidebar-accent/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/80">{workspaceContextLabel}</span>
           </div>
         </div>
         {location !== '/' && (
@@ -154,18 +166,39 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0">
             <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
+            <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-[0.1em] text-sidebar-primary">{workspaceContextLabel}</span>
           </div>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-sidebar-foreground">
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-2 text-sidebar-foreground"
+          aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={isMobileMenuOpen}
+        >
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 bg-sidebar pt-16 flex flex-col" onClick={(e) => { if (e.target === e.currentTarget) setIsMobileMenuOpen(false); }}>
-          <nav className="flex-1 p-4 space-y-2">
-            <WorkspaceSwitcher activeWorkspaceId={group?.id} className="mb-3 w-full" />
+        <div
+          className="isolate fixed inset-x-0 top-16 z-[70] flex h-[calc(100dvh-4rem)] flex-col overflow-hidden bg-sidebar md:hidden"
+          onClick={(e) => { if (e.target === e.currentTarget) setIsMobileMenuOpen(false); }}
+        >
+          <nav className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-4 pb-6 space-y-2">
+            <div className="mb-4 space-y-2">
+              <p className="px-1 text-xs font-bold uppercase tracking-[0.12em] text-sidebar-primary">Switch budget</p>
+              <p className="px-1 text-xs leading-relaxed text-sidebar-foreground/65">
+                Choose Personal or Shared budget to change the money view.
+              </p>
+              <WorkspaceSwitcher
+                activeWorkspaceId={group?.id}
+                variant="mobile"
+                className="w-full"
+                onWorkspaceSwitchRequested={() => setIsMobileMenuOpen(false)}
+              />
+            </div>
             {navItems.map((item) => {
               const isActive = location === item.href;
               return (
@@ -181,7 +214,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <div className="p-6 border-t border-sidebar-border">
+          <div className="shrink-0 border-t border-sidebar-border bg-sidebar p-6">
             <Button variant="outline" className="w-full h-12 text-lg border-sidebar-border text-sidebar-foreground bg-transparent hover:bg-sidebar-accent" onClick={logout}>
               <LogOut className="w-5 h-5 mr-2" />
               Sign Out
@@ -191,6 +224,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Persistent quick logging control */}
+      {!isMobileMenuOpen && (
       <div className="fixed bottom-5 right-4 z-50 flex flex-col items-end gap-3 md:bottom-7 md:right-7">
         {isQuickLogOpen && (
           <div
@@ -278,6 +312,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <span className="text-sm font-bold">Quick log</span>
         </Button>
       </div>
+      )}
 
       {/* Main Content */}
       <main className="min-w-0 flex-1 flex flex-col min-h-screen pb-24 pt-16 md:pb-0 md:pt-0">

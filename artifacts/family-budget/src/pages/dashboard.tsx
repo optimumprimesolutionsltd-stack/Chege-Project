@@ -4,10 +4,12 @@ import {
   useGetDashboardActivity,
   useGetDashboardCategoryBreakdown,
   useGetDashboardTrends,
+  useGetExpenses,
   useGetSavingsGoals,
   useGetBudgetCategories,
   useGetMembers,
   useCreateExpense,
+   useDeleteExpense,
   useCreateDeposit,
   useContributeToSavingsGoal,
   useCascadeContribute,
@@ -36,10 +38,10 @@ import {
 } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { formatKes, formatDate } from "@/lib/utils";
+import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
-   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag,
+   Wallet, Plus, TrendingUp, TrendingDown, Target, Loader2, X, ChevronLeft, ChevronRight, Building2, Link2, Receipt, BarChart3, Landmark, Home, Flag, BellRing, CalendarDays, Trash2,
   ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,10 +57,12 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { SHARED_GROUP_KINDS, type SharedGroupKind } from "@/components/group-kind";
-import { getActivityEditLink, type ActivityEditItem } from "@/lib/activity-edit-utils";
+import { getActivityEditLink, getActivityRecordTarget, type ActivityEditItem } from "@/lib/activity-edit-utils";
+import { AskJamviPanel } from "@/components/ask-jamvi-panel";
+import { WorkspaceSetupGuide } from "@/components/workspace-setup-guide";
 import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
-import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder } from "@/lib/expense-funding-utils";
+import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder, getProjectedCategoryBalance } from "@/lib/expense-funding-utils";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";
@@ -71,15 +75,155 @@ type DashboardActivityItem = ActivityEditItem & {
   userName?: string | null;
   categoryAllocations?: { category: string; amount: number }[];
 };
+type DashboardDeleteTarget = {
+  id: number;
+  description: string;
+};
+
+type DashboardExpense = {
+  id: number;
+  amount: number;
+  description: string;
+  category?: string | null;
+  categoryAllocations?: { category: string; amount: number }[];
+  date: string;
+  paidById?: string | null;
+  paidFromBank?: boolean;
+  isRecurring?: boolean;
+  incomeSplits?: { userId?: string | null; fromBank: boolean }[];
+};
+
+function isUncategorizedExpense(expense: DashboardExpense) {
+  return !expense.category?.trim()
+    && !(expense.categoryAllocations ?? []).some((allocation) => allocation.category.trim());
+}
+
+function appendCreatedCategoryAllocation(
+  allocations: Array<{ category: string; amount: string }>,
+  categoryName: string,
+) {
+  const oneOff = allocations.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+  const standardAllocations = allocations.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+  const emptyIndex = standardAllocations.findIndex((allocation) => !allocation.category.trim());
+
+  if (emptyIndex >= 0) {
+    standardAllocations[emptyIndex] = { ...standardAllocations[emptyIndex], category: categoryName };
+  } else if (!standardAllocations.some((allocation) => allocation.category === categoryName)) {
+    standardAllocations.push({ category: categoryName, amount: "" });
+  }
+
+  return [...standardAllocations, ...(oneOff ? [oneOff] : [])];
+}
+
+function shiftDashboardMonth(month: number, year: number, offset: number) {
+  const date = new Date(year, month - 1 + offset, 1);
+  return { month: date.getMonth() + 1, year: date.getFullYear() };
+}
+
+function DashboardMonthNavigator({
+  month,
+  year,
+  currentMonth,
+  currentYear,
+  onChange,
+}: {
+  month: number;
+  year: number;
+  currentMonth: number;
+  currentYear: number;
+  onChange: (period: { month: number; year: number }) => void;
+}) {
+  const isCurrentMonth = month === currentMonth && year === currentYear;
+  const inputValue = `${year}-${String(month).padStart(2, "0")}`;
+
+  return (
+    <section
+      aria-labelledby="dashboard-month-heading"
+      className="mt-3 w-full max-w-xl rounded-2xl border-2 border-primary/30 bg-primary/[0.07] p-3 shadow-sm sm:p-4"
+      data-testid="dashboard-month-navigator"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <CalendarDays className="h-5 w-5" aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Viewing month</p>
+          <h2 id="dashboard-month-heading" className="mt-0.5 text-xl font-display font-bold text-foreground sm:text-2xl" data-testid="dashboard-selected-month">
+            {formatMonthYear(month, year)}
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {isCurrentMonth ? "This is the current month." : "You are viewing a past or future month."}
+          </p>
+        </div>
+        {isCurrentMonth && (
+          <span className="ml-auto shrink-0 rounded-full bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground">
+            Current
+          </span>
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-10 w-10 border-primary/30 bg-background"
+          onClick={() => onChange(shiftDashboardMonth(month, year, -1))}
+          aria-label="View previous month"
+          data-testid="dashboard-previous-month"
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-10 w-10 border-primary/30 bg-background"
+          onClick={() => onChange(shiftDashboardMonth(month, year, 1))}
+          aria-label="View next month"
+          data-testid="dashboard-next-month"
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <label className="flex h-10 min-w-[155px] flex-1 items-center gap-2 rounded-md border border-primary/30 bg-background px-3 text-sm font-semibold text-foreground sm:flex-none">
+          <span className="sr-only">Choose a month</span>
+          <input
+            type="month"
+            value={inputValue}
+            onChange={(event) => {
+              const [nextYear, nextMonth] = event.target.value.split("-").map(Number);
+              if (nextYear && nextMonth) onChange({ month: nextMonth, year: nextYear });
+            }}
+            aria-label="Choose a month"
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
+            data-testid="dashboard-month-picker"
+          />
+        </label>
+        {!isCurrentMonth && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 px-3 text-sm font-semibold text-primary hover:bg-primary/10"
+            onClick={() => onChange({ month: currentMonth, year: currentYear })}
+            data-testid="dashboard-current-month"
+          >
+            Back to current
+          </Button>
+        )}
+      </div>
+    </section>
+  );
+}
 
 function DashboardActivityRow({
   item,
   compact = false,
   bankLabel = "Shared bank",
+  onRemove,
 }: {
   item: DashboardActivityItem;
   compact?: boolean;
   bankLabel?: string;
+  onRemove?: () => void;
 }) {
   const editLink = getActivityEditLink(item);
   const rowClass = compact
@@ -116,16 +260,43 @@ function DashboardActivityRow({
     </>
   );
 
-  return editLink?.label === "Edit expense" ? (
-    <Link
-      href={editLink.href}
-      className={`${rowClass} rounded-md transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-      aria-label={`Edit ${item.description}`}
-    >
-      {content}
-    </Link>
-  ) : (
-    <div className={rowClass}>{content}</div>
+  if (!onRemove) {
+    return editLink?.label === "Edit expense" ? (
+      <Link
+        href={editLink.href}
+        className={`${rowClass} rounded-md transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+        aria-label={`Edit ${item.description}`}
+      >
+        {content}
+      </Link>
+    ) : (
+      <div className={rowClass}>{content}</div>
+    );
+  }
+
+  return (
+    <div className={rowClass}>
+      {editLink?.label === "Edit expense" ? (
+        <Link
+          href={editLink.href}
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Edit ${item.description}`}
+        >
+          {content}
+        </Link>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">{content}</div>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded-md p-1.5 text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`Remove ${item.description}`}
+        title="Remove expense"
+      >
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
@@ -142,15 +313,6 @@ function localDateInputValue(date = new Date()) {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
-
-const SHARED_OVERVIEW_SHORTCUTS = [
-  { href: "/budget", label: "Budget", description: "Plan spending", icon: Wallet },
-  { href: "/contributions", label: "Contributions", description: "See money in", icon: TrendingUp },
-  { href: "/expenses", label: "Expenses", description: "Review spending", icon: Receipt },
-  { href: "/savings-goals", label: "Goals", description: "Track targets", icon: Target },
-  { href: "/bank", label: "Bank", description: "Manage funds", icon: Landmark },
-  { href: "/reports", label: "Reports", description: "Understand trends", icon: BarChart3 },
-];
 
 function OpenInvitationLinkButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -260,8 +422,8 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                {hasExistingSharedBudget
-                 ? "Create a separate Shared budget for another family, chama, club, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
-                 : "Create a Shared budget for your family, chama, club, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
+                 ? "Create a separate Shared budget for another family, chama, club, student group, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
+                 : "Create a Shared budget for your family, chama, club, student group, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
             </p>
              <p className="mt-2 text-xs font-medium text-foreground/70">
                Name it, create it, then invite the people who should share it.
@@ -339,65 +501,6 @@ function SharedGroupsFooter() {
   return <CreateSharedGroupCard hasExistingSharedBudget={sharedWorkspaces.length > 0} />;
 }
 
-type QuickLogMode = "simple" | "advanced";
-
-/**
- * Standard/Advanced switch shared by the quick-log forms.
- *
- * Standard shows only the fields a daily entry needs; Advanced reveals the
- * rest. The button is labelled with the mode it switches to, which is how the
- * expense form has always presented it.
- */
-function QuickLogModeCard({
-  mode,
-  onChange,
-  hint,
-}: {
-  mode: QuickLogMode;
-  onChange: (next: QuickLogMode) => void;
-  hint: string;
-}) {
-  const options: Array<{ value: QuickLogMode; label: string }> = [
-    { value: "simple", label: "Simple" },
-    { value: "advanced", label: "Advanced" },
-  ];
-  return (
-    <div className="space-y-2.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
-      <div>
-        <p className="text-sm font-semibold text-foreground">Quick log mode</p>
-        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{hint}</p>
-      </div>
-      {/* A switch rather than a single button, so the label on screen is the
-          mode you are in rather than the one you would move to. */}
-      <div
-        role="group"
-        aria-label="Quick log mode"
-        className="grid grid-cols-2 gap-1 rounded-lg border border-border/60 bg-card p-1"
-      >
-        {options.map((option) => {
-          const selected = mode === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={selected}
-              data-testid={`quick-log-mode-${option.value}`}
-              onClick={() => onChange(option.value)}
-              className={`h-9 rounded-md text-sm font-semibold transition-colors ${
-                selected
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted/60"
-              }`}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ── Quick Action: Bank Deposit ────────────────────────────────────────────────
 function IncomeForm({
   onDone,
@@ -410,12 +513,12 @@ function IncomeForm({
   canManageShared: boolean;
   isSharedWorkspace: boolean;
 }) {
+  const [formMode, setFormMode] = useState<"normal" | "advanced">("normal");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [madeById, setMadeById] = useState<string>("");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [date, setDate] = useState(localDateInputValue());
-  const [logMode, setLogMode] = useState<QuickLogMode>("simple");
   const { data: members = [] } = useGetMembers();
   const today = localDateInputValue();
   const selectedDepositorId = canManageShared ? madeById : currentUserId ?? "";
@@ -490,14 +593,6 @@ function IncomeForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      <QuickLogModeCard
-        mode={logMode}
-        onChange={(next) => {
-          if (next === "simple") setIncomeSourceId(null);
-          setLogMode(next);
-        }}
-        hint="Simple keeps the essentials to hand. Use Advanced to tie this deposit to an income source."
-      />
       {canManageShared ? (
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
@@ -549,7 +644,7 @@ function IncomeForm({
         )}
       </div>
       {/* Income source */}
-      {logMode === "advanced" && incomeSources && incomeSources.length > 0 && (
+      {incomeSources && incomeSources.length > 0 && (
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Income source <span className="text-muted-foreground font-normal">(optional)</span></label>
           <div className="flex flex-wrap gap-2">
@@ -590,6 +685,7 @@ function ExpenseForm({
   canUseBankFunding: boolean;
   isSharedWorkspace: boolean;
 }) {
+  const [formMode, setFormMode] = useState<"normal" | "advanced">("normal");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
@@ -609,7 +705,6 @@ function ExpenseForm({
   const [bankPortion, setBankPortion] = useState("");
   const [directPortion, setDirectPortion] = useState("");
   const [additionalDirectPortions, setAdditionalDirectPortions] = useState<Array<{ sourceId: number; amount: string }>>([]);
-  const [remainderAnchor, setRemainderAnchor] = useState<"direct" | "bank" | null>(null);
   const [isAddingBankAccount, setIsAddingBankAccount] = useState(false);
   const [newBankAccountName, setNewBankAccountName] = useState("");
   const [newBankAccountNumber, setNewBankAccountNumber] = useState("");
@@ -618,10 +713,14 @@ function ExpenseForm({
   const [recurringMonthlyBudget, setRecurringMonthlyBudget] = useState("");
   const [uncategorizedSaveOpen, setUncategorizedSaveOpen] = useState(false);
   const [date, setDate] = useState(localDateInputValue());
-  const [logMode, setLogMode] = useState<QuickLogMode>("simple");
+  const [expenseYear, expenseMonth] = date.split("-").map(Number);
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const { data: bankAccounts = [] } = useGetJointAccounts();
+  const { data: expenseCategoryBreakdown = [] } = useGetDashboardCategoryBreakdown({
+    month: expenseMonth,
+    year: expenseYear,
+  });
   const { data: selectedBankAccount } = useGetJointAccount(
     selectedBankAccountId ? { accountId: selectedBankAccountId } : undefined,
   );
@@ -646,10 +745,34 @@ function ExpenseForm({
   const qc = useQueryClient();
   const { toast } = useToast();
   const today = localDateInputValue();
-  const simpleIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];
+  const normalPayerId = currentUserId || (selectableMembers.length === 1 ? selectableMembers[0].userId : "");
+  const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];
+
+  // Normal quick log keeps one funding path: a direct expense paid by the
+  // current member from their primary saved income source. The date remains
+  // editable so Standard and Advanced apply the same date semantics.
+  useEffect(() => {
+    if (formMode !== "normal") return;
+    setIsRecurring(false);
+    setPaidFromBank(false);
+    setAllowMixedFunding(false);
+    setSelectedBankAccountId(null);
+    setBankPortion("");
+    setAdditionalDirectPortions([]);
+    setPaidBy(normalPayerId);
+    setIncomeSourceId(normalIncomeSource?.id ?? null);
+    setDirectPortion(amount);
+    setCategoryAllocations(category.trim()
+      ? [{ category, amount }]
+      : [{ category: "", amount: "" }]);
+  }, [amount, category, formMode, normalIncomeSource?.id, normalPayerId, today]);
+
   const fundingMode = paidFromBank ? (allowMixedFunding ? "mixed" : "bank") : "direct";
   const bankLabel = "Bank account";
-  const isOtherCategory = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+  const otherCategoryIndex = categoryAllocations.findIndex((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+  const isOtherCategory = otherCategoryIndex >= 0;
+  const isPrimaryOtherCategory = categoryAllocations[0]?.category.trim().toLocaleLowerCase() === "other";
+  const hasStandardAdditionalCategory = categoryAllocations.slice(1).some((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
   const expenseTotal = Number(amount) || 0;
   const fundingTotal = (Number(bankPortion) || 0)
     + (Number(directPortion) || 0)
@@ -661,6 +784,48 @@ function ExpenseForm({
       amount: Number(allocation.amount),
     })),
     formatAmount: formatKes,
+  });
+  const categoryBalancePreviews = categoryAllocations.flatMap((allocation) => {
+    const categoryName = allocation.category.trim();
+    const allocationAmount = Number(allocation.amount);
+    if (
+      !categoryName
+      || categoryName.toLocaleLowerCase() === "other"
+      || !Number.isInteger(allocationAmount)
+      || allocationAmount <= 0
+    ) {
+      return [];
+    }
+    const categoryBreakdown = expenseCategoryBreakdown.find(
+      (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+    );
+    const categoryDefinition = categories.find(
+      (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+    );
+    const budgetAmount = categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0;
+    const spentAmount = categoryBreakdown?.spentAmount ?? 0;
+    if (budgetAmount <= 0) return [];
+    return [{
+      category: categoryBreakdown?.category ?? categoryDefinition?.name ?? categoryName,
+      budgetAmount,
+      spentBeforeExpense: spentAmount,
+      ...getProjectedCategoryBalance({
+        budgetAmount,
+        spentAmount,
+        allocationAmount,
+      }),
+    }];
+  });
+  const hasBudgetedCategorySelection = categoryAllocations.some((allocation) => {
+    const categoryName = allocation.category.trim();
+    if (!categoryName || categoryName.toLocaleLowerCase() === "other") return false;
+    const categoryBreakdown = expenseCategoryBreakdown.find(
+      (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+    );
+    const categoryDefinition = categories.find(
+      (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+    );
+    return (categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0) > 0;
   });
   const fundingStatus = getExpenseFundingStatus({
     total: expenseTotal,
@@ -775,46 +940,6 @@ function ExpenseForm({
     window.location.assign(url);
   };
 
-  useEffect(() => {
-    if (logMode !== "simple") return;
-    setPaidFromBank(false);
-    setAllowMixedFunding(false);
-    setAdditionalDirectPortions([]);
-    setBankPortion("");
-    setSelectedBankAccountId(null);
-    setNotes("");
-    setIsRecurring(false);
-    if (isSharedWorkspace && currentUserId) setPaidBy(currentUserId);
-  }, [logMode, isSharedWorkspace, currentUserId]);
-
-  useEffect(() => {
-    if (logMode !== "simple") return;
-    setDirectPortion(amount);
-  }, [logMode, amount]);
-
-  useEffect(() => {
-    if (logMode !== "simple") return;
-    setIncomeSourceId(simpleIncomeSource?.id ?? null);
-  }, [logMode, simpleIncomeSource?.id]);
-
-  useEffect(() => {
-    if (!paidFromBank || !allowMixedFunding) return;
-    const total = Number(amount);
-    const direct = Number(directPortion);
-    const bank = Number(bankPortion);
-    if (!Number.isInteger(total) || total <= 0) return;
-
-    if (remainderAnchor === "direct" && Number.isInteger(direct) && direct > 0) {
-      const remainder = getFundingRemainder(total, direct);
-      setBankPortion(remainder > 0 ? String(remainder) : "");
-      return;
-    }
-    if (remainderAnchor === "bank" && Number.isInteger(bank) && bank > 0) {
-      const remainder = getFundingRemainder(total, bank);
-      setDirectPortion(remainder > 0 ? String(remainder) : "");
-    }
-  }, [allowMixedFunding, amount, bankPortion, directPortion, paidFromBank, remainderAnchor]);
-
   const handleAddBankAccount = async () => {
     const name = newBankAccountName.trim();
     const accountNumber = newBankAccountNumber.trim();
@@ -857,12 +982,16 @@ function ExpenseForm({
       const created = await createCategory.mutateAsync({
         data: { name, budgetAmount, priority: 1, isRecurring: true },
       });
-      setCategory(created.name);
+      setCategoryAllocations(current => {
+        const next = appendCreatedCategoryAllocation(current, created.name);
+        setCategory(next[0]?.category ?? created.name);
+        return next;
+      });
       setNewCategoryName("");
       setNewCategoryBudget("");
       setIsAddingCategory(false);
       await qc.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
-      toast({ title: "Category added", description: `${created.name} is selected for this expense.` });
+      toast({ title: "Category added", description: `${created.name} was added to this expense.` });
     } catch (error) {
       toast({
         variant: "destructive",
@@ -894,11 +1023,31 @@ function ExpenseForm({
         throw new Error("Could not create source");
       }
       const source: IncomeSource = await response.json();
-      setIncomeSourceId(source.id);
+      const shouldAddAsAnotherPortion = Boolean(incomeSourceId);
+      const incomeSourcesQueryKey = getGetIncomeSourcesQueryKey({ userId: payerId });
+
+      qc.setQueryData<IncomeSource[]>(incomeSourcesQueryKey, (previous = []) => [
+        ...previous.filter((item) => item.id !== source.id),
+        source,
+      ]);
+
+      if (shouldAddAsAnotherPortion) {
+        setAdditionalDirectPortions((previous) => previous.some((portion) => portion.sourceId === source.id)
+          ? previous
+          : [...previous, { sourceId: source.id, amount: "" }]);
+      } else {
+        setIncomeSourceId(source.id);
+        setDirectPortion("");
+      }
       setNewSourceName("");
       setIsAddingSource(false);
-      await qc.invalidateQueries({ queryKey: getGetIncomeSourcesQueryKey({ userId: payerId }) });
-      toast({ title: "Income source added", description: `${source.name} is selected for this expense.` });
+      await qc.invalidateQueries({ queryKey: incomeSourcesQueryKey });
+      toast({
+        title: "Income source added",
+        description: shouldAddAsAnotherPortion
+          ? `${source.name} was added. Enter the amount it funded.`
+          : `${source.name} is selected for this expense.`,
+      });
     } catch {
       toast({
         variant: "destructive",
@@ -935,6 +1084,22 @@ function ExpenseForm({
       });
       return;
     }
+    if (formMode === "normal" && !category.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Choose a category",
+        description: "Select the one category this expense covered.",
+      });
+      return;
+    }
+    if (formMode === "normal" && !normalIncomeSource) {
+      toast({
+        variant: "destructive",
+        title: "Income source required",
+        description: "Add an income source in Budget, or switch to Advanced to choose another funding method.",
+      });
+      return;
+    }
     const allocations = categoryAllocations.map((allocation) => ({ category: allocation.category.trim(), amount: Number(allocation.amount) }));
     const hasCategoryAllocation = allocations.some((allocation) => allocation.category);
     const allocationTotal = allocations.reduce((total, allocation) => total + allocation.amount, 0);
@@ -948,7 +1113,7 @@ function ExpenseForm({
       toast({
         variant: "destructive",
         title: "Note required",
-        description: "Add a note explaining what this Other expense was for.",
+        description: "Add a note explaining what this one-off expense was for.",
       });
       return;
     }
@@ -1131,23 +1296,128 @@ function ExpenseForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      <QuickLogModeCard
-        mode={logMode}
-        onChange={setLogMode}
-        hint="Simple keeps the essentials to hand. Use Advanced for splits, bank funding, notes, or recurring expenses."
-      />
-       {logMode === "advanced" && (
-       <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-         <p className="text-sm font-semibold text-foreground">1. Record the expense</p>
+      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 p-2">
+        <div>
+          <p className="text-sm font-bold text-foreground">Quick log mode</p>
+          <p className="text-xs text-muted-foreground">Standard keeps the essentials simple. Use Advanced for splits, bank funding, notes, or recurring expenses.</p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={formMode === "advanced" ? "default" : "outline"}
+          onClick={() => setFormMode(formMode === "normal" ? "advanced" : "normal")}
+          data-testid="quick-expense-mode-toggle"
+        >
+          {formMode === "normal" ? "Advanced" : "Normal"}
+        </Button>
+      </div>
+      {formMode === "normal" ? (
+        <div className="space-y-4" data-testid="quick-expense-normal-form">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
+            <Input
+              type="number"
+              min="1"
+              step="1"
+              placeholder="e.g. 2500"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              required
+              autoFocus
+              className="h-12 bg-card text-lg font-semibold"
+              data-testid="quick-expense-normal-amount"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground">Description</label>
+            <Input
+              placeholder="What was it for?"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              required
+              className="h-12 bg-card"
+              data-testid="quick-expense-normal-description"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground">Category</label>
+            <select
+              aria-label="Expense category"
+              value={category}
+              onChange={(event) => {
+                const nextCategory = event.target.value;
+                setCategory(nextCategory);
+                setCategoryAllocations(nextCategory ? [{ category: nextCategory, amount }] : [{ category: "", amount: "" }]);
+              }}
+              required
+              className="h-12 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              data-testid="quick-expense-normal-category"
+            >
+              <option value="">Select a category</option>
+              {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => (
+                <option key={item.id} value={item.name}>{item.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="quick-expense-normal-date-section">
+            <label htmlFor="quick-expense-normal-date" className="text-sm font-bold text-primary">
+              When did this happen? <span className="text-destructive">*</span>
+            </label>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              This date decides which month includes the expense in budgets, totals, and reports.
+            </p>
+            <Input
+              id="quick-expense-normal-date"
+              type="date"
+              value={date}
+              onChange={event => setDate(event.target.value)}
+              max={isSharedWorkspace && !canManageShared ? today : undefined}
+              required
+              className="h-11 bg-card"
+            />
+            {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
+          </div>
+          <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            This logs a one-time direct payment by you on the selected date, assigns the full whole-KES amount to this category, and uses your main income source{normalIncomeSource ? ` (${normalIncomeSource.name})` : ""}.
+          </div>
+          {!isIncomeSourcesLoading && !normalIncomeSource && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-sm font-semibold text-destructive">No income source is available for quick log.</p>
+              <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => setFormMode("advanced")}>
+                Switch to Advanced
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+       <div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3">
+         <p className="text-sm font-bold text-primary">1. Record the expense</p>
          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
            Enter the total once, then show what it covered and where the money came from.
          </p>
        </div>
-       )}
+       <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="expense-date-section-dashboard">
+         <label className="text-sm font-bold text-primary">
+           When did this happen? <span className="text-destructive">*</span>
+         </label>
+         <p className="text-xs leading-relaxed text-muted-foreground">
+           This date decides which month includes the expense in budgets, totals, and reports.
+         </p>
+         <Input
+           type="date"
+           value={date}
+           onChange={e => setDate(e.target.value)}
+           max={isSharedWorkspace && !canManageShared ? today : undefined}
+           required
+           className="h-11 bg-card"
+         />
+         {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
+       </div>
        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
-          <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => { setAmount(e.target.value); setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }] : current); }} min="1" required className="h-11 bg-card text-base" autoFocus />
+        <div className="space-y-1.5 rounded-xl border border-secondary/60 bg-secondary/10 p-3">
+          <label className="text-sm font-bold text-secondary-foreground">Expense total (KES)</label>
+           <Input type="number" placeholder="e.g. 2500" value={amount} onChange={e => setAmount(e.target.value)} min="1" required className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary sm:h-12" autoFocus data-testid="expense-total-dashboard" />
         </div>
          {!isOtherCategory && (
            <div className="space-y-1.5 lg:col-span-1">
@@ -1161,146 +1431,154 @@ function ExpenseForm({
              />
            </div>
          )}
-         {logMode === "simple" && (
-           <div className="space-y-1.5 sm:col-span-2 lg:col-span-4">
-             <label className="text-sm font-semibold text-foreground">Category</label>
-             <select
-               data-testid="quick-expense-simple-category"
-               value={category}
-               onChange={e => {
-                 setCategory(e.target.value);
-                 setCategoryAllocations([{ category: e.target.value, amount }]);
-               }}
-               className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-             >
-               <option value="">Select a category</option>
-               {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-             </select>
-           </div>
-         )}
-         {logMode === "advanced" && (
-         <div className="space-y-3 sm:col-span-2 lg:col-span-4 rounded-xl border border-border/60 bg-card p-4">
+          <div className="space-y-3 sm:col-span-2 lg:col-span-4 rounded-xl border border-primary/35 bg-primary/[0.04] p-4">
            <div>
-              <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
+                <label className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">2. What did this expense cover? <span className="ml-1 font-normal text-muted-foreground">(optional)</span></label>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Add a category to track this spending against a budget. You can also save it uncategorized.
+                 Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
              </p>
            </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-             <select
-               value={isOtherCategory ? "" : category}
+             <div className="space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                 aria-label="Expense category"
+                 value={isPrimaryOtherCategory ? "" : category}
                onChange={e => {
-                 setCategory(e.target.value);
-                  setCategoryAllocations(current => current.map((allocation, index) => index === 0 ? { ...allocation, category: e.target.value } : allocation));
-                 if (e.target.value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
+                 const nextCategory = e.target.value;
+                 setCategory(nextCategory);
+                 setCategoryAllocations(current => {
+                    const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                    const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                    if (!nextCategory) return oneOff ? [oneOff] : [{ category: "", amount: "" }];
+                   return [
+                      { category: nextCategory, amount: standardAllocations[0]?.amount ?? "" },
+                      ...standardAllocations.slice(1),
+                      ...(oneOff ? [oneOff] : []),
+                   ];
+                 });
+                 setSaveOtherAsCategory(false);
                }}
-               className="w-full h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-[72px] w-full flex-1 rounded-xl border-2 border-input bg-card px-6 py-4 text-base font-semibold leading-7 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
              >
-               <option value="">No category</option>
+                <option value="">Select a category</option>
                {categories
                  .filter(c => c.name.trim().toLocaleLowerCase() !== "other")
                  .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </select>
-             <Button
-               type="button"
-               variant={isOtherCategory ? "default" : "outline"}
-               className="h-11 shrink-0"
-               onClick={() => {
-                  setCategory(isOtherCategory ? "" : "Other");
-                  setCategoryAllocations(current => current.map((allocation, index) => index === 0 ? { ...allocation, category: isOtherCategory ? "" : "Other" } : allocation));
-                  if (isOtherCategory) setSaveOtherAsCategory(false);
-                 setIsAddingCategory(false);
-               }}
-                role="tab"
-                aria-controls="dashboard-other-expense-panel"
-                 aria-selected={isOtherCategory}
-               aria-pressed={isOtherCategory}
-             >
-               Other
-             </Button>
-          </div>
-            {isOtherCategory && (
-              <div id="dashboard-other-expense-panel" role="tabpanel" className="mt-3 space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                <label className="text-sm font-semibold text-foreground">Brief description</label>
-                <Input
-                  placeholder="Briefly describe this expense"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  required
-                  maxLength={120}
-                  className="h-11 bg-card"
-                  data-testid="other-brief-description"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
-                </p>
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-sm font-semibold text-foreground">
-                    Notes <span className="text-destructive">*</span>
+              </select>
+               {category.trim() && !isPrimaryOtherCategory && (
+                <div data-testid="primary-category-allocation-dashboard" className="sm:w-48">
+                  <label htmlFor="dashboard-primary-category-amount" className="sr-only">
+                    {`${category} amount (KES)`}
                   </label>
                   <Input
-                    placeholder="Explain what this Other expense was for"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
+                    id="dashboard-primary-category-amount"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={categoryAllocations[0]?.amount ?? ""}
+                    onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
+                    aria-label="KES amount covered by the primary category"
+                    aria-required="true"
                     required
-                    className="h-11 bg-card"
-                    data-testid="other-expense-notes"
+                    placeholder="Enter KES amount"
+                    className="h-14 w-full border-primary/45 bg-card font-semibold"
                   />
+                   <div
+                     role="status"
+                     aria-live="polite"
+                     data-testid="category-allocation-total-dashboard"
+                      className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
+                       categoryStatus.tone === "ready"
+                         ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                         : categoryStatus.tone === "error"
+                           ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                           : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                     }`}
+                   >
+                     {categoryStatus.message}
+                   </div>
                 </div>
-                {canManageCategories && <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={saveOtherAsCategory}
-                    onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="font-semibold">Save as a category if this repeats</span>
-                    <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
-                  </span>
-                </label>}
+              )}
               </div>
-            )}
-            {categoryAllocations.some((allocation) => allocation.category.trim()) && !(isOtherCategory && categoryAllocations.length === 1) && (
-             <div className="mt-3 space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
-             <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-foreground">Category breakdown</p>
-               <Button type="button" size="sm" variant="outline" onClick={() => setCategoryAllocations(current => [...current, { category: "", amount: "" }])} data-testid="add-category-allocation-dashboard"><Plus className="mr-1 h-3.5 w-3.5" /> Add category</Button>
+          </div>
+            {!hasStandardAdditionalCategory && (
+             <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+               <p className="text-xs text-muted-foreground">
+                 {category.trim() ? "Need to split this expense? Add another category and enter its share." : "Choose a category first, then add another category if this expense covers more than one."}
+               </p>
+               <Button type="button" size="sm" variant="outline" className="h-14 w-full justify-start sm:w-auto" disabled={!category.trim() || isPrimaryOtherCategory} onClick={() => setCategoryAllocations(current => {
+                 const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                 const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                 return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
+               })} data-testid="add-category-allocation-dashboard">
+                 <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
+               </Button>
              </div>
-             {categoryAllocations.map((allocation, index) => (
-               <div className="flex gap-2" key={index}>
-                 <select value={allocation.category.trim().toLocaleLowerCase() === "other" ? "" : allocation.category}
-                   onChange={(event) => { setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item)); if (index === 0) setCategory(event.target.value); }}
-                   aria-label={`Allocation category ${index + 1}`} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm">
-                   <option value="" disabled>Pick a category</option>
-                   {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index && selected.category === item.name)}>{item.name}</option>)}
-                 </select>
-                 <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"} onClick={() => { const value = allocation.category.trim().toLocaleLowerCase() === "other" ? "" : "Other"; setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: value } : item)); if (index === 0) setCategory(value); }} aria-label={`Other allocation ${index + 1}`}>Other</Button>
-                 <Input type="number" min="1" step="1" value={allocation.amount} onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} aria-label={`Allocation amount ${index + 1}`} className="h-10 w-24" />
-                 {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><X className="h-4 w-4" /></Button>}
-               </div>
-             ))}
-              {(() => {
+           )}
+            {hasStandardAdditionalCategory && (
+              <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
+               <div>
+                 <div>
+                   <p className="text-sm font-semibold text-foreground">Additional category breakdown</p>
+                   <p className="mt-0.5 text-xs font-medium text-foreground">Enter the amount for each additional category.</p>
+                 </div>
+             </div>
+              {categoryAllocations.slice(1).map((allocation, index) => {
+                if (allocation.category.trim().toLocaleLowerCase() === "other") return null;
                 return (
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    data-testid="category-allocation-total-dashboard"
-                    className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                      categoryStatus.tone === "ready"
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                        : categoryStatus.tone === "error"
-                          ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                          : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-                    }`}
-                  >
-                    {categoryStatus.message}
+                 <div className="space-y-2 rounded-lg border border-border/60 bg-card p-3" key={index}>
+                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <select value={allocation.category}
+                      onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
+                       aria-label={`Additional allocation category ${index + 2}`} className="h-[72px] min-w-0 flex-1 rounded-md border-2 border-input bg-card px-5 py-4 text-sm font-semibold leading-6">
+                       <option value="">Select a category</option>
+                      {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => <option key={item.id} value={item.name} disabled={categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>)}
+                    </select>
+                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                       <label htmlFor={`dashboard-additional-category-amount-${index}`} className="sr-only">
+                         {`${allocation.category || "Category"} amount (KES)`}
+                       </label>
+                       <Input
+                         id={`dashboard-additional-category-amount-${index}`}
+                         type="number"
+                         min="1"
+                         step="1"
+                         value={allocation.amount}
+                         onChange={(event) => setCategoryAllocations(current => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, amount: event.target.value } : item))}
+                         aria-label={`KES amount covered by allocation ${index + 2}`}
+                         aria-required="true"
+                         required
+                         placeholder="Enter KES amount"
+                          className="h-14 w-full border-primary/45 bg-card font-semibold"
+                       />
+                     </div>
+                     {categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => setCategoryAllocations(current => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><X className="h-4 w-4" /></Button>}
                   </div>
+                   <div
+                     role="status"
+                     aria-live="polite"
+                     data-testid="category-allocation-total-dashboard"
+                      className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
+                       categoryStatus.tone === "ready"
+                         ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                         : categoryStatus.tone === "error"
+                           ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                           : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                     }`}
+                   >
+                     {categoryStatus.message}
+                   </div>
+                </div>
                 );
-              })()}
+              })}
+              <Button type="button" size="sm" variant="outline" className="h-14 w-full justify-start sm:w-auto" onClick={() => setCategoryAllocations(current => {
+                const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
+              })}><Plus className="mr-1 h-3.5 w-3.5" /> Add another category</Button>
             </div>
             )}
-             {canManageCategories && !isOtherCategory && isAddingCategory && (
+             {canManageCategories && isAddingCategory && (
              <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
                <div>
                  <p className="text-sm font-semibold text-foreground">Create a category</p>
@@ -1329,11 +1607,11 @@ function ExpenseForm({
                </div>
              </div>
            )}
-             {canManageCategories && !isOtherCategory && (
+             {canManageCategories && (
               <Button
                 type="button"
                 variant="outline"
-                className="mt-2 h-11"
+                className="mt-2 h-14 w-full justify-start sm:w-auto"
                 onClick={() => setIsAddingCategory((open) => !open)}
                 aria-expanded={isAddingCategory}
               >
@@ -1341,60 +1619,168 @@ function ExpenseForm({
                 Create category
               </Button>
             )}
+             <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                 <Button
+                   type="button"
+                   variant={isOtherCategory ? "default" : "outline"}
+                    className={`h-14 w-full justify-start ${
+                      isOtherCategory
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:bg-primary"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+                    }`}
+                   onClick={() => {
+                     setCategoryAllocations(current => {
+                       const existingOneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                       if (existingOneOff) {
+                         const remaining = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                         return remaining.length ? remaining : [{ category: "", amount: "" }];
+                       }
+                       const retained = current.length === 1 && !current[0]?.category.trim() ? [] : current;
+                       return [...retained, { category: "Other", amount: "" }];
+                     });
+                     setSaveOtherAsCategory(false);
+                   }}
+                   aria-label={isOtherCategory ? "Remove one-off spending category" : "Select one-off spending category"}
+                   aria-pressed={isOtherCategory}
+                   data-testid="one-off-spending-category-dashboard"
+                 >
+                   {isOtherCategory ? "Remove One-off spending" : "One-off spending"}
+                 </Button>
+                 {isOtherCategory && (
+                   <div data-testid="one-off-category-allocation-dashboard" className="sm:w-48">
+                     <label htmlFor="dashboard-one-off-category-amount" className="sr-only">One-off spending amount (KES)</label>
+                     <Input
+                       id="dashboard-one-off-category-amount"
+                       type="number"
+                       min="1"
+                       step="1"
+                       value={categoryAllocations[otherCategoryIndex]?.amount ?? ""}
+                       onChange={(event) => setCategoryAllocations(current => current.map((item, index) => index === otherCategoryIndex ? { ...item, amount: event.target.value } : item))}
+                       aria-label="KES amount for one-off spending"
+                       aria-required="true"
+                       required
+                       placeholder="Enter KES amount"
+                       className="h-14 w-full border-primary/45 bg-card font-semibold"
+                     />
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        data-testid="category-allocation-total-dashboard"
+                        className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
+                          categoryStatus.tone === "ready"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                            : categoryStatus.tone === "error"
+                              ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                              : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                        }`}
+                      >
+                        {categoryStatus.message}
+                      </div>
+                   </div>
+                 )}
+               </div>
+               <p className="text-xs leading-relaxed text-muted-foreground">
+                 Use One-off spending as the last category when part of this expense does not fit any listed category.
+               </p>
+               {isOtherCategory && (
+                 <div id="dashboard-other-expense-panel" role="tabpanel" className="space-y-1.5 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                   <label className="text-sm font-semibold text-foreground">Brief description</label>
+                   <Input
+                     placeholder="Briefly describe this expense"
+                     value={description}
+                     onChange={e => setDescription(e.target.value)}
+                     required
+                     maxLength={120}
+                     className="h-11 bg-card"
+                     data-testid="other-brief-description"
+                   />
+                   <p className="text-xs text-muted-foreground">
+                     Explain what the one-off portion covered. If it repeats, save it as a category so it is easy to budget and find next time.
+                   </p>
+                   <div className="space-y-1.5 pt-1">
+                     <label className="text-sm font-semibold text-foreground">
+                       Notes <span className="text-destructive">*</span>
+                     </label>
+                     <Input
+                       placeholder="Explain what this one-off spending was for"
+                       value={notes}
+                       onChange={e => setNotes(e.target.value)}
+                       required
+                       className="h-11 bg-card"
+                       data-testid="other-expense-notes"
+                     />
+                   </div>
+                   {canManageCategories && <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+                     <input
+                       type="checkbox"
+                       checked={saveOtherAsCategory}
+                       onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
+                       className="mt-0.5 h-4 w-4 accent-primary"
+                     />
+                     <span>
+                       <span className="font-semibold">Save as a category if this repeats</span>
+                       <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
+                     </span>
+                   </label>}
+                 </div>
+               )}
+                {categoryAllocations.some((allocation) => allocation.category.trim()) && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    data-testid="category-allocation-total-dashboard-end"
+                    className="mt-3 rounded-lg border border-border/60 bg-muted/25 px-4 py-3 text-sm font-semibold leading-6 text-foreground"
+                  >
+                    {categoryStatus.message}
+                  </div>
+                )}
+             </div>
         </div>
-         )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-         {logMode === "advanced" && !isOtherCategory && (
-           <div className="space-y-1.5">
-             <label className="text-sm font-semibold text-foreground">
-               Notes <span className="font-normal text-muted-foreground">(optional)</span>
-             </label>
-             <Input
-               placeholder="Any extra details…"
-               value={notes}
-               onChange={e => setNotes(e.target.value)}
-               className="h-11 bg-card"
-             />
-           </div>
-         )}
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">Date <span className="text-destructive">*</span></label>
-          <Input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            max={isSharedWorkspace && !canManageShared ? today : undefined}
-            className="h-11 bg-card"
-          />
-          {isSharedWorkspace && !canManageShared && <p className="text-xs text-muted-foreground">Members can record expenses for today only.</p>}
-        </div>
-      </div>
-      {logMode === "advanced" && (
-      <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
-        <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
+       {!isOtherCategory && (
+         <div className="space-y-1.5">
+           <label className="text-sm font-semibold text-foreground">
+             Notes <span className="font-normal text-muted-foreground">(optional)</span>
+           </label>
+           <Input
+             placeholder="Any extra details…"
+             value={notes}
+             onChange={e => setNotes(e.target.value)}
+             className="h-11 bg-card"
+           />
+         </div>
+       )}
+       <div className="space-y-4 rounded-xl border border-secondary/60 bg-secondary/[0.08] p-4">
+         <div className="space-y-4 rounded-xl border border-secondary/40 bg-secondary/[0.04] p-4">
           <div>
-             <p className="text-sm font-semibold text-foreground">3. How was this expense funded?</p>
+               <p className="inline-flex rounded-full border border-secondary/50 bg-secondary/20 px-3 py-1 text-sm font-bold text-secondary-foreground">3. How was this expense funded?</p>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
           </div>
-           {expenseTotal > 0 && (
-             <div
-               role="status"
-               aria-live="polite"
-               data-testid="quick-expense-funding-summary"
-               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                 fundingStatus.tone === "ready"
-                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                   : fundingStatus.tone === "error"
-                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-               }`}
-             >
-               {fundingStatus.message}
-             </div>
-           )}
+             {(categoryBalancePreviews.length > 0 || hasBudgetedCategorySelection) && (
+              <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3" data-testid="quick-expense-category-balance-preview">
+                <p className="text-xs font-bold uppercase tracking-wide text-primary">Category balances after this expense</p>
+                 {categoryBalancePreviews.length > 0 ? (
+                   <>
+                     {categoryBalancePreviews.map((preview) => (
+                       <div key={preview.category} className="flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                         <span className="font-semibold text-foreground">{preview.category}</span>
+                         <span className={preview.isOverBudget ? "font-semibold text-destructive" : "font-semibold text-emerald-700 dark:text-emerald-300"}>
+                           {preview.isOverBudget
+                             ? `${formatKes(preview.overBy)} over budget`
+                             : `${formatKes(preview.remaining)} left of ${formatKes(preview.budgetAmount)}`}
+                         </span>
+                       </div>
+                     ))}
+                     <p className="text-xs text-muted-foreground">These running balances use each category amount entered above.</p>
+                   </>
+                 ) : (
+                   <p className="text-xs text-muted-foreground">Enter the amount covered by each category above to see its running balance here.</p>
+                 )}
+              </div>
+            )}
            {isSharedWorkspace && (!paidFromBank || allowMixedFunding) && (
              <div className="space-y-2">
                <div>
@@ -1446,16 +1832,21 @@ function ExpenseForm({
                     setAllowMixedFunding(false);
                     setSelectedBankAccountId(null);
                     setBankPortion("");
-                    setRemainderAnchor("direct");
                    } else if (mode === "bank") {
+                     const directTotal = (Number(directPortion) || 0)
+                       + additionalDirectPortions.reduce((sum, portion) => sum + (Number(portion.amount) || 0), 0);
+                      const hasDirectSelection = Boolean(incomeSourceId || directTotal > 0 || additionalDirectPortions.length > 0);
                      setPaidFromBank(true);
-                     setAllowMixedFunding(false);
-                     setPaidBy("");
-                     setIncomeSourceId(null);
-                     setDirectPortion("");
-                     setAdditionalDirectPortions([]);
-                     setBankPortion(amount);
-                     setRemainderAnchor("bank");
+                     setAllowMixedFunding(hasDirectSelection);
+                     if (hasDirectSelection) {
+                        setBankPortion("");
+                     } else {
+                       setPaidBy("");
+                       setIncomeSourceId(null);
+                       setDirectPortion("");
+                       setAdditionalDirectPortions([]);
+                       setBankPortion("");
+                     }
                    }
                 }}
                  className={`w-full p-3 text-left transition-colors ${
@@ -1496,37 +1887,6 @@ function ExpenseForm({
                    ) : (
                      <p className="text-xs text-muted-foreground">No income sources set up yet. Add one from Budget.</p>
                    )}
-                   {payerId && (
-                     <div className="flex flex-wrap items-center gap-2">
-                       {isAddingSource ? (
-                         <>
-                           <Input
-                             autoFocus
-                             placeholder="e.g. Freelance work"
-                             value={newSourceName}
-                             onChange={e => setNewSourceName(e.target.value)}
-                             onKeyDown={e => {
-                               if (e.key === "Enter") {
-                                 e.preventDefault();
-                                 void handleAddSource();
-                               }
-                             }}
-                             className="h-10 w-52 bg-card"
-                           />
-                           <Button type="button" size="sm" className="h-10" onClick={() => void handleAddSource()}>
-                             Save source
-                           </Button>
-                           <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingSource(false); setNewSourceName(""); }}>
-                             Cancel
-                           </Button>
-                         </>
-                       ) : (
-                         <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingSource(true)}>
-                           + New source
-                         </Button>
-                       )}
-                     </div>
-                   )}
                    {incomeSourceId && (
                       <div className="space-y-2">
                         <label className="block space-y-1.5 text-sm font-semibold text-foreground">
@@ -1536,35 +1896,11 @@ function ExpenseForm({
                             min="1"
                             step="1"
                             value={directPortion}
-                            onChange={(event) => {
-                              setRemainderAnchor("direct");
-                              setDirectPortion(event.target.value);
-                            }}
+                             onChange={(event) => setDirectPortion(event.target.value)}
                             placeholder="KES 0"
                             className="h-11 bg-card"
                           />
                         </label>
-                        {additionalDirectPortions.map((portion, index) => {
-                          const source = incomeSources.find((item) => item.id === portion.sourceId);
-                          return (
-                            <div key={portion.sourceId} className="flex items-center gap-2 rounded-lg border border-border/60 bg-card p-2">
-                              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{source?.name ?? "Income source"}</span>
-                              <Input
-                                type="number"
-                                min="1"
-                                step="1"
-                                value={portion.amount}
-                                onChange={(event) => setAdditionalDirectPortions((previous) => previous.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, amount: event.target.value } : item,
-                                ))}
-                                className="h-10 w-32 bg-card"
-                              />
-                              <Button type="button" size="sm" variant="ghost" onClick={() => setAdditionalDirectPortions((previous) => previous.filter((_, itemIndex) => itemIndex !== index))}>
-                                Remove
-                              </Button>
-                            </div>
-                          );
-                        })}
                         {(() => {
                           const total = Number(amount) || 0;
                           const assigned = (Number(directPortion) || 0)
@@ -1577,30 +1913,13 @@ function ExpenseForm({
                           );
                           return total > 0 ? (
                             <div className="space-y-2">
-                              <div
-                                role="status"
-                                data-testid="quick-expense-funding-remainder"
-                                className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                                  difference > 0
-                                    ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-                                    : difference < 0
-                                      ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                                      : "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                                }`}
-                              >
-                                {difference > 0
-                                  ? `${formatKes(difference)} remaining`
-                                  : difference < 0
-                                    ? `Overfunded by ${formatKes(Math.abs(difference))}`
-                                    : "Fully funded"}
-                              </div>
                               {difference > 0 && availableSources.length > 0 && (
                                 <select
                                   value=""
                                   onChange={(event) => {
                                     const sourceId = Number(event.target.value);
                                     if (!sourceId) return;
-                                    setAdditionalDirectPortions((previous) => [...previous, { sourceId, amount: String(difference) }]);
+                                    setAdditionalDirectPortions((previous) => [...previous, { sourceId, amount: "" }]);
                                   }}
                                   className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
                                 >
@@ -1614,11 +1933,67 @@ function ExpenseForm({
                             </div>
                           ) : null;
                         })()}
+                         {additionalDirectPortions.map((portion, index) => {
+                           const source = incomeSources.find((item) => item.id === portion.sourceId);
+                           return (
+                             <div key={portion.sourceId} className="space-y-1.5 rounded-lg border border-border/60 bg-card p-2">
+                               <span className="block min-w-0 truncate text-sm font-semibold">{source?.name ?? "Income source"}</span>
+                               <div className="flex items-center gap-2">
+                                 <Input
+                                   autoFocus={index === additionalDirectPortions.length - 1}
+                                   type="number"
+                                   min="1"
+                                   step="1"
+                                   value={portion.amount}
+                                   onChange={(event) => setAdditionalDirectPortions((previous) => previous.map((item, itemIndex) =>
+                                     itemIndex === index ? { ...item, amount: event.target.value } : item,
+                                   ))}
+                                   placeholder="KES 0"
+                                   className="h-10 min-w-0 flex-1 bg-card"
+                                 />
+                                 <Button type="button" size="sm" variant="ghost" onClick={() => setAdditionalDirectPortions((previous) => previous.filter((_, itemIndex) => itemIndex !== index))}>
+                                   Remove
+                                 </Button>
+                               </div>
+                             </div>
+                           );
+                         })}
                       </div>
                    )}
                    <p className="text-xs text-muted-foreground">
                      Paid directly means this expense is linked to the selected income source and does not reduce any Jamvi bank-account balance.
                    </p>
+                    {payerId && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {isAddingSource ? (
+                          <>
+                            <Input
+                              autoFocus
+                              placeholder="e.g. Freelance work"
+                              value={newSourceName}
+                              onChange={e => setNewSourceName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  void handleAddSource();
+                                }
+                              }}
+                              className="h-10 w-52 bg-card"
+                            />
+                            <Button type="button" size="sm" className="h-10" onClick={() => void handleAddSource()}>
+                              Save source
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingSource(false); setNewSourceName(""); }}>
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingSource(true)}>
+                            + New source
+                          </Button>
+                        )}
+                      </div>
+                    )}
                  </div>
                )}
              </div>
@@ -1634,15 +2009,33 @@ function ExpenseForm({
                 onChange={(event) => setSelectedBankAccountId(event.target.value ? Number(event.target.value) : null)}
                 className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="">{bankAccounts.length ? "Choose the account used" : "No bank accounts available"}</option>
+                 <option value="">{bankAccounts.length ? "Choose the account used" : "Create a bank account below"}</option>
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
+               {selectedBankAccountId && (
+                 <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                   Type the amount from this account to confirm
+                   <Input
+                     type="number"
+                     min="1"
+                     step="1"
+                     value={bankPortion}
+                     onChange={(event) => setBankPortion(event.target.value)}
+                     placeholder="KES 0"
+                     className="h-11 bg-card"
+                     data-testid="quick-expense-bank-amount"
+                   />
+                   <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
+                     Enter the full expense amount to confirm how much should reduce the selected account.
+                   </span>
+                 </label>
+               )}
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Jamvi will record a withdrawal from this account. The money should already exist there as an opening balance or recorded deposit.
               </p>
-              {bankAccounts.length === 0 && (
-                <p className="text-xs font-medium text-muted-foreground">Create a bank account here to continue without leaving this expense.</p>
-              )}
+               {bankAccounts.length === 0 && (
+                 <p className="text-xs font-medium text-foreground">No bank account yet. Create one below and Jamvi will select it for this expense automatically.</p>
+               )}
               {isAddingBankAccount ? (
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Input
@@ -1663,29 +2056,9 @@ function ExpenseForm({
                   </Button>
                 </div>
               ) : (
-                <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)}>
-                  + New bank account
+                 <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)} data-testid="create-bank-account-inline-dashboard">
+                   {bankAccounts.length === 0 ? "Create bank account" : "+ New bank account"}
                 </Button>
-              )}
-              {paidFromBank && (
-                <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-                  Type the amount from this account to confirm
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={bankPortion}
-                    onChange={(event) => {
-                      setRemainderAnchor("bank");
-                      setBankPortion(event.target.value);
-                    }}
-                    placeholder="KES 0"
-                    className="h-11 bg-card"
-                  />
-                  <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                     Enter the full expense amount to confirm how much should reduce the selected account.
-                  </span>
-                </label>
               )}
               {projectedExpenseBankBalance !== null && projectedExpenseBankBalance < 0 && (
                 <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100" role="alert" data-testid="quick-expense-negative-bank-warning">
@@ -1699,10 +2072,7 @@ function ExpenseForm({
                   size="sm"
                   variant="outline"
                   className="h-10 border-sky-300 bg-white/70 text-sky-800 hover:bg-white dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
-                  onClick={() => {
-                    setAllowMixedFunding(true);
-                    setRemainderAnchor("bank");
-                  }}
+                  onClick={() => setAllowMixedFunding(true)}
                   data-testid="quick-expense-add-funding-source"
                 >
                   <Plus className="mr-1.5 h-4 w-4" />
@@ -1741,18 +2111,32 @@ function ExpenseForm({
               <span className="block text-xs font-normal text-muted-foreground">This becomes the recurring monthly budget for the selected category.</span>
             </label>
           )}
+           {expenseTotal > 0 && (
+             <div
+               role="status"
+               aria-live="polite"
+               data-testid="quick-expense-funding-summary"
+               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                 fundingStatus.tone === "ready"
+                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                   : fundingStatus.tone === "error"
+                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+               }`}
+             >
+               {fundingStatus.message}
+             </div>
+           )}
         </div>
       </div>
-      )}
-      {logMode === "simple" && (
-        <p className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-          This logs a one-time direct payment by you on the selected date, assigns
-          the full whole-KES amount to this category
-          {simpleIncomeSource ? `, and uses your income source (${simpleIncomeSource.name})` : ""}.
-        </p>
+        </>
       )}
       <div className="flex gap-3">
-        <Button type="submit" className="h-11 rounded-xl bg-warning px-6 text-warning-foreground hover:bg-warning/90" disabled={createExpense.isPending}>
+        <Button
+          type="submit"
+          className="h-11 rounded-xl bg-warning px-6 text-warning-foreground hover:bg-warning/90"
+          disabled={createExpense.isPending || (formMode === "normal" && (isIncomeSourcesLoading || !normalIncomeSource))}
+        >
           {createExpense.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
           Log Expense
         </Button>
@@ -1923,12 +2307,18 @@ function GoalForm({
 // ── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const [selectedPeriod, setSelectedPeriod] = useState({ month: currentMonth, year: currentYear });
+  const { month, year } = selectedPeriod;
   const [location] = useLocation();
   const requestedQuickAction = getQuickActionFromLocation(location);
   const [activeAction, setActiveAction] = useState<QuickAction>(() => requestedQuickAction ?? "none");
   const { user } = useAuth();
+  const [deleteTarget, setDeleteTarget] = useState<DashboardDeleteTarget | null>(null);
+  const deleteExpense = useDeleteExpense();
+  const qc = useQueryClient();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!requestedQuickAction) return;
@@ -1963,6 +2353,7 @@ export default function Dashboard() {
 
   const { data: summary, isLoading: isSummaryLoading, isError: isSummaryError } = useGetDashboardSummary({ month, year });
   const { data: activity, isLoading: isActivityLoading } = useGetDashboardActivity();
+  const { data: monthlyExpenses = [] } = useGetExpenses({ month, year });
   const { data: group } = useGetGroup();
   const isSharedWorkspace = group?.isPrivate === false;
   const { data: breakdown, isLoading: isBreakdownLoading } = useGetDashboardCategoryBreakdown(
@@ -1988,7 +2379,42 @@ export default function Dashboard() {
   );
   const canManageShared = isSharedWorkspace && canManageSetup;
   const canManageCategories = group?.isPrivate === true || canManageShared;
+  const canManageExpenses = group?.isPrivate === true || canManageShared;
   const canManageBank = canManageBankAccount(group);
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const editableUncategorizedExpenses = (monthlyExpenses as DashboardExpense[])
+    .filter(isUncategorizedExpense)
+    .filter((expense) => {
+      if (canManageExpenses) return true;
+      if (!user?.id || expense.date.slice(0, 10) !== today || expense.paidById !== user.id) return false;
+      if (expense.paidFromBank || expense.isRecurring) return false;
+      return !(expense.incomeSplits ?? []).some(
+        (split) => split.fromBank || (split.userId && split.userId !== user.id),
+      );
+    });
+
+  const removeDashboardExpense = async () => {
+    if (!deleteTarget || deleteExpense.isPending) return;
+    try {
+      await deleteExpense.mutateAsync({ id: deleteTarget.id });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+        qc.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() }),
+        qc.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
+        qc.invalidateQueries({ queryKey: getGetDashboardTrendsQueryKey({ months: 6 }) }),
+        qc.invalidateQueries({ queryKey: getGetExpensesQueryKey() }),
+      ]);
+      setDeleteTarget(null);
+      toast({ title: "Expense removed", description: `${deleteTarget.description} was removed from this budget.` });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Could not remove expense",
+        description: "Refresh the dashboard and try again.",
+      });
+    }
+  };
 
   // Compute this-month totals from the transactions array
   const monthlyDeposited = bankAccount?.transactions
@@ -2075,18 +2501,22 @@ export default function Dashboard() {
         Home · Start here
       </div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <ProfileAvatar user={user} className="h-12 w-12 sm:h-14 sm:w-14" textClassName="text-lg" alt={user?.firstName ?? "User"} />
-          <div>
+          <div className="min-w-0 flex-1">
           <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
             {isSharedWorkspace ? "Shared budget" : "Personal budget"}
           </p>
           <h1 className="mt-1 text-2xl font-display font-bold text-foreground sm:text-3xl">
             {group?.isPrivate ? "Personal overview" : "Group overview"}
           </h1>
-          <p className="mt-1 text-muted-foreground">
-            {new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(now)}
-          </p>
+           <DashboardMonthNavigator
+             month={month}
+             year={year}
+             currentMonth={currentMonth}
+             currentYear={currentYear}
+             onChange={setSelectedPeriod}
+           />
           </div>
         </div>
 
@@ -2138,39 +2568,51 @@ export default function Dashboard() {
         </section>
       </div>
 
-      {isSharedWorkspace && (
-        <section aria-labelledby="group-overview-shortcuts-heading" className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
-          <div className="mb-4">
-            <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Group overview</p>
-            <h2 id="group-overview-shortcuts-heading" className="mt-1 font-display text-xl font-bold text-foreground">
-              Go straight to a budget area
-            </h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Open the shared budget, contributions, expenses, goals, bank, or reports without hunting through the menu.
-            </p>
+       <WorkspaceSetupGuide userId={user?.id} />
+
+      <AskJamviPanel month={month} year={year} workspaceName={group?.name ?? undefined} />
+
+      {editableUncategorizedExpenses.length > 0 && (
+        <section
+          aria-labelledby="uncategorized-expenses-heading"
+          aria-live="polite"
+          data-testid="uncategorized-expense-cta"
+          className="rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/35 sm:p-5"
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">
+              <BellRing className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-amber-800 dark:text-amber-200">Needs your attention</p>
+              <h2 id="uncategorized-expenses-heading" className="mt-1 font-display text-lg font-bold text-foreground">
+                {editableUncategorizedExpenses.length} expense{editableUncategorizedExpenses.length === 1 ? "" : "s"} waiting for a category
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Categorize these expenses so category budgets and reports show where the money went.
+              </p>
+            </div>
           </div>
-          <nav aria-label="Group overview shortcuts" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            {SHARED_OVERVIEW_SHORTCUTS.map((shortcut) => {
-              const ShortcutIcon = shortcut.icon;
-              return (
-                <Link
-                  key={shortcut.href}
-                  href={shortcut.href}
-                  data-testid={`overview-shortcut-${shortcut.label.toLowerCase()}`}
-                  className="group flex min-h-20 min-w-0 items-center gap-3 rounded-xl border border-border/80 bg-background px-3 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <ShortcutIcon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block w-full whitespace-normal break-words text-sm font-bold leading-tight text-foreground">{shortcut.label}</span>
-                    <span className="mt-1 block w-full whitespace-normal break-words text-xs leading-tight text-muted-foreground">{shortcut.description}</span>
-                  </span>
-                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          <div className="mt-4 space-y-2">
+            {editableUncategorizedExpenses.slice(0, 3).map((expense) => (
+              <div key={expense.id} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-card px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/70">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">{expense.description}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{formatKes(expense.amount)} · {formatDate(expense.date)}</p>
+                </div>
+                <Link href={`/expenses?edit=${expense.id}&month=${month}&year=${year}`}>
+                  <Button size="sm" className="w-full shrink-0 sm:w-auto" data-testid={`categorize-expense-${expense.id}`}>
+                    Categorize now
+                  </Button>
                 </Link>
-              );
-            })}
-          </nav>
+              </div>
+            ))}
+          </div>
+          {editableUncategorizedExpenses.length > 3 && (
+            <Link href="/expenses" className="mt-3 inline-flex text-sm font-semibold text-amber-900 underline-offset-4 hover:underline dark:text-amber-100">
+              Review all {editableUncategorizedExpenses.length} uncategorized expenses
+            </Link>
+          )}
         </section>
       )}
 
@@ -2468,6 +2910,21 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground">this month</p>
               </div>
             </div>
+             {bankAccount && bankAccount.balance < 0 && (
+               <div
+                 role="alert"
+                 data-testid="overview-negative-bank-balance-warning"
+                 className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
+               >
+                 <p className="flex items-center gap-2 font-semibold">
+                   <Flag className="h-4 w-4 fill-current" />
+                   Bank balance is below zero
+                 </p>
+                 <p className="mt-1">
+                   The selected budget is short by {formatKes(Math.abs(bankAccount.balance))}. Jamvi keeps the withdrawal recorded so the shortfall stays visible until money is deposited.
+                 </p>
+               </div>
+             )}
           </CardContent>
         </Card>
       </Link>
@@ -2487,7 +2944,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-1">
                 <p className="font-semibold text-foreground">{nearestGoal.name}</p>
                 {nearestGoal.deadline && (
-                  <p className="text-xs text-muted-foreground">by {new Date(nearestGoal.deadline).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  <p className="text-xs text-muted-foreground">by {formatDate(nearestGoal.deadline)}</p>
                 )}
               </div>
               <div className="flex justify-between text-sm mb-1">
@@ -2542,7 +2999,24 @@ export default function Dashboard() {
               {activity.length > 0 ? (
                 <div className="space-y-1">
                   {activity.slice(0, 6).map((item) => (
-                    <DashboardActivityRow key={item.id} item={item} compact bankLabel="Bank account" />
+                    <DashboardActivityRow
+                      key={item.id}
+                      item={item}
+                      compact
+                      bankLabel="Bank account"
+                      onRemove={
+                        canManageExpenses
+                        && item.type === ACTIVITY_TYPE.EXPENSE
+                        && getActivityRecordTarget(item)?.target === "expense"
+                          ? () => {
+                              const target = getActivityRecordTarget(item);
+                              if (target?.target === "expense") {
+                                setDeleteTarget({ id: target.id, description: item.description });
+                              }
+                            }
+                          : undefined
+                      }
+                    />
                   ))}
                 </div>
               ) : (
@@ -2554,6 +3028,37 @@ export default function Dashboard() {
       )}
 
       {group?.isPrivate && <SharedGroupsFooter />}
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteExpense.isPending) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{`Remove this expense from "${budgetName}"?`}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `"${deleteTarget.description}" and its effect on balances, reports, and activity in "${budgetName}" will be removed. This cannot be undone.`
+                : `This expense will be removed from "${budgetName}".`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteExpense.isPending}>Keep expense</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteExpense.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void removeDashboardExpense();
+              }}
+            >
+              {deleteExpense.isPending ? "Removing…" : "Remove expense"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

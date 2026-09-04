@@ -7,7 +7,7 @@
  */
 
 export interface BankChargeInput {
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /**
      * Required explanation from the bank statement, for example monthly account fee

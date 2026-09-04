@@ -18,3 +18,21 @@ export function shouldShowBudgetChooser({
   if (/^\/(?:invite|join)\/[^/]+\/?$/.test(appPath)) return false;
   return requiresSelection || !completed;
 }
+
+export function hasFinishedOnboarding({
+  serverCompleted,
+  serverStarted,
+  localCompleted,
+  hasExistingBudget,
+  hasSavedDraft,
+}: {
+  serverCompleted: boolean;
+  serverStarted: boolean;
+  localCompleted: boolean;
+  hasExistingBudget: boolean;
+  hasSavedDraft: boolean;
+}): boolean {
+  if (serverCompleted) return true;
+  if (serverStarted || hasSavedDraft) return false;
+  return localCompleted || hasExistingBudget;
+}

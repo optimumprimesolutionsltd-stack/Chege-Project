@@ -30,6 +30,7 @@ import {
   useCreateBankCharge,
   useUpdateJointAccountTransaction,
   useDeleteJointAccountTransaction,
+  useDeleteExpense,
   useGetBudgetCategories,
   getGetBudgetCategoriesQueryKey,
   useGetMembers,
@@ -47,6 +48,7 @@ import {
   useUpdateJointAccount,
   useDeleteJointAccount,
   getGetJointAccountsQueryKey,
+  getGetExpensesQueryKey,
   customFetch,
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -54,6 +56,8 @@ import { useAuth } from '@/lib/auth';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
 import { getProjectedBalanceAfterOutgoing } from '@/lib/bankBalance';
+import { workspaceBudgetName } from '@/lib/workspaceIdentity';
+import { formatDisplayDate } from '@/lib/displayFormat';
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -70,10 +74,15 @@ function formatDateTime(s?: string | null): string {
   );
 }
 
+function formatBankDate(s?: string | null): string {
+  return formatDisplayDate(s);
+}
+
 type Tx = {
   id: number;
   type: string;
   amount: number;
+  runningBalance?: number | null;
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
@@ -83,6 +92,7 @@ type Tx = {
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
   transferDirection?: string | null;
+  expenseId?: number | null;
   bankTransferId?: string | null;
   bankTransferAccountId?: number | null;
   bankTransferAccountName?: string | null;
@@ -97,6 +107,17 @@ type MemberIncomeSource = {
   id: number;
   name: string;
 };
+
+function parseBankAmount(value: string): number | null {
+  const normalized = value.trim().replace(/,/g, '');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toCents(value: number): number {
+  return Math.round(value * 100);
+}
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -141,6 +162,8 @@ export default function BankScreen() {
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [openingBalanceModalVisible, setOpeningBalanceModalVisible] = useState(false);
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState('');
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(todayIso());
+  const [showOpeningBalanceDatePicker, setShowOpeningBalanceDatePicker] = useState(false);
   const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [accountNameDraft, setAccountNameDraft] = useState('');
@@ -180,6 +203,7 @@ export default function BankScreen() {
   const { mutateAsync: createBankCharge } = useCreateBankCharge();
   const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
+  const { mutateAsync: deleteExpense } = useDeleteExpense();
   const { mutateAsync: transferBankToSavings } = useTransferBankToSavings();
   const { mutateAsync: transferSavingsToBank } = useTransferSavingsToBank();
   const { mutateAsync: transferBankToBank } = useTransferBankToBank();
@@ -190,10 +214,12 @@ export default function BankScreen() {
   const { data: categories = [] } = useGetBudgetCategories();
   const { data: members = [] } = useGetMembers();
   const isSharedWorkspace = group?.isPrivate === false;
+  const budgetName = workspaceBudgetName(group);
   const canManageAccount = canManageBankAccount(group);
   const canManageShared = isSharedWorkspace && canManageAccount;
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId)
     ?? accounts[0];
+  const hasBankAccounts = accounts.length > 0;
 
   useEffect(() => {
     if (!accountStorageKey) return;
@@ -282,9 +308,9 @@ export default function BankScreen() {
   };
 
   useEffect(() => {
-    if ((shortcut !== 'deposit' && shortcut !== 'bank-transfer') || handledShortcut.current === shortcut) return;
+    if ((shortcut !== 'deposit' && shortcut !== 'withdraw' && shortcut !== 'bank-transfer') || handledShortcut.current === shortcut) return;
     handledShortcut.current = shortcut;
-    openModal(shortcut === 'bank-transfer' ? 'bank_transfer' : 'deposit');
+    openModal(shortcut === 'bank-transfer' ? 'bank_transfer' : shortcut === 'withdraw' ? 'disbursement' : 'deposit');
   }, [shortcut]);
 
   const closeModal = () => {
@@ -300,6 +326,7 @@ export default function BankScreen() {
     queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
   };
 
   const invalidateAccounts = async () => {
@@ -339,7 +366,7 @@ export default function BankScreen() {
 
   const removeAccount = (accountId: number) => {
     const account = accounts.find((item) => item.id === accountId);
-    Alert.alert('Remove bank account', `Remove "${account?.name ?? 'this account'}"? Accounts with transactions cannot be removed.`, [
+    Alert.alert('Remove bank account', `Remove "${account?.name ?? 'this account'}" from "${budgetName}"? Accounts with transactions cannot be removed.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -365,6 +392,7 @@ export default function BankScreen() {
 
   const openOpeningBalanceEditor = () => {
     setOpeningBalanceDraft(String(data?.openingBalance ?? 0));
+    setOpeningBalanceDate(data?.openingBalanceDate ?? todayIso());
     setOpeningBalanceModalVisible(true);
   };
 
@@ -373,15 +401,17 @@ export default function BankScreen() {
   };
 
   const handleOpeningBalanceSubmit = async () => {
-    const value = Number(openingBalanceDraft);
-    if (!Number.isInteger(value) || value < 0) {
-      Alert.alert('Enter a whole KES amount', 'The opening balance must be zero or more whole shillings.');
+    const value = parseBankAmount(openingBalanceDraft);
+    if (value === null || value < 0) {
+      Alert.alert('Enter a valid KES amount', 'Use zero or more, with up to two decimal places.');
       return;
     }
 
     setSavingOpeningBalance(true);
     try {
-      await updateOpeningBalance({ data: { openingBalance: value, accountId: selectedAccountId ?? undefined } });
+      await updateOpeningBalance({
+        data: { openingBalance: value, openingBalanceDate, accountId: selectedAccountId ?? undefined },
+      });
       setOpeningBalanceModalVisible(false);
       await invalidateBalance();
       Alert.alert('Opening balance saved', 'The current balance now includes this starting amount.');
@@ -394,21 +424,31 @@ export default function BankScreen() {
 
   const handleDelete = (tx: Tx) => {
     if (!canManageAccount) {
-      Alert.alert('Admin access required', 'Ask a group owner or admin to delete a shared bank transaction.');
+      Alert.alert('Admin access required', `Ask a group owner or admin to delete a shared bank transaction from "${budgetName}".`);
       return;
     }
+    const deletesExpense = tx.expenseId != null;
     Alert.alert(
-      'Delete transaction',
-      `Delete "${tx.description}"?`,
+      deletesExpense ? 'Delete expense' : 'Delete transaction',
+      deletesExpense
+        ? `Delete "${tx.description}" from "${budgetName}"? Its bank funding transaction will also be removed.`
+        : `Delete "${tx.description}" from "${budgetName}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete', style: 'destructive', onPress: async () => {
             try {
-              await deleteTransaction({ id: tx.id });
+              if (deletesExpense) {
+                await deleteExpense({ id: tx.expenseId! });
+              } else {
+                await deleteTransaction({ id: tx.id });
+              }
               await invalidateBalance();
-            } catch {
-              Alert.alert('Error', 'Could not delete transaction.');
+            } catch (error: unknown) {
+              Alert.alert(
+                deletesExpense ? 'Could not delete expense' : 'Could not delete transaction',
+                error instanceof Error ? error.message : 'Please try again.',
+              );
             }
           },
         },
@@ -472,6 +512,7 @@ export default function BankScreen() {
       }
     });
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
   };
 
   // Selecting Joint bank chip explicitly clears all named members
@@ -483,6 +524,7 @@ export default function BankScreen() {
     setDepositorIds([]);
     setDepositorAmounts({});
     setIncomeSourceId(null);
+    setDepositSourceKind(null);
   };
 
   const handleCreateCategory = async () => {
@@ -524,13 +566,22 @@ export default function BankScreen() {
   const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
 
   const handleSubmit = async () => {
-    const parsed = parseFloat(amount.replace(/,/g, ''));
-    if (!parsed || parsed <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid amount greater than zero.');
+    const parsed = parseBankAmount(amount);
+    if (parsed === null || parsed <= 0) {
+      Alert.alert('Invalid amount', 'Enter an amount greater than zero with up to two decimal places.');
       return;
     }
-    if (!Number.isInteger(parsed)) {
-      Alert.alert('Whole shillings only', 'Enter the amount in whole KES.');
+    if (txType === 'transfer' && !Number.isInteger(parsed)) {
+      Alert.alert('Use whole KES for savings', 'Savings-goal transfers currently use whole shillings.');
+      return;
+    }
+    if (!selectedAccountId) {
+      Alert.alert(
+        'Choose a bank account',
+        canManageAccount
+          ? 'Create a bank account first, then return here to record the transaction.'
+          : 'Ask an owner or admin to create a bank account before recording a deposit.',
+      );
       return;
     }
     if (txType === 'disbursement' && !expenseCategory.trim()) {
@@ -637,7 +688,7 @@ export default function BankScreen() {
         const contributorSplits = txType === 'deposit' && validDepositorIds.length > 1
           ? validDepositorIds.map((userId) => ({
               userId,
-              amount: parseFloat(depositorAmounts[userId] || '0') || 0,
+              amount: parseBankAmount(depositorAmounts[userId] || '') ?? 0,
               ...(() => {
                 const existingSourceId = editingTransaction?.contributorSplits
                   ?.find((split) => split.userId === userId)
@@ -672,20 +723,20 @@ export default function BankScreen() {
         if (isMultiDepositor) {
           // Multiple named depositors: validate split sums match total
           const splitTotal = validDepositorIds.reduce(
-            (s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0
+            (s, id) => s + (parseBankAmount(depositorAmounts[id] || '') ?? 0), 0
           );
           const splitAmounts = validDepositorIds.map(
-            id => parseFloat(depositorAmounts[id] || '0') || 0,
+            id => parseBankAmount(depositorAmounts[id] || ''),
           );
-          if (splitAmounts.some(portion => !Number.isInteger(portion) || portion <= 0)) {
+          if (splitAmounts.some(portion => portion === null || portion <= 0)) {
             Alert.alert(
               'Enter every amount',
-              'Each depositor portion must be a positive whole-shilling amount.',
+              'Each depositor portion must be positive with up to two decimal places.',
             );
             setSubmitting(false);
             return;
           }
-          if (splitTotal !== parsed) {
+          if (splitAmounts.reduce<number>((sum, portion) => sum + toCents(portion ?? 0), 0) !== toCents(parsed)) {
             Alert.alert(
               "Amounts don't add up",
               `Depositor portions total KES ${splitTotal.toLocaleString()} but the deposit is KES ${parsed.toLocaleString()}.`,
@@ -700,7 +751,7 @@ export default function BankScreen() {
               date,
               contributorSplits: validDepositorIds.map((userId) => ({
                 userId,
-                amount: parseFloat(depositorAmounts[userId] || '0') || 0,
+                amount: parseBankAmount(depositorAmounts[userId] || '') ?? 0,
               })),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
               accountId: selectedAccountId ?? undefined,
@@ -776,14 +827,14 @@ export default function BankScreen() {
   const isTransfer = txType === 'transfer';
   const isBankCharge = txType === 'bank_charge';
   const isBankTransfer = txType === 'bank_transfer';
-  const parsedOutgoingAmount = Number(amount.replace(/,/g, ''));
+  const parsedOutgoingAmount = parseBankAmount(amount);
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
   const isOutgoingTransaction = isWithdrawal || isBankCharge || isBankTransfer || (isTransfer && transferDirection === 'to_savings');
   const projectedBalance = isOutgoingTransaction &&
     data &&
-    Number.isInteger(parsedOutgoingAmount) &&
+    parsedOutgoingAmount !== null &&
     parsedOutgoingAmount > 0
     ? getProjectedBalanceAfterOutgoing(
         data.balance,
@@ -841,6 +892,19 @@ export default function BankScreen() {
             );
           })}
         </View>
+        {!hasBankAccounts && canManageAccount && (
+          <Pressable
+            onPress={() => openAccountEditor()}
+            style={[styles.firstAccountCta, { borderColor: '#86efac', backgroundColor: '#1f3a2b' }]}
+            testID="bank-create-first-account"
+          >
+            <Feather name="plus-circle" size={18} color="#86efac" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.firstAccountCtaTitle}>Create your first bank account</Text>
+              <Text style={styles.firstAccountCtaText}>Jamvi will not create a main or placeholder account for you.</Text>
+            </View>
+          </Pressable>
+        )}
         {isSharedWorkspace && !canManageAccount && (
           <Text style={styles.managerGuidance}>
             You can add your own deposit today. An owner or admin handles withdrawals, transfers, and account changes.
@@ -851,24 +915,29 @@ export default function BankScreen() {
         ) : (
           <>
             <Text style={styles.balanceLabel}>Closing balance</Text>
-            <Text style={styles.balance}>KES {formatKES(data?.balance)}</Text>
+            <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.balance)}</Text>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Feather name="arrow-down-circle" size={14} color="#4ade80" />
                 <Text style={styles.statLabel}>Deposits</Text>
-                <Text style={styles.statValue}>KES {formatKES(data?.totalDeposits)}</Text>
+                <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDeposits)}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Feather name="arrow-up-circle" size={14} color="#f87171" />
                 <Text style={styles.statLabel}>Withdrawn</Text>
-                <Text style={styles.statValue}>KES {formatKES(data?.totalDisbursements)}</Text>
+                <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDisbursements)}</Text>
               </View>
             </View>
             <View style={styles.openingBalanceRow}>
               <View>
                 <Text style={styles.openingBalanceLabel}>Opening balance</Text>
-                <Text style={styles.openingBalanceValue}>KES {formatKES(data?.openingBalance)}</Text>
+                 <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.openingBalance)}</Text>
+                {data?.openingBalanceDate && (
+                  <Text style={styles.openingBalanceDate}>
+                     As of {formatDisplayDate(data.openingBalanceDate)}
+                  </Text>
+                )}
               </View>
               {canManageAccount && (
                 <TouchableOpacity
@@ -895,10 +964,10 @@ export default function BankScreen() {
                 <Text style={styles.actionBtnText}>Deposit</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnDisburse, !canManageAccount && styles.actionBtnDisabled]}
+                style={[styles.actionBtn, styles.actionBtnDisburse, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
                 onPress={() => openModal('disbursement')}
                 activeOpacity={0.8}
-                disabled={!canManageAccount}
+                disabled={!canManageAccount || !hasBankAccounts}
                 accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can withdraw money.' : undefined}
                 testID="bank-withdraw-action"
               >
@@ -906,10 +975,10 @@ export default function BankScreen() {
                 <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#164e63' }, !canManageAccount && styles.actionBtnDisabled]}
+                style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
                 onPress={() => openModal('transfer')}
                 activeOpacity={0.8}
-                disabled={!canManageAccount}
+                disabled={!canManageAccount || !hasBankAccounts}
                 accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can transfer shared money.' : undefined}
                 testID="bank-transfer-action"
               >
@@ -926,10 +995,10 @@ export default function BankScreen() {
                 <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#78350f' }, !canManageAccount && styles.actionBtnDisabled]}
+                style={[styles.actionBtn, { backgroundColor: '#78350f' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
                 onPress={() => openModal('bank_charge')}
                 activeOpacity={0.8}
-                disabled={!canManageAccount}
+                disabled={!canManageAccount || !hasBankAccounts}
                 accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can record a bank charge.' : undefined}
                 testID="bank-charge-action"
               >
@@ -965,22 +1034,26 @@ export default function BankScreen() {
           !isLoading ? (
             <View style={styles.empty}>
               <Feather name="credit-card" size={40} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                No transactions yet
-              </Text>
+                <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                 {hasBankAccounts ? 'No transactions yet' : 'Create a bank account first'}
+               </Text>
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                Money you put in or take out will appear here
+                 {hasBankAccounts
+                   ? 'Money you put in or take out will appear here'
+                   : 'Every account in Jamvi is created by you—there is no automatic main account.'}
               </Text>
-              <Pressable
-                testID="bank-create-first-deposit"
-                accessibilityRole="button"
-                accessibilityLabel="Record your first deposit"
-                onPress={() => openModal('deposit')}
-                style={[styles.emptyAction, { backgroundColor: colors.primary }]}
-              >
-                <Feather name="plus" size={16} color={colors.primaryForeground} />
-                <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Record first deposit</Text>
-              </Pressable>
+               <Pressable
+                 testID={hasBankAccounts ? 'bank-create-first-deposit' : 'bank-create-first-account-empty'}
+                 accessibilityRole="button"
+                 accessibilityLabel={hasBankAccounts ? 'Record your first deposit' : 'Create your first bank account'}
+                 onPress={() => hasBankAccounts ? openModal('deposit') : openAccountEditor()}
+                 style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+               >
+                 <Feather name="plus" size={16} color={colors.primaryForeground} />
+                 <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>
+                   {hasBankAccounts ? 'Record first deposit' : 'Create bank account'}
+                 </Text>
+               </Pressable>
             </View>
           ) : null
         }
@@ -1022,13 +1095,30 @@ export default function BankScreen() {
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
                   {data?.accountName ? `${data.accountName} · ` : ''}
-                  {formatDateTime(item.date)}{canManageAccount ? ' · Edit or delete' : canEditTransaction(item) ? ' · Edit today' : ''}
+                  {canManageAccount ? 'Edit or delete' : canEditTransaction(item) ? 'Edit today' : ''}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                <Text style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
+                 <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={[styles.txAmount, { color: dep ? '#4ade80' : '#f87171' }]}>
                   {dep ? '+' : '-'}KES {formatKES(item.amount)}
                 </Text>
+                <Text
+                  style={[styles.txDate, { color: colors.mutedForeground }]}
+                  testID={`transaction-date-${item.id}`}
+                >
+                  {formatBankDate(item.date)}
+                </Text>
+                {typeof item.runningBalance === 'number' && (
+                   <Text
+                     numberOfLines={1}
+                     adjustsFontSizeToFit
+                     minimumFontScale={0.72}
+                    style={[styles.txMeta, { color: colors.mutedForeground, textAlign: 'right' }]}
+                    testID={`bank-running-balance-${item.id}`}
+                  >
+                    Balance KES {formatKES(item.runningBalance)}
+                  </Text>
+                )}
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   {canEditTransaction(item) && <TouchableOpacity
                     onPress={() => openEdit(item)}
@@ -1184,6 +1274,90 @@ export default function BankScreen() {
                 : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankTransfer ? 'Move Between Bank Accounts' : isBankCharge ? 'Record Bank Charge' : 'Take Money Out'}
             </Text>
 
+            {isBankCharge && (
+              <>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account</Text>
+                <View style={styles.memberRow}>
+                  {accounts.map((candidate) => {
+                    const selected = candidate.id === selectedAccountId;
+                    return (
+                      <TouchableOpacity
+                        key={candidate.id}
+                        testID={`bank-charge-account-${candidate.id}`}
+                        style={[
+                          styles.memberPill,
+                          {
+                            backgroundColor: selected ? '#166534' : colors.muted,
+                            borderColor: selected ? '#22c55e' : colors.border,
+                          },
+                        ]}
+                        onPress={() => selectAccount(candidate.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                          {candidate.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                  This charge reduces only the selected account.
+                </Text>
+              </>
+            )}
+            {(isDeposit || isWithdrawal) && (
+              <View style={{ marginBottom: 14 }}>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account *</Text>
+                <View style={{ gap: 8 }}>
+                  {accounts.length === 0 ? (
+                    <View style={{ gap: 10 }}>
+                      <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>
+                        Add a bank account before recording this transaction.
+                      </Text>
+                      {canManageAccount ? (
+                        <TouchableOpacity
+                          style={[styles.inlineAccountButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}18` }]}
+                          onPress={() => {
+                            setModalVisible(false);
+                            openAccountEditor();
+                          }}
+                          testID="bank-create-account-from-transaction"
+                        >
+                          <Feather name="plus-circle" size={16} color={colors.primary} />
+                          <Text style={[styles.inlineAccountButtonText, { color: colors.primary }]}>Create bank account</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                          Ask an owner or admin to create an account before recording a deposit.
+                        </Text>
+                      )}
+                    </View>
+                  ) : accounts.map((accountOption) => (
+                    <TouchableOpacity key={accountOption.id} onPress={() => selectAccount(accountOption.id)} style={{ borderWidth: 1, borderColor: selectedAccountId === accountOption.id ? colors.primary : colors.border, backgroundColor: selectedAccountId === accountOption.id ? `${colors.primary}18` : colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }} accessibilityRole="radio" accessibilityState={{ selected: selectedAccountId === accountOption.id }}>
+                      <Text style={{ color: colors.foreground, fontWeight: selectedAccountId === accountOption.id ? '700' : '500' }}>{accountOption.name}{accountOption.accountNumber ? ` · ${accountOption.accountNumber}` : ''}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>This account will receive the deposit or be reduced by the withdrawal.</Text>
+                {selectedAccountId && data && (
+                  <View style={[styles.transactionBalanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]} testID="bank-transaction-account-balance">
+                    <View style={styles.transactionBalanceRow}>
+                      <Text style={[styles.transactionBalanceLabel, { color: colors.foreground }]}>
+                        {selectedAccount?.name ?? 'Selected account'} current balance
+                      </Text>
+                      <Text style={[styles.transactionBalanceValue, { color: colors.foreground }]}>
+                        KES {formatKES(data.balance)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.transactionBalanceHelp, { color: colors.mutedForeground }]}>
+                      This is the balance before the transaction is saved.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Amount */}
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount (KES)</Text>
             <TextInput
@@ -1197,12 +1371,52 @@ export default function BankScreen() {
               ]}
               placeholder="e.g. 5000"
               placeholderTextColor={colors.mutedForeground}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               value={amount}
               onChangeText={setAmount}
               returnKeyType="next"
               testID="bank-amount-input"
             />
+             {/* Date stays beside the amount so every bank entry starts with its transaction date. */}
+             <Text style={[styles.label, { color: colors.mutedForeground }]}>
+               {isDeposit ? 'Deposit date' : 'Date'}
+             </Text>
+             <Pressable
+               onPress={() => {
+                 if (canManageShared || editingTransactionId === null) setShowDatePicker(true);
+               }}
+               style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+               testID="bank-date-picker"
+             >
+               <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+               <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                 {new Date(date + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+               </Text>
+               <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+             </Pressable>
+             {isSharedWorkspace && !canManageShared && editingTransactionId === null && (
+               <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                 Shared-budget members can record bank deposits for today only.
+               </Text>
+             )}
+             {showDatePicker && (
+               <DateTimePicker
+                 value={new Date(date + 'T00:00:00')}
+                 mode="date"
+                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                 minimumDate={isSharedWorkspace && !canManageShared ? new Date() : undefined}
+                 maximumDate={new Date()}
+                 onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                   setShowDatePicker(Platform.OS === 'ios');
+                   if (selected) {
+                     const y = selected.getFullYear();
+                     const m = String(selected.getMonth() + 1).padStart(2, '0');
+                     const d = String(selected.getDate()).padStart(2, '0');
+                     setDate(`${y}-${m}-${d}`);
+                   }
+                 }}
+               />
+             )}
             {projectedBalance !== null && projectedBalance < 0 && (
               <View
                 style={styles.negativeBalanceWarning}
@@ -1309,7 +1523,7 @@ export default function BankScreen() {
                 </View>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
                 <TextInput style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]} placeholder="e.g. Move operating funds" placeholderTextColor={colors.mutedForeground} value={description} onChangeText={setDescription} maxLength={200} testID="bank-to-bank-narration" />
-                {selectedAccount && bankTransferDestinationId && Number.isInteger(parsedOutgoingAmount) && parsedOutgoingAmount > 0 && (
+                {selectedAccount && bankTransferDestinationId && parsedOutgoingAmount !== null && parsedOutgoingAmount > 0 && (
                   <Text style={[styles.managerGuidance, { color: colors.mutedForeground }]} testID="bank-transfer-preview">
                     {selectedAccount.name}: KES {formatKES(data?.balance)} → KES {formatKES((data?.balance ?? 0) - parsedOutgoingAmount)}. {accounts.find((candidate) => candidate.id === bankTransferDestinationId)?.name} receives KES {formatKES(parsedOutgoingAmount)}.
                   </Text>
@@ -1400,7 +1614,7 @@ export default function BankScreen() {
                 {validDepositorIds.length > 1 && (() => {
                   const total = parseFloat(amount.replace(/,/g, '')) || 0;
                   const splitTotal = validDepositorIds.reduce(
-                    (s, id) => s + (parseFloat(depositorAmounts[id] || '0') || 0), 0
+                    (s, id) => s + (parseBankAmount(depositorAmounts[id] || '') ?? 0), 0
                   );
                   const diff = total - splitTotal;
                   return (
@@ -1427,7 +1641,7 @@ export default function BankScreen() {
                                 paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
                                 fontFamily: 'Inter_400Regular',
                               }}
-                              keyboardType="numeric"
+                              keyboardType="decimal-pad"
                               placeholder="0"
                               placeholderTextColor={colors.mutedForeground}
                               value={depositorAmounts[did] || ''}
@@ -1458,8 +1672,8 @@ export default function BankScreen() {
               </>
             )}
 
-            {/* Income source — only when exactly one named depositor is selected */}
-            {isDeposit && singleDepositorId && (
+            {/* Saved income sources are for one named depositor; Joint bank can choose Other. */}
+            {isDeposit && (singleDepositorId || depositorIds.length === 0) && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
                   Where did this money come from?{' '}
@@ -1847,39 +2061,6 @@ export default function BankScreen() {
               </>
             )}
 
-            {/* Date */}
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>Date</Text>
-            <Pressable
-              onPress={() => {
-                if (canManageShared || editingTransactionId === null) setShowDatePicker(true);
-              }}
-              style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-              testID="bank-date-picker"
-            >
-              <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
-              <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
-                {new Date(date + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </Text>
-              <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
-            </Pressable>
-            {showDatePicker && (
-              <DateTimePicker
-                value={new Date(date + 'T00:00:00')}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                maximumDate={new Date()}
-                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
-                  setShowDatePicker(Platform.OS === 'ios');
-                  if (selected) {
-                    const y = selected.getFullYear();
-                    const m = String(selected.getMonth() + 1).padStart(2, '0');
-                    const d = String(selected.getDate()).padStart(2, '0');
-                    setDate(`${y}-${m}-${d}`);
-                  }
-                }}
-              />
-            )}
-
             {/* Submit */}
             <TouchableOpacity
               style={[
@@ -1930,7 +2111,7 @@ export default function BankScreen() {
             <TextInput
               value={openingBalanceDraft}
               onChangeText={setOpeningBalanceDraft}
-              keyboardType="number-pad"
+              keyboardType="decimal-pad"
               editable={!savingOpeningBalance}
               style={[
                 styles.input,
@@ -1941,8 +2122,37 @@ export default function BankScreen() {
               autoFocus
               testID="bank-opening-balance-input"
             />
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>Balance date</Text>
+            <Pressable
+              onPress={() => setShowOpeningBalanceDatePicker(true)}
+              style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+              testID="bank-opening-balance-date"
+            >
+              <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+              <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                {new Date(openingBalanceDate + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </Text>
+              <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+            </Pressable>
+            {showOpeningBalanceDatePicker && (
+              <DateTimePicker
+                value={new Date(openingBalanceDate + 'T00:00:00')}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                maximumDate={new Date()}
+                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                  setShowOpeningBalanceDatePicker(Platform.OS === 'ios');
+                  if (selected) {
+                    const y = selected.getFullYear();
+                    const m = String(selected.getMonth() + 1).padStart(2, '0');
+                    const d = String(selected.getDate()).padStart(2, '0');
+                    setOpeningBalanceDate(`${y}-${m}-${d}`);
+                  }
+                }}
+              />
+            )}
             <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
-              Current balance = opening balance + deposits − withdrawals.
+              The date marks when this starting amount applied. Current balance = opening balance + deposits − withdrawals.
             </Text>
             <View style={styles.openingBalanceActions}>
               <TouchableOpacity
@@ -2069,6 +2279,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     marginTop: 2,
   },
+  openingBalanceDate: {
+    color: '#a7f3d0',
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 2,
+  },
   editOpeningBalanceBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2116,6 +2332,70 @@ const styles = StyleSheet.create({
   actionBtnDisabled: {
     opacity: 0.45,
   },
+  inlineAccountButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  inlineAccountButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  transactionBalanceCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  transactionBalanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  transactionBalanceLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  transactionBalanceValue: {
+    fontSize: 16,
+    fontFamily: 'Inter_700Bold',
+  },
+  transactionBalanceHelp: {
+    marginTop: 3,
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
+  },
+  firstAccountCta: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  firstAccountCtaTitle: {
+    color: '#dcfce7',
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: 'Inter_700Bold',
+  },
+  firstAccountCtaText: {
+    color: '#d1fae5',
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: 'Inter_400Regular',
+  },
   managerGuidance: {
     marginTop: 10,
     color: '#d1fae5',
@@ -2160,6 +2440,10 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     fontFamily: 'Inter_600SemiBold',
     marginLeft: 8,
+  },
+  txDate: {
+    fontSize: 11,
+    fontFamily: 'Inter_400Regular',
   },
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: {

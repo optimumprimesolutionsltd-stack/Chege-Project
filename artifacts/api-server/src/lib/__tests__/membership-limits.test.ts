@@ -37,34 +37,51 @@ function given(plan: string | null, memberCount: number) {
     .mockReturnValueOnce(chain([{ count: memberCount }]));
 }
 
+const withLimit = (memberLimit: number | null) =>
+  vi.fn().mockResolvedValue({ memberLimit });
+
 describe("hasMemberCapacity", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("allows a free workspace with room to spare", async () => {
     given("free", FREE_MEMBER_LIMIT - 2);
-    await expect(hasMemberCapacity(db, 1)).resolves.toBe(true);
+    await expect(hasMemberCapacity(db, 1, withLimit(FREE_MEMBER_LIMIT))).resolves.toBe(true);
   });
 
   it("allows the very last place", async () => {
     given("free", FREE_MEMBER_LIMIT - 1);
-    await expect(hasMemberCapacity(db, 1)).resolves.toBe(true);
+    await expect(hasMemberCapacity(db, 1, withLimit(FREE_MEMBER_LIMIT))).resolves.toBe(true);
   });
 
   it("refuses once a free workspace is exactly full", async () => {
     given("free", FREE_MEMBER_LIMIT);
-    await expect(hasMemberCapacity(db, 1)).resolves.toBe(false);
+    await expect(hasMemberCapacity(db, 1, withLimit(FREE_MEMBER_LIMIT))).resolves.toBe(false);
   });
 
   it("refuses to grow a workspace that is already over the limit, rather than throwing", async () => {
     // Grandfathering: a group that predates the cap keeps working. It just
     // cannot add anyone, and nothing here removes an existing member.
     given("free", FREE_MEMBER_LIMIT + 10);
-    await expect(hasMemberCapacity(db, 1)).resolves.toBe(false);
+    await expect(hasMemberCapacity(db, 1, withLimit(FREE_MEMBER_LIMIT))).resolves.toBe(false);
   });
 
   it("does not cap a paid workspace", async () => {
     given("paid", FREE_MEMBER_LIMIT + 50);
     await expect(hasMemberCapacity(db, 1)).resolves.toBe(true);
+  });
+
+  it("uses the active package's member limit", async () => {
+    given("free", 14);
+    await expect(hasMemberCapacity(db, 1, withLimit(15))).resolves.toBe(true);
+
+    mockSelect.mockReset();
+    given("free", 15);
+    await expect(hasMemberCapacity(db, 1, withLimit(15))).resolves.toBe(false);
+  });
+
+  it("does not cap the Unlimited package", async () => {
+    given("free", 500);
+    await expect(hasMemberCapacity(db, 1, withLimit(null))).resolves.toBe(true);
   });
 
   it("leaves a missing group to the caller's own error handling", async () => {

@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  Modal,
+  TextInput,
 } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -22,18 +24,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import BudgetRing from '@/components/BudgetRing';
 import ActivityCard from '@/components/ActivityCard';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
+import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
+import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import {
   useGetDashboardSummary,
   useGetDashboardActivity,
+  useGetExpenses,
   useGetJointAccount,
   useGetGroup,
+  customFetch,
 } from '@workspace/api-client-react';
 
 const MONTHS_SHORT = [
@@ -42,6 +49,32 @@ const MONTHS_SHORT = [
 ];
 
 const PRIVACY_KEY = 'dashboard_privacy';
+
+type HomeExpense = {
+  id: number;
+  amount: number;
+  description: string;
+  category?: string | null;
+  categoryAllocations?: { category: string; amount: number }[];
+  date: string;
+  paidById?: string | null;
+  paidFromBank?: boolean;
+  isRecurring?: boolean;
+  incomeSplits?: { userId?: string | null; fromBank: boolean }[];
+};
+
+type AskResponse = {
+  answer: string;
+  readOnly: boolean;
+  workspaceScoped: boolean;
+  month: number;
+  year: number;
+};
+
+function isUncategorizedExpense(expense: HomeExpense) {
+  return !expense.category?.trim()
+    && !(expense.categoryAllocations ?? []).some((allocation) => allocation.category.trim());
+}
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -64,21 +97,6 @@ type Shortcut = {
   bg: string;
   route: string;
 };
-
-const PERSONAL_SHORTCUTS: Shortcut[] = [
-  { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
-  { icon: 'credit-card', label: 'Deposit / Withdraw', color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank' },
-  { icon: 'repeat', label: 'Bank transfer', color: '#67E8F9', bg: '#164E63', route: '/(tabs)/bank?shortcut=bank-transfer' },
-  { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
-];
-
-const SHARED_SHORTCUTS: Shortcut[] = [
-  { icon: 'plus-circle', label: 'Expense',  color: '#3CDD62', bg: '#0D3428', route: '/add-expense'            },
-  { icon: 'credit-card', label: 'Deposit / Withdraw', color: '#FDBB0A', bg: '#392D08', route: '/(tabs)/bank' },
-  { icon: 'repeat', label: 'Bank transfer', color: '#67E8F9', bg: '#164E63', route: '/(tabs)/bank?shortcut=bank-transfer' },
-  { icon: 'pie-chart',   label: 'Reports',  color: '#6C9FE6', bg: '#0A254E', route: '/(tabs)/reports'         },
-  { icon: 'settings',    label: 'Settings', color: '#A5B9D4', bg: '#17243C', route: '/(tabs)/settings'        },
-];
 
 const SHARED_OVERVIEW_SHORTCUTS: Shortcut[] = [
   { icon: 'bar-chart-2', label: 'Budget',        color: '#2DD4CC', bg: '#0B343B', route: '/(tabs)/budget',        description: 'Plan spending' },
@@ -128,6 +146,10 @@ export default function DashboardScreen() {
     isLoading: activityLoading,
     refetch: refetchActivity,
   } = useGetDashboardActivity();
+  const {
+    data: expenses = [],
+    refetch: refetchExpenses,
+  } = useGetExpenses({ month, year });
 
   const {
     data: bankAccount,
@@ -138,11 +160,42 @@ export default function DashboardScreen() {
   const isSharedWorkspace = group?.isPrivate === false;
 
   const [refreshing, setRefreshing] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askQuery, setAskQuery] = useState('');
+  const [askAnswer, setAskAnswer] = useState<AskResponse | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchSummary(), refetchActivity(), refetchBank()]);
+    await Promise.all([refetchSummary(), refetchActivity(), refetchExpenses(), refetchBank()]);
     setRefreshing(false);
-  }, [refetchSummary, refetchActivity, refetchBank]);
+  }, [refetchSummary, refetchActivity, refetchExpenses, refetchBank]);
+
+  const askJamvi = useCallback(async (value?: string) => {
+    const question = (value ?? askQuery).trim();
+    if (!question || asking) return;
+    setAskQuery(question);
+    setAskAnswer(null);
+    setAskError(null);
+    setAsking(true);
+    try {
+      const response = await customFetch<AskResponse>('/api/ai/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, month, year }),
+      });
+      setAskAnswer(response);
+    } catch (error) {
+      setAskError(error instanceof Error ? error.message : 'Ask Jamvi could not answer right now.');
+    } finally {
+      setAsking(false);
+    }
+  }, [askQuery, asking, month, year]);
+
+  const openAskJamvi = useCallback(() => {
+    setAskError(null);
+    setAskOpen(true);
+  }, []);
 
   // Compute this-month bank totals from transactions
   const monthlyDeposited = useMemo(() => {
@@ -182,8 +235,19 @@ export default function DashboardScreen() {
   const workspaceAccentColor = group?.accentColor ?? colors.brandBlue;
   const workspaceIcon = (group?.icon ?? 'users') as keyof typeof Feather.glyphMap;
   const workspacePhotoUrl = isSharedWorkspace ? group?.photoUrl : user?.profileImageUrl;
-  const shortcuts = isSharedWorkspace ? SHARED_SHORTCUTS : PERSONAL_SHORTCUTS;
   const canManageBudget = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
+  const canManageExpenses = !isSharedWorkspace || group?.role === 'owner' || group?.role === 'admin';
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const editableUncategorizedExpenses = (expenses as HomeExpense[])
+    .filter(isUncategorizedExpense)
+    .filter((expense) => {
+      if (canManageExpenses) return true;
+      if (!user?.id || expense.date.slice(0, 10) !== today || expense.paidById !== user.id) return false;
+      if (expense.paidFromBank || expense.isRecurring) return false;
+      return !(expense.incomeSplits ?? []).some(
+        (split) => split.fromBank || (split.userId && split.userId !== user.id),
+      );
+    });
   type MemberContribution = {
     userId: string;
     name: string;
@@ -326,6 +390,8 @@ export default function DashboardScreen() {
             </View>
           </View>
 
+           <WorkspaceSetupGuide />
+
           {isSharedWorkspace && (
             <View style={[styles.overviewNavCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
@@ -396,23 +462,81 @@ export default function DashboardScreen() {
           )}
         </LinearGradient>
 
-        {/* Quick shortcuts */}
-        <View style={styles.shortcutRow}>
-          {shortcuts.map(s => (
-            <Pressable
-              key={s.label}
-              testID={`home-shortcut-${s.label.toLowerCase()}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Open ${s.label}`}
-              style={[styles.shortcutBtn, { backgroundColor: s.bg }]}
-              onPress={() => router.push(s.route as any)}
-              hitSlop={4}
-            >
-              <Feather name={s.icon} size={20} color={s.color} />
-              <Text style={[styles.shortcutLabel, { color: s.color }]}>{s.label}</Text>
-            </Pressable>
-          ))}
+        <View
+          testID="ask-jamvi-cta"
+          style={[styles.askCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}
+        >
+          <View style={styles.groupCtaHeader}>
+            <View style={[styles.askCtaIcon, { backgroundColor: `${colors.primary}18` }]}>
+              <Feather name="search" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>QUICK ANSWERS</Text>
+              <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>Ask Jamvi</Text>
+            </View>
+          </View>
+          <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+            Ask about anything in this budget: spending, bank accounts, income, goals, activity, categories, or reports. Jamvi explains your numbers but cannot change records or move money.
+          </Text>
+          <Pressable
+            testID="open-ask-jamvi"
+            accessibilityRole="button"
+            accessibilityLabel="Ask Jamvi about this budget"
+            onPress={openAskJamvi}
+            style={({ pressed }) => [
+              styles.groupCtaButton,
+              { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
+            ]}
+          >
+            <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Ask Jamvi</Text>
+            <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
+          </Pressable>
         </View>
+
+        {editableUncategorizedExpenses.length > 0 && (
+          <View
+            testID="uncategorized-expense-cta"
+            accessibilityLiveRegion="polite"
+            style={[styles.uncategorizedCtaCard, { backgroundColor: colors.card, borderColor: '#F59E0B' }]}
+          >
+            <View style={styles.groupCtaHeader}>
+              <View style={[styles.groupCtaIcon, { backgroundColor: '#F59E0B22' }]}>
+                <Feather name="bell" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.groupCtaEyebrow, { color: '#D97706' }]}>NEEDS YOUR ATTENTION</Text>
+                <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>
+                  {editableUncategorizedExpenses.length} expense{editableUncategorizedExpenses.length === 1 ? '' : 's'} waiting for a category
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
+              Categorize these expenses so category budgets and reports show where the money went.
+            </Text>
+            <View style={styles.uncategorizedList}>
+              {editableUncategorizedExpenses.slice(0, 3).map((expense) => (
+                <Pressable
+                  key={expense.id}
+                  testID={`categorize-expense-${expense.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Categorize ${expense.description}`}
+                  onPress={() => router.push(getExpenseEditHref(expense) as never)}
+                  style={({ pressed }) => [
+                    styles.uncategorizedRow,
+                    { backgroundColor: colors.background, borderColor: colors.border, opacity: pressed ? 0.78 : 1 },
+                  ]}
+                >
+                  <View style={styles.uncategorizedCopy}>
+                    <Text numberOfLines={1} style={[styles.uncategorizedDescription, { color: colors.foreground }]}>{expense.description}</Text>
+                    <Text style={[styles.uncategorizedAmount, { color: colors.mutedForeground }]}>KES {formatKES(expense.amount)}</Text>
+                  </View>
+                  <Text style={[styles.uncategorizedAction, { color: colors.primary }]}>Categorize now</Text>
+                  <Feather name="chevron-right" size={16} color={colors.primary} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
 
         {!summaryLoading && summary && summary.totalBudget === 0 && (
           <View style={[styles.budgetCtaCard, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}>
@@ -498,23 +622,23 @@ export default function DashboardScreen() {
               {bankAccountLoading ? (
                 <BankBalanceSkeleton />
               ) : (
-                <Text style={[styles.bankBalance, { color: colors.info }]}>
-                  {bankAccount ? (isPrivate ? '••••' : `KES ${shortKES(bankAccount.balance)}`) : '—'}
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankBalance, { color: colors.info }]}>
+                  {bankAccount ? (isPrivate ? '••••' : `KES ${formatKES(bankAccount.balance)}`) : '—'}
                 </Text>
               )}
             </View>
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>IN THIS MONTH</Text>
-              <Text style={[styles.bankStatValue, { color: colors.success }]}>
-                {isPrivate ? '••••' : `+KES ${shortKES(monthlyDeposited)}`}
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.success }]}>
+                {isPrivate ? '••••' : `+KES ${formatKES(monthlyDeposited)}`}
               </Text>
             </View>
             <View style={[styles.bankStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.bankStat}>
               <Text style={[styles.bankStatLabel, { color: colors.mutedForeground }]}>OUT THIS MONTH</Text>
-              <Text style={[styles.bankStatValue, { color: colors.destructive }]}>
-                {isPrivate ? '••••' : `-KES ${shortKES(monthlyDisbursed)}`}
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.bankStatValue, { color: colors.destructive }]}>
+                {isPrivate ? '••••' : `-KES ${formatKES(monthlyDisbursed)}`}
               </Text>
             </View>
           </View>
@@ -524,6 +648,23 @@ export default function DashboardScreen() {
               <Text style={styles.bankEmptyText}>No deposits yet — tap to add one</Text>
             </View>
           )}
+           {bankAccount && bankAccount.balance < 0 && (
+             <View
+               accessibilityRole="alert"
+               testID="overview-negative-bank-balance-warning"
+               style={styles.negativeBankBalanceWarning}
+             >
+               <View style={styles.negativeBankBalanceWarningTitle}>
+                 <Feather name="flag" size={15} color="#b91c1c" />
+                 <Text style={styles.negativeBankBalanceWarningTitleText}>Bank balance is below zero</Text>
+               </View>
+               <Text style={styles.negativeBankBalanceWarningText}>
+                 {isPrivate
+                   ? 'Jamvi kept the withdrawal recorded. Deposit money to clear the shortfall.'
+                   : `This budget is short by KES ${shortKES(Math.abs(bankAccount.balance))}. Jamvi kept the withdrawal recorded so the shortfall stays visible.`}
+               </Text>
+             </View>
+           )}
         </Pressable>
 
         {isSharedWorkspace && (
@@ -579,6 +720,91 @@ export default function DashboardScreen() {
           </View>
         )}
       </PageScrollView>
+
+      <Modal
+        visible={askOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAskOpen(false)}
+      >
+        <KeyboardAvoidingView behavior="padding" style={styles.askModalOverlay}>
+          <View style={[styles.askModalSheet, { backgroundColor: colors.card }]}>
+            <View style={styles.askModalHeader}>
+              <View style={styles.askModalTitleRow}>
+                <View style={[styles.askModalIcon, { backgroundColor: `${colors.primary}18` }]}>
+                  <Feather name="search" size={19} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.askModalTitle, { color: colors.foreground }]}>Ask Jamvi</Text>
+                  <Text style={[styles.askModalSubtitle, { color: colors.mutedForeground }]}>
+                    Ask about this month or your available history across this budget. Answers stay read-only.
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                onPress={() => setAskOpen(false)}
+                hitSlop={8}
+                accessibilityLabel="Close Ask Jamvi"
+              >
+                <Feather name="x" size={22} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <TextInput
+              value={askQuery}
+              onChangeText={setAskQuery}
+              onSubmitEditing={() => void askJamvi()}
+              placeholder="Ask about history, reports, goals, banks, or any ledger…"
+              placeholderTextColor={colors.mutedForeground}
+              style={[styles.askInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+              accessibilityLabel="Ask Jamvi a question"
+              returnKeyType="send"
+              maxLength={500}
+              editable={!asking}
+            />
+            <Pressable
+              testID="submit-ask-jamvi"
+              accessibilityRole="button"
+              accessibilityLabel="Send question to Ask Jamvi"
+              onPress={() => void askJamvi()}
+              disabled={!askQuery.trim() || asking}
+              style={[styles.askSubmit, { backgroundColor: colors.primary, opacity: !askQuery.trim() || asking ? 0.5 : 1 }]}
+            >
+              {asking ? (
+                <ActivityIndicator color={colors.primaryForeground} size="small" />
+              ) : (
+                <>
+                  <Feather name="send" size={15} color={colors.primaryForeground} />
+                  <Text style={[styles.askSubmitText, { color: colors.primaryForeground }]}>Ask Jamvi</Text>
+                </>
+              )}
+            </Pressable>
+            <View style={styles.askPromptList}>
+              {['How did this month compare with my history?', 'How much have I spent on rent?', 'What is in each bank account?', 'Which goals need attention?', 'Who has contributed?', 'What are my highest spending categories?'].map((prompt) => (
+                <Pressable
+                  key={prompt}
+                  onPress={() => void askJamvi(prompt)}
+                  disabled={asking}
+                  style={[styles.askPrompt, { borderColor: `${colors.primary}40`, backgroundColor: `${colors.primary}0D`, opacity: asking ? 0.6 : 1 }]}
+                >
+                  <Text style={[styles.askPromptText, { color: colors.foreground }]}>{prompt}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {askError ? (
+              <Text style={[styles.askError, { color: colors.destructive }]}>{askError}</Text>
+            ) : null}
+            {askAnswer ? (
+              <View style={[styles.askAnswer, { borderColor: `${colors.primary}40`, backgroundColor: `${colors.primary}0D` }]}>
+                <Text style={[styles.askAnswerLabel, { color: colors.primary }]}>JAMVI SAYS</Text>
+                <Text style={[styles.askAnswerText, { color: colors.foreground }]}>{askAnswer.answer}</Text>
+                <Text style={[styles.askAnswerMeta, { color: colors.mutedForeground }]}>
+                  Read-only · {askAnswer.workspaceScoped ? 'Current budget only' : 'Unscoped'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
     </View>
   );
@@ -698,9 +924,6 @@ const styles = StyleSheet.create({
   contribFill: { height: '100%', borderRadius: 2 },
   contribSubLabel: { fontSize: 9, color: 'rgba(247,250,246,0.4)', fontFamily: 'Inter_400Regular' },
 
-  shortcutRow: { flexDirection: 'row', marginHorizontal: 16, paddingTop: 16, paddingBottom: 4, gap: 8 },
-  shortcutBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 14, gap: 5 },
-  shortcutLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   overviewNavCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
   overviewNavEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   overviewNavTitle: { fontSize: 18, fontFamily: 'Inter_700Bold', marginTop: 4 },
@@ -712,6 +935,15 @@ const styles = StyleSheet.create({
   overviewNavChevron: { position: 'absolute', top: 6, right: 6 },
   groupCtaCard: { marginHorizontal: 16, marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
   budgetCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
+  uncategorizedCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
+  askCtaCard: { marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderRadius: 18, padding: 16 },
+  askCtaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  uncategorizedList: { marginTop: 12, gap: 8 },
+  uncategorizedRow: { minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  uncategorizedCopy: { minWidth: 0, flex: 1 },
+  uncategorizedDescription: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  uncategorizedAmount: { marginTop: 2, fontSize: 11, fontFamily: 'Inter_400Regular' },
+  uncategorizedAction: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   groupCtaHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   groupCtaIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   groupCtaEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
@@ -719,6 +951,24 @@ const styles = StyleSheet.create({
   groupCtaText: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 11 },
   groupCtaButton: { minHeight: 46, borderRadius: 12, paddingHorizontal: 14, marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   groupCtaButtonText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  askModalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' },
+  askModalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28 },
+  askModalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
+  askModalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 11, flex: 1 },
+  askModalIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  askModalTitle: { fontSize: 19, fontFamily: 'Inter_700Bold' },
+  askModalSubtitle: { fontSize: 11, lineHeight: 16, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  askInput: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter_400Regular' },
+  askSubmit: { minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
+  askSubmitText: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  askPromptList: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 14 },
+  askPrompt: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8 },
+  askPromptText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+  askError: { fontSize: 12, lineHeight: 17, marginTop: 13, fontFamily: 'Inter_500Medium' },
+  askAnswer: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 15 },
+  askAnswerLabel: { fontSize: 10, letterSpacing: 0.8, fontFamily: 'Inter_700Bold' },
+  askAnswerText: { fontSize: 14, lineHeight: 21, marginTop: 5, fontFamily: 'Inter_400Regular' },
+  askAnswerMeta: { fontSize: 10, marginTop: 9, fontFamily: 'Inter_400Regular' },
   section: { paddingHorizontal: 20, paddingTop: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   sectionEyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1, marginBottom: 3 },
@@ -738,11 +988,15 @@ const styles = StyleSheet.create({
   bankStatsRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
   bankStat: { flex: 1, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4 },
   bankStatLabel: { fontSize: 9, fontFamily: 'Inter_400Regular', letterSpacing: 0.4, marginBottom: 3 },
-  bankBalance: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
+  bankBalance: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold' },
   bankBalanceSkeleton: { width: 62, height: 16, borderRadius: 4, backgroundColor: 'rgba(56,189,248,0.25)' },
-  bankStatValue: { fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
+  bankStatValue: { width: '100%', flexShrink: 1, textAlign: 'center', fontSize: 13, fontWeight: '600' as const, fontFamily: 'Inter_600SemiBold' },
   bankStatDivider: { width: 1, marginVertical: 10 },
 
   bankEmptyState: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderTopWidth: 1, borderTopColor: 'rgba(128,128,128,0.15)' },
   bankEmptyText: { fontSize: 13, color: '#08B7B0', fontFamily: 'Inter_400Regular', opacity: 0.8 },
+  negativeBankBalanceWarning: { gap: 5, marginHorizontal: 12, marginBottom: 12, borderWidth: 1, borderColor: '#fca5a5', borderRadius: 10, backgroundColor: '#fef2f2', paddingHorizontal: 12, paddingVertical: 10 },
+  negativeBankBalanceWarningTitle: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  negativeBankBalanceWarningTitleText: { color: '#991b1b', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  negativeBankBalanceWarningText: { color: '#7f1d1d', fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },
 });

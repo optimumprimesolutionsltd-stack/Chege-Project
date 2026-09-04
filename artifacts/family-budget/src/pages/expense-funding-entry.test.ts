@@ -18,10 +18,13 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).toContain("Type the amount from this source to confirm");
     expect(dashboardSource).toContain("Type the amount from this account to confirm");
     expect(dashboardSource).toContain("Keep adding funding sources until the remaining amount reaches zero");
-    expect(dashboardSource).toContain('data-testid="quick-expense-funding-remainder"');
+    expect(dashboardSource).toContain('is still unfunded. Select another source or enter the full amount.');
     expect(dashboardSource).toContain("additionalDirectPortions");
+    expect(dashboardSource).toContain('{ sourceId, amount: "" }');
+    expect(dashboardSource).toContain('{ sourceId: source.id, amount: "" }');
     expect(dashboardSource).toContain('title: remaining > 0 ? "Choose another funding source"');
-    expect(dashboardSource).toContain("getFundingRemainder(total, direct)");
+    expect(dashboardSource).not.toContain("setBankPortion(remainder");
+    expect(dashboardSource).not.toContain("setDirectPortion(remainder");
     expect(dashboardSource).not.toContain('["mixed", "Both"');
   });
 
@@ -29,26 +32,40 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).toContain("sourceCount === 1");
     expect(expensesSource).toContain("Type the amount from this source to confirm");
     expect(expensesSource).toContain("Type the amount from this account to confirm");
-    expect(expensesSource).toContain("Jamvi fills the remaining amount into the other selected source");
-    expect(expensesSource).toContain("getFundingRemainder(Number(form.amount)");
-    expect(expensesSource).toContain("addFundingSourceWithRemainder({");
-    expect(expensesSource).toContain("selectedSourceIds: form.payerIds");
+    expect(expensesSource).toContain("Enter the amount from each selected source manually");
+    expect(expensesSource).not.toContain("getFundingRemainder(Number(form.amount)");
+    expect(expensesSource).toContain('setAddDirectSourceAmounts((previous) => ({ ...previous, [key]: "" }))');
+    expect(expensesSource).toContain('[m.userId]: ""');
     expect(expensesSource).toContain('title: remaining > 0 ? "Add another funding source"');
     expect(expensesSource).toContain("Add another income source...");
     expect(expensesSource).toContain("as many times as needed until the expense is fully funded");
-    expect(expensesSource).toContain('data-testid="expense-funding-remainder"');
+    expect(expensesSource).toContain('is still unfunded. Select another payer or add a bank-account portion.');
+    expect(expensesSource).not.toContain("addFundingSourceWithRemainder");
+    expect(expensesSource).not.toContain("Jamvi fills the remaining amount into the other selected source");
+    expect(expensesSource).not.toContain("next.__joint_bank__ = remainder");
   });
 
   it("requires selected mobile sources to account for the full expense", () => {
     expect(mobileSource).toContain("selectedSources.length > 0");
     expect(mobileSource).toContain("'Add another funding source'");
-    expect(mobileSource).toContain("Type each amount. Jamvi fills the current remainder");
+    expect(mobileSource).toContain("Enter each amount manually. This prevents a mistaken automatic allocation.");
     expect(mobileSource).toContain("TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM");
-    expect(mobileSource).toContain("Jamvi fills the remaining amount into the other selected source");
-    expect(mobileSource).toContain("getFundingRemainder(parseFloat(amount.replace");
-    expect(mobileSource).toContain("selectedSourceIds: previous");
-    expect(mobileSource).toContain("newSourceId: key");
-    expect(mobileSource).toContain('testID="expense-funding-remainder"');
+    expect(mobileSource).toContain("Enter the amount from each selected source manually");
+    expect(mobileSource).not.toContain("const remaining = getFundingRemainder(total, directTotal);");
+    expect(mobileSource).toContain('setSplitAmounts((amounts) => {');
+    expect(mobileSource).toContain('addIncomeSourceToSelection({');
+    expect(mobileSource).toContain('newSourceId: key');
+    expect(mobileSource).not.toContain("addFundingSourceWithRemainder");
+    expect(mobileSource).toContain('is still unfunded. Select another income source.');
+    expect(mobileSource).not.toContain("if (previous.length >= 2)");
+  });
+
+  it("adds a newly created mobile income source without replacing an existing partial portion", () => {
+    expect(mobileSource).toContain('setSelectedSources((previous) => {');
+    expect(mobileSource).toContain('newSourceId: sourceKey');
+    expect(mobileSource).toContain('setSplitAmounts(selection.amounts)');
+    expect(mobileSource).toContain('return selection.selectedSourceIds;');
+    expect(mobileSource).toContain("selectedSources.map((key, index) =>");
     expect(mobileSource).not.toContain("if (previous.length >= 2)");
   });
 
@@ -62,10 +79,259 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).not.toContain("isEditMode && !allowMixedFunding && canManageShared");
   });
 
+  it("places new-source creation after the existing funding rows", () => {
+    const expenseRows = expensesSource.indexOf('data-testid="expense-direct-funding-portions"');
+    const expenseNewSource = expensesSource.indexOf("+ New source");
+    expect(expenseRows).toBeGreaterThan(-1);
+    expect(expenseNewSource).toBeGreaterThan(expenseRows);
+
+    const dashboardRows = dashboardSource.indexOf("additionalDirectPortions.map");
+    const dashboardNewSource = dashboardSource.indexOf("+ New source");
+    expect(dashboardRows).toBeGreaterThan(-1);
+    expect(dashboardNewSource).toBeGreaterThan(dashboardRows);
+  });
+
+  it("keeps direct and bank funding figures independent when bank is selected", () => {
+    expect(expensesSource).toContain('__joint_bank__: ""');
+    expect(expensesSource).not.toContain("__joint_bank__: directTotal > 0 ? String(remaining) : form.amount");
+    expect(expensesSource).toContain("...previous");
+    expect(dashboardSource).not.toContain("setBankPortion(directTotal > 0 ? String(remaining) : amount)");
+    expect(mobileSource).toContain("__joint_bank__: ''");
+    expect(mobileSource).not.toContain("__joint_bank__: directTotal > 0 ? String(remaining) : amount.replace");
+    expect(mobileSource).toContain("(!paidFromBank || allowMixedFunding) && selectedSources.length > 0");
+  });
+
+  it("keeps Shared budget member amounts blank until the user enters them", () => {
+    expect(expensesSource).toContain('[m.userId]: ""');
+    expect(mobileSource).toContain("[m.userId]: ''");
+    expect(expensesSource).not.toContain("[next[0]]: remainder");
+    expect(mobileSource).not.toContain("[next[0]]: remainder");
+  });
+
   it("shows an explicit mobile add-category action", () => {
     expect(mobileSource).toContain('testID="add-category-allocation-mobile"');
     expect(mobileSource).toContain("Add another category");
     expect(mobileSource).toContain("showAdditionalCategoryPicker");
+  });
+
+  it("requires category amounts to be entered manually on every expense form", () => {
+    expect(dashboardSource).toContain("KES amount covered by the primary category");
+    expect(dashboardSource).toContain('data-testid="primary-category-allocation-dashboard"');
+    expect(dashboardSource).toContain('className="flex flex-col gap-2 sm:flex-row sm:items-center"');
+    expect(dashboardSource).toContain('className="h-14 w-full border-primary/45 bg-card font-semibold"');
+    expect(dashboardSource).toContain("{isOtherCategory && (");
+    expect(dashboardSource).toContain("const isPrimaryOtherCategory = categoryAllocations[0]?.category.trim().toLocaleLowerCase() === \"other\";");
+    expect(dashboardSource).not.toContain("{category.trim() && categoryAllocations.length === 1 && (\n                <div");
+    expect(dashboardSource).toContain("Need to split this expense? Add another category and enter its share.");
+    expect(dashboardSource).toContain('disabled={!category.trim() || isPrimaryOtherCategory}');
+    expect(dashboardSource).toContain("Choose a category first, then add another category");
+    expect(dashboardSource).toContain("categoryAllocations.slice(1).map");
+    expect(dashboardSource).toContain("const hasStandardAdditionalCategory");
+    expect(dashboardSource).toContain("dashboard-additional-category-amount");
+    expect(dashboardSource).toContain("<option value=\"\">Select a category</option>");
+    expect(dashboardSource).toContain("className=\"flex min-w-0 flex-1 flex-col gap-1.5");
+    expect(dashboardSource).toContain("className=\"h-14 w-full justify-start sm:w-auto\"");
+    expect(dashboardSource).not.toContain("<option value=\"\" disabled>Pick a category</option>");
+    expect(dashboardSource).not.toContain("One-off spending is for a one-time expense that does not fit any listed category.");
+    expect(dashboardSource).toContain("One-off spending amount (KES)");
+    expect(dashboardSource).not.toContain('<option value="Other"');
+    expect(dashboardSource).toContain('data-testid="one-off-spending-category-dashboard"');
+    expect(dashboardSource).toContain("Use One-off spending as the last category");
+    expect(dashboardSource).toContain('value={isPrimaryOtherCategory ? "" : category}');
+    expect(dashboardSource).toContain('placeholder="Enter KES amount"');
+    expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
+    expect(dashboardSource).not.toContain("setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }]");
+    expect(expensesSource).toContain("const setAmount = (value: string) => setAmountValue(value);");
+    expect(expensesSource).toContain("KES amount covered by the primary category");
+    expect(expensesSource).toContain('data-testid={`primary-category-allocation-${mode}`}');
+    expect(expensesSource).toContain('className="flex flex-col gap-2 sm:flex-row sm:items-center"');
+    expect(expensesSource).toContain('className="h-14 w-full border-primary/45 bg-card font-semibold"');
+    expect(expensesSource).toContain("{isOtherCategory && (");
+    expect(expensesSource).toContain("Need to split this expense? Add another category and enter its share.");
+    expect(expensesSource).toContain('disabled={!form.category.trim() || isPrimaryOtherCategory}');
+    expect(expensesSource).toContain("Choose a category first, then add another category");
+    expect(expensesSource).toContain("form.categoryAllocations.slice(1).map");
+    expect(expensesSource).toContain("const hasStandardAdditionalCategory");
+    expect(expensesSource).toContain("additional-category-amount");
+    expect(expensesSource).toContain("<option value=\"\">Select a category</option>");
+    expect(expensesSource).toContain("className=\"flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input");
+    expect(expensesSource).toContain("className={`h-14 w-full justify-start border-input");
+    expect(expensesSource).not.toContain("<option value=\"\" disabled>Select category...</option>");
+    expect(expensesSource).not.toContain("One-off spending is for a one-time expense that does not fit any listed category.");
+    expect(expensesSource).toContain("One-off spending amount (KES)");
+    expect(expensesSource).not.toContain('<option value="Other"');
+    expect(expensesSource).toContain('data-testid={`one-off-spending-category-${mode}`}');
+    expect(expensesSource).toContain("Use One-off spending as the last category");
+    expect(expensesSource).toContain('value={isPrimaryOtherCategory ? "" : form.category}');
+    expect(expensesSource).toContain("{!hasStandardAdditionalCategory && (");
+    expect(expensesSource).toContain('aria-required="true"');
+    expect(expensesSource).toContain('placeholder="Enter KES amount"');
+    expect(mobileSource).toContain("CATEGORY AMOUNTS REQUIRED");
+    expect(mobileSource).toContain("Enter how much of the expense each category covered.");
+    expect(mobileSource).toContain("One-off spending amount (KES)");
+    expect(mobileSource).toContain("Use this as the last category when part of the expense does not fit any listed category.");
+    expect(mobileSource).toContain(": [{ category: result.categoryName!, amount: '' }]");
+    expect(mobileSource).not.toContain("amount: result.expenseDraft?.amount ?? amount");
+  });
+
+  it("keeps the running-balance notice visible in Funding while category amounts are blank", () => {
+    expect(expensesSource).toContain("const hasBudgetedCategorySelection = form.categoryAllocations.some");
+    expect(expensesSource).toContain("(categoryBalancePreviews.length > 0 || hasBudgetedCategorySelection)");
+    expect(expensesSource).toContain("Enter the amount covered by each category above to see its running balance here.");
+    expect(dashboardSource).toContain("const hasBudgetedCategorySelection = categoryAllocations.some");
+    expect(dashboardSource).toContain("(categoryBalancePreviews.length > 0 || hasBudgetedCategorySelection)");
+  });
+
+  it("rejects whitespace-only web descriptions and submits trimmed descriptions", () => {
+    expect(expensesSource).toContain("const addDescription = addForm.description.trim();");
+    expect(expensesSource).toContain("if (!addDescription || !addForm.date)");
+    expect(expensesSource).toContain("description: addDescription");
+    expect(expensesSource).toContain("const editDescription = editForm.description.trim();");
+    expect(expensesSource).toContain("if (!editDescription || !editForm.date)");
+    expect(expensesSource).toContain("description: editDescription");
+  });
+
+  it("treats one-off spending as a category with its own amount", () => {
+    for (const source of [dashboardSource, expensesSource]) {
+      const addAnotherControl = source.indexOf("add-category-allocation");
+      const oneOffControl = source.indexOf("one-off-spending-category");
+      const primaryAmount = source.indexOf("One-off spending amount (KES)", oneOffControl);
+
+      expect(addAnotherControl).toBeGreaterThan(-1);
+      expect(oneOffControl).toBeGreaterThan(-1);
+      expect(oneOffControl).toBeGreaterThan(addAnotherControl);
+      expect(primaryAmount).toBeGreaterThan(oneOffControl);
+      expect(source).not.toContain('<option value="Other">One-off spending</option>');
+    }
+
+    const mobileAddAnother = mobileSource.indexOf('testID="add-category-allocation-mobile"');
+    const mobileOneOff = mobileSource.indexOf('testID="one-off-spending-category"');
+    expect(mobileAddAnother).toBeGreaterThan(-1);
+    expect(mobileOneOff).toBeGreaterThan(-1);
+    expect(mobileOneOff).toBeGreaterThan(mobileAddAnother);
+  });
+
+  it("shows allocation progress immediately after every category amount entry", () => {
+    const dashboardStatus = 'data-testid="category-allocation-total-dashboard"';
+    const dashboardPrimaryAmount = dashboardSource.indexOf('id="dashboard-primary-category-amount"');
+    const dashboardAdditionalAmount = dashboardSource.indexOf('id={`dashboard-additional-category-amount-${index}`}');
+    const dashboardOneOffAmount = dashboardSource.indexOf('id="dashboard-one-off-category-amount"');
+    expect(dashboardSource.match(/data-testid="category-allocation-total-dashboard"/g)).toHaveLength(3);
+    expect(dashboardSource.indexOf(dashboardStatus, dashboardPrimaryAmount)).toBeGreaterThan(dashboardPrimaryAmount);
+    expect(dashboardSource.indexOf(dashboardStatus, dashboardAdditionalAmount)).toBeGreaterThan(dashboardAdditionalAmount);
+    expect(dashboardSource.indexOf(dashboardStatus, dashboardOneOffAmount)).toBeGreaterThan(dashboardOneOffAmount);
+
+    const expensesStatus = 'data-testid={`category-allocation-total-${mode}`}';
+    const expensesPrimaryAmount = expensesSource.indexOf('id={`${mode}-primary-category-amount`}');
+    const expensesAdditionalAmount = expensesSource.indexOf('id={`${mode}-additional-category-amount-${index}`}');
+    const expensesOneOffAmount = expensesSource.indexOf('id={`${mode}-one-off-category-amount`}');
+    expect(expensesSource.match(/data-testid=\{`category-allocation-total-\$\{mode\}`\}/g)).toHaveLength(3);
+    expect(expensesSource.indexOf(expensesStatus, expensesPrimaryAmount)).toBeGreaterThan(expensesPrimaryAmount);
+    expect(expensesSource.indexOf(expensesStatus, expensesAdditionalAmount)).toBeGreaterThan(expensesAdditionalAmount);
+    expect(expensesSource.indexOf(expensesStatus, expensesOneOffAmount)).toBeGreaterThan(expensesOneOffAmount);
+
+    const mobileAmount = mobileSource.indexOf('testID={`category-allocation-${allocation.category}`}');
+    const mobileStatus = mobileSource.indexOf('testID={`category-allocation-status-mobile-${allocation.category}`}');
+    const mobileAddAnother = mobileSource.indexOf('testID="add-category-allocation-mobile"');
+    const mobileOneOff = mobileSource.indexOf('testID="one-off-spending-category"');
+    const mobileEndStatus = mobileSource.indexOf('testID="category-allocation-status-mobile-end"');
+    expect(mobileStatus).toBeGreaterThan(mobileAmount);
+    expect(mobileAddAnother).toBeGreaterThan(mobileStatus);
+    expect(mobileEndStatus).toBeGreaterThan(mobileOneOff);
+
+    expect(dashboardSource.indexOf('data-testid="category-allocation-total-dashboard-end"')).toBeGreaterThan(
+      dashboardSource.indexOf('id="dashboard-other-expense-panel"'),
+    );
+    expect(expensesSource.indexOf('data-testid={`category-allocation-total-${mode}-end`}')).toBeGreaterThan(
+      expensesSource.indexOf('id={`other-expense-panel-${mode}`}'),
+    );
+  });
+
+  it("keeps responsive category controls substantial instead of thin", () => {
+    expect(dashboardSource).toContain('className="h-[72px] w-full flex-1 rounded-xl border-2 border-input bg-card px-6 py-4 text-base');
+    expect(dashboardSource).toContain('className="h-14 w-full border-primary/45 bg-card font-semibold"');
+    expect(dashboardSource).toContain('className="h-14 w-full justify-start sm:w-auto"');
+    expect(expensesSource).toContain('className="flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input');
+    expect(expensesSource).toContain('className="h-14 w-full border-primary/45 bg-card font-semibold"');
+    expect(expensesSource).toContain('className="h-14 w-full justify-start sm:w-auto"');
+    expect(mobileSource).toContain("minHeight: 72");
+  });
+
+  it("keeps standard category splits when one-off spending is toggled", () => {
+    expect(dashboardSource).toContain('return [...retained, { category: "Other", amount: "" }]');
+    expect(expensesSource).toContain('return [...retained, { category: "Other", amount: "" }]');
+    expect(mobileSource).toContain("return [...allocations, { category: 'Other', amount: '' }]");
+    expect(dashboardSource).toContain("...(oneOff ? [oneOff] : [])");
+    expect(expensesSource).toContain("...(oneOff ? [oneOff] : [])");
+    expect(mobileSource).toContain("return [...standard, ...(oneOff ? [oneOff] : [])]");
+    expect(dashboardSource).not.toContain('return [{ category: "Other"');
+    expect(expensesSource).not.toContain('return [{ category: "Other"');
+    expect(mobileSource).not.toContain("!hasOneOffAllocation && <Pressable");
+  });
+
+  it("keeps category choices visible, highlights the total, and exposes bank funding in both budgets", () => {
+    expect(dashboardSource).toContain("Expense total (KES)");
+    expect(dashboardSource).toContain('data-testid="expense-total-dashboard"');
+    expect(dashboardSource).toContain("border-secondary/60 bg-secondary/10");
+    expect(expensesSource).toContain("Expense total (KES)");
+    expect(expensesSource).toContain('data-testid={`expense-total-${mode}`}');
+    expect(expensesSource).toContain("border-secondary/60 bg-secondary/10");
+    const dashboardCategoryPicker = dashboardSource.indexOf('aria-label="Expense category"');
+    const expensesCategoryPicker = expensesSource.indexOf('aria-label="Expense category"');
+    expect(dashboardCategoryPicker).toBeGreaterThan(-1);
+    expect(expensesCategoryPicker).toBeGreaterThan(-1);
+    expect(dashboardSource.slice(dashboardCategoryPicker - 240, dashboardCategoryPicker)).not.toContain("{!isOtherCategory && (");
+    expect(expensesSource.slice(expensesCategoryPicker - 240, expensesCategoryPicker)).not.toContain("{!isOtherCategory && (");
+    expect(mobileSource).toContain("EXPENSE TOTAL");
+    expect(mobileSource).toContain("FUNDING OPTIONS");
+    expect(mobileSource).toContain('testID="expense-bank-funding-option"');
+    expect(mobileSource).toContain("minHeight: 72");
+    expect(mobileSource).toContain("minWidth: 112");
+    expect(mobileSource).toContain("(canManageShared || selectablePayers.length > 0)");
+  });
+
+  it("places the expense date before amount, category, and funding controls in every form", () => {
+    const dashboardDate = dashboardSource.indexOf('data-testid="expense-date-section-dashboard"');
+    const dashboardAmount = dashboardSource.indexOf('data-testid="expense-total-dashboard"');
+    const dashboardCategory = dashboardSource.indexOf("2. What did this expense cover?");
+    const dashboardFunding = dashboardSource.indexOf("3. How was this expense funded?");
+    expect(dashboardDate).toBeGreaterThan(-1);
+    expect(dashboardDate).toBeLessThan(dashboardAmount);
+    expect(dashboardDate).toBeLessThan(dashboardCategory);
+    expect(dashboardDate).toBeLessThan(dashboardFunding);
+
+    const webDate = expensesSource.indexOf('data-testid={`expense-date-section-${mode}`}');
+    const webAmount = expensesSource.indexOf('data-testid={`expense-total-${mode}`}');
+    const webCategory = expensesSource.indexOf("2. What did this expense cover?");
+    const webFunding = expensesSource.indexOf("3. How was this expense funded?");
+    expect(webDate).toBeGreaterThan(-1);
+    expect(webDate).toBeLessThan(webAmount);
+    expect(webDate).toBeLessThan(webCategory);
+    expect(webDate).toBeLessThan(webFunding);
+
+    const mobileDate = mobileSource.indexOf('testID="expense-date-section"');
+    const mobileAmount = mobileSource.indexOf("EXPENSE TOTAL");
+    const mobileCategory = mobileSource.indexOf("CATEGORY (OPTIONAL)");
+    const mobileFunding = mobileSource.indexOf("FUNDING OPTIONS");
+    expect(mobileDate).toBeGreaterThan(-1);
+    expect(mobileDate).toBeLessThan(mobileAmount);
+    expect(mobileDate).toBeLessThan(mobileCategory);
+    expect(mobileDate).toBeLessThan(mobileFunding);
+
+    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+      expect(source).toContain("This date decides which month includes the expense in budgets, totals, and reports.");
+    }
+  });
+
+  it("explains where an expense goes when no category is selected", () => {
+    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+      expect(source).toContain("Uncategorized");
+      expect(source).toContain("outside any budget category");
+    }
+    expect(dashboardSource).toContain('<option value="">Select a category</option>');
+    expect(expensesSource).toContain('<option value="">Select a category</option>');
+    expect(dashboardSource).not.toContain('<option value="">No category</option>');
+    expect(expensesSource).not.toContain('<option value="">No category</option>');
   });
 });
 
@@ -75,6 +341,17 @@ describe("inline expense bank-account creation", () => {
     expect(expensesSource).toContain("+ New bank account");
     expect(mobileSource).toContain("New bank account");
     expect(mobileSource).toContain("handleCreateBankAccount");
+  });
+
+  it("offers account creation directly from the empty bank-funding state", () => {
+    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+      expect(source).toContain("No bank account yet. Create one below");
+      expect(source).not.toContain("No bank accounts available");
+      expect(source).not.toContain("Add a bank account from the Bank tab before using bank funds.");
+    }
+    expect(dashboardSource).toContain('data-testid="create-bank-account-inline-dashboard"');
+    expect(expensesSource).toContain('data-testid={`create-bank-account-inline-${mode}`}');
+    expect(mobileSource).toContain('testID="create-bank-account-inline-mobile"');
   });
 });
 

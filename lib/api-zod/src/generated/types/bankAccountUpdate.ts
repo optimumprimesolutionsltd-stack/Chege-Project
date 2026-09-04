@@ -20,4 +20,5 @@ export interface BankAccountUpdate {
   accountNumber?: string | null;
   /** @minimum 0 */
   openingBalance?: number;
+  openingBalanceDate?: Date;
 }

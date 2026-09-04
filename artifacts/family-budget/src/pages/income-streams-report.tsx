@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getDashboardMonthlyReportPdf,
   getGetDashboardCategoryBreakdownQueryKey,
@@ -48,6 +48,12 @@ export default function IncomeStreamsReport() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const previousCalendarMonth = useMemo(() => {
+    const value = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return { month: value.getMonth() + 1, year: value.getFullYear() };
+  }, []);
+  const initialMonthChecked = useRef(false);
+  const [showingLatestExpenseMonth, setShowingLatestExpenseMonth] = useState(false);
   const today = dateInputValue(now);
   const [periodView, setPeriodView] = useState<PeriodView>("month");
   const [anchorDate, setAnchorDate] = useState(today);
@@ -63,6 +69,17 @@ export default function IncomeStreamsReport() {
   const monthlySummary = useGetDashboardSummary(
     { month, year },
     { query: { queryKey: getGetDashboardSummaryQueryKey({ month, year }), retry: false }, request: { cache: "no-store" } },
+  );
+  const previousMonthSummary = useGetDashboardSummary(
+    previousCalendarMonth,
+    {
+      query: {
+        queryKey: getGetDashboardSummaryQueryKey(previousCalendarMonth),
+        retry: false,
+        enabled: month === now.getMonth() + 1 && year === now.getFullYear() && !initialMonthChecked.current,
+      },
+      request: { cache: "no-store" },
+    },
   );
   const monthlyCategories = useGetDashboardCategoryBreakdown(
     { month, year },
@@ -87,7 +104,39 @@ export default function IncomeStreamsReport() {
     },
   );
 
+  useEffect(() => {
+    if (initialMonthChecked.current || monthlySummary.isLoading || previousMonthSummary.isLoading) return;
+    if (monthlySummary.isError || previousMonthSummary.isError) {
+      initialMonthChecked.current = true;
+      return;
+    }
+
+    initialMonthChecked.current = true;
+    if (
+      month === now.getMonth() + 1
+      && year === now.getFullYear()
+      && (monthlySummary.data?.expenseCount ?? 0) === 0
+      && (previousMonthSummary.data?.expenseCount ?? 0) > 0
+    ) {
+      setMonth(previousCalendarMonth.month);
+      setYear(previousCalendarMonth.year);
+      setShowingLatestExpenseMonth(true);
+    }
+  }, [
+    month,
+    monthlySummary.data?.expenseCount,
+    monthlySummary.isError,
+    monthlySummary.isLoading,
+    now,
+    previousCalendarMonth,
+    previousMonthSummary.data?.expenseCount,
+    previousMonthSummary.isError,
+    previousMonthSummary.isLoading,
+    year,
+  ]);
+
   const previousMonth = () => {
+    setShowingLatestExpenseMonth(false);
     if (month === 1) {
       setMonth(12);
       setYear(year - 1);
@@ -96,6 +145,7 @@ export default function IncomeStreamsReport() {
     }
   };
   const nextMonth = () => {
+    setShowingLatestExpenseMonth(false);
     if (month === 12) {
       setMonth(1);
       setYear(year + 1);
@@ -208,6 +258,27 @@ export default function IncomeStreamsReport() {
         <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${downloadMessage.startsWith("Your") ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
           {downloadMessage.startsWith("Your") ? <CheckCircle2 className="h-4 w-4" /> : <CircleHelp className="h-4 w-4" />}
           {downloadMessage}
+        </div>
+      )}
+      {showingLatestExpenseMonth && (
+        <div className="flex flex-col gap-2 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between" role="status" data-testid="latest-expense-month-notice">
+          <p>
+            <span className="font-semibold text-foreground">Showing {formatMonthYear(month, year)}.</span>{" "}
+            <span className="text-muted-foreground">The current month has no recorded expenses yet, so Jamvi opened the latest month with expense activity.</span>
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              setMonth(now.getMonth() + 1);
+              setYear(now.getFullYear());
+              setShowingLatestExpenseMonth(false);
+            }}
+          >
+            View current month
+          </Button>
         </div>
       )}
 

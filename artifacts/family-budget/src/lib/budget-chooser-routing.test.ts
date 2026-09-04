@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldShowBudgetChooser } from "./budget-chooser-routing";
+import { hasFinishedOnboarding, shouldShowBudgetChooser } from "./budget-chooser-routing";
 
 describe("budget chooser routing", () => {
   it.each(["/", "/expenses", "/budget", "/bank", "/reports", "/settings"])(
@@ -44,5 +44,32 @@ describe("budget chooser routing", () => {
       completed: true,
       requiresSelection: true,
     })).toBe(false);
+  });
+
+  it("does not mistake an existing budget for finished onboarding when setup is incomplete", () => {
+    expect(hasFinishedOnboarding({
+      serverCompleted: false,
+      serverStarted: true,
+      localCompleted: false,
+      hasExistingBudget: true,
+      hasSavedDraft: false,
+    })).toBe(false);
+    expect(hasFinishedOnboarding({
+      serverCompleted: false,
+      serverStarted: false,
+      localCompleted: false,
+      hasExistingBudget: true,
+      hasSavedDraft: true,
+    })).toBe(false);
+  });
+
+  it("preserves the legacy existing-budget completion fallback when no setup was started", () => {
+    expect(hasFinishedOnboarding({
+      serverCompleted: false,
+      serverStarted: false,
+      localCompleted: false,
+      hasExistingBudget: true,
+      hasSavedDraft: false,
+    })).toBe(true);
   });
 });

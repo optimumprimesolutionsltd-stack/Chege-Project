@@ -4,6 +4,7 @@ import { schedule as cronSchedule } from "node-cron";
 import { sendMonthlyDigest, previousMonth } from "./lib/digest";
 import { db } from "@workspace/db";
 import { groupsTable } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { assertExternalProductionConfiguration } from "./lib/productionConfig";
 
 // Backfill removed — contributions are now derived from deposits + direct expense payments
@@ -24,13 +25,28 @@ if (Number.isNaN(port) || port <= 0) {
 
 assertExternalProductionConfiguration();
 
-app.listen(port, (err) => {
+async function startServer() {
+  // Keep this additive migration idempotent so credential auth can be enabled
+  // safely on an existing deployment even when the migration runner was not
+  // invoked separately.
+  await db.execute(
+    sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" varchar`,
+  );
+  logger.info("Credential authentication schema is ready");
+
+  app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
 
   logger.info({ port }, "Server listening");
+  });
+}
+
+startServer().catch((err) => {
+  logger.error({ err }, "Failed to initialize database schema");
+  process.exit(1);
 });
 
 // ── Monthly digest cron — runs at 08:00 on the 1st of every month ─────────

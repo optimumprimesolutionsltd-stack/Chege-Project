@@ -31,6 +31,8 @@ import { SHARED_GROUP_KINDS, groupKindPresentation, type SharedGroupKind } from 
 import { applyAppearance, readAppearance, saveAppearance, type Appearance } from "@/lib/appearance";
 import { appPath } from "@/lib/base-path";
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from "@/lib/member-limit";
+import { workspaceLabel } from "@/lib/workspace-identity";
+import { formatDate } from "@/lib/utils";
 
 type GroupInvitation = {
   id: number;
@@ -126,6 +128,7 @@ export default function Settings() {
   const displayNameInputRef = useRef<HTMLInputElement>(null);
   const budgetNameInputRef = useRef<HTMLInputElement>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
   const canManageWorkspace = isPrivateWorkspace || (members?.some(
     (member) =>
       member.userId === user?.id &&
@@ -275,7 +278,7 @@ export default function Settings() {
       toast({
         variant: "destructive",
         title: "Could not update your name",
-        description: error instanceof Error ? error.message : "Use letters, spaces, apostrophes, or hyphens.",
+        description: error instanceof Error ? error.message : "Use up to 40 printable characters without line breaks.",
       });
     } finally {
       setSavingDisplayName(false);
@@ -498,7 +501,7 @@ export default function Settings() {
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm("Remove this person from the group? They will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.")) return;
+    if (!confirm(`Remove this person from "${budgetName}"? They will lose access immediately. Shared expenses, goals, bank activity, and history will stay with "${budgetName}".`)) return;
     try {
       await removeMember.mutateAsync({ userId });
       toast({ title: "Member removed", description: "Shared records stay with the group." });
@@ -507,13 +510,13 @@ export default function Settings() {
       toast({
         variant: "destructive",
         title: "Could not remove this person",
-        description: error instanceof Error ? error.message : "Only owners and admins can remove members.",
+        description: error instanceof Error ? error.message : `Only owners and admins can remove members from "${budgetName}".`,
       });
     }
   };
 
   const handleLeaveGroup = async () => {
-    if (!confirm("Leave this group? You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.")) return;
+    if (!confirm(`Leave "${budgetName}"? You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with "${budgetName}".`)) return;
     try {
       await leaveGroup.mutateAsync();
       queryClient.clear();
@@ -1009,7 +1012,7 @@ export default function Settings() {
                ? "Only you have access to your Personal budget. Shared budgets remain separate."
               : canManageShared
                 ? "You can change any non-owner between Admin and Member or remove their access. The group owner is protected."
-              : "The people listed here have access to this budget. Works for families, chamas, clubs, teams, and other shared groups."}
+              : "The people listed here have access to this budget. Works for families, chamas, clubs, student groups, teams, and other shared groups."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 px-4 pb-4 sm:px-6 sm:pb-6">
@@ -1192,7 +1195,7 @@ export default function Settings() {
                 <div key={invitation.id} className="flex flex-col gap-3 rounded-xl border border-border/60 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{invitation.email}</p>
-                    <p className="text-xs text-muted-foreground">{invitation.role} · expires {new Date(invitation.expiresAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground">{invitation.role} · expires {formatDate(invitation.expiresAt)}</p>
                   </div>
                   <div className="flex items-center justify-end gap-1 sm:shrink-0">
                     <Button variant="ghost" size="icon" aria-label={`Resend invitation to ${invitation.email}`} onClick={() => resendInvitation(invitation)}>

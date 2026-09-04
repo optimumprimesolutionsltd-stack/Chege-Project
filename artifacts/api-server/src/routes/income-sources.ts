@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { groupMembershipsTable, incomeSourcesTable } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveGroupId, isGroupManager, requireMemberSelfAttribution } from "../lib/activeGroup";
+import { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
+export { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
 
 const router = Router();
 
@@ -39,7 +41,7 @@ router.get("/income-sources", async (req, res) => {
         .where(eq(incomeSourcesTable.groupId, groupId))
         .orderBy(incomeSourcesTable.userId, incomeSourcesTable.isMain, incomeSourcesTable.id);
 
-  res.json(rows);
+  res.json(dedupeIncomeSources(rows));
 });
 
 // POST /api/income-sources — create a new source
@@ -58,6 +60,21 @@ router.post("/income-sources", async (req, res) => {
   if (!requireMemberSelfAttribution(req, res, [parsed.data.userId])) return;
   if (!(await isGroupMember(parsed.data.userId, groupId))) {
     res.status(400).json({ error: "User is not a member of this shared group." });
+    return;
+  }
+
+  const normalizedName = normalizeIncomeSourceName(parsed.data.name);
+  const [existing] = await db
+    .select({ id: incomeSourcesTable.id })
+    .from(incomeSourcesTable)
+    .where(and(
+      eq(incomeSourcesTable.groupId, groupId),
+      eq(incomeSourcesTable.userId, parsed.data.userId),
+      sql`lower(trim(${incomeSourcesTable.name})) = ${normalizedName}`,
+    ))
+    .limit(1);
+  if (existing) {
+    res.status(409).json({ error: "An income source with this name already exists for this member." });
     return;
   }
 
@@ -83,6 +100,20 @@ router.put("/income-sources/:id", async (req, res) => {
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
   if (!isGroupManager(req) && existing.userId !== req.user!.id) {
     res.status(403).json({ error: "Members can manage only their own income sources." });
+    return;
+  }
+  const [duplicate] = await db
+    .select({ id: incomeSourcesTable.id })
+    .from(incomeSourcesTable)
+    .where(and(
+      eq(incomeSourcesTable.groupId, groupId),
+      eq(incomeSourcesTable.userId, existing.userId),
+      ne(incomeSourcesTable.id, id),
+      sql`lower(trim(${incomeSourcesTable.name})) = ${normalizeIncomeSourceName(parsed.data.name)}`,
+    ))
+    .limit(1);
+  if (duplicate) {
+    res.status(409).json({ error: "An income source with this name already exists for this member." });
     return;
   }
   const [row] = await db.update(incomeSourcesTable).set(parsed.data)

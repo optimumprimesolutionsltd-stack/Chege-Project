@@ -4,8 +4,10 @@ import {
   getExpenseFundingControlState,
   getExpenseFundingStatus,
   getFundingRemainder,
+  isFundingFulfilled,
   getCategoryAllocationStatus,
   getNewExpenseCategoryMode,
+  getProjectedCategoryBalance,
   hasMissingPersonalFundingSource,
 } from "./expense-funding-utils";
 
@@ -76,6 +78,13 @@ describe("expense funding controls", () => {
     expect(getFundingRemainder(1000, 0)).toBe(0);
   });
 
+  it("marks funding fulfilled once the entered portions reach the expense total", () => {
+    expect(isFundingFulfilled(1000, 999)).toBe(false);
+    expect(isFundingFulfilled(1000, 1000)).toBe(true);
+    expect(isFundingFulfilled(1000, 1200)).toBe(true);
+    expect(isFundingFulfilled(0, 1000)).toBe(false);
+  });
+
   it("fills a newly selected second source from the existing primary amount", () => {
     expect(addFundingSourceWithRemainder({
       total: 1000,
@@ -115,6 +124,42 @@ describe("expense funding controls", () => {
     })).toEqual({ primary: "250", second: "300", third: "450" });
   });
 
+  it("preserves a bank portion while adding three independent direct portions", () => {
+    const bankKey = "__joint_bank__";
+    let amounts = addFundingSourceWithRemainder({
+      total: 9000,
+      selectedSourceIds: [bankKey],
+      newSourceId: "salary",
+      amounts: { [bankKey]: "1000" },
+    });
+    amounts.salary = "2000";
+    amounts = addFundingSourceWithRemainder({
+      total: 9000,
+      selectedSourceIds: [bankKey, "salary"],
+      newSourceId: "business",
+      amounts,
+    });
+    amounts.business = "3000";
+    amounts = addFundingSourceWithRemainder({
+      total: 9000,
+      selectedSourceIds: [bankKey, "salary", "business"],
+      newSourceId: "freelance",
+      amounts,
+    });
+
+    expect(amounts).toEqual({
+      [bankKey]: "1000",
+      salary: "2000",
+      business: "3000",
+      freelance: "3000",
+    });
+  });
+
+  it("fills bank funding from the remaining balance after direct funding", () => {
+    expect(getFundingRemainder(9000, 5900)).toBe(3100);
+    expect(getFundingRemainder(9000, 9000)).toBe(0);
+  });
+
   it("does not create a positive remainder for an exact or overfunded primary", () => {
     expect(addFundingSourceWithRemainder({
       total: 1000,
@@ -136,6 +181,33 @@ describe("expense funding controls", () => {
     expect(getNewExpenseCategoryMode({ addToBudget: true, canManageCategories: true })).toBe("budgeted");
   });
 
+  it("projects the category balance after a new expense allocation", () => {
+    expect(getProjectedCategoryBalance({
+      budgetAmount: 10_000,
+      spentAmount: 4_000,
+      allocationAmount: 2_500,
+    })).toEqual({
+      projectedSpent: 6_500,
+      remaining: 3_500,
+      overBy: 0,
+      isOverBudget: false,
+    });
+  });
+
+  it("replaces the previous allocation when previewing an edited expense", () => {
+    expect(getProjectedCategoryBalance({
+      budgetAmount: 10_000,
+      spentAmount: 9_000,
+      previousAllocationAmount: 2_000,
+      allocationAmount: 4_000,
+    })).toEqual({
+      projectedSpent: 11_000,
+      remaining: 0,
+      overBy: 1_000,
+      isOverBudget: true,
+    });
+  });
+
   it("does not mark an amount-only category row ready before a category is selected", () => {
     expect(getCategoryAllocationStatus({
       total: 1000,
@@ -144,6 +216,20 @@ describe("expense funding controls", () => {
     })).toEqual({
       tone: "attention",
       message: "Choose a category for every row",
+    });
+  });
+
+  it("shows the pending balance after the first category amount is entered", () => {
+    expect(getCategoryAllocationStatus({
+      total: 10000,
+      allocations: [
+        { category: "Education", amount: 5000 },
+        { category: "Utilities", amount: Number.NaN },
+      ],
+      formatAmount: (amount) => `KES ${amount.toLocaleString()}`,
+    })).toEqual({
+      tone: "error",
+      message: "Allocated KES 5,000 of KES 10,000 · KES 5,000 remaining",
     });
   });
 
@@ -176,6 +262,36 @@ describe("expense funding controls", () => {
     })).toEqual({
       tone: "attention",
       message: "Choose an income source for every direct portion",
+    });
+  });
+
+  it("shows the live balance after the first funding amount and only marks the exact final total fully funded", () => {
+    expect(getExpenseFundingStatus({
+      total: 10000,
+      fundingTotal: 4000,
+      hasBankFunding: false,
+      hasBankAccount: false,
+      hasDirectFunding: true,
+      hasDirectPayer: true,
+      hasDirectIncomeSource: true,
+      formatAmount: (amount) => `KES ${amount.toLocaleString()}`,
+    })).toEqual({
+      tone: "attention",
+      message: "Funded KES 4,000 of KES 10,000 · KES 6,000 remaining",
+    });
+
+    expect(getExpenseFundingStatus({
+      total: 10000,
+      fundingTotal: 10000,
+      hasBankFunding: false,
+      hasBankAccount: false,
+      hasDirectFunding: true,
+      hasDirectPayer: true,
+      hasDirectIncomeSource: true,
+      formatAmount: (amount) => `KES ${amount.toLocaleString()}`,
+    })).toEqual({
+      tone: "ready",
+      message: "Funded KES 10,000 of KES 10,000 · Fully funded",
     });
   });
 });

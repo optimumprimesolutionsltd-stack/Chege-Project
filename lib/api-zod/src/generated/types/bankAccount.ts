@@ -12,5 +12,6 @@ export interface BankAccount {
   /** @nullable */
   accountNumber: string | null;
   openingBalance: number;
+  openingBalanceDate?: Date;
   createdAt: Date;
 }

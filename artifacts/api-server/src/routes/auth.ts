@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { UpdateDisplayNameBody } from './display-name-schema';
 
 const GetCurrentAuthUserResponse = z.object({
   user: z
@@ -23,16 +24,9 @@ const ExchangeMobileAuthorizationCodeBody = z.object({
 
 const ExchangeMobileAuthorizationCodeResponse = z.object({ token: z.string() });
 const LogoutMobileSessionResponse = z.object({ success: z.boolean() });
-const UpdateDisplayNameBody = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Enter a name.')
-    .max(40, 'Use 40 characters or fewer.')
-    .regex(/^[\p{L}][\p{L}\p{M}' -]*$/u, 'Use letters, spaces, apostrophes, or hyphens.'),
-});
 import { db, usersTable } from '@workspace/db';
 import { eq } from 'drizzle-orm';
+import { verifyPhotoObject } from '../lib/photoStorage';
 import { Router, type IRouter, type Request, type Response } from 'express';
 import * as oidc from 'openid-client';
 
@@ -48,14 +42,16 @@ import {
   SESSION_COOKIE,
   SESSION_TTL,
   type SessionData,
+  hashPassword,
+  verifyPassword,
 } from '../lib/auth';
 import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
 import { resolvePhotoUrl } from '../lib/photoStorage';
 import { resolveOrigin } from '../lib/requestOrigin.js';
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
-
 const router: IRouter = Router();
+const normalizeEmail = (email: string) => email.trim().toLocaleLowerCase("en-US");
 
 async function authUserPayload(user: {
   id: string;
@@ -107,6 +103,38 @@ function setOidcCookie(res: Response, name: string, value: string) {
   });
 }
 
+const CredentialBody = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
+  password: z.string().min(8, 'Use at least 8 characters.'),
+});
+const RegisterBody = CredentialBody.extend({
+  name: z.string().trim().min(1, 'Enter your name.').max(80, 'Use 80 characters or fewer.'),
+});
+
+function localAuthUser(user: {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  preferredName: string | null;
+  profileImageUrl: string | null;
+}): SessionData['user'] {
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.preferredName ?? user.firstName,
+    lastName: user.preferredName ? null : user.lastName,
+    profileImageUrl: user.profileImageUrl,
+    needsDisplayName: !user.preferredName,
+  };
+}
+
+async function startLocalSession(res: Response, user: Parameters<typeof localAuthUser>[0]) {
+  const sid = await createSession({ user: localAuthUser(user), access_token: 'local-password' });
+  clearActiveWorkspaceCookie(res);
+  setSessionCookie(res, sid);
+}
+
 function getSafeReturnTo(value: unknown): string {
   if (
     typeof value !== 'string' ||
@@ -154,7 +182,8 @@ function getSafeErrorMetadata(error: unknown) {
 }
 
 export async function upsertUser(claims: Record<string, unknown>) {
-  const email = (claims.email as string) || null;
+  const rawEmail = (claims.email as string) || "";
+  const email = rawEmail ? normalizeEmail(rawEmail) : null;
   const profile = {
     email,
     // Google OIDC uses given_name / family_name; fall back to first_name /
@@ -205,6 +234,44 @@ export async function upsertUser(claims: Record<string, unknown>) {
   return user;
 }
 
+router.post('/auth/register', async (req: Request, res: Response) => {
+  const parsed = RegisterBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter valid details.' });
+    return;
+  }
+  const email = normalizeEmail(parsed.data.email);
+  const existing = await db.query.usersTable.findFirst({ where: eq(usersTable.email, email) });
+  if (existing) {
+    res.status(409).json({ error: 'An account with this email already exists. Try signing in instead.' });
+    return;
+  }
+  const [user] = await db.insert(usersTable).values({
+    email,
+    passwordHash: hashPassword(parsed.data.password),
+    preferredName: parsed.data.name,
+    firstName: parsed.data.name,
+  }).returning();
+  await startLocalSession(res, user);
+  res.json({ user: await authUserPayload(user) });
+});
+
+router.post('/auth/password-login', async (req: Request, res: Response) => {
+  const parsed = CredentialBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter a valid email and password.' });
+    return;
+  }
+  const email = normalizeEmail(parsed.data.email);
+  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.email, email) });
+  if (!user?.passwordHash || !verifyPassword(parsed.data.password, user.passwordHash)) {
+    res.status(401).json({ error: 'Email or password is incorrect.' });
+    return;
+  }
+  await startLocalSession(res, user);
+  res.json({ user: await authUserPayload(user) });
+});
+
 router.get('/auth/user', async (req: Request, res: Response) => {
   if (!req.isAuthenticated()) {
     res.json(GetCurrentAuthUserResponse.parse({ user: null }));
@@ -213,7 +280,15 @@ router.get('/auth/user', async (req: Request, res: Response) => {
   // Always fetch fresh user data from DB — session snapshots can be stale
   // (e.g. firstName/lastName added after the session was first created).
   const [dbUser] = await db
-    .select()
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+      preferredName: usersTable.preferredName,
+      profileImageUrl: usersTable.profileImageUrl,
+      customProfilePhotoPath: usersTable.customProfilePhotoPath,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, req.user.id))
     .limit(1);
@@ -276,6 +351,15 @@ router.put('/auth/profile-photo', async (req: Request, res: Response) => {
   if (!parsed.success) {
     res.status(400).json({ error: 'Choose a valid uploaded photo.' });
     return;
+  }
+
+  if (parsed.data.photoPath) {
+    try {
+      await verifyPhotoObject(parsed.data.photoPath);
+    } catch {
+      res.status(400).json({ error: 'The uploaded photo could not be verified. Please upload it again.' });
+      return;
+    }
   }
 
   const [user] = await db

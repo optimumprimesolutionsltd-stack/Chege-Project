@@ -5,6 +5,120 @@
  * Jamvi API — personal and group money management
  * OpenAPI spec version: 0.1.0
  */
+export interface ParseMpesaMessageInput {
+  /**
+     * An anonymized M-Pesa message. Do not include real phone numbers or other personal information.
+     * @minLength 1
+     * @maxLength 20000
+     */
+  message: string;
+}
+
+/**
+ * @nullable
+ */
+export type MpesaTransactionTransactionType = typeof MpesaTransactionTransactionType[keyof typeof MpesaTransactionTransactionType] | null;
+
+
+export const MpesaTransactionTransactionType = {
+  person_payment: 'person_payment',
+  person_receipt: 'person_receipt',
+  merchant_payment: 'merchant_payment',
+  paybill_payment: 'paybill_payment',
+  airtime_purchase: 'airtime_purchase',
+  cash_withdrawal: 'cash_withdrawal',
+  cash_deposit: 'cash_deposit',
+  bank_transfer: 'bank_transfer',
+  bank_receipt: 'bank_receipt',
+  reversal: 'reversal',
+  failed: 'failed',
+  other: 'other',
+} as const;
+
+/**
+ * @nullable
+ */
+export type MpesaTransactionPurchaseCategory = typeof MpesaTransactionPurchaseCategory[keyof typeof MpesaTransactionPurchaseCategory] | null;
+
+
+export const MpesaTransactionPurchaseCategory = {
+  postpaid_bundle: 'postpaid_bundle',
+  minutes: 'minutes',
+  airtime: 'airtime',
+  gift: 'gift',
+  wifi: 'wifi',
+} as const;
+
+export type MpesaTransactionConfidence = typeof MpesaTransactionConfidence[keyof typeof MpesaTransactionConfidence];
+
+
+export const MpesaTransactionConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+  none: 'none',
+} as const;
+
+export interface MpesaTransaction {
+  /** @nullable */
+  transactionId: string | null;
+  /** @nullable */
+  originalTransactionId: string | null;
+  /** @nullable */
+  transactionType: MpesaTransactionTransactionType;
+  /** @nullable */
+  purchaseCategory: MpesaTransactionPurchaseCategory;
+  /** @nullable */
+  amount: number | null;
+  /** @nullable */
+  currency: string | null;
+  /** @nullable */
+  merchantOrCounterparty: string | null;
+  /** @nullable */
+  accountReference: string | null;
+  /** @nullable */
+  phoneNumber: string | null;
+  /** @nullable */
+  date: string | null;
+  /** @nullable */
+  time: string | null;
+  /** @nullable */
+  mpesaBalance: number | null;
+  /** @nullable */
+  fee: number | null;
+  parserVersion: string;
+  confidence: MpesaTransactionConfidence;
+  parseWarnings: string[];
+}
+
+export type MpesaParseResultStatus = typeof MpesaParseResultStatus[keyof typeof MpesaParseResultStatus];
+
+
+export const MpesaParseResultStatus = {
+  parsed: 'parsed',
+  unsupported: 'unsupported',
+  invalid: 'invalid',
+} as const;
+
+export type MpesaParseResultConfidence = typeof MpesaParseResultConfidence[keyof typeof MpesaParseResultConfidence];
+
+
+export const MpesaParseResultConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+  none: 'none',
+} as const;
+
+export interface MpesaParseResult {
+  status: MpesaParseResultStatus;
+  transaction: MpesaTransaction | null;
+  confidence: MpesaParseResultConfidence;
+  warnings: string[];
+  /** Normalized text returned for debugging parser rules; personal-looking numbers are redacted. */
+  normalizedMessage: string;
+}
+
 export interface IncomeSource {
   id: number;
   userId: string;
@@ -27,6 +141,11 @@ export interface SuccessResponse {
 }
 
 export interface DisplayNameInput {
+  /**
+     * Printable Unicode display name without control characters or line breaks
+     * @minLength 1
+     * @maxLength 40
+     */
   name: string;
 }
 
@@ -173,8 +292,9 @@ export interface ExpenseInput {
   /**
      * Selected bank account for bank funding. Omit to use the workspace's first account.
      * @minimum 1
+     * @nullable
      */
-  accountId?: number;
+  accountId?: number | null;
   /**
      * Required for a personal expense unless paidFromBank is true. Must belong to paidById.
      * @minimum 1
@@ -283,6 +403,7 @@ export const GroupKind = {
   chama: 'chama',
   club: 'club',
   team: 'team',
+  student_group: 'student_group',
   other: 'other',
 } as const;
 
@@ -949,7 +1070,7 @@ export interface SavingsGoal {
 export interface DepositContributorSplit {
   /** Household member who supplied this deposit portion. */
   userId: string;
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /** @minimum 1 */
   incomeSourceId?: number;
@@ -962,6 +1083,11 @@ export interface JointAccountTransaction {
   /** deposit or disbursement */
   type: string;
   amount: number;
+  /**
+     * Balance in this specific bank account immediately after this transaction; null for an all-accounts view
+     * @nullable
+     */
+  runningBalance?: number | null;
   description: string;
   madeById?: string | null;
   madeByName?: string | null;
@@ -1014,6 +1140,11 @@ export interface JointAccountTransaction {
 export interface JointAccountSummary {
   /** Manually entered balance carried into the first recorded transaction */
   openingBalance: number;
+  /**
+     * Calendar date on which the opening balance applies
+     * @nullable
+     */
+  openingBalanceDate?: string | null;
   accountId: number;
   accountName: string;
   /** @nullable */
@@ -1030,14 +1161,16 @@ export interface JointAccountSummary {
 export interface OpeningBalance {
   /** @minimum 0 */
   openingBalance: number;
+  openingBalanceDate?: string;
   accountId: number;
 }
 
 export interface OpeningBalanceInput {
   /** @minimum 0 */
   openingBalance: number;
+  openingBalanceDate?: string;
   /**
-     * Manual starting balance in whole KES
+     * Manual starting balance in KES, with up to two decimal places
      * @minimum 1
      */
   accountId?: number;
@@ -1056,8 +1189,8 @@ export const DepositInputSourceKind = {
 
 export interface DepositInput {
   /**
-     * Whole KES only; must be a positive integer amount
-     * @minimum 1
+     * Positive KES amount with up to two decimal places
+     * @minimum 0.01
      */
   amount: number;
   description: string;
@@ -1074,7 +1207,7 @@ export interface DepositInput {
   incomeSourceId?: number;
   /** Choose other only when the required description is a narration. */
   sourceKind?: DepositInputSourceKind;
-  /** Whole-KES household contributor portions that must equal amount exactly. */
+  /** Household contributor portions, with up to two decimal places, that must equal amount exactly. */
   contributorSplits?: DepositContributorSplit[];
   /** @minimum 1 */
   accountId?: number;
@@ -1093,8 +1226,8 @@ export const DisbursementInputDestinationKind = {
 
 export interface DisbursementInput {
   /**
-     * Whole KES only; must be a positive integer amount
-     * @minimum 1
+     * Positive KES amount with up to two decimal places
+     * @minimum 0.01
      */
   amount: number;
   description?: string;
@@ -1113,7 +1246,7 @@ export interface DisbursementInput {
 }
 
 export interface BankChargeInput {
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /**
      * Required explanation from the bank statement, for example monthly account fee
@@ -1154,7 +1287,7 @@ export const UpdateJointAccountTransactionInputTransferDirection = {
 } as const;
 
 export interface UpdateJointAccountTransactionInput {
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /** Optional supporting detail; withdrawals fall back to their category */
   description?: string;
@@ -1192,7 +1325,10 @@ export interface UpdateJointAccountTransactionInput {
 }
 
 export interface SavingsTransferInput {
-  /** @minimum 1 */
+  /**
+     * Savings goals currently use whole KES amounts
+     * @minimum 1
+     */
   amount: number;
   /** @minimum 1 */
   goalId: number;
@@ -1213,7 +1349,7 @@ export interface BankToBankTransferInput {
   sourceAccountId: number;
   /** @minimum 1 */
   destinationAccountId: number;
-  /** @minimum 1 */
+  /** @minimum 0.01 */
   amount: number;
   /**
      * @minLength 1
@@ -1235,6 +1371,7 @@ export interface BankAccount {
   /** @nullable */
   accountNumber: string | null;
   openingBalance: number;
+  openingBalanceDate?: string;
   createdAt: string;
 }
 
@@ -1251,6 +1388,7 @@ export interface BankAccountInput {
   accountNumber?: string;
   /** @minimum 0 */
   openingBalance?: number;
+  openingBalanceDate?: string;
 }
 
 export interface BankAccountUpdate {
@@ -1267,6 +1405,7 @@ export interface BankAccountUpdate {
   accountNumber?: string | null;
   /** @minimum 0 */
   openingBalance?: number;
+  openingBalanceDate?: string;
 }
 
 export interface SavingsGoalInput {
@@ -1444,7 +1583,7 @@ months?: number;
 
 export type GetJointAccountParams = {
 /**
- * Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.
+ * Optional account selection. When omitted, accountId is null and accountName is All accounts.
  * @minimum 1
  */
 accountId?: number;

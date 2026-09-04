@@ -48,7 +48,7 @@ import {
   leaveMobileSharedWorkspace,
   switchMobileWorkspace,
 } from '@/lib/workspace';
-import { WORKSPACE_NAME_STYLES, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
+import { WORKSPACE_NAME_STYLES, workspaceBudgetName, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { SHARED_GROUP_KINDS, sharedGroupKindDetails, type SharedGroupKind } from '@/lib/groupKinds';
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from '@/lib/memberLimit';
 
@@ -234,7 +234,7 @@ export default function SettingsScreen() {
     } catch (error) {
       Alert.alert(
         'Could not update your name',
-        error instanceof Error ? error.message : 'Use letters, spaces, apostrophes, or hyphens.',
+        error instanceof Error ? error.message : 'Use up to 40 printable characters without line breaks.',
       );
     } finally {
       setSavingDisplayName(false);
@@ -606,7 +606,7 @@ export default function SettingsScreen() {
     }
   };
   const handleRemoveMember = (member: GroupMember) => {
-    Alert.alert('Remove from group?', `${member.userName ?? 'This person'} will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.`, [
+    Alert.alert('Remove member?', `Remove ${member.userName ?? 'this person'} from "${workspaceBudgetName(group)}"? They will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -617,7 +617,7 @@ export default function SettingsScreen() {
             await customFetch(`/api/members/${member.userId}`, { method: 'DELETE' });
             refreshMembers();
             } catch (error) {
-              Alert.alert('Could not remove person', error instanceof Error ? error.message : 'Only owners and admins can remove members.');
+              Alert.alert('Could not remove person', error instanceof Error ? error.message : `Only owners and admins can remove members from "${workspaceBudgetName(group)}".`);
           } finally {
             setManagingMembers(false);
           }
@@ -627,8 +627,8 @@ export default function SettingsScreen() {
   };
   const handleLeaveGroup = () => {
     Alert.alert(
-      'Leave this group?',
-      'You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with the group.',
+      `Leave "${workspaceBudgetName(group)}"?`,
+      'You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with this budget.',
       [
         { text: 'Stay', style: 'cancel' },
         {
@@ -643,7 +643,7 @@ export default function SettingsScreen() {
                 resetQueries: () => queryClient.resetQueries(),
               });
               router.replace('/budget-chooser');
-              Alert.alert('You left the group', 'Choose another budget to continue.');
+              Alert.alert('You left the Shared budget', `You left "${workspaceBudgetName(group)}". Choose another budget to continue.`);
             } catch (error) {
               Alert.alert('Could not leave group', error instanceof Error ? error.message : 'Please try again.');
             } finally {

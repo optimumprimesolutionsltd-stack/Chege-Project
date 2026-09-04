@@ -18,6 +18,8 @@ export const usersTable = pgTable('users', {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   email: varchar('email').unique(),
+  // Null for existing/provider-only accounts; populated only for email-password accounts.
+  passwordHash: varchar('password_hash'),
   // A name explicitly chosen in Jamvi. Unlike OIDC claims, it is never
   // overwritten when the person signs in again with Google.
   preferredName: varchar('preferred_name'),

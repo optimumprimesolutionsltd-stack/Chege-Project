@@ -2,6 +2,10 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../lib/subscription-catalog", () => ({
+  resolveGroupEntitlements: vi.fn(async () => ({ memberLimit: 6 })),
+}));
+
 vi.mock("@workspace/db", () => {
   const table = (name: string) => new Proxy({}, {
     get: (_, property) => ({ _table: name, _column: String(property) }),
@@ -247,7 +251,7 @@ describe("group invitation management", () => {
     });
 
     expect(response.status).toBe(409);
-    expect(response.body.error).toMatch(/free workspaces hold up to 6 people/i);
+    expect(response.body.error).toMatch(/current package supports up to 6 members/i);
     expect(insert).not.toHaveBeenCalled();
   });
 });

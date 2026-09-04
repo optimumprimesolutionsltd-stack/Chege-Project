@@ -13,17 +13,18 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { formatKes, formatMonthYear } from "@/lib/utils";
+import { formatDate, formatKes, formatMonthYear } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowRight, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { appPath } from "@/lib/base-path";
+import { workspaceLabel } from "@/lib/workspace-identity";
 
 type BudgetCategory = {
   id: number;
@@ -31,6 +32,7 @@ type BudgetCategory = {
   budgetAmount: number;
   priority: number;
   color: string;
+  isArchived?: boolean;
   isRecurring: boolean;
   activeMonth?: number | null;
   activeYear?: number | null;
@@ -38,6 +40,7 @@ type BudgetCategory = {
 type IncomeSource = { id: number; userId: string; name: string; isMain: boolean; expectedMonthlyAmount: number };
 type Member = { userId: string; userName?: string | null; role?: "owner" | "admin" | "member" };
 type LedgerTarget = { category: string; isBudgeted: boolean };
+type PriorityTier = { priority: number; label: string; description: string };
 type PendingCategoryChange = {
   name: string;
   budgetAmount: number;
@@ -46,17 +49,23 @@ type PendingCategoryChange = {
   activeMonth: number;
   activeYear: number;
 };
+type CategoryMigration = {
+  group: { id: number; name: string; kind: string };
+  categories: Array<BudgetCategory & { recommended: boolean }>;
+};
 
 function IncomeSourceEditor({
   source,
   canEdit,
   canDelete,
+  budgetName,
   onSave,
   onDelete,
 }: {
   source: IncomeSource;
   canEdit: boolean;
   canDelete: boolean;
+  budgetName: string;
   onSave: (source: IncomeSource, name: string, expectedAmount: string) => Promise<void>;
   onDelete: (source: IncomeSource) => Promise<void>;
 }) {
@@ -100,7 +109,7 @@ function IncomeSourceEditor({
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Remove "${source.name}" from future income choices? Existing records will stay, but this source will no longer be available when adding a new expense or deposit.`)) {
+    if (!confirm(`Remove "${source.name}" from "${budgetName}"? Existing records will stay, but this source will no longer be available when adding a new expense or deposit.`)) {
       return;
     }
 
@@ -240,7 +249,7 @@ const priorityGuide: Record<number, string> = {
 
 function CategoryDialog({
   open, onClose, initial, onSaved, reportMonth, reportYear, defaultPriority = 1,
-  recurringSetup = false, defaultName = "", defaultAmount = "",
+  recurringSetup = false, defaultName = "", defaultAmount = "", tiers,
 }: {
   open: boolean;
   onClose: () => void;
@@ -252,6 +261,7 @@ function CategoryDialog({
   recurringSetup?: boolean;
   defaultName?: string;
   defaultAmount?: string;
+  tiers: PriorityTier[];
 }) {
   const { toast } = useToast();
   const [name, setName] = useState(initial?.name ?? defaultName);
@@ -272,7 +282,7 @@ function CategoryDialog({
     setActiveYear(initial?.activeYear ?? reportYear);
   }, [initial, open, reportMonth, reportYear, defaultPriority, defaultName, defaultAmount]);
 
-  const parsedAmount = parseInt(amount, 10);
+  const parsedAmount = amount.trim() === "" && initial ? 0 : parseInt(amount, 10);
 
   const handleSave = () => {
     if (!name.trim() || isNaN(parsedAmount) || parsedAmount < 0) {
@@ -345,6 +355,7 @@ function CategoryDialog({
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">{recurringSetup ? "Average monthly amount (KES)" : "Budget amount (KES)"}</label>
               <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} disabled={saving} />
+                <p className="text-xs text-muted-foreground">Enter 0, or clear the amount while editing, to pause this budget. Existing expenses stay recorded.</p>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">Priority tier</label>
@@ -354,14 +365,14 @@ function CategoryDialog({
                 onChange={e => setPriority(e.target.value)}
                 disabled={saving}
               >
-                {Object.entries(priorityMap).filter(([k]) => k !== "999").map(([k, v]) => (
-                  <option key={k} value={k}>Tier {k}: {v}</option>
+                {tiers.map((tier) => (
+                  <option key={tier.priority} value={tier.priority}>Tier {tier.priority}: {tier.label}</option>
                 ))}
               </select>
               <div className="rounded-xl bg-muted/60 px-3 py-2.5">
                 <p className="text-xs font-semibold text-foreground">How to use tiers</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  Tiers help you decide what to fund first when money is limited. Start with Tier 1 for must-pay needs, then work down to Tier 5 for spending that can wait. {priorityGuide[Number(priority)]}
+                  Tiers help you decide what to fund first when money is limited. Start with Tier 1, then work down to Tier 5. {tiers.find((tier) => tier.priority === Number(priority))?.description}
                 </p>
               </div>
             </div>
@@ -437,7 +448,24 @@ export default function Budget() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { data: group } = useGetGroup();
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
   const qc = useQueryClient();
+  const { data: tierConfig, refetch: refetchTierConfig } = useQuery<{ tiers: PriorityTier[] }>({
+    queryKey: ["budget-priority-tiers", group?.id],
+    queryFn: async () => {
+      const response = await fetch("/api/budget-priority-tiers", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load priority tiers.");
+      return response.json();
+    },
+    enabled: Boolean(group?.id),
+  });
+  const priorityTiers = tierConfig?.tiers ?? Object.entries(priorityMap)
+    .filter(([priority]) => priority !== "999")
+    .map(([priority, label]) => ({
+      priority: Number(priority),
+      label,
+      description: priorityGuide[Number(priority)] ?? "",
+    }));
 
   const {
     data: breakdown,
@@ -491,6 +519,9 @@ export default function Budget() {
   const [newIncomeSourceAmount, setNewIncomeSourceAmount] = useState("");
   const [addingIncomeSource, setAddingIncomeSource] = useState(false);
   const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
+  const [tierEditorOpen, setTierEditorOpen] = useState(false);
+  const [tierDrafts, setTierDrafts] = useState<PriorityTier[]>([]);
+  const [savingTiers, setSavingTiers] = useState(false);
   const {
     data: ledger,
     isLoading: isLedgerLoading,
@@ -612,6 +643,48 @@ export default function Budget() {
   const openManage = (priority: number | null = null) => {
     setManagePriority(priority);
     setManageOpen(true);
+  };
+
+  const openTierEditor = () => {
+    setTierDrafts(priorityTiers.map((tier) => ({ ...tier })));
+    setTierEditorOpen(true);
+  };
+
+  const moveTier = (index: number, direction: -1 | 1) => {
+    setTierDrafts((current) => {
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  };
+
+  const saveTiers = async () => {
+    if (tierDrafts.some((tier) => !tier.label.trim() || !tier.description.trim())) {
+      toast({ variant: "destructive", title: "Complete every tier", description: "Each tier needs a name and short explanation." });
+      return;
+    }
+    setSavingTiers(true);
+    try {
+      const response = await fetch("/api/budget-priority-tiers", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tiers: tierDrafts }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(typeof body.error === "string" ? body.error : "Could not save priority tiers.");
+      }
+      await Promise.all([refetchTierConfig(), refreshAll()]);
+      setTierEditorOpen(false);
+      toast({ title: "Priority tiers updated", description: "Tier names, order, and their categories were updated together." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not update tiers", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setSavingTiers(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -752,6 +825,35 @@ export default function Budget() {
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) || group?.isPrivate === true;
+  const { data: categoryMigration, refetch: refetchCategoryMigration } = useQuery<CategoryMigration>({
+    queryKey: ["budget-category-migration", group?.id],
+    enabled: canManageShared,
+    queryFn: async () => {
+      const response = await fetch("/api/budget-categories/migration", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load category migration.");
+      return response.json();
+    },
+  });
+  const [migrationArchiveIds, setMigrationArchiveIds] = useState<number[]>([]);
+  const [applyingMigration, setApplyingMigration] = useState(false);
+  const mismatchedCategories = (categoryMigration?.categories ?? []).filter((category) => !category.recommended && !category.isArchived);
+  const applyCategoryMigration = async () => {
+    setApplyingMigration(true);
+    try {
+      const response = await fetch("/api/budget-categories/migration/apply", {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archiveCategoryIds: migrationArchiveIds, addRecommended: true }),
+      });
+      if (!response.ok) throw new Error("Could not update category setup.");
+      setMigrationArchiveIds([]);
+      await Promise.all([refetchCategoryMigration(), refreshAll()]);
+      toast({ title: "Category setup updated", description: "Historical records were kept. Archived categories will no longer appear for new entries." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not update categories", description: error instanceof Error ? error.message : "Please try again." });
+    } finally {
+      setApplyingMigration(false);
+    }
+  };
   const groupedIncomeSources = incomeSources.reduce((groups, source) => {
     const existing = groups.get(source.userId) ?? [];
     existing.push(source);
@@ -776,7 +878,45 @@ export default function Budget() {
         recurringSetup={!!recurringSetup}
         defaultName={recurringSetup?.category ?? ""}
         defaultAmount={recurringSetup?.category ? "" : recurringSetup?.expenseAmount ?? ""}
+        tiers={priorityTiers}
       />
+      <Dialog open={tierEditorOpen} onOpenChange={(open) => !savingTiers && setTierEditorOpen(open)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit priority tiers</DialogTitle>
+            <p className="text-sm text-muted-foreground">Rename tiers or move them. Moving a tier also moves all categories assigned to it.</p>
+          </DialogHeader>
+          <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+            {tierDrafts.map((tier, index) => (
+              <div key={tier.priority} className="grid gap-2 rounded-xl border p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
+                <span className="mt-2 rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">T{index + 1}</span>
+                <div className="space-y-2">
+                  <Input
+                    value={tier.label}
+                    maxLength={50}
+                    onChange={(event) => setTierDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))}
+                    aria-label={`Tier ${index + 1} name`}
+                  />
+                  <Input
+                    value={tier.description}
+                    maxLength={180}
+                    onChange={(event) => setTierDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item))}
+                    aria-label={`Tier ${index + 1} explanation`}
+                  />
+                </div>
+                <div className="flex gap-1">
+                  <Button type="button" variant="outline" size="icon" onClick={() => moveTier(index, -1)} disabled={index === 0 || savingTiers} aria-label={`Move ${tier.label} up`}><ArrowUp className="h-4 w-4" /></Button>
+                  <Button type="button" variant="outline" size="icon" onClick={() => moveTier(index, 1)} disabled={index === tierDrafts.length - 1 || savingTiers} aria-label={`Move ${tier.label} down`}><ArrowDown className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setTierEditorOpen(false)} disabled={savingTiers}>Cancel</Button>
+            <Button type="button" onClick={() => void saveTiers()} disabled={savingTiers}>{savingTiers ? "Saving…" : "Save tiers"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={manageOpen} onOpenChange={(open) => { setManageOpen(open); if (!open) setManagePriority(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -811,9 +951,9 @@ export default function Budget() {
       <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove "{deleteTarget?.name}"?</AlertDialogTitle>
+            <AlertDialogTitle>{`Remove "${deleteTarget?.name}" from "${budgetName}"?`}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the budget limit. Existing expenses in this category are kept.
+              {`This removes the budget limit from "${budgetName}". Existing expenses in this category are kept.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -864,11 +1004,7 @@ export default function Budget() {
                     <div className="min-w-0">
                       <p className="font-medium">{entry.description}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {new Date(`${entry.date.slice(0, 10)}T12:00:00`).toLocaleDateString("en-KE", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
+                        {formatDate(entry.date)}
                         {" · "}{entry.payerName}
                         {ledgerCategory?.isBudgeted ? null : <>{" · "}{entry.category}</>}
                         {entry.source === "bank_disbursement" ? " · Joint bank disbursement" : null}
@@ -912,7 +1048,10 @@ export default function Budget() {
                <ArrowRight className="h-5 w-5" />
             </Button>
           </div>
-             {canManageShared && <div className="grid w-full grid-cols-2 gap-2 rounded-xl bg-muted/50 p-1 sm:flex sm:w-auto sm:bg-transparent sm:p-0">
+             {canManageShared && <div className="grid w-full grid-cols-3 gap-2 rounded-xl bg-muted/50 p-1 sm:flex sm:w-auto sm:bg-transparent sm:p-0">
+               <Button variant="outline" onClick={openTierEditor} className="w-full gap-2 border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent">
+                 <SlidersHorizontal className="w-4 h-4" /> Edit tiers
+               </Button>
                <Button variant="outline" onClick={() => openManage()} className="w-full gap-2 border-input bg-card text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent">
                <SlidersHorizontal className="w-4 h-4" /> Edit existing
              </Button>
@@ -928,6 +1067,33 @@ export default function Budget() {
          </div>
        )}
       </div>
+
+       {canManageShared && mismatchedCategories.length > 0 ? (
+         <Card className="border-amber-500/30 bg-amber-500/[0.04] shadow-sm">
+           <CardContent className="p-5">
+             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+               <div>
+                 <p className="font-semibold text-foreground">Review categories for this {categoryMigration?.group.kind ?? "group"} budget</p>
+                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">Some older categories do not match this group type. Select categories to archive from future choices. Historical expenses and reports remain unchanged.</p>
+               </div>
+               <span className="shrink-0 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-800 dark:text-amber-200">Admin only</span>
+             </div>
+             <div className="mt-4 grid gap-2 sm:grid-cols-2">
+               {mismatchedCategories.map((category) => {
+                 const selected = migrationArchiveIds.includes(category.id);
+                 return <label key={category.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-3 text-sm">
+                   <input type="checkbox" checked={selected} onChange={() => setMigrationArchiveIds((current) => selected ? current.filter((id) => id !== category.id) : [...current, category.id])} className="h-4 w-4 accent-primary" />
+                   <span className="min-w-0 flex-1"><span className="font-medium text-foreground">{category.name}</span><span className="ml-2 text-xs text-muted-foreground">older category</span></span>
+                 </label>;
+               })}
+             </div>
+             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+               <p className="text-xs text-muted-foreground">Recommended {categoryMigration?.group.kind} categories will be added automatically.</p>
+               <Button type="button" onClick={applyCategoryMigration} disabled={applyingMigration || migrationArchiveIds.length === 0} className="w-full sm:w-auto">{applyingMigration ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{applyingMigration ? "Updating…" : "Apply reviewed cleanup"}</Button>
+             </div>
+           </CardContent>
+         </Card>
+       ) : null}
 
        <Card className="border-none shadow-sm bg-card">
          <CardContent className="p-5">
@@ -980,6 +1146,7 @@ export default function Budget() {
                           source={source}
                           canEdit={canManageShared || source.userId === user?.id}
                           canDelete={canManageShared || source.userId === user?.id}
+                          budgetName={budgetName}
                           onSave={saveIncomeSource}
                           onDelete={deleteIncomeSource}
                         />
@@ -1053,7 +1220,7 @@ export default function Budget() {
                        <div className="flex w-full min-w-0 flex-col items-start gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
                          <h3 className="flex min-w-0 items-center gap-2 text-xl font-display font-bold text-foreground">
                           <Target className="w-5 h-5 text-secondary" />
-                           <span className="break-words">Tier {priority}: {priorityMap[priority] ?? `Priority ${priority}`}</span>
+                            <span className="break-words">Tier {priority}: {priorityTiers.find((tier) => tier.priority === priority)?.label ?? `Priority ${priority}`}</span>
                         </h3>
                         {canManageShared && (
                            <div className="flex shrink-0 items-center gap-2">
@@ -1071,7 +1238,7 @@ export default function Budget() {
                      </div>
                    </div>
                    <p className="mt-1 text-sm text-muted-foreground">
-                     {priorityGuide[priority] ?? "Use this tier to group spending with the same level of urgency."}
+                      {priorityTiers.find((tier) => tier.priority === priority)?.description ?? "Use this tier to group spending with the same level of urgency."}
                    </p>
                  </div>
 

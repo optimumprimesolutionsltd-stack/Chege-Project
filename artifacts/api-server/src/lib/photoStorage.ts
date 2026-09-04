@@ -198,6 +198,20 @@ export async function createPhotoUpload(
   };
 }
 
+export async function verifyPhotoObject(photoPath: string): Promise<void> {
+  if (!isStoredPhotoPath(photoPath)) throw new Error("Invalid photo object path.");
+  const objectName = photoObjectName(photoIdFromPath(photoPath));
+  if (storageProvider() === "s3") {
+    await s3ClientInstance().send(new HeadObjectCommand({ Bucket: s3Bucket(), Key: objectName }));
+    return;
+  }
+  const response = await fetch(
+    await signObjectUrl(`${privateObjectDir()}/${objectName}`, "GET", 60),
+    { method: "HEAD", signal: AbortSignal.timeout(30_000) },
+  );
+  if (!response.ok) throw new Error(`Photo object verification failed (${response.status}).`);
+}
+
 export async function resolvePhotoUrl(
   photoPath: string | null | undefined,
 ): Promise<string | null> {

@@ -3,9 +3,12 @@ import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { ArrowRight, CheckCircle2, Users, Wallet, Target } from "lucide-react";
 import { Link } from "wouter";
 import { JAMVI_APP_PATH } from "@/lib/site-links";
+import { JAMVI_PACKAGES } from "@workspace/jamvi-pricing";
 
 export default function Home() {
   const shouldReduceMotion = useReducedMotion();
+  const duo = JAMVI_PACKAGES.find(p => p.code === "DUO");
+  const startingPrice = duo?.monthlyPriceKes || 300;
 
   useSeo({
     title: "Gather Around Your Money",
@@ -41,23 +44,25 @@ export default function Home() {
               variants={staggerContainer}
               className="max-w-2xl"
             >
-              <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary text-sm font-semibold mb-6">
+              <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary text-sm font-semibold mb-6 border border-secondary/20">
                 <span className="w-2 h-2 rounded-full bg-secondary"></span>
-                For your own money, and money you share
+                 Personal Free is permanent. Shared groups start at KES {startingPrice}/mo.
               </motion.div>
               <motion.h1 variants={fadeUp} className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.1] mb-6 text-primary">
-                Gather around <br/><span className="text-secondary">your money.</span>
+                 Budget better <br/><span className="text-secondary">together.</span>
               </motion.h1>
               <motion.p variants={fadeUp} className="text-lg sm:text-xl text-foreground/70 mb-8 leading-relaxed max-w-lg">
-                Your own budget, and the ones you share — with your partner, your family, your flatmates, or your chama. One place for all of it.
+                 Keep your own money private in Personal Free, then create or join
+                 Shared budgets for couples, families, chamas, clubs, and teams.
+                 Each Shared group uses one subscription for everyone in that group.
               </motion.p>
               <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-4">
-                <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-primary text-white text-base font-semibold hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 shadow-lg">
-                  Start your journey <ArrowRight className="ml-2 h-5 w-5" />
+                <a href={JAMVI_APP_PATH} className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-primary text-white text-base font-bold hover:bg-primary/90 transition-transform hover:scale-105 active:scale-95 shadow-lg">
+                  Get started for free <ArrowRight className="ml-2 h-5 w-5" />
                 </a>
-                <a href="#how-it-works" className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-white text-primary text-base font-semibold hover:bg-muted border border-border transition-colors">
-                  See how it works
-                </a>
+                <Link href="/pricing" className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-white text-primary text-base font-bold hover:bg-muted border border-border transition-colors">
+                  See simple pricing
+                </Link>
               </motion.div>
               
               <motion.p variants={fadeUp} className="mt-10 text-sm font-medium text-foreground/60">
@@ -289,7 +294,7 @@ export default function Home() {
           <img src={`${import.meta.env.BASE_URL}branding/jamvi-mark-inline.png`} alt="Jamvi Mark" className="w-20 h-20 mx-auto mb-8 drop-shadow-md" />
           <h2 className="text-4xl md:text-5xl font-bold text-primary mb-6">Take a seat on the mat.</h2>
           <p className="text-xl text-foreground/70 mb-6 max-w-2xl mx-auto leading-relaxed">
-            Start managing your money with clarity and confidence. Setup takes less than two minutes.
+            Start managing your money with clarity and confidence. Personal use is free forever, and setup takes less than two minutes.
           </p>
           <p className="mx-auto mb-10 max-w-2xl text-sm font-medium leading-relaxed text-foreground/60">
             Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service. Money moves through M-Pesa or your bank, exactly as it does now.

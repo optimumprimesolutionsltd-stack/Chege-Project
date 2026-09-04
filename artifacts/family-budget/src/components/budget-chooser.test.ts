@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { budgetChooserCompletionKey, hasCompletedBudgetChooser } from "./budget-chooser";
+import {
+  budgetChooserCompletionKey,
+  canonicalCategoryName,
+  dedupeCategoryNames,
+  dedupeIncomeStreamNames,
+  getInitialOnboardingMode,
+  hasCompletedBudgetChooser,
+  hasSavedOnboardingDraft,
+  normalizeIncomeStreamName,
+  onboardingDraftStorageKey,
+} from "./budget-chooser";
 
 describe("budget chooser completion", () => {
   let values: Map<string, string>;
@@ -12,6 +22,7 @@ describe("budget chooser completion", () => {
         localStorage: {
           getItem: (key: string) => values.get(key) ?? null,
           setItem: (key: string, value: string) => values.set(key, value),
+          removeItem: (key: string) => values.delete(key),
         },
       },
     });
@@ -28,6 +39,12 @@ describe("budget chooser completion", () => {
     expect(hasCompletedBudgetChooser("member b")).toBe(false);
   });
 
+  it("recognizes an unfinished user-specific onboarding draft", () => {
+    window.localStorage.setItem(onboardingDraftStorageKey("member/a"), JSON.stringify({ stage: "income" }));
+    expect(hasSavedOnboardingDraft("member/a")).toBe(true);
+    expect(hasSavedOnboardingDraft("member b")).toBe(false);
+  });
+
   it("does not bypass the chooser when browser storage cannot be read", () => {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -40,5 +57,24 @@ describe("budget chooser completion", () => {
       },
     });
     expect(hasCompletedBudgetChooser("member")).toBe(false);
+  });
+
+  it("sends completed returning users directly to budget selection", () => {
+    expect(getInitialOnboardingMode(true)).toBe("returning");
+    expect(getInitialOnboardingMode(false)).toBeNull();
+  });
+
+  it("collapses semantic category aliases into one canonical recommendation", () => {
+    expect(canonicalCategoryName(" rent ")).toBe("Housing");
+    expect(dedupeCategoryNames(["Food", "Food & meals", "Groceries", "Housing", "Accommodation", "Rent"])).toEqual(["Food", "Housing"]);
+  });
+
+  it("deduplicates income streams regardless of case or surrounding whitespace", () => {
+    expect(normalizeIncomeStreamName(" Salary Or Wages ")).toBe("salary or wages");
+    expect(dedupeIncomeStreamNames([
+      "Salary or wages",
+      " salary OR WAGES ",
+      "Freelance work",
+    ])).toEqual(["Salary or wages", "Freelance work"]);
   });
 });

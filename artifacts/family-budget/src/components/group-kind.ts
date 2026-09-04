@@ -11,6 +11,7 @@ export const SHARED_GROUP_KINDS: ReadonlyArray<{
   { value: "chama", label: "Chama", description: "For a savings group, merry-go-round, or investment circle." },
   { value: "club", label: "Club or church", description: "For a club, church, association, or community group." },
   { value: "team", label: "Team, department, or project", description: "For a work, sports, department, or project team." },
+  { value: "student_group", label: "Student group", description: "For a study group, class fund, campus association, or student welfare group." },
   { value: "other", label: "Other group", description: "For any other shared goal or group." },
 ];
 

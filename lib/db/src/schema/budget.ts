@@ -1,4 +1,5 @@
-import { pgTable, serial, text, integer, boolean, date, timestamp, index, unique, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean, date, timestamp, index, unique, uniqueIndex, check, foreignKey } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { groupsTable } from "./groups";
 
 // Workspace-owned bank accounts. Legacy ledger history is attached to a
@@ -8,7 +9,8 @@ export const bankAccountsTable = pgTable("bank_accounts", {
   groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   accountNumber: text("account_number"),
-  openingBalance: integer("opening_balance").notNull().default(0),
+  openingBalance: numeric("opening_balance", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  openingBalanceDate: date("opening_balance_date", { mode: "string" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   unique("bank_accounts_group_name_unique").on(table.groupId, table.name),
@@ -45,11 +47,19 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   budgetAmount: integer("budget_amount").notNull(),
   priority: integer("priority").notNull().default(1),
   color: text("color").notNull().default("#6B7280"),
+  // Archived categories remain available to historical reports and expenses,
+  // but are removed from new budget and expense choices.
+  isArchived: boolean("is_archived").notNull().default(false),
   isRecurring: boolean("is_recurring").notNull().default(true),
   activeMonth: integer("active_month"),
   activeYear: integer("active_year"),
 }, (table) => [
-  unique("budget_categories_group_name_unique").on(table.groupId, table.name),
+  check(
+    "budget_categories_name_valid_check",
+    sql`btrim(${table.name}) <> '' AND char_length(${table.name}) <= 80`,
+  ),
+  uniqueIndex("budget_categories_group_name_normalized_unique")
+    .on(table.groupId, sql`lower(btrim(${table.name}))`),
   index("budget_categories_group_priority_idx").on(table.groupId, table.priority),
 ]);
 
@@ -151,7 +161,7 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
   type: text("type").notNull(), // 'deposit' | 'disbursement'
-  amount: integer("amount").notNull(), // in KES
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(), // in KES
   description: text("description").notNull(),
   madeById: text("made_by_id"), // userId for deposits; null ok for disbursements
   incomeSourceId: integer("income_source_id"), // which income source funded this deposit
@@ -185,7 +195,7 @@ export const jointAccountDepositSplitsTable = pgTable("joint_account_deposit_spl
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
   transactionId: integer("transaction_id").notNull().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull(),
-  amount: integer("amount").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   incomeSourceId: integer("income_source_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [

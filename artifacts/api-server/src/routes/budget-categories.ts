@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { budgetCategoriesTable, expensesTable, expenseCategoryAllocationsTable, groupsTable, jointAccountTxTable } from "@workspace/db";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   ApplyBudgetCategoryRecommendationsBody,
@@ -9,10 +9,29 @@ import {
   GetBudgetCategoryRecommendationsResponse,
 } from "@workspace/api-zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { categoryPackForKind, categoryPackRows, normalizedCategoryPackKind } from "../lib/categoryPacks";
+import { categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind } from "../lib/categoryPacks";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
+const priorityTierSchema = z.object({
+  priority: z.number().int().min(1).max(5),
+  label: z.string().trim().min(1).max(50),
+  description: z.string().trim().min(1).max(180),
+});
+const editablePriorityTiersSchema = z.object({
+  tiers: z.array(priorityTierSchema).length(5).refine(
+    (tiers) => new Set(tiers.map((tier) => tier.priority)).size === 5,
+    "Each priority tier must appear exactly once.",
+  ),
+});
+
+function resolvedPriorityTiers(
+  kind: string | null | undefined,
+  saved: unknown,
+) {
+  const parsed = z.array(priorityTierSchema).length(5).safeParse(saved);
+  return parsed.success ? parsed.data : priorityTiersForKind(kind);
+}
 
 function isReservedBudgetCategoryName(name: string) {
   return name.trim().toLocaleLowerCase() === UNCATEGORIZED_CATEGORY.toLocaleLowerCase();
@@ -54,15 +73,116 @@ router.get("/budget-categories", async (req, res) => {
   const categories = await db
     .select()
     .from(budgetCategoriesTable)
-    .where(eq(budgetCategoriesTable.groupId, groupId))
+    .where(and(eq(budgetCategoriesTable.groupId, groupId), eq(budgetCategoriesTable.isArchived, false)))
     .orderBy(asc(budgetCategoriesTable.priority), asc(budgetCategoriesTable.name));
   res.json(categories);
+});
+
+router.get("/budget-priority-tiers", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const [group] = await db
+    .select({ kind: groupsTable.kind, priorityTiers: groupsTable.priorityTiers })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+  if (!group) { res.status(404).json({ error: "Active budget not found." }); return; }
+  res.json({ tiers: resolvedPriorityTiers(group.kind, group.priorityTiers) });
+});
+
+router.put("/budget-priority-tiers", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null || !requireGroupManager(req, res)) return;
+  const parsed = editablePriorityTiersSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Provide five named priority tiers in the order they should appear." });
+    return;
+  }
+
+  const orderedTiers = parsed.data.tiers.map((tier, index) => ({
+    priority: index + 1,
+    label: tier.label,
+    description: tier.description,
+  }));
+
+  await db.transaction(async (tx) => {
+    // Stage the five current priority values out of range, then put each tier's
+    // categories into its new position. This keeps a reordered tier and all of
+    // its ledger categories together.
+    await tx.update(budgetCategoriesTable)
+      .set({ priority: sql`${budgetCategoriesTable.priority} + 100` })
+      .where(and(
+        eq(budgetCategoriesTable.groupId, groupId),
+        inArray(budgetCategoriesTable.priority, [1, 2, 3, 4, 5]),
+      ));
+    for (const [index, tier] of parsed.data.tiers.entries()) {
+      await tx.update(budgetCategoriesTable)
+        .set({ priority: index + 1 })
+        .where(and(
+          eq(budgetCategoriesTable.groupId, groupId),
+          eq(budgetCategoriesTable.priority, tier.priority + 100),
+        ));
+    }
+    await tx.update(groupsTable)
+      .set({ priorityTiers: orderedTiers })
+      .where(eq(groupsTable.id, groupId));
+  });
+
+  res.json({ tiers: orderedTiers });
 });
 
 router.get("/budget-categories/recommendations", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   res.json(GetBudgetCategoryRecommendationsResponse.parse(await getCategoryRecommendationPreview(groupId)));
+});
+
+router.get("/budget-categories/migration", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null || !requireGroupManager(req, res)) return;
+  const [group] = await db.select({ kind: groupsTable.kind, name: groupsTable.name })
+    .from(groupsTable).where(eq(groupsTable.id, groupId)).limit(1);
+  if (!group) { res.status(404).json({ error: "Active budget not found." }); return; }
+  const categories = await db.select().from(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.groupId, groupId))
+    .orderBy(asc(budgetCategoriesTable.priority), asc(budgetCategoriesTable.name));
+  const recommendedNames = new Set(categoryPackForKind(group.kind).map((item) => normalizedCategoryName(item.name)));
+  res.json({
+    group: { id: groupId, name: group.name, kind: normalizedCategoryPackKind(group.kind) },
+    recommended: categoryPackForKind(group.kind),
+    categories: categories.map((category) => ({ ...category, recommended: recommendedNames.has(normalizedCategoryName(category.name)) })),
+  });
+});
+
+const categoryMigrationSchema = z.object({
+  archiveCategoryIds: z.array(z.number().int().positive()).max(100).default([]),
+  addRecommended: z.boolean().default(true),
+});
+
+router.post("/budget-categories/migration/apply", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null || !requireGroupManager(req, res)) return;
+  const parsed = categoryMigrationSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid category migration request." }); return; }
+  await db.transaction(async (tx) => {
+    const [group] = await tx.select({ kind: groupsTable.kind }).from(groupsTable)
+      .where(eq(groupsTable.id, groupId)).limit(1);
+    if (!group) return;
+    if (parsed.data.archiveCategoryIds.length > 0) {
+      await tx.update(budgetCategoriesTable).set({ isArchived: true }).where(and(
+        eq(budgetCategoriesTable.groupId, groupId),
+        inArray(budgetCategoriesTable.id, parsed.data.archiveCategoryIds),
+      ));
+    }
+    if (parsed.data.addRecommended) {
+      const current = await tx.select({ name: budgetCategoriesTable.name }).from(budgetCategoriesTable)
+        .where(eq(budgetCategoriesTable.groupId, groupId));
+      const names = new Set(current.map((item) => normalizedCategoryName(item.name)));
+      const missing = categoryPackRows(groupId, group.kind).filter((item) => !names.has(normalizedCategoryName(item.name)));
+      if (missing.length > 0) await tx.insert(budgetCategoriesTable).values(missing).onConflictDoNothing();
+    }
+  });
+  res.json({ ok: true, migration: await getCategoryRecommendationPreview(groupId) });
 });
 
 router.post("/budget-categories/recommendations/apply", async (req, res) => {

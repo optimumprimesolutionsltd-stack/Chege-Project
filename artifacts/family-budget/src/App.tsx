@@ -19,11 +19,12 @@ import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
 import Parity from '@/pages/parity';
 import IncomeStreamsReport from '@/pages/income-streams-report';
+import SearchPage from '@/pages/search';
 import InvitePage from '@/pages/invite';
 import JoinGroupPage from '@/pages/join-group';
 import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal';
-import { BudgetChooser, hasCompletedBudgetChooser } from '@/components/budget-chooser';
-import { shouldShowBudgetChooser } from '@/lib/budget-chooser-routing';
+import { BudgetChooser, hasCompletedBudgetChooser, hasSavedOnboardingDraft } from '@/components/budget-chooser';
+import { hasFinishedOnboarding, shouldShowBudgetChooser } from '@/lib/budget-chooser-routing';
 import { getGetWorkspacesQueryKey, useGetWorkspaces } from '@workspace/api-client-react';
 import { routePath } from '@/lib/base-path';
 
@@ -116,6 +117,7 @@ function AuthenticatedApp() {
         <Route path="/savings-goals" component={SavingsGoals} />
         <Route path="/bank" component={Bank} />
         <Route path="/reports" component={IncomeStreamsReport} />
+        <Route path="/search" component={SearchPage} />
         <Route path="/settings" component={Settings} />
         <Route path="/invite/:token" component={InvitePage} />
         <Route path="/join/:token" component={JoinGroupPage} />
@@ -180,6 +182,16 @@ function MainRouter() {
     enabled: isAuthenticated,
     retry: false,
   });
+  const { data: onboardingPreferences, isLoading: isOnboardingPreferencesLoading } = useQuery({
+    queryKey: ['onboarding-preferences', user?.id],
+    queryFn: async () => {
+      const response = await fetch('/api/onboarding/preferences', { credentials: 'include' });
+      if (!response.ok) throw new Error('Could not check onboarding status.');
+      return response.json() as Promise<{ completed?: boolean } | null>;
+    },
+    enabled: isAuthenticated,
+    retry: false,
+  });
 
   const appRoute = routePath(window.location.pathname, import.meta.env.BASE_URL);
   const publicPath = appRoute?.replace(/\/+$/, '') || '/';
@@ -216,7 +228,28 @@ function MainRouter() {
     return <LoginPage />;
   }
 
-  const completedBudgetChooser = hasCompletedBudgetChooser(user?.id ?? '');
+  if (isOnboardingPreferencesLoading) {
+    return <AppLoading message="Checking your Jamvi setup…" />;
+  }
+
+  // Do not classify a returning user as new while the server is still loading
+  // their existing Personal/Shared workspaces.
+  if (areWorkspacesLoading) {
+    return <AppLoading message="Loading your budgets…" />;
+  }
+
+  // The server record is authoritative across browsers and login providers.
+  // The local flag remains a fallback for older accounts that completed setup
+  // before onboarding preferences were persisted.
+  const hasExistingBudget = workspaces.length > 0;
+  const serverCompletedOnboarding = Boolean(onboardingPreferences?.completed);
+  const completedBudgetChooser = hasFinishedOnboarding({
+    serverCompleted: serverCompletedOnboarding,
+    serverStarted: onboardingPreferences?.completed === false,
+    localCompleted: hasCompletedBudgetChooser(user?.id ?? ''),
+    hasExistingBudget,
+    hasSavedDraft: hasSavedOnboardingDraft(user?.id ?? ''),
+  });
   const chooserRoute = shouldShowBudgetChooser({
     pathname: window.location.pathname,
     basePath: import.meta.env.BASE_URL,
@@ -228,10 +261,10 @@ function MainRouter() {
   });
 
   if (chooserRoute) {
-    return <BudgetChooser user={user ?? {}} />;
+    return <BudgetChooser user={user ?? {}} setupComplete={completedBudgetChooser} />;
   }
 
-  if (isCheckingGroupAccess || areWorkspacesLoading) {
+  if (isCheckingGroupAccess) {
     return <AppLoading message="Loading your budget…" />;
   }
 

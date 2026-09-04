@@ -1,14 +1,18 @@
 import { createInsertSchema } from "drizzle-zod";
 import {
   index,
+  boolean,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   serial,
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { usersTable } from "./auth";
 
 export const GROUP_ROLE = {
@@ -28,6 +32,7 @@ export const GROUP_KIND = {
   CHAMA: "chama",
   CLUB: "club",
   TEAM: "team",
+  STUDENT_GROUP: "student_group",
   OTHER: "other",
 } as const;
 
@@ -98,6 +103,13 @@ export const groupsTable = pgTable(
     // always empty. Null means the group does not work to a fixed amount -
     // families and one-off groups usually do not.
     defaultMonthlyTarget: integer("default_monthly_target"),
+    // Workspace-specific names and explanations for the five budget priority
+    // tiers. Null means the group-kind defaults are used.
+    priorityTiers: jsonb("priority_tiers").$type<Array<{
+      priority: number;
+      label: string;
+      description: string;
+    }>>(),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
@@ -112,6 +124,66 @@ export const insertGroupSchema = createInsertSchema(groupsTable).omit({
 });
 export type InsertGroup = typeof groupsTable.$inferInsert;
 export type Group = typeof groupsTable.$inferSelect;
+
+export const subscriptionPlansTable = pgTable(
+  "subscription_plans",
+  {
+    code: text("code").primaryKey(),
+    displayName: text("display_name").notNull(),
+    description: text("description").notNull(),
+    audience: text("audience").notNull(),
+    monthlyPriceKes: integer("monthly_price_kes").notNull(),
+    annualPriceKes: integer("annual_price_kes").notNull(),
+    currency: text("currency").notNull().default("KES"),
+    memberLimit: integer("member_limit"),
+    annualSavingKes: integer("annual_saving_kes"),
+    featureEntitlements: jsonb("feature_entitlements").$type<string[]>().notNull().default([]),
+    displayOrder: integer("display_order").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    recommended: boolean("recommended").notNull().default(false),
+    personal: boolean("personal").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("subscription_plans_display_order_unique").on(table.displayOrder),
+    index("subscription_plans_enabled_order_idx").on(table.enabled, table.displayOrder),
+  ],
+);
+
+export const groupSubscriptionsTable = pgTable(
+  "group_subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groupsTable.id, { onDelete: "cascade" }),
+    ownerAdminUserId: text("owner_admin_user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "restrict" }),
+    packageCode: text("package_code")
+      .notNull()
+      .references(() => subscriptionPlansTable.code, { onDelete: "restrict" }),
+    billingInterval: text("billing_interval").notNull(),
+    status: text("status").notNull().default("pending"),
+    currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    expiredAt: timestamp("expired_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("group_subscriptions_group_created_idx").on(table.groupId, table.createdAt),
+    index("group_subscriptions_package_idx").on(table.packageCode),
+    uniqueIndex("group_subscriptions_one_current_idx")
+      .on(table.groupId)
+      .where(sql`${table.status} IN ('trial', 'pending', 'active', 'past_due')`),
+  ],
+);
+
+export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
+export type GroupSubscription = typeof groupSubscriptionsTable.$inferSelect;
 
 export const groupMembershipsTable = pgTable(
   "group_memberships",

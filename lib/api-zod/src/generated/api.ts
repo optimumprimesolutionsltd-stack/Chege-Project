@@ -9,6 +9,43 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Parse an anonymized M-Pesa confirmation message
+ */
+export const parseMpesaMessageBodyMessageMax = 20000;
+
+
+
+export const ParseMpesaMessageBody = zod.object({
+  "message": zod.string().min(1).max(parseMpesaMessageBodyMessageMax).describe('An anonymized M-Pesa message. Do not include real phone numbers or other personal information.')
+})
+
+export const ParseMpesaMessageResponse = zod.object({
+  "status": zod.enum(['parsed', 'unsupported', 'invalid']),
+  "transaction": zod.union([zod.object({
+  "transactionId": zod.string().nullable(),
+  "originalTransactionId": zod.string().nullable(),
+  "transactionType": zod.union([zod.literal('person_payment'),zod.literal('person_receipt'),zod.literal('merchant_payment'),zod.literal('paybill_payment'),zod.literal('airtime_purchase'),zod.literal('cash_withdrawal'),zod.literal('cash_deposit'),zod.literal('bank_transfer'),zod.literal('bank_receipt'),zod.literal('reversal'),zod.literal('failed'),zod.literal('other'),zod.literal(null)]).nullable(),
+  "purchaseCategory": zod.union([zod.literal('postpaid_bundle'),zod.literal('minutes'),zod.literal('airtime'),zod.literal('gift'),zod.literal('wifi'),zod.literal(null)]).nullable(),
+  "amount": zod.number().nullable(),
+  "currency": zod.string().nullable(),
+  "merchantOrCounterparty": zod.string().nullable(),
+  "accountReference": zod.string().nullable(),
+  "phoneNumber": zod.string().nullable(),
+  "date": zod.coerce.date().nullable(),
+  "time": zod.string().nullable(),
+  "mpesaBalance": zod.number().nullable(),
+  "fee": zod.number().nullable(),
+  "parserVersion": zod.string(),
+  "confidence": zod.enum(['high', 'medium', 'low', 'none']),
+  "parseWarnings": zod.array(zod.string())
+}),zod.null()]),
+  "confidence": zod.enum(['high', 'medium', 'low', 'none']),
+  "warnings": zod.array(zod.string()),
+  "normalizedMessage": zod.string().describe('Normalized text returned for debugging parser rules; personal-looking numbers are redacted.')
+})
+
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -34,8 +71,12 @@ export const GetAuthUserResponse = zod.object({
 /**
  * @summary Save the authenticated user's preferred display name
  */
+export const updateDisplayNameBodyNameMax = 40;
+
+
+
 export const UpdateDisplayNameBody = zod.object({
-  "name": zod.string()
+  "name": zod.string().min(1).max(updateDisplayNameBodyNameMax).describe('Printable Unicode display name without control characters or line breaks')
 })
 
 export const UpdateDisplayNameResponse = zod.object({
@@ -167,7 +208,7 @@ export const CreateExpenseBody = zod.object({
   "notes": zod.string().optional(),
   "paidById": zod.string().nullish().describe('Legacy single-payer attribution. Omit for split-funded or bank-account expenses.'),
   "paidFromBank": zod.boolean().optional().describe('Legacy single-source bank-account flag. Use incomeSplits for a mixed payment.'),
-  "accountId": zod.number().min(1).optional().describe('Selected bank account for bank funding. Omit to use the workspace\'s first account.'),
+  "accountId": zod.number().min(1).nullish().describe('Selected bank account for bank funding. Omit to use the workspace\'s first account.'),
   "incomeSourceId": zod.number().min(1).optional().describe('Required for a personal expense unless paidFromBank is true. Must belong to paidById.'),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
@@ -247,7 +288,7 @@ export const UpdateExpenseBody = zod.object({
   "notes": zod.string().optional(),
   "paidById": zod.string().nullish().describe('Legacy single-payer attribution. Omit for split-funded or bank-account expenses.'),
   "paidFromBank": zod.boolean().optional().describe('Legacy single-source bank-account flag. Use incomeSplits for a mixed payment.'),
-  "accountId": zod.number().min(1).optional().describe('Selected bank account for bank funding. Omit to use the workspace\'s first account.'),
+  "accountId": zod.number().min(1).nullish().describe('Selected bank account for bank funding. Omit to use the workspace\'s first account.'),
   "incomeSourceId": zod.number().min(1).optional().describe('Required for a personal expense unless paidFromBank is true. Must belong to paidById.'),
   "incomeSplits": zod.array(zod.object({
   "userId": zod.string().nullish().describe('Household member who funded this portion. Null only for Joint bank.'),
@@ -376,7 +417,7 @@ export const CreateBudgetCategoryResponse = zod.object({
  * @summary Preview category recommendations for the active workspace
  */
 export const GetBudgetCategoryRecommendationsResponse = zod.object({
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "existing": zod.array(zod.object({
   "name": zod.string(),
   "budgetAmount": zod.number(),
@@ -404,7 +445,7 @@ export const ApplyBudgetCategoryRecommendationsBody = zod.object({
 }).describe('Applies only missing recommendations; existing categories are never changed.')
 
 export const ApplyBudgetCategoryRecommendationsResponse = zod.object({
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "existing": zod.array(zod.object({
   "name": zod.string(),
   "budgetAmount": zod.number(),
@@ -832,16 +873,18 @@ export const CreateSavingsGoalResponse = zod.object({
 
 
 export const GetJointAccountQueryParams = zod.object({
-  "accountId": zod.coerce.number().min(1).optional().describe('Optional account selection. When omitted, accountId identifies the earliest account and accountName is All accounts.')
+  "accountId": zod.coerce.number().min(1).optional().describe('Optional account selection. When omitted, accountId is null and accountName is All accounts.')
 })
 
-export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf = 1;
+export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountMin = 0.01;
+export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
 
 export const GetJointAccountResponse = zod.object({
   "openingBalance": zod.number().describe('Manually entered balance carried into the first recorded transaction'),
+  "openingBalanceDate": zod.coerce.date().nullish().describe('Calendar date on which the opening balance applies'),
   "accountId": zod.number(),
   "accountName": zod.string(),
   "accountNumber": zod.string().nullable(),
@@ -854,6 +897,7 @@ export const GetJointAccountResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -869,7 +913,7 @@ export const GetJointAccountResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(getJointAccountResponseTransactionsItemContributorSplitsItemAmountMin).multipleOf(getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -882,23 +926,25 @@ export const GetJointAccountResponse = zod.object({
  * @summary Set the manual opening balance for a bank account
  */
 export const updateJointAccountOpeningBalanceBodyOpeningBalanceMin = 0;
-export const updateJointAccountOpeningBalanceBodyOpeningBalanceMultipleOf = 1;
+export const updateJointAccountOpeningBalanceBodyOpeningBalanceMultipleOf = 0.01;
 
 
 
 
 export const UpdateJointAccountOpeningBalanceBody = zod.object({
   "openingBalance": zod.number().min(updateJointAccountOpeningBalanceBodyOpeningBalanceMin).multipleOf(updateJointAccountOpeningBalanceBodyOpeningBalanceMultipleOf),
-  "accountId": zod.number().min(1).optional().describe('Manual starting balance in whole KES')
+  "openingBalanceDate": zod.coerce.date().optional(),
+  "accountId": zod.number().min(1).optional().describe('Manual starting balance in KES, with up to two decimal places')
 })
 
 export const updateJointAccountOpeningBalanceResponseOpeningBalanceMin = 0;
-export const updateJointAccountOpeningBalanceResponseOpeningBalanceMultipleOf = 1;
+export const updateJointAccountOpeningBalanceResponseOpeningBalanceMultipleOf = 0.01;
 
 
 
 export const UpdateJointAccountOpeningBalanceResponse = zod.object({
   "openingBalance": zod.number().min(updateJointAccountOpeningBalanceResponseOpeningBalanceMin).multipleOf(updateJointAccountOpeningBalanceResponseOpeningBalanceMultipleOf),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "accountId": zod.number()
 })
 
@@ -906,17 +952,19 @@ export const UpdateJointAccountOpeningBalanceResponse = zod.object({
 /**
  * @summary Deposit money into a bank account
  */
-export const createDepositBodyAmountMultipleOf = 1;
+export const createDepositBodyAmountMin = 0.01;
+export const createDepositBodyAmountMultipleOf = 0.01;
 
 
-export const createDepositBodyContributorSplitsItemAmountMultipleOf = 1;
+export const createDepositBodyContributorSplitsItemAmountMin = 0.01;
+export const createDepositBodyContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
 
 
 export const CreateDepositBody = zod.object({
-  "amount": zod.number().min(1).multipleOf(createDepositBodyAmountMultipleOf).describe('Whole KES only; must be a positive integer amount'),
+  "amount": zod.number().min(createDepositBodyAmountMin).multipleOf(createDepositBodyAmountMultipleOf).describe('Positive KES amount with up to two decimal places'),
   "description": zod.string(),
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish().describe('ID of the household member who made this deposit. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null.\n'),
@@ -924,13 +972,14 @@ export const CreateDepositBody = zod.object({
   "sourceKind": zod.enum(['income_source', 'other']).optional().describe('Choose other only when the required description is a narration.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(createDepositBodyContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(createDepositBodyContributorSplitsItemAmountMin).multipleOf(createDepositBodyContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional().describe('Whole-KES household contributor portions that must equal amount exactly.'),
+})).optional().describe('Household contributor portions, with up to two decimal places, that must equal amount exactly.'),
   "accountId": zod.number().min(1).optional()
 })
 
-export const createDepositResponseContributorSplitsItemAmountMultipleOf = 1;
+export const createDepositResponseContributorSplitsItemAmountMin = 0.01;
+export const createDepositResponseContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
@@ -940,6 +989,7 @@ export const CreateDepositResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -955,7 +1005,7 @@ export const CreateDepositResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(createDepositResponseContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(createDepositResponseContributorSplitsItemAmountMin).multipleOf(createDepositResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -966,13 +1016,14 @@ export const CreateDepositResponse = zod.object({
 /**
  * @summary Withdraw money from a bank account
  */
-export const createDisbursementBodyAmountMultipleOf = 1;
+export const createDisbursementBodyAmountMin = 0.01;
+export const createDisbursementBodyAmountMultipleOf = 0.01;
 
 
 
 
 export const CreateDisbursementBody = zod.object({
-  "amount": zod.number().min(1).multipleOf(createDisbursementBodyAmountMultipleOf).describe('Whole KES only; must be a positive integer amount'),
+  "amount": zod.number().min(createDisbursementBodyAmountMin).multipleOf(createDisbursementBodyAmountMultipleOf).describe('Positive KES amount with up to two decimal places'),
   "description": zod.string().optional(),
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish().describe('ID of the household member responsible for this disbursement. Omit or pass null for Joint bank. Must be a valid household member ID when non-null.\n'),
@@ -981,7 +1032,8 @@ export const CreateDisbursementBody = zod.object({
   "accountId": zod.number().min(1).optional()
 })
 
-export const createDisbursementResponseContributorSplitsItemAmountMultipleOf = 1;
+export const createDisbursementResponseContributorSplitsItemAmountMin = 0.01;
+export const createDisbursementResponseContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
@@ -991,6 +1043,7 @@ export const CreateDisbursementResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1006,7 +1059,7 @@ export const CreateDisbursementResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(createDisbursementResponseContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(createDisbursementResponseContributorSplitsItemAmountMin).multipleOf(createDisbursementResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -1017,7 +1070,8 @@ export const CreateDisbursementResponse = zod.object({
 /**
  * @summary Record a bank fee or charge against the selected account
  */
-export const createBankChargeBodyAmountMultipleOf = 1;
+export const createBankChargeBodyAmountMin = 0.01;
+export const createBankChargeBodyAmountMultipleOf = 0.01;
 
 export const createBankChargeBodyNarrationMax = 200;
 
@@ -1025,13 +1079,14 @@ export const createBankChargeBodyNarrationMax = 200;
 
 
 export const CreateBankChargeBody = zod.object({
-  "amount": zod.number().min(1).multipleOf(createBankChargeBodyAmountMultipleOf),
+  "amount": zod.number().min(createBankChargeBodyAmountMin).multipleOf(createBankChargeBodyAmountMultipleOf),
   "narration": zod.string().min(1).max(createBankChargeBodyNarrationMax).describe('Required explanation from the bank statement, for example monthly account fee'),
   "date": zod.coerce.date(),
   "accountId": zod.number().min(1).optional()
 })
 
-export const createBankChargeResponseContributorSplitsItemAmountMultipleOf = 1;
+export const createBankChargeResponseContributorSplitsItemAmountMin = 0.01;
+export const createBankChargeResponseContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
@@ -1041,6 +1096,7 @@ export const CreateBankChargeResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1056,7 +1112,7 @@ export const CreateBankChargeResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(createBankChargeResponseContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(createBankChargeResponseContributorSplitsItemAmountMin).multipleOf(createBankChargeResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -1076,7 +1132,7 @@ export const transferBankToSavingsBodyNarrationMax = 200;
 
 
 export const TransferBankToSavingsBody = zod.object({
-  "amount": zod.number().min(1).multipleOf(transferBankToSavingsBodyAmountMultipleOf),
+  "amount": zod.number().min(1).multipleOf(transferBankToSavingsBodyAmountMultipleOf).describe('Savings goals currently use whole KES amounts'),
   "goalId": zod.number().min(1),
   "narration": zod.string().min(1).max(transferBankToSavingsBodyNarrationMax),
   "date": zod.coerce.date(),
@@ -1084,7 +1140,8 @@ export const TransferBankToSavingsBody = zod.object({
   "accountId": zod.number().min(1).optional()
 })
 
-export const transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf = 1;
+export const transferBankToSavingsResponseContributorSplitsItemAmountMin = 0.01;
+export const transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
@@ -1094,6 +1151,7 @@ export const TransferBankToSavingsResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1109,7 +1167,7 @@ export const TransferBankToSavingsResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(transferBankToSavingsResponseContributorSplitsItemAmountMin).multipleOf(transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -1129,7 +1187,7 @@ export const transferSavingsToBankBodyNarrationMax = 200;
 
 
 export const TransferSavingsToBankBody = zod.object({
-  "amount": zod.number().min(1).multipleOf(transferSavingsToBankBodyAmountMultipleOf),
+  "amount": zod.number().min(1).multipleOf(transferSavingsToBankBodyAmountMultipleOf).describe('Savings goals currently use whole KES amounts'),
   "goalId": zod.number().min(1),
   "narration": zod.string().min(1).max(transferSavingsToBankBodyNarrationMax),
   "date": zod.coerce.date(),
@@ -1137,7 +1195,8 @@ export const TransferSavingsToBankBody = zod.object({
   "accountId": zod.number().min(1).optional()
 })
 
-export const transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf = 1;
+export const transferSavingsToBankResponseContributorSplitsItemAmountMin = 0.01;
+export const transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
@@ -1147,6 +1206,7 @@ export const TransferSavingsToBankResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1162,7 +1222,7 @@ export const TransferSavingsToBankResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(transferSavingsToBankResponseContributorSplitsItemAmountMin).multipleOf(transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -1175,7 +1235,8 @@ export const TransferSavingsToBankResponse = zod.object({
  */
 
 
-export const transferBankToBankBodyAmountMultipleOf = 1;
+export const transferBankToBankBodyAmountMin = 0.01;
+export const transferBankToBankBodyAmountMultipleOf = 0.01;
 
 export const transferBankToBankBodyNarrationMax = 200;
 
@@ -1184,15 +1245,17 @@ export const transferBankToBankBodyNarrationMax = 200;
 export const TransferBankToBankBody = zod.object({
   "sourceAccountId": zod.number().min(1),
   "destinationAccountId": zod.number().min(1),
-  "amount": zod.number().min(1).multipleOf(transferBankToBankBodyAmountMultipleOf),
+  "amount": zod.number().min(transferBankToBankBodyAmountMin).multipleOf(transferBankToBankBodyAmountMultipleOf),
   "narration": zod.string().min(1).max(transferBankToBankBodyNarrationMax),
   "date": zod.coerce.date()
 })
 
-export const transferBankToBankResponseOutgoingContributorSplitsItemAmountMultipleOf = 1;
+export const transferBankToBankResponseOutgoingContributorSplitsItemAmountMin = 0.01;
+export const transferBankToBankResponseOutgoingContributorSplitsItemAmountMultipleOf = 0.01;
 
 
-export const transferBankToBankResponseIncomingContributorSplitsItemAmountMultipleOf = 1;
+export const transferBankToBankResponseIncomingContributorSplitsItemAmountMin = 0.01;
+export const transferBankToBankResponseIncomingContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
@@ -1204,6 +1267,7 @@ export const TransferBankToBankResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1219,7 +1283,7 @@ export const TransferBankToBankResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(transferBankToBankResponseOutgoingContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(transferBankToBankResponseOutgoingContributorSplitsItemAmountMin).multipleOf(transferBankToBankResponseOutgoingContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -1230,6 +1294,7 @@ export const TransferBankToBankResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1245,7 +1310,7 @@ export const TransferBankToBankResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(transferBankToBankResponseIncomingContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(transferBankToBankResponseIncomingContributorSplitsItemAmountMin).multipleOf(transferBankToBankResponseIncomingContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -1261,9 +1326,11 @@ export const UpdateJointAccountTransactionParams = zod.object({
   "id": zod.coerce.number()
 })
 
-export const updateJointAccountTransactionBodyAmountMultipleOf = 1;
+export const updateJointAccountTransactionBodyAmountMin = 0.01;
+export const updateJointAccountTransactionBodyAmountMultipleOf = 0.01;
 
-export const updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf = 1;
+export const updateJointAccountTransactionBodyContributorSplitsItemAmountMin = 0.01;
+export const updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
@@ -1273,7 +1340,7 @@ export const updateJointAccountTransactionBodyNarrationMax = 200;
 
 
 export const UpdateJointAccountTransactionBody = zod.object({
-  "amount": zod.number().min(1).multipleOf(updateJointAccountTransactionBodyAmountMultipleOf),
+  "amount": zod.number().min(updateJointAccountTransactionBodyAmountMin).multipleOf(updateJointAccountTransactionBodyAmountMultipleOf),
   "description": zod.string().optional().describe('Optional supporting detail; withdrawals fall back to their category'),
   "date": zod.coerce.date(),
   "madeById": zod.string().nullish(),
@@ -1284,7 +1351,7 @@ export const UpdateJointAccountTransactionBody = zod.object({
   "destinationKind": zod.enum(['category', 'other']).optional(),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(updateJointAccountTransactionBodyContributorSplitsItemAmountMin).multipleOf(updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional().describe('Replacement contributor portions for a deposit. Send an empty array to remove existing splits.'),
   "transferDirection": zod.enum(['to_savings', 'from_savings']).optional().describe('Required when editing a linked savings transfer'),
@@ -1293,7 +1360,8 @@ export const UpdateJointAccountTransactionBody = zod.object({
   "accountId": zod.number().min(1).optional()
 })
 
-export const updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf = 1;
+export const updateJointAccountTransactionResponseContributorSplitsItemAmountMin = 0.01;
+export const updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 
@@ -1303,6 +1371,7 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
   "amount": zod.number(),
+  "runningBalance": zod.number().nullish().describe('Balance in this specific bank account immediately after this transaction; null for an all-accounts view'),
   "description": zod.string(),
   "madeById": zod.string().nullish(),
   "madeByName": zod.string().nullish(),
@@ -1318,7 +1387,7 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
   "userId": zod.string().describe('Household member who supplied this deposit portion.'),
-  "amount": zod.number().min(1).multipleOf(updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf),
+  "amount": zod.number().min(updateJointAccountTransactionResponseContributorSplitsItemAmountMin).multipleOf(updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
 })).optional(),
   "date": zod.coerce.date(),
@@ -1346,6 +1415,7 @@ export const GetJointAccountsResponseItem = zod.object({
   "name": zod.string(),
   "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "createdAt": zod.coerce.date()
 })
 export const GetJointAccountsResponse = zod.array(GetJointAccountsResponseItem)
@@ -1359,14 +1429,15 @@ export const createJointAccountBodyNameMax = 80;
 export const createJointAccountBodyAccountNumberMax = 40;
 
 export const createJointAccountBodyOpeningBalanceMin = 0;
-export const createJointAccountBodyOpeningBalanceMultipleOf = 1;
+export const createJointAccountBodyOpeningBalanceMultipleOf = 0.01;
 
 
 
 export const CreateJointAccountBody = zod.object({
   "name": zod.string().min(1).max(createJointAccountBodyNameMax),
   "accountNumber": zod.string().min(1).max(createJointAccountBodyAccountNumberMax).optional(),
-  "openingBalance": zod.number().min(createJointAccountBodyOpeningBalanceMin).multipleOf(createJointAccountBodyOpeningBalanceMultipleOf).optional()
+  "openingBalance": zod.number().min(createJointAccountBodyOpeningBalanceMin).multipleOf(createJointAccountBodyOpeningBalanceMultipleOf).optional(),
+  "openingBalanceDate": zod.coerce.date().optional()
 })
 
 export const CreateJointAccountResponse = zod.object({
@@ -1374,6 +1445,7 @@ export const CreateJointAccountResponse = zod.object({
   "name": zod.string(),
   "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1390,14 +1462,15 @@ export const updateJointAccountBodyNameMax = 80;
 export const updateJointAccountBodyAccountNumberMax = 40;
 
 export const updateJointAccountBodyOpeningBalanceMin = 0;
-export const updateJointAccountBodyOpeningBalanceMultipleOf = 1;
+export const updateJointAccountBodyOpeningBalanceMultipleOf = 0.01;
 
 
 
 export const UpdateJointAccountBody = zod.object({
   "name": zod.string().min(1).max(updateJointAccountBodyNameMax).optional(),
   "accountNumber": zod.string().min(1).max(updateJointAccountBodyAccountNumberMax).nullish(),
-  "openingBalance": zod.number().min(updateJointAccountBodyOpeningBalanceMin).multipleOf(updateJointAccountBodyOpeningBalanceMultipleOf).optional()
+  "openingBalance": zod.number().min(updateJointAccountBodyOpeningBalanceMin).multipleOf(updateJointAccountBodyOpeningBalanceMultipleOf).optional(),
+  "openingBalanceDate": zod.coerce.date().optional()
 })
 
 export const UpdateJointAccountResponse = zod.object({
@@ -1405,6 +1478,7 @@ export const UpdateJointAccountResponse = zod.object({
   "name": zod.string(),
   "accountNumber": zod.string().nullable(),
   "openingBalance": zod.number(),
+  "openingBalanceDate": zod.coerce.date().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1633,7 +1707,7 @@ export const GetWorkspacesResponseItem = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(getWorkspacesResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
 export const GetWorkspacesResponse = zod.array(GetWorkspacesResponseItem)
@@ -1662,7 +1736,7 @@ export const SelectWorkspaceResponse = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(selectWorkspaceResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
 
@@ -1684,7 +1758,7 @@ export const CreateSharedGroupBody = zod.object({
   "name": zod.string().min(createSharedGroupBodyNameMin).max(createSharedGroupBodyNameMax),
   "emoji": zod.string().max(createSharedGroupBodyEmojiMax).nullish(),
   "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']).optional(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']).default(createSharedGroupBodyKindDefault),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']).default(createSharedGroupBodyKindDefault),
   "defaultMonthlyTarget": zod.number().min(createSharedGroupBodyDefaultMonthlyTargetMin).nullish().describe('What each member is expected to contribute per month, in KES. Members who join inherit it as their own target. Null means the group does not work to a fixed amount.')
 })
 
@@ -1704,7 +1778,7 @@ export const CreateSharedGroupResponse = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(createSharedGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member'])
 })
 
@@ -1987,7 +2061,7 @@ export const GetGroupResponse = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(getGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })
@@ -2016,7 +2090,7 @@ export const UpdateGroupBody = zod.object({
   "accentColor": zod.enum(['#011C4E', '#003383', '#087F8C', '#08B7B0', '#209E45', '#C98C00', '#0F766E', '#2563EB', '#7C3AED', '#DB2777', '#D97706', '#059669']).optional(),
   "photoPath": zod.string().regex(updateGroupBodyPhotoPathRegExp).nullish(),
   "slogan": zod.string().max(updateGroupBodySloganMax).nullish(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']).optional(),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']).optional(),
   "defaultMonthlyTarget": zod.number().min(updateGroupBodyDefaultMonthlyTargetMin).nullish().describe('What each member is expected to contribute per month, in KES. Changing it does not alter targets already set on existing members; it applies to whoever joins next.')
 })
 
@@ -2036,7 +2110,7 @@ export const UpdateGroupResponse = zod.object({
   "photoUrl": zod.string().nullish(),
   "slogan": zod.string().max(updateGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
-  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'other']),
+  "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })

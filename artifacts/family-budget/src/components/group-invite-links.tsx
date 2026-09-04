@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { appPath } from "@/lib/base-path";
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from "@/lib/member-limit";
+import { formatDate } from "@/lib/utils";
 
 function joinUrl(token: string) {
   return new URL(appPath(`/join/${token}`, import.meta.env.BASE_URL), window.location.origin).toString();
@@ -102,7 +103,7 @@ export function GroupInviteLinks({ groupName }: { groupName?: string }) {
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-foreground">Active until {new Date(activeLink.expiresAt).toLocaleDateString()}</p>
+               <p className="text-sm font-semibold text-foreground">Active until {formatDate(activeLink.expiresAt)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {shareUrl
                   ? "This link has been copied. You can copy it again below."

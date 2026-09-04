@@ -57,16 +57,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { appPath } from "@/lib/base-path";
+import { workspaceLabel } from "@/lib/workspace-identity";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  addFundingSourceWithRemainder,
   getCategoryAllocationStatus,
   getExpenseFundingControlState,
   getExpenseFundingStatus,
   getFundingRemainder,
+  isFundingFulfilled,
   getNewExpenseCategoryMode,
+  getProjectedCategoryBalance,
   hasMissingPersonalFundingSource,
 } from "@/lib/expense-funding-utils";
 
@@ -101,6 +103,23 @@ function localDateInputValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function appendCreatedCategoryAllocation(
+  allocations: Array<{ category: string; amount: string }>,
+  categoryName: string,
+) {
+  const oneOff = allocations.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+  const standardAllocations = allocations.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+  const emptyIndex = standardAllocations.findIndex((allocation) => !allocation.category.trim());
+
+  if (emptyIndex >= 0) {
+    standardAllocations[emptyIndex] = { ...standardAllocations[emptyIndex], category: categoryName };
+  } else if (!standardAllocations.some((allocation) => allocation.category === categoryName)) {
+    standardAllocations.push({ category: categoryName, amount: "" });
+  }
+
+  return [...standardAllocations, ...(oneOff ? [oneOff] : [])];
+}
+
 function isSelfFundedPersonalExpense(expense: Expense, userId: string | undefined) {
   if (!userId || expense.paidById !== userId || expense.paidFromBank || expense.isRecurring) {
     return false;
@@ -116,16 +135,13 @@ function useExpenseForm(defaults?: Partial<Expense>, now?: Date) {
   const [amountValue, setAmountValue] = useState(defaults?.amount?.toString() ?? "");
   const initialAllocations = defaults?.categoryAllocations?.length
     ? defaults.categoryAllocations.map((allocation) => ({ category: allocation.category, amount: String(allocation.amount) }))
-    : [{ category: defaults?.category ?? "", amount: defaults?.amount?.toString() ?? "" }];
+    : [{ category: defaults?.category ?? "", amount: defaults?.category ? defaults?.amount?.toString() ?? "" : "" }];
   const [categoryAllocations, setCategoryAllocations] = useState(initialAllocations);
   const amount = amountValue;
-  const setAmount = (value: string) => {
-    setAmountValue(value);
-    setCategoryAllocations((current) => current.length === 1 ? [{ ...current[0], amount: value }] : current);
-  };
+  const setAmount = (value: string) => setAmountValue(value);
   const category = categoryAllocations[0]?.category ?? "";
   const setCategory = (value: string) => setCategoryAllocations((current) =>
-    current.length ? [{ ...current[0], category: value }, ...current.slice(1)] : [{ category: value, amount: amountValue }],
+    current.length ? [{ ...current[0], category: value }, ...current.slice(1)] : [{ category: value, amount: "" }],
   );
   const [description, setDescription] = useState(defaults?.description ?? "");
   const [notes, setNotes] = useState(defaults?.notes ?? "");
@@ -232,6 +248,9 @@ export default function Expenses() {
   }, [month, year]);
 
   const [isAdding, setIsAdding] = useState(false);
+  // New expenses start with the few details needed for the common case.
+  // Existing expenses always retain the complete editor.
+  const [isAdvancedAdd, setIsAdvancedAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [ledgerFilter, setLedgerFilter] = useState<{
     payerId: string | null;
@@ -308,6 +327,8 @@ export default function Expenses() {
         params.get("recurringMonthlyBudget") ?? draft.recurringMonthlyBudget ?? "",
       );
       setSaveOtherAsCategory(draft.saveOtherAsCategory ?? false);
+      // A resumed recurring draft needs its existing advanced controls.
+      setIsAdvancedAdd(true);
       setIsAdding(true);
       sessionStorage.removeItem(RECURRING_EXPENSE_DRAFT_KEY);
     } catch {
@@ -324,6 +345,7 @@ export default function Expenses() {
   const { data: categories } = useGetBudgetCategories();
   const { data: members } = useGetMembers();
   const { data: group } = useGetGroup();
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
   const { data: bankAccounts = [] } = useGetJointAccounts();
   const activeExpenseBankAccountId = isAdding
     ? addForm.accountId
@@ -421,6 +443,39 @@ export default function Expenses() {
   const { data: addPayerSources = {} } = useIncomeSourcesForUsers(addForm.payerIds);
   const { data: editFormSources } = useIncomeSources(editForm.paidById);
 
+  const normalAddSource = addFormSources?.find((source) => source.isMain) ?? addFormSources?.[0];
+
+  // Keep all fields that Normal mode deliberately hides valid and explicit.
+  // This also means the regular create path retains its existing validations.
+  useEffect(() => {
+    if (!isAdding || isAdvancedAdd || !user?.id) return;
+
+    if (!canManageExpenses && addForm.date !== today) {
+      addForm.setDate(today);
+    }
+    addForm.setIsRecurring(false);
+    addForm.setPaidFromBank(false);
+    addForm.setAccountId(null);
+    addForm.setPaidById(user.id);
+    addForm.setPayerIds([user.id]);
+    addForm.setCategoryAllocations([{ category: addForm.category, amount: addForm.amount }]);
+    addForm.setPayerIncomeSourceIds(normalAddSource ? { [user.id]: normalAddSource.id } : {});
+    addForm.setIncomeSourceId(normalAddSource?.id ?? null);
+    setAllowMixedFunding(false);
+    setAddDirectSourceIds(normalAddSource ? [normalAddSource.id] : []);
+    setAddDirectSourceAmounts(normalAddSource ? { [normalAddSource.id]: addForm.amount } : {});
+  }, [
+    isAdding,
+    isAdvancedAdd,
+    canManageExpenses,
+    user?.id,
+    today,
+    addForm.date,
+    addForm.category,
+    addForm.amount,
+    normalAddSource?.id,
+  ]);
+
   const resetAdd = () => {
     addForm.setAmount(""); addForm.setCategory(""); addForm.setDescription(""); addForm.setNotes("");
     addForm.setCategoryAllocations([{ category: "", amount: "" }]);
@@ -436,6 +491,7 @@ export default function Expenses() {
     setAllowMixedFunding(false);
     setSaveOtherAsCategory(false);
     setIsAddingBankAccount(false); setNewBankAccountName("");
+    setIsAdvancedAdd(false);
     setIsAdding(false);
   };
 
@@ -572,7 +628,9 @@ export default function Expenses() {
       addToBudget: newCategoryAddToBudget,
       canManageCategories,
     }) === "unbudgeted") {
-      form.setCategory(name);
+      form.setCategoryAllocations((current) => {
+        return appendCreatedCategoryAllocation(current, name);
+      });
       setIsCreatingCategory(false);
       setNewCategoryName("");
       setNewCategoryBudget("");
@@ -609,7 +667,9 @@ export default function Expenses() {
           activeYear: newCategoryRecurring ? null : expenseYear,
         },
       });
-      form.setCategory(category.name);
+      form.setCategoryAllocations((current) => {
+        return appendCreatedCategoryAllocation(current, category.name);
+      });
       setIsCreatingCategory(false);
       setNewCategoryName("");
       setNewCategoryBudget("");
@@ -636,9 +696,31 @@ export default function Expenses() {
   };
 
   const chooseCategory = (form: ReturnType<typeof useExpenseForm>, value: string) => {
-    form.setCategory(value);
-    if (value.trim().toLocaleLowerCase() !== "other") setSaveOtherAsCategory(false);
+    form.setCategoryAllocations((current) => {
+      const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+      const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+      if (!value) return oneOff ? [oneOff] : [{ category: "", amount: "" }];
+      return [
+        { category: value, amount: standardAllocations[0]?.amount ?? "" },
+        ...standardAllocations.slice(1),
+        ...(oneOff ? [oneOff] : []),
+      ];
+    });
+    setSaveOtherAsCategory(false);
     setIsCreatingCategory(false);
+  };
+
+  const addOneOffCategory = (form: ReturnType<typeof useExpenseForm>) => {
+    form.setCategoryAllocations((current) => {
+      const existingOneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+      if (existingOneOff) {
+        const remaining = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+        return remaining.length ? remaining : [{ category: "", amount: "" }];
+      }
+      const retained = current.length === 1 && !current[0]?.category.trim() ? [] : current;
+      return [...retained, { category: "Other", amount: "" }];
+    });
+    setSaveOtherAsCategory(false);
   };
 
   const openRecurringBudgetSetup = (form: ReturnType<typeof useExpenseForm>, mode: "add" | "edit", makeRecurring = true, proposedCategory?: string) => {
@@ -748,14 +830,9 @@ export default function Expenses() {
         const src: IncomeSource = await res.json();
         addForm.setIncomeSourceId(src.id);
         addForm.setPayerIncomeSourceIds(prev => ({ ...prev, [paidById]: src.id }));
-        if (isPersonalBudget && !addDirectSourceIds.includes(src.id)) {
-          const key = String(src.id);
-          setAddDirectSourceAmounts((previous) => addFundingSourceWithRemainder({
-            total: Number(addForm.amount),
-            selectedSourceIds: addDirectSourceIds.map(String),
-            newSourceId: key,
-            amounts: previous,
-          }));
+        if (addForm.payerIds.length === 1 && !addDirectSourceIds.includes(src.id)) {
+           const key = String(src.id);
+           setAddDirectSourceAmounts((previous) => ({ ...previous, [key]: "" }));
           setAddDirectSourceIds((previous) => [...previous, src.id]);
         }
         setNewSourceName("");
@@ -770,13 +847,12 @@ export default function Expenses() {
 
   const handleCreate = async (e: React.FormEvent, saveWithoutCategory = false) => {
     e.preventDefault();
+    const addDescription = addForm.description.trim();
     const payerIds = addForm.payerIds.length > 0
       ? addForm.payerIds
       : (memberPayerId ? [memberPayerId] : []);
-    const personalDirectSourceIds = isPersonalBudget && !addForm.paidFromBank
-      ? addDirectSourceIds
-      : [];
-    const sourceCount = (personalDirectSourceIds.length || payerIds.length) + (addForm.paidFromBank ? 1 : 0);
+    const directSourceIds = payerIds.length === 1 ? addDirectSourceIds : [];
+    const sourceCount = (directSourceIds.length || payerIds.length) + (addForm.paidFromBank ? 1 : 0);
     const isSplitPayment = sourceCount > 1;
     const effectivePaidById = payerIds[0] ?? addForm.paidById;
     if (!addForm.amount) {
@@ -809,6 +885,14 @@ export default function Expenses() {
     }));
     const hasCategoryAllocation = categoryAllocations.some((allocation) => allocation.category);
     const allocationTotal = categoryAllocations.reduce((total, allocation) => total + allocation.amount, 0);
+    if (!isAdvancedAdd && !hasCategoryAllocation) {
+      toast({
+        variant: "destructive",
+        title: "Choose a category",
+        description: "Normal mode records the full expense in one category.",
+      });
+      return;
+    }
     if (hasCategoryAllocation && (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
       new Set(categoryAllocations.map((allocation) => allocation.category.toLocaleLowerCase())).size !== categoryAllocations.length ||
       allocationTotal !== amount)) {
@@ -826,7 +910,7 @@ export default function Expenses() {
       });
       return;
     }
-    if (!addForm.description || !addForm.date) {
+    if (!addDescription || !addForm.date) {
       toast({
         variant: "destructive",
         title: "Complete the expense details",
@@ -854,7 +938,7 @@ export default function Expenses() {
       });
       return;
     }
-    if (!addForm.paidFromBank && personalDirectSourceIds.length === 0) {
+    if (payerIds.length > 0 && directSourceIds.length === 0) {
       const missingSource = hasMissingPersonalFundingSource({
         payerIds,
         isSplitPayment,
@@ -874,8 +958,8 @@ export default function Expenses() {
       const sourceAmount = Number(
         addForm.paidFromBank
           ? addForm.payerAmounts.__joint_bank__
-          : personalDirectSourceIds.length === 1
-            ? addDirectSourceAmounts[String(personalDirectSourceIds[0])]
+          : directSourceIds.length === 1
+            ? addDirectSourceAmounts[String(directSourceIds[0])]
             : addForm.payerAmounts[payerIds[0]],
       );
       if (!Number.isInteger(sourceAmount) || sourceAmount <= 0) {
@@ -901,8 +985,8 @@ export default function Expenses() {
     if (isSplitPayment) {
       const total = amount;
       if (
-        (personalDirectSourceIds.length > 0
-          ? personalDirectSourceIds.some((id) => Number(addDirectSourceAmounts[String(id)] || 0) <= 0)
+        (directSourceIds.length > 0
+          ? directSourceIds.some((id) => Number(addDirectSourceAmounts[String(id)] || 0) <= 0)
           : payerIds.some((id) => Number(addForm.payerAmounts[id] || 0) <= 0)) ||
         (addForm.paidFromBank && Number(addForm.payerAmounts.__joint_bank__ || 0) <= 0)
       ) {
@@ -913,8 +997,8 @@ export default function Expenses() {
         });
         return;
       }
-      const splitTotal = (personalDirectSourceIds.length > 0
-        ? personalDirectSourceIds.reduce((sum, id) => sum + Number(addDirectSourceAmounts[String(id)] || 0), 0)
+      const splitTotal = (directSourceIds.length > 0
+        ? directSourceIds.reduce((sum, id) => sum + Number(addDirectSourceAmounts[String(id)] || 0), 0)
         : payerIds.reduce((s, id) => s + Number(addForm.payerAmounts[id] || 0), 0))
         + (addForm.paidFromBank ? Number(addForm.payerAmounts.__joint_bank__ || 0) : 0);
       if (!Number.isInteger(total) || splitTotal !== total) {
@@ -970,8 +1054,8 @@ export default function Expenses() {
             label: bankAccounts.find((account) => account.id === addForm.accountId)?.name ?? "Bank account",
             accountId: addForm.accountId!,
           }] : []),
-          ...(personalDirectSourceIds.length > 0
-            ? personalDirectSourceIds.map((incomeSourceId) => ({
+          ...(directSourceIds.length > 0
+            ? directSourceIds.map((incomeSourceId) => ({
               userId: effectivePaidById,
               amount: Number(addDirectSourceAmounts[String(incomeSourceId)] || 0),
               fromBank: false,
@@ -992,12 +1076,12 @@ export default function Expenses() {
                ? { ...allocation, category: normalizedOtherCategory ?? allocation.category }
                : allocation,
             ) } : {}),
-          description: addForm.description, notes: addForm.notes || undefined,
+          description: addDescription, notes: addForm.notes || undefined,
           paidById: addForm.paidFromBank && !effectivePaidById ? null : (effectivePaidById || undefined),
           isRecurring: addForm.isRecurring, date: addForm.date, paidFromBank: addForm.paidFromBank && !isSplitPayment,
           ...(addForm.paidFromBank ? { accountId: addForm.accountId! } : {}),
-          ...((personalDirectSourceIds[0] ?? addForm.incomeSourceId) && !isSplitPayment
-            ? { incomeSourceId: personalDirectSourceIds[0] ?? addForm.incomeSourceId! }
+          ...((directSourceIds[0] ?? addForm.incomeSourceId) && !isSplitPayment
+            ? { incomeSourceId: directSourceIds[0] ?? addForm.incomeSourceId! }
             : {}),
           ...(incomeSplits ? { incomeSplits } : {}),
         } as Parameters<typeof createExpense.mutateAsync>[0]["data"],
@@ -1012,12 +1096,14 @@ export default function Expenses() {
 
   const handleUpdate = async (e: React.FormEvent, id: number) => {
     e.preventDefault();
-    if (!editForm.amount) {
-      toast({
-        variant: "destructive",
-        title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
-      });
+    const editDescription = editForm.description.trim();
+    if (!editForm.amount.trim()) {
+      const expense = expenses?.find((item) => item.id === id);
+      if (expense) {
+        setDeleteTarget(expense);
+      } else {
+        toast({ variant: "destructive", title: "Expense no longer available", description: "Refresh the list and try again." });
+      }
       return;
     }
     const amount = Number(editForm.amount);
@@ -1064,7 +1150,7 @@ export default function Expenses() {
       });
       return;
     }
-    if (!editForm.description || !editForm.date) {
+    if (!editDescription || !editForm.date) {
       toast({
         variant: "destructive",
         title: "Complete the expense details",
@@ -1135,7 +1221,7 @@ export default function Expenses() {
           amount,
           category: hasCategoryAllocation ? editForm.category : "",
            ...(hasCategoryAllocation ? { categoryAllocations } : {}),
-          description: editForm.description,
+          description: editDescription,
           notes: editForm.notes || undefined,
           paidById: editForm.paidById || undefined,
           isRecurring: editForm.isRecurring,
@@ -1163,7 +1249,7 @@ export default function Expenses() {
       toast({
         variant: "destructive",
         title: "Only admins can delete expenses",
-        description: "Ask an admin or owner to remove this expense.",
+        description: `Ask an admin or owner to remove this expense from "${budgetName}".`,
       });
       return;
     }
@@ -1201,14 +1287,112 @@ export default function Expenses() {
     submitLabel: string,
     mode: "add" | "edit",
   ) => {
+    const isNormalAdd = mode === "add" && !isAdvancedAdd;
+    const normalSource = addFormSources?.find((source) => source.isMain) ?? addFormSources?.[0];
+    const normalSourceUnavailable = isNormalAdd && addFormSources !== undefined && !normalSource;
+    if (isNormalAdd) {
+      return (
+        <form onSubmit={onSubmit} noValidate className="space-y-5 sm:space-y-6" data-testid="normal-expense-form">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-4">
+            <div>
+              <h3 className="text-lg font-bold font-display text-foreground">{title}</h3>
+              <p className="text-xs text-muted-foreground">Normal mode keeps everyday expenses quick to record.</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsAdvancedAdd(true)} data-testid="expense-advanced-mode">
+              Use Advanced
+            </Button>
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-secondary/60 bg-secondary/10 p-4">
+            <label className="text-sm font-bold text-secondary-foreground">Amount (KES)</label>
+            <Input type="number" min="1" step="1" placeholder="e.g. 5000" value={form.amount}
+              onChange={(event) => form.setAmount(event.target.value)} required className="h-14 border-secondary/70 bg-background text-xl font-bold"
+              data-testid="normal-expense-amount" />
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid="normal-expense-date-section">
+            <label className="text-sm font-bold text-primary">
+              When did this happen? <span className="text-destructive">*</span>
+            </label>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              This date decides which month includes the expense in budgets, totals, and reports.
+            </p>
+            <Input
+              type="date"
+              value={form.date}
+              onChange={(event) => form.setDate(event.target.value)}
+              required
+              disabled={!canManageExpenses}
+              min={canManageExpenses ? undefined : today}
+              max={canManageExpenses ? undefined : today}
+              aria-describedby={!canManageExpenses ? "normal-member-expense-date-help" : undefined}
+              className="h-12 bg-card"
+              data-testid="normal-expense-date"
+            />
+            {!canManageExpenses && (
+              <p id="normal-member-expense-date-help" className="text-xs text-muted-foreground">
+                Members can record and correct expenses for today only. Ask an admin to backdate.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/[0.04] p-4">
+            <label className="text-sm font-bold text-primary">Category <span className="text-destructive">*</span></label>
+            <select value={form.category} onChange={(event) => chooseCategory(form, event.target.value)} required
+              aria-label="Normal expense category" className="flex h-12 w-full rounded-md border border-input bg-card px-3 text-base">
+              <option value="">Select a category</option>
+              {categories?.filter((category) => category.name.trim().toLocaleLowerCase() !== "other").map((category) =>
+                <option key={category.id} value={category.name}>{category.name}</option>,
+              )}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-foreground">Description <span className="text-destructive">*</span></label>
+            <Input value={form.description} onChange={(event) => form.setDescription(event.target.value)}
+              placeholder="e.g. Groceries" required className="h-12 bg-card" data-testid="normal-expense-description" />
+          </div>
+
+          <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm text-foreground" data-testid="normal-expense-assumptions">
+            <p className="font-bold text-primary">Jamvi will record this as:</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-relaxed text-muted-foreground">
+              <li>{form.date === today ? "today’s expense" : `an expense dated ${formatDate(form.date)}`}, paid by you, not from a bank account, and not recurring;</li>
+              <li>the full whole-KES amount in {form.category ? `"${form.category}"` : "the category you select"};</li>
+              <li>{normalSource ? `funded in full from ${normalSource.name}${normalSource.isMain ? " (your main income source)" : ""}.` : "funded from your saved income source once you select Advanced."}</li>
+            </ul>
+          </div>
+
+          {normalSourceUnavailable && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" role="alert" data-testid="normal-expense-source-blocker">
+              <p className="font-bold">Add an income source before recording this expense.</p>
+              <p className="mt-1 text-xs">Normal mode needs a saved income source to show where the money came from. Use Advanced to add one or choose another funding option.</p>
+              <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => setIsAdvancedAdd(true)}>
+                Use Advanced
+              </Button>
+            </div>
+          )}
+
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end sm:gap-3">
+            <Button type="button" variant="outline" onClick={onCancel} className="h-12 w-full px-6 sm:w-auto">Cancel</Button>
+            <Button type="submit" disabled={isPending || normalSourceUnavailable} className="h-12 w-full px-8 sm:w-auto">
+              {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {submitLabel}
+            </Button>
+          </div>
+        </form>
+      );
+    }
     const expenseTotal = Number(form.amount) || 0;
     const allocatedTotal = form.categoryAllocations.reduce((total, allocation) => total + (Number(allocation.amount) || 0), 0);
     const allocationDifference = expenseTotal - allocatedTotal;
+    const otherCategoryIndex = form.categoryAllocations.findIndex((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+    const isOtherCategory = otherCategoryIndex >= 0;
+    const isPrimaryOtherCategory = form.categoryAllocations[0]?.category.trim().toLocaleLowerCase() === "other";
+    const hasStandardAdditionalCategory = form.categoryAllocations.slice(1).some((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
     const directFundingTotal = mode === "edit"
       ? (!editHasMultipleFundingSplits && form.paidById && form.incomeSourceId ? expenseTotal : 0)
-      : isPersonalBudget
-        ? addDirectSourceIds.reduce((total, sourceId) => total + (Number(addDirectSourceAmounts[String(sourceId)]) || 0), 0)
-        : form.payerIds.reduce((total, payerId) => total + (Number(form.payerAmounts[payerId]) || 0), 0);
+       : form.payerIds.length === 1 && addDirectSourceIds.length > 0
+         ? addDirectSourceIds.reduce((total, sourceId) => total + (Number(addDirectSourceAmounts[String(sourceId)]) || 0), 0)
+         : form.payerIds.reduce((total, payerId) => total + (Number(form.payerAmounts[payerId]) || 0), 0);
     const bankFundingTotal = form.paidFromBank
       ? (Number(form.payerAmounts.__joint_bank__) || (mode === "edit" && !form.payerIds.length ? expenseTotal : 0))
       : 0;
@@ -1228,9 +1412,9 @@ export default function Expenses() {
       ? (isPersonalBudget ? Boolean(memberPayerId) : form.payerIds.length > 0)
       : Boolean(form.paidById);
     const hasDirectIncomeSource = mode === "add"
-      ? isPersonalBudget
-        ? addDirectSourceIds.length > 0
-        : form.payerIds.length > 1
+       ? form.payerIds.length === 1 && addDirectSourceIds.length > 0
+         ? true
+         : form.payerIds.length > 1
           ? form.payerIds.every((payerId) => Boolean(form.payerIncomeSourceIds[payerId]))
           : Boolean(form.incomeSourceId)
       : Boolean(form.incomeSourceId);
@@ -1244,110 +1428,182 @@ export default function Expenses() {
       hasDirectIncomeSource,
       formatAmount: formatKes,
     });
+    const fundingFulfilled = isFundingFulfilled(expenseTotal, fundingTotal);
+    const originalExpense = mode === "edit"
+      ? expenses?.find((expense) => expense.id === editingId)
+      : undefined;
+    const originalCategoryAllocations = originalExpense?.categoryAllocations?.length
+      ? originalExpense.categoryAllocations
+      : originalExpense?.category
+        ? [{ category: originalExpense.category, amount: originalExpense.amount }]
+        : [];
+    const categoryBalancePreviews = form.categoryAllocations.flatMap((allocation) => {
+      const categoryName = allocation.category.trim();
+      const allocationAmount = Number(allocation.amount);
+      if (
+        !categoryName
+        || categoryName.toLocaleLowerCase() === "other"
+        || !Number.isInteger(allocationAmount)
+        || allocationAmount <= 0
+      ) {
+        return [];
+      }
+      const categoryBreakdown = breakdown?.find(
+        (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      );
+      const categoryDefinition = categories?.find(
+        (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      );
+      const budgetAmount = categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0;
+      const spentAmount = categoryBreakdown?.spentAmount ?? 0;
+      if (budgetAmount <= 0) return [];
+      const previousAllocationAmount = originalCategoryAllocations
+        .filter((item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase())
+        .reduce((sum, item) => sum + item.amount, 0);
+      return [{
+        category: categoryBreakdown?.category ?? categoryDefinition?.name ?? categoryName,
+        budgetAmount,
+        spentBeforeExpense: spentAmount - previousAllocationAmount,
+        ...getProjectedCategoryBalance({
+          budgetAmount,
+          spentAmount,
+          allocationAmount,
+          previousAllocationAmount,
+        }),
+      }];
+    });
+    const hasBudgetedCategorySelection = form.categoryAllocations.some((allocation) => {
+      const categoryName = allocation.category.trim();
+      if (!categoryName || categoryName.toLocaleLowerCase() === "other") return false;
+      const categoryBreakdown = breakdown?.find(
+        (item) => item.category.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      );
+      const categoryDefinition = categories?.find(
+        (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      );
+      return (categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0) > 0;
+    });
 
     return (
     <form onSubmit={onSubmit} noValidate className="space-y-5 sm:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-4">
-        <h3 className="text-lg sm:text-xl font-bold font-display text-foreground">{title}</h3>
+         <div>
+           <h3 className="text-lg sm:text-xl font-bold font-display text-foreground">{title}</h3>
+           {mode === "add" && <button type="button" onClick={() => setIsAdvancedAdd(false)} className="mt-1 text-xs font-semibold text-primary underline underline-offset-2">Switch to Normal mode</button>}
+         </div>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-        <p className="text-sm font-semibold text-foreground">1. Record the expense</p>
+      <div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3">
+        <p className="text-sm font-bold text-primary">1. Record the expense</p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           Enter the total once, then show what it covered and where the money came from.
         </p>
       </div>
 
+      <div className="space-y-2 rounded-xl border border-primary/35 bg-primary/5 p-4" data-testid={`expense-date-section-${mode}`}>
+        <label className="text-sm font-bold text-primary">
+          When did this happen? <span className="text-destructive">*</span>
+        </label>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          This date decides which month includes the expense in budgets, totals, and reports.
+        </p>
+        <Input
+          type="date"
+          value={form.date}
+          onChange={e => form.setDate(e.target.value)}
+          required
+          disabled={!canManageExpenses}
+          min={canManageExpenses ? undefined : today}
+          max={canManageExpenses ? undefined : today}
+          aria-describedby={!canManageExpenses ? "member-expense-date-help" : undefined}
+          className="h-12 bg-card"
+        />
+        {!canManageExpenses && (
+          <p id="member-expense-date-help" className="text-xs text-muted-foreground">
+            Members can record and correct expenses for today only. Ask an admin to backdate.
+          </p>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
+        <div className="space-y-2 rounded-xl border border-secondary/60 bg-secondary/10 p-3">
+          <label className="text-sm font-bold text-secondary-foreground">Expense total (KES)</label>
           <Input type="number" placeholder="e.g. 5000" value={form.amount} onChange={e => form.setAmount(e.target.value)}
-            required min="1" className="h-12 text-lg bg-card" />
+            required min="1" className="h-14 border-secondary/70 bg-background text-xl font-bold shadow-sm focus-visible:ring-secondary" data-testid={`expense-total-${mode}`} />
         </div>
 
-        <div className="space-y-2 md:col-span-2 rounded-xl border border-border/60 bg-card p-4">
+        <div className="space-y-2 md:col-span-2 rounded-xl border border-primary/35 bg-primary/[0.04] p-4">
           <div>
-            <label className="text-sm font-semibold text-foreground">2. What did this expense cover? <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <label className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">2. What did this expense cover? <span className="ml-1 font-normal text-muted-foreground">(optional)</span></label>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Add a category to track this spending against a budget. You can also save it uncategorized.
+               Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <select
-              className="flex h-12 min-w-0 flex-1 cursor-pointer rounded-md border border-input bg-card px-3 py-2 text-base text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-              aria-label="Expense category"
-               value={form.category.trim().toLocaleLowerCase() === "other" ? "" : form.category}
-              onChange={e => chooseCategory(form, e.target.value)}
-            >
-              <option value="">No category</option>
-                {categories
-                  ?.filter(c => c.name.trim().toLocaleLowerCase() !== "other")
-                  .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </select>
-            <Button
-              type="button"
-              variant={form.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"}
-              className="h-12 w-full shrink-0 border-input text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
-              onClick={() => {
-                const isOther = form.category.trim().toLocaleLowerCase() === "other";
-                form.setCategory(isOther ? "" : "Other");
-                if (isOther) setSaveOtherAsCategory(false);
-                setIsCreatingCategory(false);
-              }}
-              role="tab"
-              aria-controls={`other-expense-panel-${mode}`}
-              aria-selected={form.category.trim().toLocaleLowerCase() === "other"}
-              aria-pressed={form.category.trim().toLocaleLowerCase() === "other"}
-            >
-              Other
-            </Button>
+            <div className="space-y-2">
+             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+               <select
+                  className="flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input bg-card px-6 py-4 text-base font-semibold leading-7 text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                 aria-label="Expense category"
+                   value={isPrimaryOtherCategory ? "" : form.category}
+                 onChange={e => chooseCategory(form, e.target.value)}
+               >
+                 <option value="">Select a category</option>
+                 {categories
+                   ?.filter(c => c.name.trim().toLocaleLowerCase() !== "other")
+                   .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+               </select>
+                {form.category.trim() && !isPrimaryOtherCategory && (
+                 <div data-testid={`primary-category-allocation-${mode}`} className="sm:w-48">
+                   <label htmlFor={`${mode}-primary-category-amount`} className="sr-only">
+                    {`${form.category} amount (KES)`}
+                   </label>
+                   <Input
+                     id={`${mode}-primary-category-amount`}
+                     type="number"
+                     min="1"
+                     step="1"
+                     value={form.categoryAllocations[0]?.amount ?? ""}
+                     onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === 0 ? { ...item, amount: event.target.value } : item))}
+                    aria-label="KES amount covered by the primary category"
+                     aria-required="true"
+                     required
+                     placeholder="Enter KES amount"
+                     className="h-14 w-full border-primary/45 bg-card font-semibold"
+                   />
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      data-testid={`category-allocation-total-${mode}`}
+                       className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
+                        categoryStatus.tone === "ready"
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                          : categoryStatus.tone === "error"
+                            ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                            : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                      }`}
+                    >
+                      {categoryStatus.message}
+                    </div>
+                  </div>
+                )}
+             </div>
           </div>
-          {form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (
-             <div id={`other-expense-panel-${mode}`} role="tabpanel" className="mt-3 space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
-              <label className="text-sm font-semibold text-foreground">Brief description</label>
-              <Input
-                value={form.description}
-                onChange={e => form.setDescription(e.target.value)}
-                placeholder="Briefly describe this expense"
-                maxLength={120}
-                required
-                className="h-12 bg-card"
-                data-testid="other-brief-description"
-              />
-              <p className="text-xs text-muted-foreground">
-                Briefly explain what this Other expense covered. If it repeats, save it as a category so it is easy to budget and find next time.
-              </p>
-              <div className="space-y-2 pt-1">
-                <label className="text-sm font-semibold text-foreground">
-                  Notes <span className="text-destructive">*</span>
-                </label>
-                <Input
-                  placeholder="Explain what this Other expense was for"
-                  value={form.notes ?? ""}
-                  onChange={e => form.setNotes(e.target.value)}
-                  required
-                  className="h-12 bg-card"
-                  data-testid="other-expense-notes"
-                />
-              </div>
-              {mode === "add" && canManageCategories && (
-                <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={saveOtherAsCategory}
-                    onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 accent-primary"
-                  />
-                  <span>
-                    <span className="font-semibold">Save as a category if this repeats</span>
-                    <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
-                  </span>
-                </label>
-              )}
-            </div>
-          )}
-          {!form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && isCreatingCategory && (
+            {!hasStandardAdditionalCategory && (
+             <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+               <p className="text-xs text-muted-foreground">
+                 {form.category.trim() ? "Need to split this expense? Add another category and enter its share." : "Choose a category first, then add another category if this expense covers more than one."}
+               </p>
+               <Button type="button" size="sm" variant="outline" className="h-14 w-full justify-start sm:w-auto" disabled={!form.category.trim() || isPrimaryOtherCategory} onClick={() => form.setCategoryAllocations((current) => {
+                 const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                 const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                 return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
+               })} data-testid={`add-category-allocation-${mode}`}>
+                 <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
+               </Button>
+             </div>
+           )}
+          {isCreatingCategory && (
             <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-foreground">
               <div>
                 <p className="text-sm font-semibold text-foreground">Name this expense category</p>
@@ -1445,60 +1701,70 @@ export default function Expenses() {
          </div>
           )}
           {form.category && (() => {
-            const cat = breakdown?.find(b => b.category === form.category);
-            return cat ? (
+            const preview = categoryBalancePreviews.find(
+              (item) => item.category.toLocaleLowerCase() === form.category.toLocaleLowerCase(),
+            );
+            return preview ? (
               <p className="flex flex-col gap-0.5 text-xs text-muted-foreground pt-1 sm:block">
-                Spent this month: <span className="font-semibold text-foreground">{formatKes(cat.spentAmount)}</span>
+                Spent before this expense: <span className="font-semibold text-foreground">{formatKes(preview.spentBeforeExpense)}</span>
                 <span className="hidden mx-1 sm:inline">·</span>
-                <span className={cat.spentAmount >= cat.budgetAmount ? "text-destructive font-semibold" : ""}>
-                  {formatKes(Math.max(0, cat.budgetAmount - cat.spentAmount))} remaining of {formatKes(cat.budgetAmount)}
+                <span className={preview.isOverBudget ? "text-destructive font-semibold" : ""}>
+                  {preview.isOverBudget
+                    ? `${formatKes(preview.overBy)} over budget after this expense`
+                    : `${formatKes(preview.remaining)} left after this expense of ${formatKes(preview.budgetAmount)}`}
                 </span>
               </p>
             ) : null;
           })()}
-            {form.categoryAllocations.some((allocation) => allocation.category.trim()) && !(form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && form.categoryAllocations.length === 1) && (
-             <div className="mt-3 space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
-             <div className="flex items-center justify-between gap-2">
-               <p className="text-sm font-semibold text-foreground">Category breakdown</p>
-               <Button
-                 type="button"
-                 size="sm"
-                 variant="outline"
-                 onClick={() => form.setCategoryAllocations((current) => [...current, { category: "", amount: "" }])}
-                 data-testid={`add-category-allocation-${mode}`}
-               >
-                 <Plus className="mr-1 h-3.5 w-3.5" /> Add category
-               </Button>
+             {hasStandardAdditionalCategory && (
+             <div className="mt-3 space-y-3 rounded-lg border border-primary/35 bg-primary/[0.04] p-3">
+               <div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Additional category breakdown</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">Enter the amount for each additional category.</p>
+                </div>
              </div>
-             {form.categoryAllocations.map((allocation, index) => (
-               <div key={index} className="flex gap-2">
-                 <select
-                   value={allocation.category.trim().toLocaleLowerCase() === "other" ? "" : allocation.category}
-                   onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item))}
-                   aria-label={`Allocation category ${index + 1}`}
-                   className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm"
-                 >
-                   <option value="" disabled>Select category...</option>
-                   {(categories ?? []).filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) =>
-                     <option key={item.id} value={item.name} disabled={form.categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index && selected.category === item.name)}>{item.name}</option>,
-                   )}
-                 </select>
-                 <Button type="button" size="sm" variant={allocation.category.trim().toLocaleLowerCase() === "other" ? "default" : "outline"}
-                   onClick={() => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: item.category.trim().toLocaleLowerCase() === "other" ? "" : "Other" } : item))}
-                   aria-label={`Other allocation ${index + 1}`}>Other</Button>
-                 <Input type="number" min="1" step="1" value={allocation.amount}
-                   onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))}
-                   aria-label={`Allocation amount ${index + 1}`} className="h-10 w-28" />
-                 {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove allocation ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>}
-               </div>
-             ))}
-             {(() => {
+              {form.categoryAllocations.slice(1).map((allocation, index) => {
+                if (allocation.category.trim().toLocaleLowerCase() === "other") return null;
                 return (
+                 <div key={index} className="space-y-2 rounded-lg border border-border/60 bg-card p-3">
+                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                     <select
+                       value={allocation.category}
+                       onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, category: event.target.value } : item))}
+                       aria-label={`Additional allocation category ${index + 2}`}
+                        className="h-[72px] min-w-0 flex-1 rounded-md border-2 border-input bg-card px-5 py-4 text-sm font-semibold leading-6"
+                    >
+                       <option value="">Select a category</option>
+                      {(categories ?? []).filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) =>
+                         <option key={item.id} value={item.name} disabled={form.categoryAllocations.some((selected, selectedIndex) => selectedIndex !== index + 1 && selected.category === item.name)}>{item.name}</option>,
+                      )}
+                    </select>
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <label htmlFor={`${mode}-additional-category-amount-${index}`} className="sr-only">
+                          {`${allocation.category || "Category"} amount (KES)`}
+                        </label>
+                        <Input
+                          id={`${mode}-additional-category-amount-${index}`}
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={allocation.amount}
+                      onChange={(event) => form.setCategoryAllocations((current) => current.map((item, itemIndex) => itemIndex === index + 1 ? { ...item, amount: event.target.value } : item))}
+                          aria-label={`KES amount covered by allocation ${index + 2}`}
+                          aria-required="true"
+                          required
+                          placeholder="Enter KES amount"
+                           className="h-14 w-full border-primary/45 bg-card font-semibold"
+                        />
+                      </div>
+                      {form.categoryAllocations.length > 1 && <Button type="button" size="icon" variant="ghost" onClick={() => form.setCategoryAllocations((current) => current.filter((_, itemIndex) => itemIndex !== index + 1))} aria-label={`Remove allocation ${index + 2}`}><Trash2 className="h-4 w-4" /></Button>}
+                  </div>
                   <div
                     role="status"
                     aria-live="polite"
                     data-testid={`category-allocation-total-${mode}`}
-                    className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+                    className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
                       categoryStatus.tone === "ready"
                         ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
                         : categoryStatus.tone === "error"
@@ -1508,10 +1774,132 @@ export default function Expenses() {
                   >
                     {categoryStatus.message}
                   </div>
+               </div>
                 );
-              })()}
+              })}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-14 w-full justify-start sm:w-auto"
+                 onClick={() => form.setCategoryAllocations((current) => {
+                   const oneOff = current.find((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
+                   const standardAllocations = current.filter((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
+                   return [...standardAllocations, { category: "", amount: "" }, ...(oneOff ? [oneOff] : [])];
+                 })}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add another category
+              </Button>
             </div>
             )}
+             <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                 <Button
+                   type="button"
+                   variant={isOtherCategory ? "default" : "outline"}
+                    className={`h-14 w-full justify-start border-input ${
+                      isOtherCategory
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:bg-primary"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground sm:w-auto sm:bg-transparent"
+                    }`}
+                   onClick={() => addOneOffCategory(form)}
+                   aria-label={isOtherCategory ? "Remove one-off spending category" : "Select one-off spending category"}
+                   aria-pressed={isOtherCategory}
+                   data-testid={`one-off-spending-category-${mode}`}
+                 >
+                   {isOtherCategory ? "Remove One-off spending" : "One-off spending"}
+                 </Button>
+                 {isOtherCategory && (
+                   <div data-testid={`one-off-category-allocation-${mode}`} className="sm:w-48">
+                     <label htmlFor={`${mode}-one-off-category-amount`} className="sr-only">One-off spending amount (KES)</label>
+                     <Input
+                       id={`${mode}-one-off-category-amount`}
+                       type="number"
+                       min="1"
+                       step="1"
+                       value={form.categoryAllocations[otherCategoryIndex]?.amount ?? ""}
+                       onChange={(event) => form.setCategoryAllocations((current) => current.map((item, index) => index === otherCategoryIndex ? { ...item, amount: event.target.value } : item))}
+                       aria-label="KES amount for one-off spending"
+                       aria-required="true"
+                       required
+                       placeholder="Enter KES amount"
+                       className="h-14 w-full border-primary/45 bg-card font-semibold"
+                     />
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        data-testid={`category-allocation-total-${mode}`}
+                       className={`mt-3 rounded-lg border px-4 py-3 text-sm font-semibold leading-6 ${
+                          categoryStatus.tone === "ready"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                            : categoryStatus.tone === "error"
+                              ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                              : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                        }`}
+                      >
+                        {categoryStatus.message}
+                      </div>
+                   </div>
+                 )}
+               </div>
+               <p className="text-xs leading-relaxed text-muted-foreground">
+                 Use One-off spending as the last category when part of this expense does not fit any listed category.
+               </p>
+               {isOtherCategory && (
+                 <div id={`other-expense-panel-${mode}`} role="tabpanel" className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                   <label className="text-sm font-semibold text-foreground">Brief description</label>
+                   <Input
+                     value={form.description}
+                     onChange={e => form.setDescription(e.target.value)}
+                     placeholder="Briefly describe this expense"
+                     maxLength={120}
+                     required
+                     className="h-12 bg-card"
+                     data-testid="other-brief-description"
+                   />
+                   <p className="text-xs text-muted-foreground">
+                     Explain what the one-off portion covered. If it repeats, save it as a category so it is easy to budget and find next time.
+                   </p>
+                   <div className="space-y-2 pt-1">
+                     <label className="text-sm font-semibold text-foreground">
+                       Notes <span className="text-destructive">*</span>
+                     </label>
+                     <Input
+                       placeholder="Explain what this one-off spending was for"
+                       value={form.notes ?? ""}
+                       onChange={e => form.setNotes(e.target.value)}
+                       required
+                       className="h-12 bg-card"
+                       data-testid="other-expense-notes"
+                     />
+                   </div>
+                   {mode === "add" && canManageCategories && (
+                     <label className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground">
+                       <input
+                         type="checkbox"
+                         checked={saveOtherAsCategory}
+                         onChange={(event) => setSaveOtherAsCategory(event.target.checked)}
+                         className="mt-0.5 h-4 w-4 accent-primary"
+                       />
+                       <span>
+                         <span className="font-semibold">Save as a category if this repeats</span>
+                         <span className="mt-0.5 block text-muted-foreground">Your brief description will be used as the category name.</span>
+                       </span>
+                     </label>
+                   )}
+                 </div>
+               )}
+                {form.categoryAllocations.some((allocation) => allocation.category.trim()) && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    data-testid={`category-allocation-total-${mode}-end`}
+                    className="mt-3 rounded-lg border border-border/60 bg-muted/25 px-4 py-3 text-sm font-semibold leading-6 text-foreground"
+                  >
+                    {categoryStatus.message}
+                  </div>
+                )}
+             </div>
          </div>
 
           {!form.categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === "other") && (
@@ -1538,52 +1926,42 @@ export default function Expenses() {
            </div>
          )}
 
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Date</label>
-          <Input
-            type="date"
-            value={form.date}
-            onChange={e => form.setDate(e.target.value)}
-            required
-            disabled={!canManageExpenses}
-            min={canManageExpenses ? undefined : today}
-            max={canManageExpenses ? undefined : today}
-            aria-describedby={!canManageExpenses ? "member-expense-date-help" : undefined}
-            className="h-12 bg-card"
-          />
-          {!canManageExpenses && (
-            <p id="member-expense-date-help" className="text-xs text-muted-foreground">
-              Members can record and correct expenses for today only. Ask an admin to backdate.
-            </p>
-          )}
-        </div>
-
-         <div className="md:col-span-2 space-y-4 rounded-xl border border-border/60 bg-card p-4">
+          <div className="md:col-span-2 space-y-4 rounded-xl border border-secondary/60 bg-secondary/[0.08] p-4">
            <div>
-             <p className="text-sm font-semibold text-foreground">3. How was this expense funded?</p>
+              <p className="inline-flex rounded-full border border-secondary/50 bg-secondary/20 px-3 py-1 text-sm font-bold text-secondary-foreground">3. How was this expense funded?</p>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                Choose every source used for this one expense. Enter each portion so the funding total reaches the expense total.
              </p>
            </div>
-           {mode === "edit" && editHasMultipleFundingSplits ? (
+             {(categoryBalancePreviews.length > 0 || hasBudgetedCategorySelection) && (
+              <div
+                className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3"
+                data-testid={`expense-category-balance-preview-${mode}`}
+              >
+                <p className="text-xs font-bold uppercase tracking-wide text-primary">Category balances after this expense</p>
+                 {categoryBalancePreviews.length > 0 ? (
+                   <>
+                     {categoryBalancePreviews.map((preview) => (
+                       <div key={preview.category} className="flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                         <span className="font-semibold text-foreground">{preview.category}</span>
+                         <span className={preview.isOverBudget ? "font-semibold text-destructive" : "font-semibold text-emerald-700 dark:text-emerald-300"}>
+                           {preview.isOverBudget
+                             ? `${formatKes(preview.overBy)} over budget`
+                             : `${formatKes(preview.remaining)} left of ${formatKes(preview.budgetAmount)}`}
+                         </span>
+                       </div>
+                     ))}
+                     <p className="text-xs text-muted-foreground">These running balances use each category amount entered above.</p>
+                   </>
+                 ) : (
+                   <p className="text-xs text-muted-foreground">Enter the amount covered by each category above to see its running balance here.</p>
+                 )}
+              </div>
+            )}
+            {mode === "edit" && editHasMultipleFundingSplits && (
              <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-foreground" data-testid="expense-funding-summary-edit">
                <span className="font-semibold">Multiple saved funding portions</span>
                <span className="mt-1 block text-xs text-muted-foreground">The existing bank and direct portions will stay unchanged while you edit the expense details.</span>
-             </div>
-           ) : expenseTotal > 0 && (
-             <div
-               role="status"
-               aria-live="polite"
-               data-testid={`expense-funding-summary-${mode}`}
-               className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                 fundingStatus.tone === "ready"
-                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                   : fundingStatus.tone === "error"
-                     ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                     : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-               }`}
-             >
-               {fundingStatus.message}
              </div>
            )}
           <label className="text-sm font-semibold text-foreground">
@@ -1598,15 +1976,38 @@ export default function Expenses() {
             <button type="button"
               onClick={() => {
                 const nextPaidFromBank = !form.paidFromBank;
+                 const directTotal = mode === "add"
+                   ? form.payerIds.length === 1 && addDirectSourceIds.length > 0
+                     ? addDirectSourceIds.reduce((sum, sourceId) => sum + (Number(addDirectSourceAmounts[String(sourceId)]) || 0), 0)
+                     : form.payerIds.reduce((sum, payerId) => sum + (Number(form.payerAmounts[payerId]) || 0), 0)
+                   : 0;
+                  const hasDirectSelection = mode === "add" && (
+                   addDirectSourceIds.length > 0
+                   || directTotal > 0
+                   || Boolean(form.incomeSourceId)
+                 );
                 form.setPaidFromBank(nextPaidFromBank);
                 form.setIncomeSourceId(null);
                 form.setOtherIncomeSourceLabel(null);
-                  setAllowMixedFunding(false);
-                 if (nextPaidFromBank && mode === "add") {
-                  form.setPaidById("");
-                  form.setPayerIds([]);
-                  form.setPayerIncomeSourceIds({});
-                   form.setPayerAmounts({ __joint_bank__: form.amount });
+                   setAllowMixedFunding(nextPaidFromBank && hasDirectSelection);
+                  if (nextPaidFromBank && mode === "add") {
+                   if (hasDirectSelection) {
+                     form.setPayerAmounts((previous) => ({
+                       ...previous,
+                       __joint_bank__: "",
+                     }));
+                   } else {
+                     form.setPaidById("");
+                     form.setPayerIds([]);
+                     form.setPayerIncomeSourceIds({});
+                     form.setPayerAmounts({ __joint_bank__: "" });
+                   }
+                  } else if (!nextPaidFromBank && mode === "add") {
+                    form.setPayerAmounts((previous) => {
+                      const next = { ...previous };
+                      delete next.__joint_bank__;
+                      return next;
+                    });
                  } else if (nextPaidFromBank && mode === "edit" && form.payerIds.length === 0) {
                    form.setPaidById("");
                 }
@@ -1633,12 +2034,10 @@ export default function Expenses() {
                     form.setOtherIncomeSourceLabel(null);
                     if (isMultiEnabled) {
                       if (!selected) {
-                        form.setPayerAmounts((previous) => addFundingSourceWithRemainder({
-                          total: Number(form.amount),
-                          selectedSourceIds: form.payerIds,
-                          newSourceId: m.userId,
-                          amounts: previous,
-                        }));
+                         form.setPayerAmounts((previous) => ({
+                           ...previous,
+                           [m.userId]: "",
+                         }));
                       }
                       const next = form.payerIds.includes(m.userId)
                         ? form.payerIds.filter(id => id !== m.userId)
@@ -1653,17 +2052,7 @@ export default function Expenses() {
                       }
                       // Keep single paidById in sync for income sources
                       form.setPaidById(next.length === 1 ? next[0] : "");
-                       if (form.paidFromBank) {
-                         setAllowMixedFunding(next.length > 0);
-                         if (next.length === 1) {
-                           const bankAmount = Number(form.payerAmounts.__joint_bank__);
-                           const remainder = getFundingRemainder(Number(form.amount), bankAmount);
-                           form.setPayerAmounts((previous) => ({
-                             ...previous,
-                             [next[0]]: remainder > 0 ? String(remainder) : previous[next[0]] ?? "",
-                           }));
-                         }
-                       }
+                        if (form.paidFromBank) setAllowMixedFunding(next.length > 0);
                     } else {
                       form.setPaidById(m.userId);
                      if (!form.paidFromBank) form.setPaidFromBank(false);
@@ -1688,12 +2077,37 @@ export default function Expenses() {
                 required
                 className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
               >
-                <option value="" disabled>{bankAccounts.length ? "Choose the account used..." : "No bank accounts available"}</option>
+                 <option value="" disabled>{bankAccounts.length ? "Choose the account used..." : "Create a bank account below"}</option>
                 {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
-              {bankAccounts.length === 0 && (
-                <p className="text-xs text-muted-foreground">Create a bank account here to continue without leaving this expense.</p>
-              )}
+               {mode === "add" && form.paidFromBank && form.payerIds.length === 0 && form.accountId && (
+                 <label className="block space-y-1.5 text-sm font-semibold text-foreground">
+                   Type the amount from this account to confirm
+                   <Input
+                     type="number"
+                     min="1"
+                     step="1"
+                     value={form.payerAmounts.__joint_bank__ ?? ""}
+                     onChange={(event) => {
+                       const value = event.target.value;
+                       form.setPayerAmounts((previous) => ({
+                         ...previous,
+                         __joint_bank__: value,
+                       }));
+                     }}
+                     placeholder="KES 0"
+                     className="h-10 bg-card"
+                     data-testid={`expense-bank-amount-${mode}`}
+                     required
+                   />
+                   <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
+                     Enter this manually to confirm how much should reduce the selected account.
+                   </span>
+                 </label>
+               )}
+               {bankAccounts.length === 0 && (
+                 <p className="text-xs font-medium text-foreground">No bank account yet. Create one below and Jamvi will select it for this expense automatically.</p>
+               )}
               {canManageExpenses && (isAddingBankAccount ? (
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Input
@@ -1712,38 +2126,10 @@ export default function Expenses() {
                   <Button type="button" size="sm" variant="ghost" className="h-10" onClick={() => { setIsAddingBankAccount(false); setNewBankAccountName(""); setNewBankAccountNumber(""); setNewBankOpeningBalance(""); }}>Cancel</Button>
                 </div>
               ) : (
-                <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)}>
-                  + New bank account
+                 <Button type="button" size="sm" variant="outline" className="h-10 border-dashed" onClick={() => setIsAddingBankAccount(true)} data-testid={`create-bank-account-inline-${mode}`}>
+                   {bankAccounts.length === 0 ? "Create bank account" : "+ New bank account"}
                 </Button>
               ))}
-              {mode === "add" && form.paidFromBank && form.payerIds.length === 0 && (
-                <label className="block space-y-1.5 text-sm font-semibold text-foreground">
-                  Type the amount from this account to confirm
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={form.payerAmounts.__joint_bank__ ?? ""}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      form.setPayerAmounts((previous) => {
-                        const next: Record<string, string> = { ...previous, __joint_bank__: value };
-                        if (mode === "add" && form.payerIds.length === 1) {
-                          const remainder = getFundingRemainder(Number(form.amount), Number(value));
-                          next[form.payerIds[0]] = remainder > 0 ? String(remainder) : "";
-                        }
-                        return next;
-                      });
-                    }}
-                    placeholder="KES 0"
-                    className="h-10 bg-card"
-                    required
-                  />
-                  <span className="block text-xs font-normal leading-relaxed text-muted-foreground">
-                    Enter this manually to confirm how much should reduce the selected account.
-                  </span>
-                </label>
-              )}
               {(() => {
                 const bankAmount = Number(form.payerAmounts.__joint_bank__ || 0);
                 const originalExpense = mode === "edit"
@@ -1813,7 +2199,7 @@ export default function Expenses() {
             return (
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Type the primary amount{total > 0 ? ` (expense total: KES ${total.toLocaleString()})` : ""}. Jamvi fills the remaining amount into the other selected source:
+                  Enter the amount from each selected source manually{total > 0 ? ` (expense total: KES ${total.toLocaleString()})` : ""}:
                 </p>
                  {form.paidFromBank && (
                    <div className="flex items-center gap-3">
@@ -1822,17 +2208,10 @@ export default function Expenses() {
                      </span>
                      <input type="number" placeholder="0" min="0" step="1"
                        value={form.payerAmounts.__joint_bank__ ?? ""}
-                       onChange={e => {
-                         const value = e.target.value;
-                         form.setPayerAmounts((previous) => {
-                           const next: Record<string, string> = { ...previous, __joint_bank__: value };
-                           if (form.payerIds.length === 1) {
-                             const remainder = getFundingRemainder(Number(form.amount), Number(value));
-                             next[form.payerIds[0]] = remainder > 0 ? String(remainder) : "";
-                           }
-                           return next;
-                         });
-                       }}
+                         onChange={e => form.setPayerAmounts((previous) => ({
+                           ...previous,
+                           __joint_bank__: e.target.value,
+                         }))}
                         required
                        className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
                    </div>
@@ -1855,10 +2234,6 @@ export default function Expenses() {
                              const value = e.target.value;
                              form.setPayerAmounts((previous) => {
                                const next = { ...previous, [pid]: value };
-                               if (form.paidFromBank && form.payerIds.length === 1) {
-                                 const remainder = getFundingRemainder(Number(form.amount), Number(value));
-                                 next.__joint_bank__ = remainder > 0 ? String(remainder) : "";
-                               }
                                return next;
                              });
                            }}
@@ -1919,14 +2294,9 @@ export default function Expenses() {
                  const sourceId = value ? Number(value) : null;
                  form.setIncomeSourceId(sourceId);
                 form.setOtherIncomeSourceLabel(null);
-                 if (mode === "add" && isPersonalBudget && sourceId && !addDirectSourceIds.includes(sourceId)) {
+                  if (mode === "add" && form.payerIds.length === 1 && sourceId && !addDirectSourceIds.includes(sourceId)) {
                    const key = String(sourceId);
-                   setAddDirectSourceAmounts((previous) => addFundingSourceWithRemainder({
-                     total: Number(form.amount),
-                     selectedSourceIds: addDirectSourceIds.map(String),
-                     newSourceId: key,
-                     amounts: previous,
-                   }));
+                     setAddDirectSourceAmounts((previous) => ({ ...previous, [key]: "" }));
                    setAddDirectSourceIds((previous) => [...previous, sourceId]);
                  }
                 if (mode === "add" && form.payerIds[0]) {
@@ -1938,19 +2308,28 @@ export default function Expenses() {
               }}
               required
             >
-               <option value="" disabled>{mode === "add" && isPersonalBudget && addDirectSourceIds.length > 0 ? "Add another income source..." : "Select an income source..."}</option>
+               <option value="" disabled>{mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.length > 0 ? "Add another income source..." : "Select an income source..."}</option>
               {mode === "edit" && form.otherIncomeSourceLabel !== null && (
                 <option value="legacy" disabled>
                   Historical source: {form.otherIncomeSourceLabel || "choose a saved source"}
                 </option>
               )}
-               {(mode === "add" ? addFormSources : editFormSources)?.map(src => (
-                 <option key={src.id} value={src.id} disabled={mode === "add" && isPersonalBudget && addDirectSourceIds.includes(src.id)}>
-                   {src.name}{mode === "add" && isPersonalBudget && addDirectSourceIds.includes(src.id) ? " — added" : ""}
+                {(mode === "add" ? addFormSources : editFormSources)?.map(src => {
+                  const sourceAlreadyAdded = mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.includes(src.id);
+                  const sourceDisabled = sourceAlreadyAdded || (fundingFulfilled && !sourceAlreadyAdded);
+                  return (
+                  <option key={src.id} value={src.id} disabled={sourceDisabled}>
+                     {src.name}{sourceAlreadyAdded ? " — added" : fundingFulfilled ? " — fully funded" : ""}
                  </option>
-              ))}
+                  );
+                })}
             </select>
-              {mode === "add" && isPersonalBudget && form.payerIds.length === 1 && !form.paidFromBank && addDirectSourceIds.length > 0 && (
+              {fundingFulfilled && mode === "add" && form.payerIds.length === 1 && (
+                <p className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-300" role="status">
+                  Fully funded. Other income sources are unavailable until you lower an existing portion.
+                </p>
+              )}
+              {mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.length > 0 && (
                 <div className="space-y-2" data-testid="expense-direct-funding-portions">
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     Enter each portion. Add another income source as many times as needed until the expense is fully funded.
@@ -1996,25 +2375,11 @@ export default function Expenses() {
                     const assigned = addDirectSourceIds.reduce(
                       (sum, sourceId) => sum + (Number(addDirectSourceAmounts[String(sourceId)]) || 0),
                       0,
-                    );
+                    ) + (form.paidFromBank ? Number(form.payerAmounts.__joint_bank__ || 0) : 0);
                     const difference = total - assigned;
-                    return total > 0 ? (
-                      <div
-                        role="status"
-                        data-testid="expense-funding-remainder"
-                        className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
-                          difference > 0
-                            ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-                            : difference < 0
-                              ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                              : "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                        }`}
-                      >
-                        {difference > 0
-                          ? `${formatKes(difference)} remaining — choose another income source to continue.`
-                          : difference < 0
-                            ? `Overfunded by ${formatKes(Math.abs(difference))}.`
-                            : "Fully funded."}
+                    return total > 0 && difference < 0 ? (
+                      <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+                        Overfunded by {formatKes(Math.abs(difference))}.
                       </div>
                     ) : null;
                   })()}
@@ -2048,25 +2413,41 @@ export default function Expenses() {
                 This historical label is not a saved income source. Choose a saved source before saving.
               </p>
             )}
-            {mode === "add" && (
-              <div className="flex flex-wrap gap-2">
-                {addNewSource ? (
-                  <div className="flex items-center gap-1">
-                    <Input autoFocus placeholder="Source name" value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
-                      className="h-9 text-sm w-36 bg-card" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddNewSource(form.payerIds[0] ?? form.paidById); } }} />
-                    <Button type="button" size="sm" className="h-9" onClick={() => handleAddNewSource(form.payerIds[0] ?? form.paidById)}>Add</Button>
-                    <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => { setAddNewSource(false); setNewSourceName(""); }}>✕</Button>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => setAddNewSource(true)}
-                    className="px-3 h-9 rounded-lg text-sm border border-dashed border-input text-muted-foreground hover:bg-muted/50 transition-colors">
-                    + New source
-                  </button>
-                )}
-              </div>
-            )}
+             {mode === "add" && (
+               <div className="flex flex-wrap gap-2 pt-1">
+                 {addNewSource ? (
+                   <div className="flex items-center gap-1">
+                     <Input autoFocus placeholder="Source name" value={newSourceName} onChange={e => setNewSourceName(e.target.value)}
+                       className="h-9 text-sm w-36 bg-card" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddNewSource(form.payerIds[0] ?? form.paidById); } }} />
+                     <Button type="button" size="sm" className="h-9" onClick={() => handleAddNewSource(form.payerIds[0] ?? form.paidById)}>Add</Button>
+                     <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => { setAddNewSource(false); setNewSourceName(""); }}>✕</Button>
+                   </div>
+                 ) : (
+                   <button type="button" onClick={() => setAddNewSource(true)}
+                     className="px-3 h-9 rounded-lg text-sm border border-dashed border-input text-muted-foreground hover:bg-muted/50 transition-colors">
+                     + New source
+                   </button>
+                 )}
+               </div>
+             )}
           </div>
         )}
+         {expenseTotal > 0 && (
+           <div
+             role="status"
+             aria-live="polite"
+             data-testid={`expense-funding-summary-${mode}`}
+             className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+               fundingStatus.tone === "ready"
+                 ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                 : fundingStatus.tone === "error"
+                   ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                   : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+             }`}
+           >
+             {fundingStatus.message}
+           </div>
+         )}
 
         {canManageExpenses && (
         <div className="md:col-span-2 flex items-center gap-3 bg-card rounded-xl p-4 border border-border/50">
@@ -2416,7 +2797,7 @@ export default function Expenses() {
           </CardContent>
         </Card>
       ) : (
-        <Button disabled={sharedTransactionsLocked} onClick={() => { setIsAdding(true); setEditingId(null); }} className="h-12 px-6 rounded-xl shadow-sm">
+        <Button disabled={sharedTransactionsLocked} onClick={() => { setIsAdvancedAdd(false); setIsAdding(true); setEditingId(null); }} className="h-12 px-6 rounded-xl shadow-sm">
           <Plus className="w-5 h-5 mr-2" /> Record Expense
         </Button>
       )}
@@ -2556,11 +2937,11 @@ export default function Expenses() {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove this expense?</AlertDialogTitle>
+            <AlertDialogTitle>{`Remove this expense from "${budgetName}"?`}</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget
-                ? `"${deleteTarget.description}" and its effect on balances, reports, and activity will be removed. This cannot be undone.`
-                : "This expense will be removed."}
+                ? `"${deleteTarget.description}" and its effect on balances, reports, and activity in "${budgetName}" will be removed. This cannot be undone.`
+                : `This expense will be removed from "${budgetName}".`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

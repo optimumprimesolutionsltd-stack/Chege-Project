@@ -1,0 +1,747 @@
+import { describe, expect, it } from "vitest";
+import { normalizeMpesaMessage } from "./normalize";
+import { parseMpesaMessage } from "./parser";
+
+describe("M-Pesa parser foundation", () => {
+  it("rejects an empty message without inventing a transaction", () => {
+    expect(parseMpesaMessage("   ")).toMatchObject({
+      status: "invalid",
+      transaction: null,
+      confidence: "none",
+    });
+  });
+
+  it("marks unrelated text as unsupported", () => {
+    expect(parseMpesaMessage("Meeting moved to tomorrow afternoon.")).toMatchObject({
+      status: "unsupported",
+      transaction: null,
+      confidence: "none",
+    });
+  });
+
+  it("normalizes whitespace and redacts Kenyan phone numbers", () => {
+    expect(normalizeMpesaMessage("  M-PESA\r\n  sent to 0712 345 678  ")).toBe(
+      "M-PESA\nsent to <PHONE>",
+    );
+  });
+
+  it("extracts only fields present in a generic anonymized confirmation", () => {
+    const result = parseMpesaMessage(
+      "TEST1234 Confirmed. Ksh1,250.00 paid to SAMPLE MARKET on 01/09/2026 at 18:42. New M-PESA balance is Ksh8,450.00. Transaction cost, Ksh0.00.",
+    );
+
+    expect(result.status).toBe("parsed");
+    expect(result.confidence).toBe("high");
+    expect(result.transaction).toMatchObject({
+      transactionId: "TEST1234",
+      transactionType: "merchant_payment",
+      purchaseCategory: null,
+      amount: 1250,
+      currency: "KES",
+      merchantOrCounterparty: "SAMPLE MARKET",
+      date: "2026-09-01",
+      time: "18:42",
+      mpesaBalance: 8450,
+      fee: 0,
+      phoneNumber: null,
+    });
+  });
+
+  it("returns warnings and nulls when expected fields are missing", () => {
+    const result = parseMpesaMessage("M-PESA payment notification.");
+    expect(result.status).toBe("parsed");
+    expect(result.confidence).toBe("none");
+    expect(result.transaction?.transactionId).toBeNull();
+    expect(result.transaction?.amount).toBeNull();
+    expect(result.warnings).toContain("Transaction ID was not found.");
+  });
+
+  it("does not accept zero as a transaction amount", () => {
+    const result = parseMpesaMessage("TEST1234 Confirmed. Ksh0.00 paid to SAMPLE SHOP.");
+    expect(result.transaction?.amount).toBeNull();
+    expect(result.warnings).toContain("A positive KSh amount was not found.");
+  });
+
+  it.each([
+    {
+      name: "standard postpaid bundle wording",
+      message:
+        "TESTAIR1 Confirmed. Ksh20.00 sent to SAMPLE POSTPAID BUNDLES for account SAMPLE DATA DAILY on 31/8/26 at 9:08 PM. New M-PESA balance is Ksh12,024.59. Transaction cost, Ksh0.00.",
+      transactionId: "TESTAIR1",
+      date: "2026-08-31",
+      time: "21:08",
+      balance: 12024.59,
+    },
+    {
+      name: "postpaid bundle with appended account notices",
+      message:
+        "TESTAIR2 Confirmed. Ksh20.00 sent to SAMPLE POSTPAID BUNDLES for account SAMPLE DATA DAILY on 30/8/26 at 3:16 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.Amount you can transact within the day is 499,555.00. See all your balances now <LINK>",
+      transactionId: "TESTAIR2",
+      date: "2026-08-30",
+      time: "15:16",
+      balance: 0,
+    },
+    {
+      name: "postpaid bundle with a different offer",
+      message:
+        "TESTAIR3 Confirmed. Ksh30.00 sent to SAMPLE POSTPAID BUNDLES for account SAMPLE MIDNIGHT OFFERS on 1/9/26 at 11:08 AM. New M-PESA balance is Ksh2,436.27. Transaction cost, Ksh0.00.",
+      transactionId: "TESTAIR3",
+      date: "2026-09-01",
+      time: "11:08",
+      balance: 2436.27,
+    },
+  ])("recognizes $name as a postpaid bundle purchase", ({ message, transactionId, date, time, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "airtime_purchase",
+        purchaseCategory: "postpaid_bundle",
+        amount: expect.any(Number),
+        currency: "KES",
+        merchantOrCounterparty: "SAMPLE POSTPAID BUNDLES",
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "Tunukiwa minutes offer",
+      message:
+        "TESTMIN1 Confirmed. Ksh20.00 sent to Safaricom Offers for account Tunukiwa on 2/9/26 at 9:18 AM. New M-PESA balance is Ksh65.27. Transaction cost, Ksh0.00.",
+      transactionId: "TESTMIN1",
+      merchant: "Safaricom Offers",
+      date: "2026-09-02",
+      time: "09:18",
+      amount: 20,
+      balance: 65.27,
+    },
+    {
+      name: "Tunukiwa minutes offer with a different amount",
+      message:
+        "TESTMIN2 Confirmed. Ksh53.00 sent to Safaricom Offers for account Tunukiwa on 4/3/26 at 6:11 PM. New M-PESA balance is Ksh8,071.87. Transaction cost, Ksh0.00.",
+      transactionId: "TESTMIN2",
+      merchant: "Safaricom Offers",
+      date: "2026-03-04",
+      time: "18:11",
+      amount: 53,
+      balance: 8071.87,
+    },
+    {
+      name: "Talkmore minutes offer labelled as data bundles",
+      message:
+        "TESTMIN3 Confirmed. Ksh200.00 sent to SAFARICOM DATA BUNDLES for account Talkmore on 30/8/26 at 8:38 AM. New M-PESA balance is Ksh2,180.73. Transaction cost, Ksh0.00.",
+      transactionId: "TESTMIN3",
+      merchant: "SAFARICOM DATA BUNDLES",
+      date: "2026-08-30",
+      time: "08:38",
+      amount: 200,
+      balance: 2180.73,
+    },
+  ])("recognizes $name as a minutes purchase", ({ message, transactionId, merchant, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "airtime_purchase",
+        purchaseCategory: "minutes",
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: merchant,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "direct pay airtime confirmation",
+      message:
+        "TESTAIRTIME1 Confirmed. Ksh23.00 sent to DIRECT PAY 04 for account SAMPLE ACCOUNT on 31/8/26 at 5:57 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.Amount you can transact within the day is 499,806.00. See all your balances now <LINK>",
+      transactionId: "TESTAIRTIME1",
+      merchant: "DIRECT PAY 04",
+      date: "2026-08-31",
+      time: "17:57",
+      amount: 23,
+      balance: 0,
+    },
+    {
+      name: "explicit airtime purchase",
+      message:
+        "TESTAIRTIME2 confirmed.You bought Ksh20.00 of airtime on 13/3/26 at 9:18 PM.New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,009.00. Start Investing today with Ziidi MMF & earn daily. Dial *334#.",
+      transactionId: "TESTAIRTIME2",
+      merchant: null,
+      date: "2026-03-13",
+      time: "21:18",
+      amount: 20,
+      balance: 0,
+    },
+    {
+      name: "explicit airtime purchase with a different amount",
+      message:
+        "TESTAIRTIME3 confirmed.You bought Ksh10.00 of airtime on 20/3/26 at 2:34 PM.New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,806.00. Start Investing today with Ziidi MMF & earn daily. Dial *334#.",
+      transactionId: "TESTAIRTIME3",
+      merchant: null,
+      date: "2026-03-20",
+      time: "14:34",
+      amount: 10,
+      balance: 0,
+    },
+  ])("recognizes $name as a regular airtime purchase", ({ message, transactionId, merchant, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "airtime_purchase",
+        purchaseCategory: "airtime",
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: merchant,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "home internet payment without a space in provider name",
+      message:
+        "TESTWIFI1 Confirmed. Ksh1,500.00 sent to SAFARICOMHOME for account SAMPLE ACCOUNT on 1/9/26 at 11:15 PM. New M-PESA balance is Ksh200.27. Transaction cost, Ksh0.00.",
+      transactionId: "TESTWIFI1",
+      merchant: "SAFARICOMHOME",
+      date: "2026-09-01",
+      time: "23:15",
+      amount: 1500,
+      balance: 200.27,
+    },
+    {
+      name: "home internet payment with a space in provider name",
+      message:
+        "TESTWIFI2 Confirmed. Ksh2,999.00 sent to SAFARICOMHOME for account SAMPLE ACCOUNT on 4/3/26 at 5:50 PM. New M-PESA balance is Ksh8,124.87. Transaction cost, Ksh0.00.",
+      transactionId: "TESTWIFI2",
+      merchant: "SAFARICOMHOME",
+      date: "2026-03-04",
+      time: "17:50",
+      amount: 2999,
+      balance: 8124.87,
+    },
+    {
+      name: "home internet payment with appended account notices",
+      message:
+        "TESTWIFI3 Confirmed. Ksh2,999.00 sent to Safaricom Home for account SAMPLE ACCOUNT on 3/4/26 at 6:47 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00.Amount you can transact within the day is 487,771.00. Save frequent paybills for quick payment on M-PESA app <LINK>",
+      transactionId: "TESTWIFI3",
+      merchant: "Safaricom Home",
+      date: "2026-04-03",
+      time: "18:47",
+      amount: 2999,
+      balance: 0,
+    },
+  ])("recognizes $name as a Wi-Fi purchase", ({ message, transactionId, merchant, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "airtime_purchase",
+        purchaseCategory: "wifi",
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: merchant,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "sent to a person with a phone number",
+      message:
+        "TESTSEND1 Confirmed. Ksh70.00 sent to SAMPLE PERSON <PHONE> on 2/9/26 at 9:50 AM. New M-PESA balance is Ksh0.00. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,890.00. See all your balances now <LINK>",
+      transactionId: "TESTSEND1",
+      recipient: "SAMPLE PERSON",
+      date: "2026-09-02",
+      time: "09:50",
+      amount: 70,
+      balance: 0,
+      fee: 0,
+    },
+    {
+      name: "sent to a person with a non-zero fee",
+      message:
+        "TESTSEND2 Confirmed. Ksh150.00 sent to SAMPLE PERSON <PHONE> on 1/9/26 at 6:51 PM. New M-PESA balance is Ksh7,082.59. Transaction cost, Ksh7.00. Amount you can transact within the day is 491,650.00. See all your balances now <LINK>",
+      transactionId: "TESTSEND2",
+      recipient: "SAMPLE PERSON",
+      date: "2026-09-01",
+      time: "18:51",
+      amount: 150,
+      balance: 7082.59,
+      fee: 7,
+    },
+    {
+      name: "paid to a full personal name",
+      message:
+        "TESTSEND3 Confirmed. Ksh120.00 paid to SAMPLE PERSON FULL NAME. on 30/10/25 at 6:01 PM.New M-PESA balance is Ksh248.18. Transaction cost, Ksh0.00. Amount you can transact within the day is 485,865.00. Save frequent Tills for quick payment on M-PESA app <LINK>",
+      transactionId: "TESTSEND3",
+      recipient: "SAMPLE PERSON FULL NAME",
+      date: "2025-10-30",
+      time: "18:01",
+      amount: 120,
+      balance: 248.18,
+      fee: 0,
+    },
+  ])("recognizes $name as a person-to-person payment", ({ message, transactionId, recipient, date, time, amount, balance, fee }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "person_payment",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: recipient,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "received payment with no fee line",
+      message:
+        "TESTRECEIVE1 Confirmed.You have received Ksh1,000.00 from SAMPLE PERSON <PHONE> on 21/10/25 at 9:24 PM  New M-PESA balance is Ksh1,000.00. Earn interest daily on Ziidi MMF,Dial *334#",
+      transactionId: "TESTRECEIVE1",
+      sender: "SAMPLE PERSON",
+      date: "2025-10-21",
+      time: "21:24",
+      amount: 1000,
+      balance: 1000,
+    },
+    {
+      name: "received payment with a larger amount",
+      message:
+        "TESTRECEIVE2 Confirmed.You have received Ksh3,500.00 from SAMPLE PERSON <PHONE> on 22/10/25 at 3:31 PM  New M-PESA balance is Ksh3,500.00. Earn interest daily on Ziidi MMF,Dial *334#",
+      transactionId: "TESTRECEIVE2",
+      sender: "SAMPLE PERSON",
+      date: "2025-10-22",
+      time: "15:31",
+      amount: 3500,
+      balance: 3500,
+    },
+    {
+      name: "received payment with a different amount and date",
+      message:
+        "TESTRECEIVE3 Confirmed.You have received Ksh35,000.00 from SAMPLE PERSON <PHONE> on 31/10/25 at 5:37 PM  New M-PESA balance is Ksh35,000.00. Earn interest daily on Ziidi MMF,Dial *334#",
+      transactionId: "TESTRECEIVE3",
+      sender: "SAMPLE PERSON",
+      date: "2025-10-31",
+      time: "17:37",
+      amount: 35000,
+      balance: 35000,
+    },
+  ])("recognizes $name as an incoming person-to-person payment", ({ message, transactionId, sender, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "person_receipt",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: sender,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: null,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "mall merchant payment with Till notice",
+      message:
+        "TESTMERCHANT1 Confirmed. Ksh12,696.00 paid to SAMPLE SPUR MALL. on 31/10/25 at 7:20 PM.New M-PESA balance is Ksh21,679.71. Transaction cost, Ksh0.00. Amount you can transact within the day is 486,124.00. Save frequent Tills for quick payment on M-PESA app <LINK>",
+      transactionId: "TESTMERCHANT1",
+      merchant: "SAMPLE SPUR MALL",
+      date: "2025-10-31",
+      time: "19:20",
+      amount: 12696,
+      balance: 21679.71,
+    },
+    {
+      name: "express merchant payment",
+      message:
+        "TESTMERCHANT2 Confirmed. Ksh4,264.00 paid to SAMPLE MEMBLEY EXPRESS. on 24/8/26 at 6:33 PM.New M-PESA balance is Ksh17,861.58. Transaction cost, Ksh0.00. Amount you can transact within the day is 382,804.00. Download My OneApp on <LINK>",
+      transactionId: "TESTMERCHANT2",
+      merchant: "SAMPLE MEMBLEY EXPRESS",
+      date: "2026-08-24",
+      time: "18:33",
+      amount: 4264,
+      balance: 17861.58,
+    },
+    {
+      name: "supermarket merchant payment",
+      message:
+        "TESTMERCHANT3 Confirmed. Ksh3,000.00 paid to SAMPLE SUPERMARKET. on 13/7/26 at 1:37 PM.New M-PESA balance is Ksh206.52. Transaction cost, Ksh0.00. Amount you can transact within the day is 498,110.00. Download My OneApp on <LINK>",
+      transactionId: "TESTMERCHANT3",
+      merchant: "SAMPLE SUPERMARKET",
+      date: "2026-07-13",
+      time: "13:37",
+      amount: 3000,
+      balance: 206.52,
+    },
+    {
+      name: "restaurant-style merchant payment",
+      message:
+        "TESTMERCHANT4 Confirmed. Ksh350.00 paid to SAMPLE AFRICAN DISHES. on 30/10/25 at 12:21 PM.New M-PESA balance is Ksh13,446.18. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,030.00. Save frequent Tills for quick payment on M-PESA app <LINK>",
+      transactionId: "TESTMERCHANT4",
+      merchant: "SAMPLE AFRICAN DISHES",
+      date: "2025-10-30",
+      time: "12:21",
+      amount: 350,
+      balance: 13446.18,
+    },
+  ])("recognizes $name as a merchant payment", ({ message, transactionId, merchant, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "merchant_payment",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: merchant,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: 0,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "explicit Paybill wording",
+      message:
+        "TESTPAYBILL1 Confirmed. Ksh3,000.00 sent to SAMPLE PAYBILL ACCOUNT for account SAMPLE ACCOUNT on 1/9/26 at 1:49 PM New M-PESA balance is Ksh9,474.59. Transaction cost, Ksh25.00.Amount you can transact within the day is 494,000.00. See all your balances now <LINK>",
+      transactionId: "TESTPAYBILL1",
+      recipient: "SAMPLE PAYBILL ACCOUNT",
+      accountReference: "SAMPLE ACCOUNT",
+      date: "2026-09-01",
+      time: "13:49",
+      amount: 3000,
+      balance: 9474.59,
+      fee: 25,
+    },
+    {
+      name: "business account payment without the Paybill label",
+      message:
+        "TESTPAYBILL2 Confirmed. Ksh1,000.00 sent to SAMPLE DISTRIBUTORS LTD for account SAMPLE ACCOUNT on 17/7/26 at 4:54 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh10.00.Amount you can transact within the day is 496,175.00. Download My OneApp on <LINK>",
+      transactionId: "TESTPAYBILL2",
+      recipient: "SAMPLE DISTRIBUTORS LTD",
+      accountReference: "SAMPLE ACCOUNT",
+      date: "2026-07-17",
+      time: "16:54",
+      amount: 1000,
+      balance: 0,
+      fee: 10,
+    },
+    {
+      name: "bank Paybill account payment",
+      message:
+        "TESTPAYBILL3 Confirmed. Ksh3,000.00 sent to SAMPLE KCB for account SAMPLE ACCOUNT on 30/8/26 at 12:42 PM New M-PESA balance is Ksh0.00. Transaction cost, Ksh25.00.Amount you can transact within the day is 495,980.00. See all your balances now <LINK>",
+      transactionId: "TESTPAYBILL3",
+      recipient: "SAMPLE KCB",
+      accountReference: "SAMPLE ACCOUNT",
+      date: "2026-08-30",
+      time: "12:42",
+      amount: 3000,
+      balance: 0,
+      fee: 25,
+    },
+  ])("recognizes $name as an outgoing Paybill payment", ({ message, transactionId, recipient, accountReference, date, time, amount, balance, fee }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "paybill_payment",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: recipient,
+        accountReference,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "bank app receipt",
+      message:
+        "TESTBANK1 Confirmed.You have received Ksh8,800.00 from SAMPLE BANK LIMITED - APP on 1/9/26 at 1:46 PM. New M-PESA balance is Ksh11,141.27. Buy goods with M-PESA.",
+      transactionId: "TESTBANK1",
+      sender: "SAMPLE BANK LIMITED - APP",
+      date: "2026-09-01",
+      time: "13:46",
+      amount: 8800,
+      balance: 11141.27,
+    },
+    {
+      name: "bulk account receipt",
+      message:
+        "TESTBANK2 Confirmed.You have received Ksh1,500.00 from SAMPLE BANK BULK ACCOUNT SAMPLE ACCOUNT on 29/8/26 at 4:58 PM New M-PESA balance is Ksh1,500.00. Separate personal and business funds through Pochi la Biashara on *334#.",
+      transactionId: "TESTBANK2",
+      sender: "SAMPLE BANK BULK ACCOUNT SAMPLE ACCOUNT",
+      date: "2026-08-29",
+      time: "16:58",
+      amount: 1500,
+      balance: 1500,
+    },
+    {
+      name: "bank receipt with a short source label",
+      message:
+        "TESTBANK3 Confirmed.You have received Ksh1,000.00 from SAMPLE KCB SAMPLE ACCOUNT on 23/7/26 at 7:26 PM New M-PESA balance is Ksh1,000.00. Separate personal and business funds through Pochi la Biashara on *334#.",
+      transactionId: "TESTBANK3",
+      sender: "SAMPLE KCB SAMPLE ACCOUNT",
+      date: "2026-07-23",
+      time: "19:26",
+      amount: 1000,
+      balance: 1000,
+    },
+  ])("recognizes $name as an incoming bank payment", ({ message, transactionId, sender, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "bank_receipt",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: sender,
+        accountReference: null,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: null,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "agent withdrawal with market location",
+      message:
+        "TESTWITHDRAW1 Confirmed.on 30/8/26 at 10:12 AMWithdraw Ksh800.00 from SAMPLE AGENT CODE - SAMPLE MARKET CENTRE New M-PESA balance is Ksh1,351.73. Transaction cost, Ksh29.00. Amount you can transact within the day is 499,000.00. Get a Lipa Na M-PESA Till online: <LINK>",
+      transactionId: "TESTWITHDRAW1",
+      counterparty: "SAMPLE AGENT CODE - SAMPLE MARKET CENTRE",
+      date: "2026-08-30",
+      time: "10:12",
+      amount: 800,
+      balance: 1351.73,
+      fee: 29,
+    },
+    {
+      name: "electronics agent withdrawal",
+      message:
+        "TESTWITHDRAW2 Confirmed.on 18/2/25 at 7:52 PMWithdraw Ksh3,000.00 from SAMPLE AGENT CODE - SAMPLE ELECTRONICS SAMPLE MARKET New M-PESA balance is Ksh3,088.99. Transaction cost, Ksh52.00. Amount you can transact within the day is 495,600.00. To move money from bank to M-PESA, dial *334#>Withdraw>From Bank to MPESA",
+      transactionId: "TESTWITHDRAW2",
+      counterparty: "SAMPLE AGENT CODE - SAMPLE ELECTRONICS SAMPLE MARKET",
+      date: "2025-02-18",
+      time: "19:52",
+      amount: 3000,
+      balance: 3088.99,
+      fee: 52,
+    },
+    {
+      name: "engineering contractor agent withdrawal",
+      message:
+        "TESTWITHDRAW3 Confirmed.on 14/2/25 at 12:49 PMWithdraw Ksh4,000.00 from SAMPLE AGENT CODE - SAMPLE ENGINEERING CONTRACTORS SAMPLE ROAD New M-PESA balance is Ksh2,589.97. Transaction cost, Ksh69.00. Amount you can transact within the day is 493,850.00. To move money from bank to M-PESA, dial *334#>Withdraw>From Bank to MPESA",
+      transactionId: "TESTWITHDRAW3",
+      counterparty: "SAMPLE AGENT CODE - SAMPLE ENGINEERING CONTRACTORS SAMPLE ROAD",
+      date: "2025-02-14",
+      time: "12:49",
+      amount: 4000,
+      balance: 2589.97,
+      fee: 69,
+    },
+  ])("recognizes $name as a cash withdrawal", ({ message, transactionId, counterparty, date, time, amount, balance, fee }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "cash_withdrawal",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: counterparty,
+        accountReference: null,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "large agent cash deposit",
+      message:
+        "TESTDEPOSIT1 Confirmed. On 5/8/26 at 5:00 PM Give Ksh80,000.00 cash to SAMPLE AGENT - SAMPLE LOCATION New M-PESA balance is Ksh80,402.67. You can now access M-PESA via *334#",
+      transactionId: "TESTDEPOSIT1",
+      counterparty: "SAMPLE AGENT - SAMPLE LOCATION",
+      date: "2026-08-05",
+      time: "17:00",
+      amount: 80000,
+      balance: 80402.67,
+    },
+    {
+      name: "small agent cash deposit",
+      message:
+        "TESTDEPOSIT2 Confirmed. On 28/8/26 at 6:30 PM Give Ksh500.00 cash to SAMPLE AGENT - SAMPLE LOCATION New M-PESA balance is Ksh500.00. You can now access M-PESA via *334#",
+      transactionId: "TESTDEPOSIT2",
+      counterparty: "SAMPLE AGENT - SAMPLE LOCATION",
+      date: "2026-08-28",
+      time: "18:30",
+      amount: 500,
+      balance: 500,
+    },
+    {
+      name: "agent cash deposit with a different balance",
+      message:
+        "TESTDEPOSIT3 Confirmed. On 3/4/26 at 9:24 AM Give Ksh2,950.00 cash to SAMPLE AGENT - SAMPLE LOCATION New M-PESA balance is Ksh71,014.66. You can now access M-PESA via *334#",
+      transactionId: "TESTDEPOSIT3",
+      counterparty: "SAMPLE AGENT - SAMPLE LOCATION",
+      date: "2026-04-03",
+      time: "09:24",
+      amount: 2950,
+      balance: 71014.66,
+    },
+  ])("recognizes $name as a cash deposit", ({ message, transactionId, counterparty, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        transactionType: "cash_deposit",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: counterparty,
+        accountReference: null,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: null,
+      },
+    });
+  });
+
+  it.each([
+    {
+      name: "small reversal",
+      message:
+        "TESTREVERSAL1 confirmed. Reversal of transaction TESTORIGINAL1 has been successfully reversed on 13/8/26 at 11:00 AM and Ksh1.00 is credited to your M-PESA account. New M-PESA account balance is Ksh1.00.",
+      transactionId: "TESTREVERSAL1",
+      originalTransactionId: "TESTORIGINAL1",
+      date: "2026-08-13",
+      time: "11:00",
+      amount: 1,
+      balance: 1,
+    },
+    {
+      name: "reversal with a decimal balance",
+      message:
+        "TESTREVERSAL2 confirmed. Reversal of transaction TESTORIGINAL2 has been successfully reversed on 13/8/26 at 4:00 PM and Ksh2.00 is credited to your M-PESA account. New M-PESA account balance is Ksh4,555.10.",
+      transactionId: "TESTREVERSAL2",
+      originalTransactionId: "TESTORIGINAL2",
+      date: "2026-08-13",
+      time: "16:00",
+      amount: 2,
+      balance: 4555.1,
+    },
+    {
+      name: "large reversal with a precise time",
+      message:
+        "TESTREVERSAL3 confirmed. Reversal of transaction TESTORIGINAL3 has been successfully reversed on 3/1/26 at 10:41 AM and Ksh3,500.00 is credited to your M-PESA account. New M-PESA account balance is Ksh35,793.28.",
+      transactionId: "TESTREVERSAL3",
+      originalTransactionId: "TESTORIGINAL3",
+      date: "2026-01-03",
+      time: "10:41",
+      amount: 3500,
+      balance: 35793.28,
+    },
+  ])("recognizes $name", ({ message, transactionId, originalTransactionId, date, time, amount, balance }) => {
+    const result = parseMpesaMessage(message);
+
+    expect(result).toMatchObject({
+      status: "parsed",
+      confidence: "high",
+      transaction: {
+        transactionId,
+        originalTransactionId,
+        transactionType: "reversal",
+        purchaseCategory: null,
+        amount,
+        currency: "KES",
+        merchantOrCounterparty: null,
+        accountReference: null,
+        date,
+        time,
+        mpesaBalance: balance,
+        fee: null,
+      },
+    });
+  });
+});

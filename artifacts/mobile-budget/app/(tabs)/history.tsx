@@ -48,8 +48,10 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import ActivityCard, { type ActivityItem } from '@/components/ActivityCard';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
+import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
+import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 
 const MONTH_PREF_KEY = 'expenses_month_pref';
 
@@ -69,10 +71,6 @@ function todayIso(): string {
 
 function formatKES(n: number) {
   return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
-}
-
-function formatDate(s: string) {
-  return new Date(s).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 type Expense = {
@@ -533,7 +531,7 @@ export default function HistoryScreen() {
   };
 
   const handleDelete = (exp: Expense) => {
-    Alert.alert('Delete expense', `Delete "${exp.description}"?`, [
+    Alert.alert('Delete expense', `Delete "${exp.description}" from "${workspaceBudgetName(group)}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
@@ -628,7 +626,7 @@ export default function HistoryScreen() {
   };
 
   const removeContribution = (contribution: Contribution) => {
-    Alert.alert('Remove contribution', `Remove KES ${formatKES(contribution.amount)} from ${contribution.userName}?`, [
+    Alert.alert('Remove contribution', `Remove KES ${formatKES(contribution.amount)} from ${contribution.userName} in "${workspaceBudgetName(group)}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
