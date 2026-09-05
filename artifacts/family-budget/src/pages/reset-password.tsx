@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useLocation } from 'wouter';
 import { KeyRound } from 'lucide-react';
+import { useAuth, type AuthUser } from '@workspace/replit-auth-web';
 import { BrandLogo } from '@/components/brand-logo';
 
 /** Wrapper shared with the "link is broken" states below, so a person who
@@ -31,6 +33,8 @@ const inputClass =
   'h-12 w-full rounded-xl border border-blue-100/20 bg-white/[0.08] px-4 text-white placeholder:text-blue-100/50 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/30';
 
 export default function ResetPasswordPage() {
+  const { adoptSession } = useAuth();
+  const [, navigate] = useLocation();
   const token = new URLSearchParams(window.location.search).get('token') ?? '';
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -72,11 +76,14 @@ export default function ResetPasswordPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),
       });
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as { error?: string; user?: AuthUser };
       if (!response.ok) throw new Error(result.error ?? 'Could not set your new password. Please try again.');
+      if (!result.user) throw new Error('Could not set your new password. Please try again.');
       // The server signs them in as part of the reset, so there is no reason
-      // to make them type the password they just chose.
-      window.location.href = '/app/';
+      // to make them type the password they just chose - or to reload the app
+      // to discover a session we were just handed.
+      adoptSession(result.user);
+      navigate('/');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not set your new password. Please try again.');
       setIsSaving(false);

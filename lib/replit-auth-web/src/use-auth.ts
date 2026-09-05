@@ -11,6 +11,17 @@ interface AuthState {
   login: () => void;
   logout: () => void;
   retry: () => void;
+  /**
+   * Take up a session that has just been created by signing in with an email
+   * and password, without reloading the page.
+   *
+   * The endpoint that created the session already answered with the user, so
+   * there is nothing left to ask the server. Reloading instead would re-parse
+   * the whole application bundle and re-request /api/auth/user for an answer
+   * we are holding - seconds of waiting, on the slowest connections, to learn
+   * something already known.
+   */
+  adoptSession: (user: AuthUser) => void;
   saveDisplayName: (name: string) => Promise<void>;
   saveProfilePhoto: (photoPath: string | null) => Promise<void>;
 }
@@ -131,7 +142,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const retry = useCallback(() => {
+    // A cached rejection clears itself, but a cached "nobody is signed in"
+    // does not, so retry alone would keep re-reading the same answer.
+    authRequest = null;
     setRetryCount((count) => count + 1);
+  }, []);
+
+  const adoptSession = useCallback((nextUser: AuthUser) => {
+    setUser(nextUser);
+    // The module-level cache is what a page reload used to clear. Seeding it
+    // keeps the next reader - a remount, or anything calling getCurrentUser -
+    // from resolving to the signed-out answer it happens to be holding.
+    authRequest = Promise.resolve(nextUser);
   }, []);
 
   const saveDisplayName = useCallback(async (name: string) => {
@@ -160,9 +182,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     retry,
+    adoptSession,
     saveDisplayName,
     saveProfilePhoto,
-  }), [user, isLoading, error, login, logout, retry, saveDisplayName, saveProfilePhoto]);
+  }), [user, isLoading, error, login, logout, retry, adoptSession, saveDisplayName, saveProfilePhoto]);
 
   return createElement(AuthContext.Provider, { value }, children);
 }
