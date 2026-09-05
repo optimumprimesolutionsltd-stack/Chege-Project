@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useAuth } from '@workspace/replit-auth-web';
+import { useLocation } from 'wouter';
+import { useAuth, type AuthUser } from '@workspace/replit-auth-web';
 import { ArrowUpRight, ShieldCheck, Sparkles, TrendingUp, Users, WalletCards } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
 
@@ -15,7 +16,8 @@ function FeatureRow({ icon, text }: { icon: React.ReactNode; text: string }) {
 }
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, adoptSession } = useAuth();
+  const [, navigate] = useLocation();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [credentialMode, setCredentialMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState('');
@@ -66,9 +68,14 @@ export default function LoginPage() {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentialMode === 'register' ? { name, email, password } : { email, password }),
       });
-      const result = await response.json() as { error?: string };
+      const result = await response.json() as { error?: string; user?: AuthUser };
       if (!response.ok) throw new Error(result.error ?? 'Could not sign in. Please try again.');
-      window.location.href = '/app/';
+      if (!result.user) throw new Error('Could not sign in. Please try again.');
+      // The session exists and the server has already told us who it belongs
+      // to. Reloading here would tear down the app and parse the whole bundle
+      // again to rediscover that.
+      adoptSession(result.user);
+      navigate('/');
     } catch (error) {
       setCredentialError(error instanceof Error ? error.message : 'Could not sign in. Please try again.');
       setIsSigningIn(false);
