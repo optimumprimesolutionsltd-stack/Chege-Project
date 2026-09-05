@@ -11,6 +11,9 @@ vi.mock("@aws-sdk/client-s3", () => ({
   HeadObjectCommand: class {
     constructor(public input: unknown) {}
   },
+  PutObjectCommand: class {
+    constructor(public input: unknown) {}
+  },
   S3Client: class {
     send = s3Send;
   },
@@ -18,12 +21,7 @@ vi.mock("@aws-sdk/client-s3", () => ({
 vi.mock("@aws-sdk/s3-request-presigner", () => ({
   getSignedUrl: vi.fn(),
 }));
-vi.mock("@aws-sdk/s3-presigned-post", () => ({
-  createPresignedPost: vi.fn(),
-}));
-
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import {
   assertPhotoStorageConfiguration,
   createPhotoUpload,
@@ -44,13 +42,6 @@ beforeEach(() => {
   vi.stubEnv("AWS_SECRET_ACCESS_KEY", "test-secret-key");
   s3Send.mockResolvedValue({});
   vi.mocked(getSignedUrl).mockResolvedValue(signedUrl);
-  vi.mocked(createPresignedPost).mockResolvedValue({
-    url: signedUrl,
-    fields: {
-      key: "photos/test",
-      "Content-Type": "image/png",
-    },
-  });
 });
 
 afterEach(() => {
@@ -59,27 +50,28 @@ afterEach(() => {
 });
 
 describe("S3 private photo storage", () => {
-  it("creates a size-bounded private upload form and signed viewing URL", async () => {
+  it("signs a PUT upload and a viewing URL", async () => {
     const upload = await createPhotoUpload("image/png", 1024);
 
     expect(upload.objectPath).toMatch(/^\/objects\/photos\/[a-f0-9-]+$/);
     expect(upload.uploadUrl).toBe(signedUrl);
-    expect(upload.uploadMethod).toBe("POST");
-    expect(upload.uploadFields).toEqual({
-      key: "photos/test",
-      "Content-Type": "image/png",
-    });
-    expect(createPresignedPost).toHaveBeenCalledWith(
+    // PUT, not POST: R2 does not implement PostObject, so a signed policy
+    // returned a 200 from us and then had no endpoint to reach.
+    expect(upload.uploadMethod).toBe("PUT");
+    expect(upload.uploadFields).toBeUndefined();
+    // Content-Type is signed, so the browser must send exactly what it asked
+    // for. The client sends the same value it declared, and a mismatch is a
+    // signature failure rather than a wrongly typed object in the bucket.
+    expect(getSignedUrl).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        Bucket: "jamvi-private",
-        Expires: 15 * 60,
-        Fields: { "Content-Type": "image/png" },
-        Conditions: [
-          ["content-length-range", 1, 15 * 1024 * 1024],
-          ["eq", "$Content-Type", "image/png"],
-        ],
+        input: expect.objectContaining({
+          Bucket: "jamvi-private",
+          ContentType: "image/png",
+          Key: expect.stringMatching(/^photos\/[a-f0-9-]+$/),
+        }),
       }),
+      { expiresIn: 15 * 60 },
     );
 
     await expect(resolvePhotoUrl(upload.objectPath)).resolves.toBe(signedUrl);
@@ -120,9 +112,12 @@ describe("S3 private photo storage", () => {
     expect(() => assertPhotoStorageConfiguration()).toThrow("S3_BUCKET");
   });
 
-  it("allows larger photos up to the 15 MB policy limit", async () => {
+  it("still refuses anything over 15 MB, which is now the only size check", async () => {
+    // A POST policy let storage enforce the ceiling. A signed PUT cannot, so
+    // this validation is the whole of it: it bounds an honest client, and the
+    // cost of getting past it is the member's own storage quota.
     await expect(createPhotoUpload("image/jpeg", 10 * 1024 * 1024)).resolves.toMatchObject({
-      uploadMethod: "POST",
+      uploadMethod: "PUT",
     });
     await expect(createPhotoUpload("image/jpeg", MAX_PHOTO_BYTES + 1)).rejects.toThrow(
       "smaller than 15 MB",
