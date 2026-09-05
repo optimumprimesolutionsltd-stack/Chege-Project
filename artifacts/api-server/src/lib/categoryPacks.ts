@@ -5,6 +5,18 @@ export type CategoryPackItem = {
   budgetAmount: number;
   priority: number;
   color: string;
+  /**
+   * Suggested mini-ledgers inside this category.
+   *
+   * Named for what people actually pay for here - garbage, the watchman,
+   * matatu fare, school trips - rather than for accounting tidiness. Nobody
+   * budgets for "Waste management services".
+   *
+   * They carry no amount. A suggestion has no business inventing a figure for
+   * somebody else's electricity, and a ledger with no target still tracks
+   * spending perfectly well.
+   */
+  children?: readonly string[];
 };
 
 export type PriorityTierItem = {
@@ -65,57 +77,57 @@ const ORGANISATION_PRIORITY_TIERS: Record<Exclude<GroupKind, "personal" | "famil
  */
 export const CATEGORY_PACKS: Record<GroupKind, readonly CategoryPackItem[]> = {
   personal: [
-    { name: "Food", budgetAmount: 0, priority: 1, color: "#F97316" },
-    { name: "Housing", budgetAmount: 0, priority: 1, color: "#F59E0B" },
-    { name: "Transport", budgetAmount: 0, priority: 2, color: "#8B5CF6" },
-    { name: "Health", budgetAmount: 0, priority: 2, color: "#EF4444" },
-    { name: "Utilities", budgetAmount: 0, priority: 2, color: "#EAB308" },
-    { name: "Personal care", budgetAmount: 0, priority: 3, color: "#DB2777" },
+    { name: "Food", budgetAmount: 0, priority: 1, color: "#F97316", children: ["Groceries", "Supermarket", "Eating out"] },
+    { name: "Housing", budgetAmount: 0, priority: 1, color: "#F59E0B", children: ["Rent", "Service charge", "Repairs"] },
+    { name: "Transport", budgetAmount: 0, priority: 2, color: "#8B5CF6", children: ["Matatu & bus", "Fuel", "Boda"] },
+    { name: "Health", budgetAmount: 0, priority: 2, color: "#EF4444", children: ["Clinic visits", "Medicine", "Insurance"] },
+    { name: "Utilities", budgetAmount: 0, priority: 2, color: "#EAB308", children: ["Electricity", "Water", "Wi-Fi", "Garbage", "Security"] },
+    { name: "Personal care", budgetAmount: 0, priority: 3, color: "#DB2777", children: ["Salon & barber", "Toiletries"] },
   ],
   family: [
-    { name: "Food", budgetAmount: 0, priority: 1, color: "#F97316" },
-    { name: "Housing", budgetAmount: 0, priority: 1, color: "#F59E0B" },
-    { name: "Utilities", budgetAmount: 0, priority: 1, color: "#EAB308" },
-    { name: "Health", budgetAmount: 0, priority: 2, color: "#EF4444" },
-    { name: "Education", budgetAmount: 0, priority: 2, color: "#3B82F6" },
-    { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6" },
+    { name: "Food", budgetAmount: 0, priority: 1, color: "#F97316", children: ["Groceries", "Supermarket", "Milk & bread"] },
+    { name: "Housing", budgetAmount: 0, priority: 1, color: "#F59E0B", children: ["Rent", "Service charge", "Repairs"] },
+    { name: "Utilities", budgetAmount: 0, priority: 1, color: "#EAB308", children: ["Electricity", "Water", "Wi-Fi", "Garbage", "Security"] },
+    { name: "Health", budgetAmount: 0, priority: 2, color: "#EF4444", children: ["Clinic visits", "Medicine", "Insurance"] },
+    { name: "Education", budgetAmount: 0, priority: 2, color: "#3B82F6", children: ["School fees", "School trips", "Uniforms", "Books & stationery"] },
+    { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6", children: ["Matatu & bus", "Fuel", "School run"] },
   ],
   chama: [
-    { name: "Meetings", budgetAmount: 0, priority: 1, color: "#F97316" },
-    { name: "Projects", budgetAmount: 0, priority: 1, color: "#2563EB" },
-    { name: "Welfare", budgetAmount: 0, priority: 2, color: "#DB2777" },
-    { name: "Administration", budgetAmount: 0, priority: 2, color: "#6B7280" },
-    { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6" },
+    { name: "Meetings", budgetAmount: 0, priority: 1, color: "#F97316", children: ["Venue", "Refreshments"] },
+    { name: "Projects", budgetAmount: 0, priority: 1, color: "#2563EB", children: ["Materials", "Labour", "Permits"] },
+    { name: "Welfare", budgetAmount: 0, priority: 2, color: "#DB2777", children: ["Bereavement", "Medical help", "Celebrations"] },
+    { name: "Administration", budgetAmount: 0, priority: 2, color: "#6B7280", children: ["Bank charges", "Stationery", "Airtime"] },
+    { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6", children: ["Fares", "Fuel"] },
   ],
   club: [
-    { name: "Events", budgetAmount: 0, priority: 1, color: "#F97316" },
-    { name: "Equipment", budgetAmount: 0, priority: 1, color: "#2563EB" },
-    { name: "Venue", budgetAmount: 0, priority: 2, color: "#F59E0B" },
-    { name: "Membership activities", budgetAmount: 0, priority: 2, color: "#059669" },
-    { name: "Administration", budgetAmount: 0, priority: 3, color: "#6B7280" },
+    { name: "Events", budgetAmount: 0, priority: 1, color: "#F97316", children: ["Catering", "Publicity", "Decor"] },
+    { name: "Equipment", budgetAmount: 0, priority: 1, color: "#2563EB", children: ["Purchases", "Repairs"] },
+    { name: "Venue", budgetAmount: 0, priority: 2, color: "#F59E0B", children: ["Hire", "Cleaning"] },
+    { name: "Membership activities", budgetAmount: 0, priority: 2, color: "#059669", children: ["Trips", "Competitions"] },
+    { name: "Administration", budgetAmount: 0, priority: 3, color: "#6B7280", children: ["Bank charges", "Stationery"] },
   ],
   team: [
-    { name: "Salaries", budgetAmount: 0, priority: 1, color: "#2563EB" },
-    { name: "Tools", budgetAmount: 0, priority: 1, color: "#7C3AED" },
-    { name: "Operations", budgetAmount: 0, priority: 2, color: "#059669" },
-    { name: "Travel", budgetAmount: 0, priority: 2, color: "#8B5CF6" },
-    { name: "Training", budgetAmount: 0, priority: 3, color: "#3B82F6" },
+    { name: "Salaries", budgetAmount: 0, priority: 1, color: "#2563EB", children: ["Wages", "Statutory deductions"] },
+    { name: "Tools", budgetAmount: 0, priority: 1, color: "#7C3AED", children: ["Software", "Hardware"] },
+    { name: "Operations", budgetAmount: 0, priority: 2, color: "#059669", children: ["Office rent", "Internet", "Airtime"] },
+    { name: "Travel", budgetAmount: 0, priority: 2, color: "#8B5CF6", children: ["Fares", "Accommodation", "Per diem"] },
+    { name: "Training", budgetAmount: 0, priority: 3, color: "#3B82F6", children: ["Courses", "Materials"] },
   ],
   student_group: [
-    { name: "School fees & classes", budgetAmount: 0, priority: 1, color: "#2563EB" },
-    { name: "Books & supplies", budgetAmount: 0, priority: 1, color: "#7C3AED" },
-    { name: "Meals", budgetAmount: 0, priority: 2, color: "#F97316" },
-    { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6" },
-    { name: "Airtime & data", budgetAmount: 0, priority: 3, color: "#0891B2" },
-    { name: "Events & activities", budgetAmount: 0, priority: 4, color: "#DB2777" },
-    { name: "Welfare", budgetAmount: 0, priority: 2, color: "#059669" },
-    { name: "Administration", budgetAmount: 0, priority: 3, color: "#6B7280" },
+    { name: "School fees & classes", budgetAmount: 0, priority: 1, color: "#2563EB", children: ["Tuition", "Exam fees"] },
+    { name: "Books & supplies", budgetAmount: 0, priority: 1, color: "#7C3AED", children: ["Textbooks", "Stationery", "Printing"] },
+    { name: "Meals", budgetAmount: 0, priority: 2, color: "#F97316", children: ["Lunch", "Snacks"] },
+    { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6", children: ["Fares", "Field trips"] },
+    { name: "Airtime & data", budgetAmount: 0, priority: 3, color: "#0891B2", children: ["Bundles", "Calls"] },
+    { name: "Events & activities", budgetAmount: 0, priority: 4, color: "#DB2777", children: ["School trips", "Competitions"] },
+    { name: "Welfare", budgetAmount: 0, priority: 2, color: "#059669", children: ["Emergency help"] },
+    { name: "Administration", budgetAmount: 0, priority: 3, color: "#6B7280", children: ["Bank charges", "Meeting costs"] },
   ],
   other: [
-    { name: "Supplies", budgetAmount: 0, priority: 1, color: "#F97316" },
-    { name: "Operations", budgetAmount: 0, priority: 1, color: "#059669" },
-    { name: "Transport", budgetAmount: 0, priority: 2, color: "#8B5CF6" },
-    { name: "Services", budgetAmount: 0, priority: 2, color: "#2563EB" },
+    { name: "Supplies", budgetAmount: 0, priority: 1, color: "#F97316", children: ["Consumables", "Equipment"] },
+    { name: "Operations", budgetAmount: 0, priority: 1, color: "#059669", children: ["Rent", "Utilities"] },
+    { name: "Transport", budgetAmount: 0, priority: 2, color: "#8B5CF6", children: ["Fares", "Fuel"] },
+    { name: "Services", budgetAmount: 0, priority: 2, color: "#2563EB", children: ["Professional fees", "Subscriptions"] },
   ],
 };
 
@@ -137,11 +149,25 @@ export function normalizedCategoryPackKind(kind: string | null | undefined): Gro
 }
 
 export function categoryPackRows(groupId: number, kind: string | null | undefined) {
-  return categoryPackForKind(kind).map((category) => ({
+  // `children` is a suggestion, not a column. Spreading the pack item whole
+  // would hand drizzle a field the table does not have.
+  return categoryPackForKind(kind).map(({ children: _children, ...category }) => ({
     ...category,
     groupId,
     isRecurring: true,
     activeMonth: null,
     activeYear: null,
   }));
+}
+
+/** Suggested mini-ledgers, as parent name to child names. Every name is unique
+ *  within a pack, because a category name is unique within a budget. */
+export function categoryPackChildren(
+  kind: string | null | undefined,
+): ReadonlyMap<string, readonly string[]> {
+  return new Map(
+    categoryPackForKind(kind)
+      .filter((category) => category.children?.length)
+      .map((category) => [category.name, category.children as readonly string[]]),
+  );
 }

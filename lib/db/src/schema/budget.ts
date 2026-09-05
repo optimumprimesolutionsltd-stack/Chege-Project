@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, numeric, boolean, date, timestamp, index, unique, uniqueIndex, check, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean, date, timestamp, index, unique, uniqueIndex, check, foreignKey, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { groupsTable } from "./groups";
 
@@ -45,6 +45,20 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   budgetAmount: integer("budget_amount").notNull(),
+  // A sub-category: the mini-ledger inside a bigger one, so that Groceries can
+  // accumulate a month of small purchases under Food without Food losing its
+  // single budget figure.
+  //
+  // The parent keeps the budget. A child's budgetAmount is a target within it
+  // and may be 0, which means "track this, do not judge it" - the right answer
+  // for something like Groceries that varies month to month. Spending is
+  // tracked either way: it comes from the expenses tagged to the category, not
+  // from this column.
+  //
+  // Restricted rather than cascading. Deleting Utilities should not silently
+  // take Wi-Fi, Garbage and Security with it, along with the only record of
+  // what those cost.
+  parentId: integer("parent_id").references((): AnyPgColumn => budgetCategoriesTable.id, { onDelete: "restrict" }),
   priority: integer("priority").notNull().default(1),
   color: text("color").notNull().default("#6B7280"),
   // Archived categories remain available to historical reports and expenses,
@@ -61,6 +75,10 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   uniqueIndex("budget_categories_group_name_normalized_unique")
     .on(table.groupId, sql`lower(btrim(${table.name}))`),
   index("budget_categories_group_priority_idx").on(table.groupId, table.priority),
+  index("budget_categories_parent_idx").on(table.parentId),
+  // One level only is enforced in the route, which can give a usable message.
+  // This catches the case no message helps with.
+  check("budget_categories_parent_not_self_check", sql`${table.parentId} IS NULL OR ${table.parentId} <> ${table.id}`),
 ]);
 
 export const insertBudgetCategorySchema = createInsertSchema(budgetCategoriesTable).omit({ id: true });
