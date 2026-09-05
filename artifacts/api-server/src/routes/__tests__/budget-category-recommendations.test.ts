@@ -65,6 +65,11 @@ vi.mock("drizzle-orm", () => ({
   asc: vi.fn(),
   eq: vi.fn((column: unknown, value: unknown) => ({ column, value })),
   ne: vi.fn(),
+  // Applying suggestions now reads the parent categories back so that the
+  // suggested sub-categories land underneath them. Without this the route
+  // calls an undefined function and every apply answers 500.
+  inArray: vi.fn((column: unknown, values: unknown) => ({ column, values })),
+  sql: vi.fn(),
 }));
 
 import { db } from "@workspace/db";

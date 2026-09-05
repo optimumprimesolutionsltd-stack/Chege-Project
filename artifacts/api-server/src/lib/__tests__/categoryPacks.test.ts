@@ -14,6 +14,7 @@ vi.mock("@workspace/db", () => ({
 
 import {
   CATEGORY_PACKS,
+  categoryPackChildren,
   categoryPackForKind,
   normalizedCategoryPackKind,
   priorityTiersForKind,
@@ -78,5 +79,56 @@ describe("category packs", () => {
       "Activities & Growth",
       "Flexible Spending",
     ]);
+  });
+});
+
+describe("suggested mini-ledgers", () => {
+  it("never repeats a name inside a pack", () => {
+    // A budget allows one category of a given name, and the apply flow inserts
+    // with onConflictDoNothing. A repeated name would therefore not fail
+    // loudly - it would just silently fail to create one of the ledgers.
+    for (const [kind, categories] of Object.entries(CATEGORY_PACKS)) {
+      const names: string[] = [];
+      for (const category of categories) {
+        names.push(category.name.trim().toLowerCase());
+        for (const child of category.children ?? []) {
+          names.push(child.trim().toLowerCase());
+        }
+      }
+      expect(new Set(names).size, `duplicate name in the ${kind} pack`).toBe(names.length);
+    }
+  });
+
+  it("suggests no amount for a ledger", () => {
+    // Children are created with a budget of 0 on purpose: guessing somebody
+    // else's electricity bill is worse than leaving it blank.
+    for (const categories of Object.values(CATEGORY_PACKS)) {
+      for (const category of categories) {
+        for (const child of category.children ?? []) {
+          expect(typeof child).toBe("string");
+          expect(child.trim()).not.toBe("");
+        }
+      }
+    }
+  });
+
+  it("groups every pack, so no budget type is left without ledgers", () => {
+    for (const [kind, categories] of Object.entries(CATEGORY_PACKS)) {
+      const withChildren = categories.filter((category) => (category.children?.length ?? 0) > 0);
+      expect(withChildren.length, `the ${kind} pack suggests no sub-categories`).toBeGreaterThan(0);
+    }
+  });
+
+  it("maps parent names to their ledgers for a given budget type", () => {
+    const household = categoryPackChildren("family");
+    expect(household.get("Utilities")).toContain("Garbage");
+    expect(household.get("Utilities")).toContain("Security");
+    expect(household.get("Food")).toContain("Groceries");
+    expect(household.get("Education")).toContain("School trips");
+
+    // A different kind of budget suggests a different shape entirely.
+    const chama = categoryPackChildren("chama");
+    expect(chama.has("Utilities")).toBe(false);
+    expect(chama.get("Welfare")).toContain("Bereavement");
   });
 });

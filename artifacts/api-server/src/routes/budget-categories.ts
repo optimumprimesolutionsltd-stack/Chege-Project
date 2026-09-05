@@ -9,7 +9,7 @@ import {
   GetBudgetCategoryRecommendationsResponse,
 } from "@workspace/api-zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind } from "../lib/categoryPacks";
+import { categoryPackChildren, categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind } from "../lib/categoryPacks";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
@@ -212,6 +212,43 @@ router.post("/budget-categories/recommendations/apply", async (req, res) => {
     if (missingRows.length > 0) {
       await tx.insert(budgetCategoriesTable).values(missingRows).onConflictDoNothing();
     }
+
+    // The suggested mini-ledgers, added under whichever parents now exist.
+    // Read back rather than trusting the insert above: a parent the person
+    // already had keeps its own id, and its ledgers still belong under it.
+    const suggestedChildren = categoryPackChildren(group.kind);
+    if (suggestedChildren.size > 0) {
+      const parentNames = [...suggestedChildren.keys()];
+      const parents = await tx
+        .select({ id: budgetCategoriesTable.id, name: budgetCategoriesTable.name })
+        .from(budgetCategoriesTable)
+        .where(and(
+          eq(budgetCategoriesTable.groupId, groupId),
+          inArray(budgetCategoriesTable.name, parentNames),
+        ));
+
+      const childRows = parents.flatMap((parent) =>
+        (suggestedChildren.get(parent.name) ?? [])
+          .filter((child) => !existingNames.has(normalizedCategoryName(child)))
+          .map((child) => ({
+            groupId,
+            parentId: parent.id,
+            name: child,
+            // No amount. Guessing somebody's electricity bill would be worse
+            // than leaving it blank, and a ledger tracks spending either way.
+            budgetAmount: 0,
+            priority: 3,
+            color: "#6B7280",
+            isRecurring: true,
+            activeMonth: null,
+            activeYear: null,
+          })),
+      );
+
+      if (childRows.length > 0) {
+        await tx.insert(budgetCategoriesTable).values(childRows).onConflictDoNothing();
+      }
+    }
   });
 
   res.json(ApplyBudgetCategoryRecommendationsResponse.parse(await getCategoryRecommendationPreview(groupId)));
@@ -225,6 +262,7 @@ const categoryFields = z.object({
   isRecurring: z.boolean().optional().default(true),
   activeMonth: z.number().int().min(1).max(12).nullable().optional(),
   activeYear: z.number().int().min(2000).max(2200).nullable().optional(),
+  parentId: z.number().int().positive().nullable().optional(),
 });
 
 const categorySchema = categoryFields.superRefine((data, ctx) => {
@@ -236,6 +274,50 @@ const categorySchema = categoryFields.superRefine((data, ctx) => {
     });
   }
 });
+
+
+/**
+ * Whether a category may sit under this parent.
+ *
+ * Ledgers go one level deep on purpose. Wi-Fi under Utilities is a mini-ledger
+ * somebody will actually keep; a third level is a filing system, and it turns
+ * every total in the app into a recursive question.
+ *
+ * Returns an explanation rather than a boolean so the caller can say which of
+ * the several ways this can be wrong actually happened.
+ */
+async function parentRejection(
+  groupId: number,
+  parentId: number,
+  selfId: number | null,
+): Promise<string | null> {
+  if (selfId !== null && parentId === selfId) {
+    return "A category cannot be inside itself.";
+  }
+
+  const [parent] = await db
+    .select({ id: budgetCategoriesTable.id, parentId: budgetCategoriesTable.parentId })
+    .from(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.id, parentId), eq(budgetCategoriesTable.groupId, groupId)))
+    .limit(1);
+  if (!parent) return "That category does not exist in this budget.";
+  if (parent.parentId !== null) {
+    return "Sub-categories only go one level deep. Pick a top-level category instead.";
+  }
+
+  if (selfId !== null) {
+    const [child] = await db
+      .select({ id: budgetCategoriesTable.id })
+      .from(budgetCategoriesTable)
+      .where(and(eq(budgetCategoriesTable.parentId, selfId), eq(budgetCategoriesTable.groupId, groupId)))
+      .limit(1);
+    if (child) {
+      return "This category already has sub-categories of its own, so it cannot become one.";
+    }
+  }
+
+  return null;
+}
 
 router.post("/budget-categories", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
@@ -254,6 +336,10 @@ router.post("/budget-categories", async (req, res) => {
     ),
   });
   if (duplicate) { res.status(409).json({ error: "A category with this name already exists" }); return; }
+  if (parsed.data.parentId != null) {
+    const rejection = await parentRejection(groupId, parsed.data.parentId, null);
+    if (rejection) { res.status(400).json({ error: rejection }); return; }
+  }
   try {
     const [row] = await db.insert(budgetCategoriesTable).values({
       ...parsed.data,
@@ -289,6 +375,10 @@ router.put("/budget-categories/:id", async (req, res) => {
     .where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId)))
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Category not found" }); return; }
+  if (parsed.data.parentId != null) {
+    const rejection = await parentRejection(groupId, parsed.data.parentId, id);
+    if (rejection) { res.status(400).json({ error: rejection }); return; }
+  }
   const merged = categorySchema.safeParse({ ...existing, ...parsed.data });
   if (!merged.success) { res.status(400).json({ error: "Invalid input", details: merged.error.flatten() }); return; }
   const duplicate = await db.query.budgetCategoriesTable.findFirst({
@@ -344,6 +434,19 @@ router.delete("/budget-categories/:id", async (req, res) => {
   if (!requireGroupManager(req, res)) return;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  // Checked before attempting the delete so the answer names the reason. The
+  // foreign key would refuse it anyway, but only with a constraint violation.
+  const [child] = await db
+    .select({ name: budgetCategoriesTable.name })
+    .from(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.parentId, id), eq(budgetCategoriesTable.groupId, groupId)))
+    .limit(1);
+  if (child) {
+    res.status(409).json({
+      error: `Move or remove the sub-categories inside this one first, starting with "${child.name}".`,
+    });
+    return;
+  }
   const [deleted] = await db.delete(budgetCategoriesTable)
     .where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId)))
     .returning();
