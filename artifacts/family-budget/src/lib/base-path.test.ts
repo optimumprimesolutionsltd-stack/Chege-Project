@@ -24,6 +24,16 @@ describe("base-path routing", () => {
     expect(routePath("/reset-password", "/app/")).toBeNull();
   });
 
+  it("recognises the invitation link that goes out by email", () => {
+    // Same trap as the reset link: the server builds this one absolutely, and
+    // without the /app prefix it never reaches this router at all. The
+    // marketing catch-all answers it 200 instead, so nothing looks broken
+    // except to the person holding the invitation.
+    expect(appPath("/invite/token-1", "/app/")).toBe("/app/invite/token-1");
+    expect(routePath("/app/invite/token-1", "/app/")).toBe("/invite/token-1");
+    expect(routePath("/invite/token-1", "/app/")).toBeNull();
+  });
+
   it("continues to support root deployments", () => {
     expect(appPath("/privacy", "/")).toBe("/privacy");
     expect(routePath("/privacy", "/")).toBe("/privacy");

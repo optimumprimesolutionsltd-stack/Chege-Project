@@ -254,6 +254,42 @@ describe("attachWebBuild", () => {
     expect(response.text).toContain("Jamvi budget");
   });
 
+  it("forwards invitation and join links to the app with their token intact", async () => {
+    // Invitation emails went out for months with a bare /invite/<token>. That
+    // path is not an app route, so it fell through to the marketing catch-all
+    // and answered 200 with the marketing shell — a soft 404 that looks like a
+    // working page, which is what "the invite link does not work" turns out to
+    // mean. Redirecting to /app/ alone would drop the token, so the whole path
+    // has to survive the redirect.
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir: await buildFixture("Jamvi marketing"),
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const invite = await request(app).get("/invite/abc123");
+    expect(invite.status).toBe(302);
+    expect(invite.headers.location).toBe("/app/invite/abc123");
+
+    const join = await request(app).get("/join/abc123");
+    expect(join.status).toBe(302);
+    expect(join.headers.location).toBe("/app/join/abc123");
+  });
+
+  it("keeps the query string when forwarding an invitation link", async () => {
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir: await buildFixture("Jamvi marketing"),
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const response = await request(app).get("/invite/abc123?source=email");
+
+    expect(response.headers.location).toBe("/app/invite/abc123?source=email");
+  });
+
   it("still adds the trailing slash to /app", async () => {
     const app = express();
     attachWebBuild(app, {
