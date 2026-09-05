@@ -14,6 +14,7 @@ import Activity from '@/pages/activity';
 import Contributions from '@/pages/contributions';
 import NotFound from '@/pages/not-found';
 import AuthDone from '@/pages/auth-done';
+import ResetPasswordPage from '@/pages/reset-password';
 import Settings from '@/pages/settings';
 import Subscription from "@/pages/subscription";
 import SavingsGoals from '@/pages/savings-goals';
@@ -208,6 +209,13 @@ function MainRouter() {
   // Auth-done page must be reachable before auth state resolves (popup context).
   if (publicPath === '/auth-done') {
     return <AuthDone />;
+  }
+
+  // Someone following a reset link has forgotten their password, so they are
+  // by definition signed out. Answering before the auth check keeps the page
+  // from flashing the sign-in screen at them on the way.
+  if (publicPath === '/reset-password') {
+    return <ResetPasswordPage />;
   }
 
   if (isLoading) {

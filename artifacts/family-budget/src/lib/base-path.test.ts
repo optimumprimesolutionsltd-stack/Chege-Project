@@ -15,6 +15,15 @@ describe("base-path routing", () => {
     expect(routePath("/invite/token-1", "/app/")).toBeNull();
   });
 
+  it("recognises the reset-password link that goes out by email", () => {
+    // The link in the email is absolute and built by the server. If it is ever
+    // written without the /app prefix it lands on the marketing site's
+    // catch-all instead, which answers 200 with a not-found page — a broken
+    // reset that looks like a working one.
+    expect(routePath("/app/reset-password", "/app/")).toBe("/reset-password");
+    expect(routePath("/reset-password", "/app/")).toBeNull();
+  });
+
   it("continues to support root deployments", () => {
     expect(appPath("/privacy", "/")).toBe("/privacy");
     expect(routePath("/privacy", "/")).toBe("/privacy");
