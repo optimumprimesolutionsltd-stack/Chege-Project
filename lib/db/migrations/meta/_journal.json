@@ -141,6 +141,13 @@
       "when": 1788592000000,
       "tag": "0019_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788678400000,
+      "tag": "0020_subscription_reminders",
+      "breakpoints": true
     }
   ]
 }

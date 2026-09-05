@@ -77,3 +77,35 @@ export const paymentsTable = pgTable(
 );
 
 export type Payment = typeof paymentsTable.$inferSelect;
+
+/**
+ * Which reminders have already gone out.
+ *
+ * The lifecycle job runs daily and is expected to be re-run by hand after a
+ * failure, so "have we already said this?" has to be answered by the database
+ * rather than by hoping the job runs exactly once. The unique index is the
+ * whole mechanism: a second attempt to record the same reminder conflicts and
+ * no email is sent.
+ *
+ * sentFor is the date the reminder is *about* — the day a trial ends, say —
+ * not the day it was sent. That way a renewal a year later is a different row
+ * rather than a duplicate.
+ */
+export const subscriptionRemindersTable = pgTable(
+  "subscription_reminders",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    sentFor: timestamp("sent_for", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("subscription_reminders_once_idx").on(table.userId, table.kind, table.sentFor),
+    index("subscription_reminders_user_idx").on(table.userId),
+  ],
+);
+
+export type SubscriptionReminder = typeof subscriptionRemindersTable.$inferSelect;
