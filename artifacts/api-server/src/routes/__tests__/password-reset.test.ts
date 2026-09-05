@@ -78,6 +78,7 @@ vi.mock("../../lib/auth", () => ({
 }));
 
 import authRouter from "../auth";
+import { resetRateLimits } from "../../middlewares/rateLimit";
 
 function appForAuth() {
   const app = express();
@@ -104,6 +105,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   updateRows.current = [];
   process.env.APP_URL = "https://jamvi.co.ke";
+  // The limiters keep their counters in module scope, so without this the
+  // fourth case asking for a link for the same address is refused by the
+  // per-email limit rather than exercising the endpoint.
+  resetRateLimits();
 });
 
 describe("POST /api/auth/forgot-password", () => {

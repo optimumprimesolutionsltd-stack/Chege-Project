@@ -51,6 +51,13 @@ import { resolvePhotoUrl } from '../lib/photoStorage';
 import { resolveOrigin } from '../lib/requestOrigin.js';
 import { ensureTrialSubscription } from "../lib/subscription-catalog";
 import { sendEmail } from '../lib/email';
+import {
+  forgotPasswordEmailLimiter,
+  forgotPasswordLimiter,
+  registerLimiter,
+  resetPasswordLimiter,
+  signInLimiter,
+} from '../middlewares/rateLimit';
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 /** A reset link is good for an hour: long enough to find the email, short
@@ -241,7 +248,7 @@ export async function upsertUser(claims: Record<string, unknown>) {
   return user;
 }
 
-router.post('/auth/register', async (req: Request, res: Response) => {
+router.post('/auth/register', registerLimiter, async (req: Request, res: Response) => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter valid details.' });
@@ -264,7 +271,7 @@ router.post('/auth/register', async (req: Request, res: Response) => {
   res.json({ user: await authUserPayload(user) });
 });
 
-router.post('/auth/password-login', async (req: Request, res: Response) => {
+router.post('/auth/password-login', signInLimiter, async (req: Request, res: Response) => {
   const parsed = CredentialBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Enter a valid email and password.' });
@@ -288,7 +295,7 @@ router.post('/auth/password-login', async (req: Request, res: Response) => {
  * Saying "no such user" turns this endpoint into a way to discover who banks
  * with Jamvi, and for a money app that list is worth having.
  */
-router.post('/auth/forgot-password', async (req: Request, res: Response) => {
+router.post('/auth/forgot-password', forgotPasswordLimiter, forgotPasswordEmailLimiter, async (req: Request, res: Response) => {
   const parsed = z.object({ email: z.string().trim().toLowerCase().email().max(320) })
     .safeParse(req.body);
   if (!parsed.success) {
@@ -346,7 +353,7 @@ router.post('/auth/forgot-password', async (req: Request, res: Response) => {
  * The token is claimed with a conditional update, so two requests racing with
  * the same link cannot both succeed.
  */
-router.post('/auth/reset-password', async (req: Request, res: Response) => {
+router.post('/auth/reset-password', resetPasswordLimiter, async (req: Request, res: Response) => {
   const parsed = z.object({
     token: z.string().trim().regex(/^[a-f0-9]{64}$/i, 'That reset link is not valid.'),
     password: z.string().min(8, 'Use at least 8 characters.').max(200),

@@ -9,6 +9,14 @@ import { attachWebBuild } from "./lib/webAppServing";
 
 const app: Express = express();
 
+// Render terminates TLS at its own proxy and appends the caller's address to
+// X-Forwarded-For. Trusting exactly one hop makes req.ip the address that
+// proxy added, which a caller cannot forge: anything they put in the header
+// themselves sits earlier in the list and is ignored. Trusting every hop
+// instead would let anyone claim any address and walk straight through the
+// rate limiters.
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,
