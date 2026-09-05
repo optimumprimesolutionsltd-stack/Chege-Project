@@ -19,6 +19,15 @@ export const GROUP_ROLE = {
   OWNER: "owner",
   ADMIN: "admin",
   MEMBER: "member",
+  /**
+   * Sees everything, records nothing.
+   *
+   * A chama has one treasurer and forty people who want to know the balance.
+   * Making all forty pay to look is what stops the treasurer inviting them at
+   * all, so a viewer costs nothing and never sees a paywall - the people who
+   * record money are the ones who pay.
+   */
+  VIEWER: "viewer",
 } as const;
 
 export type GroupRole = (typeof GROUP_ROLE)[keyof typeof GROUP_ROLE];
@@ -315,6 +324,18 @@ export const groupInviteLinksTable = pgTable(
       .notNull()
       .references(() => groupsTable.id, { onDelete: "cascade" }),
     tokenHash: text("token_hash").notNull().unique(),
+    /** What the link grants: a member who can record, or a viewer who cannot.
+     *  Every link created before view links existed is a member link. */
+    role: text("role").notNull().default(GROUP_ROLE.MEMBER),
+    /**
+     * Optional second factor on a view link, hashed by the same scrypt path as
+     * account passwords.
+     *
+     * A link travels badly - forwarded, quoted, screenshot - and keeps working
+     * afterwards. A passphrase said out loud at a meeting does not travel with
+     * it, so holding the URL stops being enough on its own.
+     */
+    passphraseHash: text("passphrase_hash"),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
@@ -325,6 +346,7 @@ export const groupInviteLinksTable = pgTable(
   (table) => [
     index("group_invite_links_group_id_idx").on(table.groupId),
     index("group_invite_links_token_hash_idx").on(table.tokenHash),
+    index("group_invite_links_group_role_idx").on(table.groupId, table.role),
   ],
 );
 

@@ -2705,7 +2705,7 @@ components:
           type: ["string", "null"]
         role:
           type: string
-          enum: [owner, admin, member]
+          enum: [owner, admin, member, viewer]
         addedAt:
           type: string
           format: date-time
@@ -2904,7 +2904,7 @@ components:
           $ref: "#/components/schemas/GroupKind"
         role:
           type: string
-          enum: [owner, admin, member]
+          enum: [owner, admin, member, viewer]
       required: [id, name, emoji, nameStyle, icon, accentColor, isPrivate, kind, role]
 
     GroupInviteLink:
@@ -2965,7 +2965,7 @@ components:
           $ref: "#/components/schemas/GroupKind"
         role:
           type: string
-          enum: [owner, admin, member]
+          enum: [owner, admin, member, viewer]
         canRecordSharedTransactions:
           type: boolean
           description: Whether this workspace may record expenses and contributions right now

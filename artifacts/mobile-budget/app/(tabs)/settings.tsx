@@ -55,7 +55,7 @@ import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from '@/lib/memberLimit';
 type GroupMember = {
   userId: string;
   userName: string | null;
-  role: 'owner' | 'admin' | 'member';
+  role: 'owner' | 'admin' | 'member' | 'viewer';
 };
 type GroupInvitation = {
   id: number;

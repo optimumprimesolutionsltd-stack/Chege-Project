@@ -105,7 +105,11 @@ export async function requireSharedTransactionEligibility(
   // does not create one, or has simply held a session since before any of this
   // existed. Those people are not behind on anything and must not be locked
   // out of their own group by a rule that arrived after they joined.
-  if (!req.group.isPrivate && req.user?.id) {
+  // A viewer never reaches here through an HTTP route - requireWriteAccess
+  // refuses them first - but internal callers share this function, and a
+  // viewer must never be told to subscribe. Viewing is free, and paying would
+  // not grant write access to somebody else's budget in any case.
+  if (!req.group.isPrivate && req.group.role !== "viewer" && req.user?.id) {
     const entitlements = await resolveMemberEntitlements(req.user.id);
     if (entitlements.status !== null && !entitlements.fullAccess) {
       res.status(402).json({ error: readOnlyMessage() });

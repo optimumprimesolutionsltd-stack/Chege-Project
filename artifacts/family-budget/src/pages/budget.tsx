@@ -32,6 +32,8 @@ type BudgetCategory = {
   budgetAmount: number;
   priority: number;
   color: string;
+  /** Set when this category is a mini-ledger inside another one. */
+  parentId?: number | null;
   isArchived?: boolean;
   isRecurring: boolean;
   activeMonth?: number | null;
@@ -250,6 +252,7 @@ const priorityGuide: Record<number, string> = {
 function CategoryDialog({
   open, onClose, initial, onSaved, reportMonth, reportYear, defaultPriority = 1,
   recurringSetup = false, defaultName = "", defaultAmount = "", tiers,
+  parentOptions = [], hasChildren = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -262,6 +265,12 @@ function CategoryDialog({
   defaultName?: string;
   defaultAmount?: string;
   tiers: PriorityTier[];
+  /** Top-level categories this one may sit inside. Ledgers go one level deep,
+   *  so a category that is already inside another is never offered. */
+  parentOptions?: BudgetCategory[];
+  /** True when the category being edited already holds ledgers of its own, in
+   *  which case it cannot become one. */
+  hasChildren?: boolean;
 }) {
   const { toast } = useToast();
   const [name, setName] = useState(initial?.name ?? defaultName);
@@ -270,6 +279,7 @@ function CategoryDialog({
   const [isRecurring, setIsRecurring] = useState(initial?.isRecurring ?? true);
   const [activeMonth, setActiveMonth] = useState(initial?.activeMonth ?? reportMonth);
   const [activeYear, setActiveYear] = useState(initial?.activeYear ?? reportYear);
+  const [parentId, setParentId] = useState<string>(initial?.parentId ? String(initial.parentId) : "none");
   const [saving, setSaving] = useState(false);
   const [pendingChange, setPendingChange] = useState<PendingCategoryChange | null>(null);
 
@@ -280,6 +290,7 @@ function CategoryDialog({
     setIsRecurring(initial?.isRecurring ?? true);
     setActiveMonth(initial?.activeMonth ?? reportMonth);
     setActiveYear(initial?.activeYear ?? reportYear);
+    setParentId(initial?.parentId ? String(initial.parentId) : "none");
   }, [initial, open, reportMonth, reportYear, defaultPriority, defaultName, defaultAmount]);
 
   const parsedAmount = amount.trim() === "" && initial ? 0 : parseInt(amount, 10);
@@ -316,6 +327,7 @@ function CategoryDialog({
           isRecurring: change.isRecurring,
           activeMonth: change.isRecurring ? null : change.activeMonth,
           activeYear: change.isRecurring ? null : change.activeYear,
+          parentId: parentId === "none" ? null : Number(parentId),
         }),
       });
       if (!res.ok) throw new Error("Failed");
@@ -357,6 +369,27 @@ function CategoryDialog({
               <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} disabled={saving} />
                 <p className="text-xs text-muted-foreground">Enter 0, or clear the amount while editing, to pause this budget. Existing expenses stay recorded.</p>
             </div>
+            {parentOptions.length > 0 && !hasChildren && !recurringSetup ? (
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold">Inside another category</label>
+                <select
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={parentId}
+                  onChange={e => setParentId(e.target.value)}
+                  disabled={saving}
+                  data-testid="select-category-parent"
+                >
+                  <option value="none">Not inside anything — its own category</option>
+                  {parentOptions.map(option => (
+                    <option key={option.id} value={String(option.id)}>{option.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Use this for the things you buy again and again — groceries under Food, wi-fi or garbage under Utilities.
+                  The bigger category keeps its budget; this one just tracks its own share of it.
+                </p>
+              </div>
+            ) : null}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">Priority tier</label>
               <select
@@ -799,18 +832,33 @@ export default function Budget() {
     ]);
   };
 
-  const groupedBreakdown = breakdown ? breakdown.reduce((acc, item) => {
-    if (!acc[item.priority]) acc[item.priority] = [];
-    acc[item.priority].push(item);
+  // A ledger is shown inside the category it belongs to, never as a card
+  // beside it. Otherwise the tier report grows by one card per mini-ledger and
+  // the thing sub-categories exist to prevent happens anyway.
+  const childCategories = allCategories.filter(category => category.parentId != null);
+  const childCategoryNames = new Set(childCategories.map(category => category.name));
+  const childrenByParentId = childCategories.reduce((acc, category) => {
+    const siblings = acc.get(category.parentId as number) ?? [];
+    siblings.push(category);
+    acc.set(category.parentId as number, siblings);
     return acc;
-  }, {} as Record<number, typeof breakdown>) : {};
+  }, new Map<number, BudgetCategory[]>());
+  const spentByCategoryName = new Map((breakdown ?? []).map(item => [item.category, item.spentAmount]));
+
+  const groupedBreakdown = breakdown ? breakdown
+    .filter(item => !childCategoryNames.has(item.category))
+    .reduce((acc, item) => {
+      if (!acc[item.priority]) acc[item.priority] = [];
+      acc[item.priority].push(item);
+      return acc;
+    }, {} as Record<number, typeof breakdown>) : {};
 
   // Categories that exist but have no spending this month (show budget-only row)
   const catNamesInBreakdown = new Set((breakdown ?? []).map(b => b.category));
   const activeCategories = allCategories.filter(category =>
     category.isRecurring || (category.activeMonth === month && category.activeYear === year)
   );
-  const unusedCats = activeCategories.filter(c => !catNamesInBreakdown.has(c.name));
+  const unusedCats = activeCategories.filter(c => !catNamesInBreakdown.has(c.name) && !childCategoryNames.has(c.name));
   const unusedByPriority = unusedCats.reduce((acc, c) => {
     if (!acc[c.priority]) acc[c.priority] = [];
     acc[c.priority].push(c);
@@ -879,6 +927,8 @@ export default function Budget() {
         defaultName={recurringSetup?.category ?? ""}
         defaultAmount={recurringSetup?.category ? "" : recurringSetup?.expenseAmount ?? ""}
         tiers={priorityTiers}
+        parentOptions={allCategories.filter(category => category.parentId == null && category.id !== editTarget?.id)}
+        hasChildren={!!editTarget && allCategories.some(category => category.parentId === editTarget.id)}
       />
       <Dialog open={tierEditorOpen} onOpenChange={(open) => !savingTiers && setTierEditorOpen(open)}>
         <DialogContent className="sm:max-w-2xl">
@@ -1290,6 +1340,42 @@ export default function Budget() {
                             <Progress value={Math.min(cat.percentUsed, 100)} indicatorColor={isOver ? "hsl(var(--destructive))" : isNear ? "hsl(var(--secondary))" : cat.color || "hsl(var(--primary))"} className="h-2" />
                             <div className="flex justify-end text-xs font-medium text-muted-foreground">{Math.round(cat.percentUsed)}%</div>
                           </div>
+                          {(() => {
+                            const ledgers = fullCat ? childrenByParentId.get(fullCat.id) ?? [] : [];
+                            if (ledgers.length === 0) return null;
+                            const allocated = ledgers.reduce((sum, ledger) => sum + ledger.budgetAmount, 0);
+                            const unallocated = cat.budgetAmount - allocated;
+                            return (
+                              <div className="rounded-xl border border-border/60 bg-muted/30 p-3" data-testid={`budget-ledgers-${cat.category}`}>
+                                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inside this category</p>
+                                <ul className="space-y-1.5">
+                                  {ledgers.map(ledger => (
+                                    <li key={ledger.id} className="flex items-baseline justify-between gap-3 text-sm">
+                                      <button
+                                        type="button"
+                                        className="min-w-0 truncate text-left text-foreground hover:underline"
+                                        onClick={() => setLedgerCategory({ category: ledger.name, isBudgeted: ledger.budgetAmount > 0 })}
+                                        data-testid={`budget-ledger-child-${ledger.name}`}
+                                      >
+                                        {ledger.name}
+                                      </button>
+                                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                                        {formatKes(spentByCategoryName.get(ledger.name) ?? 0)}
+                                        {ledger.budgetAmount > 0 ? ` / ${formatKes(ledger.budgetAmount)}` : ""}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                                {cat.isBudgeted && unallocated !== 0 ? (
+                                  <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+                                    {unallocated > 0
+                                      ? <>Unallocated: <span className="tabular-nums font-medium">{formatKes(unallocated)}</span></>
+                                      : <>These add up to <span className="tabular-nums font-medium">{formatKes(Math.abs(unallocated))}</span> more than the category budget.</>}
+                                  </p>
+                                ) : null}
+                              </div>
+                            );
+                          })()}
                            <Button
                              variant="outline"
                              className="w-full justify-between"
