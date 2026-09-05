@@ -14,8 +14,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Request, Response } from "express";
 
+// Typed explicitly: inferring from the default return would fix status as
+// string, and the case that broke production is status null.
 const { mockResolve } = vi.hoisted(() => ({
-  mockResolve: vi.fn(async () => ({ status: "active", fullAccess: true })),
+  mockResolve: vi.fn(
+    async (): Promise<{ status: string | null; fullAccess: boolean }> =>
+      ({ status: "active", fullAccess: true }),
+  ),
 }));
 
 vi.mock("../subscription-catalog", () => ({
