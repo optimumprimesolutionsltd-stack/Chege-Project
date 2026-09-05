@@ -105,8 +105,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
+  // overflow-x-hidden deliberately does not live on the wrapper below. Setting
+  // either overflow axis to hidden computes the other to auto, which makes the
+  // element a scroll container - and the sidebar's `sticky top-0` then sticks
+  // to it rather than to the viewport, so the sidebar scrolled away with the
+  // page and left dead space under Sign Out. The clamp lives on <main>, where
+  // the wide content that actually needs clamping is.
   return (
-    <div className="flex min-h-screen w-full max-w-full overflow-x-hidden bg-background text-foreground selection:bg-primary/20">
+    <div className="flex min-h-screen w-full max-w-full bg-background text-foreground selection:bg-primary/20">
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
         <div className="p-6">
@@ -316,7 +322,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main Content */}
-      <main className="min-w-0 flex-1 flex flex-col min-h-screen pb-24 pt-16 md:pb-0 md:pt-0">
+      <main className="min-w-0 flex-1 flex flex-col min-h-screen overflow-x-hidden pb-24 pt-16 md:pb-0 md:pt-0">
         <div className="min-w-0 flex-1 w-full max-w-6xl mx-auto p-4 md:p-8">
           {children}
         </div>
