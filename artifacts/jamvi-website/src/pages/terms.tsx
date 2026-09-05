@@ -88,12 +88,19 @@ export default function Terms() {
         <li>resell or white-label Jamvi without an agreement with us.</li>
       </ul>
 
-      <h2>6. Free and paid plans</h2>
+      <h2>6. Subscriptions</h2>
       <p>
-        Every account includes one Personal budget free permanently. Shared
-        budgets use one group subscription chosen by the owner or administrator;
-        invited members do not pay individually. Each package has its own member
-        limit. Nobody is removed automatically when a group reaches its limit.
+        Jamvi is one subscription bought per person. It covers your own budget
+        and every Shared budget you belong to. Shared budgets carry no
+        subscription of their own and no member limit, so a group costs nothing
+        however many people share it.
+      </p>
+      <p>
+        New accounts are free for their first 30 days. If a subscription lapses
+        after that, nothing is deleted: you keep your current month and every
+        record you have already entered, earlier months lock rather than
+        disappear, and you become read-only in any Shared budget you belong to.
+        Nobody is removed from a group for not paying.
       </p>
       <p>
         Current prices and what each plan includes are shown on our{" "}

@@ -6,6 +6,7 @@ import { db } from "@workspace/db";
 import { groupsTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { assertExternalProductionConfiguration } from "./lib/productionConfig";
+import { ensureSubscriptionPlanCatalogue } from "./lib/subscription-catalog";
 
 // Backfill removed — contributions are now derived from deposits + direct expense payments
 
@@ -33,6 +34,12 @@ async function startServer() {
     sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" varchar`,
   );
   logger.info("Credential authentication schema is ready");
+
+  // Price lives in code; the plans table is a copy of it. Seeding on every boot
+  // keeps the two from drifting, which matters because a member's subscription
+  // row points at this table by foreign key.
+  await ensureSubscriptionPlanCatalogue();
+  logger.info("Subscription plan catalogue is seeded");
 
   app.listen(port, (err) => {
   if (err) {

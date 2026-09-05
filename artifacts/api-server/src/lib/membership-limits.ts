@@ -1,65 +1,40 @@
-import { db, groupMembershipsTable, groupsTable, GROUP_PLAN } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
-import { resolveGroupEntitlements } from "./subscription-catalog";
+import { db } from "@workspace/db";
+import { memberMayUseSharedBudgets } from "./subscription-catalog";
 
 type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
- * How many people a free workspace holds, counting the owner.
+ * Group size is no longer a billing question.
  *
- * Six covers a household — two parents and four children — while a chama is
- * typically 12 to 30 and is clearly over. Almost nobody sits between about 7
- * and 12, so the limit rarely catches anyone awkwardly.
+ * This file used to hold hasMemberCapacity() and FREE_MEMBER_LIMIT, which
+ * capped a workspace at six people unless the group held a paid plan. Jamvi is
+ * now bought per member and groups cost nothing, so there is no cap to
+ * enforce: a chama of fifty is fifty current members.
  *
- * Read from the environment so it can be tuned once real usage is visible,
- * without a code change or a migration.
+ * What replaces it is a question about the person joining, not the room they
+ * are joining.
  */
-export const FREE_MEMBER_LIMIT = Number(process.env.FREE_MEMBER_LIMIT ?? 6);
 
-type EntitlementResolver = (
-  groupId: number,
-  tx: DbOrTransaction,
-) => Promise<{ memberLimit: number | null }>;
-
-/**
- * Whether one more person can join this workspace.
- *
- * Paid workspaces are unlimited. Free ones are capped, and the check is
- * deliberately "is there room now" rather than "is this group compliant":
- * a workspace that already exceeds the limit keeps working and simply cannot
- * grow. Nobody is ever removed by a rule introduced after they joined.
- *
- * Call inside the same transaction as the insert, so two people accepting
- * invitations at once cannot both pass the check and land the group over.
- */
-export async function hasMemberCapacity(
-  tx: DbOrTransaction,
-  groupId: number,
-  resolveEntitlements: EntitlementResolver = resolveGroupEntitlements,
+/** Whether this member's own subscription lets them take part in a Shared
+ *  budget. Groups have no plan, so this is the only gate on joining one. */
+export async function memberMayJoinGroups(
+  userId: string,
+  executor: DbOrTransaction,
 ): Promise<boolean> {
-  const [group] = await tx
-    .select({ plan: groupsTable.plan })
-    .from(groupsTable)
-    .where(eq(groupsTable.id, groupId))
-    .limit(1);
-
-  // A missing group is not this function's problem to report — callers already
-  // handle it, and returning true keeps the existing error path in charge.
-  if (!group) return true;
-  if (group.plan !== GROUP_PLAN.FREE) return true;
-
-  const entitlements = await resolveEntitlements(groupId, tx);
-  if (entitlements.memberLimit === null) return true;
-
-  const [row] = await tx
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(groupMembershipsTable)
-    .where(eq(groupMembershipsTable.groupId, groupId));
-
-  return Number(row?.count ?? 0) < entitlements.memberLimit;
+  return memberMayUseSharedBudgets(userId, executor);
 }
 
-/** Wording shown when a workspace is full. */
-export function memberLimitMessage(memberLimit = FREE_MEMBER_LIMIT): string {
-  return `This Shared budget is full. Its current package supports up to ${memberLimit} members.`;
+/** Shown when someone whose subscription has lapsed tries to join or be added
+ *  to a Shared budget. Names the person's own subscription, not the group's,
+ *  so an admin is not left looking for a group setting that no longer exists. */
+export function subscriptionRequiredMessage(): string {
+  return "This person needs an active Jamvi subscription to join a Shared budget.";
+}
+
+/** Shown to a member already in a group whose own subscription has lapsed.
+ *  Says what they can still do, because they have not lost the group or their
+ *  records — only the ability to add to them. */
+export function readOnlyMessage(): string {
+  return "Your Jamvi subscription has lapsed, so this Shared budget is read-only. "
+    + "Nothing has been removed — subscribe to start recording again.";
 }

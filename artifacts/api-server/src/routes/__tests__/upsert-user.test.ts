@@ -15,6 +15,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock @workspace/db before importing the module under test.
 // vi.mock is hoisted, so the factory must be self-contained.
 // ---------------------------------------------------------------------------
+// upsertUser also gives a new account its trial. That is covered by its own
+// tests; here it would only drag the subscription tables into a mock about
+// claim mapping.
+vi.mock('../../lib/subscription-catalog', () => ({
+  ensureTrialSubscription: vi.fn(async () => undefined),
+}));
+
 vi.mock('@workspace/db', () => {
   const makeTable = (name: string) =>
     new Proxy({}, { get: (_, prop) => ({ _table: name, _col: String(prop) }) });

@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { memberMayUseSharedBudgets } from "./subscription-catalog";
+import { readOnlyMessage } from "./membership-limits";
 
 // Version this browser-session selection independently from the retired
 // persistent workspace cookie.
@@ -91,6 +93,17 @@ export async function requireSharedTransactionEligibility(
   // context object as a new one-member shared group.
   if (typeof (req.group as { isPrivate?: boolean }).isPrivate !== "boolean") {
     return true;
+  }
+
+  // A lapsed member goes read-only in a Shared budget rather than being
+  // removed from it. They keep seeing everything and stop being able to record
+  // anything, which is a status the group can see and act on. Removing them
+  // would take a chama's record of who contributed what with it.
+  if (!req.group.isPrivate && req.user?.id) {
+    if (!(await memberMayUseSharedBudgets(req.user.id))) {
+      res.status(402).json({ error: readOnlyMessage() });
+      return false;
+    }
   }
 
   return canRecordSharedTransactions(req.group.id, req.group.isPrivate);

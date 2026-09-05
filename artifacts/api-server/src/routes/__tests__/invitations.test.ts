@@ -3,7 +3,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../lib/subscription-catalog", () => ({
-  resolveGroupEntitlements: vi.fn(async () => ({ memberLimit: 6 })),
+  memberMayUseSharedBudgets: vi.fn(async () => true),
 }));
 
 vi.mock("@workspace/db", () => {
@@ -89,7 +89,7 @@ function configureAcceptance(invite: Record<string, unknown>, signedInEmail: str
     [invite],
     [{ email: signedInEmail }],
     [],
-    [{ count: 2 }],
+    [{ defaultMonthlyTarget: null }],
   ];
   const inserted = vi.fn().mockResolvedValue(undefined);
   const updated = vi.fn().mockResolvedValue(undefined);
@@ -226,15 +226,16 @@ describe("group invitation management", () => {
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
-  it("prompts immediately instead of sending an invitation when a free workspace is full", async () => {
+  it("sends an invitation however many people are already in the group", async () => {
     const txSelectResults = [
       [{ id: 7, name: "Growing group" }],
       [],
       [],
-      [{ plan: "free" }],
-      [{ count: 6 }],
     ];
-    const insert = vi.fn();
+    const values = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: 41, email: "seventh@example.com", role: "member" }]),
+    });
+    const insert = vi.fn().mockReturnValue({ values });
     const tx = {
       select: vi.fn().mockImplementation(() => selectChain(txSelectResults.shift() ?? [])),
       insert,
@@ -250,8 +251,10 @@ describe("group invitation management", () => {
       role: "member",
     });
 
-    expect(response.status).toBe(409);
-    expect(response.body.error).toMatch(/current package supports up to 6 members/i);
-    expect(insert).not.toHaveBeenCalled();
+    // A seventh member used to be refused here. Group size is no longer a
+    // billing question, and an invitation that cannot be sent stalls the group
+    // at whoever is trying to build it.
+    expect(response.status).not.toBe(409);
+    expect(insert).toHaveBeenCalled();
   });
 });

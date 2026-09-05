@@ -37,7 +37,7 @@ export default function FAQ() {
     },
     {
       question: "What happens if our chama grows beyond 6 people?",
-      answer: "Every user gets one Personal budget free permanently. Shared budgets use one group subscription chosen by the owner or administrator. Member limits depend on that Shared package, and invited members do not pay individually."
+      answer: "Everyone pays for their own Jamvi subscription, and it covers both your own budget and every Shared budget you belong to. Groups have no bill of their own and no member limit, so a chama of fifty costs the group nothing."
     },
     {
       question: "Does Jamvi offer a non-profit discount?",
