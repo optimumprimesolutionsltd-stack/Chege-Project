@@ -271,6 +271,7 @@ router.post('/auth/password-login', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Email or password is incorrect.' });
     return;
   }
+  await ensureTrialSubscription(user.id);
   await startLocalSession(res, user);
   res.json({ user: await authUserPayload(user) });
 });
