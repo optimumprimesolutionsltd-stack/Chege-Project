@@ -1,11 +1,18 @@
+/**
+ * Jamvi is one subscription, bought per member.
+ *
+ * It replaced seven group packages (Personal Free through Unlimited) that
+ * priced a group by its size. That model charged the wrong thing: it capped
+ * how many people could share a budget, and it left every solo user — the
+ * majority, and the ones who open the app most — paying nothing.
+ *
+ * Now each member pays for themselves and groups cost nothing. A chama of
+ * fifty is not a plan, it is fifty current members. There is no member limit
+ * to enforce anywhere, and no tier for anyone to choose.
+ */
+
 export const PACKAGE_CODE = {
-  PERSONAL_FREE: "PERSONAL_FREE",
-  DUO: "DUO",
-  SMALL_GROUP: "SMALL_GROUP",
-  COMMUNITY: "COMMUNITY",
-  CLUB: "CLUB",
-  CHAMA: "CHAMA",
-  UNLIMITED: "UNLIMITED",
+  JAMVI: "JAMVI",
 } as const;
 
 export type PackageCode = (typeof PACKAGE_CODE)[keyof typeof PACKAGE_CODE];
@@ -18,60 +25,69 @@ export const BILLING_INTERVAL = {
 export type BillingInterval = (typeof BILLING_INTERVAL)[keyof typeof BILLING_INTERVAL];
 
 export const SUBSCRIPTION_STATUS = {
+  /** Paying for nothing yet. Full access; ends TRIAL_DAYS after signup. */
   TRIAL: "trial",
+  /** Chosen a plan, first payment not yet confirmed. */
   PENDING: "pending",
+  /** Paid and current. */
   ACTIVE: "active",
+  /** Payment missed. Still full access until the grace period ends. */
   PAST_DUE: "past_due",
+  /** Stopped by the member. Access runs to the end of the paid period. */
   CANCELLED: "cancelled",
+  /** Grace period spent. Read-only: nothing is ever deleted. */
   EXPIRED: "expired",
 } as const;
 
 export type SubscriptionStatus =
   (typeof SUBSCRIPTION_STATUS)[keyof typeof SUBSCRIPTION_STATUS];
 
+/** A new member gets a full monthly cycle before being asked for anything.
+ *  Shorter than this and a salaried member can finish the trial without ever
+ *  recording a payday, having budgeted against income they never saw. */
+export const TRIAL_DAYS = 30;
+
+/** Days after a missed payment before access drops to read-only. Long enough
+ *  that a failed M-Pesa deduction is not punished as if it were a decision. */
+export const GRACE_DAYS = 7;
+
 export const ENTITLEMENT = {
   PERSONAL_INCOME: "personal_income_tracking",
   PERSONAL_EXPENSES: "personal_expense_tracking",
   PERSONAL_BUDGETS: "personal_budgets",
   PERSONAL_CATEGORIES: "personal_categories",
-  BASIC_REPORTS: "basic_reports",
+  PERSONAL_SAVINGS_GOALS: "personal_savings_goals",
+  FULL_HISTORY: "full_month_history",
+  REPORTS: "reports_and_trends",
+  EXPORTS: "exportable_records",
   SHARED_GROUP_ACCESS: "shared_group_access",
   SHARED_INCOME_EXPENSES: "shared_income_expense_tracking",
-  SEPARATE_PERSONAL_SHARED: "separate_personal_shared_budgets",
   SHARED_BANK_ACCOUNTS: "shared_bank_accounts",
   SHARED_SAVINGS_GOALS: "shared_savings_goals",
-  BASIC_SHARED_REPORTS: "basic_shared_reports",
-  MULTIPLE_BANK_ACCOUNTS: "multiple_bank_accounts",
   MEMBER_CONTRIBUTIONS: "member_contribution_tracking",
-  SHARED_CATEGORIES: "shared_categories",
-  SHARED_BUDGET_LIMITS: "shared_budget_limits",
-  BASIC_ACTIVITY_HISTORY: "basic_activity_history",
-  CONTRIBUTION_CYCLES: "contribution_cycles",
-  MEMBER_CONTRIBUTION_RECORDS: "member_contribution_records",
-  EMERGENCY_GOALS: "emergency_goals",
-  GROUP_FINANCIAL_SUMMARIES: "group_financial_summaries",
   ADMIN_MEMBER_ROLES: "administrator_member_roles",
-  MULTIPLE_ADMINISTRATORS: "multiple_administrators",
-  DETAILED_REPORTS: "detailed_reports",
-  EXPORTABLE_RECORDS: "exportable_records",
-  SHARED_PROJECTS: "shared_projects",
-  EVENT_BUDGETS: "event_budgets",
-  ACCOUNTABILITY_HISTORY: "improved_accountability_history",
-  TREASURER_ROLE: "treasurer_role",
-  LOAN_TRACKING: "loan_tracking",
-  WELFARE_FUND_TRACKING: "welfare_fund_tracking",
-  MEMBER_BALANCES: "member_balances",
-  ENHANCED_REPORTS_EXPORTS: "enhanced_reports_exports",
-  HIGHER_ASK_JAMVI: "higher_ask_jamvi_allowance",
-  ADVANCED_PERMISSIONS: "advanced_permissions",
-  ORGANIZATION_TOOLS: "organization_management_tools",
-  FULL_REPORTING_EXPORTS: "full_reporting_exports",
-  DETAILED_ACTIVITY_HISTORY: "detailed_financial_activity_history",
-  PRIORITY_SUPPORT: "priority_support",
-  FAIR_USE_ASK_JAMVI: "fair_use_ask_jamvi_allowance",
+  ASK_JAMVI: "ask_jamvi",
 } as const;
 
 export type Entitlement = (typeof ENTITLEMENT)[keyof typeof ENTITLEMENT];
+
+/** One plan, so it grants everything. Kept as a list rather than a boolean
+ *  because callers ask "may this member do X", and that question should not
+ *  have to change if a second plan ever appears. */
+export const ALL_ENTITLEMENTS = Object.values(ENTITLEMENT) as readonly Entitlement[];
+
+/**
+ * What a member keeps when their subscription lapses.
+ *
+ * Deliberately not empty. A locked month is a reason to come back; a deleted
+ * one ends the relationship. Lapsed members keep their own current month and
+ * every figure they have already recorded — they lose reach, never records.
+ */
+export const LAPSED_ENTITLEMENTS = [
+  ENTITLEMENT.PERSONAL_INCOME,
+  ENTITLEMENT.PERSONAL_EXPENSES,
+  ENTITLEMENT.PERSONAL_CATEGORIES,
+] as const satisfies readonly Entitlement[];
 
 export interface JamviPackage {
   code: PackageCode;
@@ -81,72 +97,42 @@ export interface JamviPackage {
   monthlyPriceKes: number;
   annualPriceKes: number;
   currency: "KES";
-  memberLimit: number | null;
-  annualSavingKes: number | null;
+  annualSavingKes: number;
+  trialDays: number;
   entitlements: readonly Entitlement[];
   featureLabels: readonly string[];
-  displayOrder: number;
   enabled: boolean;
-  recommended: boolean;
-  personal: boolean;
-  inheritanceLabel: string;
 }
 
-const personalEntitlements = [
-  ENTITLEMENT.PERSONAL_INCOME,
-  ENTITLEMENT.PERSONAL_EXPENSES,
-  ENTITLEMENT.PERSONAL_BUDGETS,
-  ENTITLEMENT.PERSONAL_CATEGORIES,
-  ENTITLEMENT.BASIC_REPORTS,
-  ENTITLEMENT.SHARED_GROUP_ACCESS,
-] as const;
+export const JAMVI_PACKAGE: JamviPackage = {
+  code: PACKAGE_CODE.JAMVI,
+  displayName: "Jamvi",
+  description: "Your own budget, and every group you are part of.",
+  audience: "Everyone using Jamvi",
+  monthlyPriceKes: 100,
+  annualPriceKes: 1_000,
+  currency: "KES",
+  annualSavingKes: 200,
+  trialDays: TRIAL_DAYS,
+  entitlements: ALL_ENTITLEMENTS,
+  featureLabels: [
+    "Your personal budget, income and expenses",
+    "Join or create any number of Shared budgets",
+    "No limit on how many people share a budget",
+    "Shared bank accounts, savings goals and contributions",
+    "Full history, reports and exports",
+    "Ask Jamvi",
+  ],
+  enabled: true,
+};
 
-const duoEntitlements = [
-  ...personalEntitlements,
-  ENTITLEMENT.SHARED_INCOME_EXPENSES,
-  ENTITLEMENT.SEPARATE_PERSONAL_SHARED,
-  ENTITLEMENT.SHARED_BANK_ACCOUNTS,
-  ENTITLEMENT.SHARED_SAVINGS_GOALS,
-  ENTITLEMENT.BASIC_SHARED_REPORTS,
-] as const;
+/** Kept as an array because the catalogue endpoint, the pricing page and the
+ *  seeded subscription_plans rows all iterate it. One entry today. */
+export const JAMVI_PACKAGES: readonly JamviPackage[] = [JAMVI_PACKAGE];
 
-const smallGroupEntitlements = [
-  ...duoEntitlements,
-  ENTITLEMENT.MULTIPLE_BANK_ACCOUNTS,
-  ENTITLEMENT.MEMBER_CONTRIBUTIONS,
-  ENTITLEMENT.SHARED_CATEGORIES,
-  ENTITLEMENT.SHARED_BUDGET_LIMITS,
-  ENTITLEMENT.BASIC_ACTIVITY_HISTORY,
-] as const;
-
-const communityEntitlements = [
-  ...smallGroupEntitlements,
-  ENTITLEMENT.CONTRIBUTION_CYCLES,
-  ENTITLEMENT.MEMBER_CONTRIBUTION_RECORDS,
-  ENTITLEMENT.EMERGENCY_GOALS,
-  ENTITLEMENT.GROUP_FINANCIAL_SUMMARIES,
-  ENTITLEMENT.ADMIN_MEMBER_ROLES,
-] as const;
-
-const clubEntitlements = [
-  ...communityEntitlements,
-  ENTITLEMENT.MULTIPLE_ADMINISTRATORS,
-  ENTITLEMENT.DETAILED_REPORTS,
-  ENTITLEMENT.EXPORTABLE_RECORDS,
-  ENTITLEMENT.SHARED_PROJECTS,
-  ENTITLEMENT.EVENT_BUDGETS,
-  ENTITLEMENT.ACCOUNTABILITY_HISTORY,
-] as const;
-
-const chamaEntitlements = [
-  ...clubEntitlements,
-  ENTITLEMENT.TREASURER_ROLE,
-  ENTITLEMENT.LOAN_TRACKING,
-  ENTITLEMENT.WELFARE_FUND_TRACKING,
-  ENTITLEMENT.MEMBER_BALANCES,
-  ENTITLEMENT.ENHANCED_REPORTS_EXPORTS,
-  ENTITLEMENT.HIGHER_ASK_JAMVI,
-] as const;
+export const PACKAGE_CODES = JAMVI_PACKAGES.map((plan) => plan.code);
+export const BILLING_INTERVALS = Object.values(BILLING_INTERVAL);
+export const SUBSCRIPTION_STATUSES = Object.values(SUBSCRIPTION_STATUS);
 
 export function calculateAnnualSavingKes(
   monthlyPriceKes: number,
@@ -157,188 +143,6 @@ export function calculateAnnualSavingKes(
   }
   return (monthlyPriceKes * 12) - annualPriceKes;
 }
-
-export const JAMVI_PACKAGES: readonly JamviPackage[] = [
-  {
-    code: PACKAGE_CODE.PERSONAL_FREE,
-    displayName: "Personal Free",
-    description: "Your private starting place for everyday money.",
-    audience: "Every individual Jamvi user",
-    monthlyPriceKes: 0,
-    annualPriceKes: 0,
-    currency: "KES",
-    memberLimit: 1,
-    annualSavingKes: null,
-    entitlements: personalEntitlements,
-    featureLabels: [
-      "Personal income tracking",
-      "Personal expense tracking",
-      "Personal budgets and categories",
-      "Basic personal reports",
-      "Create or join a Shared budget",
-    ],
-    displayOrder: 1,
-    enabled: true,
-    recommended: false,
-    personal: true,
-    inheritanceLabel: "Included for every Jamvi user",
-  },
-  {
-    code: PACKAGE_CODE.DUO,
-    displayName: "Jamvi Duo",
-    description: "A focused Shared budget for two people.",
-    audience: "Couples and two-person shared budgets",
-    monthlyPriceKes: 300,
-    annualPriceKes: 3_000,
-    currency: "KES",
-    memberLimit: 2,
-    annualSavingKes: 600,
-    entitlements: duoEntitlements,
-    featureLabels: [
-      "Shared income and expense tracking",
-      "Separate Personal and Shared budgets",
-      "Shared bank accounts and savings goals",
-      "Basic shared reports",
-    ],
-    displayOrder: 2,
-    enabled: true,
-    recommended: false,
-    personal: false,
-    inheritanceLabel: "Everything in Personal Free, plus…",
-  },
-  {
-    code: PACKAGE_CODE.SMALL_GROUP,
-    displayName: "Jamvi Small Group",
-    description: "The practical package for growing groups.",
-    audience: "Small households, friends, and informal teams",
-    monthlyPriceKes: 500,
-    annualPriceKes: 5_000,
-    currency: "KES",
-    memberLimit: 6,
-    annualSavingKes: 1_000,
-    entitlements: smallGroupEntitlements,
-    featureLabels: [
-      "Multiple bank accounts",
-      "Member contribution tracking",
-      "Shared categories",
-      "Shared budget limits",
-      "Basic activity history",
-    ],
-    displayOrder: 3,
-    enabled: true,
-    recommended: true,
-    personal: false,
-    inheritanceLabel: "Everything in Duo, plus…",
-  },
-  {
-    code: PACKAGE_CODE.COMMUNITY,
-    displayName: "Jamvi Community",
-    description: "Structure and visibility for active community groups.",
-    audience: "Small Chamas, welfare groups, and community teams",
-    monthlyPriceKes: 1_000,
-    annualPriceKes: 10_000,
-    currency: "KES",
-    memberLimit: 15,
-    annualSavingKes: 2_000,
-    entitlements: communityEntitlements,
-    featureLabels: [
-      "Contribution cycles and member records",
-      "Savings and emergency goals",
-      "Group financial summaries",
-      "Administrator and member roles",
-    ],
-    displayOrder: 4,
-    enabled: true,
-    recommended: false,
-    personal: false,
-    inheritanceLabel: "Everything in Small Group, plus…",
-  },
-  {
-    code: PACKAGE_CODE.CLUB,
-    displayName: "Jamvi Club",
-    description: "Deeper accountability for organized groups.",
-    audience: "Clubs, associations, and organized groups",
-    monthlyPriceKes: 1_500,
-    annualPriceKes: 15_000,
-    currency: "KES",
-    memberLimit: 30,
-    annualSavingKes: 3_000,
-    entitlements: clubEntitlements,
-    featureLabels: [
-      "Multiple administrators",
-      "Detailed reports and exportable records",
-      "Shared projects and event budgets",
-      "Improved accountability history",
-    ],
-    displayOrder: 5,
-    enabled: true,
-    recommended: false,
-    personal: false,
-    inheritanceLabel: "Everything in Community, plus…",
-  },
-  {
-    code: PACKAGE_CODE.CHAMA,
-    displayName: "Jamvi Chama",
-    description: "Purpose-built controls for larger Chamas.",
-    audience: "Larger or more structured Chamas",
-    monthlyPriceKes: 2_000,
-    annualPriceKes: 20_000,
-    currency: "KES",
-    memberLimit: 50,
-    annualSavingKes: 4_000,
-    entitlements: chamaEntitlements,
-    featureLabels: [
-      "Treasurer and administrator roles",
-      "Loan and welfare-fund tracking",
-      "Member balances",
-      "Enhanced reports and exports",
-      "Higher Ask Jamvi allowance",
-    ],
-    displayOrder: 6,
-    enabled: true,
-    recommended: false,
-    personal: false,
-    inheritanceLabel: "Everything in Club, plus…",
-  },
-  {
-    code: PACKAGE_CODE.UNLIMITED,
-    displayName: "Jamvi Unlimited",
-    description: "Organization-level visibility without a member ceiling.",
-    audience: "Large associations, institutions, and organizations",
-    monthlyPriceKes: 5_000,
-    annualPriceKes: 50_000,
-    currency: "KES",
-    memberLimit: null,
-    annualSavingKes: 10_000,
-    entitlements: [
-      ...chamaEntitlements,
-      ENTITLEMENT.ADVANCED_PERMISSIONS,
-      ENTITLEMENT.ORGANIZATION_TOOLS,
-      ENTITLEMENT.FULL_REPORTING_EXPORTS,
-      ENTITLEMENT.DETAILED_ACTIVITY_HISTORY,
-      ENTITLEMENT.PRIORITY_SUPPORT,
-      ENTITLEMENT.FAIR_USE_ASK_JAMVI,
-    ],
-    featureLabels: [
-      "Unlimited members",
-      "Advanced permissions",
-      "Organization-level management tools",
-      "Full reporting and exports",
-      "Detailed financial activity history",
-      "Priority support",
-      "Higher or unlimited Ask Jamvi allowance, subject to fair use",
-    ],
-    displayOrder: 7,
-    enabled: true,
-    recommended: false,
-    personal: false,
-    inheritanceLabel: "Everything in Chama, plus…",
-  },
-];
-
-export const PACKAGE_CODES = JAMVI_PACKAGES.map((plan) => plan.code);
-export const BILLING_INTERVALS = Object.values(BILLING_INTERVAL);
-export const SUBSCRIPTION_STATUSES = Object.values(SUBSCRIPTION_STATUS);
 
 export function getJamviPackage(code: PackageCode): JamviPackage {
   const plan = JAMVI_PACKAGES.find((item) => item.code === code);
@@ -355,17 +159,41 @@ export function isBillingInterval(value: unknown): value is BillingInterval {
     && BILLING_INTERVALS.includes(value as BillingInterval);
 }
 
-for (const plan of JAMVI_PACKAGES) {
-  if (plan.personal) {
-    if (plan.code !== PACKAGE_CODE.PERSONAL_FREE || plan.monthlyPriceKes !== 0 || plan.annualPriceKes !== 0) {
-      throw new Error("Personal Free must remain the free personal package.");
-    }
-    continue;
-  }
-  if (plan.annualPriceKes !== plan.monthlyPriceKes * 10) {
-    throw new Error(`${plan.code} annual pricing must equal ten monthly payments.`);
-  }
-  if (plan.annualSavingKes !== calculateAnnualSavingKes(plan.monthlyPriceKes, plan.annualPriceKes)) {
-    throw new Error(`${plan.code} annual saving is inconsistent.`);
-  }
+/**
+ * Whether this status still carries full access.
+ *
+ * past_due is included on purpose: a missed deduction is not a decision to
+ * leave, and the grace window is what separates the two. Whether the window
+ * has closed is a question about dates, answered by the caller that holds
+ * them, not by the status alone.
+ */
+export function statusGrantsFullAccess(status: SubscriptionStatus): boolean {
+  return status === SUBSCRIPTION_STATUS.TRIAL
+    || status === SUBSCRIPTION_STATUS.ACTIVE
+    || status === SUBSCRIPTION_STATUS.PAST_DUE
+    || status === SUBSCRIPTION_STATUS.CANCELLED;
+}
+
+/** What a member may do, given where their subscription has got to. */
+export function entitlementsForStatus(
+  status: SubscriptionStatus,
+): readonly Entitlement[] {
+  return statusGrantsFullAccess(status) ? ALL_ENTITLEMENTS : LAPSED_ENTITLEMENTS;
+}
+
+export function priceKes(interval: BillingInterval): number {
+  return interval === BILLING_INTERVAL.ANNUAL
+    ? JAMVI_PACKAGE.annualPriceKes
+    : JAMVI_PACKAGE.monthlyPriceKes;
+}
+
+if (JAMVI_PACKAGE.annualPriceKes !== JAMVI_PACKAGE.monthlyPriceKes * 10) {
+  throw new Error("Annual pricing must equal ten monthly payments — two months free.");
+}
+
+if (
+  JAMVI_PACKAGE.annualSavingKes
+  !== calculateAnnualSavingKes(JAMVI_PACKAGE.monthlyPriceKes, JAMVI_PACKAGE.annualPriceKes)
+) {
+  throw new Error("Jamvi annual saving is inconsistent with its prices.");
 }

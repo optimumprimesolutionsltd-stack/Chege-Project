@@ -19,7 +19,7 @@ import {
   requireSharedGroupManager,
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
-import { hasMemberCapacity, memberLimitMessage } from "../lib/membership-limits";
+import { memberMayJoinGroups, subscriptionRequiredMessage } from "../lib/membership-limits";
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 
 const INVITE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -139,8 +139,8 @@ publicInviteLinksRouter.post("/group-invite-links/accept/:token", async (req, re
         ))
         .limit(1);
       if (!existingMembership) {
-        if (!(await hasMemberCapacity(tx, group.id))) {
-          throw new Error("workspace-full");
+        if (!(await memberMayJoinGroups(req.user!.id, tx))) {
+          throw new Error("subscription-required");
         }
         await tx.insert(groupMembershipsTable).values({
           groupId: group.id,
@@ -165,8 +165,8 @@ publicInviteLinksRouter.post("/group-invite-links/accept/:token", async (req, re
       res.status(410).json({ error: "This private join link is no longer available." });
       return;
     }
-    if (error instanceof Error && error.message === "workspace-full") {
-      res.status(409).json({ error: memberLimitMessage() });
+    if (error instanceof Error && error.message === "subscription-required") {
+      res.status(402).json({ error: subscriptionRequiredMessage() });
       return;
     }
     req.log.error(error, "Could not accept private group join link");
@@ -204,7 +204,6 @@ inviteLinksRouter.post("/group-invite-links", async (req, res): Promise<void> =>
         .for("update")
         .limit(1);
       if (!group || group.privateOwnerUserId) throw new Error("missing-shared-group");
-      if (!(await hasMemberCapacity(tx, groupId))) throw new Error("workspace-full");
 
       // A group has one active private link at a time. Creating a new one resets
       // access immediately, just like resetting a WhatsApp invite link.
@@ -230,8 +229,8 @@ inviteLinksRouter.post("/group-invite-links", async (req, res): Promise<void> =>
       return created;
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "workspace-full") {
-      res.status(409).json({ error: memberLimitMessage() });
+    if (error instanceof Error && error.message === "subscription-required") {
+      res.status(402).json({ error: subscriptionRequiredMessage() });
       return;
     }
     throw error;

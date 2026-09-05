@@ -1,8 +1,7 @@
 import { Router } from "express";
 import {
   listSelectablePackages,
-  resolveGroupEntitlements,
-  resolveUserEntitlements,
+  resolveMemberEntitlements,
 } from "../lib/subscription-catalog";
 
 export const publicSubscriptionPlansRouter = Router();
@@ -19,14 +18,9 @@ publicSubscriptionPlansRouter.get("/subscription-plans", async (req, res): Promi
 
 subscriptionPlansRouter.get("/subscription-plans/entitlements", async (req, res): Promise<void> => {
   try {
-    res.json({
-      personal: resolveUserEntitlements(),
-      shared: req.group && !req.group.isPrivate
-        ? await resolveGroupEntitlements(req.group.id)
-        : null,
-    });
+    res.json({ member: await resolveMemberEntitlements(req.user!.id) });
   } catch (error) {
-    req.log.error({ err: error, groupId: req.group?.id }, "Could not resolve subscription entitlements");
+    req.log.error({ err: error, userId: req.user?.id }, "Could not resolve subscription entitlements");
     res.status(500).json({ error: "Could not load package entitlements." });
   }
 });

@@ -127,6 +127,13 @@
       "when": 1788419200000,
       "tag": "0017_subscription_packages",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788505600000,
+      "tag": "0018_per_member_subscriptions",
+      "breakpoints": true
     }
   ]
 }

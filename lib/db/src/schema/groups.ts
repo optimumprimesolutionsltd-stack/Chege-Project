@@ -185,6 +185,73 @@ export const groupSubscriptionsTable = pgTable(
 export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
 export type GroupSubscription = typeof groupSubscriptionsTable.$inferSelect;
 
+/**
+ * One subscription per member, not per group.
+ *
+ * Groups have no plan and no bill: a chama of fifty is fifty current members.
+ * groupSubscriptionsTable above is the previous per-group model and is no
+ * longer written to.
+ */
+export const userSubscriptionsTable = pgTable(
+  "user_subscriptions",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    packageCode: text("package_code")
+      .notNull()
+      .references(() => subscriptionPlansTable.code, { onDelete: "restrict" }),
+    billingInterval: text("billing_interval").notNull(),
+    status: text("status").notNull().default("trial"),
+    /** When the free period ends. Set once, at signup, and never moved. */
+    trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+    currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    /** Set when a payment is missed. Past this, access drops to read-only. */
+    graceEndsAt: timestamp("grace_ends_at", { withTimezone: true }),
+    promoCode: text("promo_code"),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("user_subscriptions_user_created_idx").on(table.userId, table.createdAt),
+    uniqueIndex("user_subscriptions_one_current_idx")
+      .on(table.userId)
+      .where(sql`${table.status} IN ('trial', 'pending', 'active', 'past_due')`),
+  ],
+);
+
+/**
+ * Discount codes, used instead of verifying who is a student.
+ *
+ * Every verification route costs more than the discount is worth: institutional
+ * email covers a minority of Kenyan students, ID review needs a person, and
+ * third-party checks charge per lookup with thin local coverage. Codes handed
+ * to campus reps and chama secretaries verify by association, and double as a
+ * way for the product to spread.
+ */
+export const promoCodesTable = pgTable(
+  "promo_codes",
+  {
+    code: text("code").primaryKey(),
+    description: text("description").notNull(),
+    /** What a member pays per month while the code is applied. */
+    monthlyPriceKes: integer("monthly_price_kes").notNull(),
+    annualPriceKes: integer("annual_price_kes").notNull(),
+    /** Null means no cap on how many members may use it. */
+    maxRedemptions: integer("max_redemptions"),
+    redemptions: integer("redemptions").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+export type UserSubscription = typeof userSubscriptionsTable.$inferSelect;
+export type PromoCode = typeof promoCodesTable.$inferSelect;
+
 export const groupMembershipsTable = pgTable(
   "group_memberships",
   {

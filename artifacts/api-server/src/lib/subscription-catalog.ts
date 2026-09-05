@@ -1,39 +1,53 @@
 import {
   db,
-  groupSubscriptionsTable,
-  groupsTable,
   subscriptionPlansTable,
+  userSubscriptionsTable,
 } from "@workspace/db";
 import {
+  ALL_ENTITLEMENTS,
+  GRACE_DAYS,
+  JAMVI_PACKAGE,
   JAMVI_PACKAGES,
+  LAPSED_ENTITLEMENTS,
   PACKAGE_CODE,
   SUBSCRIPTION_STATUS,
+  TRIAL_DAYS,
   getJamviPackage,
+  statusGrantsFullAccess,
+  type BillingInterval,
   type JamviPackage,
   type PackageCode,
+  type SubscriptionStatus,
 } from "@workspace/jamvi-pricing";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-const entitlementStatuses = [
+/** Statuses that describe a live subscription, whether or not it is paid up.
+ *  Cancelled belongs here: access runs to the end of the period already paid. */
+const liveStatuses = [
   SUBSCRIPTION_STATUS.TRIAL,
+  SUBSCRIPTION_STATUS.PENDING,
   SUBSCRIPTION_STATUS.ACTIVE,
   SUBSCRIPTION_STATUS.PAST_DUE,
+  SUBSCRIPTION_STATUS.CANCELLED,
 ] as const;
 
 export function subscriptionStatusGrantsEntitlements(status: string): boolean {
-  return entitlementStatuses.includes(status as (typeof entitlementStatuses)[number]);
+  return statusGrantsFullAccess(status as SubscriptionStatus);
 }
 
 export interface ResolvedEntitlements {
-  subjectType: "user" | "group";
   packageCode: PackageCode | null;
   packageName: string;
-  memberLimit: number | null;
   featureFlags: readonly string[];
-  billingState: "free" | "unsubscribed" | (typeof entitlementStatuses)[number];
-  billingInterval: "monthly" | "annual" | null;
+  /** False once the trial, grace or paid period has run out. Read-only, never
+   *  removal: the member keeps every figure they have recorded. */
+  fullAccess: boolean;
+  status: SubscriptionStatus | null;
+  billingInterval: BillingInterval | null;
+  trialEndsAt: Date | null;
+  currentPeriodEnd: Date | null;
 }
 
 function planValues(plan: JamviPackage) {
@@ -45,20 +59,17 @@ function planValues(plan: JamviPackage) {
     monthlyPriceKes: plan.monthlyPriceKes,
     annualPriceKes: plan.annualPriceKes,
     currency: plan.currency,
-    memberLimit: plan.memberLimit,
+    memberLimit: null,
     annualSavingKes: plan.annualSavingKes,
     featureEntitlements: [...plan.entitlements],
-    displayOrder: plan.displayOrder,
-    recommended: plan.recommended,
-    personal: plan.personal,
+    displayOrder: 1,
+    recommended: false,
+    personal: false,
   };
 }
 
-/**
- * Idempotent seed from the typed catalogue. Paid enabled-state is deliberately
- * omitted on updates so an authorized future admin can stop new selections
- * without changing historical subscriptions or existing entitlements.
- */
+/** Idempotent seed from the typed catalogue, so the database and the code
+ *  cannot disagree about what Jamvi costs. */
 export async function ensureSubscriptionPlanCatalogue(
   executor: DbOrTransaction = db,
 ): Promise<void> {
@@ -66,43 +77,29 @@ export async function ensureSubscriptionPlanCatalogue(
     const values = planValues(plan);
     await executor
       .insert(subscriptionPlansTable)
-      .values({ ...values, enabled: true })
+      .values({ ...values, enabled: plan.enabled })
       .onConflictDoUpdate({
         target: subscriptionPlansTable.code,
-        set: {
-          ...values,
-          ...(plan.code === PACKAGE_CODE.PERSONAL_FREE ? { enabled: true } : {}),
-          updatedAt: new Date(),
-        },
+        set: values,
       });
   }
 }
 
 export async function listSelectablePackages(): Promise<JamviPackage[]> {
-  await ensureSubscriptionPlanCatalogue();
   const rows = await db
     .select({ code: subscriptionPlansTable.code })
     .from(subscriptionPlansTable)
-    .where(eq(subscriptionPlansTable.enabled, true))
-    .orderBy(subscriptionPlansTable.displayOrder);
-
+    .where(eq(subscriptionPlansTable.enabled, true));
   return packagesForEnabledCodes(rows.map((row) => row.code));
 }
 
 export function packagesForEnabledCodes(enabledCodes: readonly string[]): JamviPackage[] {
   const enabled = new Set(enabledCodes);
-  // Personal Free is a product invariant, not an optional catalogue flag.
-  enabled.add(PACKAGE_CODE.PERSONAL_FREE);
   return JAMVI_PACKAGES.filter((plan) => enabled.has(plan.code));
 }
 
-/**
- * Internal capability only. Do not expose this as a public route until Jamvi
- * has an authenticated platform-admin boundary. Personal Free cannot be
- * disabled.
- */
 export async function setPaidPackageEnabled(
-  code: Exclude<PackageCode, "PERSONAL_FREE">,
+  code: PackageCode,
   enabled: boolean,
 ): Promise<void> {
   await db
@@ -111,77 +108,145 @@ export async function setPaidPackageEnabled(
     .where(eq(subscriptionPlansTable.code, code));
 }
 
-export function resolveUserEntitlements(): ResolvedEntitlements {
-  const plan = getJamviPackage(PACKAGE_CODE.PERSONAL_FREE);
-  return {
-    subjectType: "user",
-    packageCode: plan.code,
-    packageName: plan.displayName,
-    memberLimit: plan.memberLimit,
-    featureFlags: plan.entitlements,
-    billingState: "free",
-    billingInterval: null,
-  };
+/**
+ * How far a subscription's own dates carry it, regardless of what the status
+ * column says.
+ *
+ * Statuses are moved by whatever runs the billing, and nothing runs it yet.
+ * Reading the dates means a trial that ended last week is treated as ended
+ * even though no job has been along to say so — the answer is never more
+ * generous than the member has actually paid for.
+ */
+function withinAccessWindow(
+  subscription: {
+    status: string;
+    trialEndsAt: Date | null;
+    currentPeriodEnd: Date | null;
+    graceEndsAt: Date | null;
+  },
+  now: Date,
+): boolean {
+  switch (subscription.status) {
+    case SUBSCRIPTION_STATUS.TRIAL:
+      return subscription.trialEndsAt !== null && now < subscription.trialEndsAt;
+    case SUBSCRIPTION_STATUS.ACTIVE:
+      return subscription.currentPeriodEnd === null || now < subscription.currentPeriodEnd;
+    case SUBSCRIPTION_STATUS.PAST_DUE:
+      return subscription.graceEndsAt !== null && now < subscription.graceEndsAt;
+    case SUBSCRIPTION_STATUS.CANCELLED:
+      return subscription.currentPeriodEnd !== null && now < subscription.currentPeriodEnd;
+    default:
+      return false;
+  }
 }
 
-export async function resolveGroupEntitlements(
-  groupId: number,
+const lapsed = (
+  status: SubscriptionStatus | null,
+  extras: Partial<ResolvedEntitlements> = {},
+): ResolvedEntitlements => ({
+  packageCode: null,
+  packageName: JAMVI_PACKAGE.displayName,
+  featureFlags: LAPSED_ENTITLEMENTS,
+  fullAccess: false,
+  status,
+  billingInterval: null,
+  trialEndsAt: null,
+  currentPeriodEnd: null,
+  ...extras,
+});
+
+/**
+ * What this member may do right now.
+ *
+ * Replaces the per-group resolver. Groups no longer carry a plan, so the only
+ * question left is whether the person in front of us is current.
+ */
+export async function resolveMemberEntitlements(
+  userId: string,
   executor: DbOrTransaction = db,
+  now: Date = new Date(),
 ): Promise<ResolvedEntitlements> {
   const [subscription] = await executor
     .select({
-      packageCode: groupSubscriptionsTable.packageCode,
-      status: groupSubscriptionsTable.status,
-      billingInterval: groupSubscriptionsTable.billingInterval,
+      packageCode: userSubscriptionsTable.packageCode,
+      status: userSubscriptionsTable.status,
+      billingInterval: userSubscriptionsTable.billingInterval,
+      trialEndsAt: userSubscriptionsTable.trialEndsAt,
+      currentPeriodEnd: userSubscriptionsTable.currentPeriodEnd,
+      graceEndsAt: userSubscriptionsTable.graceEndsAt,
     })
-    .from(groupSubscriptionsTable)
+    .from(userSubscriptionsTable)
     .where(and(
-      eq(groupSubscriptionsTable.groupId, groupId),
-      inArray(groupSubscriptionsTable.status, [...entitlementStatuses]),
+      eq(userSubscriptionsTable.userId, userId),
+      inArray(userSubscriptionsTable.status, [...liveStatuses]),
     ))
-    .orderBy(desc(groupSubscriptionsTable.createdAt))
+    .orderBy(desc(userSubscriptionsTable.createdAt))
     .limit(1);
 
-  if (subscription) {
-    const plan = getJamviPackage(subscription.packageCode as PackageCode);
-    return {
-      subjectType: "group",
-      packageCode: plan.code,
-      packageName: plan.displayName,
-      memberLimit: plan.memberLimit,
-      featureFlags: plan.entitlements,
-      billingState: subscription.status as (typeof entitlementStatuses)[number],
-      billingInterval: subscription.billingInterval as "monthly" | "annual",
-    };
+  if (!subscription) return lapsed(null);
+
+  const status = subscription.status as SubscriptionStatus;
+  if (!withinAccessWindow(subscription, now)) {
+    return lapsed(status, { trialEndsAt: subscription.trialEndsAt });
   }
 
-  // Preserve the old paid flag until every historical group has a subscription
-  // record. It represented unlimited capacity before package codes existed.
-  const [group] = await executor
-    .select({ plan: groupsTable.plan })
-    .from(groupsTable)
-    .where(eq(groupsTable.id, groupId))
-    .limit(1);
-  if (group?.plan === "paid") {
-    const plan = getJamviPackage(PACKAGE_CODE.UNLIMITED);
-    return {
-      subjectType: "group",
-      packageCode: plan.code,
-      packageName: plan.displayName,
-      memberLimit: null,
-      featureFlags: plan.entitlements,
-      billingState: "active",
-      billingInterval: null,
-    };
-  }
-
+  const plan = getJamviPackage(subscription.packageCode as PackageCode);
   return {
-    subjectType: "group",
-    packageCode: null,
-    packageName: "No active Shared package",
-    memberLimit: Number(process.env.FREE_MEMBER_LIMIT ?? 6),
-    featureFlags: [],
-    billingState: "unsubscribed",
-    billingInterval: null,
+    packageCode: plan.code,
+    packageName: plan.displayName,
+    featureFlags: ALL_ENTITLEMENTS,
+    fullAccess: true,
+    status,
+    billingInterval: subscription.billingInterval as BillingInterval,
+    trialEndsAt: subscription.trialEndsAt,
+    currentPeriodEnd: subscription.currentPeriodEnd,
   };
 }
+
+/** Whether this member may take part in Shared budgets. Paying is what makes
+ *  someone eligible for groups; the groups themselves cost nothing. */
+export async function memberMayUseSharedBudgets(
+  userId: string,
+  executor: DbOrTransaction = db,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const { fullAccess } = await resolveMemberEntitlements(userId, executor, now);
+  return fullAccess;
+}
+
+export function addDays(from: Date, days: number): Date {
+  const to = new Date(from);
+  to.setDate(to.getDate() + days);
+  return to;
+}
+
+/**
+ * Gives a new member their trial, once.
+ *
+ * Called at signup rather than at the first paywall, so the clock starts when
+ * they arrive and an invitation from a group always works. Returns the
+ * existing row if one is already live, so repeated calls cannot extend a
+ * trial or hand out a second one.
+ */
+export async function ensureTrialSubscription(
+  userId: string,
+  executor: DbOrTransaction = db,
+  now: Date = new Date(),
+): Promise<void> {
+  const [existing] = await executor
+    .select({ id: userSubscriptionsTable.id })
+    .from(userSubscriptionsTable)
+    .where(eq(userSubscriptionsTable.userId, userId))
+    .limit(1);
+  if (existing) return;
+
+  await executor.insert(userSubscriptionsTable).values({
+    userId,
+    packageCode: PACKAGE_CODE.JAMVI,
+    billingInterval: "monthly",
+    status: SUBSCRIPTION_STATUS.TRIAL,
+    trialEndsAt: addDays(now, TRIAL_DAYS),
+  });
+}
+
+export { GRACE_DAYS, TRIAL_DAYS };

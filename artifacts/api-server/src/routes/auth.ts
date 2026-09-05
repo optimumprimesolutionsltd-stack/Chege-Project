@@ -48,6 +48,7 @@ import {
 import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
 import { resolvePhotoUrl } from '../lib/photoStorage';
 import { resolveOrigin } from '../lib/requestOrigin.js';
+import { ensureTrialSubscription } from "../lib/subscription-catalog";
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
 const router: IRouter = Router();
@@ -231,6 +232,7 @@ export async function upsertUser(claims: Record<string, unknown>) {
       set: refreshable,
     })
     .returning();
+  await ensureTrialSubscription(user.id);
   return user;
 }
 
@@ -252,6 +254,7 @@ router.post('/auth/register', async (req: Request, res: Response) => {
     preferredName: parsed.data.name,
     firstName: parsed.data.name,
   }).returning();
+  await ensureTrialSubscription(user.id);
   await startLocalSession(res, user);
   res.json({ user: await authUserPayload(user) });
 });

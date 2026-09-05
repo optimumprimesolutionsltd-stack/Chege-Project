@@ -12,7 +12,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
 import { EmailNotConfiguredError, sendEmail } from "../lib/email";
-import { hasMemberCapacity, memberLimitMessage } from "../lib/membership-limits";
+import { memberMayJoinGroups, subscriptionRequiredMessage } from "../lib/membership-limits";
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -221,9 +221,6 @@ async function createAndSendInvitation(params: {
       ))
       .limit(1);
     if (existingInvitationRows[0]) throw new InvitationError("There is already a pending invitation for this email.", 409);
-    if (!(await hasMemberCapacity(tx, params.groupId))) {
-      throw new InvitationError(memberLimitMessage(), 409);
-    }
 
     const [invitation] = await tx
       .insert(groupInvitationsTable)
@@ -347,8 +344,8 @@ publicInvitationsRouter.post("/group-invitations/accept/:token", async (req, res
         .limit(1);
       if (existingMembership) throw new InvitationError("You are already a member of this group.", 409);
 
-      if (!(await hasMemberCapacity(tx, invitation.groupId))) {
-        throw new InvitationError(memberLimitMessage(), 409);
+      if (!(await memberMayJoinGroups(req.user!.id, tx))) {
+        throw new InvitationError(subscriptionRequiredMessage(), 402);
       }
 
       await tx.insert(groupMembershipsTable).values({
@@ -479,9 +476,6 @@ invitationsRouter.post("/group-invitations/:id/resend", async (req, res): Promis
         .for("update");
       if (!invitation || invitation.acceptedAt || invitation.cancelledAt || invitation.expiresAt.getTime() <= Date.now()) {
         throw new InvitationError("Pending invitation not found.", 404);
-      }
-      if (!(await hasMemberCapacity(tx, groupId))) {
-        throw new InvitationError(memberLimitMessage(), 409);
       }
       const [updated] = await tx
         .update(groupInvitationsTable)

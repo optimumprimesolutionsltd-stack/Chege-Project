@@ -1,23 +1,28 @@
 /**
- * Behaviour tests for the member cap and inherited contribution target, at the
- * route rather than in the helpers.
+ * Behaviour tests for the subscription gate and inherited contribution target,
+ * at the route rather than in the helpers.
  *
  * The helpers already have unit tests, but those pass whether or not any route
  * calls them. Work on this repository has repeatedly been reverted by edits
- * made from a stale copy of the workspace, and a route quietly losing its
- * capacity check is exactly the kind of regression that leaves every existing
- * test green.
+ * made from a stale copy of the workspace, and a route quietly losing its gate
+ * is exactly the kind of regression that leaves every existing test green.
  *
- * So these assert what a person experiences: a full workspace refuses the next
- * member, and someone joining a group with a contribution target inherits it.
+ * So these assert what a person experiences: someone whose own subscription
+ * has lapsed cannot join a Shared budget, and someone joining a group with a
+ * contribution target inherits it. Group size is no longer a billing question
+ * and there is no cap to test.
  */
 
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { mockMayUseSharedBudgets } = vi.hoisted(() => ({
+  mockMayUseSharedBudgets: vi.fn(async () => true),
+}));
+
 vi.mock("../../lib/subscription-catalog", () => ({
-  resolveGroupEntitlements: vi.fn(async () => ({ memberLimit: 6 })),
+  memberMayUseSharedBudgets: mockMayUseSharedBudgets,
 }));
 
 vi.mock("@workspace/db", () => {
@@ -37,7 +42,6 @@ vi.mock("@workspace/db", () => {
 
 import { db } from "@workspace/db";
 import { publicInvitationsRouter } from "../invitations.js";
-import { FREE_MEMBER_LIMIT } from "../../lib/membership-limits.js";
 
 type Mock = ReturnType<typeof vi.fn>;
 
@@ -72,18 +76,17 @@ function appFor(userId = "member-1") {
 /**
  * Drives one acceptance. The transaction reads, in order: the group, the
  * invitation, the signed-in person's email, their existing membership, then
- * the plan and member count for the capacity check, then the group's default
- * contribution target.
+ * the group's default contribution target. Whether they may join at all is
+ * asked of their subscription, not read from the group.
  */
 function acceptanceWhere({
-  plan,
-  memberCount,
+  subscribed = true,
   defaultMonthlyTarget = null,
 }: {
-  plan: string;
-  memberCount: number;
+  subscribed?: boolean;
   defaultMonthlyTarget?: number | null;
-}) {
+} = {}) {
+  mockMayUseSharedBudgets.mockResolvedValue(subscribed);
   const txSelectResults: unknown[][] = [
     [{ id: 7, name: "Test group" }],
     [{
@@ -98,8 +101,6 @@ function acceptanceWhere({
     }],
     [{ email: SIGNED_IN_EMAIL }],
     [],
-    [{ plan }],
-    [{ count: memberCount }],
     [{ defaultMonthlyTarget }],
   ];
 
@@ -121,22 +122,22 @@ function accept() {
   return request(appFor()).post(`/group-invitations/accept/${TOKEN}`).send({});
 }
 
-describe("accepting an invitation respects the member cap", () => {
+describe("accepting an invitation asks about the joiner's subscription", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("refuses to add anyone once a free workspace is full", async () => {
-    const { inserted } = acceptanceWhere({ plan: "free", memberCount: FREE_MEMBER_LIMIT });
+  it("refuses someone whose subscription has lapsed", async () => {
+    const { inserted } = acceptanceWhere({ subscribed: false });
 
     const response = await accept();
 
-    expect(response.status).toBe(409);
-    expect(response.body.error).toMatch(/full/i);
+    expect(response.status).toBe(402);
+    expect(response.body.error).toMatch(/subscription/i);
     // The important half: nobody is added.
     expect(inserted).not.toHaveBeenCalled();
   });
 
-  it("admits someone while a place remains", async () => {
-    const { inserted } = acceptanceWhere({ plan: "free", memberCount: FREE_MEMBER_LIMIT - 1 });
+  it("admits a current member", async () => {
+    const { inserted } = acceptanceWhere({ subscribed: true });
 
     const response = await accept();
 
@@ -144,12 +145,22 @@ describe("accepting an invitation respects the member cap", () => {
     expect(inserted).toHaveBeenCalled();
   });
 
-  it("does not cap a paid workspace", async () => {
-    const { inserted } = acceptanceWhere({ plan: "paid", memberCount: FREE_MEMBER_LIMIT + 40 });
+  it("asks about the person accepting, not the group", async () => {
+    acceptanceWhere({ subscribed: true });
 
-    const response = await accept();
+    await accept();
 
-    expect(response.status).toBe(200);
+    expect(mockMayUseSharedBudgets).toHaveBeenCalledWith(
+      "member-1",
+      expect.anything(),
+    );
+  });
+
+  it("does not care how many people are already in the group", async () => {
+    // Fifty members is fifty subscriptions, not a bigger plan.
+    const { inserted } = acceptanceWhere({ subscribed: true });
+
+    expect((await accept()).status).toBe(200);
     expect(inserted).toHaveBeenCalled();
   });
 });
@@ -158,11 +169,7 @@ describe("a new member inherits the group's contribution target", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("carries the group's figure onto the membership", async () => {
-    const { inserted } = acceptanceWhere({
-      plan: "free",
-      memberCount: 2,
-      defaultMonthlyTarget: 5_000,
-    });
+    const { inserted } = acceptanceWhere({ defaultMonthlyTarget: 5_000 });
 
     await accept();
 
@@ -172,11 +179,7 @@ describe("a new member inherits the group's contribution target", () => {
   });
 
   it("leaves the target unset for a group that has none", async () => {
-    const { inserted } = acceptanceWhere({
-      plan: "free",
-      memberCount: 2,
-      defaultMonthlyTarget: null,
-    });
+    const { inserted } = acceptanceWhere({ defaultMonthlyTarget: null });
 
     await accept();
 

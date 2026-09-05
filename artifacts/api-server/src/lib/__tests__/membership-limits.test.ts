@@ -1,9 +1,15 @@
 /**
- * The member cap decides who has to pay, so it gets tested.
+ * Whether a member may take part in Shared budgets.
  *
- * The important behaviour is the grandfathering one: a workspace that is
- * already over the limit must keep working and simply stop growing. Nobody is
- * removed by a rule introduced after they joined.
+ * This file used to test a six-person cap on free workspaces. Jamvi is now
+ * bought per member and groups cost nothing, so group size is not a billing
+ * question and there is no cap left to test. What matters instead is the
+ * boundary between paying and lapsed — and specifically that it is read from
+ * the subscription's own dates.
+ *
+ * That is the part worth guarding. Nothing moves the status column yet: there
+ * is no billing job, no payment integration. If access were decided by status
+ * alone, a trial that ended in March would still grant everything in June.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,80 +18,122 @@ const { mockSelect } = vi.hoisted(() => ({ mockSelect: vi.fn() }));
 
 vi.mock("@workspace/db", () => ({
   db: { select: mockSelect },
-  groupsTable: { id: "groups.id", plan: "groups.plan" },
-  groupMembershipsTable: { groupId: "group_memberships.group_id" },
-  GROUP_PLAN: { FREE: "free", PAID: "paid" },
+  subscriptionPlansTable: { code: "subscription_plans.code", enabled: "subscription_plans.enabled" },
+  userSubscriptionsTable: {
+    id: "user_subscriptions.id",
+    userId: "user_subscriptions.user_id",
+    packageCode: "user_subscriptions.package_code",
+    status: "user_subscriptions.status",
+    billingInterval: "user_subscriptions.billing_interval",
+    trialEndsAt: "user_subscriptions.trial_ends_at",
+    currentPeriodEnd: "user_subscriptions.current_period_end",
+    graceEndsAt: "user_subscriptions.grace_ends_at",
+    createdAt: "user_subscriptions.created_at",
+  },
 }));
 
 import { db } from "@workspace/db";
-import { FREE_MEMBER_LIMIT, hasMemberCapacity } from "../membership-limits.js";
+import { ENTITLEMENT, PACKAGE_CODE, SUBSCRIPTION_STATUS } from "@workspace/jamvi-pricing";
+import { resolveMemberEntitlements } from "../subscription-catalog";
 
-/** Mimics the drizzle builder: .from().where() is awaitable, and .limit() ends it. */
+/** Mimics the drizzle builder: .from().where().orderBy().limit() resolves. */
 function chain(rows: unknown[]) {
   const c: Record<string, unknown> = {};
   c.from = vi.fn(() => c);
   c.where = vi.fn(() => c);
+  c.orderBy = vi.fn(() => c);
   c.limit = vi.fn(() => Promise.resolve(rows));
-  c.then = (resolve: (value: unknown[]) => unknown) => Promise.resolve(rows).then(resolve);
   return c;
 }
 
-/** First select returns the group's plan, second returns the member count. */
-function given(plan: string | null, memberCount: number) {
-  mockSelect
-    .mockReturnValueOnce(chain(plan === null ? [] : [{ plan }]))
-    .mockReturnValueOnce(chain([{ count: memberCount }]));
+const NOW = new Date("2026-09-04T12:00:00Z");
+const days = (n: number) => new Date(NOW.getTime() + n * 86_400_000);
+
+function subscription(overrides: Record<string, unknown>) {
+  return {
+    packageCode: PACKAGE_CODE.JAMVI,
+    status: SUBSCRIPTION_STATUS.ACTIVE,
+    billingInterval: "monthly",
+    trialEndsAt: null,
+    currentPeriodEnd: null,
+    graceEndsAt: null,
+    ...overrides,
+  };
 }
 
-const withLimit = (memberLimit: number | null) =>
-  vi.fn().mockResolvedValue({ memberLimit });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
-describe("hasMemberCapacity", () => {
-  beforeEach(() => vi.clearAllMocks());
+describe("resolveMemberEntitlements", () => {
+  it("grants everything during a trial that has not run out", async () => {
+    mockSelect.mockReturnValueOnce(chain([
+      subscription({ status: SUBSCRIPTION_STATUS.TRIAL, trialEndsAt: days(9) }),
+    ]));
 
-  it("allows a free workspace with room to spare", async () => {
-    given("free", FREE_MEMBER_LIMIT - 2);
-    await expect(hasMemberCapacity(db, 1, withLimit(FREE_MEMBER_LIMIT))).resolves.toBe(true);
+    const result = await resolveMemberEntitlements("user-1", db, NOW);
+
+    expect(result.fullAccess).toBe(true);
+    expect(result.featureFlags).toContain(ENTITLEMENT.SHARED_GROUP_ACCESS);
   });
 
-  it("allows the very last place", async () => {
-    given("free", FREE_MEMBER_LIMIT - 1);
-    await expect(hasMemberCapacity(db, 1, withLimit(FREE_MEMBER_LIMIT))).resolves.toBe(true);
+  it("lapses a trial whose date has passed, even though nothing moved the status", async () => {
+    mockSelect.mockReturnValueOnce(chain([
+      subscription({ status: SUBSCRIPTION_STATUS.TRIAL, trialEndsAt: days(-1) }),
+    ]));
+
+    const result = await resolveMemberEntitlements("user-1", db, NOW);
+
+    expect(result.fullAccess).toBe(false);
+    expect(result.featureFlags).not.toContain(ENTITLEMENT.SHARED_GROUP_ACCESS);
+    expect(result.featureFlags).toContain(ENTITLEMENT.PERSONAL_EXPENSES);
   });
 
-  it("refuses once a free workspace is exactly full", async () => {
-    given("free", FREE_MEMBER_LIMIT);
-    await expect(hasMemberCapacity(db, 1, withLimit(FREE_MEMBER_LIMIT))).resolves.toBe(false);
+  it("carries a missed payment through the grace window", async () => {
+    mockSelect.mockReturnValueOnce(chain([
+      subscription({ status: SUBSCRIPTION_STATUS.PAST_DUE, graceEndsAt: days(3) }),
+    ]));
+
+    expect((await resolveMemberEntitlements("user-1", db, NOW)).fullAccess).toBe(true);
   });
 
-  it("refuses to grow a workspace that is already over the limit, rather than throwing", async () => {
-    // Grandfathering: a group that predates the cap keeps working. It just
-    // cannot add anyone, and nothing here removes an existing member.
-    given("free", FREE_MEMBER_LIMIT + 10);
-    await expect(hasMemberCapacity(db, 1, withLimit(FREE_MEMBER_LIMIT))).resolves.toBe(false);
+  it("drops to read-only once the grace window closes", async () => {
+    mockSelect.mockReturnValueOnce(chain([
+      subscription({ status: SUBSCRIPTION_STATUS.PAST_DUE, graceEndsAt: days(-1) }),
+    ]));
+
+    expect((await resolveMemberEntitlements("user-1", db, NOW)).fullAccess).toBe(false);
   });
 
-  it("does not cap a paid workspace", async () => {
-    given("paid", FREE_MEMBER_LIMIT + 50);
-    await expect(hasMemberCapacity(db, 1)).resolves.toBe(true);
+  it("honours a cancellation to the end of the period already paid for", async () => {
+    mockSelect.mockReturnValueOnce(chain([
+      subscription({ status: SUBSCRIPTION_STATUS.CANCELLED, currentPeriodEnd: days(12) }),
+    ]));
+
+    expect((await resolveMemberEntitlements("user-1", db, NOW)).fullAccess).toBe(true);
   });
 
-  it("uses the active package's member limit", async () => {
-    given("free", 14);
-    await expect(hasMemberCapacity(db, 1, withLimit(15))).resolves.toBe(true);
+  it("treats a member with no subscription as lapsed, not as an error", async () => {
+    mockSelect.mockReturnValueOnce(chain([]));
 
-    mockSelect.mockReset();
-    given("free", 15);
-    await expect(hasMemberCapacity(db, 1, withLimit(15))).resolves.toBe(false);
+    const result = await resolveMemberEntitlements("user-1", db, NOW);
+
+    expect(result.fullAccess).toBe(false);
+    expect(result.status).toBeNull();
+    expect(result.packageCode).toBeNull();
   });
 
-  it("does not cap the Unlimited package", async () => {
-    given("free", 500);
-    await expect(hasMemberCapacity(db, 1, withLimit(null))).resolves.toBe(true);
-  });
+  it("keeps a lapsed member's own records reachable", async () => {
+    // The lapsed state is where every non-payer lives, so it has to stay
+    // usable enough to come back to.
+    mockSelect.mockReturnValueOnce(chain([
+      subscription({ status: SUBSCRIPTION_STATUS.TRIAL, trialEndsAt: days(-30) }),
+    ]));
 
-  it("leaves a missing group to the caller's own error handling", async () => {
-    given(null, 0);
-    await expect(hasMemberCapacity(db, 999)).resolves.toBe(true);
+    const { featureFlags } = await resolveMemberEntitlements("user-1", db, NOW);
+
+    expect(featureFlags).toContain(ENTITLEMENT.PERSONAL_INCOME);
+    expect(featureFlags).toContain(ENTITLEMENT.PERSONAL_EXPENSES);
+    expect(featureFlags).not.toContain(ENTITLEMENT.FULL_HISTORY);
   });
 });

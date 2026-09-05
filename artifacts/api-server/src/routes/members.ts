@@ -4,7 +4,7 @@ import { groupMembershipsTable, groupsTable, usersTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
-import { hasMemberCapacity, memberLimitMessage } from "../lib/membership-limits";
+import { memberMayJoinGroups, subscriptionRequiredMessage } from "../lib/membership-limits";
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 
 const router = Router();
@@ -72,7 +72,7 @@ router.post("/members", async (req, res): Promise<void> => {
       .limit(1);
     if (existing) return "existing" as const;
 
-    if (!(await hasMemberCapacity(tx, groupId))) return "at-limit" as const;
+    if (!(await memberMayJoinGroups(userId, tx))) return "no-subscription" as const;
 
     await tx.insert(groupMembershipsTable).values({
       groupId,
@@ -85,7 +85,7 @@ router.post("/members", async (req, res): Promise<void> => {
   });
   if (outcome === "existing") { res.status(400).json({ error: "Already a member" }); return; }
   if (outcome === "missing-group") { res.status(404).json({ error: "Group not found" }); return; }
-  if (outcome === "at-limit") { res.status(409).json({ error: memberLimitMessage() }); return; }
+  if (outcome === "no-subscription") { res.status(402).json({ error: subscriptionRequiredMessage() }); return; }
 
   const members = await getGroupMembersWithNames(groupId);
   const [member] = members.filter((x) => x.userId === userId);
