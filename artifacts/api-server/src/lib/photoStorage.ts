@@ -48,7 +48,12 @@ export function s3ClientInstance(): S3Client {
   s3Client = new S3Client({
     region: requiredS3Setting("S3_REGION"),
     endpoint: endpoint || undefined,
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    // R2 only serves path-style addressing, so this is effectively required
+    // there. Read leniently because it is typed into a web form: "True" or a
+    // trailing space would otherwise fall through to virtual-hosted style,
+    // where every request fails before CORS is even consulted and the browser
+    // reports nothing more useful than "Failed to fetch".
+    forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "").trim().toLowerCase() === "true",
     credentials: {
       accessKeyId: requiredS3Setting("AWS_ACCESS_KEY_ID"),
       secretAccessKey: requiredS3Setting("AWS_SECRET_ACCESS_KEY"),
