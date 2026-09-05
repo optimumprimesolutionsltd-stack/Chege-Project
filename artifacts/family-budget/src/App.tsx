@@ -15,6 +15,7 @@ import Contributions from '@/pages/contributions';
 import NotFound from '@/pages/not-found';
 import AuthDone from '@/pages/auth-done';
 import Settings from '@/pages/settings';
+import Subscription from "@/pages/subscription";
 import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
 import Parity from '@/pages/parity';
@@ -118,6 +119,7 @@ function AuthenticatedApp() {
         <Route path="/bank" component={Bank} />
         <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/search" component={SearchPage} />
+        <Route path="/subscription" component={Subscription} />
         <Route path="/settings" component={Settings} />
         <Route path="/invite/:token" component={InvitePage} />
         <Route path="/join/:token" component={JoinGroupPage} />
