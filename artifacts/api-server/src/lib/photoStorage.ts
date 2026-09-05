@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
-import { GetObjectCommand, HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
@@ -166,27 +165,33 @@ export async function createPhotoUpload(
   const objectName = photoObjectName(photoId);
 
   if (storageProvider() === "s3") {
-    // Presigned POST policies are the only browser upload form that lets us
-    // enforce the byte range in storage itself. A signed PUT can be replayed
-    // with a larger body even after the API validates the declared size.
-    const signed = await createPresignedPost(s3ClientInstance(), {
-      Bucket: s3Bucket(),
-      Key: objectName,
-      Expires: 15 * 60,
-      Fields: {
-        "Content-Type": contentType,
-      },
-      Conditions: [
-        ["content-length-range", 1, MAX_PHOTO_BYTES],
-        ["eq", "$Content-Type", contentType],
-      ],
-    });
+    // A presigned PUT, not a POST policy.
+    //
+    // POST policies are the better tool — they let storage itself enforce the
+    // byte range, so a signed upload cannot be replayed with a larger body.
+    // Cloudflare R2 does not implement PostObject at all, so that upload
+    // simply failed: the API signed a policy happily and returned 200, and the
+    // browser's POST then had no endpoint to reach.
+    //
+    // The size ceiling is therefore checked here and nowhere else. It bounds
+    // an honest client, not a determined one: someone who signs a small upload
+    // can send a larger body, and the cost of that is their own storage quota.
+    // Uploads require a signed-in member, so this is abuse of one's own
+    // account rather than an open door.
+    const signed = await getSignedUrl(
+      s3ClientInstance(),
+      new PutObjectCommand({
+        Bucket: s3Bucket(),
+        Key: objectName,
+        ContentType: contentType,
+      }),
+      { expiresIn: 15 * 60 },
+    );
 
     return {
       objectPath: `/objects/${objectName}`,
-      uploadUrl: signed.url,
-      uploadMethod: "POST",
-      uploadFields: signed.fields,
+      uploadUrl: signed,
+      uploadMethod: "PUT",
     };
   }
 
