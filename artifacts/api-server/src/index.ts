@@ -7,6 +7,7 @@ import { groupsTable } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { assertExternalProductionConfiguration } from "./lib/productionConfig";
 import { ensureSubscriptionPlanCatalogue } from "./lib/subscription-catalog";
+import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
 
 // Backfill removed — contributions are now derived from deposits + direct expense payments
 
@@ -93,6 +94,30 @@ cronSchedule(
           );
         },
       );
+    }
+  },
+  { timezone: "Africa/Nairobi" },
+);
+
+// ── Subscription lifecycle — daily at 07:00 ──────────────────────────────
+// Moves trials and paid periods on, and sends the one reminder that is due.
+//
+// Access does not depend on this running: it is computed from each
+// subscription's own dates on every request, so a member is treated correctly
+// whether or not the job ran. What the job adds is the status other things can
+// read, and the warning nobody would otherwise get — which matters because
+// STK Push cannot deduct on its own, so renewal needs the member to act.
+//
+// Safe to re-run by hand after a failure: transitions are idempotent and the
+// unique index on subscription_reminders stops a second email.
+cronSchedule(
+  "0 7 * * *",
+  async () => {
+    try {
+      const result = await runSubscriptionLifecycle();
+      logger.info(result, "Subscription lifecycle run complete");
+    } catch (err) {
+      logger.error({ err }, "Subscription lifecycle run failed");
     }
   },
   { timezone: "Africa/Nairobi" },
