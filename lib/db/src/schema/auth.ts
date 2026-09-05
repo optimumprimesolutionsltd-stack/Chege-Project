@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, jsonb, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import { index, jsonb, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 
 // (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 export const sessionsTable = pgTable(
@@ -40,3 +40,37 @@ export const usersTable = pgTable('users', {
 
 export type UpsertUser = typeof usersTable.$inferInsert;
 export type User = typeof usersTable.$inferSelect;
+
+/**
+ * One-time links for resetting a forgotten password.
+ *
+ * Only the hash of the token is stored, never the token itself. A leaked
+ * database backup is then not a set of working password-reset links, which it
+ * would be if the raw value were kept — the same reasoning as group invite
+ * links.
+ *
+ * Rows are kept after use rather than deleted, so a support question about a
+ * reset can be answered, and so a token cannot be replayed by anyone who
+ * captured the email.
+ */
+export const passwordResetTokensTable = pgTable(
+  'password_reset_tokens',
+  {
+    id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar('user_id')
+      .notNull()
+      .references(() => usersTable.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** Set the moment a token is spent. A second attempt then finds it used
+     *  rather than valid, so a link in a forwarded email is worthless. */
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('password_reset_tokens_user_idx').on(table.userId),
+    index('password_reset_tokens_expires_idx').on(table.expiresAt),
+  ],
+);
+
+export type PasswordResetToken = typeof passwordResetTokensTable.$inferSelect;

@@ -24,8 +24,9 @@ const ExchangeMobileAuthorizationCodeBody = z.object({
 
 const ExchangeMobileAuthorizationCodeResponse = z.object({ token: z.string() });
 const LogoutMobileSessionResponse = z.object({ success: z.boolean() });
-import { db, usersTable } from '@workspace/db';
-import { eq } from 'drizzle-orm';
+import { createHash, randomBytes } from 'node:crypto';
+import { db, passwordResetTokensTable, usersTable } from '@workspace/db';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import { verifyPhotoObject } from '../lib/photoStorage';
 import { Router, type IRouter, type Request, type Response } from 'express';
 import * as oidc from 'openid-client';
@@ -49,8 +50,12 @@ import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
 import { resolvePhotoUrl } from '../lib/photoStorage';
 import { resolveOrigin } from '../lib/requestOrigin.js';
 import { ensureTrialSubscription } from "../lib/subscription-catalog";
+import { sendEmail } from '../lib/email';
 
 const OIDC_COOKIE_TTL = 10 * 60 * 1000;
+/** A reset link is good for an hour: long enough to find the email, short
+ *  enough that an old one in an inbox is not a standing key to the account. */
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const router: IRouter = Router();
 const normalizeEmail = (email: string) => email.trim().toLocaleLowerCase("en-US");
 
@@ -271,6 +276,122 @@ router.post('/auth/password-login', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Email or password is incorrect.' });
     return;
   }
+  await ensureTrialSubscription(user.id);
+  await startLocalSession(res, user);
+  res.json({ user: await authUserPayload(user) });
+});
+
+/**
+ * Forgotten password, step one: ask for a link.
+ *
+ * Always answers the same way, whether or not the address has an account.
+ * Saying "no such user" turns this endpoint into a way to discover who banks
+ * with Jamvi, and for a money app that list is worth having.
+ */
+router.post('/auth/forgot-password', async (req: Request, res: Response) => {
+  const parsed = z.object({ email: z.string().trim().toLowerCase().email().max(320) })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Enter a valid email address.' });
+    return;
+  }
+
+  const email = normalizeEmail(parsed.data.email);
+  const sameAnswer = {
+    message: 'If that email has a Jamvi account, a reset link is on its way.',
+  };
+
+  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.email, email) });
+  // An account created through Google has no password to reset. Telling them
+  // so here would leak that the address exists, so the answer is unchanged and
+  // the email simply is not sent.
+  if (!user?.passwordHash) {
+    res.json(sameAnswer);
+    return;
+  }
+
+  const token = randomBytes(32).toString('hex');
+  await db.insert(passwordResetTokensTable).values({
+    userId: user.id,
+    tokenHash: createHash('sha256').update(token).digest('hex'),
+    expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+  });
+
+  // The app is mounted under /app; a bare /reset-password falls through to the
+  // marketing site's catch-all and shows its 404 page.
+  const base = process.env.APP_URL?.trim().replace(/\/+$/, '') || getOrigin(req);
+  const link = `${base}/app/reset-password?token=${token}`;
+  try {
+    await sendEmail({
+      from: process.env.INVITATION_FROM_EMAIL ?? process.env.DIGEST_FROM_EMAIL ?? 'Jamvi <onboarding@resend.dev>',
+      to: [email],
+      subject: 'Reset your Jamvi password',
+      html: `<p>Hi${user.firstName ? ` ${user.firstName}` : ''},</p>`
+        + `<p>Use this link to choose a new password. It works once and expires in an hour.</p>`
+        + `<p><a href="${link}">Reset my password</a></p>`
+        + `<p>If you did not ask for this, you can ignore this email — your password has not changed.</p>`,
+    });
+  } catch (error) {
+    // The answer stays the same either way. A failure here is ours to see in
+    // the logs, not something to report back to an unauthenticated caller.
+    req.log.error({ err: error }, 'Could not send a password reset email');
+  }
+
+  res.json(sameAnswer);
+});
+
+/**
+ * Forgotten password, step two: spend the link.
+ *
+ * The token is claimed with a conditional update, so two requests racing with
+ * the same link cannot both succeed.
+ */
+router.post('/auth/reset-password', async (req: Request, res: Response) => {
+  const parsed = z.object({
+    token: z.string().trim().regex(/^[a-f0-9]{64}$/i, 'That reset link is not valid.'),
+    password: z.string().min(8, 'Use at least 8 characters.').max(200),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check the link and try again.' });
+    return;
+  }
+
+  const tokenHash = createHash('sha256').update(parsed.data.token).digest('hex');
+  const now = new Date();
+
+  const claimed = await db
+    .update(passwordResetTokensTable)
+    .set({ usedAt: now })
+    .where(and(
+      eq(passwordResetTokensTable.tokenHash, tokenHash),
+      isNull(passwordResetTokensTable.usedAt),
+      gt(passwordResetTokensTable.expiresAt, now),
+    ))
+    .returning({ userId: passwordResetTokensTable.userId });
+
+  if (claimed.length === 0) {
+    res.status(400).json({
+      error: 'That reset link has expired or has already been used. Ask for a new one.',
+    });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ passwordHash: hashPassword(parsed.data.password) })
+    .where(eq(usersTable.id, claimed[0].userId))
+    .returning();
+
+  // Any other outstanding link is now void: someone resetting a password they
+  // fear was compromised should not leave a second working link behind.
+  await db
+    .update(passwordResetTokensTable)
+    .set({ usedAt: now })
+    .where(and(
+      eq(passwordResetTokensTable.userId, claimed[0].userId),
+      isNull(passwordResetTokensTable.usedAt),
+    ));
+
   await ensureTrialSubscription(user.id);
   await startLocalSession(res, user);
   res.json({ user: await authUserPayload(user) });
