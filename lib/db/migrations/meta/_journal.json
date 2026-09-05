@@ -162,6 +162,20 @@
       "when": 1788641875050,
       "tag": "0022_category_sub_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788646966595,
+      "tag": "0023_invite_link_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788647094148,
+      "tag": "0024_view_link_passphrase",
+      "breakpoints": true
     }
   ]
 }

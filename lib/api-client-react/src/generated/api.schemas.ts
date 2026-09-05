@@ -626,6 +626,7 @@ export const MemberRole = {
   owner: 'owner',
   admin: 'admin',
   member: 'member',
+  viewer: 'viewer',
 } as const;
 
 export interface Member {
@@ -844,6 +845,7 @@ export const WorkspaceRole = {
   owner: 'owner',
   admin: 'admin',
   member: 'member',
+  viewer: 'viewer',
 } as const;
 
 export interface Workspace {
@@ -938,6 +940,7 @@ export const GroupRole = {
   owner: 'owner',
   admin: 'admin',
   member: 'member',
+  viewer: 'viewer',
 } as const;
 
 export interface Group {
