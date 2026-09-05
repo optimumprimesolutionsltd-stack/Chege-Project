@@ -35,12 +35,6 @@ async function startServer() {
   );
   logger.info("Credential authentication schema is ready");
 
-  // Price lives in code; the plans table is a copy of it. Seeding on every boot
-  // keeps the two from drifting, which matters because a member's subscription
-  // row points at this table by foreign key.
-  await ensureSubscriptionPlanCatalogue();
-  logger.info("Subscription plan catalogue is seeded");
-
   app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
@@ -48,6 +42,22 @@ async function startServer() {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Price lives in code and the plans table is a copy of it, so this reseeds
+  // on every boot to keep the two from drifting.
+  //
+  // After listening, and unable to stop the service. It was previously awaited
+  // before app.listen, which made a data problem into a failure to boot: on a
+  // database still holding the seven old packages, inserting Jamvi at
+  // display_order 1 collides with Personal Free over the unique index on that
+  // column, the promise rejects, and the health check never passes. Seeding is
+  // useful, but it is not worth the service for.
+  void ensureSubscriptionPlanCatalogue()
+    .then(() => logger.info("Subscription plan catalogue is seeded"))
+    .catch((err) => logger.warn(
+      { err },
+      "Could not seed the subscription plan catalogue; migrations remain the source of truth",
+    ));
   });
 }
 
