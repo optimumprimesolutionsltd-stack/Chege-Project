@@ -1,7 +1,10 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
-const { s3Send } = vi.hoisted(() => ({
+const { s3Send, s3Config } = vi.hoisted(() => ({
   s3Send: vi.fn(),
+  // Captures what the client was constructed with, so the addressing style
+  // can be asserted rather than assumed.
+  s3Config: { last: undefined as unknown },
 }));
 
 vi.mock("@aws-sdk/client-s3", () => ({
@@ -15,6 +18,9 @@ vi.mock("@aws-sdk/client-s3", () => ({
     constructor(public input: unknown) {}
   },
   S3Client: class {
+    constructor(config: unknown) {
+      s3Config.last = config;
+    }
     send = s3Send;
   },
 }));
@@ -99,6 +105,28 @@ describe("S3 private photo storage", () => {
       resolvePhotoUrl("/objects/photos/3dc216cd-296f-4d0d-97aa-6ceeeb1ee34c"),
     ).rejects.toThrow("NotFound");
     expect(getSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("reads S3_FORCE_PATH_STYLE leniently, because it is typed by hand", async () => {
+    // R2 serves path-style only. A value of "True" or one carrying a stray
+    // space used to fall through to virtual-hosted addressing, where every
+    // upload fails before CORS is consulted and the browser reports nothing
+    // more useful than "Failed to fetch".
+    for (const value of ["true", "TRUE", "True", " true "]) {
+      vi.resetModules();
+      vi.stubEnv("S3_FORCE_PATH_STYLE", value);
+      const { s3ClientInstance } = await import("../photoStorage");
+      s3ClientInstance();
+      expect((s3Config.last as { forcePathStyle?: boolean }).forcePathStyle).toBe(true);
+    }
+
+    for (const value of ["false", "", "no"]) {
+      vi.resetModules();
+      vi.stubEnv("S3_FORCE_PATH_STYLE", value);
+      const { s3ClientInstance } = await import("../photoStorage");
+      s3ClientInstance();
+      expect((s3Config.last as { forcePathStyle?: boolean }).forcePathStyle).toBe(false);
+    }
   });
 
   it("validates S3 configuration and preserves stored photo path recognition", () => {
