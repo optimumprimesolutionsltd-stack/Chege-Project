@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { memberMayUseSharedBudgets } from "./subscription-catalog";
+import { resolveMemberEntitlements } from "./subscription-catalog";
 import { readOnlyMessage } from "./membership-limits";
 
 // Version this browser-session selection independently from the retired
@@ -99,8 +99,15 @@ export async function requireSharedTransactionEligibility(
   // removed from it. They keep seeing everything and stop being able to record
   // anything, which is a status the group can see and act on. Removing them
   // would take a chama's record of who contributed what with it.
+  //
+  // Having no subscription row at all is not the same as having a lapsed one.
+  // It means the account predates subscriptions, or signed in by a route that
+  // does not create one, or has simply held a session since before any of this
+  // existed. Those people are not behind on anything and must not be locked
+  // out of their own group by a rule that arrived after they joined.
   if (!req.group.isPrivate && req.user?.id) {
-    if (!(await memberMayUseSharedBudgets(req.user.id))) {
+    const entitlements = await resolveMemberEntitlements(req.user.id);
+    if (entitlements.status !== null && !entitlements.fullAccess) {
       res.status(402).json({ error: readOnlyMessage() });
       return false;
     }
