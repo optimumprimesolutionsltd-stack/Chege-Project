@@ -89,7 +89,10 @@ async function sendInvitationEmail(params: {
   role: "admin" | "member";
   token: string;
 }) {
-  const inviteLink = `${appUrl()}/invite/${params.token}`;
+  // The app is mounted under /app; a bare /invite/<token> falls through to
+  // the marketing site's catch-all, which answers 200 with its own shell — a
+  // soft 404 that reads as "the invite link does not work".
+  const inviteLink = `${appUrl()}/app/invite/${params.token}`;
   const groupName = htmlEscape(params.groupName);
   const roleLabel = params.role === "admin" ? "Admin" : "Member";
   const html = `<!doctype html>

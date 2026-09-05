@@ -6,6 +6,12 @@ vi.mock("../../lib/subscription-catalog", () => ({
   memberMayUseSharedBudgets: vi.fn(async () => true),
 }));
 
+const sendEmail = vi.hoisted(() => vi.fn(async () => ({ id: "email-1" })));
+vi.mock("../../lib/email", () => ({
+  sendEmail,
+  EmailNotConfiguredError: class EmailNotConfiguredError extends Error {},
+}));
+
 vi.mock("@workspace/db", () => {
   const table = (name: string) => new Proxy({}, {
     get: (_, property) => ({ _table: name, _column: String(property) }),
@@ -226,6 +232,43 @@ describe("group invitation management", () => {
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
+  it("points the emailed invitation link at the app, not the marketing site", async () => {
+    // The app is served under /app/. A bare /invite/<token> matches no app
+    // route, falls through to the marketing catch-all and is answered 200 with
+    // the marketing shell — a soft 404, so the recipient reports a link that
+    // "does not work" while the server logs a success.
+    const previousAppUrl = process.env.APP_URL;
+    process.env.APP_URL = "https://jamvi.co.ke";
+    const txSelectResults = [[{ id: 7, name: "Test group" }], [], []];
+    const tx = {
+      select: vi.fn().mockImplementation(() => selectChain(txSelectResults.shift() ?? [])),
+      insert: vi.fn().mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([invitation({ email: "invitee@example.com", role: "member" })]),
+        }),
+      }),
+    };
+    (db.transaction as Mock).mockImplementation((callback: (transaction: typeof tx) => unknown) => callback(tx));
+
+    try {
+      const response = await request(managerApp({
+        id: 7,
+        role: "owner",
+        isPrivate: false,
+      })).post("/group-invitations").send({
+        email: "invitee@example.com",
+        role: "member",
+      });
+
+      expect(response.status).toBe(201);
+      const [sent] = sendEmail.mock.calls.at(-1) as unknown as [{ html: string }];
+      const link = sent.html.match(/href="(https:\/\/[^"]*invite[^"]*)"/)?.[1];
+      expect(link).toMatch(/^https:\/\/jamvi\.co\.ke\/app\/invite\/[a-f0-9]{64}$/);
+    } finally {
+      process.env.APP_URL = previousAppUrl;
+    }
+  });
+
   it("sends an invitation however many people are already in the group", async () => {
     const txSelectResults = [
       [{ id: 7, name: "Growing group" }],
@@ -233,7 +276,7 @@ describe("group invitation management", () => {
       [],
     ];
     const values = vi.fn().mockReturnValue({
-      returning: vi.fn().mockResolvedValue([{ id: 41, email: "seventh@example.com", role: "member" }]),
+      returning: vi.fn().mockResolvedValue([invitation({ id: 41, email: "seventh@example.com", role: "member" })]),
     });
     const insert = vi.fn().mockReturnValue({ values });
     const tx = {

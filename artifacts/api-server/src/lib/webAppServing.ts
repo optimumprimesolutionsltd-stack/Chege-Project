@@ -146,6 +146,19 @@ function attachDualWebBuilds(
     });
   }
 
+  // Invitation and group-join links carry a token in the path. They were sent
+  // without the /app prefix for a long time, and every one of those is still
+  // sitting in somebody's inbox. Unprefixed they hit the marketing catch-all
+  // below and answer 200 with its shell, so the recipient sees a page that is
+  // not an error and not their invitation. These forward the whole path, since
+  // a redirect to /app/ alone would drop the token and lose the invitation.
+  const TOKEN_PATH_ALIASES = ["/invite", "/join"];
+  for (const alias of TOKEN_PATH_ALIASES) {
+    app.get(`${alias}/{*splat}`, (req, res) => {
+      res.redirect(302, `/app${req.originalUrl}`);
+    });
+  }
+
   // Express does not distinguish "/app" from "/app/" by default, so this route
   // matches both. Redirecting "/app/" to "/app/" is an infinite loop, and the
   // browser gives up with ERR_TOO_MANY_REDIRECTS — the app is unreachable at
