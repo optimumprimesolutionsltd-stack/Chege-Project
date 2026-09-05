@@ -23,6 +23,7 @@ import {
   publicSubscriptionPlansRouter,
   subscriptionPlansRouter,
 } from "./subscription-plans";
+import { paymentsRouter, publicPaymentsRouter } from "./payments";
 import { requireMember } from "../middlewares/requireMember";
 
 const router: IRouter = Router();
@@ -35,6 +36,7 @@ router.use(publicInviteLinksRouter);
 router.use(onboardingRouter);
 router.use(parserRouter);
 router.use(publicSubscriptionPlansRouter);
+router.use(publicPaymentsRouter);
 
 // Apply member check to everything else
 router.use(requireMember);
@@ -56,5 +58,6 @@ router.use(photoStorageRouter);
 router.use(budgetPlansRouter);
 router.use(aiRouter);
 router.use(subscriptionPlansRouter);
+router.use(paymentsRouter);
 
 export default router;

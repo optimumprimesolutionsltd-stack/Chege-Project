@@ -134,6 +134,13 @@
       "when": 1788505600000,
       "tag": "0018_per_member_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788592000000,
+      "tag": "0019_payments",
+      "breakpoints": true
     }
   ]
 }
