@@ -1656,7 +1656,7 @@ export const GetIncomeSourcesResponse = zod.array(GetIncomeSourcesResponseItem)
 export const GetMembersResponseItem = zod.object({
   "userId": zod.string(),
   "userName": zod.string().nullish(),
-  "role": zod.enum(['owner', 'admin', 'member']),
+  "role": zod.enum(['owner', 'admin', 'member', 'viewer']),
   "addedAt": zod.coerce.date()
 })
 export const GetMembersResponse = zod.array(GetMembersResponseItem)
@@ -1675,7 +1675,7 @@ export const AddMemberBody = zod.object({
 export const AddMemberResponse = zod.object({
   "userId": zod.string(),
   "userName": zod.string().nullish(),
-  "role": zod.enum(['owner', 'admin', 'member']),
+  "role": zod.enum(['owner', 'admin', 'member', 'viewer']),
   "addedAt": zod.coerce.date()
 })
 
@@ -1708,7 +1708,7 @@ export const GetWorkspacesResponseItem = zod.object({
   "slogan": zod.string().max(getWorkspacesResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
-  "role": zod.enum(['owner', 'admin', 'member'])
+  "role": zod.enum(['owner', 'admin', 'member', 'viewer'])
 })
 export const GetWorkspacesResponse = zod.array(GetWorkspacesResponseItem)
 
@@ -1737,7 +1737,7 @@ export const SelectWorkspaceResponse = zod.object({
   "slogan": zod.string().max(selectWorkspaceResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
-  "role": zod.enum(['owner', 'admin', 'member'])
+  "role": zod.enum(['owner', 'admin', 'member', 'viewer'])
 })
 
 
@@ -1779,7 +1779,7 @@ export const CreateSharedGroupResponse = zod.object({
   "slogan": zod.string().max(createSharedGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
-  "role": zod.enum(['owner', 'admin', 'member'])
+  "role": zod.enum(['owner', 'admin', 'member', 'viewer'])
 })
 
 
@@ -2062,7 +2062,7 @@ export const GetGroupResponse = zod.object({
   "slogan": zod.string().max(getGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
-  "role": zod.enum(['owner', 'admin', 'member']),
+  "role": zod.enum(['owner', 'admin', 'member', 'viewer']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })
 
@@ -2111,7 +2111,7 @@ export const UpdateGroupResponse = zod.object({
   "slogan": zod.string().max(updateGroupResponseSloganMax).nullish(),
   "isPrivate": zod.boolean(),
   "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
-  "role": zod.enum(['owner', 'admin', 'member']),
+  "role": zod.enum(['owner', 'admin', 'member', 'viewer']),
   "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
 })
 
@@ -2130,7 +2130,7 @@ export const UpdateMemberRoleBody = zod.object({
 export const UpdateMemberRoleResponse = zod.object({
   "userId": zod.string(),
   "userName": zod.string().nullish(),
-  "role": zod.enum(['owner', 'admin', 'member']),
+  "role": zod.enum(['owner', 'admin', 'member', 'viewer']),
   "addedAt": zod.coerce.date()
 })
 

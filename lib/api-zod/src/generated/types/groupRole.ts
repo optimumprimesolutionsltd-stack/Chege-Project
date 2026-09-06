@@ -13,4 +13,5 @@ export const GroupRole = {
   owner: 'owner',
   admin: 'admin',
   member: 'member',
+  viewer: 'viewer',
 } as const;

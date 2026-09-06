@@ -21,7 +21,7 @@ declare global {
       user?: User | undefined;
       group?: {
         id: number;
-        role: "owner" | "admin" | "member";
+        role: "owner" | "admin" | "member" | "viewer";
         isPrivate: boolean;
       };
     }

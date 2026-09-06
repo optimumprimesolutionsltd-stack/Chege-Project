@@ -9,6 +9,7 @@ import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { workspaceLabel } from '@/lib/workspace-identity';
 import { ProfileAvatar } from '@/components/profile-avatar';
 import { BrandLogo } from '@/components/brand-logo';
+import { ViewerBanner } from '@/components/viewer-banner';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -324,6 +325,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <main className="min-w-0 flex-1 flex flex-col min-h-screen overflow-x-hidden pb-24 pt-16 md:pb-0 md:pt-0">
         <div className="min-w-0 flex-1 w-full max-w-6xl mx-auto p-4 md:p-8">
+          {group?.role === 'viewer' ? <ViewerBanner groupName={group?.name} /> : null}
           {children}
         </div>
       </main>

@@ -13,6 +13,7 @@ import {
   groupMembershipsTable,
   groupsTable,
   incomeSourcesTable,
+  contributionsTable,
 } from "@workspace/db";
 import { sql, eq, and, inArray, isNull } from "drizzle-orm";
 import {
@@ -27,6 +28,7 @@ import {
   GetDashboardMonthlyReportPdfQueryParams,
 } from "@workspace/api-zod";
 import { getActiveGroupId } from "../lib/activeGroup";
+import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
 
 const router = Router();
@@ -1342,6 +1344,64 @@ router.get("/dashboard/trends", async (req, res): Promise<void> => {
   }
 
   res.json(results);
+});
+
+
+/**
+ * Who paid what, month by month, and what the group spent against it.
+ *
+ * The question a treasurer actually asks is not "what did we collect in
+ * August" but "who has slipped". That needs a member against a row of months,
+ * which every existing endpoint answers one cell at a time: /contributions is
+ * one month, /dashboard/member-breakdown is one member in one month.
+ *
+ * Aggregated here rather than in the browser. Shipping every contribution row
+ * to a phone so it can add them up is the wrong place to do arithmetic, and
+ * the rows are nobody's business beyond their totals.
+ *
+ * Arrays line up with `months` by index, so the client renders a grid without
+ * matching keys.
+ */
+router.get("/dashboard/contribution-history", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const monthsBack = Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
+  const months = historyMonths(monthsBack);
+  const earliest = months[0];
+
+  const [contributions, expenses, memberships] = await Promise.all([
+    db
+      .select({
+        userId: contributionsTable.userId,
+        firstName: usersTable.firstName,
+        amount: contributionsTable.amount,
+        month: contributionsTable.month,
+        year: contributionsTable.year,
+      })
+      .from(contributionsTable)
+      .leftJoin(usersTable, eq(contributionsTable.userId, usersTable.id))
+      .where(sql`${contributionsTable.groupId} = ${groupId}
+        AND (${contributionsTable.year} > ${earliest.year}
+          OR (${contributionsTable.year} = ${earliest.year} AND ${contributionsTable.month} >= ${earliest.month}))`),
+    db
+      .select({
+        total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)`,
+        month: sql<number>`EXTRACT(MONTH FROM ${expensesTable.date})`,
+        year: sql<number>`EXTRACT(YEAR FROM ${expensesTable.date})`,
+      })
+      .from(expensesTable)
+      .where(sql`${expensesTable.groupId} = ${groupId}
+        AND ${expensesTable.date} >= make_date(${earliest.year}, ${earliest.month}, 1)`)
+      .groupBy(sql`EXTRACT(YEAR FROM ${expensesTable.date}), EXTRACT(MONTH FROM ${expensesTable.date})`),
+    db
+      .select({ userId: groupMembershipsTable.userId, firstName: usersTable.firstName })
+      .from(groupMembershipsTable)
+      .leftJoin(usersTable, eq(groupMembershipsTable.userId, usersTable.id))
+      .where(eq(groupMembershipsTable.groupId, groupId)),
+  ]);
+
+  res.json(buildContributionHistory({ months, contributions, expenses, memberships }));
 });
 
 export default router;

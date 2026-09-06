@@ -16,6 +16,7 @@ import { dateInputValue, getPeriodRange, type PeriodView } from "@/lib/period-ra
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { AlertTriangle, ArrowLeft, ArrowRight, Calendar, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Download, Landmark, Loader2, PiggyBank, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { Link } from "wouter";
+import { ContributionHistory } from "@/components/contribution-history";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
   if (recordType === "deposit") return "Joint bank deposit";
@@ -556,6 +557,8 @@ export default function IncomeStreamsReport() {
                 </div>
             </CardContent>
           </Card>
+
+          <ContributionHistory />
 
           {report.streams.length === 0 ? (
             <Card className="border-dashed">

@@ -43,7 +43,7 @@ async function availableWorkspaces(userId: string) {
       slogan: row.slogan,
       isPrivate,
       kind: (row.kind ?? "family") as "personal" | "family" | "chama" | "club" | "team" | "student_group" | "other",
-      role: row.role as "owner" | "admin" | "member",
+      role: row.role as "owner" | "admin" | "member" | "viewer",
     };
   }));
 }

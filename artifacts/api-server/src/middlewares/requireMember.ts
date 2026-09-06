@@ -223,7 +223,7 @@ export async function requireMember(
     if (selectedMembership) {
       req.group = {
         id: selectedMembership.groupId,
-        role: selectedMembership.role as "owner" | "admin" | "member",
+        role: selectedMembership.role as "owner" | "admin" | "member" | "viewer",
         isPrivate: Boolean(selectedMembership.isPrivate),
       };
     } else {
