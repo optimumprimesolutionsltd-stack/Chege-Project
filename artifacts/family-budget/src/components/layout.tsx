@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins, UsersRound } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { workspaceLabel } from '@/lib/workspace-identity';
 import { ProfileAvatar } from '@/components/profile-avatar';
 import { BrandLogo } from '@/components/brand-logo';
+import { useQuery } from '@tanstack/react-query';
+import { daysUntil, type MemberEntitlements } from '@/lib/subscription-status';
 import { ViewerBanner } from '@/components/viewer-banner';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -93,20 +95,54 @@ export function Layout({ children }: { children: React.ReactNode }) {
     navigate(action === 'income' ? '/?quick=income' : action === 'expense' ? '/?quick=expense' : '/?quick=goal');
   };
 
+  // Which parts of Jamvi this budget uses. A chama that only collects money
+  // sees one tab rather than nine. The server resolves the default, so an
+  // undefined value here only means the group has not loaded yet - in which
+  // case nothing is filtered out and the nav does not flicker.
+  const sections = group?.enabledSections;
+  const uses = (section: NonNullable<typeof sections>[number]) =>
+    !sections || sections.includes(section);
+
+  // The same entitlements the Subscription page reads. Shown in the nav so a
+  // trial running out is visible where people already look, rather than only
+  // to somebody who thought to go and check.
+  const { data: entitlements } = useQuery<MemberEntitlements>({
+    queryKey: ['member-entitlements'],
+    queryFn: async () => {
+      const response = await fetch('/api/subscription-plans/entitlements', { credentials: 'include' });
+      if (!response.ok) throw new Error('Could not load your subscription.');
+      return response.json() as Promise<MemberEntitlements>;
+    },
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const trialDaysLeft = entitlements?.status === 'trial' ? daysUntil(entitlements.trialEndsAt ?? null) : null;
+  const payLabel = trialDaysLeft !== null && trialDaysLeft >= 0
+    ? `Pay · ${trialDaysLeft} ${trialDaysLeft === 1 ? 'day' : 'days'} left`
+    : entitlements && !entitlements.fullAccess
+      ? 'Pay to continue'
+      : 'Pay & subscription';
+
   const navItems = [
     { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Overview', icon: LayoutDashboard },
     // Only in a Shared budget: a Personal one has nobody to contribute. Placed
     // second because for a chama or a church this is the screen people open the
     // app for - who has paid - and it had no way in at all until now.
-    ...(isSharedWorkspace ? [{ href: '/contributions', label: 'Contributions', icon: HandCoins }] : []),
-    { href: '/expenses', label: isSharedWorkspace ? 'Group Expenses' : 'My Expenses', icon: Receipt },
-    { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My Budget', icon: PieChart },
-    { href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity },
-    { href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target },
-    { href: '/bank', label: 'Bank accounts', icon: Landmark },
-    { href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 },
+    ...(isSharedWorkspace && uses('contributions') ? [{ href: '/contributions', label: 'Contributions', icon: HandCoins }] : []),
+    ...(uses('expenses') ? [{ href: '/expenses', label: isSharedWorkspace ? 'Group Expenses' : 'My Expenses', icon: Receipt }] : []),
+    ...(uses('budget') ? [{ href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My Budget', icon: PieChart }] : []),
+    ...(uses('activity') ? [{ href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity }] : []),
+    ...(uses('goals') ? [{ href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target }] : []),
+    ...(uses('bank') ? [{ href: '/bank', label: 'Bank accounts', icon: Landmark }] : []),
+    ...(uses('reports') ? [{ href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 }] : []),
+    // Search, Subscription and Settings are never hideable: Settings is how a
+    // section gets switched back on, and Subscription is how the app keeps
+    // being paid for. Hiding either strands an admin outside their own budget.
+    // Never hideable, like Settings: this is how somebody reaches everything
+    // they have, including the budget they meant to be in.
+    { href: '/groups', label: 'My budget & groups', icon: UsersRound },
+    { href: '/subscription', label: payLabel, icon: CreditCard },
     { href: '/search', label: 'Search', icon: Search },
-    { href: '/subscription', label: 'Subscription', icon: CreditCard },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 

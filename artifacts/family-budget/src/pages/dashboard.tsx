@@ -464,7 +464,11 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
             </div>
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold text-foreground">What kind of group is this?</legend>
-              <p className="text-xs text-muted-foreground">Choose one to tailor category recommendations for this Shared budget.</p>
+              <p className="text-xs text-muted-foreground">
+                Jamvi sets the group up for what it is: which screens it starts with, and the spending
+                categories it suggests. A chama that only collects money will not be shown a household
+                budget. You can change any of it later in Settings.
+              </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {SHARED_GROUP_KINDS.map((option) => {
                   const selected = kind === option.value;

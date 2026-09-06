@@ -202,9 +202,22 @@ export async function requireMember(
     // Preserve the one-time legacy adoption order: adopting after creating a
     // Personal membership would make an established legacy ledger unreachable.
     await adoptLegacyGroup(userId);
-    // Workspace discovery and every Shared-budget mutation pass through this
-    // middleware, so no signed-in person can create a group-only account.
-    await ensurePersonalWorkspace(userId);
+    // A Personal budget is no longer created here.
+    //
+    // This line ran on every protected request, so everybody got one whether
+    // or not they wanted it - and somebody whose whole purpose is running a
+    // chama then opened the app into an empty budget being asked to finish
+    // setting it up. The app was measuring whether they had completed
+    // something they had deliberately not started.
+    //
+    // It is now created only when somebody asks, through
+    // POST /workspaces/personal. Onboarding still creates one for anybody who
+    // says they want it, so the only people without one are those who said
+    // they were here for groups.
+    //
+    // What is given up: this line also quietly restored a Personal budget for
+    // anybody who somehow lost theirs. That self-healing goes with it, which
+    // is the price of not forcing one on people.
     const headerWorkspaceId = typeof req.get === "function"
       ? req.get("x-jamvi-workspace")
       : undefined;

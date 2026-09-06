@@ -401,6 +401,7 @@ export const GroupKind = {
   personal: 'personal',
   family: 'family',
   chama: 'chama',
+  church: 'church',
   club: 'club',
   team: 'team',
   student_group: 'student_group',
@@ -943,6 +944,19 @@ export const GroupRole = {
   viewer: 'viewer',
 } as const;
 
+export type GroupEnabledSectionsItem = typeof GroupEnabledSectionsItem[keyof typeof GroupEnabledSectionsItem];
+
+
+export const GroupEnabledSectionsItem = {
+  contributions: 'contributions',
+  expenses: 'expenses',
+  budget: 'budget',
+  activity: 'activity',
+  goals: 'goals',
+  bank: 'bank',
+  reports: 'reports',
+} as const;
+
 export interface Group {
   id: number;
   name: string;
@@ -966,6 +980,8 @@ export interface Group {
   role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */
   canRecordSharedTransactions: boolean;
+  /** Which parts of Jamvi this budget uses, so a chama that only collects money sees one tab rather than nine. Always populated - a budget that has never chosen resolves to every section. */
+  enabledSections: GroupEnabledSectionsItem[];
 }
 
 export type UpdateGroupInputNameStyle = typeof UpdateGroupInputNameStyle[keyof typeof UpdateGroupInputNameStyle];
@@ -1008,6 +1024,19 @@ export const UpdateGroupInputAccentColor = {
   '#059669': '#059669',
 } as const;
 
+export type UpdateGroupInputEnabledSectionsItem = typeof UpdateGroupInputEnabledSectionsItem[keyof typeof UpdateGroupInputEnabledSectionsItem];
+
+
+export const UpdateGroupInputEnabledSectionsItem = {
+  contributions: 'contributions',
+  expenses: 'expenses',
+  budget: 'budget',
+  activity: 'activity',
+  goals: 'goals',
+  bank: 'bank',
+  reports: 'reports',
+} as const;
+
 export interface UpdateGroupInput {
   /**
      * @minLength 2
@@ -1033,6 +1062,11 @@ export interface UpdateGroupInput {
      */
   slogan?: string | null;
   kind?: GroupKind;
+  /**
+     * Which parts of Jamvi this budget uses. Filters navigation only - a section switched off keeps every record it had and returns intact when switched back on.
+     * @minItems 1
+     */
+  enabledSections?: UpdateGroupInputEnabledSectionsItem[];
   /**
      * What each member is expected to contribute per month, in KES. Changing it does not alter targets already set on existing members; it applies to whoever joins next.
      * @minimum 0

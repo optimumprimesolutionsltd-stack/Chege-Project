@@ -40,6 +40,15 @@ export const GROUP_KIND = {
   FAMILY: "family",
   CHAMA: "chama",
   CLUB: "club",
+  /**
+   * Split out of club, because a church is not a club with different words.
+   *
+   * A chama is built on a fixed monthly amount and the question it asks is who
+   * is behind. Church giving is voluntary and varies by person: there is no
+   * amount anybody owes, so framing it as a debt would be wrong, and often
+   * across several funds at once rather than one pot.
+   */
+  CHURCH: "church",
   TEAM: "team",
   STUDENT_GROUP: "student_group",
   OTHER: "other",
@@ -112,6 +121,17 @@ export const groupsTable = pgTable(
     // always empty. Null means the group does not work to a fixed amount -
     // families and one-off groups usually do not.
     defaultMonthlyTarget: integer("default_monthly_target"),
+    // Which parts of Jamvi this budget uses. A chama that only collects money
+    // should see one tab, not nine.
+    //
+    // Null means everything, which is what every budget created before this
+    // existed keeps, so nothing changed for anybody on migration. New budgets
+    // seed it from their kind, so the mandate is usually implied by what the
+    // group already said it was.
+    //
+    // Filters navigation only. A section switched off keeps every record it
+    // had and returns intact when switched back on.
+    enabledSections: jsonb("enabled_sections").$type<string[] | null>(),
     // Workspace-specific names and explanations for the five budget priority
     // tiers. Null means the group-kind defaults are used.
     priorityTiers: jsonb("priority_tiers").$type<Array<{

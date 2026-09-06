@@ -2969,7 +2969,16 @@ components:
         canRecordSharedTransactions:
           type: boolean
           description: Whether this workspace may record expenses and contributions right now
-      required: [id, name, emoji, nameStyle, icon, accentColor, isPrivate, kind, role, canRecordSharedTransactions]
+        enabledSections:
+          type: array
+          description: >
+            Which parts of Jamvi this budget uses, so a chama that only collects
+            money sees one tab rather than nine. Always populated - a budget
+            that has never chosen resolves to every section.
+          items:
+            type: string
+            enum: [contributions, expenses, budget, activity, goals, bank, reports]
+      required: [id, name, emoji, nameStyle, icon, accentColor, isPrivate, kind, role, canRecordSharedTransactions, enabledSections]
 
     UpdateGroupInput:
       type: object
@@ -2998,6 +3007,16 @@ components:
           maxLength: 120
         kind:
           $ref: "#/components/schemas/GroupKind"
+        enabledSections:
+          type: array
+          description: >
+            Which parts of Jamvi this budget uses. Filters navigation only -
+            a section switched off keeps every record it had and returns
+            intact when switched back on.
+          minItems: 1
+          items:
+            type: string
+            enum: [contributions, expenses, budget, activity, goals, bank, reports]
         defaultMonthlyTarget:
           description: >-
             What each member is expected to contribute per month, in KES.
@@ -3009,7 +3028,7 @@ components:
 
     GroupKind:
       type: string
-      enum: [personal, family, chama, club, team, student_group, other]
+      enum: [personal, family, chama, church, club, team, student_group, other]
 
     UpdateMemberRoleInput:
       type: object

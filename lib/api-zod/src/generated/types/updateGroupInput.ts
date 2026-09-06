@@ -7,6 +7,7 @@
  */
 import type { GroupKind } from './groupKind';
 import type { UpdateGroupInputAccentColor } from './updateGroupInputAccentColor';
+import type { UpdateGroupInputEnabledSectionsItem } from './updateGroupInputEnabledSectionsItem';
 import type { UpdateGroupInputIcon } from './updateGroupInputIcon';
 import type { UpdateGroupInputNameStyle } from './updateGroupInputNameStyle';
 
@@ -35,6 +36,11 @@ export interface UpdateGroupInput {
      */
   slogan?: string | null;
   kind?: GroupKind;
+  /**
+     * Which parts of Jamvi this budget uses. Filters navigation only - a section switched off keeps every record it had and returns intact when switched back on.
+     * @minItems 1
+     */
+  enabledSections?: UpdateGroupInputEnabledSectionsItem[];
   /**
      * What each member is expected to contribute per month, in KES. Changing it does not alter targets already set on existing members; it applies to whoever joins next.
      * @minimum 0

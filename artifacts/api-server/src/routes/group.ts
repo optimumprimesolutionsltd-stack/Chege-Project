@@ -4,6 +4,8 @@ import {
   bankAccountsTable,
   groupMembershipsTable,
   groupsTable,
+  resolveEnabledSections,
+  defaultSectionsForKind,
 } from "@workspace/db";
 import {
   CreateSharedGroupBody,
@@ -97,6 +99,10 @@ router.post("/groups", async (req, res): Promise<void> => {
         emoji: normalizedEmoji(parsed.data.emoji),
         nameStyle: parsed.data.nameStyle,
         kind: parsed.data.kind,
+        // Seeded from the kind, so a chama opens showing what a chama does and
+        // nobody has to find a setting first. Changeable afterwards; the kind
+        // only decides where it starts.
+        enabledSections: [...defaultSectionsForKind(parsed.data.kind)],
         ...(parsed.data.defaultMonthlyTarget !== undefined
           ? { defaultMonthlyTarget: parsed.data.defaultMonthlyTarget }
           : {}),
@@ -172,6 +178,7 @@ router.get("/group", async (req, res): Promise<void> => {
       photoPath: groupsTable.photoPath,
       slogan: groupsTable.slogan,
       kind: groupsTable.kind,
+      enabledSections: groupsTable.enabledSections,
       isPrivate: groupsTable.privateOwnerUserId,
     })
     .from(groupsTable)
@@ -186,6 +193,9 @@ router.get("/group", async (req, res): Promise<void> => {
     isPrivate,
     role: req.group!.role,
     canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),
+    // Resolved here rather than in the client: a budget that has never chosen
+    // gets every section, and the rule for that lives in one place.
+    enabledSections: resolveEnabledSections(group.enabledSections),
   }));
 });
 
@@ -235,6 +245,13 @@ router.patch("/group", async (req, res): Promise<void> => {
       ...(parsed.data.photoPath !== undefined ? { photoPath: parsed.data.photoPath } : {}),
       ...(parsed.data.slogan !== undefined ? { slogan: normalizedSlogan(parsed.data.slogan) } : {}),
       ...(parsed.data.kind ? { kind: parsed.data.kind } : {}),
+      // Stored as given. Nothing is deleted when a section is switched off -
+      // it stops appearing in the navigation and returns intact if it is
+      // switched back on, so a chama that hides expenses in March still has
+      // March in June.
+      ...(parsed.data.enabledSections !== undefined
+        ? { enabledSections: [...parsed.data.enabledSections] }
+        : {}),
     })
     .where(eq(groupsTable.id, groupId))
     .returning({
@@ -247,6 +264,7 @@ router.patch("/group", async (req, res): Promise<void> => {
       photoPath: groupsTable.photoPath,
       slogan: groupsTable.slogan,
       kind: groupsTable.kind,
+      enabledSections: groupsTable.enabledSections,
       isPrivate: groupsTable.privateOwnerUserId,
     });
   if (!group) { res.status(404).json({ error: "Group not found" }); return; }
@@ -258,6 +276,9 @@ router.patch("/group", async (req, res): Promise<void> => {
     isPrivate,
     role: req.group!.role,
     canRecordSharedTransactions: await canRecordSharedTransactions(group.id, isPrivate),
+    // Required by the response contract, so omitting it here would throw at
+    // the parse and answer 500 on every group edit.
+    enabledSections: resolveEnabledSections(group.enabledSections),
   }));
 });
 
