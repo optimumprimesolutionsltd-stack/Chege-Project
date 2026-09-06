@@ -28,6 +28,7 @@ import { getActiveGroupId, requireSharedGroupManager, setActiveWorkspaceCookie }
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 import { hashPassword, verifyPassword } from "../lib/auth-password";
 import { rateLimit } from "../middlewares/rateLimit";
+import { generatePassphrase } from "../lib/passphrase";
 
 const VIEW_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -185,6 +186,17 @@ viewLinksRouter.get("/group-view-links", async (req, res): Promise<void> => {
         passphraseRequired: link.passphraseHash !== null,
       }
     : { active: false });
+});
+
+/** A passphrase to offer the owner, so the choice is not left to whoever is
+ *  in a hurry. Nothing is stored: it becomes real only if they create a link
+ *  with it. */
+viewLinksRouter.get("/group-view-links/suggested-passphrase", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireSharedGroupManager(req, res)) return;
+
+  res.json({ passphrase: generatePassphrase() });
 });
 
 viewLinksRouter.post("/group-view-links", async (req, res): Promise<void> => {
