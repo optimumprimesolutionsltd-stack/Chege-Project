@@ -260,9 +260,11 @@ router.patch("/contributions/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const user = await db.query.usersTable.findFirst({
-    where: eq(usersTable.id, updated.userId),
-  });
+  // A contribution recorded against somebody with no account has no user to
+  // look up. The contributor carries the name in that case.
+  const user = updated.userId
+    ? await db.query.usersTable.findFirst({ where: eq(usersTable.id, updated.userId) })
+    : undefined;
   res.json({
     ...updated,
     userName: displayName(user),

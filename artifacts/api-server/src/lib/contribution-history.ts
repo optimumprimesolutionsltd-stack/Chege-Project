@@ -14,7 +14,10 @@ export interface HistoryMonth {
 }
 
 export interface ContributionRow {
-  userId: string;
+  /** Null once a contribution can be recorded against somebody with no
+   *  account. Those are grouped by contributor instead, which this function
+   *  will read directly when the grid replaces the monthly view. */
+  userId: string | null;
   firstName: string | null;
   amount: number | string;
   month: number;
@@ -72,6 +75,7 @@ export function buildContributionHistory(input: {
   for (const entry of contributions) {
     const column = columnFor.get(`${entry.year}-${entry.month}`);
     if (column === undefined) continue;
+    if (!entry.userId) continue;
     // Somebody who has since left still contributed what they contributed.
     // Dropping them would make the column totals disagree with the rows above.
     const row = rows.get(entry.userId) ?? {

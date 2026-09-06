@@ -176,6 +176,13 @@
       "when": 1788775600000,
       "tag": "0024_view_link_passphrase",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788775600001,
+      "tag": "0025_named_contributors",
+      "breakpoints": true
     }
   ]
 }

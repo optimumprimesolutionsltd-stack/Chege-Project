@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -95,6 +95,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Overview', icon: LayoutDashboard },
+    // Only in a Shared budget: a Personal one has nobody to contribute. Placed
+    // second because for a chama or a church this is the screen people open the
+    // app for - who has paid - and it had no way in at all until now.
+    ...(isSharedWorkspace ? [{ href: '/contributions', label: 'Contributions', icon: HandCoins }] : []),
     { href: '/expenses', label: isSharedWorkspace ? 'Group Expenses' : 'My Expenses', icon: Receipt },
     { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My Budget', icon: PieChart },
     { href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity },

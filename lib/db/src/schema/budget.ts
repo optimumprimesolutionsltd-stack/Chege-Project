@@ -157,10 +157,54 @@ export const expenseIncomeSplitsTable = pgTable("expense_income_splits", {
 export type ExpenseIncomeSplit = typeof expenseIncomeSplitsTable.$inferSelect;
 
 // Contributions (monthly deposits into joint account)
+/**
+ * Everybody who puts money into a group, whether or not they use the app.
+ *
+ * Every group that collects money already keeps a spreadsheet: names down the
+ * side, dates across the top. A row there is a person, not an account - a
+ * church of two hundred will never all sign in, and a chama usually has one
+ * member without a smartphone. So a contributor is a person in a group, and
+ * the link to a Jamvi account is optional: it decides only whether they can
+ * sign in and see their own row.
+ */
+export const groupContributorsTable = pgTable("group_contributors", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
+  name: text("name").notNull(),
+  /** Null for somebody who does not use the app. */
+  userId: text("user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  /** What this person is expected to give in a period, in KES. Null means no
+   *  expectation - right for a church, where giving is not a subscription.
+   *  It is the default when recording for the whole group at once, and what
+   *  "who still owes" is measured against. */
+  monthlyTarget: integer("monthly_target"),
+  /** Archived rather than deleted: somebody who has left still contributed
+   *  what they contributed, and removing them would make last year's totals
+   *  disagree with last year's rows. */
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+}, (table) => [
+  check(
+    "group_contributors_name_valid_check",
+    sql`btrim(${table.name}) <> '' AND char_length(${table.name}) <= 120`,
+  ),
+  // Names are deliberately not unique: two people really can both be called
+  // John, and refusing the second is worse than showing both.
+  uniqueIndex("group_contributors_group_user_unique")
+    .on(table.groupId, table.userId)
+    .where(sql`${table.userId} IS NOT NULL`),
+  index("group_contributors_group_idx").on(table.groupId),
+]);
+
+export type GroupContributor = typeof groupContributorsTable.$inferSelect;
+
 export const contributionsTable = pgTable("contributions", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
-  userId: text("user_id").notNull(),
+  /** Null for a contribution recorded against somebody with no account. Kept
+   *  alongside contributorId so every existing report keeps working. */
+  userId: text("user_id"),
+  contributorId: integer("contributor_id").references(() => groupContributorsTable.id, { onDelete: "restrict" }),
   amount: integer("amount").notNull(), // in KES
   month: integer("month").notNull(), // 1-12
   year: integer("year").notNull(),
@@ -168,6 +212,7 @@ export const contributionsTable = pgTable("contributions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("contributions_group_year_month_idx").on(table.groupId, table.year, table.month),
+  index("contributions_group_contributor_idx").on(table.groupId, table.contributorId),
 ]);
 
 export const insertContributionSchema = createInsertSchema(contributionsTable).omit({ id: true, createdAt: true });
@@ -212,7 +257,11 @@ export const jointAccountDepositSplitsTable = pgTable("joint_account_deposit_spl
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
   transactionId: integer("transaction_id").notNull().references(() => jointAccountTxTable.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull(),
+  /** Null when the money came from somebody without an account. The deposit
+   *  splits carry the same contributor concept as contributions, because a
+   *  deposit is how money actually reaches the group balance. */
+  userId: text("user_id"),
+  contributorId: integer("contributor_id").references(() => groupContributorsTable.id, { onDelete: "restrict" }),
   amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   incomeSourceId: integer("income_source_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
