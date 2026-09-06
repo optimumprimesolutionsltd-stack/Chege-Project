@@ -14,6 +14,7 @@ import Activity from '@/pages/activity';
 import Contributions from '@/pages/contributions';
 import NotFound from '@/pages/not-found';
 import AuthDone from '@/pages/auth-done';
+import MyGroups from '@/pages/my-groups';
 import ResetPasswordPage from '@/pages/reset-password';
 import Settings from '@/pages/settings';
 import Subscription from "@/pages/subscription";
@@ -121,6 +122,7 @@ function AuthenticatedApp() {
         <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/search" component={SearchPage} />
         <Route path="/subscription" component={Subscription} />
+        <Route path="/groups" component={MyGroups} />
         <Route path="/settings" component={Settings} />
         <Route path="/invite/:token" component={InvitePage} />
         <Route path="/join/:token" component={JoinGroupPage} />

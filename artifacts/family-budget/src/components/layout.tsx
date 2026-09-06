@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@workspace/replit-auth-web';
-import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Activity, LogOut, Menu, X, Settings, Target, Landmark, BarChart3, Plus, Search, CreditCard, HandCoins, UsersRound } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -116,6 +116,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     // Search, Subscription and Settings are never hideable: Settings is how a
     // section gets switched back on, and Subscription is how the app keeps
     // being paid for. Hiding either strands an admin outside their own budget.
+    // Never hideable, like Settings: this is how somebody reaches everything
+    // they have, including the budget they meant to be in.
+    { href: '/groups', label: 'My budget & groups', icon: UsersRound },
     { href: '/search', label: 'Search', icon: Search },
     { href: '/subscription', label: 'Subscription', icon: CreditCard },
     { href: '/settings', label: 'Settings', icon: Settings },
