@@ -40,6 +40,15 @@ export const GROUP_KIND = {
   FAMILY: "family",
   CHAMA: "chama",
   CLUB: "club",
+  /**
+   * Split out of club, because a church is not a club with different words.
+   *
+   * A chama is built on a fixed monthly amount and the question it asks is who
+   * is behind. Church giving is voluntary and varies by person: there is no
+   * amount anybody owes, so framing it as a debt would be wrong, and often
+   * across several funds at once rather than one pot.
+   */
+  CHURCH: "church",
   TEAM: "team",
   STUDENT_GROUP: "student_group",
   OTHER: "other",

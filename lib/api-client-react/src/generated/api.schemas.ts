@@ -401,6 +401,7 @@ export const GroupKind = {
   personal: 'personal',
   family: 'family',
   chama: 'chama',
+  church: 'church',
   club: 'club',
   team: 'team',
   student_group: 'student_group',

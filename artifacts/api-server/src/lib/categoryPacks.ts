@@ -41,6 +41,13 @@ const ORGANISATION_PRIORITY_TIERS: Record<Exclude<GroupKind, "personal" | "famil
     { priority: 4, label: "Communication & Growth", description: "Communication, outreach, and development activities." },
     { priority: 5, label: "Flexible Spending", description: "Optional costs that can wait when funds are limited." },
   ],
+  church: [
+    { priority: 1, label: "Ministry & Worship", description: "Services, ministry, and the work the church exists to do." },
+    { priority: 2, label: "Welfare & Benevolence", description: "Helping members and the community in need." },
+    { priority: 3, label: "Building & Upkeep", description: "The building, its utilities, and keeping it in good order." },
+    { priority: 4, label: "Outreach & Growth", description: "Missions, events, and reaching beyond the congregation." },
+    { priority: 5, label: "Flexible Spending", description: "Costs that can wait when giving is low." },
+  ],
   club: [
     { priority: 1, label: "Core Activities", description: "Events and activities central to the club." },
     { priority: 2, label: "Venue & Membership", description: "Member participation and places where the club meets." },
@@ -98,6 +105,14 @@ export const CATEGORY_PACKS: Record<GroupKind, readonly CategoryPackItem[]> = {
     { name: "Welfare", budgetAmount: 0, priority: 2, color: "#DB2777", children: ["Bereavement", "Medical help", "Celebrations"] },
     { name: "Administration", budgetAmount: 0, priority: 2, color: "#6B7280", children: ["Bank charges", "Stationery", "Airtime"] },
     { name: "Transport", budgetAmount: 0, priority: 3, color: "#8B5CF6", children: ["Fares", "Fuel"] },
+  ],
+  church: [
+    { name: "Ministry", budgetAmount: 0, priority: 1, color: "#7C3AED", children: ["Services", "Music & worship", "Sunday school"] },
+    { name: "Welfare", budgetAmount: 0, priority: 2, color: "#DB2777", children: ["Bereavement", "Medical help", "Benevolence"] },
+    { name: "Building & upkeep", budgetAmount: 0, priority: 3, color: "#F59E0B", children: ["Repairs", "Cleaning", "Security"] },
+    { name: "Utilities", budgetAmount: 0, priority: 3, color: "#EAB308", children: ["Electricity", "Water", "Wi-Fi"] },
+    { name: "Outreach", budgetAmount: 0, priority: 4, color: "#059669", children: ["Missions", "Community events"] },
+    { name: "Administration", budgetAmount: 0, priority: 4, color: "#6B7280", children: ["Stationery", "Bank charges"] },
   ],
   club: [
     { name: "Events", budgetAmount: 0, priority: 1, color: "#F97316", children: ["Catering", "Publicity", "Decor"] },

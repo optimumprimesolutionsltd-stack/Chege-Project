@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { Router } from "express";
 import { setActiveWorkspaceCookie } from "../lib/activeGroup";
 import { resolvePhotoUrl } from "../lib/photoStorage";
+import { ensurePersonalWorkspace } from "../lib/personalWorkspace";
 
 const router = Router();
 
@@ -51,6 +52,23 @@ async function availableWorkspaces(userId: string) {
 router.get("/workspaces", async (req, res): Promise<void> => {
   const workspaces = await availableWorkspaces(req.user!.id);
   res.json(GetWorkspacesResponse.parse(workspaces));
+});
+
+/**
+ * Create the person's own budget, because they asked for it.
+ *
+ * Idempotent by construction: ensurePersonalWorkspace is the same function the
+ * middleware used to call on every request, and the unique privateOwnerUserId
+ * constraint means asking twice returns the one that exists rather than making
+ * a second. So somebody who taps the button twice, or who already has one from
+ * before this change, is answered rather than refused.
+ */
+router.post("/workspaces/personal", async (req, res): Promise<void> => {
+  const workspaceId = await ensurePersonalWorkspace(req.user!.id);
+  // Opened straight away: somebody who just asked for their own budget means
+  // to use it, and making them find it afterwards is a step for nothing.
+  setActiveWorkspaceCookie(res, workspaceId);
+  res.status(201).json({ id: workspaceId });
 });
 
 router.post("/workspaces/select", async (req, res): Promise<void> => {

@@ -112,6 +112,23 @@ export default function MyGroups() {
   const personal = workspaces.filter((workspace) => workspace.isPrivate);
   const groups = workspaces.filter((workspace) => !workspace.isPrivate);
 
+  const [creatingPersonal, setCreatingPersonal] = useState(false);
+
+  const createPersonal = async () => {
+    if (creatingPersonal) return;
+    setError(null);
+    setCreatingPersonal(true);
+    try {
+      const response = await fetch("/api/workspaces/personal", { method: "POST", credentials: "include" });
+      if (!response.ok) throw new Error("Could not create your budget.");
+      await queryClient.invalidateQueries();
+      navigate("/");
+    } catch {
+      setError("Your budget could not be created. Nothing has been changed.");
+      setCreatingPersonal(false);
+    }
+  };
+
   const choose = async (workspace: Workspace) => {
     if (selectWorkspace.isPending) return;
     setError(null);
@@ -168,9 +185,23 @@ export default function MyGroups() {
             ))}
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-            Your own budget is still being prepared.
-          </p>
+          // No longer created for everybody, so this is a real offer rather
+          // than a progress message. Somebody here to run a chama never has to
+          // take it, and taking it later gives exactly the same budget.
+          <div className="rounded-xl border border-dashed border-border p-4">
+            <p className="font-medium text-foreground">You do not have your own budget yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              A private budget for your own money — nobody else can see it. You do not need one to run a group.
+            </p>
+            <Button
+              className="mt-3"
+              onClick={() => void createPersonal()}
+              disabled={creatingPersonal}
+              data-testid="button-create-personal"
+            >
+              {creatingPersonal ? "Creating…" : "Create my own budget"}
+            </Button>
+          </div>
         )}
       </section>
 

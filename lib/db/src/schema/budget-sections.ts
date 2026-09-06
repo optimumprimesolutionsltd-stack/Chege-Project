@@ -40,8 +40,21 @@ const DEFAULTS: Record<string, readonly BudgetSection[]> = {
   personal: ALL_BUDGET_SECTIONS,
   family: ALL_BUDGET_SECTIONS,
   chama: [BUDGET_SECTION.CONTRIBUTIONS, BUDGET_SECTION.BANK, BUDGET_SECTION.REPORTS, BUDGET_SECTION.ACTIVITY],
-  club: [BUDGET_SECTION.CONTRIBUTIONS, BUDGET_SECTION.EXPENSES, BUDGET_SECTION.BANK, BUDGET_SECTION.REPORTS, BUDGET_SECTION.ACTIVITY],
-  student_group: [BUDGET_SECTION.CONTRIBUTIONS, BUDGET_SECTION.EXPENSES, BUDGET_SECTION.REPORTS, BUDGET_SECTION.ACTIVITY],
+  church: [BUDGET_SECTION.CONTRIBUTIONS, BUDGET_SECTION.EXPENSES, BUDGET_SECTION.BANK, BUDGET_SECTION.REPORTS, BUDGET_SECTION.ACTIVITY],
+  // A club plans a year - so much for events, so much for equipment - which is
+  // what budget categories are for. Cutting them was pattern-matching a club
+  // to a chama; a club is a small organisation and gets the full set.
+  club: ALL_BUDGET_SECTIONS,
+  // Bank was missing here, which was simply wrong. The group account is where
+  // the treasurer's balance lives, and hiding it hides the number the group
+  // most wants to see.
+  student_group: [
+    BUDGET_SECTION.CONTRIBUTIONS,
+    BUDGET_SECTION.EXPENSES,
+    BUDGET_SECTION.BANK,
+    BUDGET_SECTION.REPORTS,
+    BUDGET_SECTION.ACTIVITY,
+  ],
   team: ALL_BUDGET_SECTIONS,
   other: ALL_BUDGET_SECTIONS,
 };
