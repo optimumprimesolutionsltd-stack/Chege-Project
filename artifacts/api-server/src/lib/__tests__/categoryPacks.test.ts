@@ -43,9 +43,28 @@ describe("category packs", () => {
     }
   });
 
-  it("uses the family pack for legacy rows with no recognized kind", () => {
-    expect(normalizedCategoryPackKind(undefined)).toBe("family");
-    expect(categoryPackForKind("future-kind")).toBe(CATEGORY_PACKS.family);
+  it("never suggests household categories to a group whose kind it does not know", () => {
+    // Groceries, rent, wi-fi and garbage belong to a couple or an individual
+    // and to nobody else. This used to fall back to the family pack, which
+    // meant any unrecognised kind - including a kind added later whose own
+    // pack was forgotten - suggested Rent and Groceries to a chama or a
+    // congregation, and carried the household priority tiers with it.
+    //
+    // Legacy rows never needed that fallback: groups.kind is NOT NULL DEFAULT
+    // 'family', so they match the map directly.
+    expect(normalizedCategoryPackKind(undefined)).toBe("other");
+    expect(categoryPackForKind("future-kind")).toBe(CATEGORY_PACKS.other);
+
+    const names = categoryPackForKind("future-kind").map((category) => category.name);
+    for (const household of ["Food", "Housing", "Utilities", "Personal care"]) {
+      expect(names).not.toContain(household);
+    }
+  });
+
+  it("keeps household language out of the tiers for an unknown kind too", () => {
+    const labels = priorityTiersForKind("future-kind").map((tier) => tier.label);
+    expect(labels).not.toContain("Survival Essentials");
+    expect(labels).not.toContain("Daily Household");
   });
 
   it("uses Chama language instead of household language for Chama priority tiers", () => {

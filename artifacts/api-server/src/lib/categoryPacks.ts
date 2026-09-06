@@ -143,9 +143,20 @@ export function priorityTiersForKind(kind: string | null | undefined): readonly 
 }
 
 export function normalizedCategoryPackKind(kind: string | null | undefined): GroupKind {
+  // Falls back to "other", never to "family".
+  //
+  // Household categories - groceries, rent, wi-fi, garbage - belong to a
+  // couple or an individual, and to nobody else. Defaulting an unrecognised
+  // kind to family meant any group the map did not know suggested Rent and
+  // Groceries to a chama or a congregation, and the household priority tiers
+  // with them. "Other" is deliberately generic: supplies, operations,
+  // transport, services, which is wrong for nobody.
+  //
+  // This also makes adding a kind safe. A new kind whose pack is forgotten now
+  // gets neutral suggestions rather than somebody else's shopping list.
   return kind && Object.prototype.hasOwnProperty.call(CATEGORY_PACKS, kind)
     ? kind as GroupKind
-    : "family";
+    : "other";
 }
 
 export function categoryPackRows(groupId: number, kind: string | null | undefined) {
