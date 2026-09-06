@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GroupAccentColor } from './groupAccentColor';
+import type { GroupEnabledSectionsItem } from './groupEnabledSectionsItem';
 import type { GroupIcon } from './groupIcon';
 import type { GroupKind } from './groupKind';
 import type { GroupNameStyle } from './groupNameStyle';
@@ -34,4 +35,6 @@ export interface Group {
   role: GroupRole;
   /** Whether this workspace may record expenses and contributions right now */
   canRecordSharedTransactions: boolean;
+  /** Which parts of Jamvi this budget uses, so a chama that only collects money sees one tab rather than nine. Always populated - a budget that has never chosen resolves to every section. */
+  enabledSections: GroupEnabledSectionsItem[];
 }

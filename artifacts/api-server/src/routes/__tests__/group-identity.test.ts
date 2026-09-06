@@ -33,6 +33,12 @@ vi.mock("@workspace/db", () => ({
   },
   groupsTable: tables.groupsTable,
   groupMembershipsTable: tables.groupMembershipsTable,
+  // The route resolves which sections a budget uses before answering. Without
+  // these the functions are undefined, the handler throws, and every group
+  // edit answers 500 - which is what this file caught.
+  resolveEnabledSections: (stored: unknown) =>
+    Array.isArray(stored) && stored.length > 0 ? stored : ["contributions"],
+  defaultSectionsForKind: () => ["contributions"],
 }));
 
 vi.mock("drizzle-orm", () => ({

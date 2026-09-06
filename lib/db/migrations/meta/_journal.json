@@ -183,6 +183,13 @@
       "when": 1788775600001,
       "tag": "0025_named_contributors",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788775600002,
+      "tag": "0026_budget_sections",
+      "breakpoints": true
     }
   ]
 }

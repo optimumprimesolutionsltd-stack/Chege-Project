@@ -93,18 +93,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
     navigate(action === 'income' ? '/?quick=income' : action === 'expense' ? '/?quick=expense' : '/?quick=goal');
   };
 
+  // Which parts of Jamvi this budget uses. A chama that only collects money
+  // sees one tab rather than nine. The server resolves the default, so an
+  // undefined value here only means the group has not loaded yet - in which
+  // case nothing is filtered out and the nav does not flicker.
+  const sections = group?.enabledSections;
+  const uses = (section: NonNullable<typeof sections>[number]) =>
+    !sections || sections.includes(section);
+
   const navItems = [
     { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Overview', icon: LayoutDashboard },
     // Only in a Shared budget: a Personal one has nobody to contribute. Placed
     // second because for a chama or a church this is the screen people open the
     // app for - who has paid - and it had no way in at all until now.
-    ...(isSharedWorkspace ? [{ href: '/contributions', label: 'Contributions', icon: HandCoins }] : []),
-    { href: '/expenses', label: isSharedWorkspace ? 'Group Expenses' : 'My Expenses', icon: Receipt },
-    { href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My Budget', icon: PieChart },
-    { href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity },
-    { href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target },
-    { href: '/bank', label: 'Bank accounts', icon: Landmark },
-    { href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 },
+    ...(isSharedWorkspace && uses('contributions') ? [{ href: '/contributions', label: 'Contributions', icon: HandCoins }] : []),
+    ...(uses('expenses') ? [{ href: '/expenses', label: isSharedWorkspace ? 'Group Expenses' : 'My Expenses', icon: Receipt }] : []),
+    ...(uses('budget') ? [{ href: '/budget', label: isSharedWorkspace ? 'Group Budget' : 'My Budget', icon: PieChart }] : []),
+    ...(uses('activity') ? [{ href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity }] : []),
+    ...(uses('goals') ? [{ href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target }] : []),
+    ...(uses('bank') ? [{ href: '/bank', label: 'Bank accounts', icon: Landmark }] : []),
+    ...(uses('reports') ? [{ href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 }] : []),
+    // Search, Subscription and Settings are never hideable: Settings is how a
+    // section gets switched back on, and Subscription is how the app keeps
+    // being paid for. Hiding either strands an admin outside their own budget.
     { href: '/search', label: 'Search', icon: Search },
     { href: '/subscription', label: 'Subscription', icon: CreditCard },
     { href: '/settings', label: 'Settings', icon: Settings },

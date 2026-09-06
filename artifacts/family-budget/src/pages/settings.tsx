@@ -16,6 +16,7 @@ import {
 } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { BudgetSectionsCard } from "@/components/budget-sections-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -554,6 +555,27 @@ export default function Settings() {
             : "View your group and manage your own account details."}
         </p>
       </div>
+
+      <BudgetSectionsCard
+        enabledSections={group?.enabledSections}
+        canManage={canManageWorkspace}
+        saving={updateGroup.isPending}
+        onSave={async (sections) => {
+          try {
+            await updateGroup.mutateAsync({
+              // name is required by the update contract, so the current one is
+              // sent unchanged rather than the field being made optional.
+              data: {
+                name: group?.name ?? "",
+                enabledSections: sections as NonNullable<typeof group>["enabledSections"],
+              },
+            });
+            toast({ title: "Saved", description: "This budget now shows only what you chose." });
+          } catch {
+            toast({ variant: "destructive", title: "Could not save", description: "Nothing has been changed." });
+          }
+        }}
+      />
 
       <Card className="border-none shadow-md">
         <CardHeader className="p-4 sm:p-6">

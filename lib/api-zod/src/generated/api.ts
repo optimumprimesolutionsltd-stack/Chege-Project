@@ -2063,7 +2063,8 @@ export const GetGroupResponse = zod.object({
   "isPrivate": zod.boolean(),
   "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member', 'viewer']),
-  "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
+  "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now'),
+  "enabledSections": zod.array(zod.enum(['contributions', 'expenses', 'budget', 'activity', 'goals', 'bank', 'reports'])).describe('Which parts of Jamvi this budget uses, so a chama that only collects money sees one tab rather than nine. Always populated - a budget that has never chosen resolves to every section.\n')
 })
 
 
@@ -2078,6 +2079,7 @@ export const updateGroupBodyEmojiMax = 16;
 export const updateGroupBodyPhotoPathRegExp = new RegExp('^/objects/photos/[a-f0-9-]+$');
 export const updateGroupBodySloganMax = 120;
 
+
 export const updateGroupBodyDefaultMonthlyTargetMin = 0;
 
 
@@ -2091,6 +2093,7 @@ export const UpdateGroupBody = zod.object({
   "photoPath": zod.string().regex(updateGroupBodyPhotoPathRegExp).nullish(),
   "slogan": zod.string().max(updateGroupBodySloganMax).nullish(),
   "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']).optional(),
+  "enabledSections": zod.array(zod.enum(['contributions', 'expenses', 'budget', 'activity', 'goals', 'bank', 'reports'])).min(1).optional().describe('Which parts of Jamvi this budget uses. Filters navigation only - a section switched off keeps every record it had and returns intact when switched back on.\n'),
   "defaultMonthlyTarget": zod.number().min(updateGroupBodyDefaultMonthlyTargetMin).nullish().describe('What each member is expected to contribute per month, in KES. Changing it does not alter targets already set on existing members; it applies to whoever joins next.')
 })
 
@@ -2112,7 +2115,8 @@ export const UpdateGroupResponse = zod.object({
   "isPrivate": zod.boolean(),
   "kind": zod.enum(['personal', 'family', 'chama', 'club', 'team', 'student_group', 'other']),
   "role": zod.enum(['owner', 'admin', 'member', 'viewer']),
-  "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now')
+  "canRecordSharedTransactions": zod.boolean().describe('Whether this workspace may record expenses and contributions right now'),
+  "enabledSections": zod.array(zod.enum(['contributions', 'expenses', 'budget', 'activity', 'goals', 'bank', 'reports'])).describe('Which parts of Jamvi this budget uses, so a chama that only collects money sees one tab rather than nine. Always populated - a budget that has never chosen resolves to every section.\n')
 })
 
 
