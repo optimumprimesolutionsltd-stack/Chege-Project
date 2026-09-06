@@ -27,6 +27,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ContributionsGrid } from "@/components/contributions-grid";
+import { RecordContributions } from "@/components/record-contributions";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
   if (recordType === "deposit") return "Joint Bank deposit";
@@ -474,6 +476,13 @@ export default function Contributions() {
               })}
             </select>
           </div>
+
+      {isSharedWorkspace ? (
+        <div className="space-y-6">
+          <RecordContributions />
+          <ContributionsGrid />
+        </div>
+      ) : null}
           <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg hover:bg-muted"
             disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
             <ArrowRight className="h-5 w-5 text-foreground/70" />

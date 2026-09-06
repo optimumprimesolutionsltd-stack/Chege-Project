@@ -6,9 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * One person's share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.
+ */
 export interface DepositContributorSplit {
-  /** Household member who supplied this deposit portion. */
-  userId: string;
+  /** Member who supplied this deposit portion, when they have an account. */
+  userId?: string;
+  /**
+     * Contributor who supplied this portion, when they have no account.
+     * @minimum 1
+     */
+  contributorId?: number;
   /** @minimum 0.01 */
   amount: number;
   /** @minimum 1 */

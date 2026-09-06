@@ -8,10 +8,11 @@ import {
   savingsGoalsTable,
   savingsGoalContributionsTable,
   jointAccountDepositSplitsTable,
+  groupContributorsTable,
   incomeSourcesTable,
   bankAccountsTable,
 } from "@workspace/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -72,8 +73,12 @@ const DepositInput = z.object({
   madeById: z.string().nullable().optional(),
   incomeSourceId: z.number().int().positive().optional(),
   sourceKind: z.enum(["income_source", "other"]).optional(),
+  // A portion belongs to either an account holder or a contributor recorded
+  // by name. Exactly one of the two, checked in the route so the message can
+  // say which is wrong rather than dumping a schema error.
   contributorSplits: z.array(z.object({
-    userId: z.string().min(1),
+    userId: z.string().min(1).optional(),
+    contributorId: z.number().int().positive().optional(),
     amount: PositiveBankAmount,
     incomeSourceId: z.number().int().positive().optional(),
   })).min(1).optional(),
@@ -461,10 +466,15 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
   if (!requireMemberSelfAttribution(req, res, [parsed.data.madeById])) return;
   if (parsed.data.contributorSplits) {
     for (const split of parsed.data.contributorSplits) {
-      if (!requireMemberSelfAttribution(req, res, [split.userId])) return;
-      if (split.incomeSourceId) {
-        const error = await validateIncomeSourceOwner(split.incomeSourceId, split.userId, groupId);
-        if (error) { res.status(400).json({ error }); return; }
+      // A contributorId is a name in this group's ledger, not an account, so
+      // there is no member to attribute to and nothing to check here. It is
+      // verified below as belonging to this group.
+      if (split.userId !== undefined) {
+        if (!requireMemberSelfAttribution(req, res, [split.userId])) return;
+        if (split.incomeSourceId) {
+          const error = await validateIncomeSourceOwner(split.incomeSourceId, split.userId, groupId);
+          if (error) { res.status(400).json({ error }); return; }
+        }
       }
     }
   } else if (parsed.data.incomeSourceId) {
@@ -488,8 +498,29 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
       return;
     }
     for (const split of contributorSplits) {
-      const err = await validateMemberId(split.userId, groupId);
-      if (err) { res.status(400).json({ error: err }); return; }
+      const named = [split.userId, split.contributorId].filter((value) => value !== undefined);
+      if (named.length !== 1) {
+        res.status(400).json({ error: "Each portion needs exactly one of userId or contributorId." });
+        return;
+      }
+      if (split.userId !== undefined) {
+        const err = await validateMemberId(split.userId, groupId);
+        if (err) { res.status(400).json({ error: err }); return; }
+      } else {
+        const [contributor] = await db
+          .select({ id: groupContributorsTable.id })
+          .from(groupContributorsTable)
+          .where(and(
+            eq(groupContributorsTable.id, split.contributorId!),
+            eq(groupContributorsTable.groupId, groupId),
+            isNull(groupContributorsTable.archivedAt),
+          ))
+          .limit(1);
+        if (!contributor) {
+          res.status(400).json({ error: "That contributor is not in this group." });
+          return;
+        }
+      }
     }
   }
   // Explicit null or omitted keeps an older un-attributed deposit as a
@@ -515,19 +546,68 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
       })
       .returning();
     if (contributorSplits) {
-      await transaction.insert(jointAccountDepositSplitsTable).values(contributorSplits.map((split) => ({
-        groupId,
-        transactionId: created.id,
-        userId: split.userId,
-        amount: split.amount,
-        incomeSourceId: split.incomeSourceId ?? null,
-      })));
+      const rows = [];
+      for (const split of contributorSplits) {
+        rows.push({
+          groupId,
+          transactionId: created.id,
+          userId: split.userId ?? null,
+          // Both forms end up pointing at a contributor, so the grid reads one
+          // column instead of guessing which kind of split it is looking at.
+          contributorId: split.contributorId
+            ?? (split.userId ? await contributorForMember(transaction, groupId, split.userId) : null),
+          amount: split.amount,
+          incomeSourceId: split.incomeSourceId ?? null,
+        });
+      }
+      await transaction.insert(jointAccountDepositSplitsTable).values(rows);
     }
     return created;
   });
 
   res.status(201).json(await enrichTx(tx, groupId));
 });
+
+/**
+ * The contributor row for a member, created if this is the first time money has
+ * been recorded for them.
+ *
+ * Members become contributors lazily rather than all at once, so a group of
+ * forty does not acquire forty rows the moment somebody opens the grid. The
+ * partial unique index on (group_id, user_id) makes the insert safe to race.
+ */
+async function contributorForMember(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  groupId: number,
+  userId: string,
+): Promise<number | null> {
+  const [existing] = await tx
+    .select({ id: groupContributorsTable.id })
+    .from(groupContributorsTable)
+    .where(and(eq(groupContributorsTable.groupId, groupId), eq(groupContributorsTable.userId, userId)))
+    .limit(1);
+  if (existing) return existing.id;
+
+  const [user] = await tx
+    .select({ firstName: usersTable.firstName })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  const [created] = await tx
+    .insert(groupContributorsTable)
+    .values({ groupId, userId, name: user?.firstName?.trim() || "Member" })
+    .onConflictDoNothing()
+    .returning({ id: groupContributorsTable.id });
+  if (created) return created.id;
+
+  const [raced] = await tx
+    .select({ id: groupContributorsTable.id })
+    .from(groupContributorsTable)
+    .where(and(eq(groupContributorsTable.groupId, groupId), eq(groupContributorsTable.userId, userId)))
+    .limit(1);
+  return raced?.id ?? null;
+}
 
 // POST /joint-account/disbursement
 router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
