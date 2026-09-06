@@ -811,6 +811,10 @@ function StandaloneSharedBudgetForm({
       </div>
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-semibold text-foreground">What is it for?</legend>
+        <p className="text-xs text-muted-foreground">
+          Jamvi sets the group up for what it is: which screens it starts with, and the spending
+          categories it suggests. You can change any of it later in Settings.
+        </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {SHARED_GROUP_KINDS.map((option) => (
             <button key={option.value} data-testid={`button-standalone-kind-${option.value}`} type="button" aria-pressed={kind === option.value} disabled={pending} onClick={() => onKindChange(option.value)} className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70 ${kind === option.value ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border bg-card hover:border-primary/50"}`}>

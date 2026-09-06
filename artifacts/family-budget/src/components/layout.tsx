@@ -9,6 +9,8 @@ import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { workspaceLabel } from '@/lib/workspace-identity';
 import { ProfileAvatar } from '@/components/profile-avatar';
 import { BrandLogo } from '@/components/brand-logo';
+import { useQuery } from '@tanstack/react-query';
+import { daysUntil, type MemberEntitlements } from '@/lib/subscription-status';
 import { ViewerBanner } from '@/components/viewer-banner';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -101,6 +103,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const uses = (section: NonNullable<typeof sections>[number]) =>
     !sections || sections.includes(section);
 
+  // The same entitlements the Subscription page reads. Shown in the nav so a
+  // trial running out is visible where people already look, rather than only
+  // to somebody who thought to go and check.
+  const { data: entitlements } = useQuery<MemberEntitlements>({
+    queryKey: ['member-entitlements'],
+    queryFn: async () => {
+      const response = await fetch('/api/subscription-plans/entitlements', { credentials: 'include' });
+      if (!response.ok) throw new Error('Could not load your subscription.');
+      return response.json() as Promise<MemberEntitlements>;
+    },
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+  const trialDaysLeft = entitlements?.status === 'trial' ? daysUntil(entitlements.trialEndsAt ?? null) : null;
+  const payLabel = trialDaysLeft !== null && trialDaysLeft >= 0
+    ? `Pay · ${trialDaysLeft} ${trialDaysLeft === 1 ? 'day' : 'days'} left`
+    : entitlements && !entitlements.fullAccess
+      ? 'Pay to continue'
+      : 'Pay & subscription';
+
   const navItems = [
     { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Overview', icon: LayoutDashboard },
     // Only in a Shared budget: a Personal one has nobody to contribute. Placed
@@ -119,8 +141,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     // Never hideable, like Settings: this is how somebody reaches everything
     // they have, including the budget they meant to be in.
     { href: '/groups', label: 'My budget & groups', icon: UsersRound },
+    { href: '/subscription', label: payLabel, icon: CreditCard },
     { href: '/search', label: 'Search', icon: Search },
-    { href: '/subscription', label: 'Subscription', icon: CreditCard },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
