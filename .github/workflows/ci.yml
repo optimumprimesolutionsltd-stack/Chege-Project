@@ -84,9 +84,3 @@ jobs:
           echo "Staging database secret is configured."
       - name: Verify staging category integrity
         run: pnpm --filter @workspace/scripts verify:staging-categories
-r::Repository secret STAGING_DATABASE_URL is not configured. Add it before relying on this PR check."
-            exit 1
-          fi
-          echo "Staging database secret is configured."
-      - name: Verify staging category integrity
-        run: pnpm --filter @workspace/scripts verify:staging-categories
