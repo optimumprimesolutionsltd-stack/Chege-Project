@@ -4,6 +4,7 @@ import { BILLING_INTERVAL, type BillingInterval } from "@workspace/jamvi-pricing
 import { and, eq } from "drizzle-orm";
 import {
   isMpesaConfigured,
+  missingMpesaSettings,
   normalizeMsisdn,
   queryStkStatus,
   readCallback,
@@ -33,7 +34,15 @@ function billingIntervalFrom(value: unknown): BillingInterval | null {
  */
 paymentsRouter.post("/payments/stk-push", async (req, res): Promise<void> => {
   if (!isMpesaConfigured()) {
-    res.status(503).json({ error: "M-Pesa payments are not available yet." });
+    // The names go to the logs and to the caller so that whoever is deploying
+    // is told which value to set, instead of checking five of them by hand.
+    // Names are not secrets; the values they hold never leave this process.
+    const missing = missingMpesaSettings();
+    console.error(`M-Pesa is not configured. Missing: ${missing.join(", ")}`);
+    res.status(503).json({
+      error: "M-Pesa payments are not available yet.",
+      missing,
+    });
     return;
   }
 

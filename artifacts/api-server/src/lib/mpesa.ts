@@ -47,6 +47,25 @@ export function mpesaConfig(): MpesaConfig {
   };
 }
 
+export const MPESA_SETTINGS = [
+  "MPESA_CONSUMER_KEY",
+  "MPESA_CONSUMER_SECRET",
+  "MPESA_SHORTCODE",
+  "MPESA_PASSKEY",
+  "MPESA_CALLBACK_URL",
+] as const;
+
+/**
+ * Which settings are absent, by name.
+ *
+ * Named rather than counted, because "M-Pesa is not configured" sends whoever
+ * is deploying back to a dashboard of five values with no idea which one is
+ * wrong. Names only - a value never leaves this process.
+ */
+export function missingMpesaSettings(): string[] {
+  return MPESA_SETTINGS.filter((name) => !process.env[name]?.trim());
+}
+
 export function isMpesaConfigured(): boolean {
   try {
     mpesaConfig();

@@ -112,7 +112,15 @@ export default function Subscription() {
 
       if (!response.ok) {
         setWaiting(false);
-        toast({ variant: "destructive", title: "Could not start payment", description: body.error });
+        // A configuration fault names the settings that are absent, so whoever
+        // is deploying reads the answer off the screen rather than checking
+        // five values in a dashboard by hand.
+        const missing: string[] = Array.isArray(body.missing) ? body.missing : [];
+        toast({
+          variant: "destructive",
+          title: "Could not start payment",
+          description: missing.length > 0 ? `${body.error} Not set: ${missing.join(", ")}.` : body.error,
+        });
         return;
       }
 
