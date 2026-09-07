@@ -1,4 +1,5 @@
 import { useSeo } from "@/hooks/use-seo";
+import { SITE_SEO } from "@/lib/site-seo";
 import { motion } from "framer-motion";
 import { 
   PieChart, 
@@ -12,10 +13,7 @@ import {
 import { JAMVI_APP_PATH } from "@/lib/site-links";
 
 export default function Features() {
-  useSeo({
-    title: "Features - Everything you need",
-    description: "Discover Jamvi features for personal budgets and shared group finances, including transparent history, savings goals, categories, and member permissions.",
-  });
+  useSeo(SITE_SEO["/features"]);
 
   const features = [
     {

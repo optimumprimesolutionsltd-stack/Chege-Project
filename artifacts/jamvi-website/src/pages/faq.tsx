@@ -1,4 +1,5 @@
 import { useSeo } from "@/hooks/use-seo";
+import { SITE_SEO } from "@/lib/site-seo";
 import { motion } from "framer-motion";
 import {
   Accordion,
@@ -7,43 +8,14 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
+import { FAQ_ENTRIES } from "@/lib/faq-content";
 
 export default function FAQ() {
-  useSeo({
-    title: "FAQ - Frequently Asked Questions",
-    description: "Find answers about Jamvi personal budgets, shared group finances, permissions, security, pricing, currencies, and getting started in Kenya.",
-  });
+  useSeo(SITE_SEO["/faq"]);
 
-  const faqs = [
-    {
-      question: "Is Jamvi a bank account?",
-      answer: "No. Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service. You still use M-Pesa or your bank to move money; Jamvi is where you record, track, and share the history so everyone is on the same page."
-    },
-    {
-      question: "Can I use Jamvi for just myself?",
-      answer: "Absolutely. While Jamvi is great for groups, it includes powerful personal finance tools. You can create a private workspace to track your own income, expenses, and savings goals."
-    },
-    {
-      question: "Does Jamvi support multiple currencies?",
-      answer: "Currently, Jamvi is optimized for Kenyan Shillings (KES) to provide the best local experience. We plan to support other East African currencies in the future."
-    },
-    {
-      question: "How secure is my data?",
-      answer: "We take your privacy seriously. Your financial data is encrypted and securely stored. We never sell your personal data or financial history to third parties."
-    },
-    {
-      question: "Can group members edit transactions?",
-      answer: "This depends on the permissions set by the group admin. By default, to maintain trust and an accurate audit log, modifying past transactions leaves a visible 'correction reason' so everyone knows why a change was made."
-    },
-    {
-      question: "What happens if our chama grows beyond 6 people?",
-      answer: "Everyone pays for their own Jamvi subscription, and it covers both your own budget and every Shared budget you belong to. Groups have no bill of their own and no member limit, so a chama of fifty costs the group nothing."
-    },
-    {
-      question: "Does Jamvi offer a non-profit discount?",
-      answer: "Non-profit discount details have not been confirmed yet. Contact us if your organisation would like to discuss eligibility."
-    }
-  ];
+  // Shared with the FAQPage structured data, which must match what is on
+  // the page or Google drops the rich result.
+  const faqs = FAQ_ENTRIES;
 
   return (
     <div className="flex flex-col min-h-screen bg-muted/20">

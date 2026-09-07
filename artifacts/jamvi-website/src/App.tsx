@@ -49,11 +49,16 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
-function App() {
+/**
+ * `ssrPath` is supplied only by the build-time render, which has no browser to
+ * read the location from. In the browser it is undefined and wouter uses the
+ * address bar as before.
+ */
+function App({ ssrPath }: { ssrPath?: string }) {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')} ssrPath={ssrPath}>
           <Router />
         </WouterRouter>
         <Toaster />

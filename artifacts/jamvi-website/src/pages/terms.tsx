@@ -1,13 +1,10 @@
 import { useSeo } from "@/hooks/use-seo";
+import { SITE_SEO } from "@/lib/site-seo";
 import { LegalPage } from "@/components/layout/LegalPage";
 import { JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 
 export default function Terms() {
-  useSeo({
-    title: "Terms of Service",
-    description:
-      "The terms on which Jamvi is provided: what the service does, what it deliberately does not do, and the responsibilities of everyone using it.",
-  });
+  useSeo(SITE_SEO["/terms"]);
 
   return (
     <LegalPage title="Terms of Service" effective="30 August 2026">

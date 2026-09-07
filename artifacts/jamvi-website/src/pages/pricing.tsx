@@ -1,4 +1,5 @@
 import { useSeo } from "@/hooks/use-seo";
+import { SITE_SEO } from "@/lib/site-seo";
 import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Check, Users } from "lucide-react";
@@ -53,11 +54,7 @@ export default function Pricing() {
   const isAnnual = billingInterval === "annual";
   const price = isAnnual ? JAMVI_PACKAGE.annualPriceKes : JAMVI_PACKAGE.monthlyPriceKes;
 
-  useSeo({
-    title: "Pricing - One price, groups included",
-    description:
-      `Jamvi is KES ${JAMVI_PACKAGE.monthlyPriceKes} a month per person, with ${TRIAL_DAYS} days free. Your own budget and every group you are part of, however many people share it.`,
-  });
+  useSeo(SITE_SEO["/pricing"]);
 
   return (
     <div className="flex flex-col min-h-screen bg-white">
