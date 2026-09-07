@@ -1,37 +1,65 @@
-export const SITE_ORIGIN = "https://jamvi.co.ke";
-export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/branding/jamvi-mark.png`;
+import { JAMVI_PACKAGE, TRIAL_DAYS } from "@workspace/jamvi-pricing";
 
+export const SITE_ORIGIN = "https://jamvi.co.ke";
+// 1200x630, which is the slot WhatsApp, X and LinkedIn actually render.
+// The square logo mark is still the Organization logo in the structured
+// data, where a square is what is wanted.
+export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/branding/jamvi-og.png`;
+
+/**
+ * Every page's title and description, in one table.
+ *
+ * The pages read this, the build script renders from it, and the sitemap is
+ * generated from its keys - so a page cannot exist without a description or
+ * quietly drift from the one search engines were given.
+ *
+ * The titles name what people actually type. "Gather Around Your Money" is
+ * the better sentence and nobody has ever searched for it; someone looking for
+ * this app searches "chama app", "chama contributions" or "budget app Kenya".
+ * The warmth belongs on the page, where a person reads it. The title tag is
+ * read by a machine deciding whether to show us at all.
+ */
 export const SITE_SEO = {
   "/": {
-    title: "Gather Around Your Money",
+    title: "Chama & Household Budget App, Built in Kenya",
     description:
-      "Jamvi brings clarity, trust, and warmth to personal budgets and shared money. Track everyday spending or manage a chama with confidence.",
+      `Track chama contributions, split household bills and see who has paid - in one shared record everybody trusts. KES ${JAMVI_PACKAGE.monthlyPriceKes} a month per member; groups of any size cost nothing extra. Free for ${TRIAL_DAYS} days.`,
   },
   "/features": {
-    title: "Features - Everything you need",
+    title: "Features for Chamas, Families & Flatmates",
     description:
-      "Discover Jamvi features for personal budgets and shared group finances, including transparent history, savings goals, categories, and member permissions.",
+      "Record monthly contributions for the whole group at once, see who has paid on a month-by-month sheet, split expenses, set savings goals, and keep one history nobody can quietly edit.",
   },
   "/pricing": {
-    title: "Pricing - Transparent and fair",
+    title: `Pricing - KES ${JAMVI_PACKAGE.monthlyPriceKes} a Month, Groups Free`,
     description:
-      "Start managing personal and group money with simple, honest Jamvi pricing. Begin for free and choose a clear plan as your chama or team grows.",
+      `One subscription covers your own budget and every group you belong to. KES ${JAMVI_PACKAGE.monthlyPriceKes} per member per month or KES ${JAMVI_PACKAGE.annualPriceKes.toLocaleString("en-KE")} a year. No group fee, no member limit, no tiers. Free for your first ${TRIAL_DAYS} days.`,
   },
   "/about": {
-    title: "About Us - The story behind the mat",
+    title: "Built in Nairobi, for Kenyan Money",
     description:
-      "Learn why Jamvi was built for Kenyan families, chamas, and groups that want clarity, warmth, and trust when managing money together.",
+      "Why Jamvi exists: chamas, families and households in Kenya run real money on WhatsApp threads and fragile spreadsheets. Jamvi gives them one clear record instead.",
   },
   "/faq": {
-    title: "FAQ - Frequently Asked Questions",
+    title: "Questions About Chamas, Groups & Your Money",
     description:
-      "Find answers about Jamvi personal budgets, shared group finances, permissions, security, pricing, currencies, and getting started in Kenya.",
+      "Is Jamvi a bank? Can a chama of fifty use it? Who can edit a transaction? Straight answers about contributions, permissions, security, currencies and pricing in Kenya.",
+  },
+  "/terms": {
+    title: "Terms of Service",
+    description:
+      "The terms on which Jamvi is provided: what the service does, what it deliberately does not do, and the responsibilities of everyone using it.",
+  },
+  "/privacy": {
+    title: "Privacy Policy",
+    description:
+      "What personal data Jamvi collects, why, who processes it, where it is stored, and the rights you have over it under Kenya's Data Protection Act.",
   },
   "/404": {
     title: "Page Not Found",
     description: "The Jamvi page you are looking for does not exist.",
   },
-} as const;
+};
 
 export type SiteRoute = keyof typeof SITE_SEO;
 

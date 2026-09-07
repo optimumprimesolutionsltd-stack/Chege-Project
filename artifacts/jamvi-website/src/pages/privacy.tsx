@@ -1,13 +1,10 @@
 import { useSeo } from "@/hooks/use-seo";
+import { SITE_SEO } from "@/lib/site-seo";
 import { LegalPage } from "@/components/layout/LegalPage";
 import { JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 
 export default function Privacy() {
-  useSeo({
-    title: "Privacy Policy",
-    description:
-      "What personal data Jamvi collects, why, who processes it, where it is stored, and the rights you have over it under Kenya's Data Protection Act.",
-  });
+  useSeo(SITE_SEO["/privacy"]);
 
   return (
     <LegalPage title="Privacy Policy" effective="30 August 2026">

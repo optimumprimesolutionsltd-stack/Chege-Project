@@ -1,4 +1,5 @@
 import { useSeo } from "@/hooks/use-seo";
+import { SITE_SEO } from "@/lib/site-seo";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { ArrowRight, CheckCircle2, Users, Wallet, Target } from "lucide-react";
 import { Link } from "wouter";
@@ -9,10 +10,7 @@ export default function Home() {
   const shouldReduceMotion = useReducedMotion();
   const price = JAMVI_PACKAGE.monthlyPriceKes;
 
-  useSeo({
-    title: "Gather Around Your Money",
-    description: "Jamvi keeps your own budget and the ones you share in one place — with a partner, a family, flatmates, or a chama. Built in Kenya, for Kenyan money.",
-  });
+  useSeo(SITE_SEO["/"]);
 
   const fadeUp: Variants = {
     hidden: { opacity: 0.84, y: 8 },

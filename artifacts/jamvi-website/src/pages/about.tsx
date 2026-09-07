@@ -1,11 +1,9 @@
 import { useSeo } from "@/hooks/use-seo";
+import { SITE_SEO } from "@/lib/site-seo";
 import { motion } from "framer-motion";
 
 export default function About() {
-  useSeo({
-    title: "About Us - The story behind the mat",
-    description: "Learn why Jamvi was built for Kenyan families, chamas, and groups that want clarity, warmth, and trust when managing money together.",
-  });
+  useSeo(SITE_SEO["/about"]);
 
   return (
     <div className="flex flex-col min-h-screen bg-white">

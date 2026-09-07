@@ -1,12 +1,10 @@
 import { useSeo } from "@/hooks/use-seo";
+import { SITE_SEO } from "@/lib/site-seo";
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
-  useSeo({
-    title: "Page Not Found",
-    description: "The Jamvi page you are looking for does not exist.",
-  });
+  useSeo(SITE_SEO["/404"]);
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center bg-white px-4 text-center">
