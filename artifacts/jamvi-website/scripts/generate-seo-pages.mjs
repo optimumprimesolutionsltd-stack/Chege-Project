@@ -37,6 +37,7 @@ const CRAWL = {
   "/pricing": { changefreq: "monthly", priority: "0.9" },
   "/faq": { changefreq: "monthly", priority: "0.8" },
   "/about": { changefreq: "monthly", priority: "0.6" },
+  "/personal": { changefreq: "monthly", priority: "0.9" },
   "/chama": { changefreq: "monthly", priority: "0.9" },
   "/students": { changefreq: "monthly", priority: "0.8" },
   "/church": { changefreq: "monthly", priority: "0.8" },

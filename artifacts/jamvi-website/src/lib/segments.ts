@@ -34,12 +34,81 @@ export interface Segment {
   sections: string[];
   sectionsNote: string;
   faqs: { question: string; answer: string }[];
+  /** Overrides for the two headings that otherwise assume a group. */
+  faqHeading?: string;
+  ctaHeading?: string;
 }
 
 const NOT_A_BANK =
   "Jamvi records money; it never holds or moves it. Cash and M-Pesa go where they always went - Jamvi is where the record lives, so everyone sees the same thing.";
 
 export const SEGMENTS: Segment[] = [
+  {
+    slug: "/personal",
+    label: "On your own",
+    title: "Budget Your Salary - Personal Expense Tracker, Kenya",
+    description:
+      "For anyone running their own salary: rent, transport, data, the money that goes home every month, and whatever is left. See where it went, set limits that hold, and save towards something. No group needed.",
+    heading: "Your salary, from payday to month-end",
+    subheading:
+      "Rent, transport, data, the money that goes home - and what is actually left.",
+    problem:
+      "The salary lands and for two days it feels like enough. Then rent, then fare, then a bundle, then somebody at home needs something and you send it, because of course you do. By the twentieth you are counting, and you genuinely cannot say where it went - not because you were careless, but because it left in forty small pieces and nobody writes those down.",
+    points: [
+      {
+        title: "See where it actually went",
+        body: "Record what you spend and it sorts into categories, with sub-categories underneath when one is not enough - rent apart from water, fare apart from fuel. At month-end the answer is written down rather than guessed at.",
+      },
+      {
+        title: "Money sent home is a category, not a leak",
+        body: "Support sent upcountry is a real, monthly, planned part of a Kenyan salary. Give it a line and a limit like anything else, so it stops being the thing that quietly explains the gap.",
+      },
+      {
+        title: "Salary and the side hustle, counted separately",
+        body: "More than one thing coming in? Record each source and see what each really contributed over a period, instead of one blurred figure.",
+      },
+      {
+        title: "Saving towards something specific",
+        body: "A deposit, a laptop, a plot, fees. Set the target once and watch it fill - a number to aim at holds better than an intention to save whatever is left.",
+      },
+    ],
+    sections: [
+      "Expenses",
+      "Budget",
+      "Savings goals",
+      "Accounts",
+      "Reports",
+      "Activity",
+      "Contributions",
+    ],
+    sectionsNote:
+      "A personal budget starts with everything on. Turn off whatever you do not use - most people never open half of it, and that is fine.",
+    faqHeading: "Questions people ask about budgeting alone",
+    ctaHeading: "Start with this month",
+    faqs: [
+      {
+        question: "Do I have to join a group to use Jamvi?",
+        answer:
+          "No. A personal budget stands on its own. If you later join a chama or share a house budget, the same subscription covers it - but nothing requires you to.",
+      },
+      {
+        question: "Can anyone else see my personal budget?",
+        answer:
+          "No. A personal budget is private to you. Only what you record inside a shared budget is visible to the people in it.",
+      },
+      {
+        question: "Do I have to record every single M-Pesa payment?",
+        answer:
+          "No, and most people should not try. Record what you want to understand - the categories that keep surprising you - and leave the rest. A budget you keep beats a complete one you abandon in week three.",
+      },
+      {
+        question: "What does it cost for one person?",
+        answer:
+          "KES 100 a month, or KES 1,000 a year, with the first 30 days free. That is the whole price whether you use Jamvi alone or belong to five groups.",
+      },
+      { question: "Does Jamvi connect to my M-Pesa or bank?", answer: NOT_A_BANK },
+    ],
+  },
   {
     slug: "/chama",
     label: "Chamas",

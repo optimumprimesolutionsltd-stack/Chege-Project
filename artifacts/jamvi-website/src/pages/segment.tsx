@@ -125,7 +125,7 @@ export function SegmentPage({ segment }: { segment: Segment }) {
       <section className="bg-white py-20">
         <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <h2 className="mb-10 text-3xl font-bold text-primary md:text-4xl">
-            Questions {segment.label.toLowerCase()} ask
+            {segment.faqHeading ?? `Questions ${segment.label.toLowerCase()} ask`}
           </h2>
           <Accordion type="single" collapsible className="w-full">
             {segment.faqs.map((faq, index) => (
@@ -162,7 +162,7 @@ export function SegmentPage({ segment }: { segment: Segment }) {
       <section className="bg-white py-20 text-center">
         <div className="container mx-auto max-w-3xl px-4">
           <h2 className="mb-6 text-3xl font-bold text-primary md:text-4xl">
-            Start with your next contribution
+            {segment.ctaHeading ?? "Start with your next contribution"}
           </h2>
           <p className="mx-auto mb-8 max-w-xl leading-relaxed text-foreground/70">
             Setup takes a couple of minutes, and the first {TRIAL_DAYS} days are free.
