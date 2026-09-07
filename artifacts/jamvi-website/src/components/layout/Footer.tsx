@@ -1,11 +1,12 @@
 import { Link } from "wouter";
 import { JAMVI_APP_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
+import { SEGMENTS } from "@/lib/segments";
 
 export function Footer() {
   return (
     <footer className="bg-primary text-primary-foreground py-16 md:py-24">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 lg:gap-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-12 lg:gap-16">
           <div className="md:col-span-1">
             <Link href="/" className="inline-block mb-6 focus-visible:ring-2 focus-visible:ring-white rounded outline-none">
               <img src={`${import.meta.env.BASE_URL}branding/jamvi-wordmark.png`} alt="Jamvi" className="h-11 w-auto brightness-0 invert opacity-95" />
@@ -21,6 +22,19 @@ export function Footer() {
               <li><Link href="/features" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Features</Link></li>
               <li><Link href="/pricing" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Pricing</Link></li>
               <li><a href={JAMVI_APP_PATH} className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">Sign up free</a></li>
+            </ul>
+          </div>
+
+          {/* Every audience page hangs off here. Without it they would exist
+              and be reachable only from each other. */}
+          <div>
+            <h4 className="font-serif text-lg mb-6 text-white font-medium">Who it is for</h4>
+            <ul className="space-y-4">
+              {SEGMENTS.map((segment) => (
+                <li key={segment.slug}>
+                  <Link href={segment.slug} className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">{segment.label}</Link>
+                </li>
+              ))}
             </ul>
           </div>
 

@@ -172,7 +172,12 @@
        default renders the same type crisply. */
     @apply font-sans bg-background text-foreground selection:bg-secondary/30 selection:text-foreground;
   }
+  /* Colour is inherited, not set here. Setting it on the element beat the
+     lighter colour inherited from a dark section, so headings on the brand
+     navy were painted navy and disappeared - which is what happened to the
+     home page. Body carries text-foreground, so ordinary headings are
+     unchanged. */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-serif tracking-tight text-foreground;
+    @apply font-serif tracking-tight;
   }
 }
