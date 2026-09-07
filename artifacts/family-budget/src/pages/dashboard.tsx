@@ -2692,7 +2692,10 @@ export default function Dashboard() {
               </p>
             </div>
             <span
-              className="hidden shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold sm:inline-flex"
+              // Was hidden below sm, which is where nearly everybody uses this:
+              // the one word telling you whether you are in a Personal or a
+              // Shared budget was absent on a phone.
+              className="inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold"
               style={{
                 backgroundColor: `${workspaceAccentColor}20`,
                 borderColor: `${workspaceAccentColor}60`,
