@@ -96,7 +96,20 @@ export function WorkspaceSetupGuide({ userId }: { userId?: string }) {
     <Card className="border-primary/30 bg-gradient-to-br from-primary/[0.09] to-card shadow-md">
       <CardContent className="p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div><p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Start here</p><h2 className="mt-1 text-xl font-display font-bold">Set up this budget</h2><p className="mt-1 text-sm text-muted-foreground">{completedCount === 0 ? "Great start — a few details will make this budget useful." : completedCount === steps.length - 1 ? "One more step and this budget is ready." : "Almost there — keep building your budget foundation."}</p></div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Start here</p>
+            {/* Named, not "this budget". Switching between a Personal and a
+                Shared budget left this card reading identically either way,
+                so the one screen a new member spends most time on was the one
+                that never said which budget they were looking at. */}
+            <h2 className="mt-1 flex flex-wrap items-center gap-2 text-xl font-display font-bold">
+              <span className="break-words">Set up {group?.name?.trim() || (isShared ? "this group" : "your budget")}</span>
+              <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${isShared ? "border-secondary/40 bg-secondary/10 text-secondary" : "border-primary/30 bg-primary/10 text-primary"}`}>
+                {isShared ? "Shared" : "Personal"}
+              </span>
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">{completedCount === 0 ? "Great start — a few details will make this budget useful." : completedCount === steps.length - 1 ? "One more step and this budget is ready." : "Almost there — keep building your budget foundation."}</p>
+          </div>
           <Button type="button" variant="ghost" size="sm" onClick={() => setGuideCollapsed(true)} data-testid="button-skip-workspace-setup">Skip for now</Button>
         </div>
         {loading ? <p className="mt-5 flex items-center gap-2 text-sm text-muted-foreground" data-testid="status-workspace-setup-loading"><Loader2 className="h-4 w-4 animate-spin" />Checking your setup progress…</p> : hasError ? <div className="mt-5 flex items-center gap-3 text-sm text-destructive" data-testid="status-workspace-setup-error">We couldn’t check every setup step.<Button type="button" size="sm" variant="outline" onClick={retry} data-testid="button-retry-workspace-setup"><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Retry</Button></div> : <>
