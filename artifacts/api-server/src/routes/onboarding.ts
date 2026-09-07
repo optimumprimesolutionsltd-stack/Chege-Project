@@ -72,8 +72,16 @@ router.put("/onboarding/preferences", async (req, res) => {
     const values = { userId: req.user!.id, usageMode: parsed.data.usageMode, persona: parsed.data.persona ?? null, budgetDuration: parsed.data.budgetDuration, budgetStartDate: parsed.data.budgetStartDate ?? null, budgetEndDate: parsed.data.budgetEndDate ?? null, categoryNames: parsed.data.categoryNames, incomeStreams: parsed.data.incomeStreams, completed: parsed.data.completed, onboardingVersion: parsed.data.onboardingVersion, updatedAt: new Date() };
     const [preferences] = await db.insert(onboardingPreferencesTable).values(values).onConflictDoUpdate({ target: onboardingPreferencesTable.userId, set: values }).returning();
     if (parsed.data.completed) {
-      const personalWorkspaceId = await ensurePersonalWorkspace(req.user!.id);
+      // Somebody who said "shared" is here to run groups, so no Personal
+      // budget is made for them. It used to be created regardless and merely
+      // not opened, which is the thing that left a group-only person staring
+      // at an empty budget asking them to finish setting it up.
+      //
+      // "both" gets one and opens there, because they said they want both.
+      // Either way it is only ever the start: the CTA on My budget & groups
+      // creates one later, and it is the same budget.
       if (parsed.data.usageMode !== "shared") {
+        const personalWorkspaceId = await ensurePersonalWorkspace(req.user!.id);
         setActiveWorkspaceCookie(res, personalWorkspaceId);
       }
     }

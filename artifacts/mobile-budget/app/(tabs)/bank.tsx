@@ -96,7 +96,9 @@ type Tx = {
   bankTransferId?: string | null;
   bankTransferAccountId?: number | null;
   bankTransferAccountName?: string | null;
-  contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
+  // userId is optional now that a portion can be credited to a contributor
+  // recorded by name, who has no account to point at.
+  contributorSplits?: { userId?: string; contributorId?: number; amount: number; incomeSourceId?: number | null }[];
   date: string;
   createdAt?: string | null;
 };
@@ -473,12 +475,18 @@ export default function BankScreen() {
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
     setShowCategoryPicker(false);
-    const splitIds = tx.contributorSplits?.map((split) => split.userId) ?? [];
+    // This editor works in member ids, so portions credited to a contributor
+    // recorded by name are skipped rather than turned into somebody else's.
+    const splitIds = tx.contributorSplits
+      ?.map((split) => split.userId)
+      .filter((userId): userId is string => typeof userId === "string") ?? [];
     setDepositorIds(type === 'deposit'
       ? (splitIds.length > 0 ? splitIds : !isSharedWorkspace && user?.id ? [user.id] : tx.madeById ? [tx.madeById] : [])
       : []);
     setDepositorAmounts(Object.fromEntries(
-      (tx.contributorSplits ?? []).map((split) => [split.userId, String(split.amount)]),
+      (tx.contributorSplits ?? [])
+        .filter((split) => typeof split.userId === "string")
+        .map((split) => [split.userId as string, String(split.amount)]),
     ));
     setIncomeSourceId(tx.incomeSourceId ?? null);
     setDepositSourceKind(null);

@@ -53,7 +53,9 @@ type EditableTransaction = {
   savingsGoalName?: string | null;
   transferDirection?: string | null;
   expenseId?: number | null;
-  contributorSplits?: { userId: string; amount: number; incomeSourceId?: number | null }[];
+  // userId is optional now that a portion can be credited to a contributor
+  // recorded by name, who has no account to point at.
+  contributorSplits?: { userId?: string; contributorId?: number; amount: number; incomeSourceId?: number | null }[];
 };
 
 function parseBankAmount(value: string): number | null {
@@ -420,12 +422,19 @@ export default function Bank() {
       ? tx.description.replace(/^Transfer (?:to|from) savings —\s*/, "")
       : tx.description);
     setDate(tx.date);
-    const splitIds = tx.contributorSplits?.map((split) => split.userId) ?? [];
+    // This editor works in member ids, so portions credited to a contributor
+    // recorded by name are not editable here. They are skipped rather than
+    // silently turned into somebody else's.
+    const splitIds = tx.contributorSplits
+      ?.map((split) => split.userId)
+      .filter((userId): userId is string => typeof userId === "string") ?? [];
     setDepositorIds(transactionMode === "deposit"
       ? splitIds.length > 0 ? splitIds : tx.madeById ? [tx.madeById] : []
       : []);
     setDepositorAmounts(Object.fromEntries(
-      (tx.contributorSplits ?? []).map((split) => [split.userId, String(split.amount)]),
+      (tx.contributorSplits ?? [])
+        .filter((split) => typeof split.userId === "string")
+        .map((split) => [split.userId as string, String(split.amount)]),
     ));
     setIncomeSourceId(tx.incomeSourceId ?? null);
     setDepositSourceKind(null);

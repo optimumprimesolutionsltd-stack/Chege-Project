@@ -876,6 +876,7 @@ export const GetJointAccountQueryParams = zod.object({
   "accountId": zod.coerce.number().min(1).optional().describe('Optional account selection. When omitted, accountId is null and accountName is All accounts.')
 })
 
+
 export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountMin = 0.01;
 export const getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf = 0.01;
 
@@ -912,10 +913,11 @@ export const GetJointAccountResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(getJointAccountResponseTransactionsItemContributorSplitsItemAmountMin).multipleOf(getJointAccountResponseTransactionsItemContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 }))
@@ -956,6 +958,7 @@ export const createDepositBodyAmountMin = 0.01;
 export const createDepositBodyAmountMultipleOf = 0.01;
 
 
+
 export const createDepositBodyContributorSplitsItemAmountMin = 0.01;
 export const createDepositBodyContributorSplitsItemAmountMultipleOf = 0.01;
 
@@ -971,12 +974,14 @@ export const CreateDepositBody = zod.object({
   "incomeSourceId": zod.number().min(1).optional().describe('Optional income-source preset that funded this deposit. Used only with a single named depositor.\n'),
   "sourceKind": zod.enum(['income_source', 'other']).optional().describe('Choose other only when the required description is a narration.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(createDepositBodyContributorSplitsItemAmountMin).multipleOf(createDepositBodyContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional().describe('Household contributor portions, with up to two decimal places, that must equal amount exactly.'),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional().describe('Household contributor portions, with up to two decimal places, that must equal amount exactly.'),
   "accountId": zod.number().min(1).optional()
 })
+
 
 export const createDepositResponseContributorSplitsItemAmountMin = 0.01;
 export const createDepositResponseContributorSplitsItemAmountMultipleOf = 0.01;
@@ -1004,10 +1009,11 @@ export const CreateDepositResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(createDepositResponseContributorSplitsItemAmountMin).multipleOf(createDepositResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -1031,6 +1037,7 @@ export const CreateDisbursementBody = zod.object({
   "destinationKind": zod.enum(['category', 'other']).optional().describe('Choose other only when the required description is a narration.'),
   "accountId": zod.number().min(1).optional()
 })
+
 
 export const createDisbursementResponseContributorSplitsItemAmountMin = 0.01;
 export const createDisbursementResponseContributorSplitsItemAmountMultipleOf = 0.01;
@@ -1058,10 +1065,11 @@ export const CreateDisbursementResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(createDisbursementResponseContributorSplitsItemAmountMin).multipleOf(createDisbursementResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -1084,6 +1092,7 @@ export const CreateBankChargeBody = zod.object({
   "date": zod.coerce.date(),
   "accountId": zod.number().min(1).optional()
 })
+
 
 export const createBankChargeResponseContributorSplitsItemAmountMin = 0.01;
 export const createBankChargeResponseContributorSplitsItemAmountMultipleOf = 0.01;
@@ -1111,10 +1120,11 @@ export const CreateBankChargeResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(createBankChargeResponseContributorSplitsItemAmountMin).multipleOf(createBankChargeResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -1139,6 +1149,7 @@ export const TransferBankToSavingsBody = zod.object({
   "madeById": zod.string().nullish(),
   "accountId": zod.number().min(1).optional()
 })
+
 
 export const transferBankToSavingsResponseContributorSplitsItemAmountMin = 0.01;
 export const transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf = 0.01;
@@ -1166,10 +1177,11 @@ export const TransferBankToSavingsResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(transferBankToSavingsResponseContributorSplitsItemAmountMin).multipleOf(transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -1194,6 +1206,7 @@ export const TransferSavingsToBankBody = zod.object({
   "madeById": zod.string().nullish(),
   "accountId": zod.number().min(1).optional()
 })
+
 
 export const transferSavingsToBankResponseContributorSplitsItemAmountMin = 0.01;
 export const transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf = 0.01;
@@ -1221,10 +1234,11 @@ export const TransferSavingsToBankResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(transferSavingsToBankResponseContributorSplitsItemAmountMin).multipleOf(transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -1250,8 +1264,10 @@ export const TransferBankToBankBody = zod.object({
   "date": zod.coerce.date()
 })
 
+
 export const transferBankToBankResponseOutgoingContributorSplitsItemAmountMin = 0.01;
 export const transferBankToBankResponseOutgoingContributorSplitsItemAmountMultipleOf = 0.01;
+
 
 
 export const transferBankToBankResponseIncomingContributorSplitsItemAmountMin = 0.01;
@@ -1282,10 +1298,11 @@ export const TransferBankToBankResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(transferBankToBankResponseOutgoingContributorSplitsItemAmountMin).multipleOf(transferBankToBankResponseOutgoingContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 }),
@@ -1309,10 +1326,11 @@ export const TransferBankToBankResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(transferBankToBankResponseIncomingContributorSplitsItemAmountMin).multipleOf(transferBankToBankResponseIncomingContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })
@@ -1328,6 +1346,7 @@ export const UpdateJointAccountTransactionParams = zod.object({
 
 export const updateJointAccountTransactionBodyAmountMin = 0.01;
 export const updateJointAccountTransactionBodyAmountMultipleOf = 0.01;
+
 
 export const updateJointAccountTransactionBodyContributorSplitsItemAmountMin = 0.01;
 export const updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf = 0.01;
@@ -1350,15 +1369,17 @@ export const UpdateJointAccountTransactionBody = zod.object({
   "sourceKind": zod.enum(['income_source', 'other']).optional(),
   "destinationKind": zod.enum(['category', 'other']).optional(),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(updateJointAccountTransactionBodyContributorSplitsItemAmountMin).multipleOf(updateJointAccountTransactionBodyContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional().describe('Replacement contributor portions for a deposit. Send an empty array to remove existing splits.'),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional().describe('Replacement contributor portions for a deposit. Send an empty array to remove existing splits.'),
   "transferDirection": zod.enum(['to_savings', 'from_savings']).optional().describe('Required when editing a linked savings transfer'),
   "goalId": zod.number().min(1).optional().describe('Savings goal receiving or supplying an edited transfer'),
   "narration": zod.string().min(1).max(updateJointAccountTransactionBodyNarrationMax).optional().describe('Required when editing a linked savings transfer'),
   "accountId": zod.number().min(1).optional()
 })
+
 
 export const updateJointAccountTransactionResponseContributorSplitsItemAmountMin = 0.01;
 export const updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf = 0.01;
@@ -1386,10 +1407,11 @@ export const UpdateJointAccountTransactionResponse = zod.object({
   "bankTransferAccountName": zod.string().nullish(),
   "expenseId": zod.number().nullish().describe('Expense that owns this linked Joint-bank funding disbursement.'),
   "contributorSplits": zod.array(zod.object({
-  "userId": zod.string().describe('Household member who supplied this deposit portion.'),
+  "userId": zod.string().optional().describe('Member who supplied this deposit portion, when they have an account.'),
+  "contributorId": zod.number().min(1).optional().describe('Contributor who supplied this portion, when they have no account.'),
   "amount": zod.number().min(updateJointAccountTransactionResponseContributorSplitsItemAmountMin).multipleOf(updateJointAccountTransactionResponseContributorSplitsItemAmountMultipleOf),
   "incomeSourceId": zod.number().min(1).optional()
-})).optional(),
+}).describe('One person\'s share of a deposit. Give either userId, for somebody with a Jamvi account, or contributorId, for somebody recorded by name who does not use the app - a church member, or a chama member without a smartphone. Exactly one of the two.\n')).optional(),
   "date": zod.coerce.date(),
   "createdAt": zod.string()
 })

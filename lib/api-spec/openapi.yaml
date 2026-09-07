@@ -3260,10 +3260,19 @@ components:
 
     DepositContributorSplit:
       type: object
+      description: >
+        One person's share of a deposit. Give either userId, for somebody with
+        a Jamvi account, or contributorId, for somebody recorded by name who
+        does not use the app - a church member, or a chama member without a
+        smartphone. Exactly one of the two.
       properties:
         userId:
           type: string
-          description: Household member who supplied this deposit portion.
+          description: Member who supplied this deposit portion, when they have an account.
+        contributorId:
+          type: number
+          minimum: 1
+          description: Contributor who supplied this portion, when they have no account.
         amount:
           type: number
           minimum: 0.01
@@ -3271,7 +3280,7 @@ components:
         incomeSourceId:
           type: number
           minimum: 1
-      required: [userId, amount]
+      required: [amount]
 
     DisbursementInput:
       type: object

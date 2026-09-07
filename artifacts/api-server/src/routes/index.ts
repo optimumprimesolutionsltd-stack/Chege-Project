@@ -15,6 +15,7 @@ import incomeSourcesRouter from "./income-sources";
 import { invitationsRouter, publicInvitationsRouter } from "./invitations";
 import { inviteLinksRouter, publicInviteLinksRouter } from "./invite-links";
 import { viewLinksRouter, publicViewLinksRouter } from "./view-links";
+import contributorsRouter from "./contributors";
 import photoStorageRouter from "./photo-storage";
 import onboardingRouter from "./onboarding";
 import budgetPlansRouter from "./budget-plans";
@@ -49,6 +50,7 @@ router.use(requireWriteAccess);
 
 router.use(expensesRouter);
 router.use(contributionsRouter);
+router.use(contributorsRouter);
 router.use(budgetCategoriesRouter);
 router.use(dashboardRouter);
 router.use(membersRouter);
