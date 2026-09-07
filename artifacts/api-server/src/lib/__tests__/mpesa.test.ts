@@ -7,8 +7,15 @@
  * payment with an error that does not say which field was wrong.
  */
 
-import { describe, expect, it } from "vitest";
-import { darajaTimestamp, normalizeMsisdn, readCallback } from "../mpesa";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  darajaTimestamp,
+  isMpesaConfigured,
+  MPESA_SETTINGS,
+  missingMpesaSettings,
+  normalizeMsisdn,
+  readCallback,
+} from "../mpesa";
 
 describe("normalizeMsisdn", () => {
   it("accepts the shapes people actually type", () => {
@@ -141,5 +148,45 @@ describe("readCallback", () => {
     });
 
     expect(facts!.mpesaReceiptNumber).toBeNull();
+  });
+});
+
+describe("missingMpesaSettings", () => {
+  const before = { ...process.env };
+  afterEach(() => {
+    process.env = { ...before };
+  });
+
+  const setAll = () => {
+    for (const name of MPESA_SETTINGS) process.env[name] = "x";
+  };
+
+  it("names nothing when every setting is present", () => {
+    setAll();
+    expect(missingMpesaSettings()).toEqual([]);
+    expect(isMpesaConfigured()).toBe(true);
+  });
+
+  it("names the one that is absent, so a deploy is not five guesses", () => {
+    setAll();
+    delete process.env.MPESA_PASSKEY;
+
+    expect(missingMpesaSettings()).toEqual(["MPESA_PASSKEY"]);
+    expect(isMpesaConfigured()).toBe(false);
+  });
+
+  it("treats a value of only spaces as absent", () => {
+    // A pasted value that arrived as a stray space looks set in a dashboard,
+    // and is the failure that is hardest to see by eye.
+    setAll();
+    process.env.MPESA_SHORTCODE = "   ";
+
+    expect(missingMpesaSettings()).toEqual(["MPESA_SHORTCODE"]);
+  });
+
+  it("names all of them when none are set", () => {
+    for (const name of MPESA_SETTINGS) delete process.env[name];
+
+    expect(missingMpesaSettings()).toEqual([...MPESA_SETTINGS]);
   });
 });
