@@ -41,8 +41,22 @@ jobs:
 
       - run: pnpm run typecheck
 
-      - name: API test suite
-        run: pnpm --filter @workspace/api-server run test
+      # Every package with tests, not just the API. The web and mobile suites
+      # were running only on developer machines, which means on nobody's after
+      # a busy day.
+      - name: Test suites
+        run: pnpm -r --if-present run test
+
+      # Builds exactly what Render builds, with the same command, so a break
+      # here is a break there. Worth its two minutes: Render has autoDeploy
+      # off and a person presses Deploy, so a broken build is discovered by
+      # whoever is deploying, at the moment they wanted it live.
+      #
+      # The website build ends in verify-build.mjs, which asserts the
+      # pre-rendered pages actually contain markup. A build can exit 0 having
+      # emitted blank pages, and did.
+      - name: Build what Render builds
+        run: pnpm run build:render
 
   staging-category-verification:
     name: Verify staging category integrity
@@ -65,6 +79,12 @@ jobs:
         run: |
           if [ -z "$STAGING_DATABASE_URL" ]; then
             echo "::error::Repository secret STAGING_DATABASE_URL is not configured. Add it before relying on this PR check."
+            exit 1
+          fi
+          echo "Staging database secret is configured."
+      - name: Verify staging category integrity
+        run: pnpm --filter @workspace/scripts verify:staging-categories
+r::Repository secret STAGING_DATABASE_URL is not configured. Add it before relying on this PR check."
             exit 1
           fi
           echo "Staging database secret is configured."
