@@ -22,7 +22,10 @@ describe("mobile navigation drawer", () => {
   });
 
   it("removes Quick log from the stacking order while the drawer is open", () => {
-    expect(layoutSource).toContain("{!isMobileMenuOpen && (");
+    // The condition gained a second clause - the button is also hidden when
+    // the budget has nothing to quick-log - but it must still lead with the
+    // drawer check, which is what this test is about.
+    expect(layoutSource).toContain("{!isMobileMenuOpen && offeredQuickLogActions.length > 0 && (");
     expect(layoutSource).toContain(
       "aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}",
     );

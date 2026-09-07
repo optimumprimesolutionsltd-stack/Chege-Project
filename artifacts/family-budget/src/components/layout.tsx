@@ -13,6 +13,35 @@ import { useQuery } from '@tanstack/react-query';
 import { daysUntil, type MemberEntitlements } from '@/lib/subscription-status';
 import { ViewerBanner } from '@/components/viewer-banner';
 
+export type QuickLogAction = 'contribution' | 'expense' | 'income' | 'budget' | 'goal';
+
+/**
+ * Which quick-log actions a budget should offer.
+ *
+ * The menu used to offer the same four things to everybody. A chama starts
+ * with only Contributions, Group account, Reports and Activity switched on, so
+ * three of those four opened a tab it had hidden - and the one thing a chama
+ * does every month was not there at all.
+ *
+ * Contributions lead, because for a collecting group that is the only reason
+ * anybody opens this menu. Undefined sections mean the group has not loaded
+ * yet, and everything shows rather than the menu flickering.
+ */
+export function quickLogActions(
+  sections: readonly string[] | undefined,
+  isSharedWorkspace: boolean,
+): QuickLogAction[] {
+  const uses = (section: string) => !sections || sections.includes(section);
+  const actions: QuickLogAction[] = [];
+  // Recording for a whole group only means something when there is a group.
+  if (isSharedWorkspace && uses('contributions')) actions.push('contribution');
+  if (uses('expenses')) actions.push('expense');
+  if (uses('bank')) actions.push('income');
+  if (uses('budget')) actions.push('budget');
+  if (uses('goals')) actions.push('goal');
+  return actions;
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isQuickLogOpen, setIsQuickLogOpen] = useState(false);
@@ -80,8 +109,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
     group?.canRecordSharedTransactions === false &&
     members.length < 2;
 
-  const openQuickLog = (action: 'income' | 'expense' | 'goal' | 'budget') => {
+  const openQuickLog = (action: 'income' | 'expense' | 'goal' | 'budget' | 'contribution') => {
     if (sharedTransactionsLocked && (action === 'expense' || action === 'goal')) return;
+    // Recording for the whole group lives on its own screen, because a
+    // treasurer at a meeting is filling one column rather than logging one
+    // payment. Same reason budget navigates instead of opening a sheet.
+    if (action === 'contribution') {
+      navigate('/contributions');
+      setIsQuickLogOpen(false);
+      setIsMobileMenuOpen(false);
+      return;
+    }
     setIsQuickLogOpen(false);
     setIsMobileMenuOpen(false);
     if (action === 'budget') {
@@ -102,6 +140,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const sections = group?.enabledSections;
   const uses = (section: NonNullable<typeof sections>[number]) =>
     !sections || sections.includes(section);
+
+  const offeredQuickLogActions = quickLogActions(sections, isSharedWorkspace);
 
   // The same entitlements the Subscription page reads. Shown in the nav so a
   // trial running out is visible where people already look, rather than only
@@ -272,7 +312,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Persistent quick logging control */}
-      {!isMobileMenuOpen && (
+      {/* A budget that uses none of these - reports and activity only - gets
+          no button rather than one that opens an empty menu. */}
+      {!isMobileMenuOpen && offeredQuickLogActions.length > 0 && (
       <div className="fixed bottom-5 right-4 z-50 flex flex-col items-end gap-3 md:bottom-7 md:right-7">
         {isQuickLogOpen && (
           <div
@@ -284,6 +326,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-bold text-foreground">Quick log</p>
               <p className="mt-0.5 text-xs text-muted-foreground">Record money without leaving the page you are on.</p>
             </div>
+            {offeredQuickLogActions.includes('contribution') && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openQuickLog('contribution')}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-muted"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary/10 text-secondary">
+                <HandCoins className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-foreground">Record contributions</span>
+                <span className="block text-xs text-muted-foreground">Tick who has paid this month</span>
+              </span>
+            </button>
+            )}
+            {offeredQuickLogActions.includes('expense') && (
             <button
               type="button"
               role="menuitem"
@@ -299,6 +358,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <span className="block text-xs text-muted-foreground">Record spending now</span>
               </span>
             </button>
+            )}
+            {offeredQuickLogActions.includes('income') && (
             <button
               type="button"
               role="menuitem"
@@ -313,6 +374,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <span className="block text-xs text-muted-foreground">Record money received</span>
               </span>
             </button>
+            )}
+            {offeredQuickLogActions.includes('budget') && (
             <button
               type="button"
               role="menuitem"
@@ -327,6 +390,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <span className="block text-xs text-muted-foreground">Plan monthly spending</span>
               </span>
             </button>
+            )}
+            {offeredQuickLogActions.includes('goal') && (
             <button
               type="button"
               role="menuitem"
@@ -342,6 +407,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <span className="block text-xs text-muted-foreground">Move money toward a goal</span>
               </span>
             </button>
+            )}
             {sharedTransactionsLocked && (
               <p className="mx-1 mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
                 Invite one more member before recording shared expenses or goal contributions.
