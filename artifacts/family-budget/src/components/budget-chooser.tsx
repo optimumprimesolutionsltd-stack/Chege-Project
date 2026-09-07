@@ -67,11 +67,11 @@ export function dedupeCategoryNames(names: readonly string[]): string[] {
   }, []);
 }
 
-const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; description: string; categories: readonly string[] }[] = [
+export const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; description: string; categories: readonly string[] }[] = [
   { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Housing", "Utilities", "Shared bills", "Transport"] },
-  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Books & supplies", "Family support", "Personal care", "Insurance"] },
+  { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Books & supplies", "Family support", "Loans", "Personal care", "Insurance"] },
   { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business", "Business supplies", "Stock & inventory"] },
-  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Member contributions", "Projects", "Loans", "Other"] },
+  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Member contributions", "Projects", "Other"] },
 ];
 
 const ALL_ONBOARDING_CATEGORIES = dedupeCategoryNames(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
@@ -90,10 +90,10 @@ export function dedupeIncomeStreamNames(names: string[]): string[] {
     return true;
   });
 }
-const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
-  student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
-  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
-  business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Airtime & data", "Other"],
+export const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
+  student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Subscriptions", "Personal care", "Entertainment", "Other"],
+  working: ["Food", "Housing", "Utilities", "Transport", "Health", "Family support", "Loans", "Insurance", "Airtime & data", "Subscriptions", "Personal care", "Entertainment", "Other"],
+  business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Loans", "Airtime & data", "Other"],
   couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
   friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Other"],
   family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
@@ -526,7 +526,7 @@ export function BudgetChooser({
   if (showPurposeSetup) {
     const purposeOptions = onboardingMode === "shared"
       ? [["couple", "A couple", "Plan shared household money together."], ["friends", "Friends or roommates", "Split trips, bills, rent, and plans with friends."], ["family", "A family", "Coordinate home costs, school, health, and support."], ["chama", "A chama or welfare group", "Track contributions, welfare, loans, and group plans."], ["club", "A club, church, or team", "Manage membership money, events, and projects."], ["student_group", "A student group", "Share school, welfare, class, or campus costs."], ["other", "Something else", "Tell Jamvi what matters to your group."]] as const
-      : [["student", "A student", "Balance school life, living costs, and personal goals."], ["working", "Working or employed", "Plan income, household costs, and future goals."], ["business", "A business owner", "Separate business costs, personal spending, and income."], ["other", "Something else", "Build a budget around your own priorities."]] as const;
+      : [["student", "A student", "Balance school life, living costs, and personal goals."], ["working", "Working or employed", "Plan a salary: rent, transport, money sent home, and what is left."], ["business", "A business owner", "Separate business costs, personal spending, and income."], ["other", "Something else", "Build a budget around your own priorities."]] as const;
      return (
        <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10"><section className="mx-auto w-full max-w-3xl"><div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl"><header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9"><p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 6 · Make it yours</p><h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, what are you using Jamvi for?` : "What are you using Jamvi for?"}</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Your answer helps us recommend categories that fit your life instead of showing you a generic budget.</p></header><div className="p-6 sm:p-10"><div className="grid gap-3 sm:grid-cols-2">{purposeOptions.map(([value, title, description]) => { const selected = onboardingPurpose === value; return <button key={value} type="button" aria-pressed={selected} onClick={() => setOnboardingPurpose(value)} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"}`}><span className="flex items-center justify-between gap-3"><span className="font-bold text-foreground">{title}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></span><span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{description}</span></button>; })}</div><div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={goBackToUsageMode} data-testid="onboarding-back-to-usage">Back</Button><Button type="button" disabled={!onboardingPurpose} className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:purpose:${encodeURIComponent(userId)}`, onboardingPurpose ?? ""); } catch { /* Continue even when storage is unavailable. */ } setShowPurposeSetup(false); setShowDurationSetup(true); }}>Continue to duration <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></div></section></main>
     );
