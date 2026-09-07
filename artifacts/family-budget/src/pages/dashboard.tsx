@@ -523,7 +523,19 @@ function IncomeForm({
   const [madeById, setMadeById] = useState<string>("");
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [date, setDate] = useState(localDateInputValue());
+  const [accountId, setAccountId] = useState<number | null>(null);
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
   const { data: members = [] } = useGetMembers();
+  const { data: accounts = [] } = useGetJointAccounts();
+  const createAccount = useCreateJointAccount();
+
+  // There is no main account any more, so the server must be told where the
+  // money went. Left unsaid it falls back to the lowest-numbered account,
+  // which silently put every deposit in whichever was created first.
+  useEffect(() => {
+    if (accounts.length === 1) setAccountId(accounts[0].id);
+  }, [accounts]);
   const today = localDateInputValue();
   const selectedDepositorId = canManageShared ? madeById : currentUserId ?? "";
   const createDeposit = useCreateDeposit();
@@ -552,6 +564,23 @@ function IncomeForm({
       });
       return;
     }
+    if (accounts.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Add an account first",
+        description: "Money has to land somewhere. Create one below and it will be selected.",
+      });
+      setIsAddingAccount(true);
+      return;
+    }
+    if (!accountId) {
+      toast({
+        variant: "destructive",
+        title: "Choose an account",
+        description: "Say which account received this money.",
+      });
+      return;
+    }
     if (!Number.isInteger(amt)) {
       toast({
         variant: "destructive",
@@ -577,6 +606,7 @@ function IncomeForm({
           description: description.trim() || "Deposit",
           date,
           madeById: selectedDepositorId,
+          accountId,
           ...(incomeSourceId ? { incomeSourceId } : {}),
         } as Parameters<typeof createDeposit.mutateAsync>[0]["data"],
       });
@@ -597,6 +627,108 @@ function IncomeForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      {/* Simple keeps a deposit to the four things that always matter. The
+          state existed here already and did nothing; expenses have had this
+          for a while and deposits were left behind. */}
+      <div className="flex gap-1" role="group" aria-label="Entry mode">
+        {(["simple", "advanced"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={formMode === value}
+            onClick={() => setFormMode(value)}
+            className={`h-9 rounded-lg px-4 text-sm font-semibold transition-colors ${
+              formMode === value
+                ? "bg-primary text-primary-foreground"
+                : "border border-input bg-card text-foreground hover:bg-muted/50"
+            }`}
+            data-testid={`deposit-mode-${value}`}
+          >
+            {value === "simple" ? "Simple" : "Advanced"}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-sm font-semibold text-foreground" htmlFor="deposit-account">
+          Which account received it?
+        </label>
+        {accounts.length > 1 || formMode === "advanced" || accounts.length === 0 ? (
+          <select
+            id="deposit-account"
+            value={accountId ?? ""}
+            onChange={(event) => setAccountId(event.target.value ? Number(event.target.value) : null)}
+            className="h-12 w-full rounded-md border border-input bg-card px-3 text-base"
+            data-testid="select-deposit-account"
+          >
+            <option value="">{accounts.length ? "Choose an account" : "No accounts yet"}</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>{account.name}</option>
+            ))}
+          </select>
+        ) : (
+          // One account, and nothing to decide. Named rather than hidden, so
+          // nobody has to guess where their money went.
+          <p className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm font-semibold text-foreground">
+            {accounts[0]?.name ?? "Loading…"}
+          </p>
+        )}
+
+        {isAddingAccount ? (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              placeholder="e.g. Equity, M-Pesa till"
+              value={newAccountName}
+              onChange={(event) => setNewAccountName(event.target.value)}
+              className="h-11 bg-card"
+              data-testid="input-new-deposit-account"
+            />
+            <Button
+              type="button"
+              size="sm"
+              className="h-11"
+              disabled={!newAccountName.trim() || createAccount.isPending}
+              onClick={() => {
+                const name = newAccountName.trim();
+                if (!name) return;
+                createAccount.mutate({ data: { name } }, {
+                  onSuccess: (created: { id: number }) => {
+                    // Selected straight away: somebody creating an account
+                    // mid-deposit means this one.
+                    setAccountId(created.id);
+                    setIsAddingAccount(false);
+                    setNewAccountName("");
+                    qc.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+                  },
+                  onError: () => toast({
+                    variant: "destructive",
+                    title: "Could not add that account",
+                    description: "Nothing has been changed.",
+                  }),
+                });
+              }}
+              data-testid="button-create-deposit-account"
+            >
+              {createAccount.isPending ? "Adding…" : "Add"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" className="h-11" onClick={() => setIsAddingAccount(false)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-10 border-dashed"
+            onClick={() => setIsAddingAccount(true)}
+            data-testid="add-deposit-account-inline"
+          >
+            {accounts.length === 0 ? "Create an account" : "+ New account"}
+          </Button>
+        )}
+      </div>
+
       {canManageShared ? (
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Who is depositing?</label>
@@ -647,8 +779,9 @@ function IncomeForm({
           <p className="text-xs text-muted-foreground">Members can record deposits for today only.</p>
         )}
       </div>
-      {/* Income source */}
-      {incomeSources && incomeSources.length > 0 && (
+      {/* Income source. Attribution detail, so it belongs in Advanced - most
+          deposits are recorded without anybody choosing one. */}
+      {formMode === "advanced" && incomeSources && incomeSources.length > 0 && (
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">Income source <span className="text-muted-foreground font-normal">(optional)</span></label>
           <div className="flex flex-wrap gap-2">
