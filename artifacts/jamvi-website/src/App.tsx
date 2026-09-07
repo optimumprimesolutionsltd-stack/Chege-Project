@@ -18,6 +18,8 @@ import FAQ from '@/pages/faq';
 import Terms from '@/pages/terms';
 import Privacy from '@/pages/privacy';
 import NotFound from '@/pages/not-found';
+import { SegmentPage } from '@/pages/segment';
+import { SEGMENTS } from '@/lib/segments';
 
 const queryClient = new QueryClient();
 
@@ -35,6 +37,11 @@ function Router() {
             <Route path="/faq" component={FAQ} />
             <Route path="/terms" component={Terms} />
             <Route path="/privacy" component={Privacy} />
+            {SEGMENTS.map((segment) => (
+              <Route key={segment.slug} path={segment.slug}>
+                <SegmentPage segment={segment} />
+              </Route>
+            ))}
             <Route component={NotFound} />
           </Switch>
         </RoutedErrorBoundary>

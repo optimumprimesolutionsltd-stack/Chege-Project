@@ -14,6 +14,7 @@
 import { JAMVI_PACKAGE, TRIAL_DAYS } from "@workspace/jamvi-pricing";
 import { FAQ_ENTRIES } from "./faq-content";
 import { SITE_ORIGIN, DEFAULT_OG_IMAGE } from "./site-seo";
+import { SEGMENTS } from "./segments";
 
 const ORGANISATION_ID = `${SITE_ORIGIN}/#organisation`;
 const WEBSITE_ID = `${SITE_ORIGIN}/#website`;
@@ -63,10 +64,10 @@ const application = {
   },
 };
 
-function faqPage() {
+function faqPage(entries: readonly { question: string; answer: string }[]) {
   return {
     "@type": "FAQPage",
-    mainEntity: FAQ_ENTRIES.map((entry) => ({
+    mainEntity: entries.map((entry) => ({
       "@type": "Question",
       name: entry.question,
       acceptedAnswer: { "@type": "Answer", text: entry.answer },
@@ -93,6 +94,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   "/faq": "Questions",
   "/terms": "Terms of Service",
   "/privacy": "Privacy Policy",
+  ...Object.fromEntries(SEGMENTS.map((segment) => [segment.slug, segment.label])),
 };
 
 export function structuredDataFor(route: string): object {
@@ -100,7 +102,16 @@ export function structuredDataFor(route: string): object {
 
   if (route === "/") graph.push(application);
   if (route === "/pricing") graph.push(application);
-  if (route === "/faq") graph.push(faqPage());
+  if (route === "/faq") graph.push(faqPage(FAQ_ENTRIES));
+
+  // A per-audience page states the application and answers its own questions,
+  // because it is a landing page in its own right - somebody may arrive there
+  // from search having never seen the home page.
+  const segment = SEGMENTS.find((entry) => entry.slug === route);
+  if (segment) {
+    graph.push(application);
+    graph.push(faqPage(segment.faqs));
+  }
 
   const label = BREADCRUMB_LABELS[route];
   if (label) graph.push(breadcrumbs(route, label));

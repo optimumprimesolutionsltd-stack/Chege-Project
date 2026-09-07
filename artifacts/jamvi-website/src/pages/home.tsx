@@ -4,6 +4,7 @@ import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { ArrowRight, CheckCircle2, Users, Wallet, Target } from "lucide-react";
 import { Link } from "wouter";
 import { JAMVI_APP_PATH } from "@/lib/site-links";
+import { SEGMENTS } from "@/lib/segments";
 import { JAMVI_PACKAGE, TRIAL_DAYS } from "@workspace/jamvi-pricing";
 
 export default function Home() {
@@ -281,6 +282,39 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Who this is actually for.
+          Every audience page is linked from here, which is both how a reader
+          finds the one that describes them and how a crawler reaching the home
+          page finds the rest of the site. */}
+      <section className="py-24 bg-muted/30 border-t border-border">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-primary mb-6">Whatever you are keeping money for.</h2>
+            <p className="text-lg text-foreground/70 leading-relaxed">
+              A chama chases arrears. A church never chases anybody. A class fund runs for
+              ten weeks and stops. Jamvi starts each group with what that kind of group
+              actually needs.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {SEGMENTS.map((segment) => (
+              <Link
+                key={segment.slug}
+                href={segment.slug}
+                className="group p-8 rounded-3xl bg-white border border-border/60 hover:border-secondary/40 hover:shadow-lg transition-all"
+              >
+                <h3 className="text-xl font-bold text-primary mb-3">{segment.label}</h3>
+                <p className="text-foreground/70 leading-relaxed mb-5">{segment.subheading}</p>
+                <span className="inline-flex items-center text-secondary font-bold text-sm">
+                  See how <ArrowRight className="ml-1 w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

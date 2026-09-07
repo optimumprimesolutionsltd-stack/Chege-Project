@@ -37,6 +37,11 @@ const CRAWL = {
   "/pricing": { changefreq: "monthly", priority: "0.9" },
   "/faq": { changefreq: "monthly", priority: "0.8" },
   "/about": { changefreq: "monthly", priority: "0.6" },
+  "/chama": { changefreq: "monthly", priority: "0.9" },
+  "/students": { changefreq: "monthly", priority: "0.8" },
+  "/church": { changefreq: "monthly", priority: "0.8" },
+  "/clubs": { changefreq: "monthly", priority: "0.8" },
+  "/household": { changefreq: "monthly", priority: "0.9" },
   "/terms": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
 };

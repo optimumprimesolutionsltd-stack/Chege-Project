@@ -1,29 +1,34 @@
 import { JAMVI_PACKAGE, TRIAL_DAYS } from "@workspace/jamvi-pricing";
+import { SEGMENTS } from "./segments";
 
 export const SITE_ORIGIN = "https://jamvi.co.ke";
-// 1200x630, which is the slot WhatsApp, X and LinkedIn actually render.
-// The square logo mark is still the Organization logo in the structured
-// data, where a square is what is wanted.
+// 1200x630, which is the slot WhatsApp, X and LinkedIn actually render. The
+// square logo mark is still the Organization logo in the structured data,
+// where a square is what is wanted.
 export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/branding/jamvi-og.png`;
+
+export interface SeoEntry {
+  title: string;
+  description: string;
+}
 
 /**
  * Every page's title and description, in one table.
  *
  * The pages read this, the build script renders from it, and the sitemap is
- * generated from its keys - so a page cannot exist without a description or
+ * generated from its keys - so a page cannot exist without a description, or
  * quietly drift from the one search engines were given.
  *
- * The titles name what people actually type. "Gather Around Your Money" is
- * the better sentence and nobody has ever searched for it; someone looking for
- * this app searches "chama app", "chama contributions" or "budget app Kenya".
- * The warmth belongs on the page, where a person reads it. The title tag is
- * read by a machine deciding whether to show us at all.
+ * The titles name what people actually type. "Gather Around Your Money" is the
+ * better sentence and nobody has ever searched for it; someone looking for
+ * this app searches "chama app", "class fund" or "budget app Kenya". The
+ * warmth belongs on the page, where a person reads it. A title tag is read by
+ * a machine deciding whether to show us at all.
  */
-export const SITE_SEO = {
+const PAGES: Record<string, SeoEntry> = {
   "/": {
     title: "Chama & Household Budget App, Built in Kenya",
-    description:
-      `Track chama contributions, split household bills and see who has paid - in one shared record everybody trusts. KES ${JAMVI_PACKAGE.monthlyPriceKes} a month per member; groups of any size cost nothing extra. Free for ${TRIAL_DAYS} days.`,
+    description: `Track chama contributions, split household bills and see who has paid - in one shared record everybody trusts. KES ${JAMVI_PACKAGE.monthlyPriceKes} a month per member; groups of any size cost nothing extra. Free for ${TRIAL_DAYS} days.`,
   },
   "/features": {
     title: "Features for Chamas, Families & Flatmates",
@@ -32,13 +37,12 @@ export const SITE_SEO = {
   },
   "/pricing": {
     title: `Pricing - KES ${JAMVI_PACKAGE.monthlyPriceKes} a Month, Groups Free`,
-    description:
-      `One subscription covers your own budget and every group you belong to. KES ${JAMVI_PACKAGE.monthlyPriceKes} per member per month or KES ${JAMVI_PACKAGE.annualPriceKes.toLocaleString("en-KE")} a year. No group fee, no member limit, no tiers. Free for your first ${TRIAL_DAYS} days.`,
+    description: `One subscription covers your own budget and every group you belong to. KES ${JAMVI_PACKAGE.monthlyPriceKes} per member per month or KES ${JAMVI_PACKAGE.annualPriceKes.toLocaleString("en-KE")} a year. No group fee, no member limit, no tiers. Free for your first ${TRIAL_DAYS} days.`,
   },
   "/about": {
     title: "Built in Nairobi, for Kenyan Money",
     description:
-      "Why Jamvi exists: chamas, families and households in Kenya run real money on WhatsApp threads and fragile spreadsheets. Jamvi gives them one clear record instead.",
+      "Why Jamvi exists: chamas, churches, families and student groups in Kenya run real money on WhatsApp threads and fragile spreadsheets. Jamvi gives them one clear record instead.",
   },
   "/faq": {
     title: "Questions About Chamas, Groups & Your Money",
@@ -61,8 +65,14 @@ export const SITE_SEO = {
   },
 };
 
-export type SiteRoute = keyof typeof SITE_SEO;
+// The per-audience pages carry their own titles, written next to the copy they
+// describe rather than restated here.
+for (const segment of SEGMENTS) {
+  PAGES[segment.slug] = { title: segment.title, description: segment.description };
+}
 
-export function getSiteSeo(pathname: string) {
-  return SITE_SEO[pathname as SiteRoute] ?? SITE_SEO["/404"];
+export const SITE_SEO: Record<string, SeoEntry> = PAGES;
+
+export function getSiteSeo(pathname: string): SeoEntry {
+  return SITE_SEO[pathname] ?? SITE_SEO["/404"];
 }
