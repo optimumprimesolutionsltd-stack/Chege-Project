@@ -476,6 +476,12 @@ export default function Contributions() {
               })}
             </select>
           </div>
+          <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg hover:bg-muted"
+            disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
+            <ArrowRight className="h-5 w-5 text-foreground/70" />
+          </Button>
+        </div>
+      </div>
 
       {isSharedWorkspace ? (
         <div className="space-y-6">
@@ -483,12 +489,6 @@ export default function Contributions() {
           <ContributionsGrid />
         </div>
       ) : null}
-          <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-10 w-10 rounded-lg hover:bg-muted"
-            disabled={month === now.getMonth() + 1 && year === now.getFullYear()}>
-            <ArrowRight className="h-5 w-5 text-foreground/70" />
-          </Button>
-        </div>
-      </div>
 
       {/* How it works banner */}
       <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/8 border border-primary/20">
