@@ -106,6 +106,13 @@ export function ContributionsGrid() {
               Show only those who still owe
             </label>
 
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Each figure is what a member <span className="font-semibold text-foreground">gave</span> that month; the expected
+              amount is under their name. <span className="font-semibold text-destructive">Short</span> means less than
+              expected; <span className="font-semibold text-success">Ahead</span> means an earlier over-payment already
+              covered that month.
+            </p>
+
             {/* Scrolls inside its own box: twelve months of columns must never
                 push the whole page sideways on a phone. */}
             <div className="-mx-1 overflow-x-auto px-1">
@@ -133,11 +140,16 @@ export function ContributionsGrid() {
                     <tr key={row.contributorId} className="border-b border-border/50">
                       <td className="sticky left-0 z-10 max-w-[10rem] bg-card py-2 pr-3 font-medium text-foreground">
                         <span className="block truncate">{row.name}</span>
+                        <span className="block text-[11px] font-normal text-muted-foreground">
+                          {row.monthlyTarget != null && row.monthlyTarget > 0
+                            ? `Expected ${formatKes(row.monthlyTarget)}/mo`
+                            : "No set amount"}
+                        </span>
                         {/* Only when the row is otherwise clear — "ahead" beside
                             a "short" would say two opposite things at once. */}
                         {row.creditRemaining > 0 && row.outstanding.every((owed) => (owed ?? 0) === 0) ? (
                           <span className="block text-[11px] font-medium text-success">
-                            {formatKes(row.creditRemaining)} ahead
+                            {formatKes(row.creditRemaining)} ahead in total
                           </span>
                         ) : null}
                       </td>
