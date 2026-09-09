@@ -187,9 +187,12 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
         body: JSON.stringify({
           amount: splits.reduce((sum, split) => sum + split.amount, 0),
           description: `Contributions for ${new Date(year, month - 1, 1).toLocaleString("en-KE", { month: "long", year: "numeric" })}`,
-          // The first of the month: the group asks whether somebody has done
-          // this month, never which day the money arrived.
-          date: new Date(year, month - 1, 1).toISOString().slice(0, 10),
+          // The first of the selected month, built as a plain string. Going
+          // through Date().toISOString() would subtract the UTC+3 offset and
+          // land on the last day of the previous month, filing the whole batch
+          // one month early. The group asks which month, never which day the
+          // money arrived.
+          date: `${year}-${String(month).padStart(2, "0")}-01`,
           contributorSplits: splits,
         }),
       });
