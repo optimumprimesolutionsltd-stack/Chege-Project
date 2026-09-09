@@ -15,11 +15,17 @@ if (!domain) {
 
 console.log(`Checking Android OTA export in ${outputDir}`);
 
+// Run the Expo CLI through the current Node binary rather than a `pnpm exec`
+// shell-out. Node's spawn cannot resolve the `pnpm` shim on Windows (it is
+// `pnpm.cmd`, and only `shell: true` would find it), which made this check
+// unrunnable there. Resolving `expo/bin/cli` works the same on every OS and
+// drops the package-manager dependency entirely.
+const expoCli = require.resolve('expo/bin/cli');
+
 const result = spawnSync(
-  'pnpm',
+  process.execPath,
   [
-    'exec',
-    'expo',
+    expoCli,
     'export',
     '--platform',
     'android',
