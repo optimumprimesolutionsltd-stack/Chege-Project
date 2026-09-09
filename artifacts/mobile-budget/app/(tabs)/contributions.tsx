@@ -20,6 +20,7 @@ import { useColors } from '@/hooks/useColors';
 import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
+import { ContributionSheet } from '@/components/ContributionSheet';
 import {
   useGetDashboardSummary,
   useGetDashboardIncomeStreams,
@@ -598,6 +599,12 @@ export default function ContributionsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4ade80" />}
         contentContainerStyle={[styles.scroll, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }]}
       >
+        {isSharedWorkspace ? (
+          <View style={{ marginBottom: 16 }}>
+            <ContributionSheet />
+          </View>
+        ) : null}
+
         {isLoading ? (
           <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
         ) : summary ? (
