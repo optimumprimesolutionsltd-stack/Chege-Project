@@ -600,7 +600,14 @@ export default function ContributionsScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 110 }]}
       >
         {isSharedWorkspace ? (
-          <View style={{ marginBottom: 16 }}>
+          <View style={{ marginBottom: 16, gap: 12 }}>
+            <Pressable
+              onPress={() => router.push('/record-contributions')}
+              style={({ pressed }) => [contribCta.button, pressed && { opacity: 0.85 }]}
+            >
+              <Feather name="plus-circle" size={18} color="#0a1a10" />
+              <Text style={contribCta.label}>Record this month</Text>
+            </Pressable>
             <ContributionSheet />
           </View>
         ) : null}
@@ -748,4 +755,17 @@ const bStyles = StyleSheet.create({
   pickerTitle: { fontSize: 16, fontWeight: '700' as const, fontFamily: 'Inter_700Bold', textAlign: 'center', paddingVertical: 12 },
   pickerItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12, marginHorizontal: 12, marginVertical: 1 },
   pickerItemText: { fontSize: 16, fontFamily: 'Inter_500Medium' },
+});
+
+const contribCta = StyleSheet.create({
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#4ade80',
+  },
+  label: { fontSize: 15, color: '#0a1a10', fontFamily: 'Inter_700Bold' },
 });
