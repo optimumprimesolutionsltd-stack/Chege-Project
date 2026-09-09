@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { formatKes } from "@/lib/utils";
-import { Loader2, Pencil, UserPlus } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 
 type Contributor = { id: number; name: string; hasAccount: boolean; monthlyTarget: number | null };
 type BankAccount = { id: number; name: string };
@@ -32,10 +32,6 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<number | null>(null);
-  const [editTarget, setEditTarget] = useState("");
-  const [groupTarget, setGroupTarget] = useState("");
-  const [savingTarget, setSavingTarget] = useState(false);
 
   const today = new Date();
   const pad2 = (value: number) => String(value).padStart(2, "0");
@@ -60,20 +56,6 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
       return todayString >= monthStart && todayString <= monthEnd ? todayString : monthStart;
     });
   }, [monthStart, monthEnd]);
-
-  const { data: settings } = useQuery<{ defaultMonthlyTarget: number | null }>({
-    queryKey: ["contribution-settings"],
-    queryFn: async () => {
-      const response = await fetch("/api/contribution-settings", { credentials: "include" });
-      if (!response.ok) throw new Error("Could not load the expected amount.");
-      return response.json() as Promise<{ defaultMonthlyTarget: number | null }>;
-    },
-    retry: false,
-  });
-
-  useEffect(() => {
-    setGroupTarget(settings?.defaultMonthlyTarget != null ? String(settings.defaultMonthlyTarget) : "");
-  }, [settings?.defaultMonthlyTarget]);
 
   const { data: contributors = [], isLoading } = useQuery<Contributor[]>({
     queryKey: ["contributors"],
@@ -152,61 +134,6 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
       toast({ variant: "destructive", title: "Could not add", description: "That name was not added." });
     } finally {
       setAdding(false);
-    }
-  };
-
-  const saveGroupTarget = async (applyToEveryone: boolean) => {
-    const raw = groupTarget.trim();
-    const value = raw === "" ? null : Number(raw);
-    if (value !== null && (!Number.isFinite(value) || value < 0)) {
-      toast({ variant: "destructive", title: "Enter an amount", description: "Use a number of zero or more, or leave it blank." });
-      return;
-    }
-
-    setSavingTarget(true);
-    try {
-      const response = await fetch("/api/contribution-settings", {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ defaultMonthlyTarget: value, applyToEveryone }),
-      });
-      if (!response.ok) throw new Error("Could not save that amount.");
-      await queryClient.invalidateQueries();
-      toast({
-        title: "Saved",
-        description: applyToEveryone
-          ? "Everyone is now expected to give this amount."
-          : "New members will be expected to give this amount.",
-      });
-    } catch {
-      toast({ variant: "destructive", title: "Could not save", description: "Nothing has been changed." });
-    } finally {
-      setSavingTarget(false);
-    }
-  };
-
-  const saveContributorTarget = async (contributorId: number) => {
-    const raw = editTarget.trim();
-    const value = raw === "" ? null : Number(raw);
-    if (value !== null && (!Number.isFinite(value) || value < 0)) {
-      toast({ variant: "destructive", title: "Enter an amount", description: "Use a number of zero or more, or leave it blank." });
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/contributors/${contributorId}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ monthlyTarget: value }),
-      });
-      if (!response.ok) throw new Error("Could not save.");
-      setEditing(null);
-      await queryClient.invalidateQueries({ queryKey: ["contributors"] });
-      await queryClient.invalidateQueries({ queryKey: ["contribution-grid"] });
-    } catch {
-      toast({ variant: "destructive", title: "Could not save", description: "That amount was not changed." });
     }
   };
 
@@ -388,47 +315,6 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
           ) : null}
         </div>
 
-        <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-          <label className="block text-sm font-medium text-foreground" htmlFor="group-monthly-target">
-            Expected from each member, monthly
-          </label>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            What "who still owes" is measured against. Leave it blank where giving is voluntary.
-          </p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <Input
-              id="group-monthly-target"
-              type="number"
-              min="0"
-              placeholder="e.g. 1000"
-              value={groupTarget}
-              onChange={(event) => setGroupTarget(event.target.value)}
-              disabled={savingTarget}
-              className="sm:max-w-40"
-              data-testid="input-group-monthly-target"
-            />
-            <Button
-              variant="outline"
-              onClick={() => void saveGroupTarget(false)}
-              disabled={savingTarget}
-              data-testid="button-save-group-target"
-            >
-              Save
-            </Button>
-            {/* Setting the figure for the first time must not leave everyone
-                already in the group without one - that is the state that made
-                arrears useless. */}
-            <Button
-              variant="outline"
-              onClick={() => void saveGroupTarget(true)}
-              disabled={savingTarget || contributors.length === 0}
-              data-testid="button-apply-target-to-everyone"
-            >
-              Apply to everyone
-            </Button>
-          </div>
-        </div>
-
         {isLoading ? (
           <div className="flex min-h-24 items-center justify-center text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
@@ -477,43 +363,9 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
                       disabled={!on || saving}
                       data-testid={`amount-contributor-${contributor.id}`}
                     />
-                  ) : editing === contributor.id ? (
-                    <span className="flex shrink-0 items-center gap-1">
-                      <Input
-                        type="number"
-                        min="0"
-                        autoFocus
-                        placeholder="blank"
-                        className="h-9 w-24 text-right"
-                        value={editTarget}
-                        onChange={(event) => setEditTarget(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") void saveContributorTarget(contributor.id);
-                          if (event.key === "Escape") setEditing(null);
-                        }}
-                        data-testid={`edit-target-${contributor.id}`}
-                      />
-                      <Button size="sm" onClick={() => void saveContributorTarget(contributor.id)}>Save</Button>
-                    </span>
                   ) : (
-                    <span className="flex shrink-0 items-center gap-2">
-                      <span className={`tabular-nums ${on ? "text-foreground" : "text-muted-foreground/50"}`}>
-                        {on && amountFor(contributor) > 0 ? formatKes(amountFor(contributor)) : "—"}
-                      </span>
-                      {/* One tap to change what this person is expected to
-                          give, for the member who pays a different figure. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditing(contributor.id);
-                          setEditTarget(contributor.monthlyTarget != null ? String(contributor.monthlyTarget) : "");
-                        }}
-                        className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                        aria-label={`Change what ${contributor.name} is expected to give`}
-                        data-testid={`edit-contributor-${contributor.id}`}
-                      >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
+                    <span className={`shrink-0 tabular-nums ${on ? "text-foreground" : "text-muted-foreground/50"}`}>
+                      {on && amountFor(contributor) > 0 ? formatKes(amountFor(contributor)) : "—"}
                     </span>
                   )}
                 </li>
