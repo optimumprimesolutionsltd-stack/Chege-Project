@@ -21,6 +21,7 @@ import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { ContributionSheet } from '@/components/ContributionSheet';
+import { ContributionVariance } from '@/components/ContributionVariance';
 import {
   useGetDashboardSummary,
   useGetDashboardIncomeStreams,
@@ -620,6 +621,7 @@ export default function ContributionsScreen() {
               ) : null}
             </View>
             <ContributionSheet />
+            <ContributionVariance />
           </View>
         ) : null}
 
