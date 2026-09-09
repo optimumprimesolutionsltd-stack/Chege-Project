@@ -31,7 +31,7 @@ const PAGES: Record<string, SeoEntry> = {
     description: `Track chama contributions, split household bills and see who has paid - in one shared record everybody trusts. KES ${JAMVI_PACKAGE.monthlyPriceKes} a month per member; groups of any size cost nothing extra. Free for ${TRIAL_DAYS} days.`,
   },
   "/features": {
-    title: "Features for Chamas, Families & Flatmates",
+    title: "Features for Chamas, Families & Roommates",
     description:
       "Record monthly contributions for the whole group at once, see who has paid on a month-by-month sheet, split expenses, set savings goals, and keep one history nobody can quietly edit.",
   },
