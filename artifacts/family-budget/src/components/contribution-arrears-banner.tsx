@@ -28,7 +28,12 @@ export function ContributionArrearsBanner() {
   const lastIndex = data.months.length - 1;
   const monthLabel = data.months[lastIndex].label;
   const behind = data.rows
-    .map((row) => ({ name: row.name, owed: row.outstanding[lastIndex] ?? 0 }))
+    .map((row) => ({
+      name: row.name,
+      owed: row.outstanding[lastIndex] ?? 0,
+      gave: row.amounts[lastIndex] ?? 0,
+      expected: row.monthlyTarget ?? 0,
+    }))
     .filter((row) => row.owed > 0)
     .sort((a, b) => b.owed - a.owed || a.name.localeCompare(b.name));
 
@@ -52,7 +57,11 @@ export function ContributionArrearsBanner() {
           <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             {behind.map((row) => (
               <li key={row.name}>
-                <span className="font-medium text-foreground">{row.name}</span> — {formatKes(row.owed)}
+                <span className="font-medium text-foreground">{row.name}</span>
+                {" — gave "}
+                {formatKes(row.gave)}
+                {row.expected > 0 ? ` of ${formatKes(row.expected)}` : ""}
+                <span className="text-destructive"> ({formatKes(row.owed)} short)</span>
               </li>
             ))}
           </ul>
