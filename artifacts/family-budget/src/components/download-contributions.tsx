@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
+  buildContributionWhatsAppText,
   buildGroupContributionReportHtml,
   buildMemberContributionReportHtml,
 } from "@/lib/contribution-report";
@@ -86,7 +87,26 @@ export function DownloadContributions({
   const { toast } = useToast();
   const options = useMemo(contributionMonthOptions, []);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [start, end] = ordered(fromKey, toKey);
+
+  // The grid rows narrowed to the chosen range — shared by the PDF and the
+  // WhatsApp text. Null when nothing falls in the range.
+  const buildReport = (grid: ContributionGrid) => {
+    const keep = keptMonths(grid, start, end);
+    if (keep.length === 0) return null;
+    const months = keep.map((index) => grid.months[index]);
+    const rows = grid.rows.map((row) => {
+      const amounts = keep.map((index) => row.amounts[index] ?? 0);
+      return {
+        name: row.name,
+        monthlyTarget: row.monthlyTarget,
+        amounts,
+        total: amounts.reduce((sum, amount) => sum + amount, 0),
+      };
+    });
+    return { budgetName, months, rows, grandTotal: rows.reduce((sum, row) => sum + row.total, 0) };
+  };
 
   const download = async () => {
     const printWindow = openPreparingWindow();
@@ -101,27 +121,13 @@ export function DownloadContributions({
 
     setBusy(true);
     try {
-      const grid = await fetchGrid();
-      const keep = keptMonths(grid, start, end);
-      if (keep.length === 0) {
+      const report = buildReport(await fetchGrid());
+      if (!report) {
         printWindow.close();
         toast({ title: "Nothing in that range", description: "Pick a different from and to month." });
         return;
       }
-
-      const months = keep.map((index) => grid.months[index]);
-      const rows = grid.rows.map((row) => {
-        const amounts = keep.map((index) => row.amounts[index] ?? 0);
-        return {
-          name: row.name,
-          monthlyTarget: row.monthlyTarget,
-          amounts,
-          total: amounts.reduce((sum, amount) => sum + amount, 0),
-        };
-      });
-      const grandTotal = rows.reduce((sum, row) => sum + row.total, 0);
-
-      writeReport(printWindow, buildGroupContributionReportHtml({ budgetName, months, rows, grandTotal }));
+      writeReport(printWindow, buildGroupContributionReportHtml(report));
     } catch {
       printWindow.close();
       toast({
@@ -131,6 +137,29 @@ export function DownloadContributions({
       });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const shareToWhatsApp = async () => {
+    // Opened synchronously so the redirect is not treated as a blocked pop-up
+    // once the data is ready.
+    const chatWindow = window.open("", "_blank");
+    setSharing(true);
+    try {
+      const report = buildReport(await fetchGrid());
+      if (!report) {
+        chatWindow?.close();
+        toast({ title: "Nothing in that range", description: "Pick a different from and to month." });
+        return;
+      }
+      const url = `https://wa.me/?text=${encodeURIComponent(buildContributionWhatsAppText(report))}`;
+      if (chatWindow) chatWindow.location.href = url;
+      else window.open(url, "_blank");
+    } catch {
+      chatWindow?.close();
+      toast({ variant: "destructive", title: "Could not open WhatsApp", description: "Try again in a moment." });
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -162,15 +191,25 @@ export function DownloadContributions({
           ))}
         </select>
       </label>
-      <Button
-        onClick={() => void download()}
-        disabled={busy}
-        className="sm:ml-auto"
-        data-testid="button-download-contributions-pdf"
-      >
-        {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
-        {busy ? "Preparing…" : "Download PDF"}
-      </Button>
+      <div className="flex gap-2 sm:ml-auto">
+        <Button
+          variant="outline"
+          onClick={() => void shareToWhatsApp()}
+          disabled={sharing || busy}
+          data-testid="button-share-contributions-whatsapp"
+        >
+          {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-1 h-4 w-4" />}
+          {sharing ? "Opening…" : "WhatsApp"}
+        </Button>
+        <Button
+          onClick={() => void download()}
+          disabled={busy || sharing}
+          data-testid="button-download-contributions-pdf"
+        >
+          {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+          {busy ? "Preparing…" : "Download PDF"}
+        </Button>
+      </div>
     </div>
   );
 }

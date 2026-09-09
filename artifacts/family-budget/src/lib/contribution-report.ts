@@ -33,6 +33,41 @@ function periodLabel(months: ReportMonth[]): string {
 }
 
 /**
+ * The same sheet as plain text, sized for a WhatsApp message: budget name,
+ * period, one line per contributor with their total and any shortfall, then
+ * the group total against what was expected. No month-by-month breakdown — a
+ * chat message is read, not studied.
+ */
+export function buildContributionWhatsAppText(report: GroupContributionReport): string {
+  const monthCount = report.months.length;
+  const lines: string[] = [
+    `*${report.budgetName}* — Contributions`,
+    periodLabel(report.months),
+    "",
+  ];
+
+  let expectedTotal = 0;
+  for (const row of report.rows) {
+    const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : 0;
+    expectedTotal += expected;
+    const short = expected - row.total;
+    lines.push(
+      `${row.name}: ${formatKes(row.total)}${short > 0 ? `  (${formatKes(short)} short)` : ""}`,
+    );
+  }
+  if (report.rows.length === 0) lines.push("No contributors yet.");
+
+  lines.push("");
+  lines.push(
+    `Total: ${formatKes(report.grandTotal)}${expectedTotal > 0 ? ` of ${formatKes(expectedTotal)} expected` : ""}`,
+  );
+  lines.push("");
+  lines.push("Shared from Jamvi");
+
+  return lines.join("\n");
+}
+
+/**
  * The month-by-month contribution sheet as a self-contained HTML document,
  * laid out vertically so it reads on a phone once it is saved to PDF and sent
  * to WhatsApp. One block per contributor: name and period total, then the
