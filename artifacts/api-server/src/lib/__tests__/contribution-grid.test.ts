@@ -98,6 +98,72 @@ describe("buildContributionGrid", () => {
     expect(grid.rows.find((row) => row.contributorId === 1)?.outstanding[0]).toBe(0);
   });
 
+  it("carries a surplus forward to settle later months", () => {
+    // KES 3,000 in July against a 1,000 target covers July, August and
+    // September. The person is up to date, not behind twice.
+    const grid = buildContributionGrid({
+      months,
+      contributors,
+      entries: [{ contributorId: 3, amount: 3_000, month: 7, year: 2026 }],
+    });
+
+    const mary = grid.rows.find((row) => row.contributorId === 3);
+    expect(mary?.outstanding).toEqual([0, 0, 0]);
+    expect(mary?.creditRemaining).toBe(0);
+  });
+
+  it("reports the credit left over when someone has paid past the last month", () => {
+    const grid = buildContributionGrid({
+      months,
+      contributors,
+      entries: [{ contributorId: 3, amount: 5_000, month: 7, year: 2026 }],
+    });
+
+    const mary = grid.rows.find((row) => row.contributorId === 3);
+    expect(mary?.outstanding).toEqual([0, 0, 0]);
+    // 5,000 paid, 3,000 expected across the three months → 2,000 ahead.
+    expect(mary?.creditRemaining).toBe(2_000);
+  });
+
+  it("uses a partial surplus before it calls a later month short", () => {
+    const grid = buildContributionGrid({
+      months,
+      contributors,
+      entries: [{ contributorId: 2, amount: 1_500, month: 7, year: 2026 }],
+    });
+
+    const john = grid.rows.find((row) => row.contributorId === 2);
+    // July met, 500 carried into August, so August is only 500 short, not 1,000.
+    expect(john?.outstanding).toEqual([0, 500, 1_000]);
+    expect(john?.creditRemaining).toBe(0);
+  });
+
+  it("does not carry a shortfall backwards", () => {
+    const grid = buildContributionGrid({
+      months,
+      contributors,
+      entries: [{ contributorId: 1, amount: 4_000, month: 9, year: 2026 }],
+    });
+
+    const grace = grid.rows.find((row) => row.contributorId === 1);
+    // Nothing in July or August; paying late in September does not un-miss them.
+    // The 3,000 left after covering September carries forward as it would for
+    // any surplus - the UI hides it while any month is still outstanding.
+    expect(grace?.outstanding).toEqual([1_000, 1_000, 0]);
+    expect(grace?.creditRemaining).toBe(3_000);
+  });
+
+  it("keeps voluntary rows free of credit", () => {
+    const grid = buildContributionGrid({
+      months,
+      contributors: [{ id: 9, name: "Anonymous", monthlyTarget: null }],
+      entries: [{ contributorId: 9, amount: 9_000, month: 7, year: 2026 }],
+    });
+
+    expect(grid.rows[0].outstanding).toEqual([null, null, null]);
+    expect(grid.rows[0].creditRemaining).toBe(0);
+  });
+
   it("reports nothing outstanding where giving is voluntary", () => {
     // A church is never chasing anybody. No expected amount means no debt,
     // which is a different thing from a debt of zero.

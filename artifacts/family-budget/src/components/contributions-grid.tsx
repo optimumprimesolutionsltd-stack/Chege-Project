@@ -13,6 +13,7 @@ type GridRow = {
   amounts: number[];
   total: number;
   outstanding: Array<number | null>;
+  creditRemaining: number;
 };
 export type ContributionGrid = {
   months: GridMonth[];
@@ -130,8 +131,15 @@ export function ContributionsGrid() {
                 <tbody>
                   {shown.map((row) => (
                     <tr key={row.contributorId} className="border-b border-border/50">
-                      <td className="sticky left-0 z-10 max-w-[10rem] truncate bg-card py-2 pr-3 font-medium text-foreground">
-                        {row.name}
+                      <td className="sticky left-0 z-10 max-w-[10rem] bg-card py-2 pr-3 font-medium text-foreground">
+                        <span className="block truncate">{row.name}</span>
+                        {/* Only when the row is otherwise clear — "ahead" beside
+                            a "short" would say two opposite things at once. */}
+                        {row.creditRemaining > 0 && row.outstanding.every((owed) => (owed ?? 0) === 0) ? (
+                          <span className="block text-[11px] font-medium text-success">
+                            {formatKes(row.creditRemaining)} ahead
+                          </span>
+                        ) : null}
                       </td>
                       {row.amounts.map((amount, column) => {
                         const owed = row.outstanding[column];
