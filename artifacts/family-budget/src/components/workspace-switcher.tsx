@@ -5,7 +5,7 @@ import {
 } from "@workspace/api-client-react";
 import { useGetGroup } from "@workspace/api-client-react";
 import { useState } from "react";
-import { Award, BriefcaseBusiness, Heart, Home, Star, Users } from "lucide-react";
+import { Award, BriefcaseBusiness, ChevronDown, Heart, Home, Star, Users } from "lucide-react";
 import { workspaceIdentityText, workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -43,6 +43,10 @@ export function WorkspaceSwitcher({
   const isMobileVariant = variant === "mobile";
   const [pendingWorkspace, setPendingWorkspace] = useState<Workspace | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  // The dashboard card names the budget you are in on its own; the list of the
+  // others stays folded away until you ask for it, so the everyday view is one
+  // budget, not a chooser.
+  const [dashboardSwitcherOpen, setDashboardSwitcherOpen] = useState(false);
   const activeBrandedBudget = activeGroup ?? null;
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const ActiveIcon = ({
@@ -82,8 +86,20 @@ export function WorkspaceSwitcher({
   return (
     <>
       {isDashboardVariant ? (
+        workspaces.length <= 1 ? null : !dashboardSwitcherOpen ? (
+          <button
+            type="button"
+            onClick={() => setDashboardSwitcherOpen(true)}
+            className={`inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline ${className}`}
+            data-testid="dashboard-open-budget-switcher"
+          >
+            Switch budget
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : (
+        <div className={`space-y-2 ${className}`}>
         <div
-          className={`flex w-full snap-x snap-mandatory scroll-p-1 overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-3 ${className}`}
+          className="flex w-full snap-x snap-mandatory scroll-p-1 overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-3"
           role="group"
           aria-label="Available budgets"
         >
@@ -168,6 +184,15 @@ export function WorkspaceSwitcher({
               );
             })}
         </div>
+          <button
+            type="button"
+            onClick={() => setDashboardSwitcherOpen(false)}
+            className="text-xs font-medium text-muted-foreground hover:underline"
+          >
+            Hide other budgets
+          </button>
+        </div>
+        )
       ) : (
         <div className="flex min-w-0 items-center gap-2">
           {activeBrandedBudget ? (
