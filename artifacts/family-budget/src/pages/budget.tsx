@@ -552,6 +552,10 @@ export default function Budget() {
   const [newIncomeSourceAmount, setNewIncomeSourceAmount] = useState("");
   const [addingIncomeSource, setAddingIncomeSource] = useState(false);
   const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
+  // Simple by default: most people are reading the month, not restructuring
+  // it, and a flat list of forty rows is the thing sub-categories exist to
+  // prevent.
+  const [categoryView, setCategoryView] = useState<"simple" | "advanced">("simple");
   const [tierEditorOpen, setTierEditorOpen] = useState(false);
   const [tierDrafts, setTierDrafts] = useState<PriorityTier[]>([]);
   const [savingTiers, setSavingTiers] = useState(false);
@@ -835,6 +839,7 @@ export default function Budget() {
   // A ledger is shown inside the category it belongs to, never as a card
   // beside it. Otherwise the tier report grows by one card per mini-ledger and
   // the thing sub-categories exist to prevent happens anyway.
+  const showChildrenAsRows = categoryView === "advanced";
   const childCategories = allCategories.filter(category => category.parentId != null);
   const childCategoryNames = new Set(childCategories.map(category => category.name));
   const childrenByParentId = childCategories.reduce((acc, category) => {
@@ -845,8 +850,17 @@ export default function Budget() {
   }, new Map<number, BudgetCategory[]>());
   const spentByCategoryName = new Map((breakdown ?? []).map(item => [item.category, item.spentAmount]));
 
+  const parentNameByChildName = new Map(
+    childCategories.map(child => [
+      child.name,
+      allCategories.find(category => category.id === child.parentId)?.name ?? "",
+    ]),
+  );
+
   const groupedBreakdown = breakdown ? breakdown
-    .filter(item => !childCategoryNames.has(item.category))
+    // Hidden in Simple because they are shown inside their parent instead.
+    // Showing them in both places would double every figure on the screen.
+    .filter(item => showChildrenAsRows || !childCategoryNames.has(item.category))
     .reduce((acc, item) => {
       if (!acc[item.priority]) acc[item.priority] = [];
       acc[item.priority].push(item);
@@ -858,7 +872,8 @@ export default function Budget() {
   const activeCategories = allCategories.filter(category =>
     category.isRecurring || (category.activeMonth === month && category.activeYear === year)
   );
-  const unusedCats = activeCategories.filter(c => !catNamesInBreakdown.has(c.name) && !childCategoryNames.has(c.name));
+  const unusedCats = activeCategories.filter(c =>
+    !catNamesInBreakdown.has(c.name) && (showChildrenAsRows || !childCategoryNames.has(c.name)));
   const unusedByPriority = unusedCats.reduce((acc, c) => {
     if (!acc[c.priority]) acc[c.priority] = [];
     acc[c.priority].push(c);
@@ -1241,11 +1256,31 @@ export default function Budget() {
         <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 text-primary animate-spin" /></div>
       ) : (
         <div className="space-y-8">
-            <div>
-              <h2 className="font-display text-xl font-bold text-foreground">Priority tier report</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Tiers help protect essential spending first when money is limited: Tier 1 is most urgent and Tier 5 can wait.
-              </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="font-display text-xl font-bold text-foreground">Priority tier report</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Tiers help protect essential spending first when money is limited: Tier 1 is most urgent and Tier 5 can wait.
+                </p>
+              </div>
+              {/* Simple reads: one line per category, sub-categories tucked
+                  inside it. Advanced works: each sub-category is a row of its
+                  own, because that is the thing being edited. */}
+              {childCategories.length > 0 ? (
+                <div className="flex shrink-0 gap-1" role="group" aria-label="Category detail">
+                  {(["simple", "advanced"] as const).map(option => (
+                    <Button
+                      key={option}
+                      variant={categoryView === option ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCategoryView(option)}
+                      data-testid={`category-view-${option}`}
+                    >
+                      {option === "simple" ? "Simple" : "Advanced"}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
             </div>
            {Array.from(new Set([
              1,
@@ -1342,7 +1377,10 @@ export default function Budget() {
                           </div>
                           {(() => {
                             const ledgers = fullCat ? childrenByParentId.get(fullCat.id) ?? [] : [];
-                            if (ledgers.length === 0) return null;
+                            // In Advanced each of these is its own row further
+                            // up, so repeating them here would say everything
+                            // twice.
+                            if (showChildrenAsRows || ledgers.length === 0) return null;
                             const allocated = ledgers.reduce((sum, ledger) => sum + ledger.budgetAmount, 0);
                             const unallocated = cat.budgetAmount - allocated;
                             return (
