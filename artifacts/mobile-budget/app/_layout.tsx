@@ -273,6 +273,16 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: 'transparent' },
         }}
       />
+      <Stack.Screen
+        name="contribution-plan"
+        options={{
+          presentation: 'formSheet',
+          sheetAllowedDetents: [0.85, 1],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
+      />
     </Stack>
   );
 }
