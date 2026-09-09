@@ -257,6 +257,11 @@ export default function RecordContributionsScreen() {
             );
           })}
         </View>
+        <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>
+          {mode === 'simple'
+            ? 'Everyone paid the same amount — type it once below.'
+            : 'Amounts differ per person, or someone paid nothing — set each one in their row.'}
+        </Text>
 
         {mode === 'simple' && (
           <View style={styles.block}>
@@ -399,6 +404,7 @@ const styles = StyleSheet.create({
   notice: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 12, fontSize: 13, lineHeight: 18 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
+  modeHint: { fontSize: 12, lineHeight: 17, marginTop: -2 },
   list: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, overflow: 'hidden' },
   member: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
   check: { width: 22 },

@@ -211,6 +211,11 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
             <p className="mt-1 text-sm text-muted-foreground">
               Everyone is ticked to start. Untick anyone who has not paid.
             </p>
+            <p className="mt-1 text-xs text-muted-foreground" data-testid="contribution-mode-hint">
+              {mode === "simple"
+                ? "Simple: everyone paid the same amount — type it once below."
+                : "Advanced: amounts differ per person, or someone paid nothing — set each one in their row."}
+            </p>
           </div>
           <div className="flex shrink-0 gap-1" role="group" aria-label="Entry mode">
             {(["simple", "advanced"] as const).map((option) => (

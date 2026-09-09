@@ -68,6 +68,26 @@ export default function ContributionPlanScreen() {
     }
   };
 
+  // The parsed group figure, only when the box holds a usable number. The
+  // "set everyone" action stays hidden until then — wiping every member's
+  // amount at once should never be a stray tap away.
+  const parsedGroupTarget = (() => {
+    const value = parseAmount(groupTarget);
+    return typeof value === 'number' ? value : null;
+  })();
+
+  const applyToAllMembers = () => {
+    if (parsedGroupTarget == null) return;
+    Alert.alert(
+      `Set every member to KES ${kes(parsedGroupTarget)}/mo?`,
+      `This replaces the amount for all ${contributors.length} ${contributors.length === 1 ? 'member' : 'members'} below, including anyone you set individually.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Set all', style: 'destructive', onPress: () => void saveGroupTarget(true) },
+      ],
+    );
+  };
+
   const saveMemberTarget = async (contributorId: number) => {
     const value = parseAmount(editValue);
     if (value === false) {
@@ -106,7 +126,10 @@ export default function ContributionPlanScreen() {
         </Text>
 
         <View style={[styles.card, { borderColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.foreground }]}>Group default, per member per month</Text>
+          <Text style={[styles.label, { color: colors.foreground }]}>Starting amount for new members</Text>
+          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+            Anyone you add from now on starts here. It does not change the members already listed below.
+          </Text>
           <TextInput
             value={groupTarget}
             onChangeText={setGroupTarget}
@@ -116,22 +139,13 @@ export default function ContributionPlanScreen() {
             editable={!savingGroup}
             style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
           />
-          <View style={styles.groupButtons}>
-            <Pressable
-              onPress={() => void saveGroupTarget(false)}
-              disabled={savingGroup}
-              style={[styles.btn, { borderColor: colors.border, opacity: savingGroup ? 0.5 : 1 }]}
-            >
-              <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Save</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => void saveGroupTarget(true)}
-              disabled={savingGroup || contributors.length === 0}
-              style={[styles.btn, { borderColor: colors.border, opacity: savingGroup || contributors.length === 0 ? 0.5 : 1 }]}
-            >
-              <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Apply to everyone</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => void saveGroupTarget(false)}
+            disabled={savingGroup}
+            style={[styles.btn, styles.btnFull, { borderColor: colors.border, opacity: savingGroup ? 0.5 : 1 }]}
+          >
+            <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>Save</Text>
+          </Pressable>
         </View>
 
         {isLoading ? (
@@ -182,6 +196,23 @@ export default function ContributionPlanScreen() {
             ))}
           </View>
         )}
+
+        {contributors.length > 0 && parsedGroupTarget != null ? (
+          <View style={[styles.applyAll, { borderColor: colors.border }]}>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Want everyone on the same amount? This overwrites every member above with the starting amount.
+            </Text>
+            <Pressable
+              onPress={applyToAllMembers}
+              disabled={savingGroup}
+              style={[styles.btn, styles.btnFull, { borderColor: colors.border, opacity: savingGroup ? 0.5 : 1 }]}
+            >
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
+                Set all {contributors.length} to KES {kes(parsedGroupTarget)}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -194,9 +225,11 @@ const styles = StyleSheet.create({
   intro: { fontSize: 13, lineHeight: 19 },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, gap: 10 },
   label: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  hint: { fontSize: 12, lineHeight: 17 },
   input: { height: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
-  groupButtons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   btn: { height: 40, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  btnFull: { alignSelf: 'stretch' },
+  applyAll: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, gap: 10 },
   empty: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 14, fontSize: 13, lineHeight: 18 },
   list: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, overflow: 'hidden' },
   member: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12 },
