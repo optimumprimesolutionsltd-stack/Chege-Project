@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { dateInputValue, getPeriodRange, type PeriodView } from "@/lib/period-range";
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
-import { AlertTriangle, ArrowLeft, ArrowRight, Calendar, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Download, Landmark, Loader2, PiggyBank, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Calendar, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Download, Landmark, Loader2, PiggyBank, Receipt, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { Link } from "wouter";
 import { ContributionHistory } from "@/components/contribution-history";
 
@@ -104,6 +104,13 @@ export default function IncomeStreamsReport() {
       request: { cache: "no-store" },
     },
   );
+  // Bank charges are on the period-totals response but not yet in the generated
+  // client type. Read defensively until the client is regenerated.
+  const bankChargeExtras = periodTotals.data as
+    | { bankChargesTotal?: number; bankChargesCount?: number }
+    | undefined;
+  const bankChargesTotal = bankChargeExtras?.bankChargesTotal ?? 0;
+  const bankChargesCount = bankChargeExtras?.bankChargesCount ?? 0;
 
   useEffect(() => {
     if (initialMonthChecked.current || monthlySummary.isLoading || previousMonthSummary.isLoading) return;
@@ -474,6 +481,18 @@ export default function IncomeStreamsReport() {
                 </div>
               </div>
 
+              {bankChargesTotal > 0 ? (
+                <div className="flex items-baseline justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total out</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Spending plus {formatKes(bankChargesTotal)} in bank charges</p>
+                  </div>
+                  <p className="shrink-0 font-display text-xl font-bold">
+                    {formatKes(periodTotals.data.spendingTotal + bankChargesTotal)}
+                  </p>
+                </div>
+              ) : null}
+
                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
                 <div className="min-w-0 rounded-xl bg-muted/50 p-3">
                   <Landmark className="h-4 w-4 text-primary" />
@@ -498,6 +517,14 @@ export default function IncomeStreamsReport() {
                   <p className="mt-2 text-xs text-muted-foreground">Recorded expenses</p>
                   <p className="mt-1 break-words font-display text-lg font-bold">{formatKes(periodTotals.data.expenseTotal)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">Before standalone bank costs</p>
+                </div>
+                <div className="min-w-0 rounded-xl bg-muted/50 p-3">
+                  <Receipt className="h-4 w-4 text-muted-foreground" />
+                  <p className="mt-2 text-xs text-muted-foreground">Bank charges</p>
+                  <p className="mt-1 break-words font-display text-lg font-bold">{formatKes(bankChargesTotal)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {bankChargesCount} {bankChargesCount === 1 ? "charge" : "charges"} · not in spending
+                  </p>
                 </div>
               </div>
 
