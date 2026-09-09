@@ -36,8 +36,28 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   const [savingTarget, setSavingTarget] = useState(false);
 
   const today = new Date();
+  const pad2 = (value: number) => String(value).padStart(2, "0");
+  const localDateString = (value: Date) =>
+    `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
+  // The day the money actually came in. Shown on every record in the ledger,
+  // and kept inside the month being recorded so a batch can never be filed in
+  // the wrong month.
+  const [dateReceived, setDateReceived] = useState(() => localDateString(today));
+
+  const monthStart = `${year}-${pad2(month)}-01`;
+  const monthEnd = `${year}-${pad2(month)}-${pad2(new Date(year, month, 0).getDate())}`;
+
+  // When the month or year selector moves, pull the received date back into
+  // range: today if today falls in that month, otherwise the first of it.
+  useEffect(() => {
+    setDateReceived((current) => {
+      if (current >= monthStart && current <= monthEnd) return current;
+      const todayString = localDateString(new Date());
+      return todayString >= monthStart && todayString <= monthEnd ? todayString : monthStart;
+    });
+  }, [monthStart, monthEnd]);
 
   const { data: settings } = useQuery<{ defaultMonthlyTarget: number | null }>({
     queryKey: ["contribution-settings"],
@@ -187,12 +207,10 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
         body: JSON.stringify({
           amount: splits.reduce((sum, split) => sum + split.amount, 0),
           description: `Contributions for ${new Date(year, month - 1, 1).toLocaleString("en-KE", { month: "long", year: "numeric" })}`,
-          // The first of the selected month, built as a plain string. Going
-          // through Date().toISOString() would subtract the UTC+3 offset and
-          // land on the last day of the previous month, filing the whole batch
-          // one month early. The group asks which month, never which day the
-          // money arrived.
-          date: `${year}-${String(month).padStart(2, "0")}-01`,
+          // The day the treasurer says the money came in. The form keeps it
+          // inside the selected month, so the batch is always filed in that
+          // month while the ledger still shows the real date.
+          date: dateReceived,
           contributorSplits: splits,
         }),
       });
@@ -264,6 +282,21 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
               value={year}
               onChange={(event) => setYear(Number(event.target.value))}
               data-testid="input-contribution-year"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block font-medium text-foreground">Date received</span>
+            <Input
+              type="date"
+              value={dateReceived}
+              min={monthStart}
+              max={monthEnd}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (!next) return;
+                setDateReceived(next < monthStart ? monthStart : next > monthEnd ? monthEnd : next);
+              }}
+              data-testid="input-contribution-date-received"
             />
           </label>
           {mode === "simple" ? (
