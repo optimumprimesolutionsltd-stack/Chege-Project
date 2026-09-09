@@ -24,4 +24,24 @@ describe("monthly report PDF", () => {
     expect(pdf.length).toBeGreaterThan(5_000);
     expect(pdf.toString("latin1")).toContain("%%EOF");
   });
+
+  it("renders a bank charges line when there were fees", async () => {
+    const pdf = await createMonthlyReportPdf({
+      groupName: "Kilimani Household",
+      monthLabel: "August 2026",
+      totalBudget: 50_000,
+      totalSpent: 12_500,
+      remaining: 37_500,
+      expenseCount: 4,
+      categories: [
+        { category: "Food", budgetAmount: 20_000, spentAmount: 12_500, remaining: 7_500, percentUsed: 62.5 },
+      ],
+      totalFunding: 15_000,
+      bankChargesTotal: 350,
+      incomeStreams: [],
+    });
+
+    expect(pdf.subarray(0, 8).toString()).toBe("%PDF-1.3");
+    expect(pdf.toString("latin1")).toContain("%%EOF");
+  });
 });

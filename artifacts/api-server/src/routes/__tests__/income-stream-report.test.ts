@@ -302,6 +302,8 @@ describe("GET /dashboard/period-totals", () => {
       contributionTotal: 2200,
       bankDepositTotal: 1500,
       bankDisbursementTotal: 400,
+      bankChargesTotal: 0,
+      bankChargesCount: 0,
       savingsTotal: 300,
       netMovement: 1100,
       expenseCount: 3,
@@ -345,6 +347,7 @@ describe("GET /dashboard/monthly-report.pdf", () => {
       .mockReturnValueOnce(mockSelectRows([]) as never)
       .mockReturnValueOnce(mockSelectRows([]) as never)
       .mockReturnValueOnce(mockSelectRows([]) as never)
+      .mockReturnValueOnce(mockSelectRows([{ total: 0 }]) as never)
       .mockReturnValueOnce(mockSelectRows([{ count: 0 }]) as never);
     mockedDb.execute.mockResolvedValue({ rows: [] });
 
