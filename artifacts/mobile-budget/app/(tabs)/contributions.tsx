@@ -601,13 +601,24 @@ export default function ContributionsScreen() {
       >
         {isSharedWorkspace ? (
           <View style={{ marginBottom: 16, gap: 12 }}>
-            <Pressable
-              onPress={() => router.push('/record-contributions')}
-              style={({ pressed }) => [contribCta.button, pressed && { opacity: 0.85 }]}
-            >
-              <Feather name="plus-circle" size={18} color="#0a1a10" />
-              <Text style={contribCta.label}>Record this month</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                onPress={() => router.push('/record-contributions')}
+                style={({ pressed }) => [contribCta.button, { flex: 1 }, pressed && { opacity: 0.85 }]}
+              >
+                <Feather name="plus-circle" size={18} color="#0a1a10" />
+                <Text style={contribCta.label}>Record this month</Text>
+              </Pressable>
+              {group?.role === 'owner' || group?.role === 'admin' ? (
+                <Pressable
+                  onPress={() => router.push('/contribution-plan')}
+                  style={({ pressed }) => [contribCta.secondary, pressed && { opacity: 0.85 }]}
+                >
+                  <Feather name="target" size={18} color="#4ade80" />
+                  <Text style={contribCta.secondaryLabel}>Expected</Text>
+                </Pressable>
+              ) : null}
+            </View>
             <ContributionSheet />
           </View>
         ) : null}
@@ -768,4 +779,16 @@ const contribCta = StyleSheet.create({
     backgroundColor: '#4ade80',
   },
   label: { fontSize: 15, color: '#0a1a10', fontFamily: 'Inter_700Bold' },
+  secondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 48,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(74,222,128,0.5)',
+  },
+  secondaryLabel: { fontSize: 14, color: '#4ade80', fontFamily: 'Inter_700Bold' },
 });
