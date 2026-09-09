@@ -520,13 +520,15 @@ export default function Contributions() {
           {canManageContributions ? <ContributionArrearsBanner /> : null}
           {canManageContributions ? <ContributionPlan /> : null}
           <RecordContributions />
-          <DownloadContributions
-            budgetName={group ? workspaceLabel(group) : "Shared budget"}
-            fromKey={pdfFromKey}
-            toKey={pdfToKey}
-            onFromChange={setPdfFromKey}
-            onToChange={setPdfToKey}
-          />
+          {canManageContributions ? (
+            <DownloadContributions
+              budgetName={group ? workspaceLabel(group) : "Shared budget"}
+              fromKey={pdfFromKey}
+              toKey={pdfToKey}
+              onFromChange={setPdfFromKey}
+              onToChange={setPdfToKey}
+            />
+          ) : null}
           <ContributionsGrid />
           <ContributionVariance />
         </div>
@@ -839,7 +841,7 @@ export default function Contributions() {
               budgetName={group ? workspaceLabel(group) : "Shared budget"}
               pdfFromKey={pdfFromKey}
               pdfToKey={pdfToKey}
-              canDownloadPdf={isSharedWorkspace}
+              canDownloadPdf={isSharedWorkspace && canManageContributions}
             />
           ))}
         </div>
