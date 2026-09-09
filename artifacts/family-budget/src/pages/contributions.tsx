@@ -35,6 +35,8 @@ import {
   contributionMonthOptions,
 } from "@/components/download-contributions";
 import { ContributionArrearsBanner } from "@/components/contribution-arrears-banner";
+import { ContributionPlan } from "@/components/contribution-plan";
+import { ContributionVariance } from "@/components/contribution-variance";
 import { workspaceLabel } from "@/lib/workspace-identity";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
@@ -516,6 +518,7 @@ export default function Contributions() {
       {isSharedWorkspace ? (
         <div className="space-y-6">
           {canManageContributions ? <ContributionArrearsBanner /> : null}
+          {canManageContributions ? <ContributionPlan /> : null}
           <RecordContributions />
           <DownloadContributions
             budgetName={group ? workspaceLabel(group) : "Shared budget"}
@@ -525,6 +528,7 @@ export default function Contributions() {
             onToChange={setPdfToKey}
           />
           <ContributionsGrid />
+          <ContributionVariance />
         </div>
       ) : null}
 
