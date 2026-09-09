@@ -51,7 +51,7 @@ export default function Home() {
               </motion.h1>
               <motion.p variants={fadeUp} className="text-lg sm:text-xl text-foreground/70 mb-8 leading-relaxed max-w-lg">
                  One subscription covers your own budget and every group you are part of —
-                 with your partner, your family, your flatmates, your chama. Groups cost
+                 with your partner, your family, your roommates, your chama. Groups cost
                  nothing extra, however many of you there are.
               </motion.p>
               <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-4">
@@ -88,7 +88,7 @@ export default function Home() {
                     A big figure above credits and debits is the grammar of a
                     banking app and reads as money Jamvi holds, which it never
                     does. And most people arriving here are not in a chama — they
-                    share money with a partner, a family or a flat. Showing them
+                    share money with a partner, a family or roommates. Showing them
                     their own life converts better than showing them a committee.
                   */}
                   <div className="flex items-start justify-between mb-6">

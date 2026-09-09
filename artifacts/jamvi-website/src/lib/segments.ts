@@ -323,7 +323,7 @@ export const SEGMENTS: Segment[] = [
   {
     slug: "/household",
     label: "Households",
-    title: "Household Budget App for Couples, Families & Flatmates",
+    title: "Household Budget App for Couples, Families & Roommates",
     description:
       "Share rent, bills and shopping without keeping score in your head. One record everyone in the house can see, and your own private budget alongside it.",
     heading: "Shared money, without the arguments",
@@ -345,7 +345,7 @@ export const SEGMENTS: Segment[] = [
         body: "A deposit, a trip, a plot. Set the target once and watch it fill as any of you adds to it, with everyone seeing how far there is to go.",
       },
       {
-        title: "A couple, a family or a flat",
+        title: "A couple, a family or roommates",
         body: "Two people or six, related or not. A house is a house - the record does not care how you are connected.",
       },
     ],

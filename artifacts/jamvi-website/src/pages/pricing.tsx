@@ -19,7 +19,7 @@ const pricingFaqs = [
   {
     question: "Does my chama pay as well?",
     answer:
-      "No. Groups have no bill at all. Everyone in a Shared budget pays for their own Jamvi subscription, and the group itself is free however many of you there are — two flatmates or fifty chama members.",
+      "No. Groups have no bill at all. Everyone in a Shared budget pays for their own Jamvi subscription, and the group itself is free however many of you there are — two roommates or fifty chama members.",
   },
   {
     question: "What happens after the free days end?",
@@ -73,7 +73,7 @@ export default function Pricing() {
           className="text-lg text-foreground/70 leading-relaxed"
         >
           Everyone pays for themselves. A Shared budget costs nothing extra, whether it is
-          you and a flatmate or a chama of fifty.
+          you and a roommate or a chama of fifty.
         </motion.p>
       </section>
 
