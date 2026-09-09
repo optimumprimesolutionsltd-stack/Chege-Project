@@ -42,9 +42,14 @@ export interface GridRow {
   monthlyTarget: number | null;
   amounts: number[];
   total: number;
-  /** How much of the expected amount is still missing, per month. Null where
-   *  there is no expectation - a church is never chasing anybody. */
+  /** How much of the expected amount is still missing, per month, after a
+   *  surplus in an earlier month has been carried forward to settle it. Null
+   *  where there is no expectation - a church is never chasing anybody. */
   outstanding: Array<number | null>;
+  /** What is left over after the last reported month once every month's
+   *  expected amount has been met - how far this person has paid ahead. Zero
+   *  when they are exactly settled, behind, or have no expected amount. */
+  creditRemaining: number;
 }
 
 export interface ContributionGrid {
@@ -87,6 +92,7 @@ export function buildContributionGrid(input: {
       amounts: blank(),
       total: 0,
       outstanding: months.map(() => null),
+      creditRemaining: 0,
     });
   }
 
@@ -104,13 +110,31 @@ export function buildContributionGrid(input: {
 
   for (const row of rows.values()) {
     row.total = row.amounts.reduce((sum, amount) => sum + amount, 0);
+
+    if (row.monthlyTarget === null) {
+      // No expected amount means no debt, which is a different thing from a
+      // debt of zero. Nothing to carry either.
+      row.outstanding = row.amounts.map(() => null);
+      row.creditRemaining = 0;
+      continue;
+    }
+
+    const target = row.monthlyTarget;
+    let credit = 0;
     row.outstanding = row.amounts.map((paid) => {
-      if (row.monthlyTarget === null) return null;
-      const short = row.monthlyTarget - paid;
-      // Somebody who gave more than expected is not owed anything back, and
-      // showing a negative outstanding reads as an error.
-      return short > 0 ? short : 0;
+      // A surplus in one month settles the months that follow before any of
+      // them is called outstanding: somebody who paid three months up front
+      // reads as up to date, not as behind twice. A shortfall does not carry
+      // backwards - the credit only ever moves forward.
+      const available = paid + credit;
+      if (available >= target) {
+        credit = available - target;
+        return 0;
+      }
+      credit = 0;
+      return target - available;
     });
+    row.creditRemaining = credit;
   }
 
   const ordered = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));

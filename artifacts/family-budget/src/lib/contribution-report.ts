@@ -91,7 +91,11 @@ export type MemberContributionReport = {
   months: ReportMonth[];
   /** One figure per month in `months`, same order. */
   amounts: number[];
-  monthlyTarget: number | null;
+  /** Still owed per month after a surplus is carried forward. Null where there
+   *  is no expected amount. Same length and order as `months`. */
+  outstanding: Array<number | null>;
+  /** Paid past the last month once every month is settled. */
+  creditRemaining: number;
   total: number;
 };
 
@@ -109,22 +113,22 @@ export function buildMemberContributionReportHtml(report: MemberContributionRepo
   const monthRows = report.months
     .map((entry, index) => {
       const paid = report.amounts[index] ?? 0;
-      const short =
-        report.monthlyTarget != null && report.monthlyTarget - paid > 0
-          ? `<span class="short">short ${escapeHtml(formatKes(report.monthlyTarget - paid))}</span>`
-          : "";
+      const owed = report.outstanding[index] ?? 0;
+      const short = owed > 0 ? `<span class="short">short ${escapeHtml(formatKes(owed))}</span>` : "";
       return `<div class="line"><span>${escapeHtml(entry.label)}</span><span>${paid ? escapeHtml(formatKes(paid)) : "&mdash;"} ${short}</span></div>`;
     })
     .join("");
 
+  const totalShort = report.outstanding.reduce<number>((sum, owed) => sum + (owed ?? 0), 0);
+  const hasExpectation = report.outstanding.some((owed) => owed !== null);
   let expectedLine = "";
-  if (report.monthlyTarget != null) {
-    const expected = report.monthlyTarget * report.months.length;
-    const short = expected - report.total;
+  if (hasExpectation) {
     expectedLine =
-      short > 0
-        ? `<p class="sub">Expected ${escapeHtml(formatKes(expected))} over this period &nbsp;&middot;&nbsp; short ${escapeHtml(formatKes(short))}</p>`
-        : `<p class="sub">Expected ${escapeHtml(formatKes(expected))} over this period &nbsp;&middot;&nbsp; met in full</p>`;
+      totalShort > 0
+        ? `<p class="sub">Short ${escapeHtml(formatKes(totalShort))} over this period</p>`
+        : report.creditRemaining > 0
+          ? `<p class="sub">Up to date &nbsp;&middot;&nbsp; ${escapeHtml(formatKes(report.creditRemaining))} paid ahead</p>`
+          : `<p class="sub">Up to date for this period</p>`;
   }
 
   return reportDocument({

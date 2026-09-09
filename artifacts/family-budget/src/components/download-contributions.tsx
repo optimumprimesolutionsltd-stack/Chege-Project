@@ -219,6 +219,9 @@ export function DownloadMemberContribution({
       const row = grid.rows.find((entry) => entry.name === memberName);
       const months = keep.map((index) => grid.months[index]);
       const amounts = keep.map((index) => row?.amounts[index] ?? 0);
+      const outstanding = keep.map((index) =>
+        row?.monthlyTarget == null ? null : row.outstanding[index] ?? 0,
+      );
 
       writeReport(
         printWindow,
@@ -227,7 +230,8 @@ export function DownloadMemberContribution({
           memberName,
           months,
           amounts,
-          monthlyTarget: row?.monthlyTarget ?? null,
+          outstanding,
+          creditRemaining: row?.creditRemaining ?? 0,
           total: amounts.reduce((sum, amount) => sum + amount, 0),
         }),
       );
