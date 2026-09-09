@@ -18,7 +18,7 @@ import {
 const SUBSCRIPTION_URL = "https://jamvi.co.ke/app/subscription";
 
 function fromAddress(): string {
-  return process.env.INVITATION_FROM_EMAIL?.trim() || "Jamvi <hello@jamvi.co.ke>";
+  return process.env.INVITATION_FROM_EMAIL?.trim() || "Jamvi <info@jamvi.co.ke>";
 }
 
 /**
