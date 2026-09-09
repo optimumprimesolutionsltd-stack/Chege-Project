@@ -22,6 +22,7 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { ContributionSheet } from '@/components/ContributionSheet';
 import { ContributionVariance } from '@/components/ContributionVariance';
+import { ContributionExport } from '@/components/ContributionExport';
 import {
   useGetDashboardSummary,
   useGetDashboardIncomeStreams,
@@ -622,6 +623,7 @@ export default function ContributionsScreen() {
             </View>
             <ContributionSheet />
             <ContributionVariance />
+            <ContributionExport />
           </View>
         ) : null}
 

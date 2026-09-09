@@ -22,7 +22,8 @@ import {
 } from "@workspace/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { buildContributionGrid, gridMonths, type GridEntry } from "../lib/contribution-grid";
+import { buildContributionGrid, gridMonths, type ContributionGrid, type GridEntry } from "../lib/contribution-grid";
+import { createContributionReportPdf } from "../lib/contribution-report-pdf";
 
 const router: IRouter = Router();
 
@@ -230,12 +231,13 @@ router.patch("/contribution-settings", async (req, res): Promise<void> => {
  * moves the group balance; the contributions table is the older per-person
  * record. A group using either, or both, sees one honest total.
  */
-router.get("/contributions/grid", async (req, res): Promise<void> => {
-  const groupId = getActiveGroupId(req, res);
-  if (groupId === null) return;
-
-  const monthsBack = Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
-  const months = gridMonths(monthsBack);
+/**
+ * Load the who-has-paid grid for a group over the last `monthsBack` months.
+ * Shared by the JSON grid endpoint and the PDF report so both read money from
+ * the same two places and carry a surplus forward the same way.
+ */
+async function loadContributionGrid(groupId: number, monthsBack: number): Promise<ContributionGrid> {
+  const months = gridMonths(Math.min(Math.max(monthsBack, 1), 12));
   const earliest = months[0];
 
   const [contributors, recorded, deposited] = await Promise.all([
@@ -289,7 +291,68 @@ router.get("/contributions/grid", async (req, res): Promise<void> => {
     })),
   ];
 
-  res.json(buildContributionGrid({ months, contributors, entries }));
+  return buildContributionGrid({ months, contributors, entries });
+}
+
+router.get("/contributions/grid", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const monthsBack = Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
+  res.json(await loadContributionGrid(groupId, monthsBack));
+});
+
+/**
+ * The same grid as a PDF, for handing a chama or church their record or
+ * forwarding it to the group's WhatsApp. Manager-only, matching the download
+ * controls in the web app.
+ */
+router.get("/contributions/report.pdf", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const monthsBack = Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
+  const [group] = await db
+    .select({ name: groupsTable.name })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+  const grid = await loadContributionGrid(groupId, monthsBack);
+
+  const periodLabel =
+    grid.months.length === 0
+      ? ""
+      : grid.months.length === 1
+        ? grid.months[0].label
+        : `${grid.months[0].label} – ${grid.months[grid.months.length - 1].label}`;
+  const totalExpected = grid.rows.reduce(
+    (sum, row) => sum + (row.monthlyTarget != null ? row.monthlyTarget * grid.months.length : 0),
+    0,
+  );
+
+  const pdf = await createContributionReportPdf({
+    groupName: group?.name ?? "Shared group",
+    periodLabel,
+    months: grid.months.map((month) => ({ label: month.label })),
+    rows: grid.rows.map((row) => ({
+      name: row.name,
+      monthlyTarget: row.monthlyTarget,
+      amounts: row.amounts,
+      total: row.total,
+      outstanding: row.outstanding,
+      creditRemaining: row.creditRemaining,
+    })),
+    grandTotal: grid.grandTotal,
+    totalExpected,
+  });
+
+  const now = new Date();
+  const filename = `jamvi-contributions-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}.pdf`;
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(pdf);
 });
 
 export default router;
