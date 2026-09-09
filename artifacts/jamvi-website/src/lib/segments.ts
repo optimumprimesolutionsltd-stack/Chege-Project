@@ -130,6 +130,10 @@ export const SEGMENTS: Segment[] = [
         body: "Names down the side, months across the top - the sheet you already keep, filled in. Switch on show only those who still owe and you have the list to chase, with the shortfall beside each name.",
       },
       {
+        title: "The month's sheet, sent round",
+        body: "Download the contribution sheet for any run of months as a PDF and drop it in the group chat, instead of typing it out. There is one for each member too.",
+      },
+      {
         title: "Members who do not use the app still count",
         body: "Add somebody by name. No smartphone, no invitation, no email. The treasurer records for them and they appear in the sheet like anybody else.",
       },
