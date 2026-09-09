@@ -143,16 +143,26 @@ export function ContributionsGrid() {
                       </td>
                       {row.amounts.map((amount, column) => {
                         const owed = row.outstanding[column];
+                        // Nothing paid this month, nothing owed, and there was
+                        // an amount to meet: an earlier surplus has already
+                        // covered it. Show it filled rather than blank, so a
+                        // prepaid month does not read the same as an unpaid one.
+                        const coveredAhead =
+                          amount === 0 && (row.monthlyTarget ?? 0) > 0 && owed === 0;
                         return (
                           <td
                             key={column}
                             className={`whitespace-nowrap px-3 py-2 text-right tabular-nums ${
-                              amount === 0 ? "text-muted-foreground/50" : "text-foreground"
+                              coveredAhead
+                                ? "bg-success/10 text-success"
+                                : amount === 0
+                                  ? "text-muted-foreground/50"
+                                  : "text-foreground"
                             }`}
                           >
                             {/* A dash, not KES 0: nothing recorded is not the
                                 same as a payment of nothing. */}
-                            {amount === 0 ? "—" : formatKes(amount)}
+                            {coveredAhead ? "Ahead" : amount === 0 ? "—" : formatKes(amount)}
                             {owed !== null && owed > 0 ? (
                               <span className="block text-[11px] font-medium text-destructive">
                                 {formatKes(owed)} short
