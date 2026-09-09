@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BudgetSectionsCard } from "@/components/budget-sections-card";
+import { SubcategorySuggestionsCard } from "@/components/subcategory-suggestions-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -1021,6 +1022,8 @@ export default function Settings() {
            </CardContent>
          </Card>
        )}
+
+      <SubcategorySuggestionsCard canManage={isPrivateWorkspace || canManageShared} />
 
       {/* Members */}
       <Card className="border-none shadow-md">

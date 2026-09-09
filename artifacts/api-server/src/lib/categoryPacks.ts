@@ -197,3 +197,85 @@ export function categoryPackChildren(
       .map((category) => [category.name, category.children as readonly string[]]),
   );
 }
+
+export interface ExistingCategoryShape {
+  id: number;
+  name: string;
+  parentId: number | null;
+}
+
+export interface SubcategorySuggestions {
+  /** Kind is personal or family — the only kinds this tidy-up runs for. */
+  applicable: boolean;
+  /** Top-level categories whose name matches a standard child. `parentName`
+   *  may not exist in the budget yet; it is created when the move is applied. */
+  matched: Array<{ categoryId: number; categoryName: string; parentName: string }>;
+  /** Other top-level categories that are neither a standard parent nor a
+   *  standard child — the person picks a parent, or leaves them where they are. */
+  unparented: Array<{ categoryId: number; categoryName: string }>;
+  /** Every current top-level category, for the "move under" picker. */
+  parentOptions: Array<{ id: number; name: string }>;
+}
+
+/**
+ * Which existing categories in a household budget could be tucked under a
+ * parent.
+ *
+ * Household budgets (a person or a couple) are where a flat list of forty rows
+ * defeats the point of categories. A category the pack already knows as a
+ * child - "Wi-Fi", "Rent", "School fees" - sitting at the top level is matched
+ * to its standard parent. Anything else at the top level that is not itself a
+ * standard parent is offered with a picker. Categories that already have
+ * children of their own are left alone: nesting is one level deep.
+ *
+ * Pure so the matching can be tested without a database.
+ */
+export function subcategorySuggestions(
+  kind: string | null | undefined,
+  categories: ExistingCategoryShape[],
+  reservedName?: string,
+): SubcategorySuggestions {
+  const normalizedKind = normalizedCategoryPackKind(kind);
+  if (normalizedKind !== "personal" && normalizedKind !== "family") {
+    return { applicable: false, matched: [], unparented: [], parentOptions: [] };
+  }
+
+  const norm = (value: string) => value.trim().toLocaleLowerCase("en-US");
+  const reserved = reservedName ? norm(reservedName) : null;
+  const pack = categoryPackForKind(normalizedKind);
+  const packParentNames = new Set(pack.map((item) => norm(item.name)));
+  const childToParent = new Map<string, string>();
+  for (const parent of pack) {
+    for (const child of parent.children ?? []) childToParent.set(norm(child), parent.name);
+  }
+
+  const parentIdsInUse = new Set<number>();
+  for (const category of categories) {
+    if (category.parentId != null) parentIdsInUse.add(category.parentId);
+  }
+
+  const topLevel = categories.filter((category) => category.parentId == null);
+  const parentOptions = topLevel
+    .filter((category) => norm(category.name) !== reserved)
+    .map((category) => ({ id: category.id, name: category.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const matched: SubcategorySuggestions["matched"] = [];
+  const unparented: SubcategorySuggestions["unparented"] = [];
+
+  for (const category of topLevel) {
+    const name = norm(category.name);
+    if (name === reserved) continue;
+    if (parentIdsInUse.has(category.id)) continue; // already a parent
+    if (packParentNames.has(name)) continue; // a standard parent — leave it
+
+    const parentName = childToParent.get(name);
+    if (parentName && norm(parentName) !== name) {
+      matched.push({ categoryId: category.id, categoryName: category.name, parentName });
+    } else {
+      unparented.push({ categoryId: category.id, categoryName: category.name });
+    }
+  }
+
+  return { applicable: true, matched, unparented, parentOptions };
+}
