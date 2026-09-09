@@ -29,7 +29,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ContributionsGrid } from "@/components/contributions-grid";
 import { RecordContributions } from "@/components/record-contributions";
-import { DownloadContributions } from "@/components/download-contributions";
+import {
+  DownloadContributions,
+  DownloadMemberContribution,
+  contributionMonthOptions,
+} from "@/components/download-contributions";
 import { workspaceLabel } from "@/lib/workspace-identity";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
@@ -99,6 +103,7 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 
 function MemberCard({
   member, accentColor, incomeStreams, isIncomeStreamsLoading, incomeStreamsError, onOpenLedger,
+  budgetName, pdfFromKey, pdfToKey, canDownloadPdf,
 }: {
   member: MemberContrib;
   accentColor: string;
@@ -106,6 +111,10 @@ function MemberCard({
   isIncomeStreamsLoading: boolean;
   incomeStreamsError: boolean;
   onOpenLedger: () => void;
+  budgetName: string;
+  pdfFromKey: string;
+  pdfToKey: string;
+  canDownloadPdf: boolean;
 }) {
   const { userId, name, contributed, spent, net, target } = member;
   const pct = target && target > 0 ? Math.min((contributed / target) * 100, 100) : 0;
@@ -226,14 +235,24 @@ function MemberCard({
             </>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onOpenLedger}
-          className="text-sm font-semibold text-primary hover:underline"
-          data-testid={`open-contribution-ledger-${userId}`}
-        >
-          Open contribution ledger →
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onOpenLedger}
+            className="text-sm font-semibold text-primary hover:underline"
+            data-testid={`open-contribution-ledger-${userId}`}
+          >
+            Open contribution ledger →
+          </button>
+          {canDownloadPdf ? (
+            <DownloadMemberContribution
+              budgetName={budgetName}
+              memberName={name}
+              fromKey={pdfFromKey}
+              toKey={pdfToKey}
+            />
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );
@@ -268,6 +287,14 @@ export default function Contributions() {
   useEffect(() => {
     try { localStorage.setItem(CONTRIBUTIONS_MONTH_KEY, JSON.stringify({ month, year })); } catch {}
   }, [month, year]);
+
+  // One PDF range for the whole page: the group control sets it, and every
+  // per-member Download button reads the same from/to.
+  const pdfMonthOptions = useMemo(contributionMonthOptions, []);
+  const [pdfFromKey, setPdfFromKey] = useState(
+    pdfMonthOptions[Math.min(5, pdfMonthOptions.length - 1)].key,
+  );
+  const [pdfToKey, setPdfToKey] = useState(pdfMonthOptions[0].key);
 
   const { data: summary, isLoading } = useGetDashboardSummary({ month, year });
   const {
@@ -488,7 +515,13 @@ export default function Contributions() {
       {isSharedWorkspace ? (
         <div className="space-y-6">
           <RecordContributions />
-          <DownloadContributions budgetName={group ? workspaceLabel(group) : "Shared budget"} />
+          <DownloadContributions
+            budgetName={group ? workspaceLabel(group) : "Shared budget"}
+            fromKey={pdfFromKey}
+            toKey={pdfToKey}
+            onFromChange={setPdfFromKey}
+            onToChange={setPdfToKey}
+          />
           <ContributionsGrid />
         </div>
       ) : null}
@@ -797,6 +830,10 @@ export default function Contributions() {
               isIncomeStreamsLoading={isIncomeStreamsLoading}
               incomeStreamsError={incomeStreamsError}
               onOpenLedger={openContributionLedger}
+              budgetName={group ? workspaceLabel(group) : "Shared budget"}
+              pdfFromKey={pdfFromKey}
+              pdfToKey={pdfToKey}
+              canDownloadPdf={isSharedWorkspace}
             />
           ))}
         </div>

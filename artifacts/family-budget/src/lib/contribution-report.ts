@@ -75,12 +75,75 @@ export function buildGroupContributionReportHtml(report: GroupContributionReport
         .join("")
     : `<p class="empty">No contributors in this budget yet.</p>`;
 
+  return reportDocument({
+    title: `${report.budgetName} — Contributions ${periodLabel(report.months)}`,
+    heading: `${escapeHtml(report.budgetName)} &mdash; Contributions`,
+    sub: `${escapeHtml(periodLabel(report.months))} &nbsp;&middot;&nbsp; Generated ${escapeHtml(generated)}`,
+    body: `${memberBlocks}
+  <div class="total"><span>Group total</span><span>${escapeHtml(formatKes(report.grandTotal))}</span></div>`,
+  });
+}
+
+export type MemberContributionReport = {
+  budgetName: string;
+  memberName: string;
+  /** Oldest first, already narrowed to the chosen range. */
+  months: ReportMonth[];
+  /** One figure per month in `months`, same order. */
+  amounts: number[];
+  monthlyTarget: number | null;
+  total: number;
+};
+
+/**
+ * One member's month-by-month contributions, for handing that person their own
+ * record. Same print-on-load HTML document as the group sheet.
+ */
+export function buildMemberContributionReportHtml(report: MemberContributionReport): string {
+  const generated = new Date().toLocaleDateString("en-KE", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
+  const monthRows = report.months
+    .map((entry, index) => {
+      const paid = report.amounts[index] ?? 0;
+      const short =
+        report.monthlyTarget != null && report.monthlyTarget - paid > 0
+          ? `<span class="short">short ${escapeHtml(formatKes(report.monthlyTarget - paid))}</span>`
+          : "";
+      return `<div class="line"><span>${escapeHtml(entry.label)}</span><span>${paid ? escapeHtml(formatKes(paid)) : "&mdash;"} ${short}</span></div>`;
+    })
+    .join("");
+
+  let expectedLine = "";
+  if (report.monthlyTarget != null) {
+    const expected = report.monthlyTarget * report.months.length;
+    const short = expected - report.total;
+    expectedLine =
+      short > 0
+        ? `<p class="sub">Expected ${escapeHtml(formatKes(expected))} over this period &nbsp;&middot;&nbsp; short ${escapeHtml(formatKes(short))}</p>`
+        : `<p class="sub">Expected ${escapeHtml(formatKes(expected))} over this period &nbsp;&middot;&nbsp; met in full</p>`;
+  }
+
+  return reportDocument({
+    title: `${report.memberName} — Contributions ${periodLabel(report.months)}`,
+    heading: `${escapeHtml(report.memberName)}`,
+    sub: `${escapeHtml(report.budgetName)} &nbsp;&middot;&nbsp; ${escapeHtml(periodLabel(report.months))} &nbsp;&middot;&nbsp; Generated ${escapeHtml(generated)}`,
+    body: `${monthRows || '<p class="empty">Nothing recorded for this member in this period.</p>'}
+  ${expectedLine}
+  <div class="total"><span>Total</span><span>${escapeHtml(formatKes(report.total))}</span></div>`,
+  });
+}
+
+function reportDocument(parts: { title: string; heading: string; sub: string; body: string }): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${escapeHtml(report.budgetName)} — Contributions ${escapeHtml(periodLabel(report.months))}</title>
+<title>${escapeHtml(parts.title)}</title>
 <style>
   body { font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #111; margin: 32px; }
   h1 { font-size: 20px; margin: 0 0 2px; }
@@ -88,7 +151,8 @@ export function buildGroupContributionReportHtml(report: GroupContributionReport
   .member { padding: 10px 0; border-bottom: 1px solid #eee; }
   .member .row { display: flex; justify-content: space-between; gap: 16px; font-weight: 600; }
   .member .months { color: #555; font-size: 12px; margin: 4px 0 0; }
-  .short { color: #999; font-size: 12px; margin: 2px 0 0; }
+  .line { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; border-bottom: 1px solid #eee; }
+  .short { color: #b00; font-size: 12px; }
   .empty { color: #666; }
   .total { display: flex; justify-content: space-between; gap: 16px; font-weight: 700; font-size: 16px;
            margin-top: 18px; padding-top: 12px; border-top: 2px solid #333; }
@@ -96,10 +160,9 @@ export function buildGroupContributionReportHtml(report: GroupContributionReport
 </style>
 </head>
 <body>
-  <h1>${escapeHtml(report.budgetName)} &mdash; Contributions</h1>
-  <p class="sub">${escapeHtml(periodLabel(report.months))} &nbsp;&middot;&nbsp; Generated ${escapeHtml(generated)}</p>
-  ${memberBlocks}
-  <div class="total"><span>Group total</span><span>${escapeHtml(formatKes(report.grandTotal))}</span></div>
+  <h1>${parts.heading}</h1>
+  <p class="sub">${parts.sub}</p>
+  ${parts.body}
   <script>window.addEventListener("load", function () { window.focus(); window.print(); });</script>
 </body>
 </html>`;
