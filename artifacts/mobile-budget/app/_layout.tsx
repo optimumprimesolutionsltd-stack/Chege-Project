@@ -263,6 +263,16 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: 'transparent' },
         }}
       />
+      <Stack.Screen
+        name="record-contributions"
+        options={{
+          presentation: 'formSheet',
+          sheetAllowedDetents: [0.9, 1],
+          sheetGrabberVisible: true,
+          headerShown: false,
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
+      />
     </Stack>
   );
 }
