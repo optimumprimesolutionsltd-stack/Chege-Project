@@ -34,6 +34,7 @@ import {
   DownloadMemberContribution,
   contributionMonthOptions,
 } from "@/components/download-contributions";
+import { ContributionArrearsBanner } from "@/components/contribution-arrears-banner";
 import { workspaceLabel } from "@/lib/workspace-identity";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
@@ -514,6 +515,7 @@ export default function Contributions() {
 
       {isSharedWorkspace ? (
         <div className="space-y-6">
+          {canManageContributions ? <ContributionArrearsBanner /> : null}
           <RecordContributions />
           <DownloadContributions
             budgetName={group ? workspaceLabel(group) : "Shared budget"}
