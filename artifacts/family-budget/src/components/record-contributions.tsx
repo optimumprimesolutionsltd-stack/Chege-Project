@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { formatKes } from "@/lib/utils";
 import { Loader2, Pencil, UserPlus } from "lucide-react";
 
 type Contributor = { id: number; name: string; hasAccount: boolean; monthlyTarget: number | null };
+type BankAccount = { id: number; name: string };
 
 /**
  * Recording for the whole group at once.
@@ -82,6 +84,26 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
     },
     retry: false,
   });
+
+  const { data: accounts = [] } = useQuery<BankAccount[]>({
+    queryKey: ["joint-accounts"],
+    queryFn: async () => {
+      const response = await fetch("/api/joint-accounts", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load bank accounts.");
+      return response.json() as Promise<BankAccount[]>;
+    },
+    retry: false,
+  });
+  const [accountId, setAccountId] = useState<number | null>(null);
+  // Land on the first account until the treasurer picks another, and follow the
+  // list if it changes (an account is added or the only one is renamed away).
+  useEffect(() => {
+    setAccountId((current) =>
+      current != null && accounts.some((account) => account.id === current)
+        ? current
+        : accounts[0]?.id ?? null,
+    );
+  }, [accounts]);
 
   // Everybody starts ticked, because that is the common case. The work is
   // unticking the two who have not paid, not ticking the thirty-eight who have.
@@ -198,6 +220,15 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
       return;
     }
 
+    if (accountId == null) {
+      toast({
+        variant: "destructive",
+        title: "No bank account yet",
+        description: "Contributions need somewhere to land. Set up a bank account on the Bank page first.",
+      });
+      return;
+    }
+
     const splits = chosen
       .map((contributor) => ({ contributorId: contributor.id, amount: amountFor(contributor) }))
       .filter((split) => split.amount > 0);
@@ -220,6 +251,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
           // inside the selected month, so the batch is always filed in that
           // month while the ledger still shows the real date.
           date: dateReceived,
+          accountId,
           contributorSplits: splits,
         }),
       });
@@ -266,6 +298,32 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
               </Button>
             ))}
           </div>
+        </div>
+
+        <div className="text-sm">
+          <span className="mb-1 block font-medium text-foreground">Bank account</span>
+          {accounts.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border p-3 text-muted-foreground" data-testid="no-account-for-contributions">
+              No bank account yet.{" "}
+              <Link href="/bank" className="font-semibold text-primary hover:underline">Set one up</Link>{" "}
+              — contributions need somewhere to land.
+            </p>
+          ) : accounts.length === 1 ? (
+            <p className="rounded-md border border-input bg-muted/30 px-3 py-2 text-muted-foreground">
+              Goes to <span className="font-medium text-foreground">{accounts[0].name}</span>
+            </p>
+          ) : (
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:max-w-xs"
+              value={accountId ?? ""}
+              onChange={(event) => setAccountId(event.target.value ? Number(event.target.value) : null)}
+              data-testid="select-contribution-account"
+            >
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>{account.name}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -485,7 +543,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
         <Button
           className="w-full"
           onClick={() => void record()}
-          disabled={saving || total <= 0 || contributors.length < 2}
+          disabled={saving || total <= 0 || contributors.length < 2 || accountId == null}
           data-testid="button-record-contributions"
         >
           {saving ? "Recording…" : `Record ${formatKes(total)}`}
