@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ContributionsGrid } from "@/components/contributions-grid";
 import { RecordContributions } from "@/components/record-contributions";
+import { DownloadContributions } from "@/components/download-contributions";
+import { workspaceLabel } from "@/lib/workspace-identity";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
   if (recordType === "deposit") return "Joint Bank deposit";
@@ -486,6 +488,7 @@ export default function Contributions() {
       {isSharedWorkspace ? (
         <div className="space-y-6">
           <RecordContributions />
+          <DownloadContributions budgetName={group ? workspaceLabel(group) : "Shared budget"} />
           <ContributionsGrid />
         </div>
       ) : null}
