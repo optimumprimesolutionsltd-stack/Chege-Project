@@ -189,6 +189,15 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   };
 
   const record = async () => {
+    if (contributors.length < 2) {
+      toast({
+        variant: "destructive",
+        title: "Add at least two names",
+        description: "A shared budget records for a group. Add another contributor below before recording.",
+      });
+      return;
+    }
+
     const splits = chosen
       .map((contributor) => ({ contributorId: contributor.id, amount: amountFor(contributor) }))
       .filter((split) => split.amount > 0);
@@ -363,6 +372,17 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
           <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
             Nobody to record yet. Add the people who contribute, below — they do not need the app.
           </p>
+        ) : contributors.length === 1 ? (
+          <div className="space-y-2">
+            <ul className="divide-y divide-border/60 rounded-xl border border-border/60">
+              <li className="flex items-center gap-3 p-3">
+                <span className="min-w-0 flex-1 truncate text-foreground">{contributors[0].name}</span>
+              </li>
+            </ul>
+            <p className="rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="need-two-contributors">
+              Add at least one more name below. A shared budget records for a group, so it needs two or more contributors.
+            </p>
+          </div>
         ) : (
           <ul className="divide-y divide-border/60 rounded-xl border border-border/60">
             {contributors.map((contributor) => {
@@ -465,7 +485,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
         <Button
           className="w-full"
           onClick={() => void record()}
-          disabled={saving || total <= 0}
+          disabled={saving || total <= 0 || contributors.length < 2}
           data-testid="button-record-contributions"
         >
           {saving ? "Recording…" : `Record ${formatKes(total)}`}
