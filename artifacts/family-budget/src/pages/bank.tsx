@@ -8,6 +8,7 @@ import {
   useGetJointAccounts, useCreateJointAccount, useUpdateJointAccount, useDeleteJointAccount,
   getGetJointAccountsQueryKey, getGetExpensesQueryKey, useTransferBankToBank,
 } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,7 @@ export default function Bank() {
   const createAccount = useCreateJointAccount();
   const updateAccount = useUpdateJointAccount();
   const deleteAccount = useDeleteJointAccount();
+  const [, navigate] = useLocation();
   const transferBankToBank = useTransferBankToBank();
   const { data: savingsGoals = [] } = useGetSavingsGoals();
   const { toast } = useToast();
@@ -262,6 +264,11 @@ export default function Bank() {
       setAddingAccount(false);
       invalidate();
       toast({ title: editingAccountId ? "Account updated" : "Account added" });
+      // Came here from "Record this month" to sort out an account — hand the
+      // treasurer straight back so they can carry on.
+      if (new URLSearchParams(window.location.search).get("from") === "contributions") {
+        navigate("/contributions");
+      }
     } catch (error) {
       toast({
         variant: "destructive",

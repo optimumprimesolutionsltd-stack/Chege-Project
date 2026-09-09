@@ -304,7 +304,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
           <div className="mb-1 flex items-baseline justify-between gap-2">
             <span className="font-medium text-foreground">Bank account</span>
             {accounts.length > 0 ? (
-              <Link href="/bank" className="text-xs font-semibold text-primary hover:underline" data-testid="link-manage-contribution-accounts">
+              <Link href="/bank?from=contributions" className="text-xs font-semibold text-primary hover:underline" data-testid="link-manage-contribution-accounts">
                 Add or rename accounts
               </Link>
             ) : null}
@@ -312,7 +312,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
           {accounts.length === 0 ? (
             <p className="rounded-md border border-dashed border-border p-3 text-muted-foreground" data-testid="no-account-for-contributions">
               No bank account yet.{" "}
-              <Link href="/bank" className="font-semibold text-primary hover:underline">Set one up</Link>{" "}
+              <Link href="/bank?from=contributions" className="font-semibold text-primary hover:underline">Set one up</Link>{" "}
               — contributions need somewhere to land.
             </p>
           ) : accounts.length === 1 ? (
