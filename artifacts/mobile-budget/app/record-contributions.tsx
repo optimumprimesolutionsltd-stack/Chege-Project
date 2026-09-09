@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -76,8 +76,25 @@ export default function RecordContributionsScreen() {
   const [each, setEach] = useState('');
   const [amounts, setAmounts] = useState<Record<number, string>>({});
   const [ticked, setTicked] = useState<Set<number>>(new Set());
+  // Which contributor ids we have already folded into `ticked`. Without this,
+  // any background refetch of the list (window focus, staleness, or the
+  // refetch right after adding a name) hands back a new array and re-ticks
+  // everyone — silently undoing a deselection the treasurer just made. That
+  // bites hardest in Advanced mode, where they linger typing amounts.
+  const seenContributorIds = useRef<Set<number>>(new Set());
   useEffect(() => {
-    setTicked(new Set(contributors.map((contributor) => contributor.id)));
+    setTicked((previous) => {
+      const next = new Set<number>();
+      for (const contributor of contributors) {
+        // Newly appeared names start ticked (the common case); everyone else
+        // keeps whatever the treasurer last set.
+        if (!seenContributorIds.current.has(contributor.id) || previous.has(contributor.id)) {
+          next.add(contributor.id);
+        }
+      }
+      return next;
+    });
+    seenContributorIds.current = new Set(contributors.map((contributor) => contributor.id));
     const common = contributors.find((contributor) => contributor.monthlyTarget)?.monthlyTarget;
     if (common && !each) setEach(String(common));
   }, [contributors]);

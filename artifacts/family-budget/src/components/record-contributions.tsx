@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -89,8 +89,24 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
 
   // Everybody starts ticked, because that is the common case. The work is
   // unticking the two who have not paid, not ticking the thirty-eight who have.
+  //
+  // But only for names not seen before: a background refetch of the list
+  // (window focus, staleness, or the refetch right after adding a name) hands
+  // back a new array, and blindly re-ticking everyone would silently undo a
+  // deselection the treasurer just made — worst in Advanced mode, where they
+  // linger typing amounts.
+  const seenContributorIds = useRef<Set<number>>(new Set());
   useEffect(() => {
-    setTicked(new Set(contributors.map((contributor) => contributor.id)));
+    setTicked((previous) => {
+      const next = new Set<number>();
+      for (const contributor of contributors) {
+        if (!seenContributorIds.current.has(contributor.id) || previous.has(contributor.id)) {
+          next.add(contributor.id);
+        }
+      }
+      return next;
+    });
+    seenContributorIds.current = new Set(contributors.map((contributor) => contributor.id));
     const common = contributors.find((contributor) => contributor.monthlyTarget)?.monthlyTarget;
     if (common && !each) setEach(String(common));
   }, [contributors]);
