@@ -9,10 +9,16 @@ import {
   GetBudgetCategoryRecommendationsResponse,
 } from "@workspace/api-zod";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
-import { categoryPackChildren, categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind } from "../lib/categoryPacks";
+import { categoryPackChildren, categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind, subcategorySuggestions } from "../lib/categoryPacks";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
+
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
 const priorityTierSchema = z.object({
   priority: z.number().int().min(1).max(5),
   label: z.string().trim().min(1).max(50),
@@ -252,6 +258,132 @@ router.post("/budget-categories/recommendations/apply", async (req, res) => {
   });
 
   res.json(ApplyBudgetCategoryRecommendationsResponse.parse(await getCategoryRecommendationPreview(groupId)));
+});
+
+async function getSubcategorySuggestions(groupId: number) {
+  const [group] = await db
+    .select({ kind: groupsTable.kind })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+  const categories = await db
+    .select({
+      id: budgetCategoriesTable.id,
+      name: budgetCategoriesTable.name,
+      parentId: budgetCategoriesTable.parentId,
+    })
+    .from(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.groupId, groupId), eq(budgetCategoriesTable.isArchived, false)));
+  return subcategorySuggestions(group?.kind, categories, UNCATEGORIZED_CATEGORY);
+}
+
+// Reviewed in Settings: which top-level categories in a household budget could
+// be tucked under a parent. Read-only; nothing moves until /apply is called.
+router.get("/budget-categories/subcategory-suggestions", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  res.json(await getSubcategorySuggestions(groupId));
+});
+
+const SubcategoryMovesBody = z.object({
+  moves: z.array(z.object({
+    categoryId: z.number().int().positive(),
+    parentId: z.number().int().positive().optional(),
+    parentName: z.string().trim().min(1).max(80).optional(),
+  }).refine((move) => (move.parentId == null) !== (move.parentName == null), {
+    message: "Each move needs exactly one of parentId or parentName.",
+  })).min(1).max(200),
+});
+
+router.post("/budget-categories/subcategory-suggestions/apply", async (req, res) => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const parsed = SubcategoryMovesBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
+
+  const [group] = await db
+    .select({ kind: groupsTable.kind })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+  const packByName = new Map(
+    categoryPackForKind(group?.kind).map((item) => [item.name.trim().toLocaleLowerCase("en-US"), item]),
+  );
+
+  try {
+    await db.transaction(async (tx) => {
+      for (const move of parsed.data.moves) {
+        const [category] = await tx.select()
+          .from(budgetCategoriesTable)
+          .where(and(eq(budgetCategoriesTable.id, move.categoryId), eq(budgetCategoriesTable.groupId, groupId)))
+          .limit(1);
+        if (!category) throw new HttpError(404, `Category ${move.categoryId} not found.`);
+        if (category.parentId != null) throw new HttpError(400, `"${category.name}" is already a sub-category.`);
+        if (isReservedBudgetCategoryName(category.name)) {
+          throw new HttpError(400, `"${UNCATEGORIZED_CATEGORY}" cannot be nested.`);
+        }
+        const [ownChild] = await tx.select({ id: budgetCategoriesTable.id })
+          .from(budgetCategoriesTable)
+          .where(and(eq(budgetCategoriesTable.parentId, move.categoryId), eq(budgetCategoriesTable.groupId, groupId)))
+          .limit(1);
+        if (ownChild) throw new HttpError(400, `"${category.name}" has its own sub-categories, so it cannot become one.`);
+
+        let parentId = move.parentId ?? null;
+        if (parentId == null && move.parentName) {
+          const [existingParent] = await tx.select({ id: budgetCategoriesTable.id })
+            .from(budgetCategoriesTable)
+            .where(and(
+              eq(budgetCategoriesTable.name, move.parentName),
+              eq(budgetCategoriesTable.groupId, groupId),
+            ))
+            .limit(1);
+          if (existingParent) {
+            parentId = existingParent.id;
+          } else {
+            const packItem = packByName.get(move.parentName.trim().toLocaleLowerCase("en-US"));
+            const [createdParent] = await tx.insert(budgetCategoriesTable).values({
+              groupId,
+              name: move.parentName,
+              budgetAmount: 0,
+              priority: packItem?.priority ?? 3,
+              color: packItem?.color ?? "#6B7280",
+              isRecurring: true,
+              activeMonth: null,
+              activeYear: null,
+            }).onConflictDoNothing().returning({ id: budgetCategoriesTable.id });
+            parentId = createdParent?.id ?? null;
+            if (parentId == null) {
+              const [raced] = await tx.select({ id: budgetCategoriesTable.id })
+                .from(budgetCategoriesTable)
+                .where(and(eq(budgetCategoriesTable.name, move.parentName), eq(budgetCategoriesTable.groupId, groupId)))
+                .limit(1);
+              parentId = raced?.id ?? null;
+            }
+          }
+        }
+        if (parentId == null) throw new HttpError(400, "Could not resolve a parent for the move.");
+        if (parentId === move.categoryId) throw new HttpError(400, "A category cannot be inside itself.");
+
+        const [parent] = await tx.select({ id: budgetCategoriesTable.id, parentId: budgetCategoriesTable.parentId })
+          .from(budgetCategoriesTable)
+          .where(and(eq(budgetCategoriesTable.id, parentId), eq(budgetCategoriesTable.groupId, groupId)))
+          .limit(1);
+        if (!parent) throw new HttpError(400, "The chosen parent is not in this budget.");
+        if (parent.parentId != null) throw new HttpError(400, "Sub-categories only go one level deep.");
+
+        await tx.update(budgetCategoriesTable)
+          .set({ parentId })
+          .where(and(eq(budgetCategoriesTable.id, move.categoryId), eq(budgetCategoriesTable.groupId, groupId)));
+      }
+    });
+  } catch (error) {
+    if (error instanceof HttpError) { res.status(error.status).json({ error: error.message }); return; }
+    throw error;
+  }
+
+  res.json(await getSubcategorySuggestions(groupId));
 });
 
 const categoryFields = z.object({

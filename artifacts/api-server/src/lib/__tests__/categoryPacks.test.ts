@@ -18,6 +18,7 @@ import {
   categoryPackForKind,
   normalizedCategoryPackKind,
   priorityTiersForKind,
+  subcategorySuggestions,
 } from "../categoryPacks.js";
 
 describe("category packs", () => {
@@ -149,5 +150,70 @@ describe("suggested mini-ledgers", () => {
     const chama = categoryPackChildren("chama");
     expect(chama.has("Utilities")).toBe(false);
     expect(chama.get("Welfare")).toContain("Bereavement");
+  });
+});
+
+describe("subcategorySuggestions", () => {
+  const cat = (id: number, name: string, parentId: number | null = null) => ({ id, name, parentId });
+
+  it("only runs for household budgets", () => {
+    const categories = [cat(1, "Wi-Fi")];
+    expect(subcategorySuggestions("chama", categories).applicable).toBe(false);
+    expect(subcategorySuggestions("family", categories).applicable).toBe(true);
+    expect(subcategorySuggestions("personal", categories).applicable).toBe(true);
+  });
+
+  it("matches a top-level category to its standard parent by name", () => {
+    const result = subcategorySuggestions("family", [
+      cat(1, "Wi-Fi"),
+      cat(2, "Rent"),
+      cat(3, "School fees"),
+    ]);
+    expect(result.matched).toEqual([
+      { categoryId: 1, categoryName: "Wi-Fi", parentName: "Utilities" },
+      { categoryId: 2, categoryName: "Rent", parentName: "Housing" },
+      { categoryId: 3, categoryName: "School fees", parentName: "Education" },
+    ]);
+    expect(result.unparented).toEqual([]);
+  });
+
+  it("leaves standard parents and existing children alone", () => {
+    const result = subcategorySuggestions("family", [
+      cat(1, "Utilities"),
+      cat(2, "Electricity", 1),
+      cat(10, "Food"),
+    ]);
+    expect(result.matched).toEqual([]);
+    expect(result.unparented).toEqual([]);
+  });
+
+  it("does not offer to nest a category that already has children", () => {
+    // "Transport" is a standard parent name, but even a custom parent with
+    // children stays put.
+    const result = subcategorySuggestions("family", [
+      cat(1, "Subscriptions"),
+      cat(2, "Netflix", 1),
+    ]);
+    expect(result.matched).toEqual([]);
+    expect(result.unparented).toEqual([]);
+  });
+
+  it("offers a picker for other top-level categories", () => {
+    const result = subcategorySuggestions("family", [
+      cat(1, "Food"),
+      cat(2, "Netflix"),
+      cat(3, "Shopping"),
+    ]);
+    expect(result.unparented).toEqual([
+      { categoryId: 2, categoryName: "Netflix" },
+      { categoryId: 3, categoryName: "Shopping" },
+    ]);
+    expect(result.parentOptions.map((option) => option.name)).toEqual(["Food", "Netflix", "Shopping"]);
+  });
+
+  it("ignores the reserved uncategorized bucket", () => {
+    const result = subcategorySuggestions("personal", [cat(1, "Uncategorized")], "Uncategorized");
+    expect(result.unparented).toEqual([]);
+    expect(result.parentOptions).toEqual([]);
   });
 });
