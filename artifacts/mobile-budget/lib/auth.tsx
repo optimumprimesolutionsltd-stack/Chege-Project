@@ -12,10 +12,15 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { AuthUser } from '@workspace/api-client-react';
 import { ACTIVE_WORKSPACE_STORAGE_KEY } from '@/lib/workspace';
+import { clearQueryClientCache } from '@/lib/queryPersist';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export const AUTH_TOKEN_KEY = 'auth_session_token';
+// The last verified user, kept so a cold start can render the app straight
+// away and revalidate in the background instead of showing a spinner until
+// the network answers who you are.
+export const AUTH_USER_CACHE_KEY = 'auth_user_cache';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -51,8 +56,20 @@ function getApiBaseUrl(): string {
   return PRODUCTION_API;
 }
 
+async function cacheUser(user: AuthUser | null): Promise<void> {
+  try {
+    if (user) await AsyncStorage.setItem(AUTH_USER_CACHE_KEY, JSON.stringify(user));
+    else await AsyncStorage.removeItem(AUTH_USER_CACHE_KEY);
+  } catch {
+    // A storage write failing just means the next cold start spins a little
+    // longer; it is never a reason to fail sign-in.
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  // Starts true only until the cached user is read (a fast local read), not
+  // until the network answers. `revalidating` covers the background check.
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async () => {
@@ -60,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
       if (!token) {
         setUser(null);
-        setIsLoading(false);
+        await cacheUser(null);
         return;
       }
 
@@ -69,32 +86,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) {
+      if (res.status === 401) {
+        // The session is genuinely gone — only then sign the person out.
         await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
         setUser(null);
-        setIsLoading(false);
+        await cacheUser(null);
+        return;
+      }
+
+      if (!res.ok) {
+        // A 5xx or a network hiccup: keep whatever we already have.
         return;
       }
 
       const data = await res.json();
       if (data.user) {
-        // Keep the last selection across cold starts. RootLayout verifies this
-        // preference against the freshly loaded membership list before any
-        // financial screen renders, while explicit logout clears it below.
         setUser(data.user as AuthUser);
+        await cacheUser(data.user as AuthUser);
       } else {
         await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
         setUser(null);
+        await cacheUser(null);
       }
     } catch {
-      setUser(null);
+      // Offline or the server is unreachable — do NOT clear the user; the
+      // cached session stays usable until a real 401 says otherwise.
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  // Hydrate from the cached user first so the app can render immediately,
+  // then revalidate against the server in the background.
   useEffect(() => {
-    fetchUser();
+    let active = true;
+    (async () => {
+      try {
+        const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+        const cached = token ? await AsyncStorage.getItem(AUTH_USER_CACHE_KEY) : null;
+        if (active && cached) {
+          setUser(JSON.parse(cached) as AuthUser);
+          setIsLoading(false);
+        }
+      } catch {
+        // Ignore — fetchUser below still runs.
+      } finally {
+        if (active) void fetchUser();
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, [fetchUser]);
 
   // Handle cold-start deep link (app opened directly from mobile-budget:// URL)
@@ -156,6 +198,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
       await AsyncStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+      await cacheUser(null);
+      await clearQueryClientCache();
       setUser(null);
     }
   }, []);
@@ -180,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await response.json();
     setUser(data.user as AuthUser);
+    await cacheUser(data.user as AuthUser);
   }, []);
 
   const saveProfilePhoto = useCallback(async (photoPath: string | null) => {
@@ -200,6 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await response.json();
     setUser(data.user as AuthUser);
+    await cacheUser(data.user as AuthUser);
   }, []);
 
   return (
