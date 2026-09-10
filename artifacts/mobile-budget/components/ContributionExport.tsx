@@ -207,6 +207,9 @@ export function ContributionExport() {
   const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   const [busy, setBusy] = useState<null | 'pdf' | 'whatsapp'>(null);
+  const [viewing, setViewing] = useState(false);
+  const [viewData, setViewData] = useState<ContributionStatement | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   const { refetch } = useQuery<ContributionGrid>({
     queryKey: ['contribution-grid', months],
@@ -219,6 +222,36 @@ export function ContributionExport() {
 
   const [rangeStart, rangeEnd] = dayFrom <= dayTo ? [dayFrom, dayTo] : [dayTo, dayFrom];
   const statementQuery = `from=${encodeURIComponent(rangeStart)}&to=${encodeURIComponent(rangeEnd)}`;
+
+  // The on-screen report always reads as a dated list. In grid mode the last
+  // N months become a from/to span.
+  const gridStart = () => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - (months - 1));
+    return isoDay(d);
+  };
+  const viewFrom = mode === 'ledger' ? rangeStart : gridStart();
+  const viewTo = mode === 'ledger' ? rangeEnd : isoDay(new Date());
+
+  const toggleView = async () => {
+    if (viewing) {
+      setViewing(false);
+      return;
+    }
+    setViewing(true);
+    setViewLoading(true);
+    try {
+      const statement = (await customFetch(
+        `/api/contributions/statement?from=${encodeURIComponent(viewFrom)}&to=${encodeURIComponent(viewTo)}`,
+      )) as ContributionStatement;
+      setViewData(statement);
+    } catch {
+      setViewData(null);
+    } finally {
+      setViewLoading(false);
+    }
+  };
 
   const downloadPdf = async () => {
     setBusy('pdf');
@@ -428,6 +461,67 @@ export function ContributionExport() {
           <Text style={[styles.btnLabel, { color: colors.primaryForeground }]}>Download PDF</Text>
         </Pressable>
       </View>
+
+      <Pressable
+        onPress={toggleView}
+        disabled={busy !== null}
+        style={[styles.viewBtn, { borderColor: colors.border }]}
+      >
+        <Feather name={viewing ? 'eye-off' : 'eye'} size={14} color={colors.mutedForeground} />
+        <Text style={[styles.viewLabel, { color: colors.foreground }]}>
+          {viewing ? 'Hide report' : 'View report here'}
+        </Text>
+      </Pressable>
+
+      {viewing ? (
+        viewLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 4 }} />
+        ) : !viewData ? (
+          <Text style={[styles.note, { color: colors.mutedForeground }]}>The report could not be loaded.</Text>
+        ) : (
+          <View style={[styles.stmt, { borderColor: colors.border }]}>
+            <Text style={[styles.stmtPeriod, { color: colors.foreground }]}>{viewData.periodLabel}</Text>
+            <Text style={[styles.stmtSub, { color: colors.mutedForeground }]}>
+              {viewData.entries.length} {viewData.entries.length === 1 ? 'entry' : 'entries'} · KES {kes(viewData.grandTotal)} in total
+            </Text>
+
+            {viewData.entries.length === 0 ? (
+              <Text style={[styles.note, { color: colors.mutedForeground, marginTop: 6 }]}>Nothing recorded in this range.</Text>
+            ) : (
+              <View style={{ marginTop: 6 }}>
+                {viewData.entries.map((entry, index) => (
+                  <View
+                    key={`${entry.date}-${index}`}
+                    style={[styles.stmtRow, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+                  >
+                    <Text style={[styles.stmtDate, { color: colors.mutedForeground }]}>{shortDay(entry.date)}</Text>
+                    <Text style={[styles.stmtName, { color: colors.foreground }]} numberOfLines={1}>
+                      {entry.contributorName}
+                      {entry.source === 'deposit' ? <Text style={{ color: colors.mutedForeground }}>  bank</Text> : null}
+                    </Text>
+                    <Text style={[styles.stmtAmount, { color: colors.foreground }]}>KES {kes(entry.amount)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {viewData.contributors.some((c) => (viewData.totalsByContributor[c.id] ?? 0) !== 0) ? (
+              <View style={[styles.stmtByMember, { borderTopColor: colors.border }]}>
+                <Text style={[styles.stmtByMemberHead, { color: colors.mutedForeground }]}>BY MEMBER</Text>
+                {viewData.contributors
+                  .map((c) => ({ name: c.name, total: viewData.totalsByContributor[c.id] ?? 0 }))
+                  .filter((row) => row.total !== 0)
+                  .map((row) => (
+                    <View key={row.name} style={styles.stmtByMemberRow}>
+                      <Text style={[styles.stmtName, { color: colors.foreground }]} numberOfLines={1}>{row.name}</Text>
+                      <Text style={[styles.stmtAmount, { color: colors.foreground }]}>KES {kes(row.total)}</Text>
+                    </View>
+                  ))}
+              </View>
+            ) : null}
+          </View>
+        )
+      ) : null}
     </View>
   );
 }
@@ -460,4 +554,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   btnLabel: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  viewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: 2,
+  },
+  viewLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  stmt: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, marginTop: 4 },
+  stmtPeriod: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  stmtSub: { fontSize: 11, marginTop: 1 },
+  stmtRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  stmtDate: { width: 46, fontSize: 11, fontFamily: 'Inter_500Medium' },
+  stmtName: { flex: 1, fontSize: 12, fontFamily: 'Inter_500Medium' },
+  stmtAmount: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  stmtByMember: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 6, paddingTop: 8, gap: 4 },
+  stmtByMemberHead: { fontSize: 10, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.4 },
+  stmtByMemberRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
 });
