@@ -10,6 +10,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import {
+  bankAccountsTable,
   contributionsTable,
   db,
   groupsTable as groups,
@@ -82,10 +83,12 @@ export async function loadContributionStatement(
         amount: jointAccountDepositSplitsTable.amount,
         date: sql<string>`${jointAccountTxTable.date}::text`,
         description: jointAccountTxTable.description,
+        bankName: bankAccountsTable.name,
       })
       .from(jointAccountDepositSplitsTable)
       .innerJoin(jointAccountTxTable, eq(jointAccountTxTable.id, jointAccountDepositSplitsTable.transactionId))
       .innerJoin(groupContributorsTable, eq(groupContributorsTable.id, jointAccountDepositSplitsTable.contributorId))
+      .leftJoin(bankAccountsTable, eq(bankAccountsTable.id, jointAccountTxTable.accountId))
       .where(sql`${jointAccountDepositSplitsTable.groupId} = ${groupId}
         AND ${jointAccountTxTable.type} = 'deposit'
         AND ${jointAccountTxTable.bankTransferId} IS NULL
@@ -102,6 +105,7 @@ export async function loadContributionStatement(
         amount: Number(row.amount) || 0,
         source: "recorded" as const,
         description: row.note ?? null,
+        bankName: null,
       })),
     ...deposited
       .filter((row) => row.contributorId != null)
@@ -112,6 +116,7 @@ export async function loadContributionStatement(
         amount: Number(row.amount) || 0,
         source: "deposit" as const,
         description: row.description ?? null,
+        bankName: row.bankName ?? null,
       })),
   ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
@@ -563,6 +568,7 @@ router.get("/contributions/statement.pdf", async (req, res): Promise<void> => {
       amount: entry.amount,
       source: entry.source,
       description: entry.description,
+      bankName: entry.bankName,
     })),
     total:
       contributorId != null

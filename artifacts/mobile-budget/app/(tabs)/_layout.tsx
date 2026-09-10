@@ -34,7 +34,7 @@ function NativeTabLayout({ showReports, isShared }: { showReports: boolean; isSh
       {isShared && (
         <NativeTabs.Trigger name="contributions">
           <Icon sf={{ default: 'arrow.down.circle', selected: 'arrow.down.circle.fill' }} />
-          <Label>Paid in</Label>
+          <Label>Contributions</Label>
         </NativeTabs.Trigger>
       )}
       <NativeTabs.Trigger name="goals">
@@ -187,7 +187,7 @@ function ClassicTabLayout({ showReports, isShared }: { showReports: boolean; isS
         options={
           isShared
             ? {
-                title: 'Paid in',
+                title: 'Contributions',
                 tabBarIcon: ({ color }) =>
                   isIOS ? (
                     <SymbolView name="arrow.down.circle.fill" tintColor={color} size={24} />

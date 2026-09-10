@@ -118,6 +118,8 @@ export type StatementShareEntry = {
   name: string;
   amount: number;
   source: "recorded" | "deposit";
+  /** The bank account a deposit landed in; null for a hand-recorded entry. */
+  bankName: string | null;
 };
 
 export type StatementShare = {
@@ -165,10 +167,10 @@ export function buildStatementWhatsAppText(statement: StatementShare, verifyUrl?
   lines.push("*Entries*");
   lines.push(
     ...(statement.entries.length
-      ? statement.entries.map(
-          (entry) =>
-            `${shareDate(entry.date)}  ${entry.name}  ${kesText(entry.amount)}${entry.source === "deposit" ? "  (bank)" : ""}`,
-        )
+      ? statement.entries.map((entry) => {
+          const via = entry.source === "deposit" ? `  (${entry.bankName ?? "bank"})` : "";
+          return `${shareDate(entry.date)}  ${entry.name}  ${kesText(entry.amount)}${via}`;
+        })
       : ["Nothing recorded in this period."]),
   );
   lines.push("");
