@@ -41,7 +41,7 @@ import {
 import { useColors } from '@/hooks/useColors';
 import { useAppearance, type Appearance } from '@/hooks/useAppearance';
 import { useEntitlements } from '@/hooks/useEntitlements';
-import { statusLine } from '@/lib/subscription-status';
+import { statusChip } from '@/lib/subscription-status';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
@@ -107,7 +107,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const { appearance, setAppearance } = useAppearance();
   const { data: entitlements } = useEntitlements();
-  const subscriptionSummary = entitlements ? statusLine(entitlements).heading : '—';
+  const subscriptionSummary = statusChip(entitlements);
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
@@ -1480,14 +1480,14 @@ export default function SettingsScreen() {
             </View>
           ) : null}
           <Pressable testID="open-subscription" onPress={() => router.push('/subscription')} style={styles.row}>
-            <View style={styles.rowLeft}>
+            <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
               <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
                 <Feather name="credit-card" size={16} color={colors.primary} />
               </View>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Subscription</Text>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>Subscription</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
-              <Text style={[styles.rowValue, { color: colors.mutedForeground }]} numberOfLines={1}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 12 }}>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground, flexShrink: 1 }]} numberOfLines={1}>
                 {subscriptionSummary}
               </Text>
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
