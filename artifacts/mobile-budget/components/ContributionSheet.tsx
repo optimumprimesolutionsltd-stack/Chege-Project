@@ -64,6 +64,12 @@ export function ContributionSheet() {
 
   const last = data.months.length - 1;
   const monthLabel = data.months[last]?.label ?? '';
+  const periodLabel =
+    data.months.length === 0
+      ? ''
+      : data.months.length === 1
+        ? data.months[0].label
+        : `${data.months[0].label} – ${data.months[last].label}`;
   const behind = data.rows
     .map((row) => ({ name: row.name, gave: row.amounts[last] ?? 0, owed: row.outstanding[last] ?? 0, expected: row.monthlyTarget ?? 0 }))
     .filter((row) => row.owed > 0)
@@ -95,6 +101,12 @@ export function ContributionSheet() {
           })}
         </View>
       </View>
+      {periodLabel ? (
+        <Text style={[styles.period, { color: colors.foreground }]}>
+          {periodLabel}
+          {data.months.length > 1 ? ` · ${data.months.length} months` : ''}
+        </Text>
+      ) : null}
       <Text style={[styles.key, { color: colors.mutedForeground }]}>
         Each figure is what a member gave. Red = short of the expected amount. Green = a month an earlier over-payment covered.
       </Text>
@@ -171,6 +183,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   heading: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  period: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   ranges: { flexDirection: 'row', gap: 4 },
   rangeBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
   rangeLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
