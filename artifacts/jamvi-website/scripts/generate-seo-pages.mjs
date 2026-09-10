@@ -43,6 +43,10 @@ const CRAWL = {
   "/church": { changefreq: "monthly", priority: "0.8" },
   "/clubs": { changefreq: "monthly", priority: "0.8" },
   "/household": { changefreq: "monthly", priority: "0.9" },
+  "/guides": { changefreq: "monthly", priority: "0.7" },
+  "/guides/chama-record-keeping": { changefreq: "yearly", priority: "0.7" },
+  "/guides/track-who-has-paid": { changefreq: "yearly", priority: "0.7" },
+  "/guides/splitting-bills-fairly": { changefreq: "yearly", priority: "0.7" },
   "/terms": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
 };

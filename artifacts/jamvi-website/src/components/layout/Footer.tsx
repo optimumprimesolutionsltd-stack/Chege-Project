@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { JAMVI_APP_PATH, JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
 import { SEGMENTS } from "@/lib/segments";
+import { GUIDES } from "@/lib/guides";
 
 export function Footer() {
   return (
@@ -33,6 +34,20 @@ export function Footer() {
               {SEGMENTS.map((segment) => (
                 <li key={segment.slug}>
                   <Link href={segment.slug} className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">{segment.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* The guides hub and each article, so a crawler reaching the footer
+              from any page finds the informational pages too. */}
+          <div>
+            <h4 className="font-serif text-lg mb-6 text-white font-medium">Guides</h4>
+            <ul className="space-y-4">
+              <li><Link href="/guides" className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">All guides</Link></li>
+              {GUIDES.map((guide) => (
+                <li key={guide.slug}>
+                  <Link href={guide.slug} className="text-primary-foreground/70 hover:text-accent transition-colors text-sm font-medium outline-none focus-visible:text-accent">{guide.label}</Link>
                 </li>
               ))}
             </ul>

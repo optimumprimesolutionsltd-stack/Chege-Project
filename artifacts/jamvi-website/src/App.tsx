@@ -20,6 +20,9 @@ import Privacy from '@/pages/privacy';
 import NotFound from '@/pages/not-found';
 import { SegmentPage } from '@/pages/segment';
 import { SEGMENTS } from '@/lib/segments';
+import Guides from '@/pages/guides';
+import { GuidePage } from '@/pages/guide';
+import { GUIDES } from '@/lib/guides';
 
 const queryClient = new QueryClient();
 
@@ -37,6 +40,12 @@ function Router() {
             <Route path="/faq" component={FAQ} />
             <Route path="/terms" component={Terms} />
             <Route path="/privacy" component={Privacy} />
+            <Route path="/guides" component={Guides} />
+            {GUIDES.map((guide) => (
+              <Route key={guide.slug} path={guide.slug}>
+                <GuidePage guide={guide} />
+              </Route>
+            ))}
             {SEGMENTS.map((segment) => (
               <Route key={segment.slug} path={segment.slug}>
                 <SegmentPage segment={segment} />

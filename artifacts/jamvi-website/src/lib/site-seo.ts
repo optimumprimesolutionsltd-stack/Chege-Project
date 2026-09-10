@@ -1,5 +1,6 @@
 import { JAMVI_PACKAGE, TRIAL_DAYS } from "@workspace/jamvi-pricing";
 import { SEGMENTS } from "./segments";
+import { GUIDES } from "./guides";
 
 export const SITE_ORIGIN = "https://jamvi.co.ke";
 // 1200x630, which is the slot WhatsApp, X and LinkedIn actually render. The
@@ -49,6 +50,11 @@ const PAGES: Record<string, SeoEntry> = {
     description:
       "Is Jamvi a bank? Can a chama of fifty use it? Who can edit a transaction? Straight answers about contributions, permissions, security, currencies and pricing in Kenya.",
   },
+  "/guides": {
+    title: "Guides: Keeping Group Money Clear",
+    description:
+      "Practical guides on chama record-keeping, tracking who has paid, and splitting household bills without keeping score - useful whether or not you use Jamvi.",
+  },
   "/terms": {
     title: "Terms of Service",
     description:
@@ -69,6 +75,11 @@ const PAGES: Record<string, SeoEntry> = {
 // describe rather than restated here.
 for (const segment of SEGMENTS) {
   PAGES[segment.slug] = { title: segment.title, description: segment.description };
+}
+
+// Guides do the same - their title and description live beside the article.
+for (const guide of GUIDES) {
+  PAGES[guide.slug] = { title: guide.title, description: guide.description };
 }
 
 export const SITE_SEO: Record<string, SeoEntry> = PAGES;

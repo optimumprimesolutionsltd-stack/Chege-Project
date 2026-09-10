@@ -15,6 +15,7 @@ import { JAMVI_PACKAGE, TRIAL_DAYS } from "@workspace/jamvi-pricing";
 import { FAQ_ENTRIES } from "./faq-content";
 import { SITE_ORIGIN, DEFAULT_OG_IMAGE } from "./site-seo";
 import { SEGMENTS } from "./segments";
+import { GUIDES } from "./guides";
 
 const ORGANISATION_ID = `${SITE_ORIGIN}/#organisation`;
 const WEBSITE_ID = `${SITE_ORIGIN}/#website`;
@@ -92,10 +93,32 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   "/pricing": "Pricing",
   "/about": "About",
   "/faq": "Questions",
+  "/guides": "Guides",
   "/terms": "Terms of Service",
   "/privacy": "Privacy Policy",
   ...Object.fromEntries(SEGMENTS.map((segment) => [segment.slug, segment.label])),
+  ...Object.fromEntries(GUIDES.map((guide) => [guide.slug, guide.label])),
 };
+
+/** An Article, so a guide can earn a headline-and-date result and be read as
+ *  a document rather than a landing page. The publisher is the same
+ *  Organization the rest of the graph names. */
+function article(route: string) {
+  const guide = GUIDES.find((entry) => entry.slug === route);
+  if (!guide) return null;
+  return {
+    "@type": "Article",
+    headline: guide.heading,
+    description: guide.description,
+    inLanguage: "en-KE",
+    datePublished: guide.updated,
+    dateModified: guide.updated,
+    mainEntityOfPage: `${SITE_ORIGIN}${route}/`,
+    image: DEFAULT_OG_IMAGE,
+    author: { "@id": ORGANISATION_ID },
+    publisher: { "@id": ORGANISATION_ID },
+  };
+}
 
 export function structuredDataFor(route: string): object {
   const graph: object[] = [organisation, website];
@@ -112,6 +135,9 @@ export function structuredDataFor(route: string): object {
     graph.push(application);
     graph.push(faqPage(segment.faqs));
   }
+
+  const guideArticle = article(route);
+  if (guideArticle) graph.push(guideArticle);
 
   const label = BREADCRUMB_LABELS[route];
   if (label) graph.push(breadcrumbs(route, label));
