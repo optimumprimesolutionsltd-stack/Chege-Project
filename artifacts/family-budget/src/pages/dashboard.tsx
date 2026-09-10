@@ -62,6 +62,7 @@ import { AskJamviPanel } from "@/components/ask-jamvi-panel";
 import { WorkspaceSetupGuide } from "@/components/workspace-setup-guide";
 import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
+import { DashboardAnnouncement, DashboardSummaryCards } from "@/components/dashboard-home-cards";
 import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder, getProjectedCategoryBalance } from "@/lib/expense-funding-utils";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
@@ -2720,6 +2721,29 @@ export default function Dashboard() {
           </p>
         </section>
       </div>
+
+      <DashboardAnnouncement />
+
+      <DashboardSummaryCards
+        isShared={isSharedWorkspace}
+        bankBalance={bankAccount ? bankAccount.balance : null}
+        percentSpent={percentSpent}
+        hasBudget={(summary?.totalBudget ?? 0) > 0}
+        activeGoalCount={activeGoals.length}
+        contributions={
+          isSharedWorkspace
+            ? (() => {
+                const memberContributions = ((summary as unknown as {
+                  memberContributions?: Array<{ contributed: number; target: number | null }>;
+                })?.memberContributions ?? []);
+                return {
+                  members: memberContributions.length,
+                  behind: memberContributions.filter((m) => m.target != null && m.contributed < m.target).length,
+                };
+              })()
+            : null
+        }
+      />
 
        <WorkspaceSetupGuide userId={user?.id} />
 
