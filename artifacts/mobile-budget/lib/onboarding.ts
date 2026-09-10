@@ -12,6 +12,9 @@ export type MobileOnboardingDraft = {
   categoryBudgets: Record<string, string>;
   selectedIncomeStreams: string[];
   incomeAmounts: Record<string, string>;
+  /** For a group: what each member is expected to contribute per month, as a
+   *  plain KES string. Applied as the group's default contribution target. */
+  memberContribution?: string;
 };
 
 const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
@@ -196,6 +199,7 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     categoryBudgets,
     selectedIncomeStreams: dedupeIncomeStreamNames(raw.selectedIncomeStreams.filter((item): item is string => typeof item === "string")),
     incomeAmounts: raw.incomeAmounts && typeof raw.incomeAmounts === "object" ? raw.incomeAmounts as Record<string, string> : {},
+    memberContribution: typeof raw.memberContribution === "string" ? raw.memberContribution.replace(/[^0-9]/g, "") : "",
   };
 }
 

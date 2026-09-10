@@ -31,6 +31,8 @@ type WebOnboardingDraft = {
   categoryBudgets: Record<string, string>;
   selectedIncomeStreams: string[];
   incomeAmounts: Record<string, string>;
+  /** Group setup only: what each member is expected to contribute per month. */
+  memberContribution: string;
 };
 
 export function getInitialOnboardingMode(setupComplete: boolean): OnboardingMode | null {
@@ -143,6 +145,7 @@ function readOnboardingDraft(userId: string): WebOnboardingDraft | null {
       categoryBudgets: value.categoryBudgets && typeof value.categoryBudgets === "object" ? value.categoryBudgets : {},
       selectedIncomeStreams: Array.isArray(value.selectedIncomeStreams) ? value.selectedIncomeStreams.filter((item): item is string => typeof item === "string") : [],
       incomeAmounts: value.incomeAmounts && typeof value.incomeAmounts === "object" ? value.incomeAmounts : {},
+      memberContribution: typeof value.memberContribution === "string" ? value.memberContribution.replace(/[^0-9]/g, "") : "",
     };
   } catch {
     return null;
@@ -250,6 +253,7 @@ export function BudgetChooser({
   const [showIncomeSetup, setShowIncomeSetup] = useState(false);
   const [selectedIncomeStreams, setSelectedIncomeStreams] = useState<string[]>([]);
   const [incomeAmounts, setIncomeAmounts] = useState<Record<string, string>>({});
+  const [memberContribution, setMemberContribution] = useState("");
   const [customIncomeStream, setCustomIncomeStream] = useState("");
   const [incomeSelectionError, setIncomeSelectionError] = useState<string | null>(null);
 
@@ -276,13 +280,14 @@ export function BudgetChooser({
       categoryBudgets,
       selectedIncomeStreams,
       incomeAmounts,
+      memberContribution,
     };
     try {
       window.localStorage.setItem(onboardingDraftStorageKey(userId), JSON.stringify(draft));
     } catch {
       // The server-side incomplete marker still keeps onboarding from being skipped.
     }
-  }, [activeOnboardingStage, budgetDuration, categoryBudgets, customCategories, customEndDate, incomeAmounts, onboardingMode, onboardingPurpose, selectedCategories, selectedIncomeStreams, userId]);
+  }, [activeOnboardingStage, budgetDuration, categoryBudgets, customCategories, customEndDate, incomeAmounts, memberContribution, onboardingMode, onboardingPurpose, selectedCategories, selectedIncomeStreams, userId]);
 
   const enterApp = () => {
     if (userId) {
@@ -329,6 +334,7 @@ export function BudgetChooser({
     setCategoryBudgets(draft.categoryBudgets);
     setSelectedIncomeStreams(draft.selectedIncomeStreams);
     setIncomeAmounts(draft.incomeAmounts);
+    setMemberContribution(draft.memberContribution ?? "");
     setShowPurposeSetup(draft.stage === "purpose");
     setShowDurationSetup(draft.stage === "duration");
     setShowCategorySetup(draft.stage === "categories");
@@ -369,6 +375,23 @@ export function BudgetChooser({
 
   const applyOnboardingPreferences = async (workspace: Workspace) => {
     if (!userId) return;
+    // A group treasurer's key setting: what each member owes per month, applied
+    // as the group's default contribution target onto everyone.
+    if (!workspace.isPrivate && (workspace.role === "owner" || workspace.role === "admin")) {
+      const perMember = Math.max(0, Math.round(Number(memberContribution.replace(/[^0-9]/g, "")) || 0));
+      if (perMember > 0) {
+        try {
+          await fetch("/api/contribution-settings", {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ defaultMonthlyTarget: perMember, applyToEveryone: true }),
+          });
+        } catch {
+          // Not fatal — the treasurer can set it later in Contributions.
+        }
+      }
+    }
     // Category management belongs to the workspace manager. Income streams are
     // attributed to the signed-in user and can be added by any member.
     if (selectedCategories.length > 0 && (workspace.isPrivate || workspace.role === "owner" || workspace.role === "admin")) {
@@ -691,6 +714,25 @@ export function BudgetChooser({
               <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">{incomeDescription} You can add amounts and more sources later.</p>
             </header>
             <div className="p-6 sm:p-10">
+              {isSharedSetup ? (
+                <div className="mb-5 rounded-xl border border-border bg-background p-4">
+                  <p className="text-sm font-semibold text-foreground">What should each member contribute each month?</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">Sets the target for everyone. Leave blank if it varies or you'll decide later.</p>
+                  <div className="mt-3 flex w-48 items-center gap-2">
+                    <span className="text-sm text-muted-foreground">KES</span>
+                    <Input
+                      aria-label="Monthly contribution per member"
+                      data-testid="onboarding-member-contribution"
+                      inputMode="numeric"
+                      type="text"
+                      placeholder="0"
+                      value={memberContribution}
+                      onChange={(event) => setMemberContribution(event.target.value.replace(/[^0-9]/g, ""))}
+                      className="h-10 text-right"
+                    />
+                  </div>
+                </div>
+              ) : null}
               <div className="grid gap-2 sm:grid-cols-2">
                 {incomeStreamsFor(onboardingMode).map((stream) => {
                   const selected = selectedIncomeStreams.includes(stream);
