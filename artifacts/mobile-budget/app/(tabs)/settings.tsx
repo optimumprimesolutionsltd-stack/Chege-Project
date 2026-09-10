@@ -39,6 +39,7 @@ import {
   type WorkspaceNameStyle,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { useAppearance, type Appearance } from '@/hooks/useAppearance';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
@@ -94,8 +95,15 @@ function workspaceLabel(workspace: { isPrivate: boolean; name: string }): string
   return name.toLocaleLowerCase('en-US') === 'shared budget' || !name ? 'Group' : name;
 }
 
+const APPEARANCE_OPTIONS: { value: Appearance; label: string; sub: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { value: 'system', label: 'System', sub: "Match your phone's setting", icon: 'smartphone' },
+  { value: 'white', label: 'White', sub: 'Always the light theme', icon: 'sun' },
+  { value: 'midnight', label: 'Jamvi night', sub: 'Always the dark theme', icon: 'moon' },
+];
+
 export default function SettingsScreen() {
   const colors = useColors();
+  const { appearance, setAppearance } = useAppearance();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
@@ -1399,6 +1407,38 @@ export default function SettingsScreen() {
               <Text style={[styles.rowValue, { color: colors.mutedForeground }]} numberOfLines={1}>{user.email}</Text>
             </View>
           ) : null}
+        </View>
+
+        {/* Appearance */}
+        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>APPEARANCE</Text>
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {APPEARANCE_OPTIONS.map((option, index) => {
+            const selected = appearance === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                testID={`appearance-${option.value}`}
+                onPress={() => setAppearance(option.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                style={[
+                  styles.row,
+                  index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+                ]}
+              >
+                <View style={styles.rowLeft}>
+                  <View style={[styles.rowIcon, { backgroundColor: colors.muted }]}>
+                    <Feather name={option.icon} size={16} color={colors.mutedForeground} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowLabel, { color: colors.foreground }]}>{option.label}</Text>
+                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{option.sub}</Text>
+                  </View>
+                </View>
+                {selected ? <Feather name="check" size={18} color={colors.primary} /> : null}
+              </Pressable>
+            );
+          })}
         </View>
 
         {/* App */}
