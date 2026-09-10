@@ -106,6 +106,13 @@ const queryClient = new QueryClient({
   },
 });
 
+// A stable empty array for the disabled-query default. `data ?? []` would hand
+// back a fresh array every render, and this value is a dependency of the
+// routing effect below — a new reference each render re-fired that effect,
+// which calls router.replace, which re-rendered, which… blank-screen flicker
+// on every launch.
+const NO_WORKSPACES: never[] = [];
+
 function RootLayoutNav() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
@@ -115,7 +122,7 @@ function RootLayoutNav() {
   const allowWebExitRef = useRef(false);
   const [checkingChooser, setCheckingChooser] = useState(true);
   const {
-    data: workspaces = [],
+    data: workspaces = NO_WORKSPACES,
     isLoading: loadingWorkspaces,
   } = useGetWorkspaces({
     query: {
@@ -196,18 +203,25 @@ function RootLayoutNav() {
 
   useEffect(() => {
     let active = true;
+    // Only navigate when we are not already where we want to be. Firing
+    // router.replace at the route you are already on re-renders this component,
+    // which re-runs this effect — the loop that made the screen flicker.
+    const go = (destination: string, atRoute: string) => {
+      if (currentRoute !== atRoute) router.replace(destination);
+    };
+
     if (isLoading) {
       setCheckingChooser(true);
       return () => { active = false; };
     }
     if (!isAuthenticated) {
       setCheckingChooser(false);
-      router.replace('/login');
+      go('/login', 'login');
       return () => { active = false; };
     }
     if (user?.needsDisplayName) {
       setCheckingChooser(false);
-      router.replace('/profile-setup');
+      go('/profile-setup', 'profile-setup');
       return () => { active = false; };
     }
     if (!user?.id) return () => { active = false; };
@@ -224,7 +238,10 @@ function RootLayoutNav() {
           chooserComplete: chooserComplete && hasValidSelection,
           currentRoute,
         });
-        if (destination) router.replace(destination);
+        if (destination && destination !== `/${currentRoute}`) router.replace(destination);
+      })
+      .catch(() => {
+        // A storage read failing must not leave the app stuck on the spinner.
       })
       .finally(() => {
         if (active) setCheckingChooser(false);
