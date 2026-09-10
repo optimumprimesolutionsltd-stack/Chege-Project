@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { useCollapsed } from '@/hooks/useCollapsed';
 import {
   ContributorEditorFooter,
   EditListButton,
@@ -46,6 +47,7 @@ function kes(value: number): string {
 export function ContributionVariance({ canManage = false }: { canManage?: boolean }) {
   const colors = useColors();
   const editor = useContributorEditor();
+  const { open, toggle } = useCollapsed('expected-vs-actual');
   const [months, setMonths] = useState<number>(6);
 
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
@@ -85,54 +87,69 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
     };
   };
 
+  const groupLine = varianceText(groupVariance);
+  const collapsedSummary =
+    totalExpected > 0
+      ? `Given KES ${kes(totalGiven)} of KES ${kes(totalExpected)} expected · ${groupLine.label === 'On plan' ? 'on plan' : groupLine.label}`
+      : `Given KES ${kes(totalGiven)} — no set amounts`;
+
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.headerRow}>
+      <Pressable style={styles.headerRow} onPress={toggle}>
         <View style={styles.headerText}>
           <View style={styles.headingRow}>
             <Feather name="bar-chart-2" size={15} color={colors.primary} />
             <Text style={[styles.heading, { color: colors.foreground }]}>Expected vs actual</Text>
-            <EditListButton editor={editor} canManage={canManage} />
+            {open ? <EditListButton editor={editor} canManage={canManage} /> : null}
           </View>
-          <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-            {periodLabel ? (
-              <>
-                <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{periodLabel}</Text>
-                {monthCount > 1 ? ` · ${monthCount} months` : ''} — expected against what each member gave.
-              </>
-            ) : (
-              `What each member was expected to give over the last ${months} months, against what they gave.`
-            )}
-          </Text>
+          {open ? (
+            <Text style={[styles.sub, { color: colors.mutedForeground }]}>
+              {periodLabel ? (
+                <>
+                  <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{periodLabel}</Text>
+                  {monthCount > 1 ? ` · ${monthCount} months` : ''} — expected against what each member gave.
+                </>
+              ) : (
+                `What each member was expected to give over the last ${months} months, against what they gave.`
+              )}
+            </Text>
+          ) : (
+            <Text style={[styles.sub, { color: groupLine.color }]}>{collapsedSummary}</Text>
+          )}
         </View>
-        <View style={styles.ranges}>
-          {RANGES.map((range) => {
-            const active = months === range;
-            return (
-              <Pressable
-                key={range}
-                onPress={() => setMonths(range)}
-                style={[
-                  styles.rangeBtn,
-                  { borderColor: colors.border },
-                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.rangeLabel,
-                    { color: active ? colors.primaryForeground : colors.mutedForeground },
-                  ]}
-                >
-                  {range}m
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View style={styles.headRight}>
+          {open ? (
+            <View style={styles.ranges}>
+              {RANGES.map((range) => {
+                const active = months === range;
+                return (
+                  <Pressable
+                    key={range}
+                    onPress={() => setMonths(range)}
+                    style={[
+                      styles.rangeBtn,
+                      { borderColor: colors.border },
+                      active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.rangeLabel,
+                        { color: active ? colors.primaryForeground : colors.mutedForeground },
+                      ]}
+                    >
+                      {range}m
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+          <Feather name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
         </View>
-      </View>
+      </Pressable>
 
-      {isLoading ? (
+      {!open ? null : isLoading ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primary} />
         </View>
@@ -199,6 +216,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   headerText: { flex: 1, gap: 3 },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heading: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   nameWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   sub: { fontSize: 12, lineHeight: 17 },
