@@ -115,6 +115,10 @@ export default function SettingsScreen() {
   const [inviteEmails, setInviteEmails] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'admin' | 'member'>('member');
   const [managingMembers, setManagingMembers] = useState(false);
+  // GROUP ACCESS shows a plain member list until Edit is tapped; then the
+  // invite form and the per-row role/remove controls appear, and Done closes
+  // it again. Same shape as the contribution panels.
+  const [editingAccess, setEditingAccess] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupSlogan, setGroupSlogan] = useState('');
   const [groupEmoji, setGroupEmoji] = useState('');
@@ -1233,10 +1237,24 @@ export default function SettingsScreen() {
         {/* Shared group access */}
         {!group?.isPrivate && (
           <>
-         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>GROUP ACCESS</Text>
-         {canManageShared ? (
+         <View style={styles.sectionHeaderRow}>
+           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>GROUP ACCESS</Text>
+           {canManageShared ? (
+             <Pressable
+               testID="edit-group-access"
+               onPress={() => setEditingAccess((value) => !value)}
+               hitSlop={10}
+               style={{ marginLeft: 8, marginBottom: 6 }}
+             >
+               <Text style={{ color: colors.primary, fontSize: 12, fontFamily: 'Inter_600SemiBold' }}>
+                 {editingAccess ? 'Done' : 'Edit'}
+               </Text>
+             </Pressable>
+           ) : null}
+         </View>
+         {canManageShared && editingAccess ? (
            <Text style={[styles.accessHint, { color: colors.mutedForeground }]}>
-             You can change any non-owner between Admin and Member or remove their access. The group owner is protected.
+             Invite people by email, change any non-owner between Admin and Member, or remove their access. The group owner is protected.
            </Text>
          ) : null}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1254,7 +1272,7 @@ export default function SettingsScreen() {
                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{member.role === 'owner' ? 'Owner' : member.role === 'admin' ? 'Admin' : 'Member'}</Text>
                 </View>
               </View>
-              {canManageShared && member.role !== 'owner' && member.userId !== user?.id ? (
+              {canManageShared && editingAccess && member.role !== 'owner' && member.userId !== user?.id ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                    <Pressable
                      disabled={managingMembers}
@@ -1303,7 +1321,7 @@ export default function SettingsScreen() {
               </Text>
             </View>
           ) : null}
-          {canManageShared ? (
+          {!canManageShared ? null : editingAccess ? (
             <View style={[styles.addRow, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, flexWrap: 'wrap', gap: 8 }]}>
               <Text style={{ width: '100%', color: colors.foreground, fontSize: 14, fontFamily: 'Inter_600SemiBold', marginBottom: 2 }}>
                  Invite people by email
@@ -1368,17 +1386,18 @@ export default function SettingsScreen() {
                 WhatsApp opens first. If it is not available, your device’s other sharing options will open instead.
               </Text>
             </View>
-          ) : (
+          ) : null}
+          {!canManageShared ? (
             <View style={styles.row}>
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Admins manage group access. You can still contribute in your own name.</Text>
             </View>
-          )}
-          {canManageShared ? (
+          ) : null}
+          {canManageShared && editingAccess ? (
             <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'stretch' }]}>
               <ReadOnlyLinkCard groupName={group?.name} />
             </View>
           ) : null}
-          {canManageShared && inviteContacts.length > 0 ? (
+          {canManageShared && editingAccess && inviteContacts.length > 0 ? (
             <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'stretch' }]}>
               <Text style={[styles.rowLabel, { color: colors.foreground, marginBottom: 4 }]}>Quick invite</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginBottom: 10 }]}>Saved people can be invited again without retyping their details.</Text>
@@ -1402,7 +1421,7 @@ export default function SettingsScreen() {
               })}
             </View>
           ) : null}
-          {canManageShared && invitations.some((invitation) => invitation.status === 'pending') ? (
+          {canManageShared && editingAccess && invitations.some((invitation) => invitation.status === 'pending') ? (
             <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'stretch' }]}>
               <Text style={[styles.rowLabel, { color: colors.foreground, marginBottom: 4 }]}>Pending invitations</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginBottom: 10 }]}>A person joins only after they accept their email invitation.</Text>
@@ -1420,6 +1439,17 @@ export default function SettingsScreen() {
                   </Pressable>
                 </View>
               ))}
+            </View>
+          ) : null}
+          {canManageShared && editingAccess ? (
+            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, justifyContent: 'flex-end' }]}>
+              <Pressable
+                testID="done-group-access"
+                onPress={() => setEditingAccess(false)}
+                style={{ backgroundColor: colors.primary, borderRadius: 9, paddingHorizontal: 16, paddingVertical: 9 }}
+              >
+                <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_700Bold', fontSize: 13 }}>Done</Text>
+              </Pressable>
             </View>
           ) : null}
         </View>
