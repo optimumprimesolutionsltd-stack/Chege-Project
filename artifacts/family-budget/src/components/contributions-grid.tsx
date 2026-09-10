@@ -47,6 +47,13 @@ export function ContributionsGrid() {
   });
 
   const rows = data?.rows ?? [];
+  const monthCount = data?.months.length ?? 0;
+  const periodLabel =
+    monthCount === 0
+      ? ""
+      : monthCount === 1
+        ? data!.months[0].label
+        : `${data!.months[0].label} – ${data!.months[monthCount - 1].label}`;
   // "Everyone except those who are up to date" is the list a treasurer chases,
   // and in a group of forty it is the only part worth reading.
   const shown = hideSettled
@@ -63,7 +70,14 @@ export function ContributionsGrid() {
               Who has paid
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Every member down the side, months across the top — the sheet you already keep.
+              {periodLabel ? (
+                <>
+                  <span className="font-semibold text-foreground">{periodLabel}</span>
+                  {monthCount > 1 ? ` · ${monthCount} months` : ""} — every member down the side, months across the top.
+                </>
+              ) : (
+                "Every member down the side, months across the top — the sheet you already keep."
+              )}
             </p>
           </div>
           <div className="flex shrink-0 gap-1">
