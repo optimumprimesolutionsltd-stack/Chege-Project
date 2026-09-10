@@ -86,3 +86,22 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
+
+      # Safaricom Daraja — Lipa Na M-Pesa Online (STK Push) for subscriptions.
+      # Absent = /payments/stk-push returns "not configured" and nobody can
+      # subscribe; the read-only-on-lapse rule stays armed but never fires.
+      # MPESA_ENV defaults to sandbox, so production billing needs it set to
+      # "production" explicitly. MPESA_CALLBACK_URL is the public URL Safaricom
+      # POSTs the result to: https://jamvi.co.ke/api/mpesa/callback
+      - key: MPESA_ENV
+        value: sandbox
+      - key: MPESA_CONSUMER_KEY
+        sync: false
+      - key: MPESA_CONSUMER_SECRET
+        sync: false
+      - key: MPESA_SHORTCODE
+        sync: false
+      - key: MPESA_PASSKEY
+        sync: false
+      - key: MPESA_CALLBACK_URL
+        sync: false

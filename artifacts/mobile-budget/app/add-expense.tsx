@@ -48,6 +48,7 @@ import {
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
+import { handleLapsedError } from '@/lib/lapsedError';
 import {
   addIncomeSourceToSelection,
   buildSinglePayerFundingReplacement,
@@ -975,7 +976,9 @@ export default function AddExpenseSheet() {
         router.dismiss();
       } catch (error) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert('Could not save expense', getExpenseSaveError(error));
+        if (!handleLapsedError(error)) {
+          Alert.alert('Could not save expense', getExpenseSaveError(error));
+        }
       } finally {
         setIsPending(false);
       }
@@ -1135,7 +1138,9 @@ export default function AddExpenseSheet() {
       router.dismiss();
     } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Could not save expense', getExpenseSaveError(error));
+      if (!handleLapsedError(error)) {
+        Alert.alert('Could not save expense', getExpenseSaveError(error));
+      }
     } finally {
       setIsPending(false);
     }

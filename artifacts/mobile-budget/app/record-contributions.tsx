@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { handleLapsedError } from '@/lib/lapsedError';
 
 type Contributor = { id: number; name: string; hasAccount: boolean; monthlyTarget: number | null };
 type BankAccount = { id: number; name: string };
@@ -232,7 +233,9 @@ export default function RecordContributionsScreen() {
       await queryClient.invalidateQueries();
       router.back();
     } catch (error) {
-      Alert.alert('Could not record', error instanceof Error ? error.message : 'Nothing has been changed.');
+      if (!handleLapsedError(error)) {
+        Alert.alert('Could not record', error instanceof Error ? error.message : 'Nothing has been changed.');
+      }
     } finally {
       submittingRef.current = false;
       setSaving(false);

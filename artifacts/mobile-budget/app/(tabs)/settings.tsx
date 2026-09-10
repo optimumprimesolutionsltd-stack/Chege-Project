@@ -40,6 +40,8 @@ import {
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useAppearance, type Appearance } from '@/hooks/useAppearance';
+import { useEntitlements } from '@/hooks/useEntitlements';
+import { statusLine } from '@/lib/subscription-status';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
@@ -104,6 +106,8 @@ const APPEARANCE_OPTIONS: { value: Appearance; label: string; sub: string; icon:
 export default function SettingsScreen() {
   const colors = useColors();
   const { appearance, setAppearance } = useAppearance();
+  const { data: entitlements } = useEntitlements();
+  const subscriptionSummary = entitlements ? statusLine(entitlements).heading : '—';
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
@@ -1432,7 +1436,7 @@ export default function SettingsScreen() {
             <Text style={[styles.rowValue, { color: colors.mutedForeground }]}>{displayName}</Text>
           </View>
           {user?.email ? (
-            <View style={styles.row}>
+            <View style={[styles.row, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
               <View style={styles.rowLeft}>
                 <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
                   <Feather name="mail" size={16} color={colors.primary} />
@@ -1442,6 +1446,20 @@ export default function SettingsScreen() {
               <Text style={[styles.rowValue, { color: colors.mutedForeground }]} numberOfLines={1}>{user.email}</Text>
             </View>
           ) : null}
+          <Pressable testID="open-subscription" onPress={() => router.push('/subscription')} style={styles.row}>
+            <View style={styles.rowLeft}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
+                <Feather name="credit-card" size={16} color={colors.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Subscription</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground }]} numberOfLines={1}>
+                {subscriptionSummary}
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </View>
+          </Pressable>
         </View>
 
         {/* Appearance */}
