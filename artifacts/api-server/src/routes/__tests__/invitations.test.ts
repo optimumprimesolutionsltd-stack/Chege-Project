@@ -38,6 +38,7 @@ type Mock = ReturnType<typeof vi.fn>;
 function selectChain(rows: unknown[]) {
   const chain: Record<string, unknown> = {};
   chain.from = vi.fn().mockReturnValue(chain);
+  chain.innerJoin = vi.fn().mockReturnValue(chain);
   chain.where = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockReturnValue(chain);
   chain.for = vi.fn().mockResolvedValue(rows);
@@ -165,6 +166,41 @@ describe("group invitation acceptance", () => {
 
     expect(response.status).toBe(409);
     expect(response.body.error).toMatch(/already been accepted/i);
+    expect(inserted).not.toHaveBeenCalled();
+  });
+
+  it("lists the pending invitations addressed to whoever is signed in", async () => {
+    const selectResults = [
+      [{ email: "member@example.com" }],
+      [{ id: 41, groupId: 7, groupName: "Test group", role: "member", expiresAt: new Date(Date.now() + 60_000) }],
+    ];
+    (db.select as Mock).mockImplementation(() => selectChain(selectResults.shift() ?? []));
+
+    const response = await request(appFor()).get("/group-invitations/mine");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      expect.objectContaining({ id: 41, groupId: 7, groupName: "Test group", role: "member" }),
+    ]);
+  });
+
+  it("accepts a pending invitation by id for the matching signed-in email", async () => {
+    const { inserted, updated } = configureAcceptance(invitation({ role: "member" }), "member@example.com");
+
+    const response = await request(appFor()).post("/group-invitations/mine/41/accept");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ groupId: 7, groupName: "Test group", role: "member" });
+    expect(inserted).toHaveBeenCalledWith(expect.objectContaining({ groupId: 7, userId: "member-1", role: "member" }));
+    expect(updated).toHaveBeenCalledOnce();
+  });
+
+  it("rejects accept-by-id when the signed-in email differs", async () => {
+    const { inserted } = configureAcceptance(invitation(), "someone-else@example.com");
+
+    const response = await request(appFor()).post("/group-invitations/mine/41/accept");
+
+    expect(response.status).toBe(403);
     expect(inserted).not.toHaveBeenCalled();
   });
 });

@@ -15,7 +15,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useGetWorkspaces,
   useCreateSharedGroup,
@@ -83,6 +83,37 @@ export default function BudgetChooserScreen() {
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [pendingOnboardingDraft, setPendingOnboardingDraft] = useState<MobileOnboardingDraft | null>(null);
+  const [acceptingInviteId, setAcceptingInviteId] = useState<number | null>(null);
+  const [invitesDismissed, setInvitesDismissed] = useState(false);
+
+  type PendingInvite = { id: number; groupId: number; groupName: string; role: string; expiresAt: string };
+  const { data: pendingInvites = [], refetch: refetchInvites } = useQuery<PendingInvite[]>({
+    queryKey: ['group-invitations-mine'],
+    queryFn: () => customFetch<PendingInvite[]>('/api/group-invitations/mine', { responseType: 'json' }),
+    enabled: !!user?.id,
+    retry: false,
+  });
+
+  const acceptInvite = async (invite: PendingInvite) => {
+    if (acceptingInviteId) return;
+    setError(null);
+    setAcceptingInviteId(invite.id);
+    try {
+      await customFetch(`/api/group-invitations/mine/${invite.id}/accept`, { method: 'POST', responseType: 'json' });
+      const { data: fresh } = await refetchWorkspaces();
+      await refetchInvites();
+      const joined = (fresh ?? []).find((workspace) => workspace.id === invite.groupId);
+      if (joined) {
+        await chooseWorkspace(joined);
+      } else {
+        setOnboardingComplete(true);
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not accept this invitation. Please try again.');
+    } finally {
+      setAcceptingInviteId(null);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -282,6 +313,48 @@ export default function BudgetChooserScreen() {
     return <View style={[styles.page, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}><ActivityIndicator color={colors.primary} /></View>;
   }
 
+  // Someone invited to their first group should land on the invitation, not a
+  // six-step personal-budget wizard they did not ask for.
+  if (pendingInvites.length > 0 && workspaces.length === 0 && !invitesDismissed) {
+    return (
+      <View style={[styles.page, { backgroundColor: colors.background, paddingTop: insets.top + 20 }]}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} showsVerticalScrollIndicator={false}>
+          <View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="user-plus" size={22} color={colors.primaryForeground} /></View>
+          <Text style={[styles.eyebrow, { color: colors.brandTeal }]}>YOU'VE BEEN INVITED</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>
+            {pendingInvites.length === 1 ? 'Join this budget.' : 'Join a budget.'}
+          </Text>
+          <Text style={[styles.intro, { color: colors.mutedForeground }]}>
+            Accepting adds you as a {pendingInvites[0].role === 'admin' ? 'admin' : 'member'}. You keep your own free Personal budget separate.
+          </Text>
+          {error ? <View accessibilityRole="alert" style={[styles.error, { backgroundColor: colors.destructive + '14' }]}><Feather name="alert-circle" size={17} color={colors.destructive} /><Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text></View> : null}
+          {pendingInvites.map((invite) => (
+            <View key={invite.id} style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.createCardCopy}>
+                <Text style={[styles.createTitle, { color: colors.foreground }]}>{invite.groupName}</Text>
+                <Text style={[styles.createText, { color: colors.mutedForeground }]}>Shared budget · joining as {invite.role === 'admin' ? 'admin' : 'member'}</Text>
+              </View>
+              <Pressable
+                testID={`accept-invite-${invite.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Join ${invite.groupName}`}
+                disabled={acceptingInviteId != null}
+                onPress={() => void acceptInvite(invite)}
+                style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, (pressed || acceptingInviteId != null) && styles.pressed]}
+              >
+                {acceptingInviteId === invite.id ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name="check" size={18} color={colors.primaryForeground} />}
+                <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>{acceptingInviteId === invite.id ? 'Joining…' : 'Join'}</Text>
+              </Pressable>
+            </View>
+          ))}
+          <Pressable onPress={() => setInvitesDismissed(true)} hitSlop={8} style={{ paddingVertical: 12, alignSelf: 'center' }}>
+            <Text style={[styles.skipLink, { color: colors.mutedForeground }]}>Not now — set up my own budget</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    );
+  }
+
   if (!onboardingComplete) {
     return (
       <MobileOnboardingFlow
@@ -303,6 +376,32 @@ export default function BudgetChooserScreen() {
         <Text style={[styles.intro, { color: colors.mutedForeground }]}>Select a budget to open it.</Text>
 
         {error ? <View accessibilityRole="alert" style={[styles.error, { backgroundColor: colors.destructive + '14' }]}><Feather name="alert-circle" size={17} color={colors.destructive} /><Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text></View> : null}
+
+        {pendingInvites.length > 0 ? (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.brandTeal }]}>INVITATIONS</Text>
+            {pendingInvites.map((invite) => (
+              <View key={invite.id} style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.createCardCopy}>
+                  <Text style={[styles.createTitle, { color: colors.foreground }]}>{invite.groupName}</Text>
+                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>Invited as {invite.role === 'admin' ? 'admin' : 'member'}</Text>
+                </View>
+                <Pressable
+                  testID={`accept-invite-${invite.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Join ${invite.groupName}`}
+                  disabled={acceptingInviteId != null}
+                  onPress={() => void acceptInvite(invite)}
+                  style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, (pressed || acceptingInviteId != null) && styles.pressed]}
+                >
+                  {acceptingInviteId === invite.id ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name="check" size={18} color={colors.primaryForeground} />}
+                  <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>{acceptingInviteId === invite.id ? 'Joining…' : 'Join'}</Text>
+                </Pressable>
+              </View>
+            ))}
+          </>
+        ) : null}
+
         {loadingWorkspaces ? <ActivityIndicator color={colors.primary} style={styles.loader} /> : (
           <>
             <View style={[styles.selectedPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
