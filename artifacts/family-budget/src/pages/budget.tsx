@@ -19,7 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
+import { useCollapsed } from "@/hooks/use-collapsed";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { getCategoryIcon } from "@/lib/category-icons";
@@ -556,6 +557,7 @@ export default function Budget() {
   // it, and a flat list of forty rows is the thing sub-categories exist to
   // prevent.
   const [categoryView, setCategoryView] = useState<"simple" | "advanced">("simple");
+  const reportPanel = useCollapsed("budget-report");
   const [tierEditorOpen, setTierEditorOpen] = useState(false);
   const [tierDrafts, setTierDrafts] = useState<PriorityTier[]>([]);
   const [savingTiers, setSavingTiers] = useState(false);
@@ -1257,16 +1259,36 @@ export default function Budget() {
       ) : (
         <div className="space-y-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h2 className="font-display text-xl font-bold text-foreground">Priority tier report</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Tiers help protect essential spending first when money is limited: Tier 1 is most urgent and Tier 5 can wait.
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={reportPanel.toggle}
+                aria-expanded={reportPanel.open}
+                className="flex min-w-0 flex-1 items-start gap-2 text-left"
+              >
+                <span className="min-w-0">
+                  <span className="block font-display text-xl font-bold text-foreground">Priority tier report</span>
+                  {reportPanel.open ? (
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      Tiers help protect essential spending first when money is limited: Tier 1 is most urgent and Tier 5 can wait.
+                    </span>
+                  ) : (
+                    <span
+                      className={`mt-1 block text-sm ${reportVariance < 0 ? "text-destructive" : "text-muted-foreground"}`}
+                    >
+                      {(breakdown ?? []).length} {(breakdown ?? []).length === 1 ? "category" : "categories"} · {formatKes(reportActual)} of {formatKes(reportBudget)}
+                    </span>
+                  )}
+                </span>
+                {reportPanel.open ? (
+                  <ChevronUp className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                )}
+              </button>
               {/* Simple reads: one line per category, sub-categories tucked
                   inside it. Advanced works: each sub-category is a row of its
                   own, because that is the thing being edited. */}
-              {childCategories.length > 0 ? (
+              {reportPanel.open && childCategories.length > 0 ? (
                 <div className="flex shrink-0 gap-1" role="group" aria-label="Category detail">
                   {(["simple", "advanced"] as const).map(option => (
                     <Button
@@ -1282,7 +1304,7 @@ export default function Budget() {
                 </div>
               ) : null}
             </div>
-           {Array.from(new Set([
+           {!reportPanel.open ? null : Array.from(new Set([
              1,
              2,
              3,
