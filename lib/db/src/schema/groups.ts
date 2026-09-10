@@ -139,6 +139,10 @@ export const groupsTable = pgTable(
       label: string;
       description: string;
     }>>(),
+    // A rotating payout ("merry-go-round"): each round the pot is disbursed to
+    // one member in turn. Off by default and opt-in per budget, because it is
+    // a chama practice and would only confuse a church or a household.
+    merryGoRoundEnabled: boolean("merry_go_round_enabled").notNull().default(false),
     createdByUserId: text("created_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
