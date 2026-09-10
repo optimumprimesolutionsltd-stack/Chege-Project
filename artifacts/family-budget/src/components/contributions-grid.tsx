@@ -22,7 +22,7 @@ export type ContributionGrid = {
   grandTotal: number;
 };
 
-const RANGES = [3, 6, 12] as const;
+const RANGES = [1, 3, 6, 12] as const;
 
 /**
  * The sheet every collecting group already keeps: names down the side, months

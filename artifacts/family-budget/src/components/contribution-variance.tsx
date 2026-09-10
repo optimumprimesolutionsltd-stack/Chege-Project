@@ -6,7 +6,7 @@ import { formatKes } from "@/lib/utils";
 import { Loader2, Scale } from "lucide-react";
 import type { ContributionGrid } from "@/components/contributions-grid";
 
-const RANGES = [3, 6, 12] as const;
+const RANGES = [1, 3, 6, 12] as const;
 
 /**
  * Expected versus what actually came in, over a chosen stretch of months.
