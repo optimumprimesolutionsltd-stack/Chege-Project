@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import {
   ContributorEditorFooter,
+  EditableName,
   EditListButton,
   RemoveRowButton,
   useContributorEditor,
@@ -168,16 +169,12 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
                 <View style={styles.rowTop}>
                   <View style={styles.nameWrap}>
                     <RemoveRowButton editor={editor} id={row.contributorId} />
-                    <Text
-                      style={[
-                        styles.name,
-                        { color: colors.foreground },
-                        editor.isRemoving(row.contributorId) && { color: colors.mutedForeground, textDecorationLine: 'line-through' },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {row.name}
-                    </Text>
+                    <EditableName
+                      editor={editor}
+                      id={row.contributorId}
+                      name={row.name}
+                      textStyle={{ ...styles.name, color: colors.foreground }}
+                    />
                   </View>
                   <Text style={[styles.variance, { color: variance.color }]}>{variance.label}</Text>
                 </View>

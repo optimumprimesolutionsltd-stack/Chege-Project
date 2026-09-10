@@ -20,15 +20,38 @@ export function useContributorEditor() {
   const [adds, setAdds] = useState<string[]>([]);
   const [addName, setAddName] = useState("");
   const [removals, setRemovals] = useState<Set<number>>(new Set());
+  const [renames, setRenames] = useState<Record<number, string>>({});
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [rowDraft, setRowDraft] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const dirty = adds.length > 0 || removals.size > 0;
+  const dirty = adds.length > 0 || removals.size > 0 || Object.keys(renames).length > 0;
 
   const reset = () => {
     setAdds([]);
     setAddName("");
     setRemovals(new Set());
+    setRenames({});
+    setEditingRow(null);
+    setRowDraft("");
   };
+
+  const startRename = (id: number, current: string) => {
+    setEditingRow(id);
+    setRowDraft(renames[id] ?? current);
+  };
+  const cancelRename = () => setEditingRow(null);
+  const commitRename = (id: number, original: string) => {
+    const name = rowDraft.trim();
+    setEditingRow(null);
+    setRenames((current) => {
+      const next = { ...current };
+      if (name && name !== original && name.length <= 120) next[id] = name;
+      else delete next[id];
+      return next;
+    });
+  };
+  const displayName = (id: number, original: string) => renames[id] ?? original;
 
   const open = () => {
     reset();
@@ -78,6 +101,16 @@ export function useContributorEditor() {
         });
         if (!response.ok) throw new Error("add failed");
       }
+      for (const [id, name] of Object.entries(renames)) {
+        if (removals.has(Number(id))) continue;
+        const response = await fetch(`/api/contributors/${id}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        if (!response.ok) throw new Error("rename failed");
+      }
       for (const id of removals) {
         const response = await fetch(`/api/contributors/${id}`, {
           method: "PATCH",
@@ -91,12 +124,12 @@ export function useContributorEditor() {
         queryClient.invalidateQueries({ queryKey: ["contributors"] }),
         queryClient.invalidateQueries({ queryKey: ["contribution-grid"] }),
       ]);
-      toast({
-        title: "Saved",
-        description:
-          `${adds.length ? `${adds.length} added` : ""}${adds.length && removals.size ? ", " : ""}` +
-          `${removals.size ? `${removals.size} removed` : ""}.`,
-      });
+      const parts = [
+        adds.length ? `${adds.length} added` : "",
+        Object.keys(renames).length ? `${Object.keys(renames).length} renamed` : "",
+        removals.size ? `${removals.size} removed` : "",
+      ].filter(Boolean);
+      toast({ title: "Saved", description: `${parts.join(", ")}.` });
       reset();
       setEditing(false);
     } catch {
@@ -124,6 +157,13 @@ export function useContributorEditor() {
     dropAdd,
     isRemoving,
     toggleRemoval,
+    editingRow,
+    rowDraft,
+    setRowDraft,
+    startRename,
+    cancelRename,
+    commitRename,
+    displayName,
     save,
   };
 }
@@ -150,6 +190,51 @@ export function EditListButton({
       data-testid="edit-list"
     >
       <Pencil className="h-4 w-4" aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * The member's name in a row. Read-only outside edit mode; in edit mode a
+ * pencil starts an inline rename, and a staged new name shows until Save.
+ */
+export function EditableName({ editor, id, name }: { editor: Editor; id: number; name: string }) {
+  if (!editor.editing) return <span className="block truncate">{name}</span>;
+
+  if (editor.editingRow === id) {
+    return (
+      <span className="flex min-w-0 items-center gap-1">
+        <Input
+          autoFocus
+          maxLength={120}
+          className="h-8 flex-1"
+          value={editor.rowDraft}
+          onChange={(event) => editor.setRowDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              editor.commitRename(id, name);
+            }
+            if (event.key === "Escape") editor.cancelRename();
+          }}
+          data-testid={`rename-input-${id}`}
+        />
+        <Button type="button" size="sm" onClick={() => editor.commitRename(id, name)}>OK</Button>
+      </span>
+    );
+  }
+
+  const shown = editor.displayName(id, name);
+  return (
+    <button
+      type="button"
+      onClick={() => editor.startRename(id, name)}
+      className={`flex min-w-0 items-center gap-1 text-left ${editor.isRemoving(id) ? "text-muted-foreground line-through" : ""}`}
+      data-testid={`rename-${id}`}
+      aria-label={`Rename ${name}`}
+    >
+      <span className="truncate">{shown}</span>
+      <Pencil className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   );
 }
