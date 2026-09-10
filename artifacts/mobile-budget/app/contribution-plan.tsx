@@ -45,6 +45,62 @@ export default function ContributionPlanScreen() {
 
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [renaming, setRenaming] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [busyContributor, setBusyContributor] = useState<number | null>(null);
+
+  const patchContributor = async (id: number, body: Record<string, unknown>): Promise<boolean> => {
+    setBusyContributor(id);
+    try {
+      await customFetch(`/api/contributors/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['contributors'] }),
+        queryClient.invalidateQueries({ queryKey: ['contribution-grid'] }),
+      ]);
+      return true;
+    } catch (error) {
+      Alert.alert('Could not save', error instanceof Error ? error.message : 'Nothing has been changed.');
+      return false;
+    } finally {
+      setBusyContributor(null);
+    }
+  };
+
+  const saveRename = async (contributor: Contributor) => {
+    const name = renameValue.trim();
+    if (!name) {
+      Alert.alert('Enter a name', 'A contributor needs a name.');
+      return;
+    }
+    if (name === contributor.name) {
+      setRenaming(null);
+      return;
+    }
+    if (await patchContributor(contributor.id, { name })) setRenaming(null);
+  };
+
+  const removeContributor = (contributor: Contributor) => {
+    Alert.alert(
+      `Remove ${contributor.name}?`,
+      'Their past contributions stay on record, so earlier totals still add up. They drop off this list and the recording form. You can add them again later.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            if (renaming === contributor.id) setRenaming(null);
+            if (editing === contributor.id) setEditing(null);
+            void patchContributor(contributor.id, { archived: true });
+          },
+        },
+      ],
+    );
+  };
 
   const saveGroupTarget = async (applyToEveryone: boolean) => {
     const value = parseAmount(groupTarget);
@@ -161,36 +217,86 @@ export default function ContributionPlanScreen() {
                 key={contributor.id}
                 style={[styles.member, index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
               >
-                <Text style={[styles.memberName, { color: colors.foreground }]} numberOfLines={1}>{contributor.name}</Text>
-                {editing === contributor.id ? (
-                  <View style={styles.editRow}>
+                {renaming === contributor.id ? (
+                  <View style={styles.renameRow}>
                     <TextInput
-                      value={editValue}
-                      onChangeText={setEditValue}
-                      keyboardType="number-pad"
+                      value={renameValue}
+                      onChangeText={setRenameValue}
                       autoFocus
-                      placeholder="blank = none"
+                      maxLength={120}
+                      placeholder="Name"
                       placeholderTextColor={colors.mutedForeground}
-                      style={[styles.editInput, { borderColor: colors.border, color: colors.foreground }]}
+                      style={[styles.renameInput, { borderColor: colors.border, color: colors.foreground }]}
                     />
-                    <Pressable onPress={() => void saveMemberTarget(contributor.id)} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
+                    <Pressable
+                      onPress={() => void saveRename(contributor)}
+                      disabled={busyContributor === contributor.id}
+                      style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: busyContributor === contributor.id ? 0.5 : 1 }]}
+                    >
                       <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Save</Text>
+                    </Pressable>
+                    <Pressable onPress={() => setRenaming(null)} hitSlop={8}>
+                      <Feather name="x" size={18} color={colors.mutedForeground} />
                     </Pressable>
                   </View>
                 ) : (
-                  <Pressable
-                    onPress={() => {
-                      setEditing(contributor.id);
-                      setEditValue(contributor.monthlyTarget != null ? String(contributor.monthlyTarget) : '');
-                    }}
-                    style={styles.valueRow}
-                    hitSlop={8}
-                  >
-                    <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
-                      {contributor.monthlyTarget != null ? `KES ${kes(contributor.monthlyTarget)}/mo` : 'Not set'}
-                    </Text>
-                    <Feather name="edit-2" size={14} color={colors.mutedForeground} />
-                  </Pressable>
+                  <>
+                    <Pressable
+                      onPress={() => {
+                        setRenaming(contributor.id);
+                        setRenameValue(contributor.name);
+                      }}
+                      style={styles.nameRow}
+                      hitSlop={6}
+                    >
+                      <Text style={[styles.memberName, { color: colors.foreground }]} numberOfLines={1}>{contributor.name}</Text>
+                      <Feather name="edit-2" size={12} color={colors.mutedForeground} />
+                    </Pressable>
+
+                    {editing === contributor.id ? (
+                      <View style={styles.editRow}>
+                        <TextInput
+                          value={editValue}
+                          onChangeText={setEditValue}
+                          keyboardType="number-pad"
+                          autoFocus
+                          placeholder="blank = none"
+                          placeholderTextColor={colors.mutedForeground}
+                          style={[styles.editInput, { borderColor: colors.border, color: colors.foreground }]}
+                        />
+                        <Pressable onPress={() => void saveMemberTarget(contributor.id)} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
+                          <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Save</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => {
+                          setEditing(contributor.id);
+                          setEditValue(contributor.monthlyTarget != null ? String(contributor.monthlyTarget) : '');
+                        }}
+                        style={styles.valueRow}
+                        hitSlop={8}
+                      >
+                        <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
+                          {contributor.monthlyTarget != null ? `KES ${kes(contributor.monthlyTarget)}/mo` : 'Not set'}
+                        </Text>
+                        <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+                      </Pressable>
+                    )}
+
+                    <Pressable
+                      onPress={() => removeContributor(contributor)}
+                      disabled={busyContributor === contributor.id}
+                      hitSlop={8}
+                      style={{ opacity: busyContributor === contributor.id ? 0.4 : 1 }}
+                    >
+                      {busyContributor === contributor.id ? (
+                        <ActivityIndicator size="small" color={colors.mutedForeground} />
+                      ) : (
+                        <Feather name="trash-2" size={16} color="#ef4444" />
+                      )}
+                    </Pressable>
+                  </>
                 )}
               </View>
             ))}
@@ -232,10 +338,13 @@ const styles = StyleSheet.create({
   applyAll: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 14, gap: 10 },
   empty: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 14, fontSize: 13, lineHeight: 18 },
   list: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, overflow: 'hidden' },
-  member: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12 },
-  memberName: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  member: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+  nameRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  memberName: { flexShrink: 1, fontSize: 14, fontFamily: 'Inter_400Regular' },
   valueRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  editInput: { width: 110, height: 38, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 8, textAlign: 'right', fontSize: 14 },
+  editInput: { width: 100, height: 38, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 8, textAlign: 'right', fontSize: 14 },
+  renameRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  renameInput: { flex: 1, height: 38, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 10, fontSize: 14 },
   saveBtn: { height: 38, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
 });
