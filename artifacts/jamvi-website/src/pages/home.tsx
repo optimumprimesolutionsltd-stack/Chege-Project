@@ -119,7 +119,7 @@ export default function Home() {
 
                   <div className="space-y-3">
                     {[
-                      { by: "Chege", amount: "KES 5,000", done: true, color: "bg-secondary" },
+                      { by: "Otieno", amount: "KES 5,000", done: true, color: "bg-secondary" },
                       { by: "Nanjala", amount: "KES 5,000", done: true, color: "bg-primary" },
                       { by: "Wanjiru", amount: "KES 5,000", done: false, color: "bg-accent" },
                     ].map((item, i) => (
@@ -275,7 +275,7 @@ export default function Home() {
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold flex-shrink-0">G</div>
                     <div>
                       <p className="font-bold">Groceries</p>
-                      <p className="text-sm text-foreground/60">Paid by Chege, split four ways</p>
+                      <p className="text-sm text-foreground/60">Paid by Otieno, split four ways</p>
                       <p className="text-primary font-bold mt-1">KES 2,400</p>
                     </div>
                   </div>

@@ -40,6 +40,14 @@ export default function About() {
               But the tools we use to manage this shared money are broken.
             </p>
             <p>
+              Jamvi started closer to home than a chama. It began with two people at a kitchen table
+              trying to keep one honest picture of a family&rsquo;s money &mdash; what came in, what went
+              out, who paid for what &mdash; without one person carrying it all in their head or in a
+              spreadsheet only they understood. Plenty of couples and households are quietly doing the
+              same. If that sounds familiar, whether you are running a home, a chama, a class fund or a
+              church, this was built for you.
+            </p>
+            <p>
               Jamvi is built by{" "}
               <a href="https://optimumprimesolutions.co.ke" target="_blank" rel="noopener noreferrer">Optimum Prime Solutions Ltd</a>,
               {" "}a registered company in Nairobi, Kenya. The company is responsible for the product while Jamvi gives individuals and groups a clear place to record and understand their money. Company enquiries can be sent to{" "}
