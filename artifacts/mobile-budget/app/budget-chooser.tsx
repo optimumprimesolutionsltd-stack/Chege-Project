@@ -608,6 +608,7 @@ function MobileOnboardingFlow({
     categoryBudgets: {},
     selectedIncomeStreams: [],
     incomeAmounts: {},
+    memberContribution: '',
   });
   const [customCategory, setCustomCategory] = useState('');
   const [customIncomeStream, setCustomIncomeStream] = useState('');
@@ -750,10 +751,13 @@ function MobileOnboardingFlow({
   };
   const firstName = user?.firstName?.trim();
   const headingName = firstName ? `${firstName}, ` : '';
-  const stepTitles = ['Your starting point', 'Make it yours', 'Choose your horizon', 'Personalize your budget', 'Add income streams', 'Set your plan'];
+  const isShared = draft.usageMode === 'shared';
+  const stepTitles = isShared
+    ? ['Your starting point', 'What is the group?', 'How long does it run?', 'What the group spends on', 'What funds the group', 'Plan the amounts']
+    : ['Your starting point', 'Make it yours', 'Choose your horizon', 'Personalize your budget', 'Add income streams', 'Set your plan'];
   const modeOptions: Array<[MobileOnboardingMode, string, string]> = [
     ['personal', 'My money', 'A private budget for my income, spending, and goals.'],
-    ['shared', 'Money with others', 'Set up a group budget first; your free Personal budget stays private.'],
+    ['shared', 'Money with others', 'Set up a group you run first; your free Personal budget stays private.'],
     ['both', 'Both', 'Keep my personal money private and manage shared money too.'],
   ];
   const purposeOptions = draft.usageMode === 'shared' ? PURPOSE_OPTIONS.shared : PURPOSE_OPTIONS.personal;
@@ -783,13 +787,19 @@ function MobileOnboardingFlow({
         </View>
         <Text style={[styles.eyebrow, { color: colors.brandTeal }]}>WELCOME TO JAMVI · STEP {step + 1} OF 6</Text>
         <Text style={[styles.onboardingTitle, { color: colors.foreground }]}>{headingName}{stepTitles[step]}</Text>
-        <Text style={[styles.onboardingIntro, { color: colors.mutedForeground }]}>Every Jamvi account includes a free, private Personal budget. Answer a few questions so the budget you use first is ready.</Text>
+        <Text style={[styles.onboardingIntro, { color: colors.mutedForeground }]}>
+          {isShared
+            ? "You're setting up a group you'll run as its treasurer. Answer a few questions so it's ready — you can change everything later."
+            : 'Every Jamvi account includes a free, private Personal budget. Answer a few questions so the budget you use first is ready.'}
+        </Text>
         <View style={[styles.benefitsCard, { backgroundColor: colors.accent, borderColor: colors.primary + '45' }]}>
           <Text style={[styles.choiceTitle, { color: colors.foreground }]}>
             {restoredDraft ? 'Welcome back — your setup is saved.' : 'Why personalize your setup?'}
           </Text>
           <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>
-            Personalizing helps Jamvi recommend the right categories, priorities, income streams, and plan for your life. You can change everything later.
+            {isShared
+              ? 'These answers set up the right categories, income sources, and contribution target for the group. You can change everything later.'
+              : 'Personalizing helps Jamvi recommend the right categories, priorities, income streams, and plan for your life. You can change everything later.'}
           </Text>
         </View>
         <TrialNote colors={colors} />
@@ -802,21 +812,21 @@ function MobileOnboardingFlow({
         </> : null}
 
         {step === 1 ? <>
-          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}what are you using Jamvi for?</Text>
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>This helps Jamvi recommend categories that fit your life instead of showing a generic budget.</Text>
+          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'what kind of group is it?' : 'what are you using Jamvi for?'}</Text>
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? 'This helps Jamvi recommend the right categories for the group.' : 'This helps Jamvi recommend categories that fit your life instead of showing a generic budget.'}</Text>
           {purposeOptions.map(([value, title, description]) => <ChoiceRow key={value} testID={`onboarding-purpose-${value}`} title={title} description={description} selected={draft.persona === value} onPress={() => setDraftValue('persona', value)} colors={colors} />)}
         </> : null}
 
         {step === 2 ? <>
-          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}how long is this budget for?</Text>
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>A trip budget needs a finish line. An everyday budget can stay open.</Text>
+          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'how long does the group run for?' : 'how long is this budget for?'}</Text>
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? 'A project or trip fund has an end date. An ongoing chama or church stays open.' : 'A trip budget needs a finish line. An everyday budget can stay open.'}</Text>
           {durationOptions.map(([value, title, description]) => <ChoiceRow key={value} testID={`onboarding-duration-${value}`} title={title} description={description} selected={draft.budgetDuration === value} onPress={() => setDraftValue('budgetDuration', value)} colors={colors} />)}
           {draft.budgetDuration === 'custom' ? <TextInput testID="onboarding-custom-end-date" value={draft.customEndDate} onChangeText={(value) => setDraftValue('customEndDate', value)} placeholder="YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, { borderColor: colors.border, color: colors.foreground }]} /> : null}
         </> : null}
 
         {step === 3 ? <>
-          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}what should we help you track?</Text>
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>Nothing is preselected. Choose only what belongs in this budget, or select all recommended categories.</Text>
+          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'what does the group spend money on?' : 'what should we help you track?'}</Text>
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? "Nothing is preselected. Choose what the group actually spends on — you can add more later." : 'Nothing is preselected. Choose only what belongs in this budget, or select all recommended categories.'}</Text>
           <Pressable testID="onboarding-select-all" accessibilityRole="button" accessibilityLabel="Select all recommended categories" onPress={() => setDraftValue('selectedCategories', draft.selectedCategories.length === recommendedCategories.length ? [] : recommendedCategories)} style={[styles.selectAll, { backgroundColor: colors.accent, borderColor: colors.primary }]}><View style={styles.choiceCopy}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>{draft.selectedCategories.length === recommendedCategories.length ? 'Clear all categories' : 'Select all recommended categories'}</Text><Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Start quickly, then refine your list later.</Text></View><Feather name="check-square" size={20} color={colors.primary} /></Pressable>
           {visibleTiers.map((tier) => <View key={tier.priority} style={styles.categoryTier}><Text style={[styles.tierTitle, { color: colors.foreground }]}>Tier {tier.priority} · {tier.label}</Text><Text style={[styles.tierDescription, { color: colors.mutedForeground }]}>{tier.description}</Text><View style={styles.categoryGrid}>{tier.categories.map((category) => <Pressable key={category} testID={`onboarding-category-${category}`} accessibilityRole="button" accessibilityState={{ selected: draft.selectedCategories.includes(category) }} onPress={() => toggleCategory(category)} style={[styles.categoryChip, { backgroundColor: draft.selectedCategories.includes(category) ? colors.accent : colors.card, borderColor: draft.selectedCategories.includes(category) ? colors.primary : colors.border }]}><Text style={[styles.categoryChipText, { color: colors.foreground }]}>{category}</Text>{draft.selectedCategories.includes(category) ? <Feather name="check" size={15} color={colors.primary} /> : null}</Pressable>)}</View></View>)}
           <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Add your own category</Text><View style={styles.inlineInput}><TextInput testID="onboarding-custom-category" value={customCategory} onChangeText={setCustomCategory} onSubmitEditing={addCustomCategory} placeholder="e.g. HELB or trip fund" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]} /><Pressable onPress={addCustomCategory} style={[styles.smallButton, { backgroundColor: colors.primary }]}><Text style={[styles.smallButtonText, { color: colors.primaryForeground }]}>Add</Text></Pressable></View></View>
@@ -831,13 +841,34 @@ function MobileOnboardingFlow({
               ? "Member contributions are usually the main source. Pick what applies — amounts are optional and change later."
               : 'Choose the sources you rely on. Amounts are optional and can be changed later.'}
           </Text>
+          {isShared ? (
+            <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 0 }]}>
+              <Text style={[styles.choiceTitle, { color: colors.foreground }]}>What should each member contribute each month?</Text>
+              <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Sets the target for everyone. Leave blank if it varies or you'll decide later.</Text>
+              <View style={[styles.incomeAmountRow, { backgroundColor: colors.background, borderColor: colors.border, marginTop: 6 }]}>
+                <Text style={[styles.amountLabel, { color: colors.foreground }]}>Per member</Text>
+                <View style={styles.amountInputWrap}>
+                  <Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text>
+                  <TextInput
+                    testID="onboarding-member-contribution"
+                    keyboardType="number-pad"
+                    value={draft.memberContribution ?? ''}
+                    onChangeText={(value) => setDraftValue('memberContribution', value.replace(/[^0-9]/g, ''))}
+                    placeholder="0"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]}
+                  />
+                </View>
+              </View>
+            </View>
+          ) : null}
           {incomeStreamsForMode(draft.usageMode).map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
           {draft.selectedIncomeStreams.length > 0 ? <View style={styles.incomeAmountList}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Expected monthly amount (optional)</Text>{draft.selectedIncomeStreams.map((income) => <View key={income} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{income}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-income-amount-${income}`} keyboardType="decimal-pad" value={draft.incomeAmounts[income] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [income]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}</View> : null}
           <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Add another income stream</Text><View style={styles.inlineInput}><TextInput testID="onboarding-custom-income" value={customIncomeStream} onChangeText={setCustomIncomeStream} onSubmitEditing={addCustomIncome} placeholder="e.g. dividends" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]} /><Pressable onPress={addCustomIncome} style={[styles.smallButton, { backgroundColor: colors.primary }]}><Text style={[styles.smallButtonText, { color: colors.primaryForeground }]}>Add</Text></Pressable></View></View>
         </> : null}
 
         {step === 5 ? <>
-          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}how much will you plan for each category?</Text>
+          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'how much does the group plan for each?' : 'how much will you plan for each category?'}</Text>
           <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>These are plans, not restrictions. You can adjust them anytime.</Text>
           {draft.selectedCategories.map((category) => <View key={category} style={[styles.amountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{category}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-amount-${category}`} keyboardType="decimal-pad" value={draft.categoryBudgets[category] ?? ''} onChangeText={(value) => setDraftValue('categoryBudgets', { ...draft.categoryBudgets, [category]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}
           <View style={[styles.planTotal, { backgroundColor: colors.accent }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Planned total</Text><Text style={[styles.planTotalValue, { color: colors.foreground }]}>KES {draft.selectedCategories.reduce((sum, category) => sum + (Number(draft.categoryBudgets[category]) || 0), 0).toLocaleString('en-KE')}</Text></View>

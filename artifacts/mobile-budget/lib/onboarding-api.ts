@@ -63,6 +63,24 @@ export async function applyMobileOnboardingToWorkspace({
 }): Promise<void> {
   const canManageCategories = workspace.isPrivate || workspace.role === "owner" || workspace.role === "admin";
 
+  // A group treasurer's key setting: what each member owes per month. Applied
+  // as the group's default contribution target, onto everyone.
+  if (!workspace.isPrivate && canManageCategories) {
+    const perMember = Math.max(0, Math.round(Number((draft.memberContribution ?? "").replace(/[^0-9]/g, "")) || 0));
+    if (perMember > 0) {
+      try {
+        await customFetch("/api/contribution-settings", {
+          method: "PATCH",
+          responseType: "json",
+          body: JSON.stringify({ defaultMonthlyTarget: perMember, applyToEveryone: true }),
+        });
+      } catch {
+        // Not fatal to the rest of setup — the treasurer can set it later in
+        // Contributions.
+      }
+    }
+  }
+
   if (canManageCategories && draft.selectedCategories.length > 0) {
     await customFetch("/api/budget-plans/onboarding", {
       method: "POST",

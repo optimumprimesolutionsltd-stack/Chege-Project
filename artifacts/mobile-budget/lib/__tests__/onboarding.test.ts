@@ -25,6 +25,7 @@ describe('mobile onboarding', () => {
     categoryBudgets: {},
     selectedIncomeStreams: [],
     incomeAmounts: {},
+    memberContribution: '',
   };
 
   it('recommends categories by purpose without preselecting any', () => {
