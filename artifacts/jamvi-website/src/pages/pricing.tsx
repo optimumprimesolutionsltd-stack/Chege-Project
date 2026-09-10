@@ -19,12 +19,12 @@ const pricingFaqs = [
   {
     question: "Does my chama pay as well?",
     answer:
-      "No. Groups have no bill at all. Everyone in a Shared budget pays for their own Jamvi subscription, and the group itself is free however many of you there are — two roommates or fifty chama members.",
+      "No. Groups have no bill at all. Everyone in a Shared group pays for their own Jamvi subscription, and the group itself is free however many of you there are — two roommates or fifty chama members.",
   },
   {
     question: "What happens after the free days end?",
     answer:
-      `Nothing is deleted, ever. If you do not subscribe, you keep your current month and everything you have already recorded, and you go read-only in any Shared budget you belong to. Earlier months lock rather than disappear, and paying brings all of it straight back.`,
+      `Nothing is deleted, ever. If you do not subscribe, you keep your current month and everything you have already recorded, and you go read-only in any Shared group you belong to. Earlier months lock rather than disappear, and paying brings all of it straight back.`,
   },
   {
     question: "Can someone join my group before they have paid?",
@@ -72,7 +72,7 @@ export default function Pricing() {
           transition={{ delay: shouldReduceMotion ? 0 : 0.08 }}
           className="text-lg text-foreground/70 leading-relaxed"
         >
-          Everyone pays for themselves. A Shared budget costs nothing extra, whether it is
+          Everyone pays for themselves. A Shared group costs nothing extra, whether it is
           you and a roommate or a chama of fifty.
         </motion.p>
       </section>

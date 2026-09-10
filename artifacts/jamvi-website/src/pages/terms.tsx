@@ -88,7 +88,7 @@ export default function Terms() {
       <h2>6. Subscriptions</h2>
       <p>
         Jamvi is one subscription bought per person. It covers your own budget
-        and every Shared budget you belong to. Shared budgets carry no
+        and every Shared group you belong to. Shared groups carry no
         subscription of their own and no member limit, so a group costs nothing
         however many people share it.
       </p>
@@ -96,7 +96,7 @@ export default function Terms() {
         New accounts are free for their first 30 days. If a subscription lapses
         after that, nothing is deleted: you keep your current month and every
         record you have already entered, earlier months lock rather than
-        disappear, and you become read-only in any Shared budget you belong to.
+        disappear, and you become read-only in any Shared group you belong to.
         Nobody is removed from a group for not paying.
       </p>
       <p>
