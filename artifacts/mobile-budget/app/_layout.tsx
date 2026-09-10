@@ -27,6 +27,7 @@ import {
 } from '@workspace/api-client-react';
 import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
+import { AppearanceProvider } from '@/hooks/useAppearance';
 import {
   ACTIVE_WORKSPACE_STORAGE_KEY,
   hasValidMobileWorkspaceSelection,
@@ -346,23 +347,25 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <AuthProvider>
-                <RootLayoutNav />
-              </AuthProvider>
-            </KeyboardProvider>
-          </GestureHandlerRootView>
-        </QueryClientProvider>
-      </ErrorBoundary>
-      {/* Update prompt — rendered outside QueryClientProvider so it works even
-          before the user is authenticated, and outside ErrorBoundary so a
-          render error in the main tree doesn't swallow the prompt. */}
-      {updateMessage && (
-        <UpdatePrompt message={updateMessage} onDismiss={dismiss} />
-      )}
+      <AppearanceProvider>
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <KeyboardProvider>
+                <AuthProvider>
+                  <RootLayoutNav />
+                </AuthProvider>
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </QueryClientProvider>
+        </ErrorBoundary>
+        {/* Update prompt — rendered outside QueryClientProvider so it works even
+            before the user is authenticated, and outside ErrorBoundary so a
+            render error in the main tree doesn't swallow the prompt. */}
+        {updateMessage && (
+          <UpdatePrompt message={updateMessage} onDismiss={dismiss} />
+        )}
+      </AppearanceProvider>
     </SafeAreaProvider>
   );
 }
