@@ -26,38 +26,30 @@ import { buildContributionGrid, gridMonths, type ContributionGrid, type GridEntr
 import { createContributionReportPdf } from "../lib/contribution-report-pdf";
 import { createContributionStatementPdf } from "../lib/contribution-statement-pdf";
 import { groupVerifyCode } from "../lib/contribution-verification";
+import {
+  filterStatementToRange,
+  monthsToCover,
+  type ContributionStatement,
+  type StatementEntry,
+} from "../lib/contribution-statement";
 
-export interface StatementEntry {
-  contributorId: number;
-  contributorName: string;
-  /** YYYY-MM-DD. For a manual month/year contribution this is the first of
-   *  that month; a bank deposit carries its real date. */
-  date: string;
-  amount: number;
-  source: "recorded" | "deposit";
-  description: string | null;
-}
-
-export interface ContributionStatement {
-  periodLabel: string;
-  contributors: Array<{ id: number; name: string; userId: string | null }>;
-  /** Oldest first, so a running total reads top to bottom. */
-  entries: StatementEntry[];
-  totalsByContributor: Record<number, number>;
-  grandTotal: number;
-}
+export type { ContributionStatement, StatementEntry } from "../lib/contribution-statement";
+export { formatStatementDate, filterStatementToRange } from "../lib/contribution-statement";
 
 /**
  * Every contribution and every attributed bank deposit for a group over the
  * last `monthsBack` months, as individual dated rows rather than the monthly
  * totals the grid returns. This is what a member's statement and the group
- * ledger are built from.
+ * ledger are built from. When `range` is given the window is widened to cover
+ * `range.from` and the result is trimmed to those exact days.
  */
 export async function loadContributionStatement(
   groupId: number,
   monthsBack: number,
+  range?: { from: string; to: string },
 ): Promise<ContributionStatement> {
-  const months = gridMonths(Math.min(Math.max(monthsBack, 1), 12));
+  const windowMonths = range ? monthsToCover(range.from) : monthsBack;
+  const months = gridMonths(Math.min(Math.max(windowMonths, 1), 12));
   const earliest = months[0];
   const latest = months[months.length - 1];
   const periodLabel =
@@ -128,13 +120,15 @@ export async function loadContributionStatement(
     totalsByContributor[entry.contributorId] = (totalsByContributor[entry.contributorId] ?? 0) + entry.amount;
   }
 
-  return {
+  const statement: ContributionStatement = {
     periodLabel,
     contributors: contributors.map((row) => ({ id: row.id, name: row.name, userId: row.userId ?? null })),
     entries,
     totalsByContributor,
     grandTotal: entries.reduce((sum, entry) => sum + entry.amount, 0),
   };
+
+  return range ? filterStatementToRange(statement, range) : statement;
 }
 
 /** The absolute URL of the public page that verifies a group's report. */
@@ -491,6 +485,15 @@ function statementMonths(req: { query: Record<string, unknown> }): number {
   return Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
 }
 
+/** An explicit `?from=YYYY-MM-DD&to=YYYY-MM-DD` day range, when both are
+ *  present and well formed. Order is normalised by the loader. */
+function statementRange(req: { query: Record<string, unknown> }): { from: string; to: string } | undefined {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  const from = typeof req.query.from === "string" ? req.query.from : "";
+  const to = typeof req.query.to === "string" ? req.query.to : "";
+  return iso.test(from) && iso.test(to) ? { from, to } : undefined;
+}
+
 /** Resolve the requested contributor from either `contributorId` or a member
  *  `userId` (the contributions page keys its member cards by user id). */
 function statementContributorId(
@@ -517,7 +520,7 @@ router.get("/contributions/statement", async (req, res): Promise<void> => {
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
 
-  const statement = await loadContributionStatement(groupId, statementMonths(req));
+  const statement = await loadContributionStatement(groupId, statementMonths(req), statementRange(req));
   const contributorId = statementContributorId(req, statement);
   if (contributorId === null) {
     res.json(statement);
@@ -541,7 +544,7 @@ router.get("/contributions/statement.pdf", async (req, res): Promise<void> => {
     .where(eq(groupsTable.id, groupId))
     .limit(1);
 
-  const statement = await loadContributionStatement(groupId, statementMonths(req));
+  const statement = await loadContributionStatement(groupId, statementMonths(req), statementRange(req));
   const contributorId = statementContributorId(req, statement);
   const member =
     contributorId != null ? statement.contributors.find((row) => row.id === contributorId) : undefined;

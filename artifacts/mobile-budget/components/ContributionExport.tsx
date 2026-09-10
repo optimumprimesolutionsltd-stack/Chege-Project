@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
 import { Feather, FontAwesome } from '@expo/vector-icons';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useQuery } from '@tanstack/react-query';
@@ -24,12 +25,52 @@ type ContributionGrid = {
   grandTotal: number;
 };
 
+type StatementEntry = {
+  contributorId: number;
+  contributorName: string;
+  date: string;
+  amount: number;
+  source: 'recorded' | 'deposit';
+};
+type ContributionStatement = {
+  periodLabel: string;
+  contributors: Array<{ id: number; name: string }>;
+  entries: StatementEntry[];
+  totalsByContributor: Record<number, number>;
+  grandTotal: number;
+};
+
 const RANGES = [3, 6, 12] as const;
 const WHATSAPP_GREEN = '#25D366';
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function kes(value: number): string {
   const absolute = Math.abs(Math.round(value)).toLocaleString('en-KE');
   return value < 0 ? `-KES ${absolute}` : `KES ${absolute}`;
+}
+
+function isoDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function monthStartIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+/** The earliest day the statement can reach — the server loads 12 months. */
+function ledgerFloor(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() - 11, 1);
+}
+
+function longDay(iso: string): string {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function shortDay(iso: string): string {
+  const [, month, day] = iso.split('-').map(Number);
+  return `${day ?? 1} ${MONTH_ABBR[(month ?? 1) - 1] ?? ''}`;
 }
 
 function periodLabel(months: GridMonth[]): string {
@@ -104,16 +145,67 @@ function buildWhatsAppText(groupName: string, grid: ContributionGrid, verifyUrl?
 }
 
 /**
- * Download the month-by-month contribution report as a PDF, or share the same
- * figures as a WhatsApp message — the way chamas and churches already pass a
- * treasurer's report around. Owners and admins only, matching the endpoint.
+ * The dated ledger as a WhatsApp message: the exact period, a movements total,
+ * a per-member breakdown, then each dated entry. Mirrors the web app's
+ * buildStatementWhatsAppText — it lists what came in, not an
+ * expected-versus-actual position.
+ */
+function buildStatementText(groupName: string, statement: ContributionStatement, verifyUrl?: string): string {
+  const asAt = new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+  const lines: string[] = [
+    `*${groupName}*`,
+    `Contribution ledger  |  ${statement.periodLabel}`,
+    `As at ${asAt}`,
+    '',
+    `Total in this period: ${kes(statement.grandTotal)}   (${statement.entries.length} ${statement.entries.length === 1 ? 'entry' : 'entries'})`,
+  ];
+
+  const perMember = statement.contributors
+    .map((row) => ({ name: row.name, total: statement.totalsByContributor[row.id] ?? 0 }))
+    .filter((row) => row.total !== 0);
+  if (perMember.length > 0) {
+    lines.push('');
+    lines.push('*By member*');
+    lines.push(...perMember.map((row, index) => `${index + 1}. ${row.name}: ${kes(row.total)}`));
+  }
+
+  lines.push('');
+  lines.push('*Entries*');
+  lines.push(
+    ...(statement.entries.length
+      ? statement.entries.map(
+          (entry) => `${shortDay(entry.date)}  ${entry.contributorName}  ${kes(entry.amount)}${entry.source === 'deposit' ? '  (bank)' : ''}`,
+        )
+      : ['Nothing recorded in this period.']),
+  );
+  lines.push('');
+  if (verifyUrl) {
+    lines.push('Check this is genuine — the figures update live:');
+    lines.push(verifyUrl);
+    lines.push('');
+  }
+  lines.push('Prepared with Jamvi');
+
+  return lines.join('\n');
+}
+
+/**
+ * Download the contribution record as a PDF, or share the same figures to
+ * WhatsApp — the way chamas and churches already pass a treasurer's report
+ * around. "Monthly grid" is the whole-month expected-versus-actual sheet;
+ * "Dated ledger" is an exact day range, entry by entry — the only way to cover
+ * part of a month. Owners and admins only, matching the endpoint.
  */
 export function ContributionExport() {
   const colors = useColors();
   const { data: group } = useGetGroup();
   const isManager = group?.role === 'owner' || group?.role === 'admin';
 
+  const [mode, setMode] = useState<'grid' | 'ledger'>('grid');
   const [months, setMonths] = useState<number>(6);
+  const [dayFrom, setDayFrom] = useState<string>(monthStartIso);
+  const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
+  const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   const [busy, setBusy] = useState<null | 'pdf' | 'whatsapp'>(null);
 
   const { refetch } = useQuery<ContributionGrid>({
@@ -125,25 +217,30 @@ export function ContributionExport() {
 
   if (!isManager) return null;
 
+  const [rangeStart, rangeEnd] = dayFrom <= dayTo ? [dayFrom, dayTo] : [dayTo, dayFrom];
+  const statementQuery = `from=${encodeURIComponent(rangeStart)}&to=${encodeURIComponent(rangeEnd)}`;
+
   const downloadPdf = async () => {
     setBusy('pdf');
     try {
-      const blob = (await customFetch(`/api/contributions/report.pdf?months=${months}`, {
-        responseType: 'blob',
-        cache: 'no-store',
-      })) as Blob;
+      const path =
+        mode === 'ledger'
+          ? `/api/contributions/statement.pdf?${statementQuery}`
+          : `/api/contributions/report.pdf?months=${months}`;
+      const blob = (await customFetch(path, { responseType: 'blob', cache: 'no-store' })) as Blob;
       const stamp = new Date();
-      const file = new File(
-        Paths.cache,
-        `jamvi-contributions-${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, '0')}.pdf`,
-      );
+      const name =
+        mode === 'ledger'
+          ? `jamvi-contribution-ledger-${rangeStart}-to-${rangeEnd}.pdf`
+          : `jamvi-contributions-${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, '0')}.pdf`;
+      const file = new File(Paths.cache, name);
       file.write(new Uint8Array(await blob.arrayBuffer()));
       if (!(await Sharing.isAvailableAsync())) {
         throw new Error('unavailable');
       }
       await Sharing.shareAsync(file.uri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Save or share the contribution report',
+        dialogTitle: mode === 'ledger' ? 'Save or share the contribution ledger' : 'Save or share the contribution report',
         UTI: 'com.adobe.pdf',
       });
     } catch {
@@ -156,8 +253,6 @@ export function ContributionExport() {
   const shareToWhatsApp = async () => {
     setBusy('whatsapp');
     try {
-      const { data: grid } = await refetch();
-      if (!grid) throw new Error('no grid');
       // The verify link is a nicety, not a blocker — if it fails, still share.
       let verifyUrl: string | undefined;
       try {
@@ -166,9 +261,22 @@ export function ContributionExport() {
       } catch {
         verifyUrl = undefined;
       }
-      const url = `https://wa.me/?text=${encodeURIComponent(
-        buildWhatsAppText(group?.name ?? 'Our group', grid, verifyUrl),
-      )}`;
+
+      let text: string;
+      if (mode === 'ledger') {
+        const statement = (await customFetch(`/api/contributions/statement?${statementQuery}`)) as ContributionStatement;
+        if (!statement.entries || statement.entries.length === 0) {
+          Alert.alert('Nothing in that range', 'Pick a different from and to date.');
+          return;
+        }
+        text = buildStatementText(group?.name ?? 'Our group', statement, verifyUrl);
+      } else {
+        const { data: grid } = await refetch();
+        if (!grid) throw new Error('no grid');
+        text = buildWhatsAppText(group?.name ?? 'Our group', grid, verifyUrl);
+      }
+
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       const opened = await Linking.canOpenURL(url);
       if (!opened) throw new Error('cannot open');
       await Linking.openURL(url);
@@ -185,36 +293,105 @@ export function ContributionExport() {
         <Feather name="share-2" size={15} color={colors.primary} />
         <Text style={[styles.heading, { color: colors.foreground }]}>Share the report</Text>
       </View>
-      <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-        A month-by-month sheet for the group — save it as a PDF or send the figures to WhatsApp.
-      </Text>
 
-      <View style={styles.ranges}>
-        {RANGES.map((range) => {
-          const active = months === range;
+      <View style={styles.modes}>
+        {(['grid', 'ledger'] as const).map((option) => {
+          const active = mode === option;
           return (
             <Pressable
-              key={range}
-              onPress={() => setMonths(range)}
+              key={option}
+              onPress={() => setMode(option)}
               disabled={busy !== null}
               style={[
-                styles.rangeBtn,
+                styles.modeBtn,
                 { borderColor: colors.border },
                 active && { backgroundColor: colors.primary, borderColor: colors.primary },
               ]}
             >
-              <Text
-                style={[
-                  styles.rangeLabel,
-                  { color: active ? colors.primaryForeground : colors.mutedForeground },
-                ]}
-              >
-                Last {range} months
+              <Text style={[styles.modeLabel, { color: active ? colors.primaryForeground : colors.mutedForeground }]}>
+                {option === 'grid' ? 'Monthly grid' : 'Dated ledger'}
               </Text>
             </Pressable>
           );
         })}
       </View>
+
+      <Text style={[styles.sub, { color: colors.mutedForeground }]}>
+        {mode === 'grid'
+          ? 'A month-by-month sheet, expected against actual — save it as a PDF or send to WhatsApp.'
+          : 'Every entry between two days, with a running total. The only way to cover part of a month.'}
+      </Text>
+
+      {mode === 'grid' ? (
+        <View style={styles.ranges}>
+          {RANGES.map((range) => {
+            const active = months === range;
+            return (
+              <Pressable
+                key={range}
+                onPress={() => setMonths(range)}
+                disabled={busy !== null}
+                style={[
+                  styles.rangeBtn,
+                  { borderColor: colors.border },
+                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+              >
+                <Text
+                  style={[styles.rangeLabel, { color: active ? colors.primaryForeground : colors.mutedForeground }]}
+                >
+                  Last {range} months
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={styles.dayRow}>
+          {(['from', 'to'] as const).map((which) => {
+            const value = which === 'from' ? dayFrom : dayTo;
+            return (
+              <Pressable
+                key={which}
+                onPress={() => setPicker(which)}
+                disabled={busy !== null}
+                style={[styles.dayField, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.dayLabel, { color: colors.mutedForeground }]}>{which === 'from' ? 'From' : 'To'}</Text>
+                <View style={styles.dayValueRow}>
+                  <Feather name="calendar" size={13} color={colors.primary} />
+                  <Text style={[styles.dayValue, { color: colors.foreground }]}>{longDay(value)}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      {mode === 'ledger' ? (
+        <Text style={[styles.note, { color: colors.mutedForeground }]}>
+          Hand-recorded contributions are dated to the first of their month; bank deposits carry their real date.
+        </Text>
+      ) : null}
+
+      {picker && (
+        <DateTimePicker
+          value={new Date((picker === 'from' ? dayFrom : dayTo) + 'T00:00:00')}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+          minimumDate={ledgerFloor()}
+          maximumDate={new Date()}
+          onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+            const which = picker;
+            setPicker(Platform.OS === 'ios' ? which : null);
+            if (selected && which) {
+              const iso = isoDay(selected);
+              if (which === 'from') setDayFrom(iso);
+              else setDayTo(iso);
+            }
+          }}
+        />
+      )}
 
       <View style={styles.actions}>
         <Pressable
@@ -259,10 +436,19 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heading: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  modes: { flexDirection: 'row', gap: 6 },
+  modeBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth },
+  modeLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   sub: { fontSize: 12, lineHeight: 17 },
   ranges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   rangeBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, borderWidth: StyleSheet.hairlineWidth },
   rangeLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  dayRow: { flexDirection: 'row', gap: 10 },
+  dayField: { flex: 1, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingVertical: 8, gap: 3 },
+  dayLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
+  dayValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dayValue: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  note: { fontSize: 11, lineHeight: 16 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 2 },
   btn: {
     flex: 1,

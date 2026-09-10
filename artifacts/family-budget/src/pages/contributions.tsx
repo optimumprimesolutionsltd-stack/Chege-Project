@@ -33,6 +33,9 @@ import {
   DownloadContributions,
   DownloadMemberContribution,
   contributionMonthOptions,
+  monthStartKey,
+  todayKey,
+  type DownloadMode,
 } from "@/components/download-contributions";
 import { ContributionArrearsBanner } from "@/components/contribution-arrears-banner";
 import { ContributionPlan } from "@/components/contribution-plan";
@@ -106,7 +109,7 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
 
 function MemberCard({
   member, accentColor, incomeStreams, isIncomeStreamsLoading, incomeStreamsError, onOpenLedger,
-  budgetName, pdfFromKey, pdfToKey, canDownloadPdf,
+  budgetName, pdfMode, pdfFromKey, pdfToKey, pdfDayFrom, pdfDayTo, canDownloadPdf,
 }: {
   member: MemberContrib;
   accentColor: string;
@@ -115,8 +118,11 @@ function MemberCard({
   incomeStreamsError: boolean;
   onOpenLedger: () => void;
   budgetName: string;
+  pdfMode: DownloadMode;
   pdfFromKey: string;
   pdfToKey: string;
+  pdfDayFrom: string;
+  pdfDayTo: string;
   canDownloadPdf: boolean;
 }) {
   const { userId, name, contributed, spent, net, target } = member;
@@ -251,8 +257,12 @@ function MemberCard({
             <DownloadMemberContribution
               budgetName={budgetName}
               memberName={name}
+              memberUserId={userId}
+              mode={pdfMode}
               fromKey={pdfFromKey}
               toKey={pdfToKey}
+              dayFrom={pdfDayFrom}
+              dayTo={pdfDayTo}
             />
           ) : null}
         </div>
@@ -294,10 +304,13 @@ export default function Contributions() {
   // One PDF range for the whole page: the group control sets it, and every
   // per-member Download button reads the same from/to.
   const pdfMonthOptions = useMemo(contributionMonthOptions, []);
+  const [pdfMode, setPdfMode] = useState<DownloadMode>("grid");
   const [pdfFromKey, setPdfFromKey] = useState(
     pdfMonthOptions[Math.min(5, pdfMonthOptions.length - 1)].key,
   );
   const [pdfToKey, setPdfToKey] = useState(pdfMonthOptions[0].key);
+  const [pdfDayFrom, setPdfDayFrom] = useState(monthStartKey);
+  const [pdfDayTo, setPdfDayTo] = useState(todayKey);
 
   const { data: summary, isLoading } = useGetDashboardSummary({ month, year });
   const {
@@ -540,10 +553,16 @@ export default function Contributions() {
           {canManageContributions ? (
             <DownloadContributions
               budgetName={group ? workspaceLabel(group) : "Shared budget"}
+              mode={pdfMode}
+              onModeChange={setPdfMode}
               fromKey={pdfFromKey}
               toKey={pdfToKey}
               onFromChange={setPdfFromKey}
               onToChange={setPdfToKey}
+              dayFrom={pdfDayFrom}
+              dayTo={pdfDayTo}
+              onDayFromChange={setPdfDayFrom}
+              onDayToChange={setPdfDayTo}
             />
           ) : null}
           <ContributionVariance />
@@ -855,8 +874,11 @@ export default function Contributions() {
               incomeStreamsError={incomeStreamsError}
               onOpenLedger={() => openMemberStatement(m.userId)}
               budgetName={group ? workspaceLabel(group) : "Shared budget"}
+              pdfMode={pdfMode}
               pdfFromKey={pdfFromKey}
               pdfToKey={pdfToKey}
+              pdfDayFrom={pdfDayFrom}
+              pdfDayTo={pdfDayTo}
               canDownloadPdf={isSharedWorkspace && canManageContributions}
             />
           ))}
