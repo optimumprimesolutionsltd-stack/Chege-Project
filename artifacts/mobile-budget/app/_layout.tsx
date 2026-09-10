@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Platform, View } from 'react-native';
+import { Alert, BackHandler, Platform } from 'react-native';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
+import { AppLoading } from '@/components/AppLoading';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -28,6 +29,7 @@ import {
 import { ApiError } from '@workspace/api-client-react';
 import { AuthProvider, useAuth, AUTH_TOKEN_KEY } from '@/lib/auth';
 import { AppearanceProvider } from '@/hooks/useAppearance';
+import { hydrateQueryClient, startPersistingQueryClient } from '@/lib/queryPersist';
 import {
   ACTIVE_WORKSPACE_STORAGE_KEY,
   hasValidMobileWorkspaceSelection,
@@ -274,18 +276,7 @@ function RootLayoutNav() {
   }, [isLoading, isAuthenticated, user?.id, user?.needsDisplayName, currentRoute, loadingWorkspaces, workspaces.length]);
 
   if (isLoading || checkingChooser) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#011C4E',
-        }}
-      >
-        <ActivityIndicator size="large" color="#FDBB0A" />
-      </View>
-    );
+    return <AppLoading />;
   }
 
   return (
@@ -337,13 +328,28 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  // Restore the last query results before the first screen mounts so it can
+  // paint from cache instead of a spinner. Bounded by one AsyncStorage read,
+  // so it gates startup no longer than the fonts already do.
+  const [cacheReady, setCacheReady] = useState(false);
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    let stop: (() => void) | undefined;
+    hydrateQueryClient(queryClient).finally(() => {
+      stop = startPersistingQueryClient(queryClient);
+      setCacheReady(true);
+    });
+    return () => stop?.();
+  }, []);
+
+  const ready = (fontsLoaded || fontError) && cacheReady;
+
+  useEffect(() => {
+    if (ready) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [ready]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!ready) return <AppLoading />;
 
   return (
     <SafeAreaProvider>
