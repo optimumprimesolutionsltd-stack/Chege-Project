@@ -48,10 +48,10 @@ import { getDisplayName } from '@/utils/avatarHelper';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { ReadOnlyLinkCard } from '@/components/ReadOnlyLinkCard';
 import {
-  activateMobileWorkspace,
+  ACTIVE_WORKSPACE_STORAGE_KEY,
   leaveMobileSharedWorkspace,
-  switchMobileWorkspace,
 } from '@/lib/workspace';
+import { clearQueryClientCache } from '@/lib/queryPersist';
 import { WORKSPACE_NAME_STYLES, workspaceBudgetName, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { SHARED_GROUP_KINDS, sharedGroupKindDetails, type SharedGroupKind } from '@/lib/groupKinds';
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from '@/lib/memberLimit';
@@ -444,12 +444,16 @@ export default function SettingsScreen() {
   const refreshMembers = () => queryClient.invalidateQueries({ queryKey: ['members'] });
   const performWorkspaceSwitch = async (groupId: number) => {
     try {
-      await switchMobileWorkspace({
-        groupId,
-        select: (selectedGroupId) => selectWorkspace.mutateAsync({ data: { groupId: selectedGroupId } }),
-        storage: AsyncStorage,
-        resetQueries: () => queryClient.resetQueries(),
-      });
+      // Confirm the switch with the server (also sets the web cookie), then
+      // point the API client at the new workspace.
+      await selectWorkspace.mutateAsync({ data: { groupId } });
+      await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(groupId));
+      // Drop every cached and persisted query so nothing from the old budget
+      // can survive the switch or be restored on the next launch, then land on
+      // Home where the new budget's figures load fresh.
+      await clearQueryClientCache();
+      queryClient.clear();
+      router.replace('/(tabs)/');
     } catch (error) {
       Alert.alert('Could not switch budget', error instanceof Error ? error.message : 'Please try again.');
     }
@@ -483,15 +487,14 @@ export default function SettingsScreen() {
     }
     try {
       const workspace = await createSharedGroup.mutateAsync({ data: { name, kind: newGroupKind } });
-      await activateMobileWorkspace({
-        groupId: workspace.id,
-        storage: AsyncStorage,
-        resetQueries: () => queryClient.resetQueries(),
-      });
+      await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(workspace.id));
+      await clearQueryClientCache();
+      queryClient.clear();
       setNewGroupName('');
       setNewGroupKind(null);
       setCreateGroupOpen(false);
-       Alert.alert('Shared budget created', 'Your budget records stayed private and separate.');
+      Alert.alert('Shared budget created', 'Your budget records stayed private and separate.');
+      router.replace('/(tabs)/');
     } catch (error) {
       Alert.alert('Could not create group', error instanceof Error ? error.message : 'Please try again.');
     }
