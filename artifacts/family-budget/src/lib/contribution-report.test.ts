@@ -61,6 +61,26 @@ describe("buildContributionWhatsAppText", () => {
     expect(text).toContain("1. Anon: KES 500");
   });
 
+  it("adds the verification link when one is given, before the sign-off", () => {
+    const text = buildContributionWhatsAppText(
+      { budgetName: "Group", months: [months[0]], rows: [], grandTotal: 0 },
+      "https://jamvi.co.ke/r/1g-4f9a2c1b7d",
+    );
+    expect(text).toContain("Check this is genuine — the figures update live:");
+    expect(text).toContain("https://jamvi.co.ke/r/1g-4f9a2c1b7d");
+    expect(text.indexOf("jamvi.co.ke/r/")).toBeLessThan(text.indexOf("Prepared with Jamvi"));
+  });
+
+  it("omits the verification block when no link is given", () => {
+    const text = buildContributionWhatsAppText({
+      budgetName: "Group",
+      months: [months[0]],
+      rows: [],
+      grandTotal: 0,
+    });
+    expect(text).not.toContain("Check this is genuine");
+  });
+
   it("handles a group with no contributors", () => {
     const text = buildContributionWhatsAppText({
       budgetName: "New Group",

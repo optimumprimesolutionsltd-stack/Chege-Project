@@ -24,6 +24,14 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { buildContributionGrid, gridMonths, type ContributionGrid, type GridEntry } from "../lib/contribution-grid";
 import { createContributionReportPdf } from "../lib/contribution-report-pdf";
+import { groupVerifyCode } from "../lib/contribution-verification";
+
+/** The absolute URL of the public page that verifies a group's report. */
+function verifyUrlFor(req: { protocol: string; get(name: string): string | undefined }, groupId: number): string {
+  const configured = process.env.APP_ORIGIN?.trim().replace(/\/$/, "");
+  const origin = configured || `${req.protocol}://${req.get("host") ?? "jamvi.co.ke"}`;
+  return `${origin}/r/${groupVerifyCode(groupId)}`;
+}
 
 const router: IRouter = Router();
 
@@ -236,7 +244,7 @@ router.patch("/contribution-settings", async (req, res): Promise<void> => {
  * Shared by the JSON grid endpoint and the PDF report so both read money from
  * the same two places and carry a surplus forward the same way.
  */
-async function loadContributionGrid(groupId: number, monthsBack: number): Promise<ContributionGrid> {
+export async function loadContributionGrid(groupId: number, monthsBack: number): Promise<ContributionGrid> {
   const months = gridMonths(Math.min(Math.max(monthsBack, 1), 12));
   const earliest = months[0];
 
@@ -303,6 +311,18 @@ router.get("/contributions/grid", async (req, res): Promise<void> => {
 });
 
 /**
+ * The code and public URL that let a recipient check a shared report against
+ * the group's live data. Manager-only, matching who can produce a report.
+ */
+router.get("/contributions/verify-link", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  res.json({ code: groupVerifyCode(groupId), url: verifyUrlFor(req, groupId) });
+});
+
+/**
  * The same grid as a PDF, for handing a chama or church their record or
  * forwarding it to the group's WhatsApp. Manager-only, matching the download
  * controls in the web app.
@@ -345,6 +365,7 @@ router.get("/contributions/report.pdf", async (req, res): Promise<void> => {
     })),
     grandTotal: grid.grandTotal,
     totalExpected,
+    verifyUrl: verifyUrlFor(req, groupId),
   });
 
   const now = new Date();

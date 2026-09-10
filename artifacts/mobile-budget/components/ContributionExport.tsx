@@ -45,7 +45,7 @@ function periodLabel(months: GridMonth[]): string {
  * where they stand. Mirrors the web app's buildContributionWhatsAppText — a
  * chat message is read, not studied.
  */
-function buildWhatsAppText(groupName: string, grid: ContributionGrid): string {
+function buildWhatsAppText(groupName: string, grid: ContributionGrid, verifyUrl?: string): string {
   const monthCount = grid.months.length;
   const asAt = new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -93,6 +93,11 @@ function buildWhatsAppText(groupName: string, grid: ContributionGrid): string {
   lines.push('*Contributions*');
   lines.push(...(memberLines.length ? memberLines : ['No contributors recorded yet.']));
   lines.push('');
+  if (verifyUrl) {
+    lines.push('Check this is genuine — the figures update live:');
+    lines.push(verifyUrl);
+    lines.push('');
+  }
   lines.push('Prepared with Jamvi');
 
   return lines.join('\n');
@@ -153,7 +158,17 @@ export function ContributionExport() {
     try {
       const { data: grid } = await refetch();
       if (!grid) throw new Error('no grid');
-      const url = `https://wa.me/?text=${encodeURIComponent(buildWhatsAppText(group?.name ?? 'Our group', grid))}`;
+      // The verify link is a nicety, not a blocker — if it fails, still share.
+      let verifyUrl: string | undefined;
+      try {
+        const link = (await customFetch('/api/contributions/verify-link')) as { url?: string };
+        verifyUrl = link.url;
+      } catch {
+        verifyUrl = undefined;
+      }
+      const url = `https://wa.me/?text=${encodeURIComponent(
+        buildWhatsAppText(group?.name ?? 'Our group', grid, verifyUrl),
+      )}`;
       const opened = await Linking.canOpenURL(url);
       if (!opened) throw new Error('cannot open');
       await Linking.openURL(url);

@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import verifyReportRouter from "./routes/verifyReport";
 import { logger } from "./lib/logger";
 import { authMiddleware } from "./middlewares/authMiddleware";
 import { attachWebBuild } from "./lib/webAppServing";
@@ -89,6 +90,11 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Public, before the SPA catch-all and before auth: the report-verification
+// page is meant to be opened by anyone a treasurer forwards a report to.
+app.use(verifyReportRouter);
+
 attachWebBuild(app);
 app.use(authMiddleware);
 

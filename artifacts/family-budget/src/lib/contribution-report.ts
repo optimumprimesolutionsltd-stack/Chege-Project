@@ -50,7 +50,7 @@ function periodLabel(months: ReportMonth[]): string {
  * and where they stand. No month-by-month breakdown — a chat message is read,
  * not studied.
  */
-export function buildContributionWhatsAppText(report: GroupContributionReport): string {
+export function buildContributionWhatsAppText(report: GroupContributionReport, verifyUrl?: string): string {
   const monthCount = report.months.length;
   const asAt = new Date().toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
 
@@ -102,6 +102,11 @@ export function buildContributionWhatsAppText(report: GroupContributionReport): 
   lines.push("*Contributions*");
   lines.push(...(memberLines.length ? memberLines : ["No contributors recorded yet."]));
   lines.push("");
+  if (verifyUrl) {
+    lines.push("Check this is genuine — the figures update live:");
+    lines.push(verifyUrl);
+    lines.push("");
+  }
   lines.push("Prepared with Jamvi");
 
   return lines.join("\n");
