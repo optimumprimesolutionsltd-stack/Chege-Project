@@ -140,7 +140,15 @@ export default function SettingsScreen() {
     enabled: !!user?.id,
   });
   const { data: group } = useGetGroup();
-  const { data: workspaces = [] } = useGetWorkspaces();
+  const {
+    data: workspaces = [],
+    isLoading: workspacesLoading,
+    isError: workspacesError,
+    refetch: refetchWorkspaces,
+    isRefetching: workspacesRefetching,
+  } = useGetWorkspaces({
+    query: { queryKey: getGetWorkspacesQueryKey(), refetchOnMount: 'always' },
+  });
   const selectWorkspace = useSelectWorkspace();
   const createSharedGroup = useCreateSharedGroup();
   const createInviteLink = useCreateGroupInviteLink();
@@ -817,8 +825,35 @@ export default function SettingsScreen() {
            </View>
          </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGETS</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGETS</Text>
+          <Pressable
+            testID="refresh-workspaces"
+            onPress={() => void refetchWorkspaces()}
+            disabled={workspacesRefetching}
+            hitSlop={10}
+            style={{ marginLeft: 8, marginBottom: 6, opacity: workspacesRefetching ? 0.4 : 1 }}
+          >
+            {workspacesRefetching ? (
+              <ActivityIndicator size="small" color={colors.mutedForeground} />
+            ) : (
+              <Feather name="refresh-cw" size={13} color={colors.mutedForeground} />
+            )}
+          </Pressable>
+        </View>
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {workspacesError && workspaces.length === 0 ? (
+            <Pressable onPress={() => void refetchWorkspaces()} style={styles.workspaceInfo}>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Couldn’t load your budgets</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
+                Check your connection and tap to try again.
+              </Text>
+            </Pressable>
+          ) : !workspacesError && !workspacesLoading && workspaces.length === 0 ? (
+            <View style={styles.workspaceInfo}>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>No budgets yet.</Text>
+            </View>
+          ) : null}
           {workspaces.map((workspace, index) => {
             const selected = workspace.id === group?.id;
             const label = workspaceIdentityText(workspace, workspace.isPrivate ? 'Personal budget' : 'Group');
@@ -1598,6 +1633,7 @@ const styles = StyleSheet.create({
     fontSize: 11, fontFamily: 'Inter_500Medium', letterSpacing: 0.8,
     marginTop: 16, marginBottom: 6, marginLeft: 4,
   },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'flex-end' },
   accessHint: { fontSize: 12, lineHeight: 17, marginHorizontal: 4, marginBottom: 8 },
   section: { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
 
