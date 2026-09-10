@@ -31,6 +31,12 @@ export function ContributionVariance() {
   });
 
   const monthCount = data?.months.length ?? 0;
+  const periodLabel =
+    monthCount === 0
+      ? ""
+      : monthCount === 1
+        ? data!.months[0].label
+        : `${data!.months[0].label} – ${data!.months[monthCount - 1].label}`;
   const rows = (data?.rows ?? []).map((row) => {
     const given = row.amounts.reduce((sum, amount) => sum + amount, 0);
     const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : null;
@@ -65,7 +71,14 @@ export function ContributionVariance() {
               Expected vs actual
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              What each member was expected to give over the last {months} months, against what they gave.
+              {periodLabel ? (
+                <>
+                  <span className="font-semibold text-foreground">{periodLabel}</span>
+                  {monthCount > 1 ? ` · ${monthCount} months` : ""} — expected against what each member gave.
+                </>
+              ) : (
+                `What each member was expected to give over the last ${months} months, against what they gave.`
+              )}
             </p>
           </div>
           <div className="flex shrink-0 gap-1">
