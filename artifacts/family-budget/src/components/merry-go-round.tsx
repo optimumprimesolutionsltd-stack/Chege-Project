@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getGetJointAccountQueryKey, getGetJointAccountsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,7 +93,8 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
     onSuccess: (payout) => {
       queryClient.invalidateQueries({ queryKey: ["payouts"] });
       queryClient.invalidateQueries({ queryKey: ["contribution-grid"] });
-      queryClient.invalidateQueries({ queryKey: ["joint-account"] });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
       resetForm();
       setEditing(false);
       toast({ title: `Round ${payout.roundNumber} recorded`, description: `${formatKes(payout.amount)} to ${payout.name}.` });
