@@ -8,7 +8,7 @@
       "android": {
         "buildType": "apk",
         "env": {
-          "EXPO_PUBLIC_DOMAIN": "jamvi.onrender.com"
+          "EXPO_PUBLIC_DOMAIN": "jamvi.co.ke"
         }
       }
     },
