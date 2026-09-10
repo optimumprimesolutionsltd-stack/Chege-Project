@@ -30,13 +30,13 @@ describe("contributions page layout", () => {
     const picker = monthPicker.slice(0, monthPicker.indexOf("handleNextMonth"));
 
     expect(picker).not.toContain("<RecordContributions />");
-    expect(picker).not.toContain("<ContributionsGrid />");
+    expect(picker).not.toContain("<ContributionsGrid canManage={canManageContributions} />");
   });
 
   it("still renders them", () => {
     // The obvious way to make the test above pass is to delete them.
     expect(source).toContain("<RecordContributions />");
-    expect(source).toContain("<ContributionsGrid />");
+    expect(source).toContain("<ContributionsGrid canManage={canManageContributions} />");
   });
 
   it("renders them after the header, at page level", () => {
@@ -46,7 +46,7 @@ describe("contributions page layout", () => {
 
   it("keeps them together in one stack, in order", () => {
     const record = source.indexOf("<RecordContributions />");
-    const grid = source.indexOf("<ContributionsGrid />");
+    const grid = source.indexOf("<ContributionsGrid canManage={canManageContributions} />");
 
     // Recording comes before the sheet: a treasurer opens this to enter the
     // month, not to read last month.

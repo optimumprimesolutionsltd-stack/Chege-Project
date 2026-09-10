@@ -4,6 +4,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatKes } from "@/lib/utils";
 import { Loader2, TableProperties } from "lucide-react";
+import {
+  ContributorEditorFooter,
+  EditListButton,
+  RemoveRowButton,
+  useContributorEditor,
+} from "@/components/contributor-editor";
 
 type GridMonth = { month: number; year: number; label: string };
 type GridRow = {
@@ -32,9 +38,10 @@ const RANGES = [1, 3, 6, 12] as const;
  * where the whole group is ticked at once, because a treasurer at a meeting is
  * filling one column, not hunting cells in a grid.
  */
-export function ContributionsGrid() {
+export function ContributionsGrid({ canManage = false }: { canManage?: boolean }) {
   const [months, setMonths] = useState<number>(6);
   const [hideSettled, setHideSettled] = useState(false);
+  const editor = useContributorEditor();
 
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
     queryKey: ["contribution-grid", months],
@@ -68,6 +75,7 @@ export function ContributionsGrid() {
             <h2 className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
               <TableProperties className="h-5 w-5 text-secondary" aria-hidden="true" />
               Who has paid
+              <EditListButton editor={editor} canManage={canManage} label="Add or remove people" />
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {periodLabel ? (
@@ -104,9 +112,12 @@ export function ContributionsGrid() {
             This sheet could not be loaded. Nothing has been changed.
           </p>
         ) : rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No contributors yet. Add people by name, or record a contribution, and they appear here.
-          </p>
+          <>
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No contributors yet. Add people by name, or record a contribution, and they appear here.
+            </p>
+            <ContributorEditorFooter editor={editor} />
+          </>
         ) : (
           <>
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -153,7 +164,14 @@ export function ContributionsGrid() {
                   {shown.map((row) => (
                     <tr key={row.contributorId} className="border-b border-border/50">
                       <td className="sticky left-0 z-10 max-w-[10rem] bg-card py-2 pr-3 font-medium text-foreground">
-                        <span className="block truncate">{row.name}</span>
+                        <span className="flex items-center gap-1.5">
+                          <RemoveRowButton editor={editor} id={row.contributorId} name={row.name} />
+                          <span
+                            className={`block truncate ${editor.isRemoving(row.contributorId) ? "text-muted-foreground line-through" : ""}`}
+                          >
+                            {row.name}
+                          </span>
+                        </span>
                         <span className="block text-[11px] font-normal text-muted-foreground">
                           {row.monthlyTarget != null && row.monthlyTarget > 0
                             ? `Expected ${formatKes(row.monthlyTarget)}/mo`
@@ -227,6 +245,8 @@ export function ContributionsGrid() {
                 </tfoot>
               </table>
             </div>
+
+            <ContributorEditorFooter editor={editor} />
           </>
         )}
       </CardContent>

@@ -4,6 +4,12 @@ import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import {
+  ContributorEditorFooter,
+  EditListButton,
+  RemoveRowButton,
+  useContributorEditor,
+} from '@/components/ContributorEditor';
 
 type GridMonth = { month: number; year: number; label: string };
 type GridRow = {
@@ -37,8 +43,9 @@ function kes(value: number): string {
  * prepayment nets out and a run of misses shows as one figure — the question is
  * "over the period, did they give what they were meant to", not month by month.
  */
-export function ContributionVariance() {
+export function ContributionVariance({ canManage = false }: { canManage?: boolean }) {
   const colors = useColors();
+  const editor = useContributorEditor();
   const [months, setMonths] = useState<number>(6);
 
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
@@ -58,6 +65,7 @@ export function ContributionVariance() {
     const given = row.amounts.reduce((sum, amount) => sum + amount, 0);
     const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : null;
     return {
+      contributorId: row.contributorId,
       name: row.name,
       expected,
       given,
@@ -84,6 +92,7 @@ export function ContributionVariance() {
           <View style={styles.headingRow}>
             <Feather name="bar-chart-2" size={15} color={colors.primary} />
             <Text style={[styles.heading, { color: colors.foreground }]}>Expected vs actual</Text>
+            <EditListButton editor={editor} canManage={canManage} />
           </View>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
             {periodLabel ? (
@@ -138,11 +147,21 @@ export function ContributionVariance() {
           {rows.map((row) => {
             const variance = varianceText(row.variance);
             return (
-              <View key={row.name} style={[styles.memberRow, { borderColor: colors.border }]}>
+              <View key={row.contributorId} style={[styles.memberRow, { borderColor: colors.border }]}>
                 <View style={styles.rowTop}>
-                  <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
-                    {row.name}
-                  </Text>
+                  <View style={styles.nameWrap}>
+                    <RemoveRowButton editor={editor} id={row.contributorId} />
+                    <Text
+                      style={[
+                        styles.name,
+                        { color: colors.foreground },
+                        editor.isRemoving(row.contributorId) && { color: colors.mutedForeground, textDecorationLine: 'line-through' },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {row.name}
+                    </Text>
+                  </View>
                   <Text style={[styles.variance, { color: variance.color }]}>{variance.label}</Text>
                 </View>
                 <Text style={[styles.detail, { color: colors.mutedForeground }]}>
@@ -167,6 +186,8 @@ export function ContributionVariance() {
               Given KES {kes(totalGiven)}
             </Text>
           </View>
+
+          <ContributorEditorFooter editor={editor} />
         </>
       )}
     </View>
@@ -179,6 +200,7 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, gap: 3 },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   heading: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  nameWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   sub: { fontSize: 12, lineHeight: 17 },
   ranges: { flexDirection: 'row', gap: 4, alignSelf: 'flex-start' },
   rangeBtn: {

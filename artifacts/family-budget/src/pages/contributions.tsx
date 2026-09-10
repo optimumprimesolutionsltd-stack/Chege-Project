@@ -549,7 +549,7 @@ export default function Contributions() {
           {canManageContributions ? <ContributionPlan /> : null}
           {/* Who has paid comes before the export controls: you read the sheet,
               then decide whether to send it. */}
-          <ContributionsGrid />
+          <ContributionsGrid canManage={canManageContributions} />
           {canManageContributions ? (
             <DownloadContributions
               budgetName={group ? workspaceLabel(group) : "Shared budget"}
@@ -565,7 +565,7 @@ export default function Contributions() {
               onDayToChange={setPdfDayTo}
             />
           ) : null}
-          <ContributionVariance />
+          <ContributionVariance canManage={canManageContributions} />
         </div>
       ) : null}
 
