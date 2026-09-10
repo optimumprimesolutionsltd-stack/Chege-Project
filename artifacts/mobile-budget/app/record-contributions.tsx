@@ -102,6 +102,10 @@ export default function RecordContributionsScreen() {
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Set synchronously the instant a record starts, so a fast double-tap or a
+  // second tap during the network round-trip cannot fire a second deposit -
+  // React state alone re-renders a frame too late to stop it.
+  const submittingRef = useRef(false);
 
   const monthOptions = useMemo(() => {
     const result: { month: number; year: number; label: string }[] = [];
@@ -120,6 +124,37 @@ export default function RecordContributionsScreen() {
       else next.add(id);
       return next;
     });
+
+  // Same amount / Per person are two views of one intent, not separate forms.
+  // Switching to Per person fills each ticked row from the flat figure (or the
+  // person's target); switching back collapses to that figure when every
+  // ticked row already agrees. `amounts` is kept across switches, so a round
+  // trip never loses per-person edits.
+  const switchMode = (next: 'simple' | 'advanced') => {
+    if (next === mode) return;
+    if (next === 'advanced') {
+      setAmounts((previous) => {
+        const flat = Number(each);
+        const flatSeed = Number.isFinite(flat) && flat > 0 ? String(flat) : '';
+        const seeded = { ...previous };
+        for (const contributor of contributors) {
+          if (!ticked.has(contributor.id) || seeded[contributor.id]) continue;
+          const seed = flatSeed || (contributor.monthlyTarget ? String(contributor.monthlyTarget) : '');
+          if (seed) seeded[contributor.id] = seed;
+        }
+        return seeded;
+      });
+    } else {
+      const values = contributors
+        .filter((contributor) => ticked.has(contributor.id))
+        .map((contributor) => Number(amounts[contributor.id]))
+        .filter((value) => Number.isFinite(value) && value > 0);
+      if (values.length > 0 && values.every((value) => value === values[0])) {
+        setEach(String(values[0]));
+      }
+    }
+    setMode(next);
+  };
 
   const amountFor = (contributor: Contributor): number => {
     if (mode === 'advanced') {
@@ -148,7 +183,8 @@ export default function RecordContributionsScreen() {
     }
   };
 
-  const record = async () => {
+  const record = () => {
+    if (submittingRef.current || saving) return;
     if (contributors.length < 2) {
       Alert.alert('Add at least two names', 'A shared budget records for a group. Add another contributor first.');
       return;
@@ -165,13 +201,33 @@ export default function RecordContributionsScreen() {
       return;
     }
 
+    // Confirm before it becomes money in the record. Nothing here is undone by
+    // tapping again, so the tap has to be deliberate.
+    const amount = splits.reduce((sum, split) => sum + split.amount, 0);
+    const accountName = accounts.find((account) => account.id === accountId)?.name;
+    Alert.alert(
+      `Record KES ${kes(amount)}?`,
+      `${splits.length} ${splits.length === 1 ? 'person' : 'people'}${accountName ? ` · into ${accountName}` : ''} for ${MONTHS[month - 1]} ${year}. This adds one bank deposit.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Record', onPress: () => void submitRecord(splits, amount) },
+      ],
+    );
+  };
+
+  const submitRecord = async (
+    splits: Array<{ contributorId: number; amount: number }>,
+    amount: number,
+  ) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSaving(true);
     try {
       await customFetch('/api/joint-account/deposit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: splits.reduce((sum, split) => sum + split.amount, 0),
+          amount,
           description: `Contributions for ${MONTHS[month - 1]} ${year}`,
           date: dateReceived,
           accountId,
@@ -183,6 +239,7 @@ export default function RecordContributionsScreen() {
     } catch (error) {
       Alert.alert('Could not record', error instanceof Error ? error.message : 'Nothing has been changed.');
     } finally {
+      submittingRef.current = false;
       setSaving(false);
     }
   };
@@ -264,7 +321,7 @@ export default function RecordContributionsScreen() {
             return (
               <Pressable
                 key={option}
-                onPress={() => setMode(option)}
+                onPress={() => switchMode(option)}
                 style={[styles.chip, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}18` : 'transparent' }]}
               >
                 <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>
@@ -276,8 +333,8 @@ export default function RecordContributionsScreen() {
         </View>
         <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>
           {mode === 'simple'
-            ? 'Everyone paid the same amount — type it once below.'
-            : 'Amounts differ per person, or someone paid nothing — set each one in their row.'}
+            ? 'Everyone paid the same amount — type it once below. Switching to Per person fills every row with it.'
+            : 'Each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing.'}
         </Text>
 
         {mode === 'simple' && (
@@ -370,7 +427,7 @@ export default function RecordContributionsScreen() {
 
       <View style={[styles.footer, { borderTopColor: colors.border, paddingBottom: insets.bottom + 12, backgroundColor: colors.background }]}>
         <Pressable
-          onPress={() => void record()}
+          onPress={record}
           disabled={!canRecord}
           style={[styles.recordBtn, { backgroundColor: colors.primary, opacity: canRecord ? 1 : 0.5 }]}
         >
