@@ -484,7 +484,7 @@ export default function Budget() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { data: group } = useGetGroup();
-  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
   const qc = useQueryClient();
   const { data: tierConfig, refetch: refetchTierConfig } = useQuery<{ tiers: PriorityTier[] }>({
     queryKey: ["budget-priority-tiers", group?.id],

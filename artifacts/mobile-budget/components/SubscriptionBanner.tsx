@@ -8,7 +8,7 @@ import { bannerLine } from '@/lib/subscription-status';
 
 /**
  * A slim strip above the tabs when the subscription needs attention — the last
- * days of a trial, a missed payment, or a lapse that has made Shared budgets
+ * days of a trial, a missed payment, or a lapse that has made Shared groups
  * read-only. Silent otherwise. Tapping opens the Subscription screen.
  */
 export function SubscriptionBanner() {

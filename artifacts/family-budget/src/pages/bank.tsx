@@ -102,7 +102,7 @@ export default function Bank() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isSharedWorkspace = group?.isPrivate === false;
-  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
   const canManageAccount = canManageBankAccount(group);
   const canManageShared = isSharedWorkspace && canManageAccount;
   const canEditTransaction = (tx: EditableTransaction) =>
@@ -783,7 +783,7 @@ export default function Bank() {
         </h1>
         <p className="text-muted-foreground mt-1">
           {isSharedWorkspace
-            ? "Track money going in and out of your Shared budget."
+            ? "Track money going in and out of your Shared group."
             : "Track money going in and out of your Personal budget."}
         </p>
       </div>
@@ -1018,7 +1018,7 @@ export default function Bank() {
               {mode === "deposit"
                 ? `Money going into ${account?.accountName ?? "this bank account"}.`
                 : mode === "transfer"
-                  ? `Move ${isSharedWorkspace ? "Shared budget" : "Personal budget"} funds between this account and a savings goal.`
+                  ? `Move ${isSharedWorkspace ? "Shared group" : "Personal budget"} funds between this account and a savings goal.`
                   : mode === "bank_transfer"
                     ? "Record an internal move. It changes only these two bank balances and is not income or spending."
                   : mode === "bank_charge"

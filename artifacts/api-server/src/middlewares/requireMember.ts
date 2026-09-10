@@ -25,7 +25,7 @@ import {
 import { ensurePersonalWorkspace } from "../lib/personalWorkspace";
 
 const LEGACY_GROUP_KEY = "initial-shared-budget";
-const LEGACY_GROUP_NAME = "Shared budget";
+const LEGACY_GROUP_NAME = "Shared group";
 
 /**
  * Sessions are normally created immediately after the auth callback persists a
@@ -101,7 +101,7 @@ async function adoptLegacyGroup(userId: string) {
       .from(groupsTable)
       .where(eq(groupsTable.legacyKey, LEGACY_GROUP_KEY))
       .limit(1);
-    if (!group) throw new Error("Unable to establish the shared budget group.");
+    if (!group) throw new Error("Unable to establish the shared group.");
 
     await Promise.all([
       tx.update(membersTable).set({ groupId: group.id }).where(isNull(membersTable.groupId)),
@@ -130,7 +130,7 @@ async function adoptLegacyGroup(userId: string) {
       .orderBy(asc(membersTable.addedAt));
 
     if (legacyMembers.length === 0) {
-      throw new Error("The shared budget group has no valid members.");
+      throw new Error("The shared group has no valid members.");
     }
 
     await tx

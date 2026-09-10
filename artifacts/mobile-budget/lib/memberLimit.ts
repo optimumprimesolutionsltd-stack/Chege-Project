@@ -6,5 +6,5 @@ export function isMemberLimitError(error: unknown): boolean {
 export const MEMBER_LIMIT_PROMPT = {
   title: "Your group is growing",
   message:
-    "You’ve reached the free member limit. That’s a great sign—your Shared budget is bringing people together. We’re building paid plans for larger groups so you can keep everyone in one place. Your current members and records are safe.",
+    "You’ve reached the free member limit. That’s a great sign—your Shared group is bringing people together. We’re building paid plans for larger groups so you can keep everyone in one place. Your current members and records are safe.",
 };

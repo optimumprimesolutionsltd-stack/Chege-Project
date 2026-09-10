@@ -11,7 +11,7 @@ describe('workspaceIdentityPhotoUrl', () => {
     ).toBe('https://example.com/person.jpg');
   });
 
-  it('uses the independent group photo for a Shared budget', () => {
+  it('uses the independent group photo for a Shared group', () => {
     expect(
       workspaceIdentityPhotoUrl(
         { isPrivate: false, photoUrl: 'https://example.com/group.jpg' },

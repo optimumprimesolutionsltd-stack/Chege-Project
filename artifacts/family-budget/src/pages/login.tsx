@@ -91,7 +91,7 @@ export default function LoginPage() {
         <section className="hidden max-w-xl flex-1 lg:block">
           <div className="mb-8 flex flex-col items-start gap-2">
             <div className="flex h-12 w-44 items-center justify-center rounded-2xl bg-brand-surface px-3 shadow-lg">
-              <BrandLogo className="h-10 w-full" alt="Jamvi — personal and shared budgeting" />
+              <BrandLogo className="h-10 w-full" alt="Jamvi — personal and shared grouping" />
             </div>
             <p className="pl-1 text-xs font-medium text-blue-100/70">Personal & shared money, together</p>
           </div>
@@ -116,7 +116,7 @@ export default function LoginPage() {
             <div className="mb-8 flex items-start justify-between gap-4">
               <div className="flex flex-col items-start gap-2 lg:hidden">
                 <div className="flex h-11 w-36 items-center justify-center rounded-2xl bg-brand-surface px-2">
-                  <BrandLogo className="h-9 w-full" alt="Jamvi — personal and shared budgeting" />
+                  <BrandLogo className="h-9 w-full" alt="Jamvi — personal and shared grouping" />
                 </div>
                 <p className="pl-1 text-xs font-medium text-blue-100/70">Personal & shared money, together</p>
               </div>

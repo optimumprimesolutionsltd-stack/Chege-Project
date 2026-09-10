@@ -14,7 +14,7 @@ import { useGetGroup } from '@workspace/api-client-react';
 
 // iOS 26+: NativeTabs with liquid glass support
 // 5 core tabs — Bank and Settings remain accessible from Home/header controls.
-// A shared budget swaps Search out for Contributions, which is a core shared
+// A shared group swaps Search out for Contributions, which is a core shared
 // activity; Search stays reachable from the Home header.
 function NativeTabLayout({ showReports, isShared }: { showReports: boolean; isShared: boolean }) {
   return (
@@ -211,18 +211,23 @@ export default function TabLayout() {
   const { data: group } = useGetGroup();
   const showReports = group?.isPrivate !== false;
   const isShared = group?.isPrivate === false;
+  // The shared and personal layouts have a different set of tabs (Contributions
+  // vs Search). A native tab bar does not reliably add or drop a trigger when
+  // this flips after the group query resolves, so remount the navigator on the
+  // change instead of mutating its children in place.
+  const layoutKey = `${group === undefined ? 'loading' : isShared ? 'shared' : 'personal'}`;
 
   if (isLiquidGlassAvailable()) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.card }}>
-        <NativeTabLayout showReports={showReports} isShared={isShared} />
+        <NativeTabLayout key={layoutKey} showReports={showReports} isShared={isShared} />
         <GlobalFAB />
       </View>
     );
   }
   return (
     <View style={{ flex: 1, backgroundColor: colors.card }}>
-      <ClassicTabLayout showReports={showReports} isShared={isShared} />
+      <ClassicTabLayout key={layoutKey} showReports={showReports} isShared={isShared} />
       <GlobalFAB />
     </View>
   );

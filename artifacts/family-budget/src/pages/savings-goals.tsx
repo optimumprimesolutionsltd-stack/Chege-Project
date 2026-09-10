@@ -371,7 +371,7 @@ export default function SavingsGoals() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { data: group } = useGetGroup();
-  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
   const { data: members = [] } = useGetMembers();
   const sharedTransactionsLocked =
     group?.canRecordSharedTransactions === false && members.length < 2;

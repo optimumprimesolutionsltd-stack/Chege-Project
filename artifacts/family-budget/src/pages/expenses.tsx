@@ -345,7 +345,7 @@ export default function Expenses() {
   const { data: categories } = useGetBudgetCategories();
   const { data: members } = useGetMembers();
   const { data: group } = useGetGroup();
-  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
   const { data: bankAccounts = [] } = useGetJointAccounts();
   const activeExpenseBankAccountId = isAdding
     ? addForm.accountId
@@ -1628,7 +1628,7 @@ export default function Expenses() {
                 </div>
               ) : (
                 <p className="rounded-lg border border-border/70 bg-card px-3 py-2 text-xs text-muted-foreground">
-                  This will be recorded without changing the Shared budget. An owner or admin can add it to the budget later.
+                  This will be recorded without changing the Shared group. An owner or admin can add it to the budget later.
                 </p>
               )}
               {newCategoryAddToBudget && canManageCategories && (

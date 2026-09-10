@@ -553,7 +553,7 @@ export default function Contributions() {
           <ContributionsGrid canManage={canManageContributions} />
           {canManageContributions ? (
             <DownloadContributions
-              budgetName={group ? workspaceLabel(group) : "Shared budget"}
+              budgetName={group ? workspaceLabel(group) : "Shared group"}
               mode={pdfMode}
               onModeChange={setPdfMode}
               fromKey={pdfFromKey}
@@ -876,7 +876,7 @@ export default function Contributions() {
               isIncomeStreamsLoading={isIncomeStreamsLoading}
               incomeStreamsError={incomeStreamsError}
               onOpenLedger={() => openMemberStatement(m.userId)}
-              budgetName={group ? workspaceLabel(group) : "Shared budget"}
+              budgetName={group ? workspaceLabel(group) : "Shared group"}
               pdfMode={pdfMode}
               pdfFromKey={pdfFromKey}
               pdfToKey={pdfToKey}

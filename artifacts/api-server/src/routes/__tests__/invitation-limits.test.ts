@@ -8,7 +8,7 @@
  * is exactly the kind of regression that leaves every existing test green.
  *
  * So these assert what a person experiences: someone whose own subscription
- * has lapsed cannot join a Shared budget, and someone joining a group with a
+ * has lapsed cannot join a Shared group, and someone joining a group with a
  * contribution target inherits it. Group size is no longer a billing question
  * and there is no cap to test.
  */

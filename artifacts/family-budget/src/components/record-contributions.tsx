@@ -185,7 +185,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
       toast({
         variant: "destructive",
         title: "Add at least two names",
-        description: "A shared budget records for a group. Add another contributor below before recording.",
+        description: "A shared group records for a group. Add another contributor below before recording.",
       });
       return;
     }
@@ -394,7 +394,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
               </li>
             </ul>
             <p className="rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground" data-testid="need-two-contributors">
-              Add at least one more name below. A shared budget records for a group, so it needs two or more contributors.
+              Add at least one more name below. A shared group records for a group, so it needs two or more contributors.
             </p>
           </div>
         ) : (

@@ -39,6 +39,7 @@ import {
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import {
   COMMON_INCOME_STREAMS,
+  incomeStreamsForMode,
   ONBOARDING_CATEGORY_TIERS,
   PURPOSE_OPTIONS,
   canonicalCategoryName,
@@ -206,11 +207,11 @@ export default function BudgetChooserScreen() {
   const createSharedBudget = async () => {
     const name = newGroupName.trim();
     if (name.length < 2) {
-      setError('Enter a Shared budget name with at least two characters.');
+      setError('Enter a Shared group name with at least two characters.');
       return;
     }
     if (!newGroupKind) {
-      setError('Choose what this Shared budget is for.');
+      setError('Choose what this Shared group is for.');
       return;
     }
     setError(null);
@@ -228,7 +229,7 @@ export default function BudgetChooserScreen() {
       }
       await finish();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not create this Shared budget. Please try again.');
+      setError(reason instanceof Error ? reason.message : 'Could not create this Shared group. Please try again.');
     }
   };
   const [creatingPersonal, setCreatingPersonal] = useState(false);
@@ -332,7 +333,7 @@ export default function BudgetChooserScreen() {
             <View key={invite.id} style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.createCardCopy}>
                 <Text style={[styles.createTitle, { color: colors.foreground }]}>{invite.groupName}</Text>
-                <Text style={[styles.createText, { color: colors.mutedForeground }]}>Shared budget · joining as {invite.role === 'admin' ? 'admin' : 'member'}</Text>
+                <Text style={[styles.createText, { color: colors.mutedForeground }]}>Shared group · joining as {invite.role === 'admin' ? 'admin' : 'member'}</Text>
               </View>
               <Pressable
                 testID={`accept-invite-${invite.id}`}
@@ -374,6 +375,8 @@ export default function BudgetChooserScreen() {
         <Text style={[styles.eyebrow, { color: colors.brandTeal }]}>YOUR BUDGETS</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>Choose where to work.</Text>
         <Text style={[styles.intro, { color: colors.mutedForeground }]}>Select a budget to open it.</Text>
+
+        <TrialNote colors={colors} />
 
         {error ? <View accessibilityRole="alert" style={[styles.error, { backgroundColor: colors.destructive + '14' }]}><Feather name="alert-circle" size={17} color={colors.destructive} /><Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text></View> : null}
 
@@ -425,7 +428,7 @@ export default function BudgetChooserScreen() {
               <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.createCardCopy}>
                   <Text style={[styles.createTitle, { color: colors.foreground }]}>Add a Personal budget</Text>
-                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>A free, private budget for your own money. Optional — you can run Shared budgets without one.</Text>
+                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>A free, private budget for your own money. Optional — you can run Shared groups without one.</Text>
                 </View>
                 <Pressable
                   testID="create-personal-budget"
@@ -441,22 +444,22 @@ export default function BudgetChooserScreen() {
               </View>
             )}
 
-            <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGETS</Text></View>
+            <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED GROUPS</Text></View>
             {sharedWorkspaces.length ? sharedWorkspaces.map((workspace) => workspaceRow(workspace)) : null}
             <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.createCardCopy}>
-                <Text style={[styles.createTitle, { color: colors.foreground }]}>{sharedWorkspaces.length ? 'Create another Shared budget' : 'Create a Shared budget'}</Text>
+                <Text style={[styles.createTitle, { color: colors.foreground }]}>{sharedWorkspaces.length ? 'Create another Shared group' : 'Create a Shared group'}</Text>
                 <Text style={[styles.createText, { color: colors.mutedForeground }]}>A group budget you own — for a chama, family, church, or team. Add members after it is made, or join one from an invite link.</Text>
               </View>
               <Pressable
                 testID="create-shared-budget"
                 accessibilityRole="button"
-                accessibilityLabel="Create a Shared budget"
+                accessibilityLabel="Create a Shared group"
                 onPress={() => { setError(null); setCreateSharedOpen(true); }}
                 style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
               >
                 <Feather name="plus" size={18} color={colors.primaryForeground} />
-                <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared budget</Text>
+                <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared group</Text>
               </Pressable>
             </View>
             {workspaceError ? <Text style={[styles.errorText, { color: colors.destructive }]}>Could not load your budgets. Pull down or reopen the app to try again.</Text> : null}
@@ -465,17 +468,22 @@ export default function BudgetChooserScreen() {
       </ScrollView>
       <Modal visible={createSharedOpen} transparent animationType="fade" onRequestClose={() => setCreateSharedOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.scrim}>
-          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
-            <View style={[styles.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.modalHeader}>
-                <View style={styles.workspaceText}>
-                  <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
-                  <Text style={[styles.modalCopy, { color: colors.mutedForeground }]}>You can use expenses, contributions, goals, and bank activity as its owner—even before inviting anyone.</Text>
-                </View>
-                <Pressable accessibilityRole="button" accessibilityLabel="Close Shared budget creation" hitSlop={10} onPress={() => setCreateSharedOpen(false)}>
-                  <Feather name="x" size={21} color={colors.mutedForeground} />
-                </Pressable>
+          <View style={[styles.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <View style={styles.workspaceText}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared group</Text>
+                <Text style={[styles.modalCopy, { color: colors.mutedForeground }]}>You can use expenses, contributions, goals, and bank activity as its owner—even before inviting anyone.</Text>
               </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close Shared group creation" hitSlop={10} onPress={() => setCreateSharedOpen(false)}>
+                <Feather name="x" size={21} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={styles.modalBodyContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <TextInput
                 testID="new-shared-budget-name"
                 autoFocus
@@ -484,10 +492,10 @@ export default function BudgetChooserScreen() {
                 onChangeText={setNewGroupName}
                 placeholder="e.g. Mwangaza Chama"
                 placeholderTextColor={colors.mutedForeground}
-                accessibilityLabel="Shared budget name"
+                accessibilityLabel="Shared group name"
                 style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
               />
-              <Text style={[styles.kindTitle, { color: colors.foreground }]}>What is this budget for?</Text>
+              <Text style={[styles.kindTitle, { color: colors.foreground }]}>What is this group for?</Text>
               {SHARED_GROUP_KINDS.map((choice) => {
                 const selected = newGroupKind === choice.value;
                 return <Pressable key={choice.value} testID={`shared-budget-kind-${choice.value}`}
@@ -498,14 +506,14 @@ export default function BudgetChooserScreen() {
                   {selected ? <Feather name="check-circle" size={20} color={colors.primary} /> : null}
                 </Pressable>;
               })}
-              <Pressable testID="confirm-create-shared-budget" accessibilityRole="button"
-                accessibilityLabel="Create Shared budget" disabled={createSharedGroup.isPending}
-                onPress={() => void createSharedBudget()}
-                style={[styles.primaryButton, { backgroundColor: colors.primary }, createSharedGroup.isPending && styles.disabled]}>
-                {createSharedGroup.isPending ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={[styles.primaryText, { color: colors.primaryForeground }]}>Create and open Shared budget</Text>}
-              </Pressable>
-            </View>
-          </ScrollView>
+            </ScrollView>
+            <Pressable testID="confirm-create-shared-budget" accessibilityRole="button"
+              accessibilityLabel="Create Shared group" disabled={createSharedGroup.isPending}
+              onPress={() => void createSharedBudget()}
+              style={[styles.primaryButton, { backgroundColor: colors.primary }, createSharedGroup.isPending && styles.disabled]}>
+              {createSharedGroup.isPending ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={[styles.primaryText, { color: colors.primaryForeground }]}>Create and open Shared group</Text>}
+            </Pressable>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -543,6 +551,32 @@ function ChoiceRow({ title, description, selected, onPress, colors, testID }: Ch
       </View>
       <View style={[styles.choiceIndicator, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary : 'transparent' }]}>
         {selected ? <Feather name="check" size={14} color={colors.primaryForeground} /> : null}
+      </View>
+    </Pressable>
+  );
+}
+
+/**
+ * Says plainly, during setup, that Jamvi is a paid app on a free trial — so a
+ * new person is not surprised later. Links to the full pricing / pay screen.
+ */
+function TrialNote({ colors }: { colors: MobileColorPalette }) {
+  return (
+    <Pressable
+      onPress={() => router.push('/subscription')}
+      style={[styles.trialNote, { borderColor: colors.border, backgroundColor: colors.card }]}
+      testID="onboarding-trial-note"
+      accessibilityRole="button"
+      accessibilityLabel="See what Jamvi includes and how to subscribe"
+    >
+      <Feather name="gift" size={16} color={colors.primary} style={{ marginTop: 1 }} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.trialNoteTitle, { color: colors.foreground }]}>Free for your first 30 days</Text>
+        <Text style={[styles.trialNoteText, { color: colors.mutedForeground }]}>
+          Then KES 100/month or KES 1,000/year — one subscription covers your Personal budget and every group.
+          Nothing is ever deleted if you don't subscribe; shared groups just go read-only until you do.
+        </Text>
+        <Text style={[styles.trialNoteLink, { color: colors.primary }]}>See what's included →</Text>
       </View>
     </Pressable>
   );
@@ -706,7 +740,7 @@ function MobileOnboardingFlow({
       setError(`${existing} is already selected.`);
       return;
     }
-    const preset = COMMON_INCOME_STREAMS.find((item) => normalizeIncomeStreamName(item) === normalized);
+    const preset = incomeStreamsForMode(draft.usageMode).find((item) => normalizeIncomeStreamName(item) === normalized);
     updateDraft((current) => ({
       ...current,
       selectedIncomeStreams: dedupeIncomeStreamNames([...current.selectedIncomeStreams, preset ?? value]),
@@ -758,6 +792,7 @@ function MobileOnboardingFlow({
             Personalizing helps Jamvi recommend the right categories, priorities, income streams, and plan for your life. You can change everything later.
           </Text>
         </View>
+        <TrialNote colors={colors} />
         <View style={styles.progressTrack}><View style={[styles.progressFill, { backgroundColor: colors.brandTeal, width: `${((step + 1) / 6) * 100}%` }]} /></View>
 
         {step === 0 ? <>
@@ -788,9 +823,15 @@ function MobileOnboardingFlow({
         </> : null}
 
         {step === 4 ? <>
-          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}what brings money into your budget?</Text>
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>Choose the sources you rely on. Amounts are optional and can be changed later.</Text>
-          {COMMON_INCOME_STREAMS.map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
+          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>
+            {headingName}{draft.usageMode === 'shared' ? 'what brings money into the group?' : 'what brings money into your budget?'}
+          </Text>
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>
+            {draft.usageMode === 'shared'
+              ? "Member contributions are usually the main source. Pick what applies — amounts are optional and change later."
+              : 'Choose the sources you rely on. Amounts are optional and can be changed later.'}
+          </Text>
+          {incomeStreamsForMode(draft.usageMode).map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
           {draft.selectedIncomeStreams.length > 0 ? <View style={styles.incomeAmountList}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Expected monthly amount (optional)</Text>{draft.selectedIncomeStreams.map((income) => <View key={income} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{income}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-income-amount-${income}`} keyboardType="decimal-pad" value={draft.incomeAmounts[income] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [income]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}</View> : null}
           <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Add another income stream</Text><View style={styles.inlineInput}><TextInput testID="onboarding-custom-income" value={customIncomeStream} onChangeText={setCustomIncomeStream} onSubmitEditing={addCustomIncome} placeholder="e.g. dividends" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]} /><Pressable onPress={addCustomIncome} style={[styles.smallButton, { backgroundColor: colors.primary }]}><Text style={[styles.smallButtonText, { color: colors.primaryForeground }]}>Add</Text></Pressable></View></View>
         </> : null}
@@ -813,5 +854,5 @@ function MobileOnboardingFlow({
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1 }, content: { paddingHorizontal: 20, gap: 12 }, mark: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, onboardingTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, skipLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1 }, title: { fontSize: 27, fontWeight: '700' }, intro: { fontSize: 15, lineHeight: 22, marginBottom: 10 }, selectedPanel: { borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 8 }, selectedHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }, selectedIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, selectedLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1 }, selectedTitle: { fontSize: 20, fontWeight: '700', marginTop: 3 }, selectedDetail: { fontSize: 13, lineHeight: 19, marginTop: 5 }, openButton: { minHeight: 50, borderRadius: 12, paddingHorizontal: 15, marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, openButtonText: { fontSize: 15, fontWeight: '700' }, secondaryRow: { flexDirection: 'row', gap: 8, marginTop: 12 }, secondaryAction: { minHeight: 42, borderWidth: 1, borderRadius: 11, flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, secondaryText: { fontSize: 13, fontWeight: '600' }, sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: .9, marginTop: 8 }, sectionTitle: { fontSize: 23, fontWeight: '700', marginTop: -4 }, sectionDescription: { fontSize: 13, lineHeight: 19, marginTop: -5, marginBottom: 3 }, sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }, workspace: { minHeight: 72, borderRadius: 12, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 }, pressed: { opacity: .72 }, workspaceIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, workspacePhoto: { width: 40, height: 40, borderRadius: 12, borderWidth: 2 }, workspaceEmoji: { fontSize: 20 }, workspaceText: { flex: 1 }, workspaceTitle: { fontSize: 16, fontWeight: '600' }, workspaceDetail: { fontSize: 13, marginTop: 3 }, loader: { marginVertical: 22 }, empty: { fontSize: 14, lineHeight: 20, paddingVertical: 8 }, createCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12 }, createCardCopy: { gap: 4 }, createTitle: { fontSize: 16, fontWeight: '700' }, createText: { fontSize: 13, lineHeight: 19 }, createButton: { minHeight: 46, borderRadius: 11, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 }, createButtonText: { fontSize: 14, fontWeight: '700' }, explanation: { flexDirection: 'row', gap: 10, borderRadius: 12, padding: 14, marginTop: 12 }, explanationText: { flex: 1, fontSize: 13, lineHeight: 19 }, error: { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 10 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' }, modalScroll: { flexGrow: 1, justifyContent: 'flex-end' }, modal: { maxHeight: '88%', borderTopWidth: 1, borderRadius: 20, padding: 20, gap: 12 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 20, fontWeight: '700' }, modalCopy: { fontSize: 14, lineHeight: 20 }, input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, height: 48, fontSize: 16 }, kind: { borderWidth: 1, borderRadius: 10, padding: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, kindTitle: { fontSize: 14, fontWeight: '600' }, kindDescription: { fontSize: 12, lineHeight: 16, maxWidth: 265, marginTop: 2 }, primaryButton: { height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginTop: 4 }, primaryText: { fontSize: 16, fontWeight: '700' }, disabled: { opacity: .6 }, onboardingPage: { flex: 1 }, onboardingContent: { paddingHorizontal: 20, gap: 12 }, onboardingTitle: { fontSize: 28, fontWeight: '700', lineHeight: 34 }, onboardingIntro: { fontSize: 15, lineHeight: 22, marginTop: -4 }, benefitsCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 4 }, progressTrack: { height: 6, borderRadius: 6, backgroundColor: '#d7e3f1', overflow: 'hidden', marginVertical: 8 }, progressFill: { height: 6, borderRadius: 6 }, onboardingQuestion: { fontSize: 22, fontWeight: '700', marginTop: 10 }, onboardingHint: { fontSize: 14, lineHeight: 20, marginTop: -4 }, onboardingChoice: { minHeight: 70, borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, choiceCopy: { flex: 1, gap: 4 }, choiceTitle: { fontSize: 15, fontWeight: '700' }, choiceDescription: { fontSize: 13, lineHeight: 18 }, choiceIndicator: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, selectAll: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, categoryTier: { marginTop: 14, gap: 6 }, incomeAmountList: { gap: 8, marginTop: 6 }, incomeAmountRow: { minHeight: 56, borderWidth: 1, borderRadius: 12, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, tierTitle: { fontSize: 17, fontWeight: '700' }, tierDescription: { fontSize: 13, lineHeight: 18 }, categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, categoryChip: { width: '48%', minHeight: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }, categoryChipText: { flex: 1, fontSize: 13, fontWeight: '600' }, customBox: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8, marginTop: 14 }, inlineInput: { flexDirection: 'row', alignItems: 'center', gap: 8 }, onboardingInput: { height: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, fontSize: 16 }, flexInput: { flex: 1 }, smallButton: { height: 48, paddingHorizontal: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, smallButtonText: { fontSize: 14, fontWeight: '700' }, amountRow: { minHeight: 58, borderWidth: 1, borderRadius: 12, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, amountLabel: { flex: 1, fontSize: 14, fontWeight: '600' }, amountInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 }, currency: { fontSize: 12 }, amountInput: { width: 92, height: 40, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, textAlign: 'right', fontSize: 15 }, planTotal: { borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }, planTotalValue: { fontSize: 18, fontWeight: '700' }, onboardingError: { padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 18, marginTop: 4 }, onboardingActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 }, backButton: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 7 }, backButtonText: { fontSize: 14, fontWeight: '600' },
+  page: { flex: 1 }, content: { paddingHorizontal: 20, gap: 12 }, mark: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, onboardingTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, skipLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1 }, title: { fontSize: 27, fontWeight: '700' }, intro: { fontSize: 15, lineHeight: 22, marginBottom: 10 }, selectedPanel: { borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 8 }, selectedHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }, selectedIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, selectedLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1 }, selectedTitle: { fontSize: 20, fontWeight: '700', marginTop: 3 }, selectedDetail: { fontSize: 13, lineHeight: 19, marginTop: 5 }, openButton: { minHeight: 50, borderRadius: 12, paddingHorizontal: 15, marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, openButtonText: { fontSize: 15, fontWeight: '700' }, secondaryRow: { flexDirection: 'row', gap: 8, marginTop: 12 }, secondaryAction: { minHeight: 42, borderWidth: 1, borderRadius: 11, flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, secondaryText: { fontSize: 13, fontWeight: '600' }, sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: .9, marginTop: 8 }, sectionTitle: { fontSize: 23, fontWeight: '700', marginTop: -4 }, sectionDescription: { fontSize: 13, lineHeight: 19, marginTop: -5, marginBottom: 3 }, sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }, workspace: { minHeight: 72, borderRadius: 12, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 }, pressed: { opacity: .72 }, workspaceIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, workspacePhoto: { width: 40, height: 40, borderRadius: 12, borderWidth: 2 }, workspaceEmoji: { fontSize: 20 }, workspaceText: { flex: 1 }, workspaceTitle: { fontSize: 16, fontWeight: '600' }, workspaceDetail: { fontSize: 13, marginTop: 3 }, loader: { marginVertical: 22 }, empty: { fontSize: 14, lineHeight: 20, paddingVertical: 8 }, createCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12 }, createCardCopy: { gap: 4 }, createTitle: { fontSize: 16, fontWeight: '700' }, createText: { fontSize: 13, lineHeight: 19 }, createButton: { minHeight: 46, borderRadius: 11, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 }, createButtonText: { fontSize: 14, fontWeight: '700' }, explanation: { flexDirection: 'row', gap: 10, borderRadius: 12, padding: 14, marginTop: 12 }, explanationText: { flex: 1, fontSize: 13, lineHeight: 19 }, error: { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 10 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' }, modalScroll: { flexGrow: 1, justifyContent: 'flex-end' }, modal: { maxHeight: '88%', borderTopWidth: 1, borderRadius: 20, padding: 20, gap: 12, overflow: 'hidden' }, modalBody: { flexShrink: 1 }, modalBodyContent: { gap: 12, paddingBottom: 4 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 20, fontWeight: '700' }, modalCopy: { fontSize: 14, lineHeight: 20 }, input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, height: 48, fontSize: 16 }, kind: { borderWidth: 1, borderRadius: 10, padding: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, kindTitle: { fontSize: 14, fontWeight: '600' }, kindDescription: { fontSize: 12, lineHeight: 16, maxWidth: 265, marginTop: 2 }, primaryButton: { height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginTop: 4 }, primaryText: { fontSize: 16, fontWeight: '700' }, disabled: { opacity: .6 }, onboardingPage: { flex: 1 }, onboardingContent: { paddingHorizontal: 20, gap: 12 }, onboardingTitle: { fontSize: 28, fontWeight: '700', lineHeight: 34 }, onboardingIntro: { fontSize: 15, lineHeight: 22, marginTop: -4 }, benefitsCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 4 }, progressTrack: { height: 6, borderRadius: 6, backgroundColor: '#d7e3f1', overflow: 'hidden', marginVertical: 8 }, progressFill: { height: 6, borderRadius: 6 }, onboardingQuestion: { fontSize: 22, fontWeight: '700', marginTop: 10 }, onboardingHint: { fontSize: 14, lineHeight: 20, marginTop: -4 }, onboardingChoice: { minHeight: 70, borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, choiceCopy: { flex: 1, gap: 4 }, choiceTitle: { fontSize: 15, fontWeight: '700' }, choiceDescription: { fontSize: 13, lineHeight: 18 }, choiceIndicator: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, selectAll: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, categoryTier: { marginTop: 14, gap: 6 }, incomeAmountList: { gap: 8, marginTop: 6 }, incomeAmountRow: { minHeight: 56, borderWidth: 1, borderRadius: 12, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, tierTitle: { fontSize: 17, fontWeight: '700' }, tierDescription: { fontSize: 13, lineHeight: 18 }, categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, categoryChip: { width: '48%', minHeight: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }, categoryChipText: { flex: 1, fontSize: 13, fontWeight: '600' }, customBox: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8, marginTop: 14 }, inlineInput: { flexDirection: 'row', alignItems: 'center', gap: 8 }, onboardingInput: { height: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, fontSize: 16 }, flexInput: { flex: 1 }, smallButton: { height: 48, paddingHorizontal: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, smallButtonText: { fontSize: 14, fontWeight: '700' }, amountRow: { minHeight: 58, borderWidth: 1, borderRadius: 12, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, amountLabel: { flex: 1, fontSize: 14, fontWeight: '600' }, amountInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 }, currency: { fontSize: 12 }, amountInput: { width: 92, height: 40, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, textAlign: 'right', fontSize: 15 }, planTotal: { borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }, planTotalValue: { fontSize: 18, fontWeight: '700' }, onboardingError: { padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 18, marginTop: 4 }, onboardingActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 }, backButton: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 7 }, trialNote: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 14, padding: 13, marginTop: 4 }, trialNoteTitle: { fontSize: 13, fontWeight: '700' }, trialNoteText: { fontSize: 12, lineHeight: 17, marginTop: 3 }, trialNoteLink: { fontSize: 12, fontWeight: '700', marginTop: 6 }, backButtonText: { fontSize: 14, fontWeight: '600' },
 });

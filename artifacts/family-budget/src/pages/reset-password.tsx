@@ -16,7 +16,7 @@ function ResetCard({ children }: { children: React.ReactNode }) {
         <div className="w-full rounded-[2rem] border border-brand-teal/20 bg-[#06183c]/95 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
           <div className="mb-7 flex items-start justify-between gap-4">
             <div className="flex h-11 w-36 items-center justify-center rounded-2xl bg-brand-surface px-2">
-              <BrandLogo className="h-9 w-full" alt="Jamvi — personal and shared budgeting" />
+              <BrandLogo className="h-9 w-full" alt="Jamvi — personal and shared grouping" />
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-teal/15 text-brand-teal">
               <KeyRound className="h-5 w-5" />

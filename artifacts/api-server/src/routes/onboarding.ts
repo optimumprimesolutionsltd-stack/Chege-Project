@@ -53,9 +53,9 @@ router.get("/onboarding/preferences", async (req, res) => {
 router.get("/onboarding/duplicate-categories", async (req, res) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const targetGroupId = z.coerce.number().int().positive().safeParse(req.query.groupId);
-  if (!targetGroupId.success) { res.status(400).json({ error: "A valid Shared budget is required." }); return; }
+  if (!targetGroupId.success) { res.status(400).json({ error: "A valid Shared group is required." }); return; }
   const [targetMembership] = await db.select({ groupId: groupMembershipsTable.groupId }).from(groupMembershipsTable).where(and(eq(groupMembershipsTable.groupId, targetGroupId.data), eq(groupMembershipsTable.userId, req.user!.id))).limit(1);
-  if (!targetMembership) { res.status(403).json({ error: "You are not a member of that Shared budget." }); return; }
+  if (!targetMembership) { res.status(403).json({ error: "You are not a member of that Shared group." }); return; }
   const [personal] = await db.select({ id: groupsTable.id }).from(groupsTable).where(eq(groupsTable.privateOwnerUserId, req.user!.id)).limit(1);
   if (!personal) { res.json({ duplicates: [] }); return; }
   const personalCategories = await db.select({ name: budgetCategoriesTable.name }).from(budgetCategoriesTable).where(eq(budgetCategoriesTable.groupId, personal.id));

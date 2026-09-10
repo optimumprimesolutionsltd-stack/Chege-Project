@@ -101,7 +101,7 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain("(!paidFromBank || allowMixedFunding) && selectedSources.length > 0");
   });
 
-  it("keeps Shared budget member amounts blank until the user enters them", () => {
+  it("keeps Shared group member amounts blank until the user enters them", () => {
     expect(expensesSource).toContain('[m.userId]: ""');
     expect(mobileSource).toContain("[m.userId]: ''");
     expect(expensesSource).not.toContain("[next[0]]: remainder");

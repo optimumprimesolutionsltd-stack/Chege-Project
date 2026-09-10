@@ -1098,7 +1098,7 @@ export default function BankScreen() {
                 onPress={() => openModal('disbursement')}
                 activeOpacity={0.8}
                 disabled={!canManageAccount || !hasBankAccounts}
-                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can withdraw money.' : undefined}
+                accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can withdraw money.' : undefined}
                 testID="bank-withdraw-action"
               >
                 <Feather name="arrow-up-right" size={16} color="#f87171" />
@@ -1109,7 +1109,7 @@ export default function BankScreen() {
                 onPress={() => openModal('transfer')}
                 activeOpacity={0.8}
                 disabled={!canManageAccount || !hasBankAccounts}
-                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can transfer shared money.' : undefined}
+                accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can transfer shared money.' : undefined}
                 testID="bank-transfer-action"
               >
                 <Feather name="repeat" size={16} color="#67e8f9" />
@@ -1129,7 +1129,7 @@ export default function BankScreen() {
                 onPress={() => openModal('bank_charge')}
                 activeOpacity={0.8}
                 disabled={!canManageAccount || !hasBankAccounts}
-                accessibilityHint={!canManageAccount ? 'Only a Shared budget owner or admin can record a bank charge.' : undefined}
+                accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can record a bank charge.' : undefined}
                 testID="bank-charge-action"
               >
                 <Feather name="file-minus" size={16} color="#fde68a" />
@@ -2257,7 +2257,7 @@ export default function BankScreen() {
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
             <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Set starting balance</Text>
             <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
-              Enter the money already in this Shared budget’s bank account before the transactions shown below.
+              Enter the money already in this Shared group’s bank account before the transactions shown below.
               This does not create a transaction.
             </Text>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Opening balance (KES)</Text>

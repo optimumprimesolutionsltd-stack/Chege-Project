@@ -44,7 +44,7 @@ export function statusLine(
     return {
       heading: "Your subscription has lapsed",
       detail:
-        "Nothing has been removed. Your records are all still here, and Shared budgets are "
+        "Nothing has been removed. Your records are all still here, and Shared groups are "
         + "read-only until you subscribe.",
     };
   }
@@ -70,7 +70,7 @@ export function statusLine(
   if (entitlements.status === "past_due") {
     return {
       heading: "We could not take your last payment",
-      detail: "Nothing has changed yet. Pay to keep your Shared budgets working.",
+      detail: "Nothing has changed yet. Pay to keep your Shared groups working.",
     };
   }
 
@@ -81,4 +81,31 @@ export function statusLine(
         + `${periodDays} ${plural(periodDays)}.`
       : "Everything is active.",
   };
+}
+
+/**
+ * A very short label for a settings row or chip — a few words at most, so it
+ * never collides with the row's own label. Full wording lives in statusLine.
+ */
+export function statusChip(entitlements: MemberEntitlements | undefined, now: Date = new Date()): string {
+  if (!entitlements) return "—";
+  if (!entitlements.fullAccess) return "Lapsed";
+  switch (entitlements.status) {
+    case "trial": {
+      const days = daysUntil(entitlements.trialEndsAt, now);
+      if (days === null) return "Free trial";
+      if (days <= 0) return "Trial ends today";
+      return `Free trial · ${days}d left`;
+    }
+    case "past_due":
+      return "Payment due";
+    case "cancelled":
+      return "Cancelled";
+    case "pending":
+      return "Payment pending";
+    case "active":
+      return "Subscribed";
+    default:
+      return "Subscription";
+  }
 }

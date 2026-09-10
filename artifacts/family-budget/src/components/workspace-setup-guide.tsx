@@ -99,7 +99,7 @@ export function WorkspaceSetupGuide({ userId }: { userId?: string }) {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Start here</p>
             {/* Named, not "this budget". Switching between a Personal and a
-                Shared budget left this card reading identically either way,
+                Shared group left this card reading identically either way,
                 so the one screen a new member spends most time on was the one
                 that never said which budget they were looking at. */}
             <h2 className="mt-1 flex flex-wrap items-center gap-2 text-xl font-display font-bold">

@@ -45,7 +45,7 @@ function classifyQuestion(question: string): AskJamviIntent {
   if (/(ledger|transaction|payment|entry|record|find|search|when did|how much did)/.test(value)) return "ledger";
   if (/(bank|account|withdraw|cash|deposit)/.test(value)) return "bank";
   if (/(activity|history|contribut|member|who paid)/.test(value)) return "activity";
-  if (/(workspace|budget name|personal budget|shared budget|group|category|categories|income source)/.test(value)) return "workspace";
+  if (/(workspace|budget name|personal budget|shared group|group|category|categories|income source)/.test(value)) return "workspace";
   if (/(goal|saving|save|emergency|target)/.test(value)) return "goals";
   if (/(income|earn|deposit|received|contribution)/.test(value)) return "income";
   if (/(where|spend|spent|spending|category|categories|most)/.test(value)) return "spending";
@@ -105,7 +105,7 @@ export function generateAskJamviFallback(question: string, summary: AskJamviSumm
   }
   if (intent === "workspace") {
     const sourceCount = summary.incomeSources?.length ?? 0;
-    return `${workspace.name} is your ${workspace.isPrivate ? "Personal budget" : "Shared budget"} with ${categories.length} budget categor${categories.length === 1 ? "y" : "ies"} and ${sourceCount} income source${sourceCount === 1 ? "" : "s"}.`;
+    return `${workspace.name} is your ${workspace.isPrivate ? "Personal budget" : "Shared group"} with ${categories.length} budget categor${categories.length === 1 ? "y" : "ies"} and ${sourceCount} income source${sourceCount === 1 ? "" : "s"}.`;
   }
   if (intent === "remaining") {
     return totals.remaining >= 0
@@ -205,7 +205,7 @@ export async function generateAskJamviResponse(question: string, summary: AskJam
         messages: [
           {
             role: "system",
-            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer for the whole Jamvi app. Answer only from the supplied read-only budget context. The context contains the selected period plus bounded all-time ledger history, all-time spending categories, bank accounts, income sources, contributions, goals, budget priorities, members, and totals. You can answer questions about expenses, individual categories, historical records, bank accounts, income, goals, reports, trends, activity, categories, priorities, members, and workspace details. Use KES, distinguish Personal and Shared budgets, and keep savings goals separate from expenses. Make reasonable calculations from the supplied numbers, state which period you are using, and say when the bounded history does not contain enough data. Never instruct or claim that you performed a financial action. If the question is unrelated or asks for a mutation, explain the read-only boundary plainly.",
+            content: "You are Ask Jamvi, a concise Kenyan personal-finance explainer for the whole Jamvi app. Answer only from the supplied read-only budget context. The context contains the selected period plus bounded all-time ledger history, all-time spending categories, bank accounts, income sources, contributions, goals, budget priorities, members, and totals. You can answer questions about expenses, individual categories, historical records, bank accounts, income, goals, reports, trends, activity, categories, priorities, members, and workspace details. Use KES, distinguish Personal and Shared groups, and keep savings goals separate from expenses. Make reasonable calculations from the supplied numbers, state which period you are using, and say when the bounded history does not contain enough data. Never instruct or claim that you performed a financial action. If the question is unrelated or asks for a mutation, explain the read-only boundary plainly.",
           },
           { role: "user", content: JSON.stringify({ question, budgetContext: summary }) },
         ],

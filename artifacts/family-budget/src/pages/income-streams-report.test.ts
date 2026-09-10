@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 const reportSource = fs.readFileSync(new URL("./income-streams-report.tsx", import.meta.url), "utf8");
 
-describe("Shared Budget report month selection", () => {
+describe("Shared Group report month selection", () => {
   it("opens the previous month when the current month has no expenses", () => {
     expect(reportSource).toContain("(monthlySummary.data?.expenseCount ?? 0) === 0");
     expect(reportSource).toContain("(previousMonthSummary.data?.expenseCount ?? 0) > 0");

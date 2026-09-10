@@ -36,6 +36,6 @@ describe("mobile navigation drawer", () => {
     expect(layoutSource).toContain('variant="mobile"');
     expect(layoutSource).toContain("onWorkspaceSwitchRequested={() => setIsMobileMenuOpen(false)}");
     expect(layoutSource).toContain("Switch budget");
-    expect(layoutSource).toContain("Choose Personal or Shared budget to change the money view.");
+    expect(layoutSource).toContain("Choose Personal or Shared group to change the money view.");
   });
 });

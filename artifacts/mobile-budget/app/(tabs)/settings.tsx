@@ -41,7 +41,7 @@ import {
 import { useColors } from '@/hooks/useColors';
 import { useAppearance, type Appearance } from '@/hooks/useAppearance';
 import { useEntitlements } from '@/hooks/useEntitlements';
-import { statusLine } from '@/lib/subscription-status';
+import { statusChip } from '@/lib/subscription-status';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
@@ -94,7 +94,7 @@ function getSharedBudgetIcon(icon?: string): keyof typeof Feather.glyphMap {
 function workspaceLabel(workspace: { isPrivate: boolean; name: string }): string {
   if (workspace.isPrivate) return 'Personal budget';
   const name = workspace.name.trim();
-  return name.toLocaleLowerCase('en-US') === 'shared budget' || !name ? 'Group' : name;
+  return name.toLocaleLowerCase('en-US') === 'shared group' || !name ? 'Group' : name;
 }
 
 const APPEARANCE_OPTIONS: { value: Appearance; label: string; sub: string; icon: keyof typeof Feather.glyphMap }[] = [
@@ -107,7 +107,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const { appearance, setAppearance } = useAppearance();
   const { data: entitlements } = useEntitlements();
-  const subscriptionSummary = entitlements ? statusLine(entitlements).heading : '—';
+  const subscriptionSummary = statusChip(entitlements);
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
@@ -230,13 +230,13 @@ export default function SettingsScreen() {
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
       ]);
        Alert.alert(
-         group?.isPrivate ? 'Budget updated' : 'Shared budget updated',
+         group?.isPrivate ? 'Budget updated' : 'Shared group updated',
          group?.isPrivate ? 'Your budget name now appears across Jamvi.' : 'Its name and identity now appear across Jamvi.',
        );
       if (closeBudgetNameEditor) setEditingBudgetName(false);
     } catch (error) {
        Alert.alert(
-         group?.isPrivate ? 'Could not update Personal budget' : 'Could not update Shared budget',
+         group?.isPrivate ? 'Could not update Personal budget' : 'Could not update Shared group',
          error instanceof Error ? error.message : 'Use between 2 and 60 characters.',
        );
     } finally {
@@ -302,7 +302,7 @@ export default function SettingsScreen() {
         return;
       }
       const inviteUrl = `https://${domain}/invite/${encodeURIComponent(created.token)}`;
-      const message = `Join ${group.name || 'my Jamvi Shared budget'} using this private invite link: ${inviteUrl}`;
+      const message = `Join ${group.name || 'my Jamvi Shared group'} using this private invite link: ${inviteUrl}`;
       try {
         await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(message)}`);
       } catch {
@@ -405,10 +405,10 @@ export default function SettingsScreen() {
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
       ]);
-       Alert.alert(group.isPrivate ? 'Personal budget photo updated' : 'Shared budget photo updated');
+       Alert.alert(group.isPrivate ? 'Personal budget photo updated' : 'Shared group photo updated');
     } catch (error) {
       Alert.alert(
-        group.isPrivate ? 'Could not update Personal budget photo' : 'Could not update Shared budget photo',
+        group.isPrivate ? 'Could not update Personal budget photo' : 'Could not update Shared group photo',
         error instanceof Error ? error.message : 'Please try again.',
       );
     } finally {
@@ -434,10 +434,10 @@ export default function SettingsScreen() {
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
       ]);
-       Alert.alert(group.isPrivate ? 'Personal budget photo removed' : 'Shared budget photo removed');
+       Alert.alert(group.isPrivate ? 'Personal budget photo removed' : 'Shared group photo removed');
     } catch (error) {
       Alert.alert(
-        group.isPrivate ? 'Could not remove Personal budget photo' : 'Could not remove Shared budget photo',
+        group.isPrivate ? 'Could not remove Personal budget photo' : 'Could not remove Shared group photo',
         error instanceof Error ? error.message : 'Please try again.',
       );
     } finally {
@@ -486,7 +486,7 @@ export default function SettingsScreen() {
       return;
     }
     if (!newGroupKind) {
-      Alert.alert('Choose a budget type', 'Select the kind of Shared budget you are creating.');
+      Alert.alert('Choose a budget type', 'Select the kind of Shared group you are creating.');
       return;
     }
     try {
@@ -497,7 +497,7 @@ export default function SettingsScreen() {
       setNewGroupName('');
       setNewGroupKind(null);
       setCreateGroupOpen(false);
-      Alert.alert('Shared budget created', 'Your budget records stayed private and separate.');
+      Alert.alert('Shared group created', 'Your budget records stayed private and separate.');
       router.replace('/(tabs)/');
     } catch (error) {
       Alert.alert('Could not create group', error instanceof Error ? error.message : 'Please try again.');
@@ -671,7 +671,7 @@ export default function SettingsScreen() {
                 resetQueries: () => queryClient.resetQueries(),
               });
               router.replace('/budget-chooser');
-              Alert.alert('You left the Shared budget', `You left "${workspaceBudgetName(group)}". Choose another budget to continue.`);
+              Alert.alert('You left the Shared group', `You left "${workspaceBudgetName(group)}". Choose another budget to continue.`);
             } catch (error) {
               Alert.alert('Could not leave group', error instanceof Error ? error.message : 'Please try again.');
             } finally {
@@ -737,7 +737,7 @@ export default function SettingsScreen() {
              ) : null}
              <Text style={[styles.lockedHint, { color: colors.mutedForeground }]}>Your sign-in email can’t be changed in Jamvi.</Text>
               <Text style={[styles.lockedHint, { color: colors.mutedForeground, marginTop: 4 }]}>
-                Your profile photo represents you and is also used for your Personal budget. Shared budgets can keep their own group photo.
+                Your profile photo represents you and is also used for your Personal budget. Shared groups can keep their own group photo.
               </Text>
             <Pressable
               onPress={() => void handlePickProfilePhoto()}
@@ -789,7 +789,7 @@ export default function SettingsScreen() {
                   This short line appears with your budget photo and name.
                 </Text>
                  <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
-                   This is the name other members see in shared budgets and activity.
+                   This is the name other members see in shared groups and activity.
                  </Text>
                  <View style={styles.editActions}>
                    <Pressable
@@ -819,7 +819,7 @@ export default function SettingsScreen() {
                    <Text style={[styles.rowLabel, { color: colors.foreground }]}>Your name</Text>
                    <Text style={[styles.summaryValue, { color: colors.foreground }]}>{displayName || 'Not set'}</Text>
                    <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
-                     This is the name other members see in shared budgets and activity.
+                     This is the name other members see in shared groups and activity.
                    </Text>
                  </View>
                  <Pressable
@@ -913,7 +913,7 @@ export default function SettingsScreen() {
             <View style={[styles.workspaceInfo, { borderTopColor: colors.border, borderTopWidth: workspaces.length ? StyleSheet.hairlineWidth : 0 }]}>
                 <Text style={[styles.rowLabel, { color: colors.foreground }]}>Personal budget</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
-                 Expenses, goals, bank activity, and reports here belong only to you. A Shared budget has its own separate money and members.
+                 Expenses, goals, bank activity, and reports here belong only to you. A Shared group has its own separate money and members.
               </Text>
               <Pressable
                 testID="create-private-group"
@@ -921,7 +921,7 @@ export default function SettingsScreen() {
                 style={[styles.createGroupButton, { borderColor: colors.primary }]}
               >
                 <Feather name="plus" size={16} color={colors.primary} />
-                 <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Create a Shared budget</Text>
+                 <Text style={[styles.createGroupButtonText, { color: colors.primary }]}>Create a Shared group</Text>
               </Pressable>
             </View>
            ) : null}
@@ -1039,16 +1039,16 @@ export default function SettingsScreen() {
            ) : (
              <View style={{ padding: 14 }}>
                 <Text style={[styles.summaryValue, { color: colors.foreground }, workspaceNameTextStyle(group?.nameStyle)]}>
-                  {group?.emoji ? `${group.emoji} ` : ''}{group?.name ?? 'Shared budget'}
+                  {group?.emoji ? `${group.emoji} ` : ''}{group?.name ?? 'Shared group'}
                 </Text>
                 {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic', marginTop: 4 }]}>{group.slogan}</Text> : null}
-               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>An owner or admin manages this Shared budget’s name.</Text>
+               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>An owner or admin manages this Shared group’s name.</Text>
              </View>
            )}
          </View>
          {!group?.isPrivate && (
            <>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGET TYPE</Text>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED GROUP TYPE</Text>
             <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 10 }]}>
               <View style={styles.kindHeader}>
                 <View style={{ flex: 1 }}>
@@ -1116,7 +1116,7 @@ export default function SettingsScreen() {
            </>
          )}
          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-           {group?.isPrivate ? 'PERSONAL BUDGET IDENTITY' : 'SHARED BUDGET IDENTITY'}
+           {group?.isPrivate ? 'PERSONAL BUDGET IDENTITY' : 'SHARED GROUP IDENTITY'}
          </Text>
          <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 14 }]}>
               <View style={styles.identityPreview}>
@@ -1129,7 +1129,7 @@ export default function SettingsScreen() {
                 )}
                 <View style={{ flex: 1 }}>
                    <Text style={[styles.rowLabel, { color: colors.foreground }, workspaceNameTextStyle(groupNameStyle)]}>
-                      {groupEmoji ? `${groupEmoji} ` : ''}{group?.name || (group?.isPrivate ? 'Personal budget' : 'Shared budget')}
+                      {groupEmoji ? `${groupEmoji} ` : ''}{group?.name || (group?.isPrivate ? 'Personal budget' : 'Shared group')}
                    </Text>
                    {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic' }]}>{group.slogan}</Text> : null}
                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
@@ -1152,9 +1152,9 @@ export default function SettingsScreen() {
                     )}
                     <View style={{ flex: 1 }}>
                        <Text style={[styles.rowLabel, { color: colors.foreground }]}>
-                         {group?.isPrivate ? 'Personal budget photo' : 'Shared budget photo'}
+                         {group?.isPrivate ? 'Personal budget photo' : 'Shared group photo'}
                        </Text>
-                         <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>This photo identifies the selected Shared budget when members switch budgets. It does not change anyone’s profile photo. Use a square JPG, PNG, or WebP photo up to 15 MB; Jamvi shrinks it first for a faster upload.</Text>
+                         <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>This photo identifies the selected Shared group when members switch budgets. It does not change anyone’s profile photo. Use a square JPG, PNG, or WebP photo up to 15 MB; Jamvi shrinks it first for a faster upload.</Text>
                       <View style={{ flexDirection: 'row', gap: 14, marginTop: 9 }}>
                         <Pressable disabled={uploadingGroupPhoto} onPress={() => void handlePickGroupPhoto()}>
                           <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
@@ -1220,7 +1220,7 @@ export default function SettingsScreen() {
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text style={styles.saveGroupText}>
-                        {group?.isPrivate ? 'Save Personal budget identity' : 'Save Shared budget identity'}
+                        {group?.isPrivate ? 'Save Personal budget identity' : 'Save Shared group identity'}
                       </Text>
                     )}
                   </Pressable>
@@ -1229,7 +1229,7 @@ export default function SettingsScreen() {
                 <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
                    {group?.isPrivate
                      ? 'Only you can update your Personal budget’s name, emoji, style, icon, and accent colour.'
-                     : 'An owner or admin can update this Shared budget’s name, emoji, style, icon, and accent colour.'}
+                     : 'An owner or admin can update this Shared group’s name, emoji, style, icon, and accent colour.'}
                 </Text>
               )}
          </View>
@@ -1480,14 +1480,14 @@ export default function SettingsScreen() {
             </View>
           ) : null}
           <Pressable testID="open-subscription" onPress={() => router.push('/subscription')} style={styles.row}>
-            <View style={styles.rowLeft}>
+            <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
               <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
                 <Feather name="credit-card" size={16} color={colors.primary} />
               </View>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Subscription</Text>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>Subscription</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
-              <Text style={[styles.rowValue, { color: colors.mutedForeground }]} numberOfLines={1}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 12 }}>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground, flexShrink: 1 }]} numberOfLines={1}>
                 {subscriptionSummary}
               </Text>
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
@@ -1563,9 +1563,9 @@ export default function SettingsScreen() {
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared group</Text>
                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 5 }]}>
-                  You will be the owner. Nothing from your Personal budget will be copied into this Shared budget.
+                  You will be the owner. Nothing from your Personal budget will be copied into this Shared group.
                 </Text>
               </View>
               <Pressable onPress={() => setCreateGroupOpen(false)} hitSlop={10}>
@@ -1582,7 +1582,7 @@ export default function SettingsScreen() {
               placeholderTextColor={colors.mutedForeground}
               style={[styles.modalInput, { borderColor: colors.border, color: colors.foreground }]}
             />
-            <Text style={[styles.modalKindLabel, { color: colors.foreground }]}>What kind of Shared budget is this?</Text>
+            <Text style={[styles.modalKindLabel, { color: colors.foreground }]}>What kind of Shared group is this?</Text>
             <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This sets useful category recommendations. You can change it later.</Text>
             <View style={styles.kindChoices}>
               {SHARED_GROUP_KINDS.map((choice) => {
@@ -1604,7 +1604,7 @@ export default function SettingsScreen() {
               onPress={() => void handleCreateSharedGroup()}
               style={[styles.modalCreateButton, { backgroundColor: colors.primary, opacity: createSharedGroup.isPending || !newGroupKind ? 0.55 : 1 }]}
             >
-              {createSharedGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalCreateText}>Create Shared budget</Text>}
+              {createSharedGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalCreateText}>Create Shared group</Text>}
             </Pressable>
           </View>
           </ScrollView>

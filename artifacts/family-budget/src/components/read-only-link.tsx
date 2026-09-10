@@ -20,7 +20,7 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 /**
- * Read-only sharing for a Shared budget.
+ * Read-only sharing for a Shared group.
  *
  * A member link lets someone record; this one lets them only look — the whole
  * chama can watch the balance without the treasurer paying for forty seats. The
@@ -127,7 +127,7 @@ export function ReadOnlyLink({ groupName }: { groupName?: string }) {
   };
 
   const shareOnWhatsApp = (url: string) => {
-    const message = `See the finances for ${groupName || "our Shared budget"} on Jamvi (view only): ${url}`;
+    const message = `See the finances for ${groupName || "our Shared group"} on Jamvi (view only): ${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   };
 

@@ -71,11 +71,16 @@ export const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; descr
   { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Housing", "Utilities", "Shared bills", "Transport"] },
   { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Books & supplies", "Family support", "Loans", "Personal care", "Insurance"] },
   { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business", "Business supplies", "Stock & inventory"] },
-  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Member contributions", "Projects", "Other"] },
+  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Events & programs", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Welfare & benevolence", "Building & upkeep", "Outreach & missions", "Projects", "Other"] },
 ];
 
 const ALL_ONBOARDING_CATEGORIES = dedupeCategoryNames(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
 const COMMON_INCOME_STREAMS = ["Salary or wages", "Business or side hustle", "Freelance or contract work", "Farming or livestock", "Rental income", "Family support or remittances", "Pension or benefits", "Other income"] as const;
+// For a group the members' own contributions are the main source of money,
+// not a personal salary — so the shared onboarding offers these instead.
+const GROUP_INCOME_STREAMS = ["Member contributions", "Joining or registration fees", "Fines and penalties", "Fundraising and events", "Interest from group loans", "Grants or donations", "Investment returns", "Other group income"] as const;
+const incomeStreamsFor = (mode: string | null): readonly string[] =>
+  mode === "shared" ? GROUP_INCOME_STREAMS : COMMON_INCOME_STREAMS;
 
 export function normalizeIncomeStreamName(name: string): string {
   return name.trim().toLocaleLowerCase("en-US");
@@ -97,8 +102,9 @@ export const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
   couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
   friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Other"],
   family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
-  chama: ["Member welfare", "Loans", "Member contributions", "Events", "Transport", "Projects", "Other"],
-  club: ["Member contributions", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
+  chama: ["Member welfare", "Loans", "Events", "Transport", "Projects", "Other"],
+  church: ["Building & upkeep", "Utilities", "Outreach & missions", "Welfare & benevolence", "Events & programs", "Equipment", "Transport", "Other"],
+  club: ["Member welfare", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
 };
 
 export function budgetChooserCompletionKey(userId: string) {
@@ -406,7 +412,7 @@ export function BudgetChooser({
           const result = await response.json() as { duplicates?: string[] };
           const repeated = (result.duplicates ?? []).filter((name) => selectedCategories.includes(name));
           if (repeated.length > 0) {
-            const proceed = window.confirm(`Some selected categories already exist in your Personal budget: ${repeated.join(", ")}. Personal and Shared budgets keep separate category records, so these will be created separately for group spending. Continue?`);
+            const proceed = window.confirm(`Some selected categories already exist in your Personal budget: ${repeated.join(", ")}. Personal and Shared groups keep separate category records, so these will be created separately for group spending. Continue?`);
             if (!proceed) return;
           }
         }
@@ -428,7 +434,7 @@ export function BudgetChooser({
       return;
     }
     if (!sharedBudgetKind) {
-      setCreationError("Choose what this Shared budget is for.");
+      setCreationError("Choose what this Shared group is for.");
       return;
     }
 
@@ -444,7 +450,7 @@ export function BudgetChooser({
       await applyOnboardingPreferences(workspace);
       enterApp();
     } catch (error) {
-      setCreationError(error instanceof Error ? error.message : "Could not create that Shared budget. Please try again.");
+      setCreationError(error instanceof Error ? error.message : "Could not create that Shared group. Please try again.");
     }
   };
 
@@ -493,7 +499,7 @@ export function BudgetChooser({
             <header className="border-b border-primary/10 bg-primary px-6 py-8 text-primary-foreground sm:px-10 sm:py-10">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Welcome to Jamvi</p>
               <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">Let’s set up Jamvi for you{user.firstName ? `, ${user.firstName}` : ""}.</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">One account can hold your private Personal budget and the Shared budgets you choose to create with other people.</p>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">One account can hold your private Personal budget and the Shared groups you choose to create with other people.</p>
             </header>
             <div className="p-6 sm:p-10">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">First, a quick question</p>
@@ -514,7 +520,7 @@ export function BudgetChooser({
                   </button>
                 ))}
               </div>
-              <div className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2.5"><p className="text-xs leading-relaxed text-muted-foreground"><span className="font-semibold text-foreground">Your choice does not lock you in.</span> Personal records stay private, and Shared budgets are only visible to the people you invite.</p><button type="button" onClick={() => void skipOnboarding()} className="shrink-0 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title="You can complete setup later from your budgets">Skip for now</button></div>
+              <div className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-2.5"><p className="text-xs leading-relaxed text-muted-foreground"><span className="font-semibold text-foreground">Your choice does not lock you in.</span> Personal records stay private, and Shared groups are only visible to the people you invite.</p><button type="button" onClick={() => void skipOnboarding()} className="shrink-0 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title="You can complete setup later from your budgets">Skip for now</button></div>
               {selectionError ? <p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-foreground" role="alert">{selectionError}</p> : null}
             </div>
           </div>
@@ -525,7 +531,7 @@ export function BudgetChooser({
 
   if (showPurposeSetup) {
     const purposeOptions = onboardingMode === "shared"
-      ? [["couple", "A couple", "Plan shared household money together."], ["friends", "Friends or roommates", "Split trips, bills, rent, and plans with friends."], ["family", "A family", "Coordinate home costs, school, health, and support."], ["chama", "A chama or welfare group", "Track contributions, welfare, loans, and group plans."], ["club", "A club, church, or team", "Manage membership money, events, and projects."], ["student_group", "A student group", "Share school, welfare, class, or campus costs."], ["other", "Something else", "Tell Jamvi what matters to your group."]] as const
+      ? [["couple", "A couple", "Plan shared household money together."], ["friends", "Friends or roommates", "Split trips, bills, rent, and plans with friends."], ["family", "A family", "Coordinate home costs, school, health, and support."], ["chama", "A chama or welfare group", "Track contributions, welfare, loans, and group plans."], ["church", "A church or fellowship", "Track offerings, funds, and what the church runs."], ["club", "A club or team", "Manage membership money, events, and projects."], ["student_group", "A student group", "Share school, welfare, class, or campus costs."], ["other", "Something else", "Tell Jamvi what matters to your group."]] as const
       : [["student", "A student", "Balance school life, living costs, and personal goals."], ["working", "Working or employed", "Plan a salary: rent, transport, money sent home, and what is left."], ["business", "A business owner", "Separate business costs, personal spending, and income."], ["other", "Something else", "Build a budget around your own priorities."]] as const;
      return (
        <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10"><section className="mx-auto w-full max-w-3xl"><div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl"><header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9"><p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 6 · Make it yours</p><h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, what are you using Jamvi for?` : "What are you using Jamvi for?"}</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Your answer helps us recommend categories that fit your life instead of showing you a generic budget.</p></header><div className="p-6 sm:p-10"><div className="grid gap-3 sm:grid-cols-2">{purposeOptions.map(([value, title, description]) => { const selected = onboardingPurpose === value; return <button key={value} type="button" aria-pressed={selected} onClick={() => setOnboardingPurpose(value)} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"}`}><span className="flex items-center justify-between gap-3"><span className="font-bold text-foreground">{title}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></span><span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{description}</span></button>; })}</div><div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={goBackToUsageMode} data-testid="onboarding-back-to-usage">Back</Button><Button type="button" disabled={!onboardingPurpose} className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:purpose:${encodeURIComponent(userId)}`, onboardingPurpose ?? ""); } catch { /* Continue even when storage is unavailable. */ } setShowPurposeSetup(false); setShowDurationSetup(true); }}>Continue to duration <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></div></section></main>
@@ -636,9 +642,9 @@ export function BudgetChooser({
 
   if (showIncomeSetup) {
     const isSharedSetup = onboardingMode === "shared";
-    const incomeHeading = isSharedSetup ? "What will bring money into your Shared budget?" : "What brings money into your budget?";
+    const incomeHeading = isSharedSetup ? "What brings money into the group?" : "What brings money into your budget?";
     const incomeDescription = isSharedSetup
-      ? "Choose the sources you expect members to contribute from. Each person can add their own source later."
+      ? "Member contributions are usually the main source. Pick what applies — you can add amounts later."
       : "Choose the sources you rely on so Jamvi can help you see what is available to plan with.";
     const toggleIncomeStream = (stream: string) => {
       const normalized = normalizeIncomeStreamName(stream);
@@ -656,7 +662,7 @@ export function BudgetChooser({
         setIncomeSelectionError(`${existing} is already selected.`);
         return;
       }
-      const preset = COMMON_INCOME_STREAMS.find((item) => normalizeIncomeStreamName(item) === normalized);
+      const preset = incomeStreamsFor(onboardingMode).find((item) => normalizeIncomeStreamName(item) === normalized);
       setSelectedIncomeStreams((current) => dedupeIncomeStreamNames([...current, preset ?? stream]));
       setIncomeSelectionError(preset ? `${preset} was already listed, so Jamvi selected it for you.` : null);
       setCustomIncomeStream("");
@@ -686,7 +692,7 @@ export function BudgetChooser({
             </header>
             <div className="p-6 sm:p-10">
               <div className="grid gap-2 sm:grid-cols-2">
-                {COMMON_INCOME_STREAMS.map((stream) => {
+                {incomeStreamsFor(onboardingMode).map((stream) => {
                   const selected = selectedIncomeStreams.includes(stream);
                   return <button key={stream} type="button" aria-pressed={selected} onClick={() => toggleIncomeStream(stream)} className={`flex min-h-12 items-center justify-between rounded-xl border px-3 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40"}`}><span>{stream}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></button>;
                 })}
@@ -694,7 +700,7 @@ export function BudgetChooser({
               {selectedIncomeStreams.length > 0 ? <div className="mt-5 space-y-2"><p className="text-sm font-semibold text-foreground">Expected monthly amount (optional)</p>{selectedIncomeStreams.map((stream) => <div key={stream} className="flex items-center gap-3 rounded-xl border border-border bg-background p-3"><span className="min-w-0 flex-1 truncate text-sm text-foreground">{stream}</span><div className="flex w-36 items-center gap-2"><span className="text-sm text-muted-foreground">KES</span><Input aria-label={`Expected monthly amount for ${stream}`} inputMode="decimal" type="text" placeholder="0" value={incomeAmounts[stream] ?? ""} onChange={(event) => setIncomeAmounts((current) => ({ ...current, [stream]: event.target.value.replace(/[^0-9.]/g, "") }))} className="h-10 text-right" /></div></div>)}</div> : null}
               <div className="mt-6 flex flex-col gap-2 sm:flex-row"><Input aria-label="Custom income stream" placeholder="Add another income stream" value={customIncomeStream} onChange={(event) => { setCustomIncomeStream(event.target.value); setIncomeSelectionError(null); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCustomIncomeStream(); } }} /><Button type="button" variant="outline" className="rounded-xl" onClick={addCustomIncomeStream}>Add source</Button></div>
               {incomeSelectionError ? <p className="mt-2 text-sm text-amber-700" role="status">{incomeSelectionError}</p> : null}
-              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Income streams are private to you in a Personal budget. In a Shared budget, each member can record their own source.</p>
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">Income streams are private to you in a Personal budget. In a Shared group, each member can record their own source.</p>
                <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={goBackToCategories} data-testid="onboarding-back-to-categories">Back</Button><div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end"><p className="text-sm text-muted-foreground">{selectedIncomeStreams.length} income {selectedIncomeStreams.length === 1 ? "stream" : "streams"} selected</p><Button type="button" className="h-12 rounded-xl px-6" onClick={finishOnboarding}>Continue to my budgets <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div>
             </div>
           </div>
@@ -706,7 +712,7 @@ export function BudgetChooser({
   const onboardingHeading = onboardingMode === "personal"
     ? "Start with your Personal budget."
     : onboardingMode === "shared"
-      ? "Choose or create your Shared budget."
+      ? "Choose or create your Shared group."
       : onboardingMode === "returning"
         ? "Welcome back. Choose a budget."
         : "Choose where to start today.";
@@ -723,12 +729,16 @@ export function BudgetChooser({
               </button> : null}
             </div>
             <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{onboardingHeading}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your free Personal budget is always private. Shared budgets stay separate and are visible only to their members.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your free Personal budget is always private. Shared groups stay separate and are visible only to their members.</p>
+            <div className="mt-4 max-w-2xl rounded-xl bg-primary-foreground/10 px-4 py-3 text-sm leading-relaxed text-primary-foreground/85">
+              <span className="font-semibold text-primary-foreground">Free for your first 30 days.</span> Then KES&nbsp;100/month or KES&nbsp;1,000/year — one subscription covers your Personal budget and every group. Nothing is ever deleted if you don't subscribe; shared groups just go read-only until you do.{" "}
+              <a href={`${import.meta.env.BASE_URL}subscription`} className="font-semibold text-primary-foreground underline underline-offset-4">See what's included</a>
+            </div>
           </header>
 
           <div className="p-6 sm:p-10">
             {selectionError ? <p className="mb-6 rounded-xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" role="alert">{selectionError}</p> : null}
-            {duplicateCategoryNotice ? <p className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-foreground" role="status"><span className="font-semibold">Shared budget notice:</span> {duplicateCategoryNotice}</p> : null}
+            {duplicateCategoryNotice ? <p className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-foreground" role="status"><span className="font-semibold">Shared group notice:</span> {duplicateCategoryNotice}</p> : null}
             {isLoading ? <div className="h-36 animate-pulse rounded-2xl bg-muted" role="status" aria-label="Loading budgets" /> : workspaceLoadFailed ? (
               <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-6 text-center" role="alert">
                 <h2 className="font-display text-xl font-bold text-foreground">Your budgets could not load</h2>
@@ -748,7 +758,7 @@ export function BudgetChooser({
                   </div>
 
                   <div className="mt-7 border-l-2 border-border pl-4">
-                    <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#087F8C]" /><h3 className="text-sm font-bold text-foreground">Shared budgets</h3></div>
+                    <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#087F8C]" /><h3 className="text-sm font-bold text-foreground">Shared groups</h3></div>
                       {personal.length > 0 && shared.length === 0 && (onboardingMode === "shared" || onboardingMode === "both") ? (
                         <StandaloneSharedBudgetForm
                           name={sharedBudgetName}
@@ -760,7 +770,7 @@ export function BudgetChooser({
                           onSubmit={createStandaloneSharedBudget}
                         />
                       ) : null}
-                    {shared.length ? <div className="grid gap-3">{shared.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label={groupKindPresentation(workspace.kind).label} selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : personal.length > 0 && (onboardingMode === "shared" || onboardingMode === "both") ? null : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No Shared budgets yet. Open your Personal budget to create one, or use an invitation link to join an existing group.</p>}
+                    {shared.length ? <div className="grid gap-3">{shared.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label={groupKindPresentation(workspace.kind).label} selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : personal.length > 0 && (onboardingMode === "shared" || onboardingMode === "both") ? null : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No Shared groups yet. Open your Personal budget to create one, or use an invitation link to join an existing group.</p>}
                   </div>
                 </div>
 
@@ -803,7 +813,7 @@ function StandaloneSharedBudgetForm({
   return (
     <form onSubmit={onSubmit} className="mb-5 rounded-2xl border border-primary/25 bg-primary/[0.05] p-4 sm:p-5">
       <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">Start here</p>
-      <h4 className="mt-1 font-display text-lg font-bold text-foreground">Create a Shared budget</h4>
+      <h4 className="mt-1 font-display text-lg font-bold text-foreground">Create a Shared group</h4>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Start with a department, chama, church, club, student group, team, project, or another shared purpose.</p>
       <div className="mt-4 space-y-2">
         <label htmlFor="standalone-shared-budget-name" className="text-sm font-semibold text-foreground">Budget name</label>
@@ -826,7 +836,7 @@ function StandaloneSharedBudgetForm({
       </fieldset>
       {error ? <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert" data-testid="status-standalone-shared-budget-error">{error}</p> : null}
       <Button data-testid="button-create-standalone-shared-budget" type="submit" className="mt-5 h-12 w-full rounded-xl" disabled={pending}>
-        <Plus className="mr-2 h-4 w-4" />{pending ? "Creating…" : "Create and open Shared budget"}
+        <Plus className="mr-2 h-4 w-4" />{pending ? "Creating…" : "Create and open Shared group"}
       </Button>
     </form>
   );

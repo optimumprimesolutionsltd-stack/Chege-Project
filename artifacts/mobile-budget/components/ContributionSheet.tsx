@@ -46,7 +46,7 @@ function kesShort(value: number): string {
 }
 
 /**
- * The read-only "who has paid" sheet for a shared budget, matching the web
+ * The read-only "who has paid" sheet for a shared group, matching the web
  * app: an arrears line for the current month, then a row per contributor with
  * the expected amount, this month's status, and a short recent-months strip.
  * A surplus carried forward from an earlier month reads as "Ahead", never as a

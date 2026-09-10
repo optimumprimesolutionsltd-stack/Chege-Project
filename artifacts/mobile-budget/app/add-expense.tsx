@@ -1525,7 +1525,7 @@ export default function AddExpenseSheet() {
                 />
               </View>
             ) : (
-              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>This will not change the Shared budget. An owner or admin can add it later.</Text>
+              <Text style={[styles.categoryCreateHint, { color: colors.mutedForeground }]}>This will not change the Shared group. An owner or admin can add it later.</Text>
             )}
             {newCategoryAddToBudget && canManageCategories ? (
               <>

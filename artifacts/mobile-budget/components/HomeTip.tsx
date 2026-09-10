@@ -10,7 +10,7 @@ const SNOOZE_KEY = 'jamvi:home-tip-snooze-until';
 const SNOOZE_DAYS = 5;
 
 // One nudge, rotated by the day so it is not the same one every open. Only for
-// shared budgets — every tip here is about sharing the record with the group.
+// shared groups — every tip here is about sharing the record with the group.
 const TIPS: { icon: keyof typeof Feather.glyphMap; text: string; route: string }[] = [
   { icon: 'user-plus', text: 'Invite the rest of the group so everyone sees the same record.', route: '/(tabs)/settings' },
   { icon: 'link', text: 'Share a read-only link — people can follow the money without an account.', route: '/(tabs)/settings' },

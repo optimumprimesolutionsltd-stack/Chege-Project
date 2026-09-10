@@ -170,7 +170,7 @@ export default function RecordContributionsScreen() {
   const record = () => {
     if (submittingRef.current || saving) return;
     if (contributors.length < 2) {
-      Alert.alert('Add at least two names', 'A shared budget records for a group. Add another contributor first.');
+      Alert.alert('Add at least two names', 'A shared group records for a group. Add another contributor first.');
       return;
     }
     if (accountId == null) {
@@ -350,7 +350,7 @@ export default function RecordContributionsScreen() {
           <Text style={[styles.notice, { borderColor: colors.border, color: colors.mutedForeground }]}>
             {contributors.length === 0
               ? 'Nobody to record yet. Add the people who contribute below — they do not need the app.'
-              : 'Add at least one more name below. A shared budget records for a group.'}
+              : 'Add at least one more name below. A shared group records for a group.'}
           </Text>
         ) : (
           <View style={[styles.list, { borderColor: colors.border }]}>

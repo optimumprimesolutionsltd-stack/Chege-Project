@@ -393,11 +393,11 @@ export default function DashboardScreen() {
             )}
             <View style={styles.workspaceIdentityCopy}>
               <Text style={styles.workspaceIdentityEyebrow}>
-                {isSharedWorkspace ? 'SHARED BUDGET' : 'PERSONAL BUDGET'}
+                {isSharedWorkspace ? 'SHARED GROUP' : 'PERSONAL BUDGET'}
               </Text>
               <Text style={[styles.workspaceIdentityName, workspaceNameTextStyle(group?.nameStyle)]}>
                 {group?.emoji ? `${group.emoji} ` : ''}
-                {group?.name || (isSharedWorkspace ? 'Shared budget' : 'Personal budget')}
+                {group?.name || (isSharedWorkspace ? 'Shared group' : 'Personal budget')}
               </Text>
             </View>
           </View>
@@ -570,7 +570,7 @@ export default function DashboardScreen() {
             <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
               {canManageBudget
                 ? 'Add your first budget category so you can plan spending and see what is left.'
-                : 'An owner or admin will add the budget categories for this Shared budget.'}
+                : 'An owner or admin will add the budget categories for this Shared group.'}
             </Text>
             {canManageBudget ? (
               <Pressable
@@ -715,24 +715,24 @@ export default function DashboardScreen() {
                 <Feather name="users" size={20} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>SHARED BUDGETS</Text>
+                <Text style={[styles.groupCtaEyebrow, { color: colors.primary }]}>SHARED GROUPS</Text>
                 <Text style={[styles.groupCtaTitle, { color: colors.foreground }]}>Manage budgets with others</Text>
               </View>
             </View>
             <Text style={[styles.groupCtaText, { color: colors.mutedForeground }]}>
-              Create a Shared budget from Settings when you are ready to manage money with a group.
+              Create a Shared group from Settings when you are ready to manage money with a group.
             </Text>
             <Pressable
               testID="home-create-shared-budget-cta"
               accessibilityRole="button"
-              accessibilityLabel="Open Settings to manage Shared budgets"
+              accessibilityLabel="Open Settings to manage Shared groups"
               onPress={() => router.push('/(tabs)/settings')}
               style={({ pressed }) => [
                 styles.groupCtaButton,
                 { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
               ]}
             >
-              <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Manage Shared budgets</Text>
+              <Text style={[styles.groupCtaButtonText, { color: colors.primaryForeground }]}>Manage Shared groups</Text>
               <Feather name="arrow-right" size={17} color={colors.primaryForeground} />
             </Pressable>
           </View>

@@ -42,7 +42,7 @@ export function WorkspaceIdentityRow({
       star: 'star',
     } as const
   )[group.icon ?? 'users'] ?? 'users';
-  const name = group.name?.trim() || (isShared ? 'Shared budget' : 'Personal budget');
+  const name = group.name?.trim() || (isShared ? 'Shared group' : 'Personal budget');
   const isDark = tone === 'dark';
 
   return (
@@ -60,7 +60,7 @@ export function WorkspaceIdentityRow({
       )}
       <View style={styles.copy}>
         <Text style={[styles.eyebrow, { color: isDark ? '#A5B9D4' : colors.mutedForeground }]}>
-          {isShared ? 'SHARED BUDGET' : 'PERSONAL BUDGET'}
+          {isShared ? 'SHARED GROUP' : 'PERSONAL BUDGET'}
         </Text>
         <Text
           numberOfLines={1}

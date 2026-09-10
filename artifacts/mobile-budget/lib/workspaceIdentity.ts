@@ -36,5 +36,5 @@ export function workspaceBudgetName(
   workspace?: { isPrivate?: boolean; emoji?: string | null; name: string } | null,
 ): string {
   if (workspace?.isPrivate) return 'Personal budget';
-  return workspace ? workspaceIdentityText(workspace, 'Shared budget') : 'Shared budget';
+  return workspace ? workspaceIdentityText(workspace, 'Shared group') : 'Shared group';
 }

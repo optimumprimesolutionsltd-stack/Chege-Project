@@ -46,7 +46,7 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Budget chooser before Home",
     web: "done",
     mobile: "done",
-    note: "Every login gets one free Personal budget before Shared budgets can be created; both platforms keep Personal and Shared records separate",
+    note: "Every login gets one free Personal budget before Shared groups can be created; both platforms keep Personal and Shared records separate",
   },
   {
     category: "Core screens",
@@ -155,7 +155,7 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Edit or remove category limits",
     web: "done",
     mobile: "done",
-    note: "Both show visible Edit and Remove actions; manager permissions still apply in Shared budgets",
+    note: "Both show visible Edit and Remove actions; manager permissions still apply in Shared groups",
   },
   {
     category: "Budget",

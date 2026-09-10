@@ -251,7 +251,7 @@ viewLinksRouter.post("/group-view-links", async (req, res): Promise<void> => {
     });
   } catch (error) {
     if (error instanceof Error && error.message === "missing-shared-group") {
-      res.status(400).json({ error: "Only a Shared budget can be shared for viewing." });
+      res.status(400).json({ error: "Only a Shared group can be shared for viewing." });
       return;
     }
     throw error;

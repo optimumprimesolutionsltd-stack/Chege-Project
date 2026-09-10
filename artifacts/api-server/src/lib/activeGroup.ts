@@ -69,7 +69,7 @@ export function requireSharedGroupManager(req: Request, res: Response): boolean 
 }
 
 /**
- * A workspace owner can start recording immediately. A shared budget does not
+ * A workspace owner can start recording immediately. A shared group does not
  * become a different kind of ledger while it has only one member.
  */
 export async function canRecordSharedTransactions(
@@ -95,7 +95,7 @@ export async function requireSharedTransactionEligibility(
     return true;
   }
 
-  // A lapsed member goes read-only in a Shared budget rather than being
+  // A lapsed member goes read-only in a Shared group rather than being
   // removed from it. They keep seeing everything and stop being able to record
   // anything, which is a status the group can see and act on. Removing them
   // would take a chama's record of who contributed what with it.
