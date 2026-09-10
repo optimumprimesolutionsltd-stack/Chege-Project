@@ -201,11 +201,16 @@ function RootLayoutNav() {
     }
   }, [isAuthenticated]);
 
+  // The entry decision is made once per signed-in session. After it resolves,
+  // a query settling or a route change must NOT re-show the spinner or re-run
+  // the check — that toggling is what strobed the screen over the content.
+  const entryResolvedRef = useRef(false);
+  useEffect(() => {
+    entryResolvedRef.current = false;
+  }, [isAuthenticated, user?.id]);
+
   useEffect(() => {
     let active = true;
-    // Only navigate when we are not already where we want to be. Firing
-    // router.replace at the route you are already on re-renders this component,
-    // which re-runs this effect — the loop that made the screen flicker.
     const go = (destination: string, atRoute: string) => {
       if (currentRoute !== atRoute) router.replace(destination);
     };
@@ -215,19 +220,31 @@ function RootLayoutNav() {
       return () => { active = false; };
     }
     if (!isAuthenticated) {
+      entryResolvedRef.current = true;
       setCheckingChooser(false);
       go('/login', 'login');
       return () => { active = false; };
     }
     if (user?.needsDisplayName) {
+      entryResolvedRef.current = true;
       setCheckingChooser(false);
       go('/profile-setup', 'profile-setup');
       return () => { active = false; };
     }
     if (!user?.id) return () => { active = false; };
 
+    // Already decided where this session lands. Keep the spinner down and do
+    // nothing else — no re-check, no redirect.
+    if (entryResolvedRef.current) {
+      setCheckingChooser(false);
+      return () => { active = false; };
+    }
+    if (loadingWorkspaces) {
+      setCheckingChooser(true);
+      return () => { active = false; };
+    }
+
     setCheckingChooser(true);
-    if (loadingWorkspaces) return () => { active = false; };
     void Promise.all([
       isMobileBudgetChooserComplete({ userId: user.id, storage: AsyncStorage }),
       hasValidMobileWorkspaceSelection({ storage: AsyncStorage, workspaces }),
@@ -244,10 +261,16 @@ function RootLayoutNav() {
         // A storage read failing must not leave the app stuck on the spinner.
       })
       .finally(() => {
-        if (active) setCheckingChooser(false);
+        if (active) {
+          entryResolvedRef.current = true;
+          setCheckingChooser(false);
+        }
       });
     return () => { active = false; };
-  }, [isLoading, isAuthenticated, user?.id, user?.needsDisplayName, currentRoute, loadingWorkspaces, workspaces]);
+    // `workspaces.length` rather than `workspaces`: a fresh array reference on
+    // every render (query refetch, structural-sharing miss) must not re-fire
+    // this effect. The count is enough to know the list is ready.
+  }, [isLoading, isAuthenticated, user?.id, user?.needsDisplayName, currentRoute, loadingWorkspaces, workspaces.length]);
 
   if (isLoading || checkingChooser) {
     return (
