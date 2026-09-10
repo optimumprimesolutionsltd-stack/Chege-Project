@@ -243,9 +243,13 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   };
 
   return (
-    <Card className="border-2 border-primary/30 shadow-lg ring-1 ring-primary/5" data-testid="record-contributions">
-      <div className="rounded-t-[calc(var(--radius)-2px)] bg-primary/8 px-4 py-2 text-xs font-bold uppercase tracking-wide text-primary sm:px-6">
-        Record this month
+    <Card
+      className="overflow-hidden border-2 border-primary/40 bg-gradient-to-b from-primary/[0.07] to-card shadow-xl ring-2 ring-primary/10"
+      data-testid="record-contributions"
+    >
+      <div className="flex items-center gap-2 bg-primary px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-primary-foreground sm:px-6">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary" aria-hidden="true" />
+        Record this month · start here
       </div>
       <CardContent className="space-y-4 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
