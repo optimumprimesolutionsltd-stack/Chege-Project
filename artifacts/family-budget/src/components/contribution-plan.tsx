@@ -77,6 +77,26 @@ export function ContributionPlan() {
     }
   };
 
+  // The parsed group figure, only when the box holds a usable number. The
+  // "set everyone" action is hidden until then — clearing every member's
+  // amount at once is not something a button should invite by accident.
+  const parsedGroupTarget = (() => {
+    const raw = groupTarget.trim();
+    if (raw === "") return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  })();
+
+  const applyToAllMembers = async () => {
+    if (parsedGroupTarget == null) return;
+    const confirmed = window.confirm(
+      `Set every member to ${formatKes(parsedGroupTarget)}/mo? This replaces the amount for all ${contributors.length} ` +
+        `${contributors.length === 1 ? "member" : "members"} below, including anyone you set individually.`,
+    );
+    if (!confirmed) return;
+    await saveGroupTarget(true);
+  };
+
   const saveMemberTarget = async (contributorId: number) => {
     const raw = editValue.trim();
     const value = raw === "" ? null : Number(raw);
@@ -118,8 +138,11 @@ export function ContributionPlan() {
 
         <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
           <label className="block text-sm font-medium text-foreground" htmlFor="plan-group-target">
-            Group default, per member per month
+            Starting amount for new members
           </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Anyone you add from now on starts at this amount. It does not change the members already listed below.
+          </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <Input
               id="plan-group-target"
@@ -134,17 +157,6 @@ export function ContributionPlan() {
             />
             <Button variant="outline" onClick={() => void saveGroupTarget(false)} disabled={savingGroup} data-testid="button-save-group-target">
               Save
-            </Button>
-            {/* Setting the figure for the first time must not leave everyone
-                already in the group without one - that is the state that made
-                arrears useless. */}
-            <Button
-              variant="outline"
-              onClick={() => void saveGroupTarget(true)}
-              disabled={savingGroup || contributors.length === 0}
-              data-testid="button-apply-target-to-everyone"
-            >
-              Apply to everyone
             </Button>
           </div>
         </div>
@@ -203,6 +215,24 @@ export function ContributionPlan() {
             ))}
           </ul>
         )}
+
+        {contributors.length > 0 && parsedGroupTarget != null ? (
+          <div className="flex flex-col gap-2 rounded-xl border border-border/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Want everyone on the same amount? This overwrites every member above with the starting amount.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => void applyToAllMembers()}
+              disabled={savingGroup}
+              data-testid="button-apply-target-to-everyone"
+            >
+              Set all {contributors.length} to {formatKes(parsedGroupTarget)}
+            </Button>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
