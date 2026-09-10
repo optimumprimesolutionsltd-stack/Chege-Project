@@ -61,4 +61,20 @@ describe("summarizePayouts", () => {
     );
     expect(result.nextRound).toBe(4);
   });
+
+  it("stays sane when a middle round is removed, leaving a gap", () => {
+    // Rounds 1, 2, 4 remain after round 3 was undone.
+    const result = summarizePayouts(
+      [
+        { roundNumber: 1, contributorId: 1, amount: 10000 },
+        { roundNumber: 2, contributorId: 2, amount: 10000 },
+        { roundNumber: 4, contributorId: 1, amount: 10000 },
+      ],
+      members,
+    );
+    expect(result.nextRound).toBe(5);
+    expect(result.totalPaidOut).toBe(30000);
+    expect(result.members[0]).toEqual({ id: 1, name: "Mary", timesReceived: 2, lastRound: 4 });
+    expect(result.members[2]).toEqual({ id: 3, name: "Grace", timesReceived: 0, lastRound: null });
+  });
 });
