@@ -112,6 +112,76 @@ export function buildContributionWhatsAppText(report: GroupContributionReport, v
   return lines.join("\n");
 }
 
+export type StatementShareEntry = {
+  /** YYYY-MM-DD. */
+  date: string;
+  name: string;
+  amount: number;
+  source: "recorded" | "deposit";
+};
+
+export type StatementShare = {
+  budgetName: string;
+  /** Already formatted by the server, e.g. "1 Aug 2026 – 31 Aug 2026". */
+  periodLabel: string;
+  entries: StatementShareEntry[];
+  perMember: Array<{ name: string; total: number }>;
+  grandTotal: number;
+};
+
+function shareDate(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][(month ?? 1) - 1] ?? "";
+  return `${day ?? 1} ${abbr}`;
+}
+
+/**
+ * A day-range ledger as a WhatsApp message: the period, a one-line total, a
+ * per-member breakdown, then each dated entry. This is the "dated ledger" the
+ * download control produces when it is not in month-grid mode — so it lists
+ * movements, not an expected-versus-actual position.
+ */
+export function buildStatementWhatsAppText(statement: StatementShare, verifyUrl?: string): string {
+  const asAt = new Date().toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
+  const lines: string[] = [
+    `*${statement.budgetName}*`,
+    `Contribution ledger  |  ${statement.periodLabel}`,
+    `As at ${asAt}`,
+    "",
+    `Total in this period: ${kesText(statement.grandTotal)}   (${statement.entries.length} ${statement.entries.length === 1 ? "entry" : "entries"})`,
+  ];
+
+  if (statement.perMember.length > 0) {
+    lines.push("");
+    lines.push("*By member*");
+    lines.push(
+      ...statement.perMember
+        .filter((row) => row.total !== 0)
+        .map((row, index) => `${index + 1}. ${row.name}: ${kesText(row.total)}`),
+    );
+  }
+
+  lines.push("");
+  lines.push("*Entries*");
+  lines.push(
+    ...(statement.entries.length
+      ? statement.entries.map(
+          (entry) =>
+            `${shareDate(entry.date)}  ${entry.name}  ${kesText(entry.amount)}${entry.source === "deposit" ? "  (bank)" : ""}`,
+        )
+      : ["Nothing recorded in this period."]),
+  );
+  lines.push("");
+  if (verifyUrl) {
+    lines.push("Check this is genuine — the figures update live:");
+    lines.push(verifyUrl);
+    lines.push("");
+  }
+  lines.push("Prepared with Jamvi");
+
+  return lines.join("\n");
+}
+
 /**
  * The month-by-month contribution sheet as a self-contained HTML document,
  * laid out vertically so it reads on a phone once it is saved to PDF and sent

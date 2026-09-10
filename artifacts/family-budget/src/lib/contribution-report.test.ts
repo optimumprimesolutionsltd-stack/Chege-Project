@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildContributionWhatsAppText, type GroupContributionReport } from "./contribution-report";
+import {
+  buildContributionWhatsAppText,
+  buildStatementWhatsAppText,
+  type GroupContributionReport,
+  type StatementShare,
+} from "./contribution-report";
 
 const months = [
   { month: 7, year: 2026, label: "Jul 2026" },
@@ -89,5 +94,59 @@ describe("buildContributionWhatsAppText", () => {
       grandTotal: 0,
     });
     expect(text).toContain("No contributors recorded yet.");
+  });
+});
+
+describe("buildStatementWhatsAppText", () => {
+  const statement: StatementShare = {
+    budgetName: "Umoja Chama",
+    periodLabel: "1 Aug 2026 – 15 Aug 2026",
+    entries: [
+      { date: "2026-08-03", name: "Mary", amount: 2000, source: "recorded" },
+      { date: "2026-08-10", name: "John", amount: 1500, source: "deposit" },
+    ],
+    perMember: [
+      { name: "Mary", total: 2000 },
+      { name: "John", total: 1500 },
+      { name: "Grace", total: 0 },
+    ],
+    grandTotal: 3500,
+  };
+
+  it("leads with the period and a movements total, not expected-vs-actual", () => {
+    const text = buildStatementWhatsAppText(statement);
+    expect(text).toContain("Contribution ledger  |  1 Aug 2026 – 15 Aug 2026");
+    expect(text).toContain("Total in this period: KES 3,500   (2 entries)");
+    expect(text).not.toContain("expected");
+  });
+
+  it("lists each dated entry and marks bank deposits", () => {
+    const text = buildStatementWhatsAppText(statement);
+    expect(text).toContain("3 Aug  Mary  KES 2,000");
+    expect(text).toContain("10 Aug  John  KES 1,500  (bank)");
+  });
+
+  it("drops members with nothing in the period from the breakdown", () => {
+    const text = buildStatementWhatsAppText(statement);
+    expect(text).toContain("1. Mary: KES 2,000");
+    expect(text).not.toContain("Grace");
+  });
+
+  it("adds the verify link only when given", () => {
+    expect(buildStatementWhatsAppText(statement)).not.toContain("Check this is genuine");
+    expect(buildStatementWhatsAppText(statement, "https://jamvi.co.ke/r/abc")).toContain(
+      "https://jamvi.co.ke/r/abc",
+    );
+  });
+
+  it("handles an empty period", () => {
+    const text = buildStatementWhatsAppText({
+      ...statement,
+      entries: [],
+      perMember: [],
+      grandTotal: 0,
+    });
+    expect(text).toContain("Nothing recorded in this period.");
+    expect(text).toContain("(0 entries)");
   });
 });

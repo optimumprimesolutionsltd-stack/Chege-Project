@@ -16,10 +16,14 @@ import {
   buildContributionWhatsAppText,
   buildGroupContributionReportHtml,
   buildMemberContributionReportHtml,
+  buildStatementWhatsAppText,
+  type StatementShare,
 } from "@/lib/contribution-report";
 import type { ContributionGrid } from "@/components/contributions-grid";
 
 export type MonthOption = { key: string; label: string };
+
+export type DownloadMode = "grid" | "ledger";
 
 // The last 12 months, newest first — the window /api/contributions/grid can
 // return in one call.
@@ -33,6 +37,26 @@ export function contributionMonthOptions(): MonthOption[] {
       label: date.toLocaleString("en-KE", { month: "short", year: "numeric" }),
     };
   });
+}
+
+/** Today as YYYY-MM-DD, local time — the default "to" for the dated ledger. */
+export function todayKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** The first of the current month, YYYY-MM-DD — the default "from". */
+export function monthStartKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+/** The earliest day the dated ledger can reach: the server only loads 12
+ *  months of history for a statement. */
+export function ledgerFloorKey(): string {
+  const now = new Date();
+  const floor = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  return `${floor.getFullYear()}-${String(floor.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
 // Opened synchronously with the click so pop-up blockers allow it; filled in
@@ -59,6 +83,35 @@ async function fetchGrid(): Promise<ContributionGrid> {
   return (await response.json()) as ContributionGrid;
 }
 
+type StatementResponse = {
+  periodLabel: string;
+  contributors: Array<{ id: number; name: string }>;
+  entries: Array<{ contributorId: number; contributorName: string; date: string; amount: number; source: "recorded" | "deposit" }>;
+  totalsByContributor: Record<number, number>;
+  grandTotal: number;
+};
+
+async function fetchStatementShare(budgetName: string, from: string, to: string): Promise<StatementShare> {
+  const response = await fetch(
+    `/api/contributions/statement?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { credentials: "include" },
+  );
+  if (!response.ok) throw new Error("statement request failed");
+  const data = (await response.json()) as StatementResponse;
+  return {
+    budgetName,
+    periodLabel: data.periodLabel,
+    entries: data.entries.map((entry) => ({
+      date: entry.date,
+      name: entry.contributorName,
+      amount: entry.amount,
+      source: entry.source,
+    })),
+    perMember: data.contributors.map((row) => ({ name: row.name, total: data.totalsByContributor[row.id] ?? 0 })),
+    grandTotal: data.grandTotal,
+  };
+}
+
 // Indices of the grid's months that fall in [start, end], inclusive.
 function keptMonths(grid: ContributionGrid, start: string, end: string): number[] {
   return grid.months
@@ -74,34 +127,80 @@ function ordered(fromKey: string, toKey: string): [string, string] {
   return fromKey <= toKey ? [fromKey, toKey] : [toKey, fromKey];
 }
 
+function statementPdfUrl(from: string, to: string, userId?: string): string {
+  const [start, end] = ordered(from, to);
+  const params = new URLSearchParams({ from: start, to: end });
+  if (userId) params.set("userId", userId);
+  return `/api/contributions/statement.pdf?${params.toString()}`;
+}
+
+/** The Monthly grid / Dated ledger switch. Grid keeps the expected-versus-actual
+ *  sheet by whole months; ledger lists individual dated entries between two
+ *  days — the only way to see part of a month. */
+function ModeToggle({ mode, onModeChange }: { mode: DownloadMode; onModeChange: (mode: DownloadMode) => void }) {
+  return (
+    <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5 text-xs font-medium">
+      {(["grid", "ledger"] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onModeChange(option)}
+          className={`rounded-md px-2.5 py-1.5 transition-colors ${
+            mode === option ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+          data-testid={`contribution-download-mode-${option}`}
+        >
+          {option === "grid" ? "Monthly grid" : "Dated ledger"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
- * Downloads the group's month-by-month contribution sheet as a PDF, for the
- * chosen range. Opens a print-ready page the browser saves as PDF — no PDF
- * library, which keeps it working the same on a phone (Save to Files, then
- * share to WhatsApp) and on a desktop. The From/To range is controlled so the
- * per-member buttons on the same page can reuse it.
+ * Downloads the group's contribution record as a PDF, for the chosen range.
+ *
+ * "Monthly grid" opens a print-ready expected-versus-actual sheet the browser
+ * saves as PDF — no PDF library, so it works the same on a phone and a desktop.
+ * "Dated ledger" opens the server-built statement PDF for an exact day range,
+ * the only way to cover part of a month. The range is controlled from the
+ * parent so the per-member buttons on the same page reuse it.
  */
 export function DownloadContributions({
   budgetName,
+  mode,
+  onModeChange,
   fromKey,
   toKey,
   onFromChange,
   onToChange,
+  dayFrom,
+  dayTo,
+  onDayFromChange,
+  onDayToChange,
 }: {
   budgetName: string;
+  mode: DownloadMode;
+  onModeChange: (mode: DownloadMode) => void;
   fromKey: string;
   toKey: string;
   onFromChange: (key: string) => void;
   onToChange: (key: string) => void;
+  dayFrom: string;
+  dayTo: string;
+  onDayFromChange: (key: string) => void;
+  onDayToChange: (key: string) => void;
 }) {
   const { toast } = useToast();
   const options = useMemo(contributionMonthOptions, []);
+  const floor = useMemo(ledgerFloorKey, []);
+  const today = useMemo(todayKey, []);
   const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [start, end] = ordered(fromKey, toKey);
 
-  // The grid rows narrowed to the chosen range — shared by the PDF and the
-  // WhatsApp text. Null when nothing falls in the range.
+  // The grid rows narrowed to the chosen month range — shared by the grid PDF
+  // and its WhatsApp text. Null when nothing falls in the range.
   const buildReport = (grid: ContributionGrid) => {
     const keep = keptMonths(grid, start, end);
     if (keep.length === 0) return null;
@@ -119,6 +218,11 @@ export function DownloadContributions({
   };
 
   const download = async () => {
+    if (mode === "ledger") {
+      window.open(statementPdfUrl(dayFrom, dayTo), "_blank", "noopener,noreferrer");
+      return;
+    }
+
     const printWindow = openPreparingWindow();
     if (!printWindow) {
       toast({
@@ -156,12 +260,6 @@ export function DownloadContributions({
     const chatWindow = window.open("", "_blank");
     setSharing(true);
     try {
-      const report = buildReport(await fetchGrid());
-      if (!report) {
-        chatWindow?.close();
-        toast({ title: "Nothing in that range", description: "Pick a different from and to month." });
-        return;
-      }
       // The verify link is a nicety, not a blocker — if it fails, still share.
       let verifyUrl: string | undefined;
       try {
@@ -170,7 +268,27 @@ export function DownloadContributions({
       } catch {
         verifyUrl = undefined;
       }
-      const url = `https://wa.me/?text=${encodeURIComponent(buildContributionWhatsAppText(report, verifyUrl))}`;
+
+      let text: string;
+      if (mode === "ledger") {
+        const share = await fetchStatementShare(budgetName, dayFrom, dayTo);
+        if (share.entries.length === 0) {
+          chatWindow?.close();
+          toast({ title: "Nothing in that range", description: "Pick a different from and to date." });
+          return;
+        }
+        text = buildStatementWhatsAppText(share, verifyUrl);
+      } else {
+        const report = buildReport(await fetchGrid());
+        if (!report) {
+          chatWindow?.close();
+          toast({ title: "Nothing in that range", description: "Pick a different from and to month." });
+          return;
+        }
+        text = buildContributionWhatsAppText(report, verifyUrl);
+      }
+
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       if (chatWindow) chatWindow.location.href = url;
       else window.open(url, "_blank");
     } catch {
@@ -182,77 +300,137 @@ export function DownloadContributions({
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-3 sm:flex-row sm:items-end">
-      <label className="text-sm">
-        <span className="mb-1 block font-medium text-foreground">From</span>
-        <select
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          value={fromKey}
-          onChange={(event) => onFromChange(event.target.value)}
-          data-testid="select-contribution-pdf-from"
-        >
-          {options.map((option) => (
-            <option key={option.key} value={option.key}>{option.label}</option>
-          ))}
-        </select>
-      </label>
-      <label className="text-sm">
-        <span className="mb-1 block font-medium text-foreground">To</span>
-        <select
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          value={toKey}
-          onChange={(event) => onToChange(event.target.value)}
-          data-testid="select-contribution-pdf-to"
-        >
-          {options.map((option) => (
-            <option key={option.key} value={option.key}>{option.label}</option>
-          ))}
-        </select>
-      </label>
-      <div className="flex gap-2 sm:ml-auto">
-        <Button
-          onClick={() => void shareToWhatsApp()}
-          disabled={sharing || busy}
-          className="bg-[#25D366] text-white hover:bg-[#1eb257]"
-          data-testid="button-share-contributions-whatsapp"
-        >
-          {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <WhatsAppIcon className="mr-1 h-4 w-4" />}
-          {sharing ? "Opening…" : "WhatsApp"}
-        </Button>
-        <Button
-          onClick={() => void download()}
-          disabled={busy || sharing}
-          data-testid="button-download-contributions-pdf"
-        >
-          {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
-          {busy ? "Preparing…" : "Download PDF"}
-        </Button>
+    <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <ModeToggle mode={mode} onModeChange={onModeChange} />
+        <p className="text-xs text-muted-foreground">
+          {mode === "grid" ? "Whole months, expected vs actual" : "Any day range, entry by entry"}
+        </p>
       </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        {mode === "grid" ? (
+          <>
+            <label className="text-sm">
+              <span className="mb-1 block font-medium text-foreground">From</span>
+              <select
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={fromKey}
+                onChange={(event) => onFromChange(event.target.value)}
+                data-testid="select-contribution-pdf-from"
+              >
+                {options.map((option) => (
+                  <option key={option.key} value={option.key}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block font-medium text-foreground">To</span>
+              <select
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={toKey}
+                onChange={(event) => onToChange(event.target.value)}
+                data-testid="select-contribution-pdf-to"
+              >
+                {options.map((option) => (
+                  <option key={option.key} value={option.key}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          </>
+        ) : (
+          <>
+            <label className="text-sm">
+              <span className="mb-1 block font-medium text-foreground">From</span>
+              <input
+                type="date"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={dayFrom}
+                min={floor}
+                max={dayTo || today}
+                onChange={(event) => onDayFromChange(event.target.value)}
+                data-testid="input-contribution-pdf-from"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block font-medium text-foreground">To</span>
+              <input
+                type="date"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={dayTo}
+                min={dayFrom || floor}
+                max={today}
+                onChange={(event) => onDayToChange(event.target.value)}
+                data-testid="input-contribution-pdf-to"
+              />
+            </label>
+          </>
+        )}
+        <div className="flex gap-2 sm:ml-auto">
+          <Button
+            onClick={() => void shareToWhatsApp()}
+            disabled={sharing || busy}
+            className="bg-[#25D366] text-white hover:bg-[#1eb257]"
+            data-testid="button-share-contributions-whatsapp"
+          >
+            {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <WhatsAppIcon className="mr-1 h-4 w-4" />}
+            {sharing ? "Opening…" : "WhatsApp"}
+          </Button>
+          <Button
+            onClick={() => void download()}
+            disabled={busy || sharing}
+            data-testid="button-download-contributions-pdf"
+          >
+            {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+            {busy ? "Preparing…" : "Download PDF"}
+          </Button>
+        </div>
+      </div>
+
+      {mode === "ledger" ? (
+        <p className="text-xs text-muted-foreground">
+          Hand-recorded contributions are dated to the first of their month; bank deposits carry their real date.
+        </p>
+      ) : null}
     </div>
   );
 }
 
 /**
  * One member's contribution record as a PDF, for the same range the group
- * control is set to. Contributors are matched to the grid by name — the grid
- * keys rows by contributor, not by account.
+ * control is set to. In "Monthly grid" mode this is a print-ready sheet matched
+ * to the grid by name; in "Dated ledger" mode it is the server statement PDF
+ * for the exact day range.
  */
 export function DownloadMemberContribution({
   budgetName,
   memberName,
+  memberUserId,
+  mode,
   fromKey,
   toKey,
+  dayFrom,
+  dayTo,
 }: {
   budgetName: string;
   memberName: string;
+  memberUserId: string;
+  mode: DownloadMode;
   fromKey: string;
   toKey: string;
+  dayFrom: string;
+  dayTo: string;
 }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [start, end] = ordered(fromKey, toKey);
 
   const download = async () => {
+    if (mode === "ledger") {
+      window.open(statementPdfUrl(dayFrom, dayTo, memberUserId), "_blank", "noopener,noreferrer");
+      return;
+    }
+
     const printWindow = openPreparingWindow();
     if (!printWindow) {
       toast({
@@ -313,7 +491,7 @@ export function DownloadMemberContribution({
       data-testid={`download-member-contribution-${memberName}`}
     >
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-      {busy ? "Preparing…" : "Download PDF"}
+      {busy ? "Preparing…" : mode === "ledger" ? "Download ledger (PDF)" : "Download PDF"}
     </button>
   );
 }
