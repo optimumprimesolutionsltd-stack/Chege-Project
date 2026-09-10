@@ -22,7 +22,7 @@ type ContributionGrid = {
   grandTotal: number;
 };
 
-const RANGES = [3, 6, 12] as const;
+const RANGES = [1, 3, 6, 12] as const;
 
 function kes(value: number): string {
   return value.toLocaleString('en-KE', { maximumFractionDigits: 0 });

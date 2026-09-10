@@ -1,9 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+
+const RANGES = [1, 3, 6, 12] as const;
 
 type GridMonth = { month: number; year: number; label: string };
 type GridRow = {
@@ -44,9 +46,10 @@ function kesShort(value: number): string {
  */
 export function ContributionSheet() {
   const colors = useColors();
+  const [months, setMonths] = useState<number>(6);
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
-    queryKey: ['contribution-grid', 6],
-    queryFn: () => customFetch('/api/contributions/grid?months=6'),
+    queryKey: ['contribution-grid', months],
+    queryFn: () => customFetch(`/api/contributions/grid?months=${months}`),
     retry: false,
   });
 
@@ -69,7 +72,29 @@ export function ContributionSheet() {
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Text style={[styles.heading, { color: colors.foreground }]}>Who has paid</Text>
+      <View style={styles.headRow}>
+        <Text style={[styles.heading, { color: colors.foreground }]}>Who has paid</Text>
+        <View style={styles.ranges}>
+          {RANGES.map((range) => {
+            const active = months === range;
+            return (
+              <Pressable
+                key={range}
+                onPress={() => setMonths(range)}
+                style={[
+                  styles.rangeBtn,
+                  { borderColor: colors.border },
+                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+              >
+                <Text style={[styles.rangeLabel, { color: active ? colors.primaryForeground : colors.mutedForeground }]}>
+                  {range}m
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
       <Text style={[styles.key, { color: colors.mutedForeground }]}>
         Each figure is what a member gave. Red = short of the expected amount. Green = a month an earlier over-payment covered.
       </Text>
@@ -144,7 +169,11 @@ export function ContributionSheet() {
 const styles = StyleSheet.create({
   loading: { paddingVertical: 24, alignItems: 'center' },
   card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
+  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   heading: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  ranges: { flexDirection: 'row', gap: 4 },
+  rangeBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
+  rangeLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   key: { fontSize: 12, lineHeight: 17 },
   arrears: { flexDirection: 'row', gap: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 10 },
   arrearsText: { flex: 1, fontSize: 13, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
