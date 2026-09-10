@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import {
   ContributorEditorFooter,
+  EditableName,
   EditListButton,
   RemoveRowButton,
   useContributorEditor,
@@ -162,16 +163,12 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
             <View style={styles.rowTop}>
               <View style={styles.nameWrap}>
                 <RemoveRowButton editor={editor} id={row.contributorId} />
-                <Text
-                  style={[
-                    styles.name,
-                    { color: colors.foreground },
-                    editor.isRemoving(row.contributorId) && { color: colors.mutedForeground, textDecorationLine: 'line-through' },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {row.name}
-                </Text>
+                <EditableName
+                  editor={editor}
+                  id={row.contributorId}
+                  name={row.name}
+                  textStyle={{ ...styles.name, color: colors.foreground }}
+                />
               </View>
               <Text style={[styles.expected, { color: colors.mutedForeground }]}>
                 {row.monthlyTarget != null && row.monthlyTarget > 0 ? `Expected KES ${kes(row.monthlyTarget)}/mo` : 'No set amount'}

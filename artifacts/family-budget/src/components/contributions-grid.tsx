@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, Loader2, TableProperties } from "lucide-react";
 import { useCollapsed } from "@/hooks/use-collapsed";
 import {
   ContributorEditorFooter,
+  EditableName,
   EditListButton,
   RemoveRowButton,
   useContributorEditor,
@@ -202,13 +203,9 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
                   {shown.map((row) => (
                     <tr key={row.contributorId} className="border-b border-border/50">
                       <td className="sticky left-0 z-10 max-w-[10rem] bg-card py-2 pr-3 font-medium text-foreground">
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex min-w-0 items-center gap-1.5">
                           <RemoveRowButton editor={editor} id={row.contributorId} name={row.name} />
-                          <span
-                            className={`block truncate ${editor.isRemoving(row.contributorId) ? "text-muted-foreground line-through" : ""}`}
-                          >
-                            {row.name}
-                          </span>
+                          <EditableName editor={editor} id={row.contributorId} name={row.name} />
                         </span>
                         <span className="block text-[11px] font-normal text-muted-foreground">
                           {row.monthlyTarget != null && row.monthlyTarget > 0

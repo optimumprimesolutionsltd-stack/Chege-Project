@@ -8,6 +8,7 @@ import type { ContributionGrid } from "@/components/contributions-grid";
 import { useCollapsed } from "@/hooks/use-collapsed";
 import {
   ContributorEditorFooter,
+  EditableName,
   EditListButton,
   RemoveRowButton,
   useContributorEditor,
@@ -171,11 +172,9 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
                 {rows.map((row) => (
                   <tr key={row.contributorId} className="border-b border-border/50">
                     <td className="max-w-[12rem] py-2 pr-3 font-medium text-foreground">
-                      <span className="flex items-center gap-1.5">
+                      <span className="flex min-w-0 items-center gap-1.5">
                         <RemoveRowButton editor={editor} id={row.contributorId} name={row.name} />
-                        <span className={`block truncate ${editor.isRemoving(row.contributorId) ? "text-muted-foreground line-through" : ""}`}>
-                          {row.name}
-                        </span>
+                        <EditableName editor={editor} id={row.contributorId} name={row.name} />
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-muted-foreground">

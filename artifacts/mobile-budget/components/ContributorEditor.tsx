@@ -17,15 +17,38 @@ export function useContributorEditor() {
   const [adds, setAdds] = useState<string[]>([]);
   const [addName, setAddName] = useState('');
   const [removals, setRemovals] = useState<Set<number>>(new Set());
+  const [renames, setRenames] = useState<Record<number, string>>({});
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [rowDraft, setRowDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const dirty = adds.length > 0 || removals.size > 0;
+  const dirty = adds.length > 0 || removals.size > 0 || Object.keys(renames).length > 0;
 
   const reset = () => {
     setAdds([]);
     setAddName('');
     setRemovals(new Set());
+    setRenames({});
+    setEditingRow(null);
+    setRowDraft('');
   };
+
+  const startRename = (id: number, current: string) => {
+    setEditingRow(id);
+    setRowDraft(renames[id] ?? current);
+  };
+  const cancelRename = () => setEditingRow(null);
+  const commitRename = (id: number, original: string) => {
+    const name = rowDraft.trim();
+    setEditingRow(null);
+    setRenames((current) => {
+      const next = { ...current };
+      if (name && name !== original && name.length <= 120) next[id] = name;
+      else delete next[id];
+      return next;
+    });
+  };
+  const displayName = (id: number, original: string) => renames[id] ?? original;
   const open = () => {
     reset();
     setEditing(true);
@@ -68,6 +91,14 @@ export function useContributorEditor() {
           body: JSON.stringify({ name }),
         });
       }
+      for (const [id, name] of Object.entries(renames)) {
+        if (removals.has(Number(id))) continue;
+        await customFetch(`/api/contributors/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+      }
       for (const id of removals) {
         await customFetch(`/api/contributors/${id}`, {
           method: 'PATCH',
@@ -102,6 +133,13 @@ export function useContributorEditor() {
     dropAdd,
     isRemoving,
     toggleRemoval,
+    editingRow,
+    rowDraft,
+    setRowDraft,
+    startRename,
+    cancelRename,
+    commitRename,
+    displayName,
     save,
   };
 }
@@ -125,6 +163,62 @@ export function RemoveRowButton({ editor, id }: { editor: Editor; id: number }) 
   return (
     <Pressable onPress={() => editor.toggleRemoval(id)} hitSlop={8} accessibilityLabel={staged ? 'Keep' : 'Remove'}>
       <Feather name={staged ? 'rotate-ccw' : 'trash-2'} size={15} color={staged ? colors.primary : '#ef4444'} />
+    </Pressable>
+  );
+}
+
+/**
+ * The member's name in a row. Read-only outside edit mode; in edit mode a tap
+ * starts an inline rename, and a staged new name shows until Save.
+ */
+export function EditableName({
+  editor,
+  id,
+  name,
+  textStyle,
+}: {
+  editor: Editor;
+  id: number;
+  name: string;
+  textStyle?: object;
+}) {
+  const colors = useColors();
+
+  if (!editor.editing) {
+    return (
+      <Text style={textStyle} numberOfLines={1}>
+        {name}
+      </Text>
+    );
+  }
+
+  if (editor.editingRow === id) {
+    return (
+      <View style={styles.renameInline}>
+        <TextInput
+          autoFocus
+          maxLength={120}
+          value={editor.rowDraft}
+          onChangeText={editor.setRowDraft}
+          onSubmitEditing={() => editor.commitRename(id, name)}
+          style={[styles.renameInlineInput, { borderColor: colors.border, color: colors.foreground }]}
+        />
+        <Pressable onPress={() => editor.commitRename(id, name)} hitSlop={8}>
+          <Feather name="check" size={16} color={colors.primary} />
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <Pressable onPress={() => editor.startRename(id, name)} style={styles.renameTrigger} hitSlop={6}>
+      <Text
+        style={[textStyle, editor.isRemoving(id) && { color: colors.mutedForeground, textDecorationLine: 'line-through' }]}
+        numberOfLines={1}
+      >
+        {editor.displayName(id, name)}
+      </Text>
+      <Feather name="edit-2" size={11} color={colors.mutedForeground} />
     </Pressable>
   );
 }
@@ -182,6 +276,17 @@ export function ContributorEditorFooter({ editor }: { editor: Editor }) {
 }
 
 const styles = StyleSheet.create({
+  renameInline: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 },
+  renameInlineInput: {
+    flex: 1,
+    minWidth: 0,
+    height: 32,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    fontSize: 13,
+  },
+  renameTrigger: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 },
   footer: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, gap: 10, marginTop: 8 },
   addRow: { flexDirection: 'row', gap: 8 },
   input: { flex: 1, height: 40, borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, paddingHorizontal: 10, fontSize: 14 },
