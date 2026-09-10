@@ -23,6 +23,7 @@ import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { ContributionSheet } from '@/components/ContributionSheet';
 import { ContributionVariance } from '@/components/ContributionVariance';
 import { ContributionExport } from '@/components/ContributionExport';
+import { MerryGoRound } from '@/components/MerryGoRound';
 import {
   useGetDashboardSummary,
   useGetDashboardIncomeStreams,
@@ -623,6 +624,7 @@ export default function ContributionsScreen() {
             </View>
             <ContributionSheet canManage={group?.role === 'owner' || group?.role === 'admin'} />
             <ContributionVariance canManage={group?.role === 'owner' || group?.role === 'admin'} />
+            <MerryGoRound canManage={group?.role === 'owner' || group?.role === 'admin'} />
             <ContributionExport />
           </View>
         ) : null}

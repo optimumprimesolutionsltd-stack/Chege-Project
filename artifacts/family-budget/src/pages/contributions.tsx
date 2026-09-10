@@ -40,6 +40,7 @@ import {
 import { ContributionArrearsBanner } from "@/components/contribution-arrears-banner";
 import { ContributionPlan } from "@/components/contribution-plan";
 import { ContributionVariance } from "@/components/contribution-variance";
+import { MerryGoRound } from "@/components/merry-go-round";
 import { workspaceLabel } from "@/lib/workspace-identity";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
@@ -566,6 +567,7 @@ export default function Contributions() {
             />
           ) : null}
           <ContributionVariance canManage={canManageContributions} />
+          <MerryGoRound canManage={canManageContributions} />
         </div>
       ) : null}
 
