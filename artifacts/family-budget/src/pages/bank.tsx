@@ -21,6 +21,8 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
 import { getProjectedBalanceAfterOutgoing } from "@/lib/bank-balance-utils";
 import { workspaceLabel } from "@/lib/workspace-identity";
+import { useListEditor } from "@/hooks/use-list-editor";
+import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
 
 // "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
@@ -208,6 +210,28 @@ export default function Bank() {
     queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() });
   };
+
+  // Panel-level edit mode: one Edit on a heading, stage renames/removals/adds,
+  // one Save applies them all.
+  const accountEditor = useListEditor({
+    noun: "account",
+    add: async (name) => { await createAccount.mutateAsync({ data: { name } }); },
+    rename: async (id, name) => {
+      const current = accounts.find((item) => item.id === id);
+      await updateAccount.mutateAsync({ id, data: { name, accountNumber: current?.accountNumber ?? null } });
+    },
+    remove: async (id) => { await deleteAccount.mutateAsync({ id }); },
+    afterSave: invalidate,
+  });
+  const txEditor = useListEditor({
+    noun: "transaction",
+    remove: async (id) => {
+      const tx = (account?.transactions ?? []).find((item: EditableTransaction) => item.id === id);
+      if (tx?.expenseId != null) await deleteExpense.mutateAsync({ id: tx.expenseId });
+      else await deleteTx.mutateAsync({ id });
+    },
+    afterSave: invalidate,
+  });
 
   const openOpeningBalanceEditor = () => {
     setOpeningBalanceDraft(String(account?.openingBalance ?? 0));
@@ -777,25 +801,49 @@ export default function Bank() {
           </div>
           {canManageAccount && (
             <div className="border-t border-border/60 pt-3">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {isCreatingAccount ? "Create a bank account" : "Manage bank accounts"}
-              </p>
-              <p className="mb-3 text-xs text-muted-foreground">
-                {isCreatingAccount
-                  ? "Every bank account is created by you. Give it a clear name such as M-Pesa wallet, KCB salary, or Savings."
-                  : "Edit the selected account or add another separate bank account."}
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={isCreatingAccount ? "e.g. Family M-Pesa" : "Account name"} maxLength={80} />
-                <Input data-testid="input-bank-account-number" value={accountNumberDraft} onChange={(event) => setAccountNumberDraft(event.target.value)} placeholder="Account number (optional)" maxLength={40} />
-                <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{isCreatingAccount ? "Add account" : "Save changes"}</Button>
-                {!isCreatingAccount && <Button type="button" variant="outline" data-testid="button-add-bank-account" onClick={startAddingAccount}>Add another</Button>}
-                {addingAccount && selectedBankAccount && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={startEditingSelectedAccount}>Cancel</Button>}
+              <div className="mb-1 flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {isCreatingAccount ? "Create a bank account" : "Manage bank accounts"}
+                </p>
+                <ListEditButton editor={accountEditor} canManage={canManageAccount} label="Rename or remove bank accounts" />
               </div>
-              {selectedAccountId && <div className="mt-2 flex gap-2">
-                <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={startEditingSelectedAccount}>Edit selected account</Button>
-                <Button type="button" size="sm" variant="destructive" data-testid="button-remove-bank-account" onClick={() => handleAccountDelete(selectedAccountId)} disabled={deleteAccount.isPending}>Remove selected</Button>
-              </div>}
+
+              {accountEditor.editing ? (
+                <div className="space-y-2">
+                  <ul className="divide-y divide-border/50 rounded-lg border border-border/60">
+                    {accounts.map((item) => (
+                      <li key={item.id} className="flex items-center gap-2 px-3 py-2">
+                        <RemoveRowButton editor={accountEditor} id={item.id} name={item.name} />
+                        <EditableName editor={accountEditor} id={item.id} name={item.name} className="flex-1 text-sm font-medium" />
+                      </li>
+                    ))}
+                  </ul>
+                  <ListEditorFooter
+                    editor={accountEditor}
+                    addPlaceholder="Add a bank account by name"
+                    summary="An account with transactions cannot be removed — move or delete its transactions first."
+                  />
+                </div>
+              ) : (
+                <>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {isCreatingAccount
+                      ? "Every bank account is created by you. Give it a clear name such as M-Pesa wallet, KCB salary, or Savings."
+                      : "Edit the selected account or add another separate bank account."}
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input data-testid="input-bank-account-name" value={accountNameDraft} onChange={(event) => setAccountNameDraft(event.target.value)} placeholder={isCreatingAccount ? "e.g. Family M-Pesa" : "Account name"} maxLength={80} />
+                    <Input data-testid="input-bank-account-number" value={accountNumberDraft} onChange={(event) => setAccountNumberDraft(event.target.value)} placeholder="Account number (optional)" maxLength={40} />
+                    <Button type="button" data-testid="button-save-bank-account" onClick={handleAccountSave} disabled={createAccount.isPending || updateAccount.isPending}>{isCreatingAccount ? "Add account" : "Save changes"}</Button>
+                    {!isCreatingAccount && <Button type="button" variant="outline" data-testid="button-add-bank-account" onClick={startAddingAccount}>Add another</Button>}
+                    {addingAccount && selectedBankAccount && <Button type="button" variant="outline" data-testid="button-cancel-bank-account-edit" onClick={startEditingSelectedAccount}>Cancel</Button>}
+                  </div>
+                  {selectedAccountId && <div className="mt-2 flex gap-2">
+                    <Button type="button" size="sm" variant="outline" data-testid="button-rename-bank-account" onClick={startEditingSelectedAccount}>Edit selected account</Button>
+                    <Button type="button" size="sm" variant="destructive" data-testid="button-remove-bank-account" onClick={() => handleAccountDelete(selectedAccountId)} disabled={deleteAccount.isPending}>Remove selected</Button>
+                  </div>}
+                </>
+              )}
             </div>
           )}
         </CardContent>
@@ -1431,6 +1479,11 @@ export default function Bank() {
           <p className="text-sm mt-1">Record a deposit or disbursement above.</p>
         </div>
       ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transactions</h2>
+            <ListEditButton editor={txEditor} canManage={canManageAccount} label="Remove several transactions" />
+          </div>
         <Card className="border-none shadow-md overflow-hidden">
           <div className="divide-y divide-border/50">
             {account.transactions.map((tx) => {
@@ -1439,13 +1492,17 @@ export default function Bank() {
               const isBankTransfer = !!tx.bankTransferId;
               const isBankCharge = tx.bankCharge === true;
               const attribution = madeByLabel(tx.madeByName, tx.type);
+              const removable = canManageAccount || canEditTransaction(tx);
               return (
                 <div
                   key={tx.id}
                   data-testid={`transaction-row-${tx.id}`}
-                  className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-muted/20 transition-colors"
+                  className={`p-4 sm:p-5 flex items-center justify-between gap-4 transition-colors ${txEditor.editing && txEditor.isRemoving(tx.id) ? "bg-destructive/5 opacity-70" : "hover:bg-muted/20"}`}
                 >
                   <div className="flex items-center gap-4 min-w-0">
+                    {txEditor.editing ? (
+                      <RemoveRowButton editor={txEditor} id={tx.id} name={tx.description ?? "this transaction"} disabled={!removable} />
+                    ) : null}
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isDeposit ? "bg-green-100" : "bg-red-100"}`}>
                       {isDeposit
                         ? <ArrowDownLeft className="w-5 h-5 text-green-600" />
@@ -1492,7 +1549,7 @@ export default function Bank() {
                         </p>
                       )}
                     </div>
-                    {canEditTransaction(tx) && !isBankTransfer && <Button
+                    {!txEditor.editing && canEditTransaction(tx) && !isBankTransfer && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-edit-tx-${tx.id}`}
@@ -1501,7 +1558,7 @@ export default function Bank() {
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>}
-                    {canManageAccount && <Button
+                    {!txEditor.editing && canManageAccount && <Button
                       variant="ghost"
                       size="icon"
                       data-testid={`button-delete-tx-${tx.id}`}
@@ -1516,6 +1573,11 @@ export default function Bank() {
             })}
           </div>
         </Card>
+        <ListEditorFooter
+          editor={txEditor}
+          summary={`${(account?.transactions ?? []).filter((tx: EditableTransaction) => txEditor.isRemoving(tx.id)).length} marked for deletion. A withdrawal linked to an expense removes that expense too.`}
+        />
+        </div>
       )}
     </div>
   );

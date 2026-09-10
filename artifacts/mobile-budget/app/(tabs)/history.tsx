@@ -21,6 +21,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { useListEditor } from '@/hooks/useListEditor';
+import { ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
 import { PageFlatList } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import {
@@ -250,6 +252,17 @@ export default function HistoryScreen() {
       ?? null;
     return !isSharedWorkspace && personalPayerId === user.id;
   };
+
+  // Panel-level edit mode for the Expenses list: one Edit in the heading,
+  // stage removals, one Save deletes them all.
+  const expEditor = useListEditor({
+    remove: async (id) => { await deleteExpense.mutateAsync({ id }); },
+    afterSave: () => {
+      queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey({ month, year }) });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() });
+    },
+  });
   const sharedHouseholdRows = useMemo(
     () => (monthlyActivity.data ?? []).filter((raw) => (raw as ActivityItem).type === 'household') as ActivityItem[],
     [monthlyActivity.data],
@@ -658,9 +671,14 @@ export default function HistoryScreen() {
         <WorkspaceIdentityRow group={group} tone="light" />
         {/* Title row */}
         <View style={styles.headerTitleRow}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            {activeTab === 'expenses' ? 'Expenses' : activeTab === 'contributions' ? 'Contributions' : 'Activity'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+              {activeTab === 'expenses' ? 'Expenses' : activeTab === 'contributions' ? 'Contributions' : 'Activity'}
+            </Text>
+            {activeTab === 'expenses' && expenses.length > 0 && (
+              <ListEditButton editor={expEditor} canManage={isContributionManager || expenses.some(canRemoveExpenseRecord)} />
+            )}
+          </View>
           {activeTab === 'expenses' && expenses.length > 0 && (
             <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
               {expenses.length} entries · KES {formatKES(totalSpent)}
@@ -808,20 +826,45 @@ export default function HistoryScreen() {
               return (
                 <View style={styles.groupChild}>
                   <View style={[styles.groupChildLine, { backgroundColor: colors.border }]} />
-                  <View style={styles.groupChildCard}>
-                    <ExpenseRow
-                      expense={row.item}
-                      colors={colors}
-                      onEdit={canEditExpenseRecord(row.item) ? () => openEdit(row.item) : undefined}
-                      onDelete={canRemoveExpenseRecord(row.item) ? () => handleDelete(row.item) : undefined}
-                    />
-                  </View>
+                  {expEditor.editing ? (
+                    <View style={[styles.groupChildCard, { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 4 }]}>
+                      {canRemoveExpenseRecord(row.item) ? (
+                        <RemoveRowButton editor={expEditor} id={row.item.id} />
+                      ) : (
+                        <Feather name="lock" size={13} color={colors.mutedForeground} />
+                      )}
+                      <View style={{ flex: 1, opacity: expEditor.isRemoving(row.item.id) ? 0.5 : 1 }}>
+                        <ExpenseRow expense={row.item} colors={colors} />
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.groupChildCard}>
+                      <ExpenseRow
+                        expense={row.item}
+                        colors={colors}
+                        onEdit={canEditExpenseRecord(row.item) ? () => openEdit(row.item) : undefined}
+                        onDelete={canRemoveExpenseRecord(row.item) ? () => handleDelete(row.item) : undefined}
+                      />
+                    </View>
+                  )}
                 </View>
               );
             }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
             contentContainerStyle={[styles.list, { paddingBottom: Platform.OS === 'web' ? 100 : insets.bottom + 100 }]}
             showsVerticalScrollIndicator={false}
+            ListFooterComponent={
+              expEditor.editing ? (
+                <View style={{ paddingHorizontal: 16 }}>
+                  <ListEditorFooter
+                    editor={expEditor}
+                    summary={`${expenses.filter((exp) => expEditor.isRemoving(exp.id)).length} expense${
+                      expenses.filter((exp) => expEditor.isRemoving(exp.id)).length === 1 ? '' : 's'
+                    } marked for deletion.`}
+                  />
+                </View>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Feather name="inbox" size={36} color={colors.mutedForeground} />

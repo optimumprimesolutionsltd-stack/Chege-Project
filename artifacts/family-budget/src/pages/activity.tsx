@@ -25,6 +25,8 @@ import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { workspaceLabel } from "@/lib/workspace-identity";
+import { useListEditor } from "@/hooks/use-list-editor";
+import { ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
 
 type ActivityTab = "all" | "expenses" | "contributions";
 type MemberContribution = { userId: string; name: string; contributed: number; spent: number; net: number; target: number | null };
@@ -132,6 +134,30 @@ export default function Activity() {
     setShowUnattributedRecords(false);
     if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1);
   };
+  const invalidateAfterRemoval = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: getGetDashboardActivityQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetDashboardIncomeStreamsQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetDashboardPeriodTotalsQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetExpensesQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() }),
+  ]);
+
+  // Panel-level edit mode: stage several expense rows, one Save removes them.
+  // Only expenses (clean numeric ids) are bulk-removable; deposits keep their
+  // per-row control.
+  const activityEditor = useListEditor({
+    noun: "expense",
+    remove: async (id) => { await deleteExpense.mutateAsync({ id }); },
+    afterSave: invalidateAfterRemoval,
+  });
+  const stagedRemovalCount = filteredActivity.filter((item) => {
+    const record = getActivityRecordTarget(item);
+    return record?.target === "expense" && activityEditor.isRemoving(record.id);
+  }).length;
+
   const removeActivityRecord = async (item: Parameters<typeof getActivityRecordTarget>[0]) => {
     const record = getActivityRecordTarget(item);
     if (!record || !canManageRecords) return;
@@ -300,6 +326,14 @@ export default function Activity() {
         </>
       )}
 
+      {tab !== "contributions" && canManageRecords && filteredActivity.length > 0 && (
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {tab === "expenses" ? "Expenses" : "Recent activity"}
+          </h2>
+          <ListEditButton editor={activityEditor} canManage={canManageRecords} label="Remove several expenses" />
+        </div>
+      )}
       <Card className="border-none shadow-md overflow-hidden min-h-[30vh]">
         <CardContent className="p-0">
           {isLoading ? (
@@ -327,8 +361,16 @@ export default function Activity() {
                     {group.items.map((item) => {
                       const edit = getActivityEditLink(item);
                       const record = getActivityRecordTarget(item);
+                      const bulkRemovable = activityEditor.editing && record?.target === "expense";
                       return (
-                        <div key={item.id} className="flex items-start gap-3 p-3 transition-colors hover:bg-muted/10 sm:items-center sm:gap-5 sm:p-6">
+                        <div key={item.id} className={`flex items-start gap-3 p-3 transition-colors sm:items-center sm:gap-5 sm:p-6 ${bulkRemovable && activityEditor.isRemoving(record.id) ? "bg-destructive/5 opacity-70" : "hover:bg-muted/10"}`}>
+                          {activityEditor.editing ? (
+                            record?.target === "expense" ? (
+                              <RemoveRowButton editor={activityEditor} id={record.id} name={item.description} />
+                            ) : (
+                              <span className="w-6 shrink-0" aria-hidden="true" />
+                            )
+                          ) : null}
                           <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
                             item.type === ACTIVITY_TYPE.EXPENSE ? 'bg-accent/50 text-accent-foreground border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
                           }`}>
@@ -351,7 +393,7 @@ export default function Activity() {
                                 </span>
                               )}
                             </div>
-                            {(edit || (canManageRecords && record)) && (
+                            {!activityEditor.editing && (edit || (canManageRecords && record)) && (
                               <div className="mt-2 flex flex-wrap items-center gap-3">
                                 {edit && (
                                   <Link
@@ -388,6 +430,12 @@ export default function Activity() {
           )}
         </CardContent>
       </Card>
+      {tab !== "contributions" && (
+        <ListEditorFooter
+          editor={activityEditor}
+          summary={`${stagedRemovalCount} expense${stagedRemovalCount === 1 ? "" : "s"} marked for deletion. This removes the source record from every ledger and report. This cannot be undone.`}
+        />
+      )}
     </div>
   );
 }
