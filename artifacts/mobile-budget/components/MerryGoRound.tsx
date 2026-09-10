@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { customFetch } from '@workspace/api-client-react';
+import { customFetch, getGetJointAccountQueryKey, getGetJointAccountsQueryKey } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 
@@ -16,7 +17,9 @@ type PayoutsResponse = {
   members: PayoutMember[];
 };
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const todayIso = () => ymd(new Date());
 const kes = (value: number) => value.toLocaleString('en-KE', { maximumFractionDigits: 0 });
 
 /**
@@ -57,6 +60,7 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
   const [recipientId, setRecipientId] = useState<number | null>(null);
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayIso);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [note, setNote] = useState('');
   const resetForm = () => {
     setRecipientId(null);
@@ -80,7 +84,8 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
     onSuccess: (payout) => {
       queryClient.invalidateQueries({ queryKey: ['payouts'] });
       queryClient.invalidateQueries({ queryKey: ['contribution-grid'] });
-      queryClient.invalidateQueries({ queryKey: ['joint-account'] });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
       resetForm();
       setEditing(false);
       Alert.alert(`Round ${payout.roundNumber} recorded`, `KES ${kes(payout.amount)} to ${payout.name}.`);
@@ -260,16 +265,27 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
                 </View>
                 <View style={styles.field}>
                   <Text style={[styles.label, { color: colors.foreground }]}>Date</Text>
-                  <TextInput
-                    value={date}
-                    onChangeText={setDate}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={colors.mutedForeground}
-                    style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
+                  <Pressable
+                    onPress={() => setShowDatePicker(true)}
+                    style={[styles.input, styles.dateField, { borderColor: colors.border }]}
                     testID="payout-date"
-                  />
+                  >
+                    <Text style={{ color: colors.foreground, fontSize: 14 }}>{date}</Text>
+                    <Feather name="calendar" size={15} color={colors.mutedForeground} />
+                  </Pressable>
                 </View>
               </View>
+              {showDatePicker && (
+                <DateTimePicker
+                  mode="date"
+                  value={new Date(`${date}T12:00:00`)}
+                  maximumDate={new Date()}
+                  onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                    if (Platform.OS !== 'ios') setShowDatePicker(false);
+                    if (selected) setDate(ymd(selected));
+                  }}
+                />
+              )}
 
               <Text style={[styles.label, { color: colors.foreground }]}>Note (optional)</Text>
               <TextInput
@@ -366,6 +382,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     fontSize: 14,
   },
+  dateField: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   hint: { fontSize: 11, lineHeight: 16 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10 },
   cancelBtn: { paddingHorizontal: 10, paddingVertical: 8 },
