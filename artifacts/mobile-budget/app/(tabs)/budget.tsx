@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { useCollapsed } from '@/hooks/useCollapsed';
 import { PageScrollView } from '@/components/PageScrollReset';
 import {
   getGetDashboardCategoryBreakdownQueryKey,
@@ -83,6 +84,8 @@ function formatKES(n?: number | null): string {
 
 export default function BudgetScreen() {
   const colors = useColors();
+  const tierPanel = useCollapsed('budget-tiers');
+  const categoryPanel = useCollapsed('budget-categories');
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
@@ -1099,15 +1102,21 @@ export default function BudgetScreen() {
         </View>
 
         <View style={styles.tierSection}>
-          <View style={styles.tierHeader}>
+          <Pressable style={styles.tierHeader} onPress={tierPanel.toggle}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.tierTitle, { color: colors.foreground }]}>Priority tier report</Text>
-              <Text style={[styles.tierSubtitle, { color: colors.mutedForeground }]}>
-                 Tiers help protect essential spending first: Tier 1 is most urgent and Tier 5 can wait.
-              </Text>
+              {tierPanel.open ? (
+                <Text style={[styles.tierSubtitle, { color: colors.mutedForeground }]}>
+                   Tiers help protect essential spending first: Tier 1 is most urgent and Tier 5 can wait.
+                </Text>
+              ) : (
+                <Text style={[styles.collapseSummary, { color: colors.mutedForeground }]}>
+                  {tierReport.length} {tierReport.length === 1 ? 'tier' : 'tiers'} in use
+                </Text>
+              )}
             </View>
             <View style={styles.tierHeaderActions}>
-              {canManageCategories ? (
+              {tierPanel.open && canManageCategories ? (
                 <Pressable
                   onPress={openTierEditor}
                   style={[styles.tierAction, { borderColor: colors.border, backgroundColor: colors.card }]}
@@ -1118,10 +1127,10 @@ export default function BudgetScreen() {
                   <Text style={[styles.tierActionText, { color: colors.primary }]}>Edit tiers</Text>
                 </Pressable>
               ) : null}
-              <Feather name="layers" size={19} color={colors.secondary} />
+              <Feather name={tierPanel.open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
             </View>
-          </View>
-          {isLoading ? (
+          </Pressable>
+          {!tierPanel.open ? null : isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
           ) : tierReport.length === 0 ? (
             <View style={[styles.tierEmpty, { borderColor: colors.border }]}>
@@ -1186,7 +1195,20 @@ export default function BudgetScreen() {
 
         {/* Category list */}
         <View style={styles.list}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BY CATEGORY</Text>
+          <Pressable onPress={categoryPanel.toggle} style={styles.collapseHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BY CATEGORY</Text>
+              {!categoryPanel.open ? (
+                <Text style={[styles.collapseSummary, { color: reportVariance < 0 ? colors.destructive : colors.mutedForeground }]}>
+                  {breakdown.length} {breakdown.length === 1 ? 'category' : 'categories'} · KES {formatKES(reportActual)} of KES {formatKES(reportBudget)}
+                </Text>
+              ) : null}
+            </View>
+            <Feather name={categoryPanel.open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
+          </Pressable>
+
+          {!categoryPanel.open ? null : (
+          <>
           {!isLoading && breakdown.length > 0 ? (
             <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>
               {canManageCategories
@@ -1333,6 +1355,8 @@ export default function BudgetScreen() {
               })}
             </>
           )}
+          </>
+          )}
         </View>
       </PageScrollView>
     </View>
@@ -1389,6 +1413,8 @@ const styles = StyleSheet.create({
    incomeEditInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, fontFamily: 'Inter_400Regular' },
    incomeEditActions: { flexDirection: 'row', alignItems: 'center', gap: 13, minHeight: 18 },
   list: { paddingHorizontal: 16, paddingTop: 20 },
+  collapseHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  collapseSummary: { fontSize: 12.5, fontFamily: 'Inter_500Medium', lineHeight: 17, marginLeft: 4, marginTop: 2 },
   sectionLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginBottom: 12, marginLeft: 4 },
   sectionHint: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginHorizontal: 4, marginTop: -6, marginBottom: 12 },
   catCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 10 },
