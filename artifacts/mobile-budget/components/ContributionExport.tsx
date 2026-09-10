@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Linking } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useQuery } from '@tanstack/react-query';
@@ -25,6 +25,7 @@ type ContributionGrid = {
 };
 
 const RANGES = [3, 6, 12] as const;
+const WHATSAPP_GREEN = '#25D366';
 
 function kes(value: number): string {
   const absolute = Math.abs(Math.round(value)).toLocaleString('en-KE');
@@ -38,30 +39,61 @@ function periodLabel(months: GridMonth[]): string {
 }
 
 /**
- * The plain-text contribution summary for a WhatsApp message: group name,
- * period, one line per member with their total and any shortfall, then the
- * group total against what was expected. Mirrors the web app's
- * buildContributionWhatsAppText — a chat message is read, not studied.
+ * The plain-text contribution summary for a WhatsApp message, laid out as a
+ * treasurer's report: a titled header with the period and the date it was run,
+ * a short summary block, then a numbered line per member with their total and
+ * where they stand. Mirrors the web app's buildContributionWhatsAppText — a
+ * chat message is read, not studied.
  */
 function buildWhatsAppText(groupName: string, grid: ContributionGrid): string {
   const monthCount = grid.months.length;
-  const lines: string[] = [`*${groupName}* — Contributions`, periodLabel(grid.months), ''];
+  const asAt = new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
 
   let expectedTotal = 0;
-  for (const row of grid.rows) {
+  let paidUp = 0;
+  let behindCount = 0;
+  const memberLines = grid.rows.map((row, index) => {
     const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : 0;
     expectedTotal += expected;
-    const short = expected - row.total;
-    lines.push(`${row.name}: ${kes(row.total)}${short > 0 ? `  (${kes(short)} short)` : ''}`);
+    let note = '';
+    if (expected > 0) {
+      const diff = row.total - expected;
+      if (diff < 0) {
+        behindCount += 1;
+        note = `  — short ${kes(-diff)}`;
+      } else {
+        paidUp += 1;
+        if (diff > 0) note = `  — ${kes(diff)} ahead`;
+      }
+    }
+    return `${index + 1}. ${row.name}: ${kes(row.total)}${note}`;
+  });
+
+  const lines: string[] = [
+    `*${groupName}*`,
+    `Contribution report  |  ${periodLabel(grid.months)}`,
+    `As at ${asAt}`,
+    '',
+    '*Summary*',
+  ];
+
+  if (expectedTotal > 0) {
+    const balance = grid.grandTotal - expectedTotal;
+    lines.push(`Members: ${grid.rows.length}   Paid up: ${paidUp}   Behind: ${behindCount}`);
+    lines.push(`Collected: ${kes(grid.grandTotal)} of ${kes(expectedTotal)} expected`);
+    lines.push(
+      balance < 0 ? `Shortfall: ${kes(-balance)}` : balance > 0 ? `Surplus: ${kes(balance)}` : 'On target',
+    );
+  } else {
+    lines.push(`Members: ${grid.rows.length}`);
+    lines.push(`Collected: ${kes(grid.grandTotal)}`);
   }
-  if (grid.rows.length === 0) lines.push('No contributors yet.');
 
   lines.push('');
-  lines.push(
-    `Total: ${kes(grid.grandTotal)}${expectedTotal > 0 ? ` of ${kes(expectedTotal)} expected` : ''}`,
-  );
+  lines.push('*Contributions*');
+  lines.push(...(memberLines.length ? memberLines : ['No contributors recorded yet.']));
   lines.push('');
-  lines.push('Shared from Jamvi');
+  lines.push('Prepared with Jamvi');
 
   return lines.join('\n');
 }
@@ -175,17 +207,16 @@ export function ContributionExport() {
           disabled={busy !== null}
           style={({ pressed }) => [
             styles.btn,
-            styles.btnOutline,
-            { borderColor: colors.border },
-            (pressed || busy !== null) && { opacity: 0.7 },
+            { backgroundColor: WHATSAPP_GREEN },
+            (pressed || busy !== null) && { opacity: 0.85 },
           ]}
         >
           {busy === 'whatsapp' ? (
-            <ActivityIndicator size="small" color={colors.foreground} />
+            <ActivityIndicator size="small" color="#ffffff" />
           ) : (
-            <Feather name="message-circle" size={16} color={colors.foreground} />
+            <FontAwesome name="whatsapp" size={18} color="#ffffff" />
           )}
-          <Text style={[styles.btnLabel, { color: colors.foreground }]}>WhatsApp</Text>
+          <Text style={[styles.btnLabel, { color: '#ffffff' }]}>WhatsApp</Text>
         </Pressable>
 
         <Pressable
@@ -227,6 +258,5 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 12,
   },
-  btnOutline: { borderWidth: StyleSheet.hairlineWidth },
   btnLabel: { fontSize: 13, fontFamily: 'Inter_700Bold' },
 });

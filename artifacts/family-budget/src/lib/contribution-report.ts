@@ -26,6 +26,17 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * "KES 1,234" — the explicit ISO form, used only in the WhatsApp report so it
+ * matches the PDF exactly. `formatKes` goes through locale currency formatting,
+ * which renders as "Ksh" on some runtimes and "KES" on others; a report that is
+ * forwarded between phones should not depend on which.
+ */
+function kesText(amount: number): string {
+  const absolute = Math.abs(Math.round(amount)).toLocaleString("en-KE");
+  return amount < 0 ? `-KES ${absolute}` : `KES ${absolute}`;
+}
+
 function periodLabel(months: ReportMonth[]): string {
   if (months.length === 0) return "";
   if (months.length === 1) return months[0].label;
@@ -33,36 +44,65 @@ function periodLabel(months: ReportMonth[]): string {
 }
 
 /**
- * The same sheet as plain text, sized for a WhatsApp message: budget name,
- * period, one line per contributor with their total and any shortfall, then
- * the group total against what was expected. No month-by-month breakdown — a
- * chat message is read, not studied.
+ * The same sheet as plain text, laid out as a treasurer's report for a
+ * WhatsApp message: a titled header with the period and the date it was run, a
+ * short summary block, then a numbered line per contributor with their total
+ * and where they stand. No month-by-month breakdown — a chat message is read,
+ * not studied.
  */
 export function buildContributionWhatsAppText(report: GroupContributionReport): string {
   const monthCount = report.months.length;
-  const lines: string[] = [
-    `*${report.budgetName}* — Contributions`,
-    periodLabel(report.months),
-    "",
-  ];
+  const asAt = new Date().toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
 
   let expectedTotal = 0;
-  for (const row of report.rows) {
+  let paidUp = 0;
+  let behindCount = 0;
+  const memberLines = report.rows.map((row, index) => {
     const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : 0;
     expectedTotal += expected;
-    const short = expected - row.total;
+    let note = "";
+    if (expected > 0) {
+      const diff = row.total - expected;
+      if (diff < 0) {
+        behindCount += 1;
+        note = `  — short ${kesText(-diff)}`;
+      } else {
+        paidUp += 1;
+        if (diff > 0) note = `  — ${kesText(diff)} ahead`;
+      }
+    }
+    return `${index + 1}. ${row.name}: ${kesText(row.total)}${note}`;
+  });
+
+  const lines: string[] = [
+    `*${report.budgetName}*`,
+    `Contribution report  |  ${periodLabel(report.months)}`,
+    `As at ${asAt}`,
+    "",
+    "*Summary*",
+  ];
+
+  if (expectedTotal > 0) {
+    const balance = report.grandTotal - expectedTotal;
+    lines.push(`Members: ${report.rows.length}   Paid up: ${paidUp}   Behind: ${behindCount}`);
+    lines.push(`Collected: ${kesText(report.grandTotal)} of ${kesText(expectedTotal)} expected`);
     lines.push(
-      `${row.name}: ${formatKes(row.total)}${short > 0 ? `  (${formatKes(short)} short)` : ""}`,
+      balance < 0
+        ? `Shortfall: ${kesText(-balance)}`
+        : balance > 0
+          ? `Surplus: ${kesText(balance)}`
+          : "On target",
     );
+  } else {
+    lines.push(`Members: ${report.rows.length}`);
+    lines.push(`Collected: ${kesText(report.grandTotal)}`);
   }
-  if (report.rows.length === 0) lines.push("No contributors yet.");
 
   lines.push("");
-  lines.push(
-    `Total: ${formatKes(report.grandTotal)}${expectedTotal > 0 ? ` of ${formatKes(expectedTotal)} expected` : ""}`,
-  );
+  lines.push("*Contributions*");
+  lines.push(...(memberLines.length ? memberLines : ["No contributors recorded yet."]));
   lines.push("");
-  lines.push("Shared from Jamvi");
+  lines.push("Prepared with Jamvi");
 
   return lines.join("\n");
 }
