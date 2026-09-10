@@ -71,11 +71,16 @@ export const ONBOARDING_CATEGORY_TIERS: { priority: number; label: string; descr
   { priority: 1, label: "Essentials", description: "The costs that keep life moving.", categories: ["Food", "Housing", "Utilities", "Shared bills", "Transport"] },
   { priority: 2, label: "Important", description: "Regular needs worth planning for.", categories: ["Health", "Education", "Books & supplies", "Family support", "Loans", "Personal care", "Insurance"] },
   { priority: 3, label: "Household & connection", description: "The things that support your day-to-day life.", categories: ["Airtime & data", "Household", "Subscriptions", "Work & business", "Business supplies", "Stock & inventory"] },
-  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Projects", "Other"] },
+  { priority: 4, label: "Flexible", description: "Optional spending and future plans.", categories: ["Entertainment", "Dates & activities", "Events", "Events & programs", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Welfare & benevolence", "Building & upkeep", "Outreach & missions", "Projects", "Other"] },
 ];
 
 const ALL_ONBOARDING_CATEGORIES = dedupeCategoryNames(ONBOARDING_CATEGORY_TIERS.flatMap((tier) => tier.categories));
 const COMMON_INCOME_STREAMS = ["Salary or wages", "Business or side hustle", "Freelance or contract work", "Farming or livestock", "Rental income", "Family support or remittances", "Pension or benefits", "Other income"] as const;
+// For a group the members' own contributions are the main source of money,
+// not a personal salary — so the shared onboarding offers these instead.
+const GROUP_INCOME_STREAMS = ["Member contributions", "Joining or registration fees", "Fines and penalties", "Fundraising and events", "Interest from group loans", "Grants or donations", "Investment returns", "Other group income"] as const;
+const incomeStreamsFor = (mode: string | null): readonly string[] =>
+  mode === "shared" ? GROUP_INCOME_STREAMS : COMMON_INCOME_STREAMS;
 
 export function normalizeIncomeStreamName(name: string): string {
   return name.trim().toLocaleLowerCase("en-US");
@@ -98,6 +103,7 @@ export const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
   friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data", "Other"],
   family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
   chama: ["Member welfare", "Loans", "Events", "Transport", "Projects", "Other"],
+  church: ["Building & upkeep", "Utilities", "Outreach & missions", "Welfare & benevolence", "Events & programs", "Equipment", "Transport", "Other"],
   club: ["Member welfare", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
 };
 
@@ -525,7 +531,7 @@ export function BudgetChooser({
 
   if (showPurposeSetup) {
     const purposeOptions = onboardingMode === "shared"
-      ? [["couple", "A couple", "Plan shared household money together."], ["friends", "Friends or roommates", "Split trips, bills, rent, and plans with friends."], ["family", "A family", "Coordinate home costs, school, health, and support."], ["chama", "A chama or welfare group", "Track contributions, welfare, loans, and group plans."], ["club", "A club, church, or team", "Manage membership money, events, and projects."], ["student_group", "A student group", "Share school, welfare, class, or campus costs."], ["other", "Something else", "Tell Jamvi what matters to your group."]] as const
+      ? [["couple", "A couple", "Plan shared household money together."], ["friends", "Friends or roommates", "Split trips, bills, rent, and plans with friends."], ["family", "A family", "Coordinate home costs, school, health, and support."], ["chama", "A chama or welfare group", "Track contributions, welfare, loans, and group plans."], ["church", "A church or fellowship", "Track offerings, funds, and what the church runs."], ["club", "A club or team", "Manage membership money, events, and projects."], ["student_group", "A student group", "Share school, welfare, class, or campus costs."], ["other", "Something else", "Tell Jamvi what matters to your group."]] as const
       : [["student", "A student", "Balance school life, living costs, and personal goals."], ["working", "Working or employed", "Plan a salary: rent, transport, money sent home, and what is left."], ["business", "A business owner", "Separate business costs, personal spending, and income."], ["other", "Something else", "Build a budget around your own priorities."]] as const;
      return (
        <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10"><section className="mx-auto w-full max-w-3xl"><div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl"><header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9"><p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Step 2 of 6 · Make it yours</p><h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{user.firstName ? `${user.firstName}, what are you using Jamvi for?` : "What are you using Jamvi for?"}</h1><p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/80 sm:text-base">Your answer helps us recommend categories that fit your life instead of showing you a generic budget.</p></header><div className="p-6 sm:p-10"><div className="grid gap-3 sm:grid-cols-2">{purposeOptions.map(([value, title, description]) => { const selected = onboardingPurpose === value; return <button key={value} type="button" aria-pressed={selected} onClick={() => setOnboardingPurpose(value)} className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"}`}><span className="flex items-center justify-between gap-3"><span className="font-bold text-foreground">{title}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></span><span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{description}</span></button>; })}</div><div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"><Button type="button" variant="outline" className="h-12 rounded-xl px-6" onClick={goBackToUsageMode} data-testid="onboarding-back-to-usage">Back</Button><Button type="button" disabled={!onboardingPurpose} className="h-12 rounded-xl px-6" onClick={() => { try { window.localStorage.setItem(`jamvi:onboarding:purpose:${encodeURIComponent(userId)}`, onboardingPurpose ?? ""); } catch { /* Continue even when storage is unavailable. */ } setShowPurposeSetup(false); setShowDurationSetup(true); }}>Continue to duration <ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></div></section></main>
@@ -636,9 +642,9 @@ export function BudgetChooser({
 
   if (showIncomeSetup) {
     const isSharedSetup = onboardingMode === "shared";
-    const incomeHeading = isSharedSetup ? "What will bring money into your Shared group?" : "What brings money into your budget?";
+    const incomeHeading = isSharedSetup ? "What brings money into the group?" : "What brings money into your budget?";
     const incomeDescription = isSharedSetup
-      ? "Choose the sources you expect members to contribute from. Each person can add their own source later."
+      ? "Member contributions are usually the main source. Pick what applies — you can add amounts later."
       : "Choose the sources you rely on so Jamvi can help you see what is available to plan with.";
     const toggleIncomeStream = (stream: string) => {
       const normalized = normalizeIncomeStreamName(stream);
@@ -656,7 +662,7 @@ export function BudgetChooser({
         setIncomeSelectionError(`${existing} is already selected.`);
         return;
       }
-      const preset = COMMON_INCOME_STREAMS.find((item) => normalizeIncomeStreamName(item) === normalized);
+      const preset = incomeStreamsFor(onboardingMode).find((item) => normalizeIncomeStreamName(item) === normalized);
       setSelectedIncomeStreams((current) => dedupeIncomeStreamNames([...current, preset ?? stream]));
       setIncomeSelectionError(preset ? `${preset} was already listed, so Jamvi selected it for you.` : null);
       setCustomIncomeStream("");
@@ -686,7 +692,7 @@ export function BudgetChooser({
             </header>
             <div className="p-6 sm:p-10">
               <div className="grid gap-2 sm:grid-cols-2">
-                {COMMON_INCOME_STREAMS.map((stream) => {
+                {incomeStreamsFor(onboardingMode).map((stream) => {
                   const selected = selectedIncomeStreams.includes(stream);
                   return <button key={stream} type="button" aria-pressed={selected} onClick={() => toggleIncomeStream(stream)} className={`flex min-h-12 items-center justify-between rounded-xl border px-3 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/40"}`}><span>{stream}</span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>{selected ? <Check className="h-3 w-3" aria-hidden="true" /> : null}</span></button>;
                 })}

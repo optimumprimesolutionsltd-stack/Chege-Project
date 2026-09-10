@@ -1009,8 +1009,8 @@ export default function BudgetScreen() {
             />
             <Pressable
               onPress={() => void handleAddIncomeSource()}
-              disabled={addingIncomeSource || !newIncomeSource.trim()}
-              style={[styles.incomeAddButton, { backgroundColor: colors.primary, opacity: addingIncomeSource || !newIncomeSource.trim() ? 0.45 : 1 }]}
+              disabled={addingIncomeSource}
+              style={[styles.incomeAddButton, { backgroundColor: colors.primary, opacity: addingIncomeSource ? 0.45 : 1 }]}
               accessibilityRole="button"
               accessibilityLabel="Add income source"
             >

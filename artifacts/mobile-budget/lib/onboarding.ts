@@ -67,7 +67,7 @@ export const ONBOARDING_CATEGORY_TIERS = [
     priority: 4,
     label: "Flexible",
     description: "Optional spending and future plans.",
-    categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Projects", "Loans", "Other"],
+    categories: ["Entertainment", "Dates & activities", "Events", "Events & programs", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Welfare & benevolence", "Building & upkeep", "Outreach & missions", "Projects", "Loans", "Other"],
   },
 ] as const;
 
@@ -131,7 +131,8 @@ export const PURPOSE_OPTIONS = {
     ["friends", "Friends or roommates", "Split trips, bills, rent, and plans with friends."],
     ["family", "A family", "Coordinate home costs, school, health, and support."],
     ["chama", "A chama or welfare group", "Track contributions, welfare, loans, and group plans."],
-    ["club", "A club, church, or team", "Manage membership money, events, and projects."],
+    ["church", "A church or fellowship", "Track offerings, funds, and what the church runs."],
+    ["club", "A club or team", "Manage membership money, events, and projects."],
     ["student_group", "A student group", "Share school, welfare, class, or campus costs."],
     ["other", "Something else", "Tell Jamvi what matters to your group."],
   ],
@@ -145,6 +146,7 @@ const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
   friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data"],
   family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
   chama: ["Member welfare", "Loans", "Events", "Transport", "Projects", "Other"],
+  church: ["Building & upkeep", "Utilities", "Outreach & missions", "Welfare & benevolence", "Events & programs", "Equipment", "Transport", "Other"],
   club: ["Member welfare", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
   student_group: ["School fees & classes", "Books & supplies", "Meals", "Transport", "Airtime & data", "Events & activities", "Welfare", "Administration"],
 };
