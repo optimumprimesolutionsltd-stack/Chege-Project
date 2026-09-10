@@ -293,86 +293,168 @@ publicInvitationsRouter.get("/group-invitations/accept/:token", async (req, res)
   });
 });
 
+/**
+ * Turn a pending email invitation into a verified membership for the signed-in
+ * user. Shared by the token link (from the email) and the in-app "you've been
+ * invited" list, which has only the invitation id — the raw token is never
+ * stored, so it cannot be handed back by a list endpoint.
+ */
+async function acceptPendingInvitation(
+  userId: string,
+  match: { tokenHash: string } | { id: number },
+): Promise<{ groupId: number; groupName: string; role: string }> {
+  const where = "tokenHash" in match
+    ? eq(groupInvitationsTable.tokenHash, match.tokenHash)
+    : eq(groupInvitationsTable.id, match.id);
+
+  const [locator] = await db
+    .select({ groupId: groupInvitationsTable.groupId })
+    .from(groupInvitationsTable)
+    .where(where)
+    .limit(1);
+  if (!locator) throw new InvitationError("Invitation not found.", 404);
+
+  return db.transaction(async (tx) => {
+    const [group] = await tx
+      .select({ id: groupsTable.id, name: groupsTable.name })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, locator.groupId))
+      .for("update");
+    if (!group) throw new InvitationError("Invitation not found.", 404);
+
+    const [invitation] = await tx
+      .select()
+      .from(groupInvitationsTable)
+      .where(where)
+      .for("update");
+    if (!invitation) throw new InvitationError("Invitation not found.", 404);
+    if (invitation.acceptedAt) throw new InvitationError("This invitation has already been accepted.", 409);
+    if (invitation.cancelledAt) throw new InvitationError("This invitation was cancelled.", 410);
+    if (invitation.expiresAt.getTime() <= Date.now()) throw new InvitationError("This invitation has expired.", 410);
+
+    const [user] = await tx
+      .select({ email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+    const signedInEmail = user?.email?.trim().toLowerCase();
+    if (!signedInEmail || signedInEmail !== invitation.email) {
+      throw new InvitationError("Sign in with the email address that received this invitation.", 403);
+    }
+
+    const [existingMembership] = await tx
+      .select({ userId: groupMembershipsTable.userId })
+      .from(groupMembershipsTable)
+      .where(and(
+        eq(groupMembershipsTable.groupId, invitation.groupId),
+        eq(groupMembershipsTable.userId, userId),
+      ))
+      .limit(1);
+    if (existingMembership) throw new InvitationError("You are already a member of this group.", 409);
+
+    if (!(await memberMayJoinGroups(userId, tx))) {
+      throw new InvitationError(subscriptionRequiredMessage(), 402);
+    }
+
+    await tx.insert(groupMembershipsTable).values({
+      groupId: invitation.groupId,
+      userId,
+      role: invitation.role,
+      addedByUserId: invitation.createdByUserId,
+      monthlyTarget: await inheritedMonthlyTarget(tx, invitation.groupId),
+    });
+    await tx
+      .update(groupInvitationsTable)
+      .set({ acceptedAt: new Date() })
+      .where(eq(groupInvitationsTable.id, invitation.id));
+
+    return { groupId: invitation.groupId, groupName: group.name, role: invitation.role };
+  });
+}
+
+function handleAcceptError(req: Request, res: Response, error: unknown): void {
+  if (error instanceof InvitationError) {
+    res.status(error.status).json({ error: error.message });
+    return;
+  }
+  req.log.error(error, "Could not accept group invitation");
+  res.status(500).json({ error: "Could not accept invitation. Please try again." });
+}
+
 publicInvitationsRouter.post("/group-invitations/accept/:token", async (req, res): Promise<void> => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Sign in before accepting this invitation." });
     return;
   }
-
-  const token = req.params.token;
-  const hash = tokenHash(token);
   try {
-    const [tokenRecord] = await db
-      .select({ groupId: groupInvitationsTable.groupId })
-      .from(groupInvitationsTable)
-      .where(eq(groupInvitationsTable.tokenHash, hash))
-      .limit(1);
-    if (!tokenRecord) throw new InvitationError("Invitation not found.", 404);
+    const { groupName, role } = await acceptPendingInvitation(req.user!.id, { tokenHash: tokenHash(req.params.token) });
+    res.json({ groupName, role });
+  } catch (error) {
+    handleAcceptError(req, res, error);
+  }
+});
 
-    const accepted = await db.transaction(async (tx) => {
-      const [group] = await tx
-        .select({ id: groupsTable.id, name: groupsTable.name })
-        .from(groupsTable)
-        .where(eq(groupsTable.id, tokenRecord.groupId))
-        .for("update");
-      if (!group) throw new InvitationError("Invitation not found.", 404);
+/**
+ * The invitations waiting for whoever is signed in — matched on their verified
+ * email. Available before a workspace is chosen, so a person invited to their
+ * first group is not stranded with nothing to open.
+ */
+publicInvitationsRouter.get("/group-invitations/mine", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  const [user] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.user!.id))
+    .limit(1);
+  const email = user?.email?.trim().toLowerCase();
+  if (!email) {
+    res.json([]);
+    return;
+  }
+  const rows = await db
+    .select({
+      id: groupInvitationsTable.id,
+      groupId: groupInvitationsTable.groupId,
+      groupName: groupsTable.name,
+      role: groupInvitationsTable.role,
+      expiresAt: groupInvitationsTable.expiresAt,
+    })
+    .from(groupInvitationsTable)
+    .innerJoin(groupsTable, eq(groupsTable.id, groupInvitationsTable.groupId))
+    .where(and(
+      eq(groupInvitationsTable.email, email),
+      isNull(groupInvitationsTable.acceptedAt),
+      isNull(groupInvitationsTable.cancelledAt),
+      gt(groupInvitationsTable.expiresAt, new Date()),
+    ))
+    .orderBy(desc(groupInvitationsTable.createdAt));
+  res.json(rows.map((row) => ({
+    id: row.id,
+    groupId: row.groupId,
+    groupName: row.groupName,
+    role: row.role,
+    expiresAt: row.expiresAt.toISOString(),
+  })));
+});
 
-      const [invitation] = await tx
-        .select()
-        .from(groupInvitationsTable)
-        .where(eq(groupInvitationsTable.tokenHash, hash))
-        .for("update");
-      if (!invitation) throw new InvitationError("Invitation not found.", 404);
-      if (invitation.acceptedAt) throw new InvitationError("This invitation has already been accepted.", 409);
-      if (invitation.cancelledAt) throw new InvitationError("This invitation was cancelled.", 410);
-      if (invitation.expiresAt.getTime() <= Date.now()) throw new InvitationError("This invitation has expired.", 410);
-
-      const [user] = await tx
-        .select({ email: usersTable.email })
-        .from(usersTable)
-        .where(eq(usersTable.id, req.user!.id))
-        .limit(1);
-      const signedInEmail = user?.email?.trim().toLowerCase();
-      if (!signedInEmail || signedInEmail !== invitation.email) {
-        throw new InvitationError("Sign in with the email address that received this invitation.", 403);
-      }
-
-      const [existingMembership] = await tx
-        .select({ userId: groupMembershipsTable.userId })
-        .from(groupMembershipsTable)
-        .where(and(
-          eq(groupMembershipsTable.groupId, invitation.groupId),
-          eq(groupMembershipsTable.userId, req.user!.id),
-        ))
-        .limit(1);
-      if (existingMembership) throw new InvitationError("You are already a member of this group.", 409);
-
-      if (!(await memberMayJoinGroups(req.user!.id, tx))) {
-        throw new InvitationError(subscriptionRequiredMessage(), 402);
-      }
-
-      await tx.insert(groupMembershipsTable).values({
-        groupId: invitation.groupId,
-        userId: req.user!.id,
-        role: invitation.role,
-        addedByUserId: invitation.createdByUserId,
-        monthlyTarget: await inheritedMonthlyTarget(tx, invitation.groupId),
-      });
-      await tx
-        .update(groupInvitationsTable)
-        .set({ acceptedAt: new Date() })
-        .where(eq(groupInvitationsTable.id, invitation.id));
-
-      return { groupName: group.name, role: invitation.role };
-    });
+publicInvitationsRouter.post("/group-invitations/mine/:id/accept", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Sign in before accepting this invitation." });
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid invitation." });
+    return;
+  }
+  try {
+    const accepted = await acceptPendingInvitation(req.user!.id, { id });
     res.json(accepted);
   } catch (error) {
-    if (error instanceof InvitationError) {
-      res.status(error.status).json({ error: error.message });
-      return;
-    }
-    req.log.error(error, "Could not accept group invitation");
-    res.status(500).json({ error: "Could not accept invitation. Please try again." });
+    handleAcceptError(req, res, error);
   }
 });
 

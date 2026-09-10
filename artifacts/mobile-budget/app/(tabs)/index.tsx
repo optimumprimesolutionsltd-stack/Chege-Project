@@ -19,7 +19,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -272,21 +272,30 @@ export default function DashboardScreen() {
   }
 
   if (summaryError) {
+    // No active workspace at all — a brand-new or just-signed-in person. Send
+    // them to the chooser, where they can create a budget or accept an
+    // invitation, rather than a dead "ask someone to add you" screen.
+    if (!group) {
+      return <Redirect href="/budget-chooser" />;
+    }
     return (
       <View style={[styles.accessContainer, { backgroundColor: colors.background }]}>
         <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.accessIcon, { backgroundColor: `${colors.primary}18` }]}>
             <Feather name="home" size={25} color={colors.primary} />
           </View>
-          <Text style={[styles.accessTitle, { color: colors.foreground }]}>Join this group first</Text>
+          <Text style={[styles.accessTitle, { color: colors.foreground }]}>This budget could not load</Text>
           <Text style={[styles.accessText, { color: colors.mutedForeground }]}>
-            Shared funds, budgets, and savings goals stay private. Ask someone already in this group to add you from Settings.
+            Check your connection and try again. If you have just been removed from this group, pick another budget.
           </Text>
           <Pressable
-            onPress={() => router.push('/(tabs)/settings')}
+            onPress={() => { void refetchSummary(); }}
             style={[styles.accessButton, { backgroundColor: colors.primary }]}
           >
-            <Text style={styles.accessButtonText}>Open Settings</Text>
+            <Text style={styles.accessButtonText}>Try again</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push('/budget-chooser')} style={{ paddingVertical: 10 }}>
+            <Text style={[styles.accessText, { color: colors.primary, textDecorationLine: 'underline' }]}>Choose another budget</Text>
           </Pressable>
         </View>
       </View>
