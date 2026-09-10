@@ -231,14 +231,16 @@ export default function RecordContributionsScreen() {
         }),
       });
       await queryClient.invalidateQueries();
+      // Leave the guard set: the screen is closing, and resetting it opens a
+      // window where the sheet is still on screen and a second tap fires a
+      // second deposit.
       router.back();
     } catch (error) {
+      submittingRef.current = false;
+      setSaving(false);
       if (!handleLapsedError(error)) {
         Alert.alert('Could not record', error instanceof Error ? error.message : 'Nothing has been changed.');
       }
-    } finally {
-      submittingRef.current = false;
-      setSaving(false);
     }
   };
 
