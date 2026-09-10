@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Eye, EyeOff, Loader2 } from "lucide-react";
+import { formatKes } from "@/lib/utils";
 
 // WhatsApp's own mark, so the share button reads as "send to WhatsApp" rather
 // than a generic message. lucide dropped brand glyphs, so it is inlined.
@@ -127,6 +128,120 @@ function ordered(fromKey: string, toKey: string): [string, string] {
   return fromKey <= toKey ? [fromKey, toKey] : [toKey, fromKey];
 }
 
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "3 Sep" — fixed table, not Intl, so it never renders "Sept" on some runtimes. */
+function shortDate(iso: string): string {
+  const [, month, day] = iso.split("-").map(Number);
+  return `${day ?? 1} ${MONTH_ABBR[(month ?? 1) - 1] ?? ""}`;
+}
+
+/** A whole-month key range as inclusive ISO dates: first of `startKey` to last of `endKey`. */
+function monthKeyRangeToDates(startKey: string, endKey: string): { from: string; to: string } {
+  const [year, month] = endKey.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return { from: `${startKey}-01`, to: `${endKey}-${String(lastDay).padStart(2, "0")}` };
+}
+
+/**
+ * The report on screen — the same figures the PDF and the WhatsApp message
+ * carry, for people who just want to read it here without sending or saving
+ * anything.
+ */
+function StatementView({ from, to }: { from: string; to: string }) {
+  const [state, setState] = useState<{ status: "loading" | "error" | "ready"; data: StatementShare | null }>({
+    status: "loading",
+    data: null,
+  });
+
+  useEffect(() => {
+    let active = true;
+    setState({ status: "loading", data: null });
+    fetchStatementShare("", from, to)
+      .then((data) => {
+        if (active) setState({ status: "ready", data });
+      })
+      .catch(() => {
+        if (active) setState({ status: "error", data: null });
+      });
+    return () => {
+      active = false;
+    };
+  }, [from, to]);
+
+  if (state.status === "loading") {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        Loading the report…
+      </div>
+    );
+  }
+  if (state.status === "error" || !state.data) {
+    return (
+      <p className="rounded-xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+        The report could not be loaded. Try again in a moment.
+      </p>
+    );
+  }
+
+  const { data } = state;
+  const perMember = data.perMember.filter((row) => row.total !== 0);
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card p-4" data-testid="contribution-statement-view">
+      <p className="text-sm font-semibold text-foreground">{data.periodLabel}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {data.entries.length} {data.entries.length === 1 ? "entry" : "entries"} · {formatKes(data.grandTotal)} in total
+      </p>
+
+      {data.entries.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">Nothing recorded in this range.</p>
+      ) : (
+        <div className="mt-3 -mx-1 overflow-x-auto px-1">
+          <table className="w-full min-w-[22rem] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground">
+                <th className="py-1.5 pr-3 font-semibold">Date</th>
+                <th className="py-1.5 pr-3 font-semibold">Member</th>
+                <th className="py-1.5 pl-3 text-right font-semibold">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.entries.map((entry, index) => (
+                <tr key={`${entry.date}-${index}`} className="border-b border-border/50">
+                  <td className="whitespace-nowrap py-1.5 pr-3 tabular-nums text-muted-foreground">{shortDate(entry.date)}</td>
+                  <td className="max-w-[9rem] truncate py-1.5 pr-3 text-foreground">
+                    {entry.name}
+                    {entry.source === "deposit" ? <span className="ml-1 text-xs text-muted-foreground">bank</span> : null}
+                  </td>
+                  <td className="whitespace-nowrap py-1.5 pl-3 text-right tabular-nums text-foreground">
+                    {formatKes(entry.amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {perMember.length > 0 ? (
+        <div className="mt-3 border-t border-border pt-2">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">By member</p>
+          <ul className="flex flex-col gap-0.5 text-sm">
+            {perMember.map((row) => (
+              <li key={row.name} className="flex justify-between">
+                <span className="truncate text-foreground">{row.name}</span>
+                <span className="tabular-nums text-foreground">{formatKes(row.total)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function statementPdfUrl(from: string, to: string, userId?: string): string {
   const [start, end] = ordered(from, to);
   const params = new URLSearchParams({ from: start, to: end });
@@ -197,7 +312,15 @@ export function DownloadContributions({
   const today = useMemo(todayKey, []);
   const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [viewing, setViewing] = useState(false);
   const [start, end] = ordered(fromKey, toKey);
+
+  // The on-screen report always reads as a dated list. In grid mode the chosen
+  // month range becomes first-of-start to last-of-end.
+  const viewRange =
+    mode === "ledger"
+      ? { from: ordered(dayFrom, dayTo)[0], to: ordered(dayFrom, dayTo)[1] }
+      : monthKeyRangeToDates(start, end);
 
   // The grid rows narrowed to the chosen month range — shared by the grid PDF
   // and its WhatsApp text. Null when nothing falls in the range.
@@ -366,7 +489,15 @@ export function DownloadContributions({
             </label>
           </>
         )}
-        <div className="flex gap-2 sm:ml-auto">
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <Button
+            variant="outline"
+            onClick={() => setViewing((value) => !value)}
+            data-testid="button-view-contributions"
+          >
+            {viewing ? <EyeOff className="mr-1 h-4 w-4" /> : <Eye className="mr-1 h-4 w-4" />}
+            {viewing ? "Hide" : "View"}
+          </Button>
           <Button
             onClick={() => void shareToWhatsApp()}
             disabled={sharing || busy}
@@ -386,6 +517,8 @@ export function DownloadContributions({
           </Button>
         </div>
       </div>
+
+      {viewing ? <StatementView from={viewRange.from} to={viewRange.to} /> : null}
 
       {mode === "ledger" ? (
         <p className="text-xs text-muted-foreground">
