@@ -63,9 +63,18 @@ function replaceOrAdd(html, pattern, tag) {
   return pattern.test(html) ? html.replace(pattern, tag) : html.replace("</head>", `    ${tag}\n  </head>`);
 }
 
+// One URL form per page: the home page is "/", every other route ends in a
+// slash. The static server 301s a slash-less request to the trailing-slash
+// directory, so the canonical tag and the sitemap have to name that same form
+// or the two disagree and the redirect target and the canonical chase each
+// other.
+function canonicalFor(route) {
+  return route === "/" ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}${route}/`;
+}
+
 function renderPage(route, metadata) {
   const title = `${metadata.title} | Jamvi`;
-  const canonical = `${SITE_ORIGIN}${route === "/" ? "/" : route}`;
+  const canonical = canonicalFor(route);
 
   let html = shell.replace(/<title>[^<]*<\/title>/, `<title>${escapeAttribute(title)}</title>`);
   html = replaceOrAdd(html, /<meta name="description"[^>]*>/, `<meta name="description" content="${escapeAttribute(metadata.description)}" />`);
@@ -95,7 +104,7 @@ function renderPage(route, metadata) {
 function sitemap(lastmod) {
   const entries = routes.map((route) => {
     const { changefreq, priority } = CRAWL[route] ?? { changefreq: "monthly", priority: "0.5" };
-    const loc = `${SITE_ORIGIN}${route === "/" ? "/" : route}`;
+    const loc = canonicalFor(route);
     return `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.join("\n")}\n</urlset>\n`;
