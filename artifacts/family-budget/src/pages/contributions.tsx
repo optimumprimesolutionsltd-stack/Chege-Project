@@ -517,9 +517,13 @@ export default function Contributions() {
 
       {isSharedWorkspace ? (
         <div className="space-y-6">
+          {/* The most-used action on the page, so it leads. */}
+          <RecordContributions />
           {canManageContributions ? <ContributionArrearsBanner /> : null}
           {canManageContributions ? <ContributionPlan /> : null}
-          <RecordContributions />
+          {/* Who has paid comes before the export controls: you read the sheet,
+              then decide whether to send it. */}
+          <ContributionsGrid />
           {canManageContributions ? (
             <DownloadContributions
               budgetName={group ? workspaceLabel(group) : "Shared budget"}
@@ -529,7 +533,6 @@ export default function Contributions() {
               onToChange={setPdfToKey}
             />
           ) : null}
-          <ContributionsGrid />
           <ContributionVariance />
         </div>
       ) : null}
