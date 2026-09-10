@@ -14,6 +14,10 @@ export interface StatementEntry {
   amount: number;
   source: "recorded" | "deposit";
   description: string | null;
+  /** The bank account a deposit landed in, by name. Null for a hand-recorded
+   *  contribution (there is no account) or a deposit whose account was
+   *  removed. */
+  bankName: string | null;
 }
 
 export interface ContributionStatement {

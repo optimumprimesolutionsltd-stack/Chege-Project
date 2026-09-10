@@ -102,8 +102,8 @@ describe("buildStatementWhatsAppText", () => {
     budgetName: "Umoja Chama",
     periodLabel: "1 Aug 2026 – 15 Aug 2026",
     entries: [
-      { date: "2026-08-03", name: "Mary", amount: 2000, source: "recorded" },
-      { date: "2026-08-10", name: "John", amount: 1500, source: "deposit" },
+      { date: "2026-08-03", name: "Mary", amount: 2000, source: "recorded", bankName: null },
+      { date: "2026-08-10", name: "John", amount: 1500, source: "deposit", bankName: "Equity chama" },
     ],
     perMember: [
       { name: "Mary", total: 2000 },
@@ -120,10 +120,10 @@ describe("buildStatementWhatsAppText", () => {
     expect(text).not.toContain("expected");
   });
 
-  it("lists each dated entry and marks bank deposits", () => {
+  it("lists each dated entry and names the bank a deposit landed in", () => {
     const text = buildStatementWhatsAppText(statement);
     expect(text).toContain("3 Aug  Mary  KES 2,000");
-    expect(text).toContain("10 Aug  John  KES 1,500  (bank)");
+    expect(text).toContain("10 Aug  John  KES 1,500  (Equity chama)");
   });
 
   it("drops members with nothing in the period from the breakdown", () => {

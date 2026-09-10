@@ -8,6 +8,8 @@ export type StatementPdfEntry = {
   amount: number;
   source: "recorded" | "deposit";
   description: string | null;
+  /** The bank account a deposit landed in; null for a hand-recorded entry. */
+  bankName?: string | null;
 };
 
 export type ContributionStatementPdfData = {
@@ -179,7 +181,8 @@ export function createContributionStatementPdf(data: ContributionStatementPdfDat
       let running = 0;
       for (const entry of data.entries) {
         running += entry.amount;
-        const typeLabel = entry.source === "deposit" ? "Bank deposit" : "Recorded";
+        const typeLabel =
+          entry.source === "deposit" ? entry.bankName || "Bank deposit" : "Recorded";
         row(
           perMember
             ? [

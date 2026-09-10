@@ -31,6 +31,7 @@ type StatementEntry = {
   date: string;
   amount: number;
   source: 'recorded' | 'deposit';
+  bankName: string | null;
 };
 type ContributionStatement = {
   periodLabel: string;
@@ -174,7 +175,9 @@ function buildStatementText(groupName: string, statement: ContributionStatement,
   lines.push(
     ...(statement.entries.length
       ? statement.entries.map(
-          (entry) => `${shortDay(entry.date)}  ${entry.contributorName}  ${kes(entry.amount)}${entry.source === 'deposit' ? '  (bank)' : ''}`,
+          (entry) =>
+            `${shortDay(entry.date)}  ${entry.contributorName}  ${kes(entry.amount)}` +
+            (entry.source === 'deposit' ? `  (${entry.bankName ?? 'bank'})` : ''),
         )
       : ['Nothing recorded in this period.']),
   );
@@ -253,27 +256,24 @@ export function ContributionExport() {
     }
   };
 
+  const viewQuery = `from=${encodeURIComponent(viewFrom)}&to=${encodeURIComponent(viewTo)}`;
+
   const downloadPdf = async () => {
     setBusy('pdf');
     try {
-      const path =
-        mode === 'ledger'
-          ? `/api/contributions/statement.pdf?${statementQuery}`
-          : `/api/contributions/report.pdf?months=${months}`;
-      const blob = (await customFetch(path, { responseType: 'blob', cache: 'no-store' })) as Blob;
-      const stamp = new Date();
-      const name =
-        mode === 'ledger'
-          ? `jamvi-contribution-ledger-${rangeStart}-to-${rangeEnd}.pdf`
-          : `jamvi-contributions-${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, '0')}.pdf`;
-      const file = new File(Paths.cache, name);
+      // The dated statement PDF for exactly what View shows.
+      const blob = (await customFetch(`/api/contributions/statement.pdf?${viewQuery}`, {
+        responseType: 'blob',
+        cache: 'no-store',
+      })) as Blob;
+      const file = new File(Paths.cache, `jamvi-contribution-ledger-${viewFrom}-to-${viewTo}.pdf`);
       file.write(new Uint8Array(await blob.arrayBuffer()));
       if (!(await Sharing.isAvailableAsync())) {
         throw new Error('unavailable');
       }
       await Sharing.shareAsync(file.uri, {
         mimeType: 'application/pdf',
-        dialogTitle: mode === 'ledger' ? 'Save or share the contribution ledger' : 'Save or share the contribution report',
+        dialogTitle: 'Save or share the contribution report',
         UTI: 'com.adobe.pdf',
       });
     } catch {
@@ -295,19 +295,12 @@ export function ContributionExport() {
         verifyUrl = undefined;
       }
 
-      let text: string;
-      if (mode === 'ledger') {
-        const statement = (await customFetch(`/api/contributions/statement?${statementQuery}`)) as ContributionStatement;
-        if (!statement.entries || statement.entries.length === 0) {
-          Alert.alert('Nothing in that range', 'Pick a different from and to date.');
-          return;
-        }
-        text = buildStatementText(group?.name ?? 'Our group', statement, verifyUrl);
-      } else {
-        const { data: grid } = await refetch();
-        if (!grid) throw new Error('no grid');
-        text = buildWhatsAppText(group?.name ?? 'Our group', grid, verifyUrl);
+      const statement = (await customFetch(`/api/contributions/statement?${viewQuery}`)) as ContributionStatement;
+      if (!statement.entries || statement.entries.length === 0) {
+        Alert.alert('Nothing in that range', 'Pick a different range.');
+        return;
       }
+      const text = buildStatementText(group?.name ?? 'Our group', statement, verifyUrl);
 
       const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       const opened = await Linking.canOpenURL(url);
@@ -426,50 +419,18 @@ export function ContributionExport() {
         />
       )}
 
-      <View style={styles.actions}>
-        <Pressable
-          onPress={shareToWhatsApp}
-          disabled={busy !== null}
-          style={({ pressed }) => [
-            styles.btn,
-            { backgroundColor: WHATSAPP_GREEN },
-            (pressed || busy !== null) && { opacity: 0.85 },
-          ]}
-        >
-          {busy === 'whatsapp' ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <FontAwesome name="whatsapp" size={18} color="#ffffff" />
-          )}
-          <Text style={[styles.btnLabel, { color: '#ffffff' }]}>WhatsApp</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={downloadPdf}
-          disabled={busy !== null}
-          style={({ pressed }) => [
-            styles.btn,
-            { backgroundColor: colors.primary },
-            (pressed || busy !== null) && { opacity: 0.85 },
-          ]}
-        >
-          {busy === 'pdf' ? (
-            <ActivityIndicator size="small" color={colors.primaryForeground} />
-          ) : (
-            <Feather name="download" size={16} color={colors.primaryForeground} />
-          )}
-          <Text style={[styles.btnLabel, { color: colors.primaryForeground }]}>Download PDF</Text>
-        </Pressable>
-      </View>
-
       <Pressable
         onPress={toggleView}
         disabled={busy !== null}
-        style={[styles.viewBtn, { borderColor: colors.border }]}
+        style={({ pressed }) => [
+          styles.btn,
+          { backgroundColor: colors.primary },
+          (pressed || busy !== null) && { opacity: 0.85 },
+        ]}
       >
-        <Feather name={viewing ? 'eye-off' : 'eye'} size={14} color={colors.mutedForeground} />
-        <Text style={[styles.viewLabel, { color: colors.foreground }]}>
-          {viewing ? 'Hide report' : 'View report here'}
+        <Feather name={viewing ? 'eye-off' : 'eye'} size={16} color={colors.primaryForeground} />
+        <Text style={[styles.btnLabel, { color: colors.primaryForeground }]}>
+          {viewing ? 'Hide report' : 'View report'}
         </Text>
       </Pressable>
 
@@ -497,7 +458,9 @@ export function ContributionExport() {
                     <Text style={[styles.stmtDate, { color: colors.mutedForeground }]}>{shortDay(entry.date)}</Text>
                     <Text style={[styles.stmtName, { color: colors.foreground }]} numberOfLines={1}>
                       {entry.contributorName}
-                      {entry.source === 'deposit' ? <Text style={{ color: colors.mutedForeground }}>  bank</Text> : null}
+                      {entry.source === 'deposit' ? (
+                        <Text style={{ color: colors.mutedForeground }}>{`  via ${entry.bankName ?? 'bank'}`}</Text>
+                      ) : null}
                     </Text>
                     <Text style={[styles.stmtAmount, { color: colors.foreground }]}>KES {kes(entry.amount)}</Text>
                   </View>
@@ -521,6 +484,44 @@ export function ContributionExport() {
             ) : null}
           </View>
         )
+      ) : null}
+
+      {viewing && !viewLoading && viewData && viewData.entries.length > 0 ? (
+        <View style={styles.actions}>
+          <Pressable
+            onPress={shareToWhatsApp}
+            disabled={busy !== null}
+            style={({ pressed }) => [
+              styles.btn,
+              { backgroundColor: WHATSAPP_GREEN },
+              (pressed || busy !== null) && { opacity: 0.85 },
+            ]}
+          >
+            {busy === 'whatsapp' ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <FontAwesome name="whatsapp" size={18} color="#ffffff" />
+            )}
+            <Text style={[styles.btnLabel, { color: '#ffffff' }]}>Send on WhatsApp</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={downloadPdf}
+            disabled={busy !== null}
+            style={({ pressed }) => [
+              styles.btn,
+              { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+              (pressed || busy !== null) && { opacity: 0.85 },
+            ]}
+          >
+            {busy === 'pdf' ? (
+              <ActivityIndicator size="small" color={colors.foreground} />
+            ) : (
+              <Feather name="download" size={16} color={colors.foreground} />
+            )}
+            <Text style={[styles.btnLabel, { color: colors.foreground }]}>Download PDF</Text>
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );

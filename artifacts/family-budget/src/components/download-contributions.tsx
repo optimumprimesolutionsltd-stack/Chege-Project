@@ -87,7 +87,14 @@ async function fetchGrid(): Promise<ContributionGrid> {
 type StatementResponse = {
   periodLabel: string;
   contributors: Array<{ id: number; name: string }>;
-  entries: Array<{ contributorId: number; contributorName: string; date: string; amount: number; source: "recorded" | "deposit" }>;
+  entries: Array<{
+    contributorId: number;
+    contributorName: string;
+    date: string;
+    amount: number;
+    source: "recorded" | "deposit";
+    bankName: string | null;
+  }>;
   totalsByContributor: Record<number, number>;
   grandTotal: number;
 };
@@ -107,6 +114,7 @@ async function fetchStatementShare(budgetName: string, from: string, to: string)
       name: entry.contributorName,
       amount: entry.amount,
       source: entry.source,
+      bankName: entry.bankName ?? null,
     })),
     perMember: data.contributors.map((row) => ({ name: row.name, total: data.totalsByContributor[row.id] ?? 0 })),
     grandTotal: data.grandTotal,
@@ -211,9 +219,13 @@ function StatementView({ from, to }: { from: string; to: string }) {
               {data.entries.map((entry, index) => (
                 <tr key={`${entry.date}-${index}`} className="border-b border-border/50">
                   <td className="whitespace-nowrap py-1.5 pr-3 tabular-nums text-muted-foreground">{shortDate(entry.date)}</td>
-                  <td className="max-w-[9rem] truncate py-1.5 pr-3 text-foreground">
-                    {entry.name}
-                    {entry.source === "deposit" ? <span className="ml-1 text-xs text-muted-foreground">bank</span> : null}
+                  <td className="max-w-[12rem] py-1.5 pr-3 text-foreground">
+                    <span className="block truncate">{entry.name}</span>
+                    {entry.source === "deposit" ? (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        via {entry.bankName ?? "bank"}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="whitespace-nowrap py-1.5 pl-3 text-right tabular-nums text-foreground">
                     {formatKes(entry.amount)}
@@ -340,41 +352,10 @@ export function DownloadContributions({
     return { budgetName, months, rows, grandTotal: rows.reduce((sum, row) => sum + row.total, 0) };
   };
 
-  const download = async () => {
-    if (mode === "ledger") {
-      window.open(statementPdfUrl(dayFrom, dayTo), "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    const printWindow = openPreparingWindow();
-    if (!printWindow) {
-      toast({
-        variant: "destructive",
-        title: "Allow pop-ups to download",
-        description: "The report opens in a new tab to be saved as PDF.",
-      });
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const report = buildReport(await fetchGrid());
-      if (!report) {
-        printWindow.close();
-        toast({ title: "Nothing in that range", description: "Pick a different from and to month." });
-        return;
-      }
-      writeReport(printWindow, buildGroupContributionReportHtml(report));
-    } catch {
-      printWindow.close();
-      toast({
-        variant: "destructive",
-        title: "Could not create the report",
-        description: "Try again in a moment.",
-      });
-    } finally {
-      setBusy(false);
-    }
+  const download = () => {
+    // The dated statement PDF for exactly what View shows. A server route, so
+    // no print window to be blocked.
+    window.open(statementPdfUrl(viewRange.from, viewRange.to), "_blank", "noopener,noreferrer");
   };
 
   const shareToWhatsApp = async () => {
@@ -392,24 +373,13 @@ export function DownloadContributions({
         verifyUrl = undefined;
       }
 
-      let text: string;
-      if (mode === "ledger") {
-        const share = await fetchStatementShare(budgetName, dayFrom, dayTo);
-        if (share.entries.length === 0) {
-          chatWindow?.close();
-          toast({ title: "Nothing in that range", description: "Pick a different from and to date." });
-          return;
-        }
-        text = buildStatementWhatsAppText(share, verifyUrl);
-      } else {
-        const report = buildReport(await fetchGrid());
-        if (!report) {
-          chatWindow?.close();
-          toast({ title: "Nothing in that range", description: "Pick a different from and to month." });
-          return;
-        }
-        text = buildContributionWhatsAppText(report, verifyUrl);
+      const share = await fetchStatementShare(budgetName, viewRange.from, viewRange.to);
+      if (share.entries.length === 0) {
+        chatWindow?.close();
+        toast({ title: "Nothing in that range", description: "Pick a different range." });
+        return;
       }
+      const text = buildStatementWhatsAppText(share, verifyUrl);
 
       const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       if (chatWindow) chatWindow.location.href = url;
@@ -491,34 +461,40 @@ export function DownloadContributions({
         )}
         <div className="flex flex-wrap gap-2 sm:ml-auto">
           <Button
-            variant="outline"
             onClick={() => setViewing((value) => !value)}
             data-testid="button-view-contributions"
           >
             {viewing ? <EyeOff className="mr-1 h-4 w-4" /> : <Eye className="mr-1 h-4 w-4" />}
-            {viewing ? "Hide" : "View"}
-          </Button>
-          <Button
-            onClick={() => void shareToWhatsApp()}
-            disabled={sharing || busy}
-            className="bg-[#25D366] text-white hover:bg-[#1eb257]"
-            data-testid="button-share-contributions-whatsapp"
-          >
-            {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <WhatsAppIcon className="mr-1 h-4 w-4" />}
-            {sharing ? "Opening…" : "WhatsApp"}
-          </Button>
-          <Button
-            onClick={() => void download()}
-            disabled={busy || sharing}
-            data-testid="button-download-contributions-pdf"
-          >
-            {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
-            {busy ? "Preparing…" : "Download PDF"}
+            {viewing ? "Hide report" : "View report"}
           </Button>
         </div>
       </div>
 
-      {viewing ? <StatementView from={viewRange.from} to={viewRange.to} /> : null}
+      {viewing ? (
+        <>
+          <StatementView from={viewRange.from} to={viewRange.to} />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => void shareToWhatsApp()}
+              disabled={sharing || busy}
+              className="bg-[#25D366] text-white hover:bg-[#1eb257]"
+              data-testid="button-share-contributions-whatsapp"
+            >
+              {sharing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <WhatsAppIcon className="mr-1 h-4 w-4" />}
+              {sharing ? "Opening…" : "Send on WhatsApp"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void download()}
+              disabled={busy || sharing}
+              data-testid="button-download-contributions-pdf"
+            >
+              {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+              {busy ? "Preparing…" : "Download PDF"}
+            </Button>
+          </div>
+        </>
+      ) : null}
 
       {mode === "ledger" ? (
         <p className="text-xs text-muted-foreground">
