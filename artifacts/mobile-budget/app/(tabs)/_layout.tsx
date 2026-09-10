@@ -14,7 +14,9 @@ import { useGetGroup } from '@workspace/api-client-react';
 
 // iOS 26+: NativeTabs with liquid glass support
 // 5 core tabs — Bank and Settings remain accessible from Home/header controls.
-function NativeTabLayout({ showReports }: { showReports: boolean }) {
+// A shared budget swaps Search out for Contributions, which is a core shared
+// activity; Search stays reachable from the Home header.
+function NativeTabLayout({ showReports, isShared }: { showReports: boolean; isShared: boolean }) {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -29,14 +31,22 @@ function NativeTabLayout({ showReports }: { showReports: boolean }) {
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
         <Label>Budget</Label>
       </NativeTabs.Trigger>
+      {isShared && (
+        <NativeTabs.Trigger name="contributions">
+          <Icon sf={{ default: 'arrow.down.circle', selected: 'arrow.down.circle.fill' }} />
+          <Label>Paid in</Label>
+        </NativeTabs.Trigger>
+      )}
       <NativeTabs.Trigger name="goals">
         <Icon sf={{ default: 'target', selected: 'target' }} />
         <Label>Goals</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="search">
-        <Icon sf={{ default: 'magnifyingglass', selected: 'magnifyingglass' }} />
-        <Label>Search</Label>
-      </NativeTabs.Trigger>
+      {!isShared && (
+        <NativeTabs.Trigger name="search">
+          <Icon sf={{ default: 'magnifyingglass', selected: 'magnifyingglass' }} />
+          <Label>Search</Label>
+        </NativeTabs.Trigger>
+      )}
       {showReports && (
         <NativeTabs.Trigger name="reports">
           <Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} />
@@ -47,7 +57,7 @@ function NativeTabLayout({ showReports }: { showReports: boolean }) {
   );
 }
 
-function ClassicTabLayout({ showReports }: { showReports: boolean }) {
+function ClassicTabLayout({ showReports, isShared }: { showReports: boolean; isShared: boolean }) {
   const colors = useColors();
   const { resolvedScheme } = useAppearance();
   const isDark = resolvedScheme === 'dark';
@@ -144,15 +154,19 @@ function ClassicTabLayout({ showReports }: { showReports: boolean }) {
       />
       <Tabs.Screen
         name="search"
-        options={{
-          title: 'Search',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="magnifyingglass" tintColor={color} size={24} />
-            ) : (
-              <Feather name="search" size={22} color={color} />
-            ),
-        }}
+        options={
+          isShared
+            ? { href: null }
+            : {
+                title: 'Search',
+                tabBarIcon: ({ color }) =>
+                  isIOS ? (
+                    <SymbolView name="magnifyingglass" tintColor={color} size={24} />
+                  ) : (
+                    <Feather name="search" size={22} color={color} />
+                  ),
+              }
+        }
       />
       <Tabs.Screen
         name="reports"
@@ -170,9 +184,19 @@ function ClassicTabLayout({ showReports }: { showReports: boolean }) {
       />
       <Tabs.Screen
         name="contributions"
-        options={{
-          href: null,
-        }}
+        options={
+          isShared
+            ? {
+                title: 'Paid in',
+                tabBarIcon: ({ color }) =>
+                  isIOS ? (
+                    <SymbolView name="arrow.down.circle.fill" tintColor={color} size={24} />
+                  ) : (
+                    <Feather name="download" size={22} color={color} />
+                  ),
+              }
+            : { href: null }
+        }
       />
 
       {/* ── Hidden — accessible via Home/header controls ── */}
@@ -186,18 +210,19 @@ export default function TabLayout() {
   const colors = useColors();
   const { data: group } = useGetGroup();
   const showReports = group?.isPrivate !== false;
+  const isShared = group?.isPrivate === false;
 
   if (isLiquidGlassAvailable()) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.card }}>
-        <NativeTabLayout showReports={showReports} />
+        <NativeTabLayout showReports={showReports} isShared={isShared} />
         <GlobalFAB />
       </View>
     );
   }
   return (
     <View style={{ flex: 1, backgroundColor: colors.card }}>
-      <ClassicTabLayout showReports={showReports} />
+      <ClassicTabLayout showReports={showReports} isShared={isShared} />
       <GlobalFAB />
     </View>
   );
