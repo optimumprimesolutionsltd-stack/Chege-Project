@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { GroupInviteLinks } from "@/components/group-invite-links";
+import { ReadOnlyLink } from "@/components/read-only-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
 import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Moon, Palette, Pencil, Star, Sun, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
@@ -1140,6 +1141,7 @@ export default function Settings() {
 
           {/* Invite member form */}
           {canManageShared && <GroupInviteLinks groupName={group?.name} />}
+          {canManageShared && <ReadOnlyLink groupName={group?.name} />}
           {canManageShared && (
             <form onSubmit={handleAdd} noValidate className="space-y-3 border-t border-border/50 pt-4">
               <div>
