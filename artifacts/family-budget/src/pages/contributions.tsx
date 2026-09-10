@@ -810,12 +810,13 @@ export default function Contributions() {
       )}
 
       {unattributedFunding && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-foreground">
+        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-foreground">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="font-semibold">Unattributed funding: {formatKes(unattributedFunding.total)}</p>
+              <p className="font-semibold">Not linked to an income source: {formatKes(unattributedFunding.total)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                This funding has no selected income source, so it is kept separate from each member’s income plan.
+                This much came into the group without a chosen income source (like Salary or Business), so it isn’t
+                counted in any member’s income plan. It still adds to the group total. You can link it later from the Bank page.
               </p>
             </div>
             <button
@@ -824,16 +825,16 @@ export default function Contributions() {
               aria-controls="contributions-unattributed-records"
               onClick={() => setShowUnattributedRecords((isOpen) => !isOpen)}
               data-testid="toggle-unattributed-funding-records"
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-amber-500/40 bg-card px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-amber-500/10"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
             >
               {showUnattributedRecords ? "Hide records" : `See ${unattributedFunding.transactionCount} ${unattributedFunding.transactionCount === 1 ? "record" : "records"}`}
               {showUnattributedRecords ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
           </div>
           {showUnattributedRecords && (
-            <div id="contributions-unattributed-records" className="mt-4 rounded-xl border border-amber-500/25 bg-card/70 p-3">
+            <div id="contributions-unattributed-records" className="mt-4 rounded-xl border border-border bg-card/70 p-3">
               <p className="mb-2 text-xs text-muted-foreground">
-                These entries are the source of the unattributed total for {formatMonthYear(month, year)}.
+                The deposits that make up this total for {formatMonthYear(month, year)}.
               </p>
               {unattributedFunding.entries.length === 0 ? (
                 <p className="rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">

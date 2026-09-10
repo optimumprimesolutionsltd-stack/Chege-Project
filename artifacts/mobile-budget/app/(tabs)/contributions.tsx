@@ -655,11 +655,13 @@ export default function ContributionsScreen() {
             {unattributedFunding && (
               <View style={styles.unattributedCard}>
                 <View style={styles.unattributedIcon}>
-                  <Feather name="help-circle" size={16} color="#fbbf24" />
+                  <Feather name="help-circle" size={16} color="rgba(247,250,246,0.75)" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.unattributedTitle}>Unattributed funding · KES {formatKES(unattributedFunding.total)}</Text>
-                  <Text style={styles.unattributedText}>No income source was selected, so this amount is not assigned to a member’s income plan.</Text>
+                  <Text style={styles.unattributedTitle}>Not linked to an income source · KES {formatKES(unattributedFunding.total)}</Text>
+                  <Text style={styles.unattributedText}>
+                    This much came into the group without a chosen income source (like Salary or Business), so it isn’t in any member’s income plan. It still counts in the group total — link it later from the Bank tab.
+                  </Text>
                 </View>
               </View>
             )}
@@ -725,9 +727,9 @@ const styles = StyleSheet.create({
   incomeSourceName: { fontSize: 13, color: '#f7faf6', fontFamily: 'Inter_600SemiBold' },
   incomeSourceSub: { marginTop: 2, fontSize: 10, color: 'rgba(247,250,246,0.48)', fontFamily: 'Inter_400Regular' },
   incomeSourceVariance: { maxWidth: 84, textAlign: 'right', fontSize: 10, fontFamily: 'Inter_600SemiBold' },
-  unattributedCard: { flexDirection: 'row', gap: 10, borderRadius: 14, padding: 14, backgroundColor: 'rgba(245,158,11,0.1)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.28)' },
-  unattributedIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(245,158,11,0.14)' },
-  unattributedTitle: { fontSize: 13, color: '#fcd34d', fontFamily: 'Inter_600SemiBold' },
+  unattributedCard: { flexDirection: 'row', gap: 10, borderRadius: 14, padding: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  unattributedIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)' },
+  unattributedTitle: { fontSize: 13, color: '#f7faf6', fontFamily: 'Inter_600SemiBold' },
   unattributedText: { marginTop: 3, fontSize: 11, lineHeight: 16, color: 'rgba(247,250,246,0.6)', fontFamily: 'Inter_400Regular' },
 });
 
