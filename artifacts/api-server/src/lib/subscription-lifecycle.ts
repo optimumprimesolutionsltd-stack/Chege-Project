@@ -23,7 +23,7 @@ export const REMINDER = {
    *  Without this nobody would know to. */
   RENEWAL_DUE: "renewal_due",
   PAYMENT_MISSED: "payment_missed",
-  /** Last word before a Shared budget goes read-only. */
+  /** Last word before a Shared group goes read-only. */
   GRACE_ENDING: "grace_ending",
 } as const;
 

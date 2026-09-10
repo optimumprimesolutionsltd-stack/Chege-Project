@@ -18,10 +18,10 @@ describe("workspaceLabel", () => {
     })).toBe("Personal budget");
   });
 
-  it("keeps the familiar Group fallback for an uncustomized Shared budget", () => {
+  it("keeps the familiar Group fallback for an uncustomized Shared group", () => {
     expect(workspaceLabel({
       isPrivate: false,
-      name: "Shared budget",
+      name: "Shared group",
       emoji: "🤝",
     })).toBe("🤝 Group");
   });

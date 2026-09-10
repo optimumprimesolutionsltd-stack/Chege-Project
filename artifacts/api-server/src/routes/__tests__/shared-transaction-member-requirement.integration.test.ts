@@ -89,7 +89,7 @@ describe.skipIf(!hasDb)("standalone shared groups can record money immediately",
     });
 
     const [legacyGroup] = await db.insert(groupsTable).values({
-      name: `Legacy shared budget ${Date.now()}`,
+      name: `Legacy shared group ${Date.now()}`,
       createdByUserId: ownerId,
       legacyKey: `legacy-transaction-rule-${Date.now()}`,
     }).returning();
@@ -291,7 +291,7 @@ describe.skipIf(!hasDb)("standalone shared groups can record money immediately",
     expect(cascadeContribution.status, JSON.stringify(cascadeContribution.body)).toBe(200);
   });
 
-  it("keeps one-person private budgets and legacy shared budgets usable", async () => {
+  it("keeps one-person private budgets and legacy shared groups usable", async () => {
     activeGroupId = privateGroupId;
     activeGroupIsPrivate = true;
     const privateJointExpense = await request(app).post("/expenses").send({

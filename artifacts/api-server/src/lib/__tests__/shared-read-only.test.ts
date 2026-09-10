@@ -1,5 +1,5 @@
 /**
- * A lapsed member goes read-only in a Shared budget.
+ * A lapsed member goes read-only in a Shared group.
  *
  * This is the behaviour the whole pricing model rests on, and it is the one
  * most likely to be got wrong in a way nobody notices: too strict and a chama
@@ -44,7 +44,7 @@ beforeEach(() => {
   mockResolve.mockResolvedValue({ status: "active", fullAccess: true });
 });
 
-describe("recording in a Shared budget", () => {
+describe("recording in a Shared group", () => {
   it("lets a current member record", async () => {
     const { req, res } = contextFor({ isPrivate: false });
 

@@ -75,7 +75,7 @@ router.post("/groups", async (req, res): Promise<void> => {
     return;
   }
   if (await hasAccessibleSharedBudgetWithName(req.user!.id, name)) {
-    res.status(409).json({ error: "You already have a Shared budget with that name. Choose a different name." });
+    res.status(409).json({ error: "You already have a Shared group with that name. Choose a different name." });
     return;
   }
 
@@ -142,7 +142,7 @@ router.post("/groups", async (req, res): Promise<void> => {
       { err: error, creationStep, userId: req.user!.id, groupKind: parsed.data.kind },
       "Could not create Shared group",
     );
-    res.status(500).json({ error: "Could not create the Shared budget. Please try again." });
+    res.status(500).json({ error: "Could not create the Shared group. Please try again." });
     return;
   }
 
@@ -214,7 +214,7 @@ router.patch("/group", async (req, res): Promise<void> => {
     && parsed.data.photoPath !== undefined
     && parsed.data.photoPath !== null
   ) {
-    res.status(400).json({ error: "Photos are only available for Shared budgets." });
+    res.status(400).json({ error: "Photos are only available for Shared groups." });
     return;
   }
   if (parsed.data.photoPath) {
@@ -231,7 +231,7 @@ router.patch("/group", async (req, res): Promise<void> => {
     return;
   }
   if (await hasAccessibleSharedBudgetWithName(req.user!.id, name, groupId)) {
-    res.status(409).json({ error: "You already have a Shared budget with that name. Choose a different name." });
+    res.status(409).json({ error: "You already have a Shared group with that name. Choose a different name." });
     return;
   }
 

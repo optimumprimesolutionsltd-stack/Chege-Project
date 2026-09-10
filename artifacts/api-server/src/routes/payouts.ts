@@ -1,5 +1,5 @@
 /**
- * Merry-go-round: a rotating payout for a shared budget.
+ * Merry-go-round: a rotating payout for a shared group.
  *
  * Each round the treasurer picks a member and records what the pot paid them.
  * Recording a payout also writes a joint-account disbursement, so the bank

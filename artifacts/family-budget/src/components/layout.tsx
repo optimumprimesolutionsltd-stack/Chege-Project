@@ -97,7 +97,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [location, navigate]);
 
   const isSharedWorkspace = group?.isPrivate === false;
-  const workspaceContextLabel = group ? (isSharedWorkspace ? 'Shared budget' : 'Personal budget') : 'Select a budget';
+  const workspaceContextLabel = group ? (isSharedWorkspace ? 'Shared group' : 'Personal budget') : 'Select a budget';
   const activeWorkspaceRole = group?.role ?? (group?.isPrivate ? 'owner' : 'member');
   const activeWorkspaceRoleLabel = activeWorkspaceRole === 'owner'
     ? 'Owner'
@@ -165,7 +165,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: '/', label: isSharedWorkspace ? 'Group Overview' : 'My Overview', icon: LayoutDashboard },
-    // Only in a Shared budget: a Personal one has nobody to contribute. Placed
+    // Only in a Shared group: a Personal one has nobody to contribute. Placed
     // second because for a chama or a church this is the screen people open the
     // app for - who has paid - and it had no way in at all until now.
     ...(isSharedWorkspace && uses('contributions') ? [{ href: '/contributions', label: 'Contributions', icon: HandCoins }] : []),
@@ -198,7 +198,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-screen sticky top-0">
         <div className="p-6">
             <div className="flex h-10 w-40 items-center justify-center rounded-xl bg-brand-surface px-2 shadow-sm">
-            <BrandLogo className="h-8 w-full" alt="Jamvi — personal and shared budgeting" />
+            <BrandLogo className="h-8 w-full" alt="Jamvi — personal and shared grouping" />
           </div>
           <div className="mt-2 min-w-0">
             <span className="block text-[11px] font-medium text-sidebar-foreground/70">Personal & shared money, together</span>
@@ -250,7 +250,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-sidebar border-b border-sidebar-border z-50 flex items-center justify-between px-4">
         <div className="flex items-center gap-2 text-sidebar-foreground">
            <div className="flex h-8 w-28 items-center justify-center rounded-lg bg-brand-surface px-1.5">
-            <BrandLogo className="h-6 w-full" alt="Jamvi — personal and shared budgeting" />
+            <BrandLogo className="h-6 w-full" alt="Jamvi — personal and shared grouping" />
           </div>
           <div className="min-w-0">
             <span className="block max-w-36 truncate text-[10px] text-sidebar-foreground/60">{group ? workspaceLabel(group) : 'My budget'}</span>
@@ -278,7 +278,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="mb-4 space-y-2">
               <p className="px-1 text-xs font-bold uppercase tracking-[0.12em] text-sidebar-primary">Switch budget</p>
               <p className="px-1 text-xs leading-relaxed text-sidebar-foreground/65">
-                Choose Personal or Shared budget to change the money view.
+                Choose Personal or Shared group to change the money view.
               </p>
               <WorkspaceSwitcher
                 activeWorkspaceId={group?.id}

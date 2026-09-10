@@ -117,7 +117,7 @@ export const JAMVI_PACKAGE: JamviPackage = {
   entitlements: ALL_ENTITLEMENTS,
   featureLabels: [
     "Your personal budget, income and expenses",
-    "Join or create any number of Shared budgets",
+    "Join or create any number of Shared groups",
     "No limit on how many people share a budget",
     "Shared bank accounts, savings goals and contributions",
     "Full history, reports and exports",

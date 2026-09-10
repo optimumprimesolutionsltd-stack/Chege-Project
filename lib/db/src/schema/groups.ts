@@ -66,7 +66,7 @@ export const GROUP_PLAN = {
 
 export type GroupPlan = (typeof GROUP_PLAN)[keyof typeof GROUP_PLAN];
 
-// Shared budgets use a small, recognizable identity system rather than
+// Shared groups use a small, recognizable identity system rather than
 // unrestricted uploads or colours. Defaults keep every existing workspace
 // usable and visually consistent after the additive schema update.
 export const DEFAULT_GROUP_ICON = "users";

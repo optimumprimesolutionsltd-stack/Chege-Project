@@ -42,7 +42,7 @@ export function getWorkspaceSetupSteps({
     { id: "goals", title: "Create a savings goal", description: "Set something meaningful to save toward.", route: "/savings-goals", action: "Create savings goal", complete: goals.length > 0 },
   ];
   if (isShared) {
-    steps.push({ id: "invite", title: "Invite a member", description: "Bring another person into this shared budget.", route: "/settings", action: "Invite a member", complete: memberCount > 1 });
+    steps.push({ id: "invite", title: "Invite a member", description: "Bring another person into this shared group.", route: "/settings", action: "Invite a member", complete: memberCount > 1 });
   }
   return steps;
 }

@@ -1,6 +1,6 @@
 type BankWorkspace = {
   isPrivate: boolean;
-  // A viewer is only ever in a Shared budget, and falls through to false below
+  // A viewer is only ever in a Shared group, and falls through to false below
   // exactly as a member does.
   role: "owner" | "admin" | "member" | "viewer";
 };

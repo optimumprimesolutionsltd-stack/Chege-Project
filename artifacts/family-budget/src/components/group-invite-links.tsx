@@ -37,7 +37,7 @@ export function GroupInviteLinks({ groupName }: { groupName?: string }) {
   };
 
   const shareOnWhatsApp = (url: string) => {
-    const message = `Join ${groupName || "my Jamvi Shared budget"} using this private invite link: ${url}`;
+    const message = `Join ${groupName || "my Jamvi Shared group"} using this private invite link: ${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   };
 

@@ -46,7 +46,7 @@ describe("shared group action permissions", () => {
 });
 
 describe("web workspace preference", () => {
-  it("keeps a selected shared budget only for the current browser session", () => {
+  it("keeps a selected shared group only for the current browser session", () => {
     const cookie = vi.fn();
     const res = { cookie } as unknown as Response;
 

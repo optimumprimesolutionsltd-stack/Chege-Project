@@ -1,7 +1,7 @@
 /**
  * The setup card has to say which budget it is setting up.
  *
- * Switching between a Personal and a Shared budget left this card reading
+ * Switching between a Personal and a Shared group left this card reading
  * identically either way - "Set up this budget", same steps, same progress
  * bar - so the screen a new member spends most of their time on was the one
  * that never told them which budget they were looking at.

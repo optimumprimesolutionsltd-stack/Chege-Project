@@ -52,7 +52,7 @@ export default function Activity() {
   const deleteExpense = useDeleteExpense();
   const deleteDeposit = useDeleteJointAccountTransaction();
   const isSharedWorkspace = group?.isPrivate === false;
-  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
   const canManageRecords =
     group?.isPrivate === true ||
     group?.role === "owner" ||
@@ -229,7 +229,7 @@ export default function Activity() {
         <>
           <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-            <div className="min-w-0"><p className="text-sm font-semibold">Contributions are tracked automatically</p><p className="mt-0.5 text-xs text-muted-foreground">Personal expense portions, bank deposits, and savings contributions count once for the member who funded them. Joint-bank portions remain Shared budget funds.</p></div>
+            <div className="min-w-0"><p className="text-sm font-semibold">Contributions are tracked automatically</p><p className="mt-0.5 text-xs text-muted-foreground">Personal expense portions, bank deposits, and savings contributions count once for the member who funded them. Joint-bank portions remain Shared group funds.</p></div>
           </div>
           {summaryLoading ? <div className="flex justify-center py-8"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div> : summaryError ? (
             <Card className="border-destructive/30 bg-destructive/5"><CardContent className="py-6 text-center"><p className="font-semibold">We couldn’t load this month’s contribution report.</p><p className="mt-1 text-sm text-muted-foreground">Check your group access, then refresh and try again.</p></CardContent></Card>
@@ -311,8 +311,8 @@ export default function Activity() {
           )}
           {sharedHouseholdActivity.length > 0 && (
             <Card className="border-amber-500/30 bg-amber-500/5"><CardContent className="pt-5">
-              <p className="font-semibold">Shared budget funding</p>
-              <p className="mt-1 text-sm text-muted-foreground">These Joint bank portions are Shared budget funds, not member contributions, so they are excluded from the totals above.</p>
+              <p className="font-semibold">Shared group funding</p>
+              <p className="mt-1 text-sm text-muted-foreground">These Joint bank portions are Shared group funds, not member contributions, so they are excluded from the totals above.</p>
               <div className="mt-3 divide-y divide-border/60">
                 {sharedHouseholdActivity.map((item) => (
                   <div key={item.id} className="flex items-start justify-between gap-3 py-2 text-sm">

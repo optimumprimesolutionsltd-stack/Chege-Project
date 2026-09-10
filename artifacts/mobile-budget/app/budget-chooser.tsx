@@ -39,6 +39,7 @@ import {
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import {
   COMMON_INCOME_STREAMS,
+  incomeStreamsForMode,
   ONBOARDING_CATEGORY_TIERS,
   PURPOSE_OPTIONS,
   canonicalCategoryName,
@@ -206,11 +207,11 @@ export default function BudgetChooserScreen() {
   const createSharedBudget = async () => {
     const name = newGroupName.trim();
     if (name.length < 2) {
-      setError('Enter a Shared budget name with at least two characters.');
+      setError('Enter a Shared group name with at least two characters.');
       return;
     }
     if (!newGroupKind) {
-      setError('Choose what this Shared budget is for.');
+      setError('Choose what this Shared group is for.');
       return;
     }
     setError(null);
@@ -228,7 +229,7 @@ export default function BudgetChooserScreen() {
       }
       await finish();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not create this Shared budget. Please try again.');
+      setError(reason instanceof Error ? reason.message : 'Could not create this Shared group. Please try again.');
     }
   };
   const [creatingPersonal, setCreatingPersonal] = useState(false);
@@ -332,7 +333,7 @@ export default function BudgetChooserScreen() {
             <View key={invite.id} style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.createCardCopy}>
                 <Text style={[styles.createTitle, { color: colors.foreground }]}>{invite.groupName}</Text>
-                <Text style={[styles.createText, { color: colors.mutedForeground }]}>Shared budget · joining as {invite.role === 'admin' ? 'admin' : 'member'}</Text>
+                <Text style={[styles.createText, { color: colors.mutedForeground }]}>Shared group · joining as {invite.role === 'admin' ? 'admin' : 'member'}</Text>
               </View>
               <Pressable
                 testID={`accept-invite-${invite.id}`}
@@ -425,7 +426,7 @@ export default function BudgetChooserScreen() {
               <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.createCardCopy}>
                   <Text style={[styles.createTitle, { color: colors.foreground }]}>Add a Personal budget</Text>
-                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>A free, private budget for your own money. Optional — you can run Shared budgets without one.</Text>
+                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>A free, private budget for your own money. Optional — you can run Shared groups without one.</Text>
                 </View>
                 <Pressable
                   testID="create-personal-budget"
@@ -441,22 +442,22 @@ export default function BudgetChooserScreen() {
               </View>
             )}
 
-            <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGETS</Text></View>
+            <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED GROUPS</Text></View>
             {sharedWorkspaces.length ? sharedWorkspaces.map((workspace) => workspaceRow(workspace)) : null}
             <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.createCardCopy}>
-                <Text style={[styles.createTitle, { color: colors.foreground }]}>{sharedWorkspaces.length ? 'Create another Shared budget' : 'Create a Shared budget'}</Text>
+                <Text style={[styles.createTitle, { color: colors.foreground }]}>{sharedWorkspaces.length ? 'Create another Shared group' : 'Create a Shared group'}</Text>
                 <Text style={[styles.createText, { color: colors.mutedForeground }]}>A group budget you own — for a chama, family, church, or team. Add members after it is made, or join one from an invite link.</Text>
               </View>
               <Pressable
                 testID="create-shared-budget"
                 accessibilityRole="button"
-                accessibilityLabel="Create a Shared budget"
+                accessibilityLabel="Create a Shared group"
                 onPress={() => { setError(null); setCreateSharedOpen(true); }}
                 style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
               >
                 <Feather name="plus" size={18} color={colors.primaryForeground} />
-                <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared budget</Text>
+                <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared group</Text>
               </Pressable>
             </View>
             {workspaceError ? <Text style={[styles.errorText, { color: colors.destructive }]}>Could not load your budgets. Pull down or reopen the app to try again.</Text> : null}
@@ -469,10 +470,10 @@ export default function BudgetChooserScreen() {
             <View style={[styles.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.modalHeader}>
                 <View style={styles.workspaceText}>
-                  <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
+                  <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared group</Text>
                   <Text style={[styles.modalCopy, { color: colors.mutedForeground }]}>You can use expenses, contributions, goals, and bank activity as its owner—even before inviting anyone.</Text>
                 </View>
-                <Pressable accessibilityRole="button" accessibilityLabel="Close Shared budget creation" hitSlop={10} onPress={() => setCreateSharedOpen(false)}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Close Shared group creation" hitSlop={10} onPress={() => setCreateSharedOpen(false)}>
                   <Feather name="x" size={21} color={colors.mutedForeground} />
                 </Pressable>
               </View>
@@ -484,7 +485,7 @@ export default function BudgetChooserScreen() {
                 onChangeText={setNewGroupName}
                 placeholder="e.g. Mwangaza Chama"
                 placeholderTextColor={colors.mutedForeground}
-                accessibilityLabel="Shared budget name"
+                accessibilityLabel="Shared group name"
                 style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
               />
               <Text style={[styles.kindTitle, { color: colors.foreground }]}>What is this budget for?</Text>
@@ -499,10 +500,10 @@ export default function BudgetChooserScreen() {
                 </Pressable>;
               })}
               <Pressable testID="confirm-create-shared-budget" accessibilityRole="button"
-                accessibilityLabel="Create Shared budget" disabled={createSharedGroup.isPending}
+                accessibilityLabel="Create Shared group" disabled={createSharedGroup.isPending}
                 onPress={() => void createSharedBudget()}
                 style={[styles.primaryButton, { backgroundColor: colors.primary }, createSharedGroup.isPending && styles.disabled]}>
-                {createSharedGroup.isPending ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={[styles.primaryText, { color: colors.primaryForeground }]}>Create and open Shared budget</Text>}
+                {createSharedGroup.isPending ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={[styles.primaryText, { color: colors.primaryForeground }]}>Create and open Shared group</Text>}
               </Pressable>
             </View>
           </ScrollView>
@@ -706,7 +707,7 @@ function MobileOnboardingFlow({
       setError(`${existing} is already selected.`);
       return;
     }
-    const preset = COMMON_INCOME_STREAMS.find((item) => normalizeIncomeStreamName(item) === normalized);
+    const preset = incomeStreamsForMode(draft.usageMode).find((item) => normalizeIncomeStreamName(item) === normalized);
     updateDraft((current) => ({
       ...current,
       selectedIncomeStreams: dedupeIncomeStreamNames([...current.selectedIncomeStreams, preset ?? value]),
@@ -788,9 +789,15 @@ function MobileOnboardingFlow({
         </> : null}
 
         {step === 4 ? <>
-          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}what brings money into your budget?</Text>
-          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>Choose the sources you rely on. Amounts are optional and can be changed later.</Text>
-          {COMMON_INCOME_STREAMS.map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
+          <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>
+            {headingName}{draft.usageMode === 'shared' ? 'what brings money into the group?' : 'what brings money into your budget?'}
+          </Text>
+          <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>
+            {draft.usageMode === 'shared'
+              ? "Member contributions are usually the main source. Pick what applies — amounts are optional and change later."
+              : 'Choose the sources you rely on. Amounts are optional and can be changed later.'}
+          </Text>
+          {incomeStreamsForMode(draft.usageMode).map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
           {draft.selectedIncomeStreams.length > 0 ? <View style={styles.incomeAmountList}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Expected monthly amount (optional)</Text>{draft.selectedIncomeStreams.map((income) => <View key={income} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{income}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-income-amount-${income}`} keyboardType="decimal-pad" value={draft.incomeAmounts[income] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [income]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}</View> : null}
           <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Add another income stream</Text><View style={styles.inlineInput}><TextInput testID="onboarding-custom-income" value={customIncomeStream} onChangeText={setCustomIncomeStream} onSubmitEditing={addCustomIncome} placeholder="e.g. dividends" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]} /><Pressable onPress={addCustomIncome} style={[styles.smallButton, { backgroundColor: colors.primary }]}><Text style={[styles.smallButtonText, { color: colors.primaryForeground }]}>Add</Text></Pressable></View></View>
         </> : null}

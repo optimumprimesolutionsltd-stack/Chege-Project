@@ -12,7 +12,7 @@ describe("dashboard expense removal", () => {
   });
 
   it("confirms whole-expense removal and refreshes dashboard data", () => {
-    expect(dashboardSource).toContain('const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";');
+    expect(dashboardSource).toContain('const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";');
     expect(dashboardSource).toContain('Remove this expense from "${budgetName}"?');
     expect(dashboardSource).toContain('activity in "${budgetName}" will be removed.');
     expect(dashboardSource).toContain("await deleteExpense.mutateAsync({ id: deleteTarget.id });");

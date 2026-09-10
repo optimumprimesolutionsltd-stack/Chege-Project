@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 
 /**
  * The server returns 402 with a read-only message when a lapsed member tries to
- * record in a Shared budget. Turn that into a clear prompt with a way to fix
+ * record in a Shared group. Turn that into a clear prompt with a way to fix
  * it, rather than a generic "could not save".
  *
  * Returns true when it handled the error (the caller should stop), false
@@ -15,7 +15,7 @@ export function handleLapsedError(error: unknown): boolean {
 
   const message =
     (error as { data?: { error?: string } } | null)?.data?.error ??
-    'This Shared budget is read-only because your Jamvi subscription has lapsed. Nothing has been removed.';
+    'This Shared group is read-only because your Jamvi subscription has lapsed. Nothing has been removed.';
 
   Alert.alert('Subscription needed', message, [
     { text: 'Not now', style: 'cancel' },

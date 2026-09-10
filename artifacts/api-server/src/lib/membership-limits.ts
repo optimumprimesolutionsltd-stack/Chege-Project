@@ -25,16 +25,16 @@ export async function memberMayJoinGroups(
 }
 
 /** Shown when someone whose subscription has lapsed tries to join or be added
- *  to a Shared budget. Names the person's own subscription, not the group's,
+ *  to a Shared group. Names the person's own subscription, not the group's,
  *  so an admin is not left looking for a group setting that no longer exists. */
 export function subscriptionRequiredMessage(): string {
-  return "This person needs an active Jamvi subscription to join a Shared budget.";
+  return "This person needs an active Jamvi subscription to join a Shared group.";
 }
 
 /** Shown to a member already in a group whose own subscription has lapsed.
  *  Says what they can still do, because they have not lost the group or their
  *  records — only the ability to add to them. */
 export function readOnlyMessage(): string {
-  return "Your Jamvi subscription has lapsed, so this Shared budget is read-only. "
+  return "Your Jamvi subscription has lapsed, so this Shared group is read-only. "
     + "Nothing has been removed — subscribe to start recording again.";
 }

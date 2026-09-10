@@ -203,7 +203,7 @@ export async function resolveMemberEntitlements(
   };
 }
 
-/** Whether this member may take part in Shared budgets. Paying is what makes
+/** Whether this member may take part in Shared groups. Paying is what makes
  *  someone eligible for groups; the groups themselves cost nothing. */
 export async function memberMayUseSharedBudgets(
   userId: string,

@@ -87,7 +87,7 @@ describe("PATCH /group identity", () => {
     vi.clearAllMocks();
     activeGroupMocks.requireGroupManager.mockImplementation((req: any, res: any) => {
       if (req.group?.role === "owner" || req.group?.role === "admin") return true;
-      res.status(403).json({ error: "Only owners and admins can manage this Shared budget." });
+      res.status(403).json({ error: "Only owners and admins can manage this Shared group." });
       return false;
     });
     mockedDb.select.mockReturnValue({
@@ -196,7 +196,7 @@ describe("PATCH /group identity", () => {
     });
 
     expect(response.status).toBe(400);
-    expect(response.body).toEqual({ error: "Photos are only available for Shared budgets." });
+    expect(response.body).toEqual({ error: "Photos are only available for Shared groups." });
     expect(mockedDb.update).not.toHaveBeenCalled();
   });
 
@@ -227,7 +227,7 @@ describe("PATCH /group identity", () => {
     expect(photoStorageMocks.resolvePhotoUrl).not.toHaveBeenCalled();
   });
 
-  it("does not let a Shared budget member change its identity", async () => {
+  it("does not let a Shared group member change its identity", async () => {
     const response = await request(buildApp({ role: "member" })).patch("/group").send({
       name: "Member override",
       emoji: "⚠️",

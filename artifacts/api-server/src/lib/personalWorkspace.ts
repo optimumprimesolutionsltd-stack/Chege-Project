@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 /**
  * Every Jamvi login identity owns one free Personal budget. The unique
  * privateOwnerUserId constraint makes this safe to call from onboarding,
- * workspace discovery, and Shared budget creation paths.
+ * workspace discovery, and Shared group creation paths.
  */
 export async function ensurePersonalWorkspace(userId: string): Promise<number> {
   return db.transaction(async (tx) => {

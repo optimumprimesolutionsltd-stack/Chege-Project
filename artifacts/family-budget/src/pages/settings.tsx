@@ -131,7 +131,7 @@ export default function Settings() {
   const displayNameInputRef = useRef<HTMLInputElement>(null);
   const budgetNameInputRef = useRef<HTMLInputElement>(null);
   const isPrivateWorkspace = group?.isPrivate ?? false;
-  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared budget";
+  const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
   const canManageWorkspace = isPrivateWorkspace || (members?.some(
     (member) =>
       member.userId === user?.id &&
@@ -198,7 +198,7 @@ export default function Settings() {
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
       ]);
       toast({
-        title: isPrivateWorkspace ? "Budget updated" : "Shared budget updated",
+        title: isPrivateWorkspace ? "Budget updated" : "Shared group updated",
         description: isPrivateWorkspace
           ? "Your budget name now appears across Jamvi."
           : "Its name and identity now appear across Jamvi.",
@@ -207,7 +207,7 @@ export default function Settings() {
     } catch (error) {
       toast({
         variant: "destructive",
-        title: isPrivateWorkspace ? "Could not update Personal budget" : "Could not update Shared budget",
+        title: isPrivateWorkspace ? "Could not update Personal budget" : "Could not update Shared group",
         description: error instanceof Error ? error.message : "Please try again.",
       });
     }
@@ -551,7 +551,7 @@ export default function Settings() {
         <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground mt-1">
           {canManageShared
-            ? "Manage who has access to this Shared budget."
+            ? "Manage who has access to this Shared group."
             : isPrivateWorkspace
               ? "This is your Personal budget. Only you can see it."
             : "View your group and manage your own account details."}
@@ -658,7 +658,7 @@ export default function Settings() {
             Your sign-in email is managed by your sign-in account and can’t be changed in Jamvi.
           </p>
           <p className="rounded-lg bg-muted/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            Your profile photo represents you wherever your name appears. If you have a Personal budget, it uses this photo too; Shared budgets can keep their own group photo.
+            Your profile photo represents you wherever your name appears. If you have a Personal budget, it uses this photo too; Shared groups can keep their own group photo.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
@@ -701,7 +701,7 @@ export default function Settings() {
                 </Button>
               </div>
               <p id="display-name-help" className="text-xs leading-relaxed text-muted-foreground">
-                This is the name other members see in shared budgets and activity.
+                This is the name other members see in shared groups and activity.
               </p>
             </form>
           ) : (
@@ -709,7 +709,7 @@ export default function Settings() {
               <div>
                 <p className="text-sm font-semibold text-foreground">Your name</p>
                 <p className="mt-1 text-sm text-muted-foreground">{savedDisplayName || "Not set"}</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">This is the name other members see in shared budgets and activity.</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">This is the name other members see in shared groups and activity.</p>
               </div>
               <Button type="button" variant="outline" onClick={startDisplayNameEdit} className="w-full sm:w-auto sm:shrink-0">
                 <Pencil className="mr-2 h-4 w-4" />
@@ -726,7 +726,7 @@ export default function Settings() {
           <CardDescription>
             {isPrivateWorkspace
                ? "This is the name for your Personal budget."
-              : "This is the name your Shared budget sees across Jamvi."}
+              : "This is the name your Shared group sees across Jamvi."}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
@@ -804,21 +804,21 @@ export default function Settings() {
           ) : (
             <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
               <p className={`text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
-                {group?.emoji ? `${group.emoji} ` : ""}{group?.name ?? "Shared budget"}
+                {group?.emoji ? `${group.emoji} ` : ""}{group?.name ?? "Shared group"}
               </p>
                 {group?.slogan ? <p className="mt-1 text-sm italic text-muted-foreground">{group.slogan}</p> : null}
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">An owner or admin manages this Shared budget’s name. Your access and shared records stay the same.</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">An owner or admin manages this Shared group’s name. Your access and shared records stay the same.</p>
             </div>
           )}
         </CardContent>
       </Card>
       <Card className="border-none shadow-md">
           <CardHeader className="p-4 sm:p-6">
-            <CardTitle>{isPrivateWorkspace ? "Personal budget identity" : "Shared budget identity"}</CardTitle>
+            <CardTitle>{isPrivateWorkspace ? "Personal budget identity" : "Shared group identity"}</CardTitle>
             <CardDescription>
               {isPrivateWorkspace
                 ? "Your Personal budget uses the same photo as your profile, so you only need to choose it once."
-                : "A photo, icon, and accent colour help members recognise this Shared budget when they switch budgets. It is separate from every member’s profile photo."}
+                : "A photo, icon, and accent colour help members recognise this Shared group when they switch budgets. It is separate from every member’s profile photo."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 px-4 pb-4 sm:px-6 sm:pb-6">
@@ -836,7 +836,7 @@ export default function Settings() {
               })()}
               <div>
                  <p className={`text-lg text-foreground ${workspaceNameClass(groupNameStyle)}`}>
-                   {groupEmoji ? `${groupEmoji} ` : ""}{group?.name || "Shared budget"}
+                   {groupEmoji ? `${groupEmoji} ` : ""}{group?.name || "Shared group"}
                  </p>
                  {group?.slogan ? <p className="text-sm italic text-muted-foreground">{group.slogan}</p> : null}
                   <p className="text-xs text-muted-foreground">
@@ -861,10 +861,10 @@ export default function Settings() {
                       )}
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground">
-                          {isPrivateWorkspace ? "Personal budget photo" : "Shared budget photo"}
+                          {isPrivateWorkspace ? "Personal budget photo" : "Shared group photo"}
                         </p>
                         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                          This photo identifies the selected Shared budget when members switch budgets. It does not change anyone’s profile photo. Choose a JPG, PNG, or WebP image up to 15 MB. Jamvi shrinks large photos first for a faster upload.
+                          This photo identifies the selected Shared group when members switch budgets. It does not change anyone’s profile photo. Choose a JPG, PNG, or WebP image up to 15 MB. Jamvi shrinks large photos first for a faster upload.
                         </p>
                       </div>
                     </div>
@@ -927,12 +927,12 @@ export default function Settings() {
                     ? "Saving…"
                     : isPrivateWorkspace
                       ? "Save Personal budget identity"
-                      : "Save Shared budget identity"}
+                      : "Save Shared group identity"}
                 </Button>
               </>
             ) : (
               <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-                An owner or admin can update the Shared budget name, emoji, style, icon, and accent colour.
+                An owner or admin can update the Shared group name, emoji, style, icon, and accent colour.
               </p>
             )}
           </CardContent>
@@ -940,7 +940,7 @@ export default function Settings() {
        {!isPrivateWorkspace && (
          <Card className="border-none shadow-md">
            <CardHeader className="p-4 sm:p-6">
-             <CardTitle>Shared budget kind</CardTitle>
+             <CardTitle>Shared group kind</CardTitle>
              <CardDescription>
                This helps Jamvi suggest useful budget categories for your group.
              </CardDescription>
@@ -1035,7 +1035,7 @@ export default function Settings() {
           </div>
           <CardDescription>
             {isPrivateWorkspace
-               ? "Only you have access to your Personal budget. Shared budgets remain separate."
+               ? "Only you have access to your Personal budget. Shared groups remain separate."
               : canManageShared
                 ? "You can change any non-owner between Admin and Member or remove their access. The group owner is protected."
               : "The people listed here have access to this budget. Works for families, chamas, clubs, student groups, teams, and other shared groups."}
@@ -1101,7 +1101,7 @@ export default function Settings() {
             <div className="rounded-xl border border-border/60 bg-muted/40 p-4">
                 <p className="text-sm font-semibold text-foreground">Personal budget</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  Expenses, goals, bank activity, and reports here belong only to you. A Shared budget has its own separate budget and members.
+                  Expenses, goals, bank activity, and reports here belong only to you. A Shared group has its own separate budget and members.
               </p>
             </div>
           ) : !canManageShared && (

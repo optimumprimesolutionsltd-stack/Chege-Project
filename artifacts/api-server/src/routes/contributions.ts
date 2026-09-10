@@ -91,7 +91,7 @@ router.get("/contributions", async (req, res): Promise<void> => {
  * The filters match the dashboard's deposit query exactly, so the ledger and
  * the total it sits under can never disagree: real deposits only, no leg of a
  * bank-to-bank transfer, and nothing left unattributed — a deposit with no
- * member is Shared budget funding, not anyone's contribution.
+ * member is Shared group funding, not anyone's contribution.
  */
 router.get("/contributions/deposits", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);

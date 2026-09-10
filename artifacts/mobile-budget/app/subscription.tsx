@@ -24,7 +24,7 @@ const ANNUAL_KES = 1_000;
 
 const FEATURES = [
   'Your personal budget, income and expenses',
-  'Join or create any number of Shared budgets',
+  'Join or create any number of Shared groups',
   'No limit on how many people share a budget',
   'Shared bank accounts, savings goals and contributions',
   'Full history, reports and exports',
@@ -258,7 +258,7 @@ export default function SubscriptionScreen() {
             </View>
           ))}
           <Text style={[styles.groupsNote, { color: colors.mutedForeground, backgroundColor: colors.muted }]}>
-            Groups cost nothing. Everyone in a Shared budget pays for their own subscription, so a chama of fifty has no
+            Groups cost nothing. Everyone in a Shared group pays for their own subscription, so a chama of fifty has no
             bill of its own.
           </Text>
         </View>

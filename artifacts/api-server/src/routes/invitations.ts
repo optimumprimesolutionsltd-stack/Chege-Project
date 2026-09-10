@@ -107,7 +107,7 @@ async function sendInvitationEmail(params: {
           </td></tr>
           <tr><td style="padding:32px">
             <p style="margin:0 0 16px;font-size:16px;line-height:1.5">You have been invited to join <strong>${groupName}</strong> on Jamvi as a <strong>${roleLabel}</strong>.</p>
-            <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#52645a">Sign in using this email address, then accept the invitation to join the shared budget.</p>
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#52645a">Sign in using this email address, then accept the invitation to join the shared group.</p>
             <a href="${inviteLink}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:#2f8f4e;color:#ffffff;text-decoration:none;font-weight:700">Accept invitation</a>
             <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#718077">This invitation expires in 7 days. If you were not expecting it, you can ignore this email.</p>
           </td></tr>

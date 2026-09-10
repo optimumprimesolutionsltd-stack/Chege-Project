@@ -14,7 +14,7 @@ import { useGetGroup } from '@workspace/api-client-react';
 
 // iOS 26+: NativeTabs with liquid glass support
 // 5 core tabs — Bank and Settings remain accessible from Home/header controls.
-// A shared budget swaps Search out for Contributions, which is a core shared
+// A shared group swaps Search out for Contributions, which is a core shared
 // activity; Search stays reachable from the Home header.
 function NativeTabLayout({ showReports, isShared }: { showReports: boolean; isShared: boolean }) {
   return (

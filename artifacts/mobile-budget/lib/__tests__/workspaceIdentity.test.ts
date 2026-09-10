@@ -9,6 +9,6 @@ describe('workspaceBudgetName', () => {
   });
 
   it('preserves the exact shared workspace identity, including its emoji', () => {
-    expect(source).toContain("return workspace ? workspaceIdentityText(workspace, 'Shared budget') : 'Shared budget';");
+    expect(source).toContain("return workspace ? workspaceIdentityText(workspace, 'Shared group') : 'Shared group';");
   });
 });

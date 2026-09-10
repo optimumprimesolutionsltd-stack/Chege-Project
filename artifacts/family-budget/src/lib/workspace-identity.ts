@@ -38,7 +38,7 @@ export function workspaceLabel(
   const normalizedName = name.replace(/\s+/g, " ").toLocaleLowerCase("en-US");
   const displayName = workspace.isPrivate
     ? (name || "Personal budget")
-    : (normalizedName === "shared budget" || !name ? "Group" : name);
+    : (normalizedName === "shared group" || !name ? "Group" : name);
 
   return `${workspace.emoji ? `${workspace.emoji} ` : ""}${displayName}`;
 }

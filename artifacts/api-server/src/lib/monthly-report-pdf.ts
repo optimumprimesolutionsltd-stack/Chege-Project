@@ -56,7 +56,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       info: {
         Title: `${data.monthLabel} monthly report`,
         Author: "Jamvi",
-        Subject: "Shared group budget report",
+        Subject: "Shared group report",
       },
     });
     const chunks: Buffer[] = [];
@@ -124,7 +124,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
     document.font("Helvetica-Bold").fontSize(22).fillColor("#103A2D").text("Monthly financial report", SIDE_MARGIN, y);
     y += 30;
     document.font("Helvetica").fontSize(10).fillColor("#60736C").text(
-      "A clear snapshot of your shared budget, spending, and recorded income-stream funding.",
+      "A clear snapshot of your shared group, spending, and recorded income-stream funding.",
       SIDE_MARGIN,
       y,
       { width: CONTENT_WIDTH },

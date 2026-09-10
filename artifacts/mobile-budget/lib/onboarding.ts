@@ -67,7 +67,7 @@ export const ONBOARDING_CATEGORY_TIERS = [
     priority: 4,
     label: "Flexible",
     description: "Optional spending and future plans.",
-    categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Member contributions", "Projects", "Loans", "Other"],
+    categories: ["Entertainment", "Dates & activities", "Events", "Equipment", "Venue", "Clothing", "Gifts", "Member welfare", "Projects", "Loans", "Other"],
   },
 ] as const;
 
@@ -83,6 +83,27 @@ export const COMMON_INCOME_STREAMS = [
   "Pension or benefits",
   "Other income",
 ] as const;
+
+/**
+ * What brings money into a group. For a chama or welfare group the members'
+ * own contributions are the main source, not a personal salary — so the
+ * shared-onboarding income step offers these instead of COMMON_INCOME_STREAMS.
+ */
+export const GROUP_INCOME_STREAMS = [
+  "Member contributions",
+  "Joining or registration fees",
+  "Fines and penalties",
+  "Fundraising and events",
+  "Interest from group loans",
+  "Grants or donations",
+  "Investment returns",
+  "Other group income",
+] as const;
+
+/** The income options for whichever way Jamvi is being set up. */
+export function incomeStreamsForMode(usageMode: MobileOnboardingMode): readonly string[] {
+  return usageMode === "shared" ? GROUP_INCOME_STREAMS : COMMON_INCOME_STREAMS;
+}
 
 export function normalizeIncomeStreamName(name: string): string {
   return name.trim().toLocaleLowerCase("en-US");
@@ -123,8 +144,8 @@ const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
   couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
   friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data"],
   family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
-  chama: ["Member welfare", "Loans", "Member contributions", "Events", "Transport", "Projects", "Other"],
-  club: ["Member contributions", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
+  chama: ["Member welfare", "Loans", "Events", "Transport", "Projects", "Other"],
+  club: ["Member welfare", "Events", "Equipment", "Venue", "Transport", "Projects", "Entertainment", "Other"],
   student_group: ["School fees & classes", "Books & supplies", "Meals", "Transport", "Airtime & data", "Events & activities", "Welfare", "Administration"],
 };
 

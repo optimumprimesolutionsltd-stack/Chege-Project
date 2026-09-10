@@ -20,7 +20,7 @@ function formatDay(iso: string): string {
 }
 
 /**
- * Read-only sharing for a Shared budget, mirroring the web Settings card. A
+ * Read-only sharing for a Shared group, mirroring the web Settings card. A
  * member link lets someone record and needs its own subscription; this one
  * lets the whole group only look, for free. Optionally protected by a spoken
  * passphrase — shown separately, to be said aloud rather than sent with the
@@ -101,7 +101,7 @@ export function ReadOnlyLinkCard({ groupName }: { groupName?: string }) {
   };
 
   const shareLink = async (url: string) => {
-    const message = `See the finances for ${groupName || 'our Shared budget'} on Jamvi (view only): ${url}`;
+    const message = `See the finances for ${groupName || 'our Shared group'} on Jamvi (view only): ${url}`;
     try {
       await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(message)}`);
     } catch {

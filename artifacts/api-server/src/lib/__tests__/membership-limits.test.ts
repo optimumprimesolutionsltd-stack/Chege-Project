@@ -1,5 +1,5 @@
 /**
- * Whether a member may take part in Shared budgets.
+ * Whether a member may take part in Shared groups.
  *
  * This file used to test a six-person cap on free workspaces. Jamvi is now
  * bought per member and groups cost nothing, so group size is not a billing

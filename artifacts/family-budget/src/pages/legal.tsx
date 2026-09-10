@@ -9,7 +9,7 @@ const pageContent = {
     description:
       "How Jamvi collects, uses, stores, and protects information when you use the budgeting service.",
     intro:
-      "Jamvi helps people manage personal budgets and work together in shared budgets. This Privacy Policy explains the information we handle when you use Jamvi.",
+      "Jamvi helps people manage personal budgets and work together in shared groups. This Privacy Policy explains the information we handle when you use Jamvi.",
     sections: [
       {
         heading: "Information we collect",
@@ -22,15 +22,15 @@ const pageContent = {
       {
         heading: "How we use information",
         paragraphs: [
-          "We use information to authenticate you, provide personal and shared budgeting features, calculate balances and reports, show information to authorized members of a shared budget, send invitations and requested notifications, and protect the service from misuse.",
+          "We use information to authenticate you, provide personal and shared grouping features, calculate balances and reports, show information to authorized members of a shared group, send invitations and requested notifications, and protect the service from misuse.",
           "Jamvi does not sell your personal information. We do not use your financial records to provide financial advice or to make decisions about your eligibility for credit, insurance, employment, or other services.",
         ],
       },
       {
-        heading: "Shared budgets",
+        heading: "Shared groups",
         paragraphs: [
-          "Information entered into a shared budget is visible to the members who have access to that shared budget. Only add information that you are comfortable sharing with those members.",
-          "Personal budgets remain separate from shared budgets. Shared bank funds, goals, reports, activity, and history belong to the shared workspace and are available according to that workspace's roles and permissions.",
+          "Information entered into a shared group is visible to the members who have access to that shared group. Only add information that you are comfortable sharing with those members.",
+          "Personal budgets remain separate from shared groups. Shared bank funds, goals, reports, activity, and history belong to the shared workspace and are available according to that workspace's roles and permissions.",
         ],
       },
       {
@@ -64,22 +64,22 @@ const pageContent = {
   terms: {
     title: "Terms of Service",
     description:
-      "The rules for using Jamvi personal and shared budgeting workspaces.",
+      "The rules for using Jamvi personal and shared grouping workspaces.",
     intro:
       "These Terms of Service describe the rules for using Jamvi. By using Jamvi, you agree to follow these terms.",
     sections: [
       {
         heading: "Using Jamvi",
         paragraphs: [
-          "Jamvi provides tools for recording and organizing personal and shared budget information. You are responsible for the accuracy of the information you enter and for reviewing records before relying on them.",
+          "Jamvi provides tools for recording and organizing personal and shared group information. You are responsible for the accuracy of the information you enter and for reviewing records before relying on them.",
           "You must use an account that belongs to you, keep your sign-in access secure, and provide truthful information when managing a workspace or inviting another person.",
         ],
       },
       {
         heading: "Shared workspaces",
         paragraphs: [
-          "A shared budget is a collaborative workspace. Workspace owners and administrators may manage members, invitations, shared setup, and shared money records according to the permissions shown in Jamvi.",
-          "Do not invite someone to a shared budget or expose financial information without the appropriate permission. Members should use their own accounts and participate under their own names.",
+          "A shared group is a collaborative workspace. Workspace owners and administrators may manage members, invitations, shared setup, and shared money records according to the permissions shown in Jamvi.",
+          "Do not invite someone to a shared group or expose financial information without the appropriate permission. Members should use their own accounts and participate under their own names.",
         ],
       },
       {

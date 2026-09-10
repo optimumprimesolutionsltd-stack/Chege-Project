@@ -278,7 +278,7 @@ export default function Subscription() {
           <ul className="flex flex-col gap-2.5">
             {[
               "Your personal budget, income and expenses",
-              "Join or create any number of Shared budgets",
+              "Join or create any number of Shared groups",
               "No limit on how many people share a budget",
               "Shared bank accounts, savings goals and contributions",
               "Full history, reports and exports",
@@ -290,7 +290,7 @@ export default function Subscription() {
             ))}
           </ul>
           <p className="mt-4 rounded-lg bg-muted/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-            Groups cost nothing. Everyone in a Shared budget pays for their own subscription, so a
+            Groups cost nothing. Everyone in a Shared group pays for their own subscription, so a
             chama of fifty has no bill of its own.
           </p>
         </CardContent>
