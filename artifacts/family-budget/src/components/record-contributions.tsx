@@ -30,6 +30,10 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   const [amounts, setAmounts] = useState<Record<number, string>>({});
   const [ticked, setTicked] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
+  // Set synchronously the instant a record starts, so a fast double-click or a
+  // click during the network round-trip cannot fire a second deposit — React
+  // state re-renders a frame too late to block it.
+  const submittingRef = useRef(false);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
 
@@ -176,6 +180,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   };
 
   const record = async () => {
+    if (submittingRef.current || saving) return;
     if (contributors.length < 2) {
       toast({
         variant: "destructive",
@@ -226,6 +231,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
       return;
     }
 
+    submittingRef.current = true;
     setSaving(true);
     try {
       const response = await fetch("/api/joint-account/deposit", {
@@ -251,6 +257,11 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
         description: `${splits.length} ${splits.length === 1 ? "person" : "people"} · ${formatKes(total)}`,
       });
       await queryClient.invalidateQueries();
+      // Clear the ticks and amounts so the same batch cannot be recorded twice
+      // by pressing again, and drop back to a clean form.
+      setTicked(new Set());
+      setAmounts({});
+      setEach("");
       onRecorded?.();
     } catch (error) {
       toast({
@@ -259,6 +270,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
         description: error instanceof Error ? error.message : "Nothing has been changed.",
       });
     } finally {
+      submittingRef.current = false;
       setSaving(false);
     }
   };
