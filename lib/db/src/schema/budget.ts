@@ -219,6 +219,32 @@ export const insertContributionSchema = createInsertSchema(contributionsTable).o
 export type InsertContribution = typeof contributionsTable.$inferInsert;
 export type Contribution = typeof contributionsTable.$inferSelect;
 
+// Merry-go-round: each round the pot is paid out to one member in turn. The
+// recipient is chosen by the treasurer, so this table is the record of who has
+// received and in what order — there is no fixed rotation stored anywhere.
+// Recording a payout also writes a joint-account disbursement (transactionId),
+// so the bank balance and this history stay in step.
+export const groupPayoutsTable = pgTable("group_payouts", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
+  contributorId: integer("contributor_id").notNull().references(() => groupContributorsTable.id, { onDelete: "restrict" }),
+  /** The bank disbursement this payout created. Null only for a payout imported
+   *  or recorded before the money moved. */
+  transactionId: integer("transaction_id").references(() => jointAccountTxTable.id, { onDelete: "set null" }),
+  /** 1-based, assigned in order per group. */
+  roundNumber: integer("round_number").notNull(),
+  amount: integer("amount").notNull(), // in KES
+  date: date("date", { mode: "string" }).notNull(),
+  note: text("note"),
+  recordedByUserId: text("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("group_payouts_group_round_idx").on(table.groupId, table.roundNumber),
+  uniqueIndex("group_payouts_group_round_unique").on(table.groupId, table.roundNumber),
+]);
+
+export type GroupPayout = typeof groupPayoutsTable.$inferSelect;
+
 // Joint Account Transactions — deposits and disbursements from the shared pool
 export const jointAccountTxTable = pgTable("joint_account_transactions", {
   id: serial("id").primaryKey(),

@@ -296,9 +296,11 @@ router.patch("/contributors/:id", async (req, res): Promise<void> => {
 });
 
 const settingsUpdate = z.object({
-  defaultMonthlyTarget: z.number().int().min(0).nullable(),
+  defaultMonthlyTarget: z.number().int().min(0).nullable().optional(),
   /** Also write it onto everybody, rather than only onto people added later. */
   applyToEveryone: z.boolean().optional(),
+  /** Turn the rotating payout on or off for this budget. */
+  merryGoRoundEnabled: z.boolean().optional(),
 });
 
 /** What the group expects from each member, and whether that has been decided
@@ -306,7 +308,15 @@ const settingsUpdate = z.object({
 router.get("/contribution-settings", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  res.json({ defaultMonthlyTarget: await groupDefaultTarget(groupId) });
+  const [group] = await db
+    .select({ merryGoRoundEnabled: groups.merryGoRoundEnabled })
+    .from(groups)
+    .where(eq(groups.id, groupId))
+    .limit(1);
+  res.json({
+    defaultMonthlyTarget: await groupDefaultTarget(groupId),
+    merryGoRoundEnabled: group?.merryGoRoundEnabled ?? false,
+  });
 });
 
 router.patch("/contribution-settings", async (req, res): Promise<void> => {
@@ -320,15 +330,21 @@ router.patch("/contribution-settings", async (req, res): Promise<void> => {
     return;
   }
 
+  const changes: { defaultMonthlyTarget?: number | null; merryGoRoundEnabled?: boolean } = {};
+  if (parsed.data.defaultMonthlyTarget !== undefined) changes.defaultMonthlyTarget = parsed.data.defaultMonthlyTarget;
+  if (parsed.data.merryGoRoundEnabled !== undefined) changes.merryGoRoundEnabled = parsed.data.merryGoRoundEnabled;
+
+  if (Object.keys(changes).length === 0) {
+    res.status(400).json({ error: "Nothing to change." });
+    return;
+  }
+
   await db.transaction(async (tx) => {
-    await tx
-      .update(groups)
-      .set({ defaultMonthlyTarget: parsed.data.defaultMonthlyTarget })
-      .where(eq(groups.id, groupId));
+    await tx.update(groups).set(changes).where(eq(groups.id, groupId));
 
     // Setting the figure for the first time should not leave every existing
     // member without one - which is the state that made arrears useless.
-    if (parsed.data.applyToEveryone) {
+    if (parsed.data.applyToEveryone && parsed.data.defaultMonthlyTarget !== undefined) {
       await tx
         .update(groupContributorsTable)
         .set({ monthlyTarget: parsed.data.defaultMonthlyTarget })
@@ -339,7 +355,7 @@ router.patch("/contribution-settings", async (req, res): Promise<void> => {
     }
   });
 
-  res.json({ defaultMonthlyTarget: parsed.data.defaultMonthlyTarget });
+  res.json(changes);
 });
 
 /**
