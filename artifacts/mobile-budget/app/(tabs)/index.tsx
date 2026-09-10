@@ -32,6 +32,7 @@ import BudgetRing from '@/components/BudgetRing';
 import ActivityCard from '@/components/ActivityCard';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
+import { DashboardAnnouncement } from '@/components/DashboardAnnouncement';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import {
@@ -461,6 +462,8 @@ export default function DashboardScreen() {
             </View>
           )}
         </LinearGradient>
+
+        <DashboardAnnouncement />
 
         <View
           testID="ask-jamvi-cta"
