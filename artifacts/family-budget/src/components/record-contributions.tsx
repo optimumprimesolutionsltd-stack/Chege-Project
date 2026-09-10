@@ -120,6 +120,30 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
     });
   };
 
+  // Advanced starts where Simple does: every ticked person's expected amount
+  // already in their row, so the treasurer edits the exceptions instead of
+  // typing every figure. Only fills blanks - never overwrites what was typed,
+  // never touches an unticked row.
+  useEffect(() => {
+    if (mode !== "advanced") return;
+    setAmounts((previous) => {
+      const flat = Number(each);
+      const flatSeed = Number.isFinite(flat) && flat > 0 ? String(flat) : "";
+      let changed = false;
+      const next = { ...previous };
+      for (const contributor of contributors) {
+        if (!ticked.has(contributor.id)) continue;
+        if (next[contributor.id]) continue;
+        const seed = flatSeed || (contributor.monthlyTarget ? String(contributor.monthlyTarget) : "");
+        if (seed) {
+          next[contributor.id] = seed;
+          changed = true;
+        }
+      }
+      return changed ? next : previous;
+    });
+  }, [mode, contributors, ticked, each]);
+
   const amountFor = (contributor: Contributor): number => {
     if (mode === "advanced") {
       const typed = Number(amounts[contributor.id]);
@@ -219,18 +243,21 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   };
 
   return (
-    <Card className="border-none shadow-md" data-testid="record-contributions">
+    <Card className="border-2 border-primary/30 shadow-lg ring-1 ring-primary/5" data-testid="record-contributions">
+      <div className="rounded-t-[calc(var(--radius)-2px)] bg-primary/8 px-4 py-2 text-xs font-bold uppercase tracking-wide text-primary sm:px-6">
+        Record this month
+      </div>
       <CardContent className="space-y-4 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="font-display text-lg font-bold text-foreground">Record this month</h2>
+            <h2 className="font-display text-xl font-bold text-foreground">Record this month&rsquo;s contributions</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Everyone is ticked to start. Untick anyone who has not paid.
             </p>
             <p className="mt-1 text-xs text-muted-foreground" data-testid="contribution-mode-hint">
               {mode === "simple"
                 ? "Simple: everyone paid the same amount — type it once below."
-                : "Advanced: amounts differ per person, or someone paid nothing — set each one in their row."}
+                : "Advanced: each row is filled with the expected amount. Change the ones that differ, or clear a row for someone who paid nothing."}
             </p>
           </div>
           <div className="flex shrink-0 gap-1" role="group" aria-label="Entry mode">

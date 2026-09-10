@@ -517,9 +517,10 @@ export default function Contributions() {
 
       {isSharedWorkspace ? (
         <div className="space-y-6">
+          {/* The most-used action on the page, so it leads. */}
+          <RecordContributions />
           {canManageContributions ? <ContributionArrearsBanner /> : null}
           {canManageContributions ? <ContributionPlan /> : null}
-          <RecordContributions />
           {canManageContributions ? (
             <DownloadContributions
               budgetName={group ? workspaceLabel(group) : "Shared budget"}
