@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { formatKes } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useCollapsed } from "@/hooks/use-collapsed";
-import { ChevronDown, ChevronUp, Loader2, Pencil, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 
 type PayoutMember = { id: number; name: string; timesReceived: number; lastRound: number | null };
 type Payout = { id: number; roundNumber: number; contributorId: number; name: string; amount: number; date: string; note: string | null };
@@ -103,6 +103,27 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
       toast({
         variant: "destructive",
         title: "Could not record the payout",
+        description: error instanceof Error ? error.message : "Please try again.",
+      }),
+  });
+
+  const deletePayout = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/payouts/${id}`, { method: "DELETE", credentials: "include" });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error ?? "Could not undo the round.");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payouts"] });
+      queryClient.invalidateQueries({ queryKey: ["contribution-grid"] });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+      toast({ title: "Round removed", description: "The payout and its bank withdrawal were reversed." });
+    },
+    onError: (error) =>
+      toast({
+        variant: "destructive",
+        title: "Could not undo the round",
         description: error instanceof Error ? error.message : "Please try again.",
       }),
   });
@@ -212,6 +233,7 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
                       <th className="py-2 pr-3 text-left font-semibold">Member</th>
                       <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Amount</th>
                       <th className="whitespace-nowrap py-2 pl-3 text-right font-semibold">Date</th>
+                      {editing && canManage ? <th className="w-8" /> : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -224,6 +246,24 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
                         </td>
                         <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-foreground">{formatKes(payout.amount)}</td>
                         <td className="whitespace-nowrap py-2 pl-3 text-right tabular-nums text-muted-foreground">{payout.date}</td>
+                        {editing && canManage ? (
+                          <td className="py-2 pl-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`Undo round ${payout.roundNumber} — ${formatKes(payout.amount)} to ${payout.name}? This reverses the bank withdrawal too.`)) {
+                                  deletePayout.mutate(payout.id);
+                                }
+                              }}
+                              disabled={deletePayout.isPending}
+                              className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                              aria-label={`Undo round ${payout.roundNumber}`}
+                              data-testid={`delete-payout-${payout.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>
@@ -232,6 +272,7 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
                       <th className="py-2 pr-3 text-left" colSpan={2}>Paid out</th>
                       <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatKes(data.totalPaidOut)}</td>
                       <td />
+                      {editing && canManage ? <td /> : null}
                     </tr>
                   </tfoot>
                 </table>

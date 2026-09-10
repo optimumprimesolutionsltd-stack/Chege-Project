@@ -183,4 +183,44 @@ router.post("/payouts", async (req, res): Promise<void> => {
   res.status(201).json({ ...payout, name: recipient.name });
 });
 
+/**
+ * Undo a recorded round: remove the payout and the joint-account disbursement
+ * it created, so the bank balance goes back to where it was. Any round can be
+ * removed — round numbers do not have to stay contiguous.
+ */
+router.delete("/payouts/:id", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid round." });
+    return;
+  }
+
+  const removed = await db.transaction(async (tx) => {
+    const [payout] = await tx
+      .select({ id: groupPayoutsTable.id, transactionId: groupPayoutsTable.transactionId })
+      .from(groupPayoutsTable)
+      .where(and(eq(groupPayoutsTable.id, id), eq(groupPayoutsTable.groupId, groupId)))
+      .limit(1);
+    if (!payout) return null;
+
+    await tx.delete(groupPayoutsTable).where(eq(groupPayoutsTable.id, payout.id));
+    if (payout.transactionId != null) {
+      await tx
+        .delete(jointAccountTxTable)
+        .where(and(eq(jointAccountTxTable.id, payout.transactionId), eq(jointAccountTxTable.groupId, groupId)));
+    }
+    return payout.id;
+  });
+
+  if (removed === null) {
+    res.status(404).json({ error: "That round was not found." });
+    return;
+  }
+  res.json({ id: removed });
+});
+
 export default router;

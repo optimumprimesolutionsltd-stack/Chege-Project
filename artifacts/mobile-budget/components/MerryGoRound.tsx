@@ -94,6 +94,31 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
       Alert.alert('Could not record the payout', error instanceof Error ? error.message : 'Please try again.'),
   });
 
+  const deletePayout = useMutation({
+    mutationFn: async (id: number) => {
+      await customFetch(`/api/payouts/${id}`, { method: 'DELETE', responseType: 'json' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payouts'] });
+      queryClient.invalidateQueries({ queryKey: ['contribution-grid'] });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetJointAccountsQueryKey() });
+      Alert.alert('Round removed', 'The payout and its bank withdrawal were reversed.');
+    },
+    onError: (error) =>
+      Alert.alert('Could not undo the round', error instanceof Error ? error.message : 'Please try again.'),
+  });
+
+  const confirmDeletePayout = (payout: Payout) =>
+    Alert.alert(
+      `Undo round ${payout.roundNumber}?`,
+      `KES ${kes(payout.amount)} to ${payout.name}. This reverses the bank withdrawal too.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Undo round', style: 'destructive', onPress: () => deletePayout.mutate(payout.id) },
+      ],
+    );
+
   if (isLoading) {
     return (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]}>
@@ -211,6 +236,17 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
                     </Text>
                   </View>
                   <Text style={[styles.payoutAmount, { color: colors.foreground }]}>KES {kes(payout.amount)}</Text>
+                  {editing && canManage ? (
+                    <Pressable
+                      onPress={() => confirmDeletePayout(payout)}
+                      disabled={deletePayout.isPending}
+                      hitSlop={8}
+                      style={{ marginLeft: 8 }}
+                      testID={`delete-payout-${payout.id}`}
+                    >
+                      <Feather name="trash-2" size={15} color="#ef4444" />
+                    </Pressable>
+                  ) : null}
                 </View>
               ))}
               <View style={[styles.totalRow, { borderColor: colors.border }]}>
