@@ -7,10 +7,69 @@ import { db, groupMembershipsTable, groupsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { Router } from "express";
 import { setActiveWorkspaceCookie } from "../lib/activeGroup";
+import { logger } from "../lib/logger";
 import { resolvePhotoUrl } from "../lib/photoStorage";
 import { ensurePersonalWorkspace } from "../lib/personalWorkspace";
 
 const router = Router();
+
+// `icon`, `accent_color`, `name_style`, `kind` and `role` are free-text
+// columns, so the database can hold a value the response schema does not
+// list — an older default, or one written by a newer client. A single such
+// row must not make `GetWorkspacesResponse.parse` throw and hide *every*
+// workspace, so each field is snapped to a known value first.
+const VALID_ICONS = new Set(["users", "home", "heart", "briefcase", "award", "star"]);
+const VALID_ACCENTS = new Set([
+  "#011C4E", "#003383", "#087F8C", "#08B7B0", "#209E45", "#C98C00",
+  "#0F766E", "#2563EB", "#7C3AED", "#DB2777", "#D97706", "#059669",
+]);
+const VALID_NAME_STYLES = new Set(["plain", "italic", "bold", "serif"]);
+const VALID_KINDS = new Set([
+  "personal", "family", "chama", "church", "club", "team", "student_group", "other",
+]);
+const VALID_ROLES = new Set(["owner", "admin", "member", "viewer"]);
+
+function oneOf(set: Set<string>, value: unknown, fallback: string): string {
+  return typeof value === "string" && set.has(value) ? value : fallback;
+}
+
+type WorkspaceRow = {
+  id: number;
+  name: string;
+  emoji: string | null;
+  nameStyle: string;
+  icon: string;
+  accentColor: string;
+  slogan: string | null;
+  kind: string | null;
+  privateOwnerUserId: string | null;
+  role: string;
+};
+
+/**
+ * Every enum-ish field snapped to a value the response schema accepts, plus
+ * emoji/slogan length-clamped. Pure — the async photo lookup is layered on by
+ * the caller.
+ */
+export function toWorkspaceListItem(row: WorkspaceRow, photoUrl: string | null) {
+  const isPrivate = Boolean(row.privateOwnerUserId);
+  return {
+    id: row.id,
+    name: row.name,
+    emoji: typeof row.emoji === "string" && row.emoji.length <= 16 ? row.emoji : null,
+    nameStyle: oneOf(VALID_NAME_STYLES, row.nameStyle, "plain") as "plain" | "italic" | "bold" | "serif",
+    icon: oneOf(VALID_ICONS, row.icon, "users") as "users" | "home" | "heart" | "briefcase" | "award" | "star",
+    accentColor: oneOf(VALID_ACCENTS, row.accentColor, "#0F766E") as
+      | "#011C4E" | "#003383" | "#087F8C" | "#08B7B0" | "#209E45" | "#C98C00"
+      | "#0F766E" | "#2563EB" | "#7C3AED" | "#DB2777" | "#D97706" | "#059669",
+    photoUrl: isPrivate ? null : photoUrl,
+    slogan: typeof row.slogan === "string" && row.slogan.length <= 120 ? row.slogan : null,
+    isPrivate,
+    kind: oneOf(VALID_KINDS, row.kind, "family") as
+      | "personal" | "family" | "chama" | "church" | "club" | "team" | "student_group" | "other",
+    role: oneOf(VALID_ROLES, row.role, "member") as "owner" | "admin" | "member" | "viewer",
+  };
+}
 
 async function availableWorkspaces(userId: string) {
   const rows = await db
@@ -32,26 +91,23 @@ async function availableWorkspaces(userId: string) {
     .where(eq(groupMembershipsTable.userId, userId));
 
   return Promise.all(rows.map(async (row) => {
-    const isPrivate = Boolean(row.privateOwnerUserId);
-    return {
-      id: row.id,
-      name: row.name,
-      emoji: row.emoji,
-      nameStyle: row.nameStyle,
-      icon: row.icon,
-      accentColor: row.accentColor,
-      photoUrl: isPrivate ? null : await resolvePhotoUrl(row.photoPath).catch(() => null),
-      slogan: row.slogan,
-      isPrivate,
-      kind: (row.kind ?? "family") as "personal" | "family" | "chama" | "club" | "team" | "student_group" | "other",
-      role: row.role as "owner" | "admin" | "member" | "viewer",
-    };
+    const photoUrl = Boolean(row.privateOwnerUserId)
+      ? null
+      : await resolvePhotoUrl(row.photoPath).catch(() => null);
+    return toWorkspaceListItem(row, photoUrl);
   }));
 }
 
 router.get("/workspaces", async (req, res): Promise<void> => {
   const workspaces = await availableWorkspaces(req.user!.id);
-  res.json(GetWorkspacesResponse.parse(workspaces));
+  const parsed = GetWorkspacesResponse.safeParse(workspaces);
+  if (!parsed.success) {
+    // Last resort: never let a schema mismatch hide someone's whole list.
+    logger.error({ err: parsed.error, userId: req.user!.id }, "Workspaces response failed schema validation");
+    res.json(workspaces);
+    return;
+  }
+  res.json(parsed.data);
 });
 
 /**
