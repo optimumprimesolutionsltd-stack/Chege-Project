@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatKes } from "@/lib/utils";
-import { Loader2, TableProperties } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, TableProperties } from "lucide-react";
+import { useCollapsed } from "@/hooks/use-collapsed";
 import {
   ContributorEditorFooter,
   EditListButton,
@@ -42,6 +43,7 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
   const [months, setMonths] = useState<number>(6);
   const [hideSettled, setHideSettled] = useState(false);
   const editor = useContributorEditor();
+  const { open, toggle } = useCollapsed("who-has-paid");
 
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
     queryKey: ["contribution-grid", months],
@@ -66,42 +68,78 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
   const shown = hideSettled
     ? rows.filter((row) => row.outstanding.some((amount) => (amount ?? 0) > 0))
     : rows;
+  const behindCount = rows.filter((row) => row.outstanding.some((amount) => (amount ?? 0) > 0)).length;
+  const summary =
+    rows.length === 0
+      ? "No contributors yet"
+      : `${
+          behindCount > 0 ? `${behindCount} of ${rows.length} behind` : "Everybody up to date"
+        } · collected ${formatKes(data?.grandTotal ?? 0)}`;
 
   return (
     <Card className="overflow-hidden border-none shadow-md" data-testid="contributions-grid">
       <CardContent className="space-y-4 p-4 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h2 className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
-              <TableProperties className="h-5 w-5 text-secondary" aria-hidden="true" />
-              Who has paid
-              <EditListButton editor={editor} canManage={canManage} label="Add or remove people" />
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {periodLabel ? (
-                <>
-                  <span className="font-semibold text-foreground">{periodLabel}</span>
-                  {monthCount > 1 ? ` · ${monthCount} months` : ""} — every member down the side, months across the top.
-                </>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            className="flex min-w-0 flex-1 items-start gap-2 text-left"
+          >
+            <TableProperties className="mt-1 h-5 w-5 shrink-0 text-secondary" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
+                Who has paid
+                {open ? (
+                  <span onClick={(event) => event.stopPropagation()}>
+                    <EditListButton editor={editor} canManage={canManage} label="Add or remove people" />
+                  </span>
+                ) : null}
+              </span>
+              {open ? (
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  {periodLabel ? (
+                    <>
+                      <span className="font-semibold text-foreground">{periodLabel}</span>
+                      {monthCount > 1 ? ` · ${monthCount} months` : ""} — every member down the side, months across the top.
+                    </>
+                  ) : (
+                    "Every member down the side, months across the top — the sheet you already keep."
+                  )}
+                </span>
               ) : (
-                "Every member down the side, months across the top — the sheet you already keep."
+                <span
+                  className={`mt-1 block text-sm ${behindCount > 0 ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {summary}
+                </span>
               )}
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-1">
-            {RANGES.map((range) => (
-              <Button
-                key={range}
-                variant={months === range ? "default" : "outline"}
-                size="sm"
-                onClick={() => setMonths(range)}
-                data-testid={`grid-range-${range}`}
-              >
-                {range}m
-              </Button>
-            ))}
-          </div>
+            </span>
+            {open ? (
+              <ChevronUp className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            )}
+          </button>
+          {open ? (
+            <div className="flex shrink-0 gap-1">
+              {RANGES.map((range) => (
+                <Button
+                  key={range}
+                  variant={months === range ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setMonths(range)}
+                  data-testid={`grid-range-${range}`}
+                >
+                  {range}m
+                </Button>
+              ))}
+            </div>
+          ) : null}
         </div>
+
+        {open ? (
+        <>
 
         {isLoading ? (
           <div className="flex min-h-32 items-center justify-center text-muted-foreground">
@@ -249,6 +287,8 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
             <ContributorEditorFooter editor={editor} />
           </>
         )}
+        </>
+        ) : null}
       </CardContent>
     </Card>
   );

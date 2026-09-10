@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { useCollapsed } from '@/hooks/useCollapsed';
 import {
   ContributorEditorFooter,
   EditListButton,
@@ -53,6 +54,7 @@ function kesShort(value: number): string {
 export function ContributionSheet({ canManage = false }: { canManage?: boolean }) {
   const colors = useColors();
   const editor = useContributorEditor();
+  const { open, toggle } = useCollapsed('who-has-paid');
   const [months, setMonths] = useState<number>(6);
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
     queryKey: ['contribution-grid', months],
@@ -82,35 +84,53 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
     .filter((row) => row.owed > 0)
     .sort((a, b) => b.owed - a.owed || a.name.localeCompare(b.name));
   const totalShort = behind.reduce((sum, row) => sum + row.owed, 0);
+  const summary =
+    behind.length > 0
+      ? `${behind.length} ${behind.length === 1 ? 'member' : 'members'} behind for ${monthLabel} · KES ${kes(totalShort)} short`
+      : `Everyone is up to date for ${monthLabel}`;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.headRow}>
+      <Pressable style={styles.headRow} onPress={toggle}>
         <View style={styles.headingWrap}>
           <Text style={[styles.heading, { color: colors.foreground }]}>Who has paid</Text>
-          <EditListButton editor={editor} canManage={canManage} />
+          {open ? <EditListButton editor={editor} canManage={canManage} /> : null}
         </View>
-        <View style={styles.ranges}>
-          {RANGES.map((range) => {
-            const active = months === range;
-            return (
-              <Pressable
-                key={range}
-                onPress={() => setMonths(range)}
-                style={[
-                  styles.rangeBtn,
-                  { borderColor: colors.border },
-                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-              >
-                <Text style={[styles.rangeLabel, { color: active ? colors.primaryForeground : colors.mutedForeground }]}>
-                  {range}m
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View style={styles.headRight}>
+          {open ? (
+            <View style={styles.ranges}>
+              {RANGES.map((range) => {
+                const active = months === range;
+                return (
+                  <Pressable
+                    key={range}
+                    onPress={() => setMonths(range)}
+                    style={[
+                      styles.rangeBtn,
+                      { borderColor: colors.border },
+                      active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                    ]}
+                  >
+                    <Text style={[styles.rangeLabel, { color: active ? colors.primaryForeground : colors.mutedForeground }]}>
+                      {range}m
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+          <Feather name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
         </View>
-      </View>
+      </Pressable>
+
+      {!open ? (
+        <Text style={[styles.collapsedSummary, { color: behind.length > 0 ? colors.warning : colors.mutedForeground }]}>
+          {summary}
+        </Text>
+      ) : null}
+
+      {!open ? null : (
+      <>
       {periodLabel ? (
         <Text style={[styles.period, { color: colors.foreground }]}>
           {periodLabel}
@@ -198,6 +218,8 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
       })}
 
       <ContributorEditorFooter editor={editor} />
+      </>
+      )}
     </View>
   );
 }
@@ -206,8 +228,10 @@ const styles = StyleSheet.create({
   loading: { paddingVertical: 24, alignItems: 'center' },
   card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headingWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   heading: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  collapsedSummary: { fontSize: 12.5, fontFamily: 'Inter_500Medium', lineHeight: 17 },
   nameWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   period: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   ranges: { flexDirection: 'row', gap: 4 },
