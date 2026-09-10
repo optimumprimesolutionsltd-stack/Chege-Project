@@ -43,6 +43,7 @@ import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
+import { ReadOnlyLinkCard } from '@/components/ReadOnlyLinkCard';
 import {
   activateMobileWorkspace,
   leaveMobileSharedWorkspace,
@@ -1322,6 +1323,11 @@ export default function SettingsScreen() {
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>Admins manage group access. You can still contribute in your own name.</Text>
             </View>
           )}
+          {canManageShared ? (
+            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'stretch' }]}>
+              <ReadOnlyLinkCard groupName={group?.name} />
+            </View>
+          ) : null}
           {canManageShared && inviteContacts.length > 0 ? (
             <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'stretch' }]}>
               <Text style={[styles.rowLabel, { color: colors.foreground, marginBottom: 4 }]}>Quick invite</Text>
