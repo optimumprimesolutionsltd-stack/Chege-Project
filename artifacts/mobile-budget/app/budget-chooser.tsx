@@ -123,6 +123,35 @@ export default function BudgetChooserScreen() {
     await refetchWorkspaces();
     setOnboardingComplete(true);
   };
+  // Setup is a convenience, never a gate. Somebody here to run a group can step
+  // straight to choosing or creating one; the questions can be answered later.
+  const skipOnboarding = async () => {
+    if (!user?.id) {
+      setError('Your account could not be identified. Please sign in again.');
+      return;
+    }
+    const skipped: MobileOnboardingDraft = {
+      usageMode: 'shared',
+      persona: null,
+      budgetDuration: 'ongoing',
+      customEndDate: '',
+      lastStep: 0,
+      selectedCategories: [],
+      customCategories: [],
+      categoryBudgets: {},
+      selectedIncomeStreams: [],
+      incomeAmounts: {},
+    };
+    try {
+      await saveMobileOnboardingPreferences(skipped);
+      await clearOnboardingDraft({ userId: user.id, storage: AsyncStorage });
+      setPendingOnboardingDraft(null);
+      await refetchWorkspaces();
+      setOnboardingComplete(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not skip setup right now. Please try again.');
+    }
+  };
   const chooseWorkspace = async (workspace: Workspace) => {
     if (selectWorkspace.isPending) return;
     setError(null);
@@ -169,6 +198,28 @@ export default function BudgetChooserScreen() {
       await finish();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not create this Shared budget. Please try again.');
+    }
+  };
+  const [creatingPersonal, setCreatingPersonal] = useState(false);
+  const createPersonalBudget = async () => {
+    if (creatingPersonal) return;
+    setError(null);
+    setCreatingPersonal(true);
+    try {
+      const created = await customFetch<{ id: number }>('/api/workspaces/personal', {
+        method: 'POST',
+        responseType: 'json',
+      });
+      await activateMobileWorkspace({
+        groupId: created.id,
+        storage: AsyncStorage,
+        resetQueries: () => queryClient.resetQueries(),
+      });
+      await finish();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not create your Personal budget. Please try again.');
+    } finally {
+      setCreatingPersonal(false);
     }
   };
   const workspaceRow = (workspace: Workspace, personal = false) => {
@@ -232,7 +283,15 @@ export default function BudgetChooserScreen() {
   }
 
   if (!onboardingComplete) {
-    return <MobileOnboardingFlow colors={colors} insets={insets} user={user} onComplete={continueToWorkspaceChooser} />;
+    return (
+      <MobileOnboardingFlow
+        colors={colors}
+        insets={insets}
+        user={user}
+        onComplete={continueToWorkspaceChooser}
+        onSkip={skipOnboarding}
+      />
+    );
   }
 
   return (
@@ -266,41 +325,41 @@ export default function BudgetChooserScreen() {
             {privateWorkspace ? workspaceRow(privateWorkspace, true) : (
               <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.createCardCopy}>
-                  <Text style={[styles.createTitle, { color: colors.foreground }]}>Preparing your Personal budget</Text>
-                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>Every Jamvi account starts with a free, private Personal budget before Shared budgets are added.</Text>
+                  <Text style={[styles.createTitle, { color: colors.foreground }]}>Add a Personal budget</Text>
+                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>A free, private budget for your own money. Optional — you can run Shared budgets without one.</Text>
                 </View>
                 <Pressable
-                  testID="retry-personal-budget"
+                  testID="create-personal-budget"
                   accessibilityRole="button"
-                  accessibilityLabel="Check for Personal budget again"
-                  onPress={() => void refetchWorkspaces()}
-                  style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+                  accessibilityLabel="Create my Personal budget"
+                  disabled={creatingPersonal}
+                  onPress={() => void createPersonalBudget()}
+                  style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, (pressed || creatingPersonal) && styles.pressed]}
                 >
-                  <Feather name="refresh-cw" size={18} color={colors.primaryForeground} />
-                  <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Check again</Text>
+                  {creatingPersonal ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name="plus" size={18} color={colors.primaryForeground} />}
+                  <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>{creatingPersonal ? 'Creating…' : 'Create Personal budget'}</Text>
                 </Pressable>
               </View>
             )}
 
             <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED BUDGETS</Text></View>
-            {sharedWorkspaces.length ? sharedWorkspaces.map((workspace) => workspaceRow(workspace)) : privateWorkspace ? (
-              <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.createCardCopy}>
-                  <Text style={[styles.createTitle, { color: colors.foreground }]}>Create a Shared budget</Text>
-                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>It stays separate from your free Personal budget and is visible only to its members.</Text>
-                </View>
-                <Pressable
-                  testID="create-shared-budget"
-                  accessibilityRole="button"
-                  accessibilityLabel="Create a Shared budget"
-                  onPress={() => { setError(null); setCreateSharedOpen(true); }}
-                  style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
-                >
-                  <Feather name="plus" size={18} color={colors.primaryForeground} />
-                  <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared budget</Text>
-                </Pressable>
+            {sharedWorkspaces.length ? sharedWorkspaces.map((workspace) => workspaceRow(workspace)) : null}
+            <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.createCardCopy}>
+                <Text style={[styles.createTitle, { color: colors.foreground }]}>{sharedWorkspaces.length ? 'Create another Shared budget' : 'Create a Shared budget'}</Text>
+                <Text style={[styles.createText, { color: colors.mutedForeground }]}>A group budget you own — for a chama, family, church, or team. Add members after it is made, or join one from an invite link.</Text>
               </View>
-            ) : <Text style={[styles.empty, { color: colors.mutedForeground }]}>Your free Personal budget must be ready before you can add a Shared budget.</Text>}
+              <Pressable
+                testID="create-shared-budget"
+                accessibilityRole="button"
+                accessibilityLabel="Create a Shared budget"
+                onPress={() => { setError(null); setCreateSharedOpen(true); }}
+                style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
+              >
+                <Feather name="plus" size={18} color={colors.primaryForeground} />
+                <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared budget</Text>
+              </Pressable>
+            </View>
             {workspaceError ? <Text style={[styles.errorText, { color: colors.destructive }]}>Could not load your budgets. Pull down or reopen the app to try again.</Text> : null}
           </>
         )}
@@ -395,12 +454,15 @@ function MobileOnboardingFlow({
   insets,
   user,
   onComplete,
+  onSkip,
 }: {
   colors: MobileColorPalette;
   insets: { top: number; bottom: number; left: number; right: number };
   user: MobileUser;
   onComplete: (draft: MobileOnboardingDraft) => Promise<void>;
+  onSkip: () => Promise<void>;
 }) {
+  const [skipping, setSkipping] = useState(false);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<MobileOnboardingDraft>({
     usageMode: 'personal',
@@ -573,7 +635,19 @@ function MobileOnboardingFlow({
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.onboardingPage, { backgroundColor: colors.background, paddingTop: insets.top + 18 }]}>
       <ScrollView contentContainerStyle={[styles.onboardingContent, { paddingBottom: insets.bottom + 26 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="sliders" size={22} color={colors.primaryForeground} /></View>
+        <View style={styles.onboardingTopRow}>
+          <View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="sliders" size={22} color={colors.primaryForeground} /></View>
+          <Pressable
+            testID="onboarding-skip"
+            accessibilityRole="button"
+            accessibilityLabel="Skip setup for now"
+            disabled={skipping}
+            onPress={() => { setSkipping(true); void onSkip().finally(() => setSkipping(false)); }}
+            hitSlop={10}
+          >
+            <Text style={[styles.skipLink, { color: colors.mutedForeground }]}>{skipping ? 'Skipping…' : 'Skip for now'}</Text>
+          </Pressable>
+        </View>
         <Text style={[styles.eyebrow, { color: colors.brandTeal }]}>WELCOME TO JAMVI · STEP {step + 1} OF 6</Text>
         <Text style={[styles.onboardingTitle, { color: colors.foreground }]}>{headingName}{stepTitles[step]}</Text>
         <Text style={[styles.onboardingIntro, { color: colors.mutedForeground }]}>Every Jamvi account includes a free, private Personal budget. Answer a few questions so the budget you use first is ready.</Text>
@@ -640,5 +714,5 @@ function MobileOnboardingFlow({
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1 }, content: { paddingHorizontal: 20, gap: 12 }, mark: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1 }, title: { fontSize: 27, fontWeight: '700' }, intro: { fontSize: 15, lineHeight: 22, marginBottom: 10 }, selectedPanel: { borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 8 }, selectedHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }, selectedIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, selectedLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1 }, selectedTitle: { fontSize: 20, fontWeight: '700', marginTop: 3 }, selectedDetail: { fontSize: 13, lineHeight: 19, marginTop: 5 }, openButton: { minHeight: 50, borderRadius: 12, paddingHorizontal: 15, marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, openButtonText: { fontSize: 15, fontWeight: '700' }, secondaryRow: { flexDirection: 'row', gap: 8, marginTop: 12 }, secondaryAction: { minHeight: 42, borderWidth: 1, borderRadius: 11, flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, secondaryText: { fontSize: 13, fontWeight: '600' }, sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: .9, marginTop: 8 }, sectionTitle: { fontSize: 23, fontWeight: '700', marginTop: -4 }, sectionDescription: { fontSize: 13, lineHeight: 19, marginTop: -5, marginBottom: 3 }, sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }, workspace: { minHeight: 72, borderRadius: 12, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 }, pressed: { opacity: .72 }, workspaceIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, workspacePhoto: { width: 40, height: 40, borderRadius: 12, borderWidth: 2 }, workspaceEmoji: { fontSize: 20 }, workspaceText: { flex: 1 }, workspaceTitle: { fontSize: 16, fontWeight: '600' }, workspaceDetail: { fontSize: 13, marginTop: 3 }, loader: { marginVertical: 22 }, empty: { fontSize: 14, lineHeight: 20, paddingVertical: 8 }, createCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12 }, createCardCopy: { gap: 4 }, createTitle: { fontSize: 16, fontWeight: '700' }, createText: { fontSize: 13, lineHeight: 19 }, createButton: { minHeight: 46, borderRadius: 11, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 }, createButtonText: { fontSize: 14, fontWeight: '700' }, explanation: { flexDirection: 'row', gap: 10, borderRadius: 12, padding: 14, marginTop: 12 }, explanationText: { flex: 1, fontSize: 13, lineHeight: 19 }, error: { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 10 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' }, modalScroll: { flexGrow: 1, justifyContent: 'flex-end' }, modal: { maxHeight: '88%', borderTopWidth: 1, borderRadius: 20, padding: 20, gap: 12 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 20, fontWeight: '700' }, modalCopy: { fontSize: 14, lineHeight: 20 }, input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, height: 48, fontSize: 16 }, kind: { borderWidth: 1, borderRadius: 10, padding: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, kindTitle: { fontSize: 14, fontWeight: '600' }, kindDescription: { fontSize: 12, lineHeight: 16, maxWidth: 265, marginTop: 2 }, primaryButton: { height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginTop: 4 }, primaryText: { fontSize: 16, fontWeight: '700' }, disabled: { opacity: .6 }, onboardingPage: { flex: 1 }, onboardingContent: { paddingHorizontal: 20, gap: 12 }, onboardingTitle: { fontSize: 28, fontWeight: '700', lineHeight: 34 }, onboardingIntro: { fontSize: 15, lineHeight: 22, marginTop: -4 }, benefitsCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 4 }, progressTrack: { height: 6, borderRadius: 6, backgroundColor: '#d7e3f1', overflow: 'hidden', marginVertical: 8 }, progressFill: { height: 6, borderRadius: 6 }, onboardingQuestion: { fontSize: 22, fontWeight: '700', marginTop: 10 }, onboardingHint: { fontSize: 14, lineHeight: 20, marginTop: -4 }, onboardingChoice: { minHeight: 70, borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, choiceCopy: { flex: 1, gap: 4 }, choiceTitle: { fontSize: 15, fontWeight: '700' }, choiceDescription: { fontSize: 13, lineHeight: 18 }, choiceIndicator: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, selectAll: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, categoryTier: { marginTop: 14, gap: 6 }, incomeAmountList: { gap: 8, marginTop: 6 }, incomeAmountRow: { minHeight: 56, borderWidth: 1, borderRadius: 12, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, tierTitle: { fontSize: 17, fontWeight: '700' }, tierDescription: { fontSize: 13, lineHeight: 18 }, categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, categoryChip: { width: '48%', minHeight: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }, categoryChipText: { flex: 1, fontSize: 13, fontWeight: '600' }, customBox: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8, marginTop: 14 }, inlineInput: { flexDirection: 'row', alignItems: 'center', gap: 8 }, onboardingInput: { height: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, fontSize: 16 }, flexInput: { flex: 1 }, smallButton: { height: 48, paddingHorizontal: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, smallButtonText: { fontSize: 14, fontWeight: '700' }, amountRow: { minHeight: 58, borderWidth: 1, borderRadius: 12, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, amountLabel: { flex: 1, fontSize: 14, fontWeight: '600' }, amountInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 }, currency: { fontSize: 12 }, amountInput: { width: 92, height: 40, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, textAlign: 'right', fontSize: 15 }, planTotal: { borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }, planTotalValue: { fontSize: 18, fontWeight: '700' }, onboardingError: { padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 18, marginTop: 4 }, onboardingActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 }, backButton: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 7 }, backButtonText: { fontSize: 14, fontWeight: '600' },
+  page: { flex: 1 }, content: { paddingHorizontal: 20, gap: 12 }, mark: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, onboardingTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, skipLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' }, eyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1 }, title: { fontSize: 27, fontWeight: '700' }, intro: { fontSize: 15, lineHeight: 22, marginBottom: 10 }, selectedPanel: { borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 8 }, selectedHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 }, selectedIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, selectedLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1 }, selectedTitle: { fontSize: 20, fontWeight: '700', marginTop: 3 }, selectedDetail: { fontSize: 13, lineHeight: 19, marginTop: 5 }, openButton: { minHeight: 50, borderRadius: 12, paddingHorizontal: 15, marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, openButtonText: { fontSize: 15, fontWeight: '700' }, secondaryRow: { flexDirection: 'row', gap: 8, marginTop: 12 }, secondaryAction: { minHeight: 42, borderWidth: 1, borderRadius: 11, flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, secondaryText: { fontSize: 13, fontWeight: '600' }, sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: .9, marginTop: 8 }, sectionTitle: { fontSize: 23, fontWeight: '700', marginTop: -4 }, sectionDescription: { fontSize: 13, lineHeight: 19, marginTop: -5, marginBottom: 3 }, sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }, workspace: { minHeight: 72, borderRadius: 12, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 12 }, pressed: { opacity: .72 }, workspaceIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }, workspacePhoto: { width: 40, height: 40, borderRadius: 12, borderWidth: 2 }, workspaceEmoji: { fontSize: 20 }, workspaceText: { flex: 1 }, workspaceTitle: { fontSize: 16, fontWeight: '600' }, workspaceDetail: { fontSize: 13, marginTop: 3 }, loader: { marginVertical: 22 }, empty: { fontSize: 14, lineHeight: 20, paddingVertical: 8 }, createCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12 }, createCardCopy: { gap: 4 }, createTitle: { fontSize: 16, fontWeight: '700' }, createText: { fontSize: 13, lineHeight: 19 }, createButton: { minHeight: 46, borderRadius: 11, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 }, createButtonText: { fontSize: 14, fontWeight: '700' }, explanation: { flexDirection: 'row', gap: 10, borderRadius: 12, padding: 14, marginTop: 12 }, explanationText: { flex: 1, fontSize: 13, lineHeight: 19 }, error: { flexDirection: 'row', gap: 8, padding: 12, borderRadius: 10 }, errorText: { flex: 1, fontSize: 13, lineHeight: 18 }, scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(1, 28, 78, 0.48)' }, modalScroll: { flexGrow: 1, justifyContent: 'flex-end' }, modal: { maxHeight: '88%', borderTopWidth: 1, borderRadius: 20, padding: 20, gap: 12 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 20, fontWeight: '700' }, modalCopy: { fontSize: 14, lineHeight: 20 }, input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, height: 48, fontSize: 16 }, kind: { borderWidth: 1, borderRadius: 10, padding: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }, kindTitle: { fontSize: 14, fontWeight: '600' }, kindDescription: { fontSize: 12, lineHeight: 16, maxWidth: 265, marginTop: 2 }, primaryButton: { height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, marginTop: 4 }, primaryText: { fontSize: 16, fontWeight: '700' }, disabled: { opacity: .6 }, onboardingPage: { flex: 1 }, onboardingContent: { paddingHorizontal: 20, gap: 12 }, onboardingTitle: { fontSize: 28, fontWeight: '700', lineHeight: 34 }, onboardingIntro: { fontSize: 15, lineHeight: 22, marginTop: -4 }, benefitsCard: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 4 }, progressTrack: { height: 6, borderRadius: 6, backgroundColor: '#d7e3f1', overflow: 'hidden', marginVertical: 8 }, progressFill: { height: 6, borderRadius: 6 }, onboardingQuestion: { fontSize: 22, fontWeight: '700', marginTop: 10 }, onboardingHint: { fontSize: 14, lineHeight: 20, marginTop: -4 }, onboardingChoice: { minHeight: 70, borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, choiceCopy: { flex: 1, gap: 4 }, choiceTitle: { fontSize: 15, fontWeight: '700' }, choiceDescription: { fontSize: 13, lineHeight: 18 }, choiceIndicator: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, selectAll: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }, categoryTier: { marginTop: 14, gap: 6 }, incomeAmountList: { gap: 8, marginTop: 6 }, incomeAmountRow: { minHeight: 56, borderWidth: 1, borderRadius: 12, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, tierTitle: { fontSize: 17, fontWeight: '700' }, tierDescription: { fontSize: 13, lineHeight: 18 }, categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, categoryChip: { width: '48%', minHeight: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }, categoryChipText: { flex: 1, fontSize: 13, fontWeight: '600' }, customBox: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 8, marginTop: 14 }, inlineInput: { flexDirection: 'row', alignItems: 'center', gap: 8 }, onboardingInput: { height: 48, borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, fontSize: 16 }, flexInput: { flex: 1 }, smallButton: { height: 48, paddingHorizontal: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, smallButtonText: { fontSize: 14, fontWeight: '700' }, amountRow: { minHeight: 58, borderWidth: 1, borderRadius: 12, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, amountLabel: { flex: 1, fontSize: 14, fontWeight: '600' }, amountInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 }, currency: { fontSize: 12 }, amountInput: { width: 92, height: 40, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, textAlign: 'right', fontSize: 15 }, planTotal: { borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }, planTotalValue: { fontSize: 18, fontWeight: '700' }, onboardingError: { padding: 12, borderRadius: 10, fontSize: 13, lineHeight: 18, marginTop: 4 }, onboardingActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 }, backButton: { minHeight: 50, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 7 }, backButtonText: { fontSize: 14, fontWeight: '600' },
 });
