@@ -21,6 +21,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Loader2, Calendar, Target, Pencil, Trash2, Plus, SlidersHorizontal, WalletCards, ReceiptText } from "lucide-react";
 import { useCollapsed } from "@/hooks/use-collapsed";
+import { useListEditor } from "@/hooks/use-list-editor";
+import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { getCategoryIcon } from "@/lib/category-icons";
@@ -890,6 +892,27 @@ export default function Budget() {
       member.userId === user?.id &&
       (member.role === "owner" || member.role === "admin"),
   ) || group?.isPrivate === true;
+
+  // Panel-level edit mode for the category report: rename or remove several at
+  // once, one Save. Adding a category still uses the + / dialog, which also
+  // sets its amount and priority.
+  const categoryEditor = useListEditor({
+    noun: "category",
+    rename: async (id, name) => {
+      const res = await fetch(`/api/budget-categories/${id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error("rename failed");
+    },
+    remove: async (id) => {
+      const res = await fetch(`/api/budget-categories/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("remove failed");
+    },
+    afterSave: refreshAll,
+  });
   const { data: categoryMigration, refetch: refetchCategoryMigration } = useQuery<CategoryMigration>({
     queryKey: ["budget-category-migration", group?.id],
     enabled: canManageShared,
@@ -1285,6 +1308,9 @@ export default function Budget() {
                   <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 )}
               </button>
+              {reportPanel.open ? (
+                <ListEditButton editor={categoryEditor} canManage={canManageShared} label="Rename or remove categories" />
+              ) : null}
               {/* Simple reads: one line per category, sub-categories tucked
                   inside it. Advanced works: each sub-category is a row of its
                   own, because that is the thing being edited. */}
@@ -1364,7 +1390,11 @@ export default function Budget() {
                                 <CategoryIcon className="h-4 w-4" aria-hidden="true" />
                               </span>
                               <div className="min-w-0">
-                               <h3 className="break-words text-lg font-semibold leading-snug text-foreground">{cat.category}</h3>
+                               <h3 className="break-words text-lg font-semibold leading-snug text-foreground">
+                                 {categoryEditor.editing && fullCat
+                                   ? <span className="flex items-center gap-2"><RemoveRowButton editor={categoryEditor} id={fullCat.id} name={cat.category} /><EditableName editor={categoryEditor} id={fullCat.id} name={cat.category} /></span>
+                                   : cat.category}
+                               </h3>
                                <p className="break-words text-sm text-muted-foreground">
                                 {cat.isBudgeted
                                   ? <>Limit: {formatKes(cat.budgetAmount)} · {cat.isRecurring
@@ -1381,7 +1411,7 @@ export default function Budget() {
                                   {isOver ? <span className="text-destructive">Over by {formatKes(Math.abs(cat.remaining))}</span> : <span>{formatKes(cat.remaining)} left</span>}
                                 </p>
                               </div>
-                               {canManageShared && fullCat ? (
+                               {canManageShared && fullCat && !categoryEditor.editing ? (
                                  <div className="flex flex-wrap items-center justify-end gap-1">
                                    <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(fullCat)}>
                                      <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
@@ -1460,10 +1490,15 @@ export default function Budget() {
                               <CategoryIcon className="h-4 w-4" aria-hidden="true" />
                             </span>
                              <div className="min-w-0">
-                             <h3 className="break-words text-lg font-semibold leading-snug text-foreground">{cat.name}</h3>
+                             <h3 className="break-words text-lg font-semibold leading-snug text-foreground">
+                               {categoryEditor.editing
+                                 ? <span className="flex items-center gap-2"><RemoveRowButton editor={categoryEditor} id={cat.id} name={cat.name} /><EditableName editor={categoryEditor} id={cat.id} name={cat.name} /></span>
+                                 : cat.name}
+                             </h3>
                              <p className="break-words text-sm text-muted-foreground">Limit: {formatKes(cat.budgetAmount)} · No spending yet</p>
                             </div>
                           </div>
+                           {!categoryEditor.editing ? (
                            <div className="flex w-full flex-wrap items-center justify-end gap-1 sm:w-auto sm:shrink-0">
                              <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground" onClick={() => setEditTarget(cat)}>
                                <Pencil className="mr-1 w-3.5 h-3.5" /> Edit
@@ -1472,6 +1507,7 @@ export default function Budget() {
                                <Trash2 className="mr-1 w-3.5 h-3.5" /> Remove
                              </Button>
                           </div>
+                          ) : null}
                         </div>
                         <Progress value={0} className="h-2" />
                         <Button
@@ -1491,6 +1527,10 @@ export default function Budget() {
               </div>
             );
           })}
+          <ListEditorFooter
+            editor={categoryEditor}
+            summary="Removing a category keeps every expense already recorded against it."
+          />
         </div>
       )}
     </div>

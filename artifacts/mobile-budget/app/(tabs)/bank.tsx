@@ -22,6 +22,8 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
+import { useListEditor } from '@/hooks/useListEditor';
+import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
 import { PageFlatList } from '@/components/PageScrollReset';
 import {
   useGetJointAccount,
@@ -830,6 +832,29 @@ export default function BankScreen() {
 
   const transactions: Tx[] = data?.transactions ?? [];
 
+  // Panel-level edit mode: one Edit on a heading turns the list editable, one
+  // Save at the foot applies every staged change.
+  const accountEditor = useListEditor({
+    add: async (name) => { await createAccount({ data: { name } }); },
+    rename: async (id, name) => {
+      const account = accounts.find((item) => item.id === id);
+      await updateAccount({ id, data: { name, accountNumber: account?.accountNumber ?? null } });
+    },
+    remove: async (id) => { await deleteAccount({ id }); },
+    afterSave: invalidateAccounts,
+  });
+  const txEditor = useListEditor({
+    remove: async (id) => {
+      const tx = transactions.find((item) => item.id === id);
+      if (tx?.expenseId != null) await deleteExpense({ id: tx.expenseId });
+      else await deleteTransaction({ id });
+    },
+    afterSave: invalidateBalance,
+  });
+  // A transaction row can only be staged for removal when the person could
+  // delete it on its own — the same rule the per-row Delete already enforces.
+  const canRemoveTx = (tx: Tx) => canManageAccount || canEditTransaction(tx);
+
   const isDeposit = txType === 'deposit';
   const isWithdrawal = txType === 'disbursement';
   const isTransfer = txType === 'transfer';
@@ -874,12 +899,108 @@ export default function BankScreen() {
         <WorkspaceIdentityRow group={group} />
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <Text style={styles.headerTitle}>Bank accounts</Text>
-          {canManageAccount && (
-            <TouchableOpacity onPress={() => openAccountEditor()} hitSlop={10} testID="bank-add-account">
-              <Feather name="plus-circle" size={24} color="#86efac" />
-            </TouchableOpacity>
+          {canManageAccount && !accountEditor.editing && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              {hasBankAccounts && (
+                <TouchableOpacity onPress={accountEditor.open} hitSlop={10} testID="bank-edit-accounts">
+                  <Feather name="edit-2" size={19} color="#86efac" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => openAccountEditor()} hitSlop={10} testID="bank-add-account">
+                <Feather name="plus-circle" size={24} color="#86efac" />
+              </TouchableOpacity>
+            </View>
           )}
         </View>
+        {accountEditor.editing ? (
+          <View style={{ marginTop: 10, gap: 8 }}>
+            {accounts.map((account) => {
+              const staged = accountEditor.isRemoving(account.id);
+              const renaming = accountEditor.editingRow === account.id;
+              return (
+                <View
+                  key={account.id}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1f3a2b', borderRadius: 12, paddingHorizontal: 12, minHeight: 44 }}
+                >
+                  <TouchableOpacity onPress={() => accountEditor.toggleRemoval(account.id)} hitSlop={8} testID={`bank-remove-account-${account.id}`}>
+                    <Feather name={staged ? 'rotate-ccw' : 'trash-2'} size={16} color={staged ? '#86efac' : '#fca5a5'} />
+                  </TouchableOpacity>
+                  {renaming ? (
+                    <>
+                      <TextInput
+                        autoFocus
+                        value={accountEditor.rowDraft}
+                        onChangeText={accountEditor.setRowDraft}
+                        onSubmitEditing={() => accountEditor.commitRename(account.id, account.name)}
+                        maxLength={120}
+                        style={{ flex: 1, color: '#ecfdf5', fontFamily: 'Inter_600SemiBold', paddingVertical: 8 }}
+                        placeholderTextColor="#6ee7b7"
+                      />
+                      <TouchableOpacity onPress={() => accountEditor.commitRename(account.id, account.name)} hitSlop={8}>
+                        <Feather name="check" size={17} color="#86efac" />
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <TouchableOpacity
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}
+                      onPress={() => accountEditor.startRename(account.id, account.name)}
+                    >
+                      <Text
+                        style={{ color: '#d1fae5', fontFamily: 'Inter_600SemiBold', textDecorationLine: staged ? 'line-through' : 'none' }}
+                        numberOfLines={1}
+                      >
+                        {accountEditor.displayName(account.id, account.name)}
+                      </Text>
+                      <Feather name="edit-2" size={11} color="#6ee7b7" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+            {accountEditor.adds.map((name, index) => (
+              <TouchableOpacity
+                key={`add-${index}`}
+                onPress={() => accountEditor.dropAdd(index)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#14532d', borderRadius: 12, paddingHorizontal: 12, minHeight: 40 }}
+              >
+                <Feather name="plus" size={14} color="#86efac" />
+                <Text style={{ flex: 1, color: '#ecfdf5' }}>{name}</Text>
+                <Feather name="x" size={13} color="#6ee7b7" />
+              </TouchableOpacity>
+            ))}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
+              <TextInput
+                value={accountEditor.addName}
+                onChangeText={accountEditor.setAddName}
+                onSubmitEditing={accountEditor.commitAdd}
+                maxLength={120}
+                placeholder="Add a bank account by name"
+                placeholderTextColor="#6ee7b7"
+                style={{ flex: 1, height: 42, borderWidth: 1, borderColor: '#2f6f4c', borderRadius: 10, paddingHorizontal: 12, color: '#ecfdf5' }}
+              />
+              <TouchableOpacity onPress={accountEditor.commitAdd} style={{ width: 42, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#2f6f4c', alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="plus" size={18} color="#86efac" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 14, marginTop: 4 }}>
+              <TouchableOpacity onPress={accountEditor.cancel} disabled={accountEditor.saving} hitSlop={8}>
+                <Text style={{ color: '#9ca3af', fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => void accountEditor.save()}
+                disabled={accountEditor.saving || !accountEditor.dirty}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#22c55e', paddingHorizontal: 16, height: 40, borderRadius: 10, opacity: accountEditor.saving || !accountEditor.dirty ? 0.5 : 1 }}
+                testID="bank-save-accounts"
+              >
+                {accountEditor.saving ? <ActivityIndicator size="small" color="#052e16" /> : null}
+                <Text style={{ color: '#052e16', fontFamily: 'Inter_700Bold' }}>Save changes</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ color: '#6ee7b7', fontSize: 11, lineHeight: 16 }}>
+              An account with transactions cannot be removed — move or delete its transactions first.
+            </Text>
+          </View>
+        ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
           {accounts.map((account) => {
             const active = account.id === selectedAccount?.id;
@@ -900,6 +1021,7 @@ export default function BankScreen() {
             );
           })}
         </View>
+        )}
         {!hasBankAccounts && canManageAccount && (
           <Pressable
             onPress={() => openAccountEditor()}
@@ -1035,7 +1157,18 @@ export default function BankScreen() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           transactions.length > 0 ? (
-            <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
+              <ListEditButton editor={txEditor} canManage={canManageAccount} />
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          txEditor.editing ? (
+            <ListEditorFooter
+              editor={txEditor}
+              summary={`${transactions.filter((tx) => txEditor.isRemoving(tx.id)).length} marked for deletion. A withdrawal linked to an expense removes that expense too.`}
+            />
           ) : null
         }
         ListEmptyComponent={
@@ -1069,13 +1202,23 @@ export default function BankScreen() {
           const dep = item.type === 'deposit';
           const payerLabel = txPayerLabel(item);
           const bankCharge = item.bankCharge === true;
+          const editing = txEditor.editing;
+          const removable = canRemoveTx(item);
+          const staged = editing && txEditor.isRemoving(item.id);
           return (
             <Pressable
               style={({ pressed }) => [
                 styles.txRow,
-                { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                { borderBottomColor: colors.border, opacity: pressed && !editing ? 0.7 : staged ? 0.55 : 1 },
               ]}
             >
+              {editing ? (
+                removable ? (
+                  <RemoveRowButton editor={txEditor} id={item.id} />
+                ) : (
+                  <Feather name="lock" size={14} color={colors.mutedForeground} style={{ marginRight: 2 }} />
+                )
+              ) : null}
               <View style={[styles.txIcon, { backgroundColor: dep ? '#1a3320' : '#3a1a1a' }]}>
                 <Feather
                   name={dep ? 'arrow-down-left' : 'arrow-up-right'}
@@ -1127,6 +1270,7 @@ export default function BankScreen() {
                     Balance KES {formatKES(item.runningBalance)}
                   </Text>
                 )}
+                {!editing && (
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   {canEditTransaction(item) && <TouchableOpacity
                     onPress={() => openEdit(item)}
@@ -1143,6 +1287,7 @@ export default function BankScreen() {
                     <Feather name="trash-2" size={16} color="#f87171" />
                   </TouchableOpacity>}
                 </View>
+                )}
               </View>
             </Pressable>
           );

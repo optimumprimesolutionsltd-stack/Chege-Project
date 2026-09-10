@@ -22,6 +22,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
+import { useListEditor } from '@/hooks/useListEditor';
+import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from '@/components/ListEditor';
 import { PageScrollView } from '@/components/PageScrollReset';
 import {
   getGetDashboardCategoryBreakdownQueryKey,
@@ -264,6 +266,21 @@ export default function BudgetScreen() {
     member => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
   );
   const canManageCategories = group?.isPrivate === true || canManageSharedIncome;
+
+  // Panel-level edit mode for BY CATEGORY: rename or remove several at once,
+  // one Save. Adding a category still uses the + / modal, which also sets its
+  // amount and priority.
+  const catEditor = useListEditor({
+    rename: async (id, name) => {
+      await customFetch(`/api/budget-categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+    },
+    remove: async (id) => { await customFetch(`/api/budget-categories/${id}`, { method: 'DELETE' }); },
+    afterSave: refreshAll,
+  });
   const openTierEditor = () => {
     setTierDrafts(priorityTiers.map(tier => ({ ...tier })));
     setTierEditorOpen(true);
@@ -1197,7 +1214,14 @@ export default function BudgetScreen() {
         <View style={styles.list}>
           <Pressable onPress={categoryPanel.toggle} style={styles.collapseHead}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BY CATEGORY</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BY CATEGORY</Text>
+                {categoryPanel.open && (allCategories.length > 0) ? (
+                  <View onStartShouldSetResponder={() => true}>
+                    <ListEditButton editor={catEditor} canManage={canManageCategories} />
+                  </View>
+                ) : null}
+              </View>
               {!categoryPanel.open ? (
                 <Text style={[styles.collapseSummary, { color: reportVariance < 0 ? colors.destructive : colors.mutedForeground }]}>
                   {breakdown.length} {breakdown.length === 1 ? 'category' : 'categories'} · KES {formatKES(reportActual)} of KES {formatKES(reportBudget)}
@@ -1245,21 +1269,36 @@ export default function BudgetScreen() {
                 const icon = getCategoryIcon(cat.category);
                 const fullCat = allCategories.find(c => c.name === cat.category);
 
+                const rowEditing = catEditor.editing && !!fullCat;
                 return (
                   <Pressable
                     key={cat.category}
-                    onPress={() => setLedgerCategory({ category: cat.category, isBudgeted: cat.isBudgeted })}
+                    onPress={rowEditing ? undefined : () => setLedgerCategory({ category: cat.category, isBudgeted: cat.isBudgeted })}
                     testID={`budget-ledger-${cat.category}`}
                     accessibilityRole="button"
                     accessibilityLabel={`View ${cat.category} spending`}
-                    style={[styles.catCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    style={[styles.catCard, { backgroundColor: colors.card, borderColor: colors.border }, rowEditing && fullCat && catEditor.isRemoving(fullCat.id) && { opacity: 0.55 }]}
                   >
                     <View style={styles.catTop}>
+                      {rowEditing && fullCat ? (
+                        <View style={{ paddingRight: 4, alignSelf: 'flex-start', paddingTop: 2 }}>
+                          <RemoveRowButton editor={catEditor} id={fullCat.id} />
+                        </View>
+                      ) : null}
                       <View style={[styles.catIcon, { backgroundColor: isOver ? '#3a1a1a' : '#1a3320' }]}>
                         <Feather name={icon} size={16} color={isOver ? '#f87171' : '#4ade80'} />
                       </View>
                       <View style={styles.catInfo}>
-                        <Text style={[styles.catName, { color: colors.foreground }]}>{cat.category}</Text>
+                        {rowEditing && fullCat ? (
+                          <EditableName
+                            editor={catEditor}
+                            id={fullCat.id}
+                            name={cat.category}
+                            textStyle={{ ...styles.catName, color: colors.foreground }}
+                          />
+                        ) : (
+                          <Text style={[styles.catName, { color: colors.foreground }]}>{cat.category}</Text>
+                        )}
                         <Text style={[styles.catFrequency, { color: colors.mutedForeground }]}>
                           {!cat.isBudgeted
                             ? 'No active budget assigned'
@@ -1276,7 +1315,7 @@ export default function BudgetScreen() {
                           <Text style={[styles.catSpent, { color: colors.foreground }]}>{formatKES(cat.spentAmount)}</Text>
                           <Text style={[styles.catBudget, { color: colors.mutedForeground }]}>/ {formatKES(cat.budgetAmount)}</Text>
                         </View>
-                        {fullCat && canManageCategories && (
+                        {fullCat && canManageCategories && !rowEditing && (
                           <>
                             <Pressable onPress={() => openEdit(fullCat)} hitSlop={8} style={styles.editBtn}>
                               <Feather name="edit-2" size={13} color={colors.mutedForeground} />
@@ -1293,30 +1332,47 @@ export default function BudgetScreen() {
                     <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
                       <View style={[styles.barFill, { width: `${pct * 100}%`, backgroundColor: isOver ? '#f87171' : '#4ade80' }]} />
                     </View>
-                    <View style={styles.viewSpendingRow}>
-                      <Text style={[styles.viewSpendingText, { color: colors.primary }]}>View spending</Text>
-                      <Feather name="arrow-right" size={15} color={colors.primary} />
-                    </View>
+                    {!rowEditing ? (
+                      <View style={styles.viewSpendingRow}>
+                        <Text style={[styles.viewSpendingText, { color: colors.primary }]}>View spending</Text>
+                        <Feather name="arrow-right" size={15} color={colors.primary} />
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
               {unusedCategories.map((cat) => {
                 const icon = getCategoryIcon(cat.name);
+                const rowEditing = catEditor.editing;
                 return (
                   <Pressable
                     key={cat.id}
-                    onPress={() => setLedgerCategory({ category: cat.name, isBudgeted: true })}
+                    onPress={rowEditing ? undefined : () => setLedgerCategory({ category: cat.name, isBudgeted: true })}
                     testID={`budget-ledger-${cat.name}`}
                     accessibilityRole="button"
                     accessibilityLabel={`View ${cat.name} spending`}
-                    style={[styles.catCard, styles.catCardMuted, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    style={[styles.catCard, styles.catCardMuted, { backgroundColor: colors.card, borderColor: colors.border }, rowEditing && catEditor.isRemoving(cat.id) && { opacity: 0.55 }]}
                   >
                     <View style={styles.catTop}>
+                      {rowEditing ? (
+                        <View style={{ paddingRight: 4, alignSelf: 'flex-start', paddingTop: 2 }}>
+                          <RemoveRowButton editor={catEditor} id={cat.id} />
+                        </View>
+                      ) : null}
                       <View style={[styles.catIcon, { backgroundColor: '#1a3320' }]}>
                         <Feather name={icon} size={16} color="#4ade80" />
                       </View>
                       <View style={styles.catInfo}>
-                        <Text style={[styles.catName, { color: colors.foreground }]}>{cat.name}</Text>
+                        {rowEditing ? (
+                          <EditableName
+                            editor={catEditor}
+                            id={cat.id}
+                            name={cat.name}
+                            textStyle={{ ...styles.catName, color: colors.foreground }}
+                          />
+                        ) : (
+                          <Text style={[styles.catName, { color: colors.foreground }]}>{cat.name}</Text>
+                        )}
                         <Text style={[styles.catFrequency, { color: colors.mutedForeground }]}>
                           {cat.isRecurring
                             ? 'Recurring monthly'
@@ -1331,7 +1387,7 @@ export default function BudgetScreen() {
                           <Text style={[styles.catSpent, { color: colors.foreground }]}>0</Text>
                           <Text style={[styles.catBudget, { color: colors.mutedForeground }]}>/ {formatKES(cat.budgetAmount)}</Text>
                         </View>
-                        {canManageCategories && (
+                        {canManageCategories && !rowEditing && (
                           <>
                             <Pressable onPress={() => openEdit(cat)} hitSlop={8} style={styles.editBtn} accessibilityLabel={`Edit ${cat.name} budget`}>
                               <Feather name="edit-2" size={13} color={colors.mutedForeground} />
@@ -1346,15 +1402,23 @@ export default function BudgetScreen() {
                       </View>
                     </View>
                     <View style={[styles.barTrack, { backgroundColor: colors.border }]} />
-                    <View style={styles.viewSpendingRow}>
-                      <Text style={[styles.viewSpendingText, { color: colors.primary }]}>View spending</Text>
-                      <Feather name="arrow-right" size={15} color={colors.primary} />
-                    </View>
+                    {!rowEditing ? (
+                      <View style={styles.viewSpendingRow}>
+                        <Text style={[styles.viewSpendingText, { color: colors.primary }]}>View spending</Text>
+                        <Feather name="arrow-right" size={15} color={colors.primary} />
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
             </>
           )}
+          {catEditor.editing ? (
+            <ListEditorFooter
+              editor={catEditor}
+              summary={`${allCategories.filter((c) => catEditor.isRemoving(c.id)).length} to remove. Removing a category keeps its recorded expenses.`}
+            />
+          ) : null}
           </>
           )}
         </View>
