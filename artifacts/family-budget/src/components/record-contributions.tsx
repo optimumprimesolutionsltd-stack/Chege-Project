@@ -37,25 +37,23 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   const pad2 = (value: number) => String(value).padStart(2, "0");
   const localDateString = (value: Date) =>
     `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
-  const [month, setMonth] = useState(today.getMonth() + 1);
-  const [year, setYear] = useState(today.getFullYear());
-  // The day the money actually came in. Shown on every record in the ledger,
-  // and kept inside the month being recorded so a batch can never be filed in
-  // the wrong month.
+
+  // The one date field: the day the money came in. The month it counts toward
+  // is that date's month — no separate picker to disagree with it. Compulsory,
+  // so a record is never filed against a guessed month.
   const [dateReceived, setDateReceived] = useState(() => localDateString(today));
+  const todayString = localDateString(today);
+  // A sane floor for back-dating (three years) without an artificial ceiling
+  // below today.
+  const earliestDate = `${today.getFullYear() - 3}-01-01`;
 
-  const monthStart = `${year}-${pad2(month)}-01`;
-  const monthEnd = `${year}-${pad2(month)}-${pad2(new Date(year, month, 0).getDate())}`;
-
-  // When the month or year selector moves, pull the received date back into
-  // range: today if today falls in that month, otherwise the first of it.
-  useEffect(() => {
-    setDateReceived((current) => {
-      if (current >= monthStart && current <= monthEnd) return current;
-      const todayString = localDateString(new Date());
-      return todayString >= monthStart && todayString <= monthEnd ? todayString : monthStart;
-    });
-  }, [monthStart, monthEnd]);
+  const received = dateReceived ? new Date(`${dateReceived}T00:00:00`) : null;
+  const month = received ? received.getMonth() + 1 : today.getMonth() + 1;
+  const year = received ? received.getFullYear() : today.getFullYear();
+  const countsTowardLabel = new Date(year, month - 1, 1).toLocaleString("en-KE", {
+    month: "long",
+    year: "numeric",
+  });
 
   const { data: contributors = [], isLoading } = useQuery<Contributor[]>({
     queryKey: ["contributors"],
@@ -196,12 +194,35 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
       return;
     }
 
+    if (!dateReceived || dateReceived < earliestDate || dateReceived > todayString) {
+      toast({
+        variant: "destructive",
+        title: "Pick the date received",
+        description: "Choose the day the money came in — that is the month it counts toward.",
+      });
+      return;
+    }
+
+    if (chosen.length === 0) {
+      toast({ variant: "destructive", title: "Nobody ticked", description: "Tick at least one person who paid." });
+      return;
+    }
+
+    if (mode === "simple" && !(Number(each) > 0)) {
+      toast({ variant: "destructive", title: "Enter the amount", description: "Type what each person paid in the Each (KES) box." });
+      return;
+    }
+
     const splits = chosen
       .map((contributor) => ({ contributorId: contributor.id, amount: amountFor(contributor) }))
       .filter((split) => split.amount > 0);
 
     if (splits.length === 0) {
-      toast({ variant: "destructive", title: "Nothing to record", description: "Tick at least one person and enter an amount." });
+      toast({
+        variant: "destructive",
+        title: "No amounts entered",
+        description: "Enter what each ticked person paid, or untick anyone who paid nothing.",
+      });
       return;
     }
 
@@ -312,45 +333,23 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
           )}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
-            <span className="mb-1 block font-medium text-foreground">Month</span>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={month}
-              onChange={(event) => setMonth(Number(event.target.value))}
-              data-testid="select-contribution-month"
-            >
-              {Array.from({ length: 12 }, (_, index) => (
-                <option key={index + 1} value={index + 1}>
-                  {new Date(2000, index, 1).toLocaleString("en-KE", { month: "long" })}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block font-medium text-foreground">Year</span>
-            <Input
-              type="number"
-              value={year}
-              onChange={(event) => setYear(Number(event.target.value))}
-              data-testid="input-contribution-year"
-            />
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block font-medium text-foreground">Date received</span>
+            <span className="mb-1 block font-medium text-foreground">
+              Date received <span className="text-destructive" aria-hidden="true">*</span>
+            </span>
             <Input
               type="date"
+              required
               value={dateReceived}
-              min={monthStart}
-              max={monthEnd}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (!next) return;
-                setDateReceived(next < monthStart ? monthStart : next > monthEnd ? monthEnd : next);
-              }}
+              min={earliestDate}
+              max={todayString}
+              onChange={(event) => setDateReceived(event.target.value)}
               data-testid="input-contribution-date-received"
             />
+            <span className="mt-1 block text-xs text-muted-foreground" data-testid="contribution-counts-toward">
+              {dateReceived ? `Counts toward ${countsTowardLabel}` : "Pick the day the money came in"}
+            </span>
           </label>
           {mode === "simple" ? (
             <label className="text-sm">

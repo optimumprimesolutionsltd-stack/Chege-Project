@@ -7,8 +7,6 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  Modal,
-  FlatList,
   Alert,
   Platform,
 } from 'react-native';
@@ -56,21 +54,16 @@ export default function RecordContributionsScreen() {
   }, [accounts]);
 
   const now = useMemo(() => new Date(), []);
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
-  const monthStart = `${year}-${pad(month)}-01`;
-  const monthEnd = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
+  // The one date field. The month a record counts toward is this date's month —
+  // there is no separate month picker to disagree with it.
   const [dateReceived, setDateReceived] = useState(ymd(now));
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
-
-  useEffect(() => {
-    setDateReceived((current) => {
-      if (current >= monthStart && current <= monthEnd) return current;
-      const todayString = ymd(new Date());
-      return todayString >= monthStart && todayString <= monthEnd ? todayString : monthStart;
-    });
-  }, [monthStart, monthEnd]);
+  const todayStr = ymd(now);
+  const earliestDate = `${now.getFullYear() - 3}-01-01`;
+  const received = new Date(`${dateReceived}T00:00:00`);
+  const month = received.getMonth() + 1;
+  const year = received.getFullYear();
+  const countsToward = `${MONTHS[month - 1]} ${year}`;
 
   const [mode, setMode] = useState<'simple' | 'advanced'>('simple');
   const [each, setEach] = useState('');
@@ -106,16 +99,6 @@ export default function RecordContributionsScreen() {
   // second tap during the network round-trip cannot fire a second deposit -
   // React state alone re-renders a frame too late to stop it.
   const submittingRef = useRef(false);
-
-  const monthOptions = useMemo(() => {
-    const result: { month: number; year: number; label: string }[] = [];
-    const date = new Date(now.getFullYear(), now.getMonth(), 1);
-    for (let i = 0; i < 24; i++) {
-      result.push({ month: date.getMonth() + 1, year: date.getFullYear(), label: `${MONTHS[date.getMonth()]} ${date.getFullYear()}` });
-      date.setMonth(date.getMonth() - 1);
-    }
-    return result;
-  }, [now]);
 
   const toggle = (id: number) =>
     setTicked((previous) => {
@@ -193,11 +176,23 @@ export default function RecordContributionsScreen() {
       Alert.alert('No bank account yet', 'Contributions need somewhere to land. Set up a bank account on the Bank tab first.');
       return;
     }
+    if (!dateReceived || dateReceived < earliestDate || dateReceived > todayStr) {
+      Alert.alert('Pick the date received', 'Choose the day the money came in — that is the month it counts toward.');
+      return;
+    }
+    if (chosen.length === 0) {
+      Alert.alert('Nobody ticked', 'Tick at least one person who paid.');
+      return;
+    }
+    if (mode === 'simple' && !(Number(each) > 0)) {
+      Alert.alert('Enter the amount', 'Type what each person paid in the Each (KES) box.');
+      return;
+    }
     const splits = chosen
       .map((contributor) => ({ contributorId: contributor.id, amount: amountFor(contributor) }))
       .filter((split) => split.amount > 0);
     if (splits.length === 0) {
-      Alert.alert('Nothing to record', 'Tick at least one person and enter an amount.');
+      Alert.alert('No amounts entered', 'Enter what each ticked person paid, or untick anyone who paid nothing.');
       return;
     }
 
@@ -207,7 +202,7 @@ export default function RecordContributionsScreen() {
     const accountName = accounts.find((account) => account.id === accountId)?.name;
     Alert.alert(
       `Record KES ${kes(amount)}?`,
-      `${splits.length} ${splits.length === 1 ? 'person' : 'people'}${accountName ? ` · into ${accountName}` : ''} for ${MONTHS[month - 1]} ${year}. This adds one bank deposit.`,
+      `${splits.length} ${splits.length === 1 ? 'person' : 'people'}${accountName ? ` · into ${accountName}` : ''} for ${countsToward}. This adds one bank deposit.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Record', onPress: () => void submitRecord(splits, amount) },
@@ -283,30 +278,22 @@ export default function RecordContributionsScreen() {
           )}
         </View>
 
-        {/* Month + date */}
-        <View style={styles.row}>
-          <View style={{ flex: 1, gap: 6 }}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Month</Text>
-            <Pressable onPress={() => setMonthPickerVisible(true)} style={[styles.field, { borderColor: colors.border }]}>
-              <Text style={{ color: colors.foreground }}>{MONTHS[month - 1]} {year}</Text>
-              <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
-            </Pressable>
-          </View>
-          <View style={{ flex: 1, gap: 6 }}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Date received</Text>
-            <Pressable onPress={() => setShowDatePicker(true)} style={[styles.field, { borderColor: colors.border }]}>
-              <Text style={{ color: colors.foreground }}>{dateReceived}</Text>
-              <Feather name="calendar" size={16} color={colors.mutedForeground} />
-            </Pressable>
-          </View>
+        {/* Date received — the month it counts toward comes from this */}
+        <View style={styles.block}>
+          <Text style={[styles.label, { color: colors.foreground }]}>Date received *</Text>
+          <Pressable onPress={() => setShowDatePicker(true)} style={[styles.field, { borderColor: colors.border }]}>
+            <Text style={{ color: colors.foreground }}>{dateReceived}</Text>
+            <Feather name="calendar" size={16} color={colors.mutedForeground} />
+          </Pressable>
+          <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>Counts toward {countsToward}</Text>
         </View>
 
         {showDatePicker && (
           <DateTimePicker
             mode="date"
             value={new Date(`${dateReceived}T12:00:00`)}
-            minimumDate={new Date(`${monthStart}T00:00:00`)}
-            maximumDate={new Date(`${monthEnd}T23:59:59`)}
+            minimumDate={new Date(`${earliestDate}T00:00:00`)}
+            maximumDate={now}
             onChange={(_event: DateTimePickerEvent, selected?: Date) => {
               if (Platform.OS !== 'ios') setShowDatePicker(false);
               if (selected) setDateReceived(ymd(selected));
@@ -437,31 +424,6 @@ export default function RecordContributionsScreen() {
         </Pressable>
       </View>
 
-      <Modal visible={monthPickerVisible} animationType="slide" transparent onRequestClose={() => setMonthPickerVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setMonthPickerVisible(false)}>
-          <Pressable style={[styles.modalSheet, { backgroundColor: colors.card }]} onPress={() => {}}>
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Which month?</Text>
-            <FlatList
-              data={monthOptions}
-              keyExtractor={(item) => `${item.year}-${item.month}`}
-              style={{ flexGrow: 0 }}
-              renderItem={({ item }) => {
-                const selected = item.month === month && item.year === year;
-                return (
-                  <Pressable
-                    onPress={() => { setMonth(item.month); setYear(item.year); setMonthPickerVisible(false); }}
-                    style={[styles.modalItem, selected && { backgroundColor: `${colors.primary}18` }]}
-                  >
-                    <Text style={{ color: selected ? colors.primary : colors.foreground, fontFamily: selected ? 'Inter_700Bold' : 'Inter_400Regular' }}>
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              }}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -488,8 +450,4 @@ const styles = StyleSheet.create({
   totalBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, padding: 14 },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   recordBtn: { height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modalSheet: { maxHeight: '70%', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
-  modalTitle: { fontSize: 16, fontFamily: 'Inter_700Bold', marginBottom: 12 },
-  modalItem: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: 8 },
 });
