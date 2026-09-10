@@ -4,6 +4,12 @@ import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import {
+  ContributorEditorFooter,
+  EditListButton,
+  RemoveRowButton,
+  useContributorEditor,
+} from '@/components/ContributorEditor';
 
 const RANGES = [1, 3, 6, 12] as const;
 
@@ -44,8 +50,9 @@ function kesShort(value: number): string {
  * A surplus carried forward from an earlier month reads as "Ahead", never as a
  * fresh miss.
  */
-export function ContributionSheet() {
+export function ContributionSheet({ canManage = false }: { canManage?: boolean }) {
   const colors = useColors();
+  const editor = useContributorEditor();
   const [months, setMonths] = useState<number>(6);
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
     queryKey: ['contribution-grid', months],
@@ -79,7 +86,10 @@ export function ContributionSheet() {
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.headRow}>
-        <Text style={[styles.heading, { color: colors.foreground }]}>Who has paid</Text>
+        <View style={styles.headingWrap}>
+          <Text style={[styles.heading, { color: colors.foreground }]}>Who has paid</Text>
+          <EditListButton editor={editor} canManage={canManage} />
+        </View>
         <View style={styles.ranges}>
           {RANGES.map((range) => {
             const active = months === range;
@@ -130,7 +140,19 @@ export function ContributionSheet() {
         return (
           <View key={row.contributorId} style={[styles.memberRow, { borderColor: colors.border }]}>
             <View style={styles.rowTop}>
-              <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{row.name}</Text>
+              <View style={styles.nameWrap}>
+                <RemoveRowButton editor={editor} id={row.contributorId} />
+                <Text
+                  style={[
+                    styles.name,
+                    { color: colors.foreground },
+                    editor.isRemoving(row.contributorId) && { color: colors.mutedForeground, textDecorationLine: 'line-through' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {row.name}
+                </Text>
+              </View>
               <Text style={[styles.expected, { color: colors.mutedForeground }]}>
                 {row.monthlyTarget != null && row.monthlyTarget > 0 ? `Expected KES ${kes(row.monthlyTarget)}/mo` : 'No set amount'}
               </Text>
@@ -174,6 +196,8 @@ export function ContributionSheet() {
           </View>
         );
       })}
+
+      <ContributorEditorFooter editor={editor} />
     </View>
   );
 }
@@ -182,7 +206,9 @@ const styles = StyleSheet.create({
   loading: { paddingVertical: 24, alignItems: 'center' },
   card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  headingWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   heading: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  nameWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   period: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   ranges: { flexDirection: 'row', gap: 4 },
   rangeBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },

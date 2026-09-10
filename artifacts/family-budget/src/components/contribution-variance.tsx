@@ -5,6 +5,12 @@ import { Button } from "@/components/ui/button";
 import { formatKes } from "@/lib/utils";
 import { Loader2, Scale } from "lucide-react";
 import type { ContributionGrid } from "@/components/contributions-grid";
+import {
+  ContributorEditorFooter,
+  EditListButton,
+  RemoveRowButton,
+  useContributorEditor,
+} from "@/components/contributor-editor";
 
 const RANGES = [1, 3, 6, 12] as const;
 
@@ -17,8 +23,9 @@ const RANGES = [1, 3, 6, 12] as const;
  * is "over the period, did they give what they were meant to", not month by
  * month.
  */
-export function ContributionVariance() {
+export function ContributionVariance({ canManage = false }: { canManage?: boolean }) {
   const [months, setMonths] = useState<number>(6);
+  const editor = useContributorEditor();
 
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
     queryKey: ["contribution-grid", months],
@@ -41,6 +48,7 @@ export function ContributionVariance() {
     const given = row.amounts.reduce((sum, amount) => sum + amount, 0);
     const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : null;
     return {
+      contributorId: row.contributorId,
       name: row.name,
       expected,
       given,
@@ -69,6 +77,7 @@ export function ContributionVariance() {
             <h2 className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
               <Scale className="h-5 w-5 text-secondary" aria-hidden="true" />
               Expected vs actual
+              <EditListButton editor={editor} canManage={canManage} label="Add or remove people" />
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {periodLabel ? (
@@ -117,8 +126,15 @@ export function ContributionVariance() {
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.name} className="border-b border-border/50">
-                    <td className="max-w-[10rem] truncate py-2 pr-3 font-medium text-foreground">{row.name}</td>
+                  <tr key={row.contributorId} className="border-b border-border/50">
+                    <td className="max-w-[12rem] py-2 pr-3 font-medium text-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <RemoveRowButton editor={editor} id={row.contributorId} name={row.name} />
+                        <span className={`block truncate ${editor.isRemoving(row.contributorId) ? "text-muted-foreground line-through" : ""}`}>
+                          {row.name}
+                        </span>
+                      </span>
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-muted-foreground">
                       {row.expected != null ? formatKes(row.expected) : "—"}
                     </td>
@@ -144,6 +160,9 @@ export function ContributionVariance() {
                 </tr>
               </tfoot>
             </table>
+            <div className="pt-3">
+              <ContributorEditorFooter editor={editor} />
+            </div>
           </div>
         )}
       </CardContent>

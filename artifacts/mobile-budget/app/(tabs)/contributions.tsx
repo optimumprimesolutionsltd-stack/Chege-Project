@@ -621,8 +621,8 @@ export default function ContributionsScreen() {
                 </Pressable>
               ) : null}
             </View>
-            <ContributionSheet />
-            <ContributionVariance />
+            <ContributionSheet canManage={group?.role === 'owner' || group?.role === 'admin'} />
+            <ContributionVariance canManage={group?.role === 'owner' || group?.role === 'admin'} />
             <ContributionExport />
           </View>
         ) : null}
