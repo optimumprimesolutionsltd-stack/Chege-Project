@@ -854,11 +854,11 @@ export default function AddExpenseSheet() {
     }
     if (!isAdvanced && !isEditMode) {
       if (!category.trim()) {
-        Alert.alert('Category required', 'Choose one category for this expense, or switch to Advanced for more options.');
+        Alert.alert('Category required', 'Choose one category for this expense, or switch to Detailed for more options.');
         return;
       }
       if (!normalIncomeSource) {
-        Alert.alert('Income source required', 'Add a saved income source in Advanced before you can save this expense.');
+        Alert.alert('Income source required', 'Add a saved income source in Detailed before you can save this expense.');
         return;
       }
     }
@@ -1216,30 +1216,37 @@ export default function AddExpenseSheet() {
         </Pressable>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[styles.content, { paddingBottom: botPad + 24 }]}
-      >
-        {!isEditMode && (
+      {!isEditMode && (
+        <View style={[styles.modeBar, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
           <View style={styles.modeRow}>
             <Pressable
               onPress={() => setIsAdvanced(false)}
               style={[styles.modeButton, { backgroundColor: !isAdvanced ? colors.primary : colors.muted, borderColor: !isAdvanced ? colors.primary : colors.border }]}
               testID="expense-mode-normal"
             >
-              <Text style={[styles.modeButtonText, { color: !isAdvanced ? '#fff' : colors.foreground }]}>Normal</Text>
+              <Text style={[styles.modeButtonText, { color: !isAdvanced ? '#fff' : colors.foreground }]}>Quick</Text>
             </Pressable>
             <Pressable
               onPress={() => setIsAdvanced(true)}
               style={[styles.modeButton, { backgroundColor: isAdvanced ? colors.primary : colors.muted, borderColor: isAdvanced ? colors.primary : colors.border }]}
               testID="expense-mode-advanced"
             >
-              <Text style={[styles.modeButtonText, { color: isAdvanced ? '#fff' : colors.foreground }]}>Advanced</Text>
+              <Text style={[styles.modeButtonText, { color: isAdvanced ? '#fff' : colors.foreground }]}>Detailed</Text>
             </Pressable>
           </View>
-        )}
+          <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>
+            {isAdvanced
+              ? 'Detailed: split one payment across categories or people, backdate it, or make it recurring.'
+              : 'Quick: one category, paid by you, today. Enough for most expenses.'}
+          </Text>
+        </View>
+      )}
 
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[styles.content, { paddingBottom: botPad + 24 }]}
+      >
         {/* Date comes first because it determines the month used by budgets and reports. */}
         {(isAdvanced || !isEditMode) && <View testID="expense-date-section" style={{ marginBottom: 4 }}>
           <View style={styles.labelRow}>
@@ -1335,7 +1342,7 @@ export default function AddExpenseSheet() {
                 <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>
                    {isAdvanced
                      ? (canManageCategories ? 'No categories yet. You can create one below or save without a category.' : 'No categories are available. You can save without one or ask a budget manager to add one.')
-                     : 'No categories are available. Switch to Advanced to create one, or ask a budget manager to add one.'}
+                     : 'No categories are available. Switch to Detailed to create one, or ask a budget manager to add one.'}
                 </Text>
               )}
               {categoryList.map((cat) => {
@@ -1728,7 +1735,7 @@ export default function AddExpenseSheet() {
                   <>
                     <Text style={[styles.normalBlockerText, { color: colors.destructive }]}>A saved income source is required before this expense can be saved.</Text>
                     <Pressable onPress={() => setIsAdvanced(true)} testID="normal-income-source-blocker">
-                      <Text style={[styles.normalAdvancedLink, { color: colors.primary }]}>Switch to Advanced to add an income source</Text>
+                      <Text style={[styles.normalAdvancedLink, { color: colors.primary }]}>Switch to Detailed to add an income source</Text>
                     </Pressable>
                   </>
                 )}
@@ -2492,9 +2499,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   content: { paddingHorizontal: 20, paddingTop: 20, gap: 6 },
-  modeRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  modeBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  modeRow: { flexDirection: 'row', gap: 8 },
   modeButton: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   modeButtonText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  modeHint: { fontSize: 11, lineHeight: 15, marginTop: 7 },
   normalSummary: { marginTop: 14, padding: 12, borderWidth: 1, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
   normalSummaryTitle: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   normalBlockerText: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_600SemiBold', marginTop: 8 },

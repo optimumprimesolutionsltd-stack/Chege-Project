@@ -34,7 +34,7 @@ describe('mobile normal expense mode', () => {
     expect(source).toContain('{isAdvanced && canManageShared && <View');
     expect(source).toContain('testID="normal-expense-summary"');
     expect(source).toContain('testID="normal-income-source-blocker"');
-    expect(source).toContain('Switch to Advanced to add an income source');
-    expect(source).toContain("Alert.alert('Income source required', 'Add a saved income source in Advanced before you can save this expense.')");
+    expect(source).toContain('Switch to Detailed to add an income source');
+    expect(source).toContain("Alert.alert('Income source required', 'Add a saved income source in Detailed before you can save this expense.')");
   });
 });

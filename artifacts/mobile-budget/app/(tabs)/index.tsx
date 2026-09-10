@@ -34,6 +34,7 @@ import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
 import { DashboardAnnouncement } from '@/components/DashboardAnnouncement';
 import { SubscriptionBanner } from '@/components/SubscriptionBanner';
+import { HomeTip } from '@/components/HomeTip';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import {
@@ -465,6 +466,8 @@ export default function DashboardScreen() {
         </LinearGradient>
 
         <SubscriptionBanner />
+
+        <HomeTip />
 
         <DashboardAnnouncement />
 
