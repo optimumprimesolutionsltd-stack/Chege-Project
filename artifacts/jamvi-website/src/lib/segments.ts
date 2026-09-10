@@ -94,7 +94,7 @@ export const SEGMENTS: Segment[] = [
       {
         question: "Can anyone else see my personal budget?",
         answer:
-          "No. A personal budget is private to you. Only what you record inside a shared budget is visible to the people in it.",
+          "No. A personal budget is private to you. Only what you record inside a shared group is visible to the people in it.",
       },
       {
         question: "Do I have to record every single M-Pesa payment?",
@@ -346,7 +346,7 @@ export const SEGMENTS: Segment[] = [
       },
       {
         title: "Your own budget stays yours",
-        body: "A shared budget for the house and a private one for you, in the same app and the same subscription. What you spend on your own is not in the shared record.",
+        body: "A shared group for the house and a private one for you, in the same app and the same subscription. What you spend on your own is not in the shared record.",
       },
       {
         title: "Saving towards something together",
@@ -358,7 +358,7 @@ export const SEGMENTS: Segment[] = [
       },
       {
         title: "Let someone look without joining",
-        body: "A read-only link lets a parent, a co-signer or a housemate who is rarely around open the shared budget and see where things stand, without an account of their own and without being able to change anything.",
+        body: "A read-only link lets a parent, a co-signer or a housemate who is rarely around open the shared group and see where things stand, without an account of their own and without being able to change anything.",
       },
     ],
     sections: [
@@ -376,12 +376,12 @@ export const SEGMENTS: Segment[] = [
       {
         question: "Do we both need to pay?",
         answer:
-          "Each person who uses the app pays for their own subscription, and it covers their personal budget and every shared budget they are in. There is no separate charge for the household.",
+          "Each person who uses the app pays for their own subscription, and it covers their personal budget and every shared group they are in. There is no separate charge for the household.",
       },
       {
         question: "Can my partner see my personal spending?",
         answer:
-          "No. A personal budget is private to you. Only what you record in the shared budget is shared.",
+          "No. A personal budget is private to you. Only what you record in the shared group is shared.",
       },
       {
         question: "Can we split an expense unevenly?",

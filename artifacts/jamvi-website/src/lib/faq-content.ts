@@ -41,7 +41,7 @@ export const FAQ_ENTRIES: readonly FaqEntry[] = [
   {
     question: "What happens if our chama grows beyond 6 people?",
     answer:
-      "Everyone pays for their own Jamvi subscription, and it covers both your own budget and every Shared budget you belong to. Groups have no bill of their own and no member limit, so a chama of fifty costs the group nothing.",
+      "Everyone pays for their own Jamvi subscription, and it covers both your own budget and every Shared group you belong to. Groups have no bill of their own and no member limit, so a chama of fifty costs the group nothing.",
   },
   {
     question: "Does Jamvi offer a non-profit discount?",
