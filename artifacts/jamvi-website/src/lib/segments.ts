@@ -131,7 +131,11 @@ export const SEGMENTS: Segment[] = [
       },
       {
         title: "The month's sheet, sent round",
-        body: "Download the contribution sheet for any run of months as a PDF and drop it in the group chat, instead of typing it out. There is one for each member too.",
+        body: "Download the contribution sheet for any run of months as a PDF and drop it in the group chat, instead of typing it out. There is one for each member too. Every sheet carries a link back to Jamvi, so anyone who receives it can check the figures were not changed after it was sent.",
+      },
+      {
+        title: "The whole chama can watch, for free",
+        body: "Send a read-only link and every member can open the group and see the balance, the contributions and the reports - without being able to change anything, and without paying. Only the people who record money need a subscription.",
       },
       {
         title: "Members who do not use the app still count",
@@ -351,6 +355,10 @@ export const SEGMENTS: Segment[] = [
       {
         title: "A couple, a family or roommates",
         body: "Two people or six, related or not. A house is a house - the record does not care how you are connected.",
+      },
+      {
+        title: "Let someone look without joining",
+        body: "A read-only link lets a parent, a co-signer or a housemate who is rarely around open the shared budget and see where things stand, without an account of their own and without being able to change anything.",
       },
     ],
     sections: [
