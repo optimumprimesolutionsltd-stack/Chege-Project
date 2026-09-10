@@ -162,7 +162,15 @@ export function DownloadContributions({
         toast({ title: "Nothing in that range", description: "Pick a different from and to month." });
         return;
       }
-      const url = `https://wa.me/?text=${encodeURIComponent(buildContributionWhatsAppText(report))}`;
+      // The verify link is a nicety, not a blocker — if it fails, still share.
+      let verifyUrl: string | undefined;
+      try {
+        const response = await fetch("/api/contributions/verify-link", { credentials: "include" });
+        if (response.ok) verifyUrl = ((await response.json()) as { url?: string }).url;
+      } catch {
+        verifyUrl = undefined;
+      }
+      const url = `https://wa.me/?text=${encodeURIComponent(buildContributionWhatsAppText(report, verifyUrl))}`;
       if (chatWindow) chatWindow.location.href = url;
       else window.open(url, "_blank");
     } catch {

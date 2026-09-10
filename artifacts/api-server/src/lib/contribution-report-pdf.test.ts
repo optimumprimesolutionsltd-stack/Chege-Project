@@ -44,6 +44,25 @@ describe("contribution report PDF", () => {
     expect(pdf.toString("latin1")).toContain("%%EOF");
   });
 
+  it("still produces a valid PDF with a verify URL and encryption enabled", async () => {
+    const pdf = await createContributionReportPdf({
+      groupName: "Umoja Chama",
+      periodLabel: "Jul 2026 – Sep 2026",
+      months,
+      rows: [
+        { name: "Mary", monthlyTarget: 2_000, amounts: [2_000, 2_000, 2_000], total: 6_000, outstanding: [0, 0, 0], creditRemaining: 0 },
+      ],
+      grandTotal: 6_000,
+      totalExpected: 6_000,
+      verifyUrl: "https://jamvi.co.ke/r/1g-4f9a2c1b7d",
+    });
+
+    expect(pdf.subarray(0, 8).toString()).toBe("%PDF-1.3");
+    expect(pdf.toString("latin1")).toContain("%%EOF");
+    // An /Encrypt dictionary is present once permissions are set.
+    expect(pdf.toString("latin1")).toContain("/Encrypt");
+  });
+
   it("renders when a group has no contributors and no expectations", async () => {
     const pdf = await createContributionReportPdf({
       groupName: "New Group",
