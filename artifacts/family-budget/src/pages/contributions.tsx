@@ -245,7 +245,7 @@ function MemberCard({
             className="text-sm font-semibold text-primary hover:underline"
             data-testid={`open-contribution-ledger-${userId}`}
           >
-            Open contribution ledger →
+            View statement (PDF) →
           </button>
           {canDownloadPdf ? (
             <DownloadMemberContribution
@@ -357,6 +357,19 @@ export default function Contributions() {
     const ledger = document.getElementById("contribution-ledger");
     ledger?.scrollIntoView({ behavior: "smooth", block: "start" });
     ledger?.focus({ preventScroll: true });
+  };
+
+  // The statement is a real PDF the server builds; opening it in a new tab is
+  // the whole interaction. Six months by default, matching the report range.
+  const openMemberStatement = (memberUserId: string) => {
+    window.open(
+      `/api/contributions/statement.pdf?months=6&userId=${encodeURIComponent(memberUserId)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
+  const openGroupLedger = () => {
+    window.open("/api/contributions/statement.pdf?months=6", "_blank", "noopener,noreferrer");
   };
 
   useEffect(() => {
@@ -767,11 +780,11 @@ export default function Contributions() {
             </div>
             <button
               type="button"
-              onClick={openContributionLedger}
+              onClick={openGroupLedger}
               className="mt-4 text-sm font-semibold text-primary hover:underline"
               data-testid="open-group-contribution-ledger"
             >
-              Open contribution ledger →
+              View group ledger (PDF) →
             </button>
           </CardContent>
         </Card>
@@ -840,7 +853,7 @@ export default function Contributions() {
               incomeStreams={streamsByMember.get(m.userId) ?? []}
               isIncomeStreamsLoading={isIncomeStreamsLoading}
               incomeStreamsError={incomeStreamsError}
-              onOpenLedger={openContributionLedger}
+              onOpenLedger={() => openMemberStatement(m.userId)}
               budgetName={group ? workspaceLabel(group) : "Shared budget"}
               pdfFromKey={pdfFromKey}
               pdfToKey={pdfToKey}

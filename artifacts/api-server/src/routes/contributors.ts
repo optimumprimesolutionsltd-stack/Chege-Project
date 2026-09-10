@@ -24,7 +24,118 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
 import { buildContributionGrid, gridMonths, type ContributionGrid, type GridEntry } from "../lib/contribution-grid";
 import { createContributionReportPdf } from "../lib/contribution-report-pdf";
+import { createContributionStatementPdf } from "../lib/contribution-statement-pdf";
 import { groupVerifyCode } from "../lib/contribution-verification";
+
+export interface StatementEntry {
+  contributorId: number;
+  contributorName: string;
+  /** YYYY-MM-DD. For a manual month/year contribution this is the first of
+   *  that month; a bank deposit carries its real date. */
+  date: string;
+  amount: number;
+  source: "recorded" | "deposit";
+  description: string | null;
+}
+
+export interface ContributionStatement {
+  periodLabel: string;
+  contributors: Array<{ id: number; name: string; userId: string | null }>;
+  /** Oldest first, so a running total reads top to bottom. */
+  entries: StatementEntry[];
+  totalsByContributor: Record<number, number>;
+  grandTotal: number;
+}
+
+/**
+ * Every contribution and every attributed bank deposit for a group over the
+ * last `monthsBack` months, as individual dated rows rather than the monthly
+ * totals the grid returns. This is what a member's statement and the group
+ * ledger are built from.
+ */
+export async function loadContributionStatement(
+  groupId: number,
+  monthsBack: number,
+): Promise<ContributionStatement> {
+  const months = gridMonths(Math.min(Math.max(monthsBack, 1), 12));
+  const earliest = months[0];
+  const latest = months[months.length - 1];
+  const periodLabel =
+    months.length === 1 ? months[0].label : `${months[0].label} – ${latest.label}`;
+
+  const [contributors, recorded, deposited] = await Promise.all([
+    db
+      .select({ id: groupContributorsTable.id, name: groupContributorsTable.name, userId: groupContributorsTable.userId })
+      .from(groupContributorsTable)
+      .where(and(eq(groupContributorsTable.groupId, groupId), isNull(groupContributorsTable.archivedAt)))
+      .orderBy(asc(groupContributorsTable.name)),
+    db
+      .select({
+        contributorId: contributionsTable.contributorId,
+        name: groupContributorsTable.name,
+        amount: contributionsTable.amount,
+        month: contributionsTable.month,
+        year: contributionsTable.year,
+        note: contributionsTable.note,
+      })
+      .from(contributionsTable)
+      .innerJoin(groupContributorsTable, eq(groupContributorsTable.id, contributionsTable.contributorId))
+      .where(sql`${contributionsTable.groupId} = ${groupId}
+        AND (${contributionsTable.year} > ${earliest.year}
+          OR (${contributionsTable.year} = ${earliest.year} AND ${contributionsTable.month} >= ${earliest.month}))`),
+    db
+      .select({
+        contributorId: jointAccountDepositSplitsTable.contributorId,
+        name: groupContributorsTable.name,
+        amount: jointAccountDepositSplitsTable.amount,
+        date: sql<string>`${jointAccountTxTable.date}::text`,
+        description: jointAccountTxTable.description,
+      })
+      .from(jointAccountDepositSplitsTable)
+      .innerJoin(jointAccountTxTable, eq(jointAccountTxTable.id, jointAccountDepositSplitsTable.transactionId))
+      .innerJoin(groupContributorsTable, eq(groupContributorsTable.id, jointAccountDepositSplitsTable.contributorId))
+      .where(sql`${jointAccountDepositSplitsTable.groupId} = ${groupId}
+        AND ${jointAccountTxTable.type} = 'deposit'
+        AND ${jointAccountTxTable.bankTransferId} IS NULL
+        AND ${jointAccountTxTable.date} >= make_date(${earliest.year}, ${earliest.month}, 1)`),
+  ]);
+
+  const entries: StatementEntry[] = [
+    ...recorded
+      .filter((row) => row.contributorId != null)
+      .map((row) => ({
+        contributorId: row.contributorId as number,
+        contributorName: row.name,
+        date: `${row.year}-${String(row.month).padStart(2, "0")}-01`,
+        amount: Number(row.amount) || 0,
+        source: "recorded" as const,
+        description: row.note ?? null,
+      })),
+    ...deposited
+      .filter((row) => row.contributorId != null)
+      .map((row) => ({
+        contributorId: row.contributorId as number,
+        contributorName: row.name,
+        date: row.date.slice(0, 10),
+        amount: Number(row.amount) || 0,
+        source: "deposit" as const,
+        description: row.description ?? null,
+      })),
+  ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  const totalsByContributor: Record<number, number> = {};
+  for (const entry of entries) {
+    totalsByContributor[entry.contributorId] = (totalsByContributor[entry.contributorId] ?? 0) + entry.amount;
+  }
+
+  return {
+    periodLabel,
+    contributors: contributors.map((row) => ({ id: row.id, name: row.name, userId: row.userId ?? null })),
+    entries,
+    totalsByContributor,
+    grandTotal: entries.reduce((sum, entry) => sum + entry.amount, 0),
+  };
+}
 
 /** The absolute URL of the public page that verifies a group's report. */
 function verifyUrlFor(req: { protocol: string; get(name: string): string | undefined }, groupId: number): string {
@@ -372,6 +483,103 @@ router.get("/contributions/report.pdf", async (req, res): Promise<void> => {
   const filename = `jamvi-contributions-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}.pdf`;
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(pdf);
+});
+
+function statementMonths(req: { query: Record<string, unknown> }): number {
+  return Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
+}
+
+/** Resolve the requested contributor from either `contributorId` or a member
+ *  `userId` (the contributions page keys its member cards by user id). */
+function statementContributorId(
+  req: { query: Record<string, unknown> },
+  statement: ContributionStatement,
+): number | null {
+  const byId = Number(req.query.contributorId);
+  if (Number.isInteger(byId) && byId > 0) return byId;
+  const userId = typeof req.query.userId === "string" ? req.query.userId : null;
+  if (userId) {
+    const match = statement.contributors.find((row) => row.userId === userId);
+    if (match) return match.id;
+  }
+  return null;
+}
+
+/**
+ * The entry-level ledger: every contribution and attributed deposit for the
+ * group, or for one member when `contributorId` is given. Manager-only, like
+ * the report. JSON for an on-screen view; `.pdf` for a statement to hand out.
+ */
+router.get("/contributions/statement", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const statement = await loadContributionStatement(groupId, statementMonths(req));
+  const contributorId = statementContributorId(req, statement);
+  if (contributorId === null) {
+    res.json(statement);
+    return;
+  }
+  res.json({
+    ...statement,
+    entries: statement.entries.filter((entry) => entry.contributorId === contributorId),
+    grandTotal: statement.totalsByContributor[contributorId] ?? 0,
+  });
+});
+
+router.get("/contributions/statement.pdf", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (!requireGroupManager(req, res)) return;
+
+  const [group] = await db
+    .select({ name: groupsTable.name })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+
+  const statement = await loadContributionStatement(groupId, statementMonths(req));
+  const contributorId = statementContributorId(req, statement);
+  const member =
+    contributorId != null ? statement.contributors.find((row) => row.id === contributorId) : undefined;
+  const entries =
+    contributorId != null
+      ? statement.entries.filter((entry) => entry.contributorId === contributorId)
+      : statement.entries;
+
+  const pdf = await createContributionStatementPdf({
+    groupName: group?.name ?? "Shared group",
+    periodLabel: statement.periodLabel,
+    memberName: member?.name,
+    entries: entries.map((entry) => ({
+      date: entry.date,
+      name: entry.contributorName,
+      amount: entry.amount,
+      source: entry.source,
+      description: entry.description,
+    })),
+    total:
+      contributorId != null
+        ? statement.totalsByContributor[contributorId] ?? 0
+        : statement.grandTotal,
+    perMemberTotals:
+      contributorId != null
+        ? []
+        : statement.contributors
+            .map((row) => ({ name: row.name, total: statement.totalsByContributor[row.id] ?? 0 }))
+            .filter((row) => row.total > 0),
+  });
+
+  const stamp = new Date();
+  const slug = member ? member.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "group";
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="jamvi-statement-${slug}-${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, "0")}.pdf"`,
+  );
   res.setHeader("Cache-Control", "private, no-store");
   res.send(pdf);
 });
