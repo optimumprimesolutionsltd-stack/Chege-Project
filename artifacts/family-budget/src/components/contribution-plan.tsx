@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { formatKes } from "@/lib/utils";
-import { Loader2, Pencil, Target } from "lucide-react";
+import { Loader2, Pencil, Target, Trash2, X } from "lucide-react";
 
 type Contributor = { id: number; name: string; monthlyTarget: number | null };
 
@@ -46,6 +46,66 @@ export function ContributionPlan() {
 
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [renaming, setRenaming] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [busyContributor, setBusyContributor] = useState<number | null>(null);
+
+  const patchContributor = async (id: number, body: Record<string, unknown>): Promise<boolean> => {
+    setBusyContributor(id);
+    try {
+      const response = await fetch(`/api/contributors/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(detail?.error ?? "Could not save.");
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contributors"] }),
+        queryClient.invalidateQueries({ queryKey: ["contribution-grid"] }),
+      ]);
+      return true;
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not save",
+        description: error instanceof Error ? error.message : "Nothing has been changed.",
+      });
+      return false;
+    } finally {
+      setBusyContributor(null);
+    }
+  };
+
+  const saveRename = async (contributor: Contributor) => {
+    const name = renameValue.trim();
+    if (!name) {
+      toast({ variant: "destructive", title: "Enter a name", description: "A contributor needs a name." });
+      return;
+    }
+    if (name === contributor.name) {
+      setRenaming(null);
+      return;
+    }
+    if (await patchContributor(contributor.id, { name })) setRenaming(null);
+  };
+
+  const removeContributor = async (contributor: Contributor) => {
+    const confirmed = window.confirm(
+      `Remove ${contributor.name} from this group?\n\n` +
+        "Their past contributions stay on record, so earlier totals still add up. " +
+        "They drop off this list and the recording form. You can add them again later.",
+    );
+    if (!confirmed) return;
+    if (renaming === contributor.id) setRenaming(null);
+    if (editing === contributor.id) setEditing(null);
+    if (await patchContributor(contributor.id, { archived: true })) {
+      toast({ title: "Removed", description: `${contributor.name} is no longer in this group.` });
+    }
+  };
 
   const saveGroupTarget = async (applyToEveryone: boolean) => {
     const raw = groupTarget.trim();
@@ -172,44 +232,108 @@ export function ContributionPlan() {
         ) : (
           <ul className="divide-y divide-border/60 rounded-xl border border-border/60">
             {contributors.map((contributor) => (
-              <li key={contributor.id} className="flex items-center gap-3 p-3 text-sm">
-                <span className="min-w-0 flex-1 truncate text-foreground">{contributor.name}</span>
-                {editing === contributor.id ? (
-                  <span className="flex shrink-0 items-center gap-1">
+              <li key={contributor.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 text-sm">
+                {renaming === contributor.id ? (
+                  <span className="flex w-full items-center gap-1">
                     <Input
-                      type="number"
-                      min="0"
                       autoFocus
-                      placeholder="blank = no amount"
-                      className="h-9 w-32 text-right"
-                      value={editValue}
-                      onChange={(event) => setEditValue(event.target.value)}
+                      maxLength={120}
+                      className="h-9 flex-1"
+                      value={renameValue}
+                      onChange={(event) => setRenameValue(event.target.value)}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter") void saveMemberTarget(contributor.id);
-                        if (event.key === "Escape") setEditing(null);
+                        if (event.key === "Enter") void saveRename(contributor);
+                        if (event.key === "Escape") setRenaming(null);
                       }}
-                      data-testid={`edit-target-${contributor.id}`}
+                      data-testid={`rename-input-${contributor.id}`}
                     />
-                    <Button size="sm" onClick={() => void saveMemberTarget(contributor.id)}>Save</Button>
-                  </span>
-                ) : (
-                  <span className="flex shrink-0 items-center gap-2">
-                    <span className="tabular-nums text-foreground">
-                      {contributor.monthlyTarget != null ? `${formatKes(contributor.monthlyTarget)}/mo` : "Not set"}
-                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() => void saveRename(contributor)}
+                      disabled={busyContributor === contributor.id}
+                    >
+                      Save
+                    </Button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditing(contributor.id);
-                        setEditValue(contributor.monthlyTarget != null ? String(contributor.monthlyTarget) : "");
-                      }}
+                      onClick={() => setRenaming(null)}
                       className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                      aria-label={`Change what ${contributor.name} is expected to give`}
-                      data-testid={`edit-contributor-${contributor.id}`}
+                      aria-label="Cancel rename"
                     >
-                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </span>
+                ) : (
+                  <>
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <span className="min-w-0 truncate text-foreground">{contributor.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRenaming(contributor.id);
+                          setRenameValue(contributor.name);
+                        }}
+                        className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                        aria-label={`Rename ${contributor.name}`}
+                        data-testid={`rename-contributor-${contributor.id}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </span>
+
+                    {editing === contributor.id ? (
+                      <span className="flex shrink-0 items-center gap-1">
+                        <Input
+                          type="number"
+                          min="0"
+                          autoFocus
+                          placeholder="blank = no amount"
+                          className="h-9 w-32 text-right"
+                          value={editValue}
+                          onChange={(event) => setEditValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void saveMemberTarget(contributor.id);
+                            if (event.key === "Escape") setEditing(null);
+                          }}
+                          data-testid={`edit-target-${contributor.id}`}
+                        />
+                        <Button size="sm" onClick={() => void saveMemberTarget(contributor.id)}>Save</Button>
+                      </span>
+                    ) : (
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="tabular-nums text-foreground">
+                          {contributor.monthlyTarget != null ? `${formatKes(contributor.monthlyTarget)}/mo` : "Not set"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditing(contributor.id);
+                            setEditValue(contributor.monthlyTarget != null ? String(contributor.monthlyTarget) : "");
+                          }}
+                          className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label={`Change what ${contributor.name} is expected to give`}
+                          data-testid={`edit-contributor-${contributor.id}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => void removeContributor(contributor)}
+                      disabled={busyContributor === contributor.id}
+                      className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                      aria-label={`Remove ${contributor.name}`}
+                      data-testid={`remove-contributor-${contributor.id}`}
+                    >
+                      {busyContributor === contributor.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </button>
+                  </>
                 )}
               </li>
             ))}
