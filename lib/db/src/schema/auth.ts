@@ -29,6 +29,17 @@ export const usersTable = pgTable('users', {
   // A photo chosen in Jamvi takes precedence over the picture supplied by the
   // sign-in provider, which may change whenever the person signs in again.
   customProfilePhotoPath: varchar('custom_profile_photo_path'),
+  // Set the moment somebody asks to delete their account; cleared the moment
+  // they sign back in before the grace period runs out, which is what makes
+  // asking to delete a reversible mistake rather than an instant one. Null
+  // for every account that has never asked.
+  deletionRequestedAt: timestamp('deletion_requested_at', { withTimezone: true }),
+  // Set once the grace period has actually run out and the account has been
+  // erased. The row itself is kept, not dropped — payments and subscription
+  // history reference this id and stay as an audit trail — but every field
+  // that identifies the person is cleared, and this timestamp is what a
+  // sign-in check reads to refuse them permanently rather than reactivate.
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import { assertExternalProductionConfiguration } from "./lib/productionConfig";
 import { ensureSubscriptionPlanCatalogue } from "./lib/subscription-catalog";
 import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
+import { runAccountDeletions } from "./lib/account-deletion";
 
 // Backfill removed — contributions are now derived from deposits + direct expense payments
 
@@ -118,6 +119,24 @@ cronSchedule(
       logger.info(result, "Subscription lifecycle run complete");
     } catch (err) {
       logger.error({ err }, "Subscription lifecycle run failed");
+    }
+  },
+  { timezone: "Africa/Nairobi" },
+);
+
+// ── Account deletions — daily at 07:15 ────────────────────────────────────
+// After the subscription run, so a trial that expired the same day it was
+// scheduled for deletion is still handled in the usual order. Erases every
+// account whose grace period ran out: see lib/account-deletion.ts for what
+// that does and does not remove.
+cronSchedule(
+  "15 7 * * *",
+  async () => {
+    try {
+      const result = await runAccountDeletions();
+      logger.info(result, "Account deletion run complete");
+    } catch (err) {
+      logger.error({ err }, "Account deletion run failed");
     }
   },
   { timezone: "Africa/Nairobi" },

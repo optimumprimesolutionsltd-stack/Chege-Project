@@ -113,6 +113,7 @@ export default function SettingsScreen() {
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'admin' | 'member'>('member');
   const [managingMembers, setManagingMembers] = useState(false);
@@ -727,6 +728,34 @@ export default function SettingsScreen() {
             } catch {
               Alert.alert('Error', 'Could not sign out. Please try again.');
               setLoggingOut(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      "You'll be signed out right away. If you don't sign back in within 14 days, your Personal budget is permanently erased and you leave every Shared group you're in — ownership passes to someone else where that applies. Sign back in before then to cancel this.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete my account',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              await customFetch('/api/auth/delete-account', { method: 'POST' });
+              await logout();
+            } catch (error) {
+              Alert.alert(
+                'Could not delete your account',
+                error instanceof Error ? error.message : 'Check your connection and try again.',
+              );
+            } finally {
+              setDeletingAccount(false);
             }
           },
         },
@@ -1597,6 +1626,17 @@ export default function SettingsScreen() {
           <Feather name="log-out" size={18} color="#ef4444" />
           <Text style={styles.signOutText}>{loggingOut ? 'Signing out…' : 'Sign out'}</Text>
         </Pressable>
+
+        <Pressable
+          testID="delete-account"
+          onPress={handleDeleteAccount}
+          disabled={deletingAccount}
+          style={({ pressed }) => [styles.deleteAccountBtn, { opacity: pressed || deletingAccount ? 0.6 : 1 }]}
+        >
+          <Text style={[styles.deleteAccountText, { color: colors.mutedForeground }]}>
+            {deletingAccount ? 'Deleting…' : 'Delete account'}
+          </Text>
+        </Pressable>
       </PageScrollView>
       <Modal visible={createGroupOpen} transparent animationType="fade" onRequestClose={() => setCreateGroupOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalKAV}>
@@ -1754,4 +1794,7 @@ const styles = StyleSheet.create({
     gap: 10, marginTop: 28, padding: 15, borderRadius: 14, borderWidth: 1,
   },
   signOutText: { fontSize: 16, fontWeight: '600', fontFamily: 'Inter_600SemiBold', color: '#ef4444' },
+
+  deleteAccountBtn: { alignItems: 'center', justifyContent: 'center', marginTop: 14, padding: 10 },
+  deleteAccountText: { fontSize: 13, fontFamily: 'Inter_500Medium', textDecorationLine: 'underline' },
 });

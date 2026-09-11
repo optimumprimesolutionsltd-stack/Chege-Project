@@ -100,7 +100,8 @@ async function optimizePhotoForUpload(file: File): Promise<File> {
 }
 
 export default function Settings() {
-  const { user, saveDisplayName, saveProfilePhoto } = useAuth();
+  const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const { data: members, isLoading } = useGetMembers();
   const removeMember = useRemoveMember();
   const leaveGroup = useLeaveGroup();
@@ -530,6 +531,30 @@ export default function Settings() {
         title: "Could not leave group",
         description: error instanceof Error ? error.message : undefined,
       });
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm(
+      "Delete your account? You'll be signed out right away. If you don't sign back in within 14 days, your Personal "
+      + "budget is permanently erased and you leave every Shared group you're in — ownership passes to someone else "
+      + "where that applies. Sign back in before then to cancel this.",
+    )) return;
+    setDeletingAccount(true);
+    try {
+      const response = await fetch("/api/auth/delete-account", { method: "POST", credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error);
+      }
+      logout();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not delete your account",
+        description: error instanceof Error && error.message ? error.message : "Check your connection and try again.",
+      });
+      setDeletingAccount(false);
     }
   };
 
@@ -1236,6 +1261,32 @@ export default function Settings() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Delete your account</p>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  You are signed out right away. If you do not sign back in within 14 days, your Personal budget is
+                  permanently erased and you leave every Shared group you are in. Sign back in before then to cancel
+                  this.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto sm:shrink-0"
+                onClick={() => void handleDeleteAccount()}
+                disabled={deletingAccount}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {deletingAccount ? "Deleting…" : "Delete account"}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
