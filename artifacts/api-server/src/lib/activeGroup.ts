@@ -69,6 +69,19 @@ export function requireSharedGroupManager(req: Request, res: Response): boolean 
 }
 
 /**
+ * For the handful of actions even an admin should not be able to take on
+ * their own: handing off ownership, and deleting the group outright.
+ */
+export function requireGroupOwner(req: Request, res: Response): boolean {
+  if (req.group?.role !== "owner") {
+    res.status(403).json({ error: "Only the group's owner can do this." });
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * A workspace owner can start recording immediately. A shared group does not
  * become a different kind of ledger while it has only one member.
  */

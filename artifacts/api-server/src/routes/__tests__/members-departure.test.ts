@@ -52,13 +52,13 @@ function selectChain(rows: unknown[]) {
   return chain;
 }
 
-function appFor(role: "owner" | "admin" | "member", userId = "current-user") {
+function appFor(role: "owner" | "admin" | "member", userId = "current-user", isPrivate = false) {
   const app = express();
   app.use(express.json());
   app.use((req: any, _res, next) => {
     req.isAuthenticated = () => true;
     req.user = { id: userId };
-    req.group = { id: 7, role };
+    req.group = { id: 7, role, isPrivate };
     next();
   });
   app.use("/", membersRouter);
@@ -69,12 +69,14 @@ function configureTransaction(selectResults: unknown[][], deletedRows: unknown[]
   const deleteWhere = vi.fn().mockReturnValue({
     returning: vi.fn().mockResolvedValue(deletedRows),
   });
+  const updateSet = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
   const tx = {
     select: vi.fn().mockImplementation(() => selectChain(selectResults.shift() ?? [])),
     delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+    update: vi.fn().mockReturnValue({ set: updateSet }),
   };
   (db.transaction as Mock).mockImplementation((callback: (transaction: typeof tx) => unknown) => callback(tx));
-  return { tx };
+  return { tx, updateSet };
 }
 
 beforeEach(() => {
@@ -203,5 +205,65 @@ describe("member role management", () => {
     expect(response.status).toBe(403);
     expect(response.body.error).toMatch(/forbidden/i);
     expect(db.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("ownership transfer", () => {
+  it("promotes the target to owner and drops the outgoing owner to admin", async () => {
+    const { tx, updateSet } = configureTransaction([
+      [{ id: 7 }],
+      [{ userId: "member-1" }],
+    ]);
+    (db.select as Mock).mockReturnValue(selectChain([
+      { userId: "member-1", role: "owner", addedAt: new Date("2026-01-01T00:00:00.000Z"), firstName: "Amina", lastName: null, email: "amina@example.com" },
+      { userId: "current-user", role: "admin", addedAt: new Date("2026-01-01T00:00:00.000Z"), firstName: "Chege", lastName: null, email: "chege@example.com" },
+    ]));
+
+    const response = await request(appFor("owner")).post("/members/member-1/transfer-ownership");
+
+    expect(response.status).toBe(200);
+    expect(tx.update).toHaveBeenCalledTimes(2);
+    expect(updateSet).toHaveBeenNthCalledWith(1, { role: "owner" });
+    expect(updateSet).toHaveBeenNthCalledWith(2, { role: "admin" });
+    expect(response.body).toMatchObject([
+      { userId: "member-1", role: "owner" },
+      { userId: "current-user", role: "admin" },
+    ]);
+  });
+
+  it("refuses to hand ownership to yourself", async () => {
+    const response = await request(appFor("owner")).post("/members/current-user/transfer-ownership");
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatch(/someone else/i);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("blocks anyone but the owner from transferring ownership", async () => {
+    const response = await request(appFor("admin")).post("/members/member-1/transfer-ownership");
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/only the group's owner/i);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("refuses on a Personal budget, which has no ownership to hand off", async () => {
+    const response = await request(appFor("owner", "current-user", true)).post("/members/member-1/transfer-ownership");
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/no ownership to hand off/i);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it("404s when the intended successor is not actually a member", async () => {
+    const { tx } = configureTransaction([
+      [{ id: 7 }],
+      [],
+    ]);
+
+    const response = await request(appFor("owner")).post("/members/ghost/transfer-ownership");
+
+    expect(response.status).toBe(404);
+    expect(tx.update).not.toHaveBeenCalled();
   });
 });

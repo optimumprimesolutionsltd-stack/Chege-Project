@@ -30,6 +30,7 @@ vi.mock("@workspace/db", () => ({
   db: {
     select: vi.fn(),
     update: vi.fn(),
+    transaction: vi.fn(),
   },
   groupsTable: tables.groupsTable,
   groupMembershipsTable: tables.groupMembershipsTable,
@@ -45,13 +46,24 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn((column: unknown, value: unknown) => ({ column, value })),
 }));
 
+const activeGroupExtraMocks = vi.hoisted(() => ({
+  requireGroupOwner: vi.fn(),
+  clearActiveWorkspaceCookie: vi.fn(),
+}));
+const accountDeletionMocks = vi.hoisted(() => ({
+  eraseGroupData: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../lib/activeGroup", () => ({
   canRecordSharedTransactions: vi.fn().mockResolvedValue(true),
   getActiveGroupId: vi.fn((req: { group?: { id: number } }) => req.group?.id ?? null),
   requireGroupManager: activeGroupMocks.requireGroupManager,
+  requireGroupOwner: activeGroupExtraMocks.requireGroupOwner,
   setActiveWorkspaceCookie: vi.fn(),
+  clearActiveWorkspaceCookie: activeGroupExtraMocks.clearActiveWorkspaceCookie,
 }));
 vi.mock("../../lib/photoStorage", () => photoStorageMocks);
+vi.mock("../../lib/account-deletion", () => accountDeletionMocks);
 
 import { db } from "@workspace/db";
 import groupRouter from "../group.js";
@@ -59,6 +71,7 @@ import groupRouter from "../group.js";
 const mockedDb = db as unknown as {
   select: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  transaction: ReturnType<typeof vi.fn>;
 };
 
 function buildApp({
@@ -260,5 +273,44 @@ describe("PATCH /group identity", () => {
 
     expect(response.status).toBe(400);
     expect(mockedDb.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /group", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedDb.transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback({}));
+  });
+
+  it("erases the group when the owner deletes it", async () => {
+    activeGroupExtraMocks.requireGroupOwner.mockReturnValue(true);
+
+    const response = await request(buildApp({ groupId: 9, role: "owner" })).delete("/group");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true });
+    expect(accountDeletionMocks.eraseGroupData).toHaveBeenCalledWith({}, 9);
+    expect(activeGroupExtraMocks.clearActiveWorkspaceCookie).toHaveBeenCalledOnce();
+  });
+
+  it("refuses an admin, even though admins can otherwise manage the group", async () => {
+    activeGroupExtraMocks.requireGroupOwner.mockImplementation((_req, res) => {
+      res.status(403).json({ error: "Only the group's owner can do this." });
+      return false;
+    });
+
+    const response = await request(buildApp({ role: "admin" })).delete("/group");
+
+    expect(response.status).toBe(403);
+    expect(accountDeletionMocks.eraseGroupData).not.toHaveBeenCalled();
+  });
+
+  it("refuses on a Personal budget before even checking ownership", async () => {
+    const response = await request(buildApp({ role: "owner", isPrivate: true })).delete("/group");
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatch(/delete your account/i);
+    expect(activeGroupExtraMocks.requireGroupOwner).not.toHaveBeenCalled();
+    expect(accountDeletionMocks.eraseGroupData).not.toHaveBeenCalled();
   });
 });

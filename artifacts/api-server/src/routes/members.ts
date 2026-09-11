@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { groupMembershipsTable, groupsTable, usersTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupOwner, requireSharedGroupManager } from "../lib/activeGroup";
 import { memberMayJoinGroups, subscriptionRequiredMessage } from "../lib/membership-limits";
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 
@@ -124,6 +124,57 @@ router.patch("/members/:userId", async (req, res): Promise<void> => {
   const members = await getGroupMembersWithNames(groupId);
   const [member] = members.filter((x) => x.userId === req.params.userId);
   res.json(member);
+});
+
+/**
+ * Hands the group to someone else. The outgoing owner drops to admin rather
+ * than a plain member — someone who just handed off a group they built
+ * usually still wants a say in it, and this is what makes Leave group usable
+ * right afterward if they decide they are done with it entirely.
+ */
+router.post("/members/:userId/transfer-ownership", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (req.group?.isPrivate) {
+    res.status(403).json({ error: "A Personal budget has no ownership to hand off." });
+    return;
+  }
+  if (!requireGroupOwner(req, res)) return;
+
+  const { userId } = req.params;
+  if (userId === req.user!.id) {
+    res.status(400).json({ error: "Choose someone else to become the new owner." });
+    return;
+  }
+
+  const outcome = await db.transaction(async (tx) => {
+    const [group] = await tx
+      .select({ id: groupsTable.id })
+      .from(groupsTable)
+      .where(eq(groupsTable.id, groupId))
+      .for("update");
+    if (!group) return "missing-group" as const;
+
+    const [target] = await tx
+      .select({ userId: groupMembershipsTable.userId })
+      .from(groupMembershipsTable)
+      .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, userId)))
+      .for("update");
+    if (!target) return "missing-member" as const;
+
+    await tx.update(groupMembershipsTable)
+      .set({ role: "owner" })
+      .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, userId)));
+    await tx.update(groupMembershipsTable)
+      .set({ role: "admin" })
+      .where(and(eq(groupMembershipsTable.groupId, groupId), eq(groupMembershipsTable.userId, req.user!.id)));
+    return "transferred" as const;
+  });
+
+  if (outcome === "missing-group") { res.status(404).json({ error: "Group not found" }); return; }
+  if (outcome === "missing-member") { res.status(404).json({ error: "That person is not a member of this group." }); return; }
+
+  res.json(await getGroupMembersWithNames(groupId));
 });
 
 router.delete("/members/me", async (req, res): Promise<void> => {

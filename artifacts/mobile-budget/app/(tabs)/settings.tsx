@@ -655,6 +655,61 @@ export default function SettingsScreen() {
       },
     ]);
   };
+  const handleTransferOwnership = (member: GroupMember) => {
+    Alert.alert(
+      `Make ${member.userName ?? 'this person'} the owner?`,
+      `You will drop to admin — you keep full access, just not the owner role. ${member.userName ?? 'They'} will be able to remove members, change group setup, and delete the group. This cannot be undone by yourself; only the new owner can hand it back.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Make owner',
+          onPress: async () => {
+            setManagingMembers(true);
+            try {
+              await customFetch(`/api/members/${member.userId}/transfer-ownership`, { method: 'POST' });
+              refreshMembers();
+            } catch (error) {
+              Alert.alert('Could not transfer ownership', error instanceof Error ? error.message : 'Please try again.');
+            } finally {
+              setManagingMembers(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteGroup = () => {
+    const name = workspaceBudgetName(group);
+    Alert.alert(
+      `Delete "${name}"?`,
+      `This erases every expense, contribution, bank record, and goal in "${name}" for every member — not just you. Nobody, including you, can undo this. If you only want to stop being responsible for it, use "Make owner" on another member instead.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete group',
+          style: 'destructive',
+          onPress: async () => {
+            setManagingMembers(true);
+            try {
+              await leaveMobileSharedWorkspace({
+                leave: () => customFetch('/api/group', { method: 'DELETE' }),
+                storage: AsyncStorage,
+                resetQueries: () => queryClient.resetQueries(),
+              });
+              router.replace('/budget-chooser');
+              Alert.alert('Group deleted', `"${name}" and everything in it is gone.`);
+            } catch (error) {
+              Alert.alert('Could not delete this group', error instanceof Error ? error.message : 'Please try again.');
+            } finally {
+              setManagingMembers(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleLeaveGroup = () => {
     Alert.alert(
       `Leave "${workspaceBudgetName(group)}"?`,
@@ -1330,7 +1385,19 @@ export default function SettingsScreen() {
                 </View>
               </View>
               {canManageShared && editingAccess && member.role !== 'owner' && member.userId !== user?.id ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                   {myMembership?.role === 'owner' ? (
+                     <Pressable
+                       disabled={managingMembers}
+                       onPress={() => handleTransferOwnership(member)}
+                       accessibilityRole="button"
+                       accessibilityLabel={`Make ${member.userName ?? 'member'} the owner`}
+                     >
+                       <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                         Make owner
+                       </Text>
+                     </Pressable>
+                   ) : null}
                    <Pressable
                      disabled={managingMembers}
                      onPress={() => handleRoleChange(member)}
@@ -1372,10 +1439,29 @@ export default function SettingsScreen() {
               </Pressable>
             </View>
           ) : myMembership?.role === 'owner' ? (
-            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0 }]}>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                Owners stay in the group so it always has someone responsible for access. Ownership transfer is not available yet.
+            <View style={[styles.row, { borderTopColor: colors.border, borderTopWidth: members.length ? StyleSheet.hairlineWidth : 0, alignItems: 'stretch' }]}>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground, marginBottom: editingAccess && members.some((m) => m.role !== 'owner') ? 12 : 0 }]}>
+                {editingAccess && members.some((m) => m.role !== 'owner')
+                  ? 'Owners stay in the group so it always has someone responsible for access. Tap "Make owner" next to another member above to hand it off — you can leave once you are no longer the owner.'
+                  : 'Owners stay in the group so it always has someone responsible for access. Add another member, then hand off ownership to leave.'}
               </Text>
+              {editingAccess ? (
+                <>
+                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>Delete this group</Text>
+                  <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4, marginBottom: 12 }]}>
+                    Erases everything in "{workspaceBudgetName(group)}" for every member. Cannot be undone.
+                  </Text>
+                  <Pressable
+                    disabled={managingMembers}
+                    onPress={handleDeleteGroup}
+                    style={{ alignSelf: 'flex-start', borderWidth: 1, borderColor: '#ef444466', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9 }}
+                  >
+                    <Text style={{ color: '#ef4444', fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                      {managingMembers ? 'Deleting…' : 'Delete group'}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
             </View>
           ) : null}
           {!canManageShared ? null : editingAccess ? (
