@@ -50,6 +50,7 @@ import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
 import { resolvePhotoUrl } from '../lib/photoStorage';
 import { resolveOrigin } from '../lib/requestOrigin.js';
 import { ensureTrialSubscription } from "../lib/subscription-catalog";
+import { cancelPendingAccountDeletion, requestAccountDeletion } from "../lib/account-deletion";
 import { sendEmail } from '../lib/email';
 import {
   forgotPasswordEmailLimiter,
@@ -245,6 +246,7 @@ export async function upsertUser(claims: Record<string, unknown>) {
     })
     .returning();
   await ensureTrialSubscription(user.id);
+  await cancelPendingAccountDeletion(user.id);
   return user;
 }
 
@@ -267,6 +269,7 @@ router.post('/auth/register', registerLimiter, async (req: Request, res: Respons
     firstName: parsed.data.name,
   }).returning();
   await ensureTrialSubscription(user.id);
+  await cancelPendingAccountDeletion(user.id);
   await startLocalSession(res, user);
   res.json({ user: await authUserPayload(user) });
 });
@@ -284,6 +287,7 @@ router.post('/auth/password-login', signInLimiter, async (req: Request, res: Res
     return;
   }
   await ensureTrialSubscription(user.id);
+  await cancelPendingAccountDeletion(user.id);
   await startLocalSession(res, user);
   res.json({ user: await authUserPayload(user) });
 });
@@ -400,6 +404,7 @@ router.post('/auth/reset-password', resetPasswordLimiter, async (req: Request, r
     ));
 
   await ensureTrialSubscription(user.id);
+  await cancelPendingAccountDeletion(user.id);
   await startLocalSession(res, user);
   res.json({ user: await authUserPayload(user) });
 });
@@ -433,6 +438,27 @@ router.get('/auth/user', async (req: Request, res: Response) => {
       user: await authUserPayload(dbUser),
     }),
   );
+});
+
+/**
+ * Requests account deletion. Ends the session immediately, in the same
+ * request — the client only needs to treat this response like a logout. The
+ * account is not actually erased until ACCOUNT_DELETION_GRACE_DAYS later
+ * (see lib/account-deletion.ts); signing back in before then cancels it.
+ */
+router.post('/auth/delete-account', async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: 'Sign in first.' });
+    return;
+  }
+
+  const scheduledFor = await requestAccountDeletion(req.user.id);
+
+  const sid = getSessionId(req);
+  await clearSession(res, sid);
+  clearActiveWorkspaceCookie(res);
+
+  res.json({ scheduledFor: scheduledFor.toISOString() });
 });
 
 router.put('/auth/display-name', async (req: Request, res: Response) => {
