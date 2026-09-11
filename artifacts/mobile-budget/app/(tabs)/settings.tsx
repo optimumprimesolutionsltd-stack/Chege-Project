@@ -453,14 +453,14 @@ export default function SettingsScreen() {
       // point the API client at the new workspace.
       await selectWorkspace.mutateAsync({ data: { groupId } });
       await AsyncStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(groupId));
-      // Drop every cached and persisted query so nothing from the old budget
+      // Drop every cached and persisted query so nothing from the old workspace
       // can survive the switch or be restored on the next launch, then land on
-      // Home where the new budget's figures load fresh.
+      // Home where the new workspace's figures load fresh.
       await clearQueryClientCache();
       queryClient.clear();
       router.replace('/(tabs)/');
     } catch (error) {
-      Alert.alert('Could not switch budget', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Could not switch workspace', error instanceof Error ? error.message : 'Please try again.');
     }
   };
   const handleSelectWorkspace = (groupId: number) => {
@@ -469,12 +469,12 @@ export default function SettingsScreen() {
     if (!destination) return;
 
     Alert.alert(
-      'Switch budget?',
-      `You are about to open ${workspaceLabel(destination)}. Your balances, expenses, goals, bank activity, and reports will refresh for that budget.`,
+      'Switch workspace?',
+      `You are about to open ${workspaceLabel(destination)}. Your balances, expenses, goals, bank activity, and reports will refresh for that workspace.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Switch budget',
+          text: 'Switch workspace',
           onPress: () => void performWorkspaceSwitch(destination.id),
         },
       ],
@@ -487,7 +487,7 @@ export default function SettingsScreen() {
       return;
     }
     if (!newGroupKind) {
-      Alert.alert('Choose a budget type', 'Select the kind of Shared group you are creating.');
+      Alert.alert('Choose a group type', 'Select the kind of Shared group you are creating.');
       return;
     }
     try {
@@ -518,7 +518,7 @@ export default function SettingsScreen() {
       ]);
       setEditingGroupKind(false);
     } catch (error) {
-      Alert.alert('Could not update budget type', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert('Could not update group type', error instanceof Error ? error.message : 'Please try again.');
     }
   };
   const handleApplyRecommendations = async () => {
@@ -657,7 +657,7 @@ export default function SettingsScreen() {
   const handleLeaveGroup = () => {
     Alert.alert(
       `Leave "${workspaceBudgetName(group)}"?`,
-      'You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with this budget.',
+      'You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with this workspace.',
       [
         { text: 'Stay', style: 'cancel' },
         {
@@ -672,7 +672,7 @@ export default function SettingsScreen() {
                 resetQueries: () => queryClient.resetQueries(),
               });
               router.replace('/budget-chooser');
-              Alert.alert('You left the Shared group', `You left "${workspaceBudgetName(group)}". Choose another budget to continue.`);
+              Alert.alert('You left the Shared group', `You left "${workspaceBudgetName(group)}". Choose another workspace to continue.`);
             } catch (error) {
               Alert.alert('Could not leave group', error instanceof Error ? error.message : 'Please try again.');
             } finally {
@@ -865,7 +865,7 @@ export default function SettingsScreen() {
          </View>
 
         <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGETS</Text>
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>WORKSPACES</Text>
           <Pressable
             testID="refresh-workspaces"
             onPress={() => void refetchWorkspaces()}
@@ -883,14 +883,14 @@ export default function SettingsScreen() {
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {workspacesError && workspaces.length === 0 ? (
             <Pressable onPress={() => void refetchWorkspaces()} style={styles.workspaceInfo}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Couldn’t load your budgets</Text>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Couldn’t load your workspaces</Text>
               <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
                 Check your connection and tap to try again.
               </Text>
             </Pressable>
           ) : !workspacesError && !workspacesLoading && workspaces.length === 0 ? (
             <View style={styles.workspaceInfo}>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>No budgets yet.</Text>
+              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>No workspaces yet.</Text>
             </View>
           ) : null}
           {workspaces.map((workspace, index) => {
@@ -898,7 +898,7 @@ export default function SettingsScreen() {
             const label = workspaceIdentityText(workspace, workspace.isPrivate ? 'Personal budget' : 'Group');
             const photoUrl = workspace.isPrivate ? user?.profileImageUrl : workspace.photoUrl;
             const detail = workspace.isPrivate
-              ? 'Only you can access this budget'
+              ? 'Only you can access this workspace'
               : `${workspace.name} · ${workspace.role === 'owner' ? 'Owner' : workspace.role === 'admin' ? 'Admin' : 'Member'}`;
             return (
               <Pressable
