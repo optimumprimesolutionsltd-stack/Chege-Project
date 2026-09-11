@@ -2,6 +2,7 @@ import { useSeo } from "@/hooks/use-seo";
 import { SITE_SEO } from "@/lib/site-seo";
 import { LegalPage } from "@/components/layout/LegalPage";
 import { JAMVI_SUPPORT_EMAIL } from "@/lib/site-links";
+import { TRIAL_DAYS } from "@workspace/jamvi-pricing";
 
 export default function Terms() {
   useSeo(SITE_SEO["/terms"]);
@@ -93,7 +94,7 @@ export default function Terms() {
         however many people share it.
       </p>
       <p>
-        New accounts are free for their first 30 days. If a subscription lapses
+        New accounts are free for their first {TRIAL_DAYS} days. If a subscription lapses
         after that, nothing is deleted: you keep your current month and every
         record you have already entered, earlier months lock rather than
         disappear, and you become read-only in any Shared group you belong to.

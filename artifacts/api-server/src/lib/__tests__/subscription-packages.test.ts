@@ -55,10 +55,8 @@ describe("the Jamvi package", () => {
     expect(JAMVI_PACKAGE).not.toHaveProperty("memberLimit");
   });
 
-  it("trials for a full monthly cycle", () => {
-    // Shorter and a salaried member can finish the trial without ever having
-    // recorded a payday, having budgeted against income they never saw.
-    expect(TRIAL_DAYS).toBe(30);
+  it("trials for two weeks", () => {
+    expect(TRIAL_DAYS).toBe(14);
     expect(JAMVI_PACKAGE.trialDays).toBe(TRIAL_DAYS);
     expect(GRACE_DAYS).toBe(7);
   });

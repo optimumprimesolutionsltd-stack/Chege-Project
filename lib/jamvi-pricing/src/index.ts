@@ -42,10 +42,8 @@ export const SUBSCRIPTION_STATUS = {
 export type SubscriptionStatus =
   (typeof SUBSCRIPTION_STATUS)[keyof typeof SUBSCRIPTION_STATUS];
 
-/** A new member gets a full monthly cycle before being asked for anything.
- *  Shorter than this and a salaried member can finish the trial without ever
- *  recording a payday, having budgeted against income they never saw. */
-export const TRIAL_DAYS = 30;
+/** How long a new member has full access before being asked to pay. */
+export const TRIAL_DAYS = 14;
 
 /** Days after a missed payment before access drops to read-only. Long enough
  *  that a failed M-Pesa deduction is not punished as if it were a decision. */

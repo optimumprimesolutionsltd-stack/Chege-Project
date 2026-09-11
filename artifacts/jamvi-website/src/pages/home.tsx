@@ -325,7 +325,7 @@ export default function Home() {
           <img src={`${import.meta.env.BASE_URL}branding/jamvi-mark-inline.png`} alt="Jamvi Mark" className="w-20 h-20 mx-auto mb-8 drop-shadow-md" />
           <h2 className="text-4xl md:text-5xl font-bold text-primary mb-6">Take a seat on the mat.</h2>
           <p className="text-xl text-foreground/70 mb-6 max-w-2xl mx-auto leading-relaxed">
-            Start managing your money with clarity and confidence. Free for your first 30 days, and setup takes less than two minutes.
+            Start managing your money with clarity and confidence. Free for your first {TRIAL_DAYS} days, and setup takes less than two minutes.
           </p>
           <p className="mx-auto mb-10 max-w-2xl text-sm font-medium leading-relaxed text-foreground/60">
             Jamvi records contributions, expenses, and balances. It does not send, receive, or hold money, and it is not a payment service. Money moves through M-Pesa or your bank, exactly as it does now.

@@ -621,7 +621,7 @@ function TrialNote({ colors }: { colors: MobileColorPalette }) {
     >
       <Feather name="gift" size={16} color={colors.primary} style={{ marginTop: 1 }} />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.trialNoteTitle, { color: colors.foreground }]}>Free for your first 30 days</Text>
+        <Text style={[styles.trialNoteTitle, { color: colors.foreground }]}>Free for your first 14 days</Text>
         <Text style={[styles.trialNoteText, { color: colors.mutedForeground }]}>
           Then KES 100/month or KES 1,000/year — one subscription covers your Personal budget and every group.
           Nothing is ever deleted if you don't subscribe; shared groups just go read-only until you do.
