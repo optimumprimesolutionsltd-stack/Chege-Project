@@ -112,7 +112,14 @@ export function statusChip(entitlements: MemberEntitlements | undefined, now: Da
   }
 }
 
-/** A short line for the persistent banner — null when there is nothing to say. */
+/**
+ * A short line for the persistent banner — null when there is nothing to say.
+ *
+ * Shown for the whole trial, not just its last days: mobile has no nav item
+ * that can carry "Pay · Nd left" the way the web sidebar does, so this banner
+ * is the only place a client on a fresh trial finds out they are on one
+ * without having gone looking in Settings.
+ */
 export function bannerLine(
   entitlements: MemberEntitlements | undefined,
   now: Date = new Date(),
@@ -127,7 +134,8 @@ export function bannerLine(
   }
   if (entitlements.status === 'trial') {
     const days = daysUntil(entitlements.trialEndsAt, now);
-    if (days !== null && days <= 7) {
+    if (days === null) return null;
+    if (days <= 7) {
       return {
         text:
           days > 0
@@ -136,6 +144,10 @@ export function bannerLine(
         tone: 'info',
       };
     }
+    return {
+      text: `You're on a free trial — ${days} days left. Tap to see what's included.`,
+      tone: 'info',
+    };
   }
   return null;
 }
