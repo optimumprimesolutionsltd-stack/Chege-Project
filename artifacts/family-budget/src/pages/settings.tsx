@@ -519,6 +519,52 @@ export default function Settings() {
     }
   };
 
+  const handleTransferOwnership = async (userId: string, memberName: string) => {
+    if (!confirm(
+      `Make ${memberName} the owner? You will drop to admin — you keep full access, just not the owner role. `
+      + `${memberName} will be able to remove members, change group setup, and delete the group. This cannot be `
+      + "undone by yourself; only the new owner can hand it back.",
+    )) return;
+    try {
+      const response = await fetch(`/api/members/${userId}/transfer-ownership`, { method: "POST", credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error);
+      }
+      toast({ title: "Ownership transferred", description: `${memberName} is now the owner.` });
+      queryClient.invalidateQueries({ queryKey: getGetMembersQueryKey() });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not transfer ownership",
+        description: error instanceof Error && error.message ? error.message : "Please try again.",
+      });
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!confirm(
+      `Delete "${budgetName}"? This erases every expense, contribution, bank record, and goal in it for every `
+      + "member — not just you. Nobody, including you, can undo this. If you only want to stop being responsible "
+      + 'for it, use "Make owner" on another member instead.',
+    )) return;
+    try {
+      const response = await fetch("/api/group", { method: "DELETE", credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error);
+      }
+      queryClient.clear();
+      window.location.assign(`${appPath("/", import.meta.env.BASE_URL)}?left=1`);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not delete this group",
+        description: error instanceof Error && error.message ? error.message : "Please try again.",
+      });
+    }
+  };
+
   const handleLeaveGroup = async () => {
     if (!confirm(`Leave "${budgetName}"? You will lose access immediately. Shared expenses, goals, bank activity, and history will stay with "${budgetName}".`)) return;
     try {
@@ -1083,6 +1129,17 @@ export default function Settings() {
                   <div className="flex flex-wrap items-center gap-2">
                     {canManageShared && m.role !== "owner" && m.userId !== user?.id ? (
                       <>
+                        {myMembership?.role === "owner" ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-primary hover:text-primary"
+                            onClick={() => void handleTransferOwnership(m.userId, m.userName ?? "this person")}
+                            aria-label={`Make ${m.userName ?? "member"} the owner`}
+                          >
+                            Make owner
+                          </Button>
+                        ) : null}
                         <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                           <span>Role</span>
                           <select
@@ -1159,9 +1216,31 @@ export default function Settings() {
             </div>
           )}
           {myMembership?.role === "owner" && !isPrivateWorkspace && (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Owners stay in the group so it always has someone responsible for access. Ownership transfer is not available yet.
-            </p>
+            <>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {members?.some((m) => m.role !== "owner")
+                  ? 'Owners stay in the group so it always has someone responsible for access. Use "Make owner" next to another member above to hand it off — you can leave once you are no longer the owner.'
+                  : "Owners stay in the group so it always has someone responsible for access. Add another member, then hand off ownership to leave."}
+              </p>
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Delete this group</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                      Erases everything in "{budgetName}" for every member. Cannot be undone.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto sm:shrink-0"
+                    onClick={() => void handleDeleteGroup()}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete group
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
 
           {/* Invite member form */}

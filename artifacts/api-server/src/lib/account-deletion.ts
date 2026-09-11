@@ -42,7 +42,7 @@ import {
   usersTable,
 } from "@workspace/db";
 
-type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export const ACCOUNT_DELETION_GRACE_DAYS = 14;
 const DAY_MS = 86_400_000;
@@ -93,12 +93,15 @@ export async function accountsDueForErasure(now: Date = new Date()): Promise<str
 
 /**
  * Deletes everything that belongs to one group: a Personal budget being
- * closed, or a Shared group whose last member is leaving. Order matters —
- * most of these tables restrict deleting a group that still has rows in
- * them, so children go first. Ending on the group row itself, which cascades
- * memberships, invitations, invite links and legacy per-group subscriptions.
+ * closed, a Shared group whose last member is leaving, or an owner deleting
+ * a Shared group outright (see routes/group.ts's DELETE /group — the same
+ * function, because "erase this group's data" means the same thing either
+ * way). Order matters — most of these tables restrict deleting a group that
+ * still has rows in them, so children go first. Ending on the group row
+ * itself, which cascades memberships, invitations, invite links and legacy
+ * per-group subscriptions.
  */
-async function eraseGroupData(tx: DbOrTransaction, groupId: number): Promise<void> {
+export async function eraseGroupData(tx: DbOrTransaction, groupId: number): Promise<void> {
   // Cascades expense_category_allocations, expense_income_splits, and any
   // joint_account_transactions row created for a split-funded expense.
   await tx.delete(expensesTable).where(eq(expensesTable.groupId, groupId));

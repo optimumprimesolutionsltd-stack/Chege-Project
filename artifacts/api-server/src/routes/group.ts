@@ -17,11 +17,14 @@ import {
 import { eq } from "drizzle-orm";
 import {
   canRecordSharedTransactions,
+  clearActiveWorkspaceCookie,
   getActiveGroupId,
   requireGroupManager,
+  requireGroupOwner,
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
 import { resolvePhotoUrl, verifyPhotoObject } from "../lib/photoStorage";
+import { eraseGroupData } from "../lib/account-deletion";
 
 const router = Router();
 
@@ -280,6 +283,34 @@ router.patch("/group", async (req, res): Promise<void> => {
     // the parse and answer 500 on every group edit.
     enabledSections: resolveEnabledSections(group.enabledSections),
   }));
+});
+
+/**
+ * Deletes the active Shared group outright — every expense, contribution,
+ * bank ledger row and goal in it, for every member, gone at once. Reuses the
+ * exact routine account deletion uses to close a group nobody is left in
+ * (lib/account-deletion.ts), because "erase this group's data" means the
+ * same thing whether the reason is one owner leaving or one member left.
+ *
+ * Owner-only, unlike most group management, and refused on a Personal
+ * budget — that has no group to hand off or dissolve; deleting it means
+ * deleting the account.
+ */
+router.delete("/group", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  if (req.group?.isPrivate) {
+    res.status(403).json({
+      error: "A Personal budget can't be deleted on its own — delete your account if you want it gone.",
+    });
+    return;
+  }
+  if (!requireGroupOwner(req, res)) return;
+
+  await db.transaction((tx) => eraseGroupData(tx, groupId));
+
+  clearActiveWorkspaceCookie(res);
+  res.json({ success: true });
 });
 
 export default router;
