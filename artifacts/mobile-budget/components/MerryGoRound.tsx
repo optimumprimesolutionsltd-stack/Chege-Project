@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch, getGetJointAccountQueryKey, getGetJointAccountsQueryKey } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
+import { handleLapsedError } from '@/lib/lapsedError';
 
 type PayoutMember = { id: number; name: string; timesReceived: number; lastRound: number | null };
 type Payout = { id: number; roundNumber: number; contributorId: number; name: string; amount: number; date: string; note: string | null };
@@ -90,8 +91,10 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
       setEditing(false);
       Alert.alert(`Round ${payout.roundNumber} recorded`, `KES ${kes(payout.amount)} to ${payout.name}.`);
     },
-    onError: (error) =>
-      Alert.alert('Could not record the payout', error instanceof Error ? error.message : 'Please try again.'),
+    onError: (error) => {
+      if (handleLapsedError(error)) return;
+      Alert.alert('Could not record the payout', error instanceof Error ? error.message : 'Please try again.');
+    },
   });
 
   const deletePayout = useMutation({

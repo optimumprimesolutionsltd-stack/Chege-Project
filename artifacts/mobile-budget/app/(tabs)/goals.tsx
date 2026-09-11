@@ -32,6 +32,7 @@ import { deriveContributorTotals, applyDateFilter, isCorrectionRow, MANUAL_ADJUS
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { buildCascadePreview, parseWholeKesAmount } from '@/utils/cascadePreview';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
+import { handleLapsedError } from '@/lib/lapsedError';
 import {
   useGetSavingsGoals,
   useCreateSavingsGoal,
@@ -844,9 +845,11 @@ export default function GoalsScreen() {
       setCascadePayerIds([]);
       setCascadePayerAmounts({});
       setCascadeResult(result.allocations ?? []);
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to distribute payment. Please try again.');
+      if (!handleLapsedError(error)) {
+        Alert.alert('Error', 'Failed to distribute payment. Please try again.');
+      }
     } finally {
       setSubmittingCascade(false);
     }
@@ -951,9 +954,11 @@ export default function GoalsScreen() {
       setContributeVisible(false);
       setContribPayerIds([]);
       setContribPayerAmounts({});
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to record contribution. Please try again.');
+      if (!handleLapsedError(error)) {
+        Alert.alert('Error', 'Failed to record contribution. Please try again.');
+      }
     } finally {
       setSubmittingContrib(false);
     }
