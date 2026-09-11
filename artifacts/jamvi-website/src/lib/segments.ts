@@ -18,6 +18,8 @@
  * defaults change there, change them here.
  */
 
+import { TRIAL_DAYS } from "@workspace/jamvi-pricing";
+
 export interface Segment {
   slug: string;
   /** Menu and breadcrumb label. */
@@ -104,7 +106,7 @@ export const SEGMENTS: Segment[] = [
       {
         question: "What does it cost for one person?",
         answer:
-          "KES 100 a month, or KES 1,000 a year, with the first 30 days free. That is the whole price whether you use Jamvi alone or belong to five groups.",
+          `KES 100 a month, or KES 1,000 a year, with the first ${TRIAL_DAYS} days free. That is the whole price whether you use Jamvi alone or belong to five groups.`,
       },
       { question: "Does Jamvi connect to my M-Pesa or bank?", answer: NOT_A_BANK },
     ],
