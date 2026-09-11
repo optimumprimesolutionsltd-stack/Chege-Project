@@ -400,9 +400,9 @@ export default function BudgetChooserScreen() {
     <View style={[styles.page, { backgroundColor: colors.background, paddingTop: insets.top + 20 }]}>
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]} showsVerticalScrollIndicator={false}>
         <View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="layers" size={22} color={colors.primaryForeground} /></View>
-        <Text style={[styles.eyebrow, { color: colors.brandTeal }]}>YOUR BUDGETS</Text>
+        <Text style={[styles.eyebrow, { color: colors.brandTeal }]}>YOUR WORKSPACES</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>Choose where to work.</Text>
-        <Text style={[styles.intro, { color: colors.mutedForeground }]}>Select a budget to open it.</Text>
+        <Text style={[styles.intro, { color: colors.mutedForeground }]}>Select one to open it.</Text>
 
         <TrialNote colors={colors} />
 
@@ -445,12 +445,12 @@ export default function BudgetChooserScreen() {
                   </View>
                 </View>
                 <Pressable testID="open-selected-budget" accessibilityRole="button" accessibilityLabel={`Open ${selectedName}`} disabled={selectWorkspace.isPending} onPress={() => void chooseWorkspace(selectedWorkspace)} style={[styles.openButton, { backgroundColor: colors.accent }, selectWorkspace.isPending && styles.disabled]}><Text style={[styles.openButtonText, { color: colors.accentForeground }]}>{selectWorkspace.isPending ? 'Opening…' : `Open ${selectedName}`}</Text><Feather name="arrow-up-right" size={18} color={colors.accentForeground} /></Pressable>
-              </> : <Text style={[styles.empty, { color: colors.mutedForeground }]}>Choose a budget to see the next step.</Text>}
+              </> : <Text style={[styles.empty, { color: colors.mutedForeground }]}>Choose one to see the next step.</Text>}
             </View>
 
-            <Text style={[styles.sectionLabel, { color: colors.brandTeal }]}>YOUR BUDGETS</Text>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Choose a budget</Text>
-            <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>Click a budget to open it.</Text>
+            <Text style={[styles.sectionLabel, { color: colors.brandTeal }]}>YOUR WORKSPACES</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Choose a workspace</Text>
+            <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>Tap one to open it.</Text>
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PERSONAL BUDGET · FREE</Text>
             {privateWorkspace ? workspaceRow(privateWorkspace, true) : (
               <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -496,7 +496,7 @@ export default function BudgetChooserScreen() {
       </ScrollView>
       <Modal visible={createSharedOpen} transparent animationType="fade" onRequestClose={() => setCreateSharedOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.scrim}>
-          <View style={[styles.modal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.modal, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.modalHeader}>
               <View style={styles.workspaceText}>
                 <Text style={[styles.modalTitle, { color: colors.foreground }]}>Create a Shared group</Text>
