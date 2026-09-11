@@ -55,7 +55,10 @@ export default function ProfileSetupScreen() {
         </View>
         <Text style={styles.title}>What should we call you?</Text>
         <Text style={styles.subtitle}>
-          This is the name your group will see in Jamvi. Your email stays private and is only used to sign you in.
+          This is the name your group will see in Jamvi, and the name money you
+          contribute is recorded under. Use both names if you will share a
+          budget — one name on its own can be confused with another member's.
+          Your email stays private and is only used to sign you in.
         </Text>
 
         <Text style={styles.label}>YOUR NAME</Text>
@@ -70,8 +73,10 @@ export default function ProfileSetupScreen() {
             if (error) setError('');
           }}
           onSubmitEditing={submit}
-          placeholder="Your name"
-          placeholderTextColor="#6f927b"
+          placeholder="e.g. Jane Wanjiku"
+          // Was #6f927b, a green left over from the green theme and hard to
+          // read on this navy gradient.
+          placeholderTextColor="#7f93ae"
           returnKeyType="done"
           style={styles.input}
           testID="display-name-input"

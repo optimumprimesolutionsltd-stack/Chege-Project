@@ -204,7 +204,11 @@ export default function RecordContributionsScreen() {
       return;
     }
     if (accountId == null) {
-      Alert.alert('No bank account yet', 'Contributions need somewhere to land. Set up a bank account on the Bank tab first.');
+      // Points at the control on this screen, not at a "Bank tab" that does not
+      // exist in the tab bar - Bank is reachable only from Home. Sending
+      // somebody to a tab they cannot find, to do a thing they could do here,
+      // was two wrong turns in one sentence.
+      Alert.alert('No bank account yet', 'Contributions need somewhere to land. Tap "Add a bank account" at the top of this screen.');
       return;
     }
     if (!dateReceived || dateReceived < earliestDate || dateReceived > todayStr) {

@@ -662,7 +662,7 @@ export default function ContributionsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.unattributedTitle}>Not linked to an income source · KES {formatKES(unattributedFunding.total)}</Text>
                   <Text style={styles.unattributedText}>
-                    This much came into the group without a chosen income source (like Salary or Business), so it isn’t in any member’s income plan. It still counts in the group total — link it later from the Bank tab.
+                    This much came into the group without a chosen income source (like Salary or Business), so it isn’t in any member’s income plan. It still counts in the group total — link it later from Home → Bank.
                   </Text>
                 </View>
               </View>
