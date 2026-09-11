@@ -770,7 +770,7 @@ export function BudgetChooser({
     : onboardingMode === "shared"
       ? "Choose or create your Shared group."
       : onboardingMode === "returning"
-        ? "Welcome back. Choose a budget."
+        ? "Welcome back. Choose a workspace."
         : "Choose where to start today.";
 
   return (
@@ -779,7 +779,7 @@ export function BudgetChooser({
         <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card shadow-xl">
           <header className="border-b border-primary/10 bg-primary px-6 py-7 text-primary-foreground sm:px-10 sm:py-9">
             <div className="flex items-start justify-between gap-4">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Your budgets</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Your workspaces</p>
               {!setupComplete ? <button type="button" onClick={skipOnboarding} className="shrink-0 text-xs font-medium text-primary-foreground/55 underline-offset-4 transition-colors hover:text-primary-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="You can complete setup later from your budgets">
                 Skip for now
               </button> : null}
@@ -797,16 +797,16 @@ export function BudgetChooser({
             {duplicateCategoryNotice ? <p className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-foreground" role="status"><span className="font-semibold">Shared group notice:</span> {duplicateCategoryNotice}</p> : null}
             {isLoading ? <div className="h-36 animate-pulse rounded-2xl bg-muted" role="status" aria-label="Loading budgets" /> : workspaceLoadFailed ? (
               <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-6 text-center" role="alert">
-                <h2 className="font-display text-xl font-bold text-foreground">Your budgets could not load</h2>
+                <h2 className="font-display text-xl font-bold text-foreground">Your workspaces could not load</h2>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Check your connection and try again. Nothing has been changed.</p>
                 <Button type="button" variant="outline" className="mt-5 rounded-xl" onClick={() => void refetchWorkspaces()}>Try again</Button>
               </div>
             ) : (
               <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)] lg:items-start">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Your budgets</p>
-                  <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Choose a budget</h2>
-                  <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">Click a budget to open it.</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Your workspaces</p>
+                  <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Choose a workspace</h2>
+                  <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">Tap one to open it.</p>
 
                     <div className="mt-6 border-l-2 border-border pl-4">
                     <div className="mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-bold text-foreground">Personal budget</h3></div>
@@ -844,7 +844,7 @@ export function BudgetChooser({
                     <Button type="button" className="mt-6 h-12 w-full justify-between rounded-xl px-4" disabled={selectWorkspace.isPending} onClick={() => void chooseWorkspace(selectedWorkspace)}>
                       <span>{selectWorkspace.isPending ? "Opening…" : `Open ${selectedName}`}</span><ArrowUpRight className="h-4 w-4" />
                     </Button>
-                  </> : <p className="text-sm text-muted-foreground">Choose a budget to see the next step.</p>}
+                  </> : <p className="text-sm text-muted-foreground">Choose one to see the next step.</p>}
 
                 </aside>
               </div>
