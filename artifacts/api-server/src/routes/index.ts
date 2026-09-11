@@ -27,6 +27,7 @@ import {
   subscriptionPlansRouter,
 } from "./subscription-plans";
 import { paymentsRouter, publicPaymentsRouter } from "./payments";
+import { crmSyncRouter } from "./crm-sync";
 import { requireMember } from "../middlewares/requireMember";
 import { requireWriteAccess } from "../middlewares/requireWriteAccess";
 
@@ -42,6 +43,9 @@ router.use(onboardingRouter);
 router.use(parserRouter);
 router.use(publicSubscriptionPlansRouter);
 router.use(publicPaymentsRouter);
+// Read-only, its own bearer-token gate (CRM_SYNC_KEY) — not a member session,
+// so it must not sit behind requireMember.
+router.use(crmSyncRouter);
 
 // Apply member check to everything else
 router.use(requireMember);
