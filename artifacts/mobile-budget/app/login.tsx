@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -21,7 +22,15 @@ export default function LoginScreen() {
   async function handleLogin() {
     setSigningIn(true);
     try {
-      await login();
+      // Every ending except backing out deserves a word. Without this the
+      // spinner simply stopped and this same screen came back, which on a
+      // patchy connection is indistinguishable from the app being broken.
+      if (await login() === 'failed') {
+        Alert.alert(
+          'Could not sign you in',
+          'Check your internet connection and try again. Nothing has been changed on your account.',
+        );
+      }
     } finally {
       setSigningIn(false);
     }
@@ -182,7 +191,9 @@ const styles = StyleSheet.create({
   },
   disclaimer: {
     fontSize: 13,
-    color: '#5c8a6c',
+    // Was #5c8a6c, a muted green left over from the green theme and close to
+    // unreadable on this navy gradient. Matches the tagline instead.
+    color: '#A5B9D4',
     fontFamily: 'Inter_400Regular',
   },
 });

@@ -26,17 +26,28 @@ interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: () => Promise<void>;
+  login: () => Promise<LoginOutcome>;
   logout: () => Promise<void>;
   saveDisplayName: (name: string) => Promise<void>;
   saveProfilePhoto: (photoPath: string | null) => Promise<void>;
 }
 
+/**
+ * How a sign-in attempt ended.
+ *
+ * "cancelled" is the one outcome that must stay silent - somebody who backed
+ * out of the browser does not need to be told what they just did. Every other
+ * ending used to be silent too, which is the bug: the spinner stopped, the
+ * login screen came back, and nothing said why. On a patchy connection that
+ * reads as a broken app rather than as a failed request.
+ */
+export type LoginOutcome = 'success' | 'cancelled' | 'failed';
+
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
-  login: async () => {},
+  login: async () => 'failed' as LoginOutcome,
   logout: async () => {},
   saveDisplayName: async () => {},
   saveProfilePhoto: async () => {},
@@ -156,30 +167,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [fetchUser]);
 
-  const login = useCallback(async () => {
+  const login = useCallback(async (): Promise<LoginOutcome> => {
     const apiBase = getApiBaseUrl();
     if (!apiBase) {
       console.error('API base URL not configured');
-      return;
+      return 'failed';
     }
 
-    // openAuthSessionAsync uses Chrome Custom Tabs on Android — it handles the
-    // redirect back to the app internally so no "Open with…" disambiguation
-    // dialog appears. The result URL is returned directly.
-    const result = await WebBrowser.openAuthSessionAsync(
-      `${apiBase}/api/mobile-login`,
-      'mobile-budget://',
-      { showInRecents: false },
-    );
+    try {
+      // openAuthSessionAsync uses Chrome Custom Tabs on Android — it handles the
+      // redirect back to the app internally so no "Open with…" disambiguation
+      // dialog appears. The result URL is returned directly.
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${apiBase}/api/mobile-login`,
+        'mobile-budget://',
+        { showInRecents: false },
+      );
 
-    if (result.type === 'success' && result.url) {
-      const parsed = Linking.parse(result.url);
-      if (parsed.hostname === 'auth' && parsed.queryParams?.token) {
-        const token = parsed.queryParams.token as string;
-        await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
-        setIsLoading(true);
-        await fetchUser();
+      // Backing out of the browser is a decision, not a fault.
+      if (result.type !== 'success' || !result.url) {
+        return result.type === 'cancel' || result.type === 'dismiss' ? 'cancelled' : 'failed';
       }
+
+      const parsed = Linking.parse(result.url);
+      // Reaching here without a token means the round trip completed and still
+      // did not sign anybody in. It used to fall through as though it had.
+      if (parsed.hostname !== 'auth' || !parsed.queryParams?.token) return 'failed';
+
+      const token = parsed.queryParams.token as string;
+      await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+      setIsLoading(true);
+      await fetchUser();
+      return 'success';
+    } catch (error) {
+      // A thrown browser session or a failed fetchUser used to escape as an
+      // unhandled rejection, leaving the screen with nothing to say.
+      console.error('Sign-in failed', error);
+      setIsLoading(false);
+      return 'failed';
     }
   }, [fetchUser]);
 

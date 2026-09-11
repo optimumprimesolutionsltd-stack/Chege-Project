@@ -408,7 +408,7 @@ export default function DashboardScreen() {
               <Text style={[styles.overviewNavEyebrow, { color: colors.primary }]}>GROUP OVERVIEW</Text>
               <Text style={[styles.overviewNavTitle, { color: colors.foreground }]}>Your group areas</Text>
               <Text style={[styles.overviewNavSubtitle, { color: colors.mutedForeground }]}>
-                Quickly see what each Group tab helps you manage.
+                Quickly see what each part of your group helps you manage.
               </Text>
               <View style={styles.overviewNavGrid}>
                 {SHARED_OVERVIEW_SHORTCUTS.map((shortcut) => (
