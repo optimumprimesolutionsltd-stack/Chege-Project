@@ -23,6 +23,7 @@ import {
   requireSharedTransactionEligibility,
 } from "../lib/activeGroup";
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
+import { memberLedgerName } from "../lib/contributor-name";
 
 const router = Router();
 const PositiveBankAmount = z.number().finite().positive().multipleOf(0.01);
@@ -591,14 +592,21 @@ async function contributorForMember(
   if (existing) return existing.id;
 
   const [user] = await tx
-    .select({ firstName: usersTable.firstName })
+    .select({ firstName: usersTable.firstName, lastName: usersTable.lastName })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
 
+  // Both names. Taking only the first one is how most unidentifiable rows got
+  // into the ledger - a group with three Johns got three rows reading "John" -
+  // and unlike a typed name this one nobody chose to be ambiguous. A deposit
+  // must never fail for want of a surname, so an account carrying only one
+  // name still gets a row; the sheet marks it for the treasurer to complete.
+  const ledgerName = memberLedgerName(user?.firstName, user?.lastName);
+
   const [created] = await tx
     .insert(groupContributorsTable)
-    .values({ groupId, userId, name: user?.firstName?.trim() || "Member" })
+    .values({ groupId, userId, name: ledgerName ?? "Member" })
     .onConflictDoNothing()
     .returning({ id: groupContributorsTable.id });
   if (created) return created.id;

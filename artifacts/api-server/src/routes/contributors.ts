@@ -28,6 +28,12 @@ import { createContributionReportPdf } from "../lib/contribution-report-pdf";
 import { createContributionStatementPdf } from "../lib/contribution-statement-pdf";
 import { groupVerifyCode } from "../lib/contribution-verification";
 import {
+  CONTRIBUTOR_NAME_MAX,
+  contributorNameMessage,
+  contributorNameProblem,
+  normalizeContributorName,
+} from "../lib/contributor-name";
+import {
   filterStatementToRange,
   monthsToCover,
   type ContributionStatement,
@@ -181,7 +187,7 @@ router.get("/contributors", async (req, res): Promise<void> => {
 });
 
 const newContributor = z.object({
-  name: z.string().trim().min(1).max(120),
+  name: z.string().max(CONTRIBUTOR_NAME_MAX * 2),
   monthlyTarget: z.number().int().min(0).nullable().optional(),
 });
 
@@ -194,9 +200,18 @@ router.post("/contributors", async (req, res): Promise<void> => {
 
   const parsed = newContributor.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Enter a name of up to 120 characters." });
+    res.status(400).json({ error: contributorNameMessage("empty") });
     return;
   }
+
+  // One name is not a record of anybody: in a group of forty it cannot be told
+  // from the next John, so the ledger row has to carry at least two names.
+  const problem = contributorNameProblem(parsed.data.name);
+  if (problem) {
+    res.status(400).json({ error: contributorNameMessage(problem) });
+    return;
+  }
+  const name = normalizeContributorName(parsed.data.name);
 
   // What the group expects, unless this person is told to be different. A
   // treasurer setting the figure once is the common case; setting it forty
@@ -209,7 +224,7 @@ router.post("/contributors", async (req, res): Promise<void> => {
   // John, and refusing the second is worse than showing both.
   const [created] = await db
     .insert(groupContributorsTable)
-    .values({ groupId, name: parsed.data.name, monthlyTarget })
+    .values({ groupId, name, monthlyTarget })
     .returning();
 
   res.status(201).json({ id: created.id, name: created.name, hasAccount: false, monthlyTarget: created.monthlyTarget });
@@ -228,7 +243,7 @@ async function groupDefaultTarget(groupId: number): Promise<number | null> {
 }
 
 const contributorUpdate = z.object({
-  name: z.string().trim().min(1).max(120).optional(),
+  name: z.string().max(CONTRIBUTOR_NAME_MAX * 2).optional(),
   // Explicit null is meaningful: it says this person is not expected to give a
   // set amount, which is different from not saying.
   monthlyTarget: z.number().int().min(0).nullable().optional(),
@@ -256,12 +271,22 @@ router.patch("/contributors/:id", async (req, res): Promise<void> => {
 
   const parsed = contributorUpdate.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Enter a name of up to 120 characters, and an amount of zero or more." });
+    res.status(400).json({ error: "Enter a name, and an amount of zero or more." });
     return;
   }
 
   const changes: Record<string, unknown> = {};
-  if (parsed.data.name !== undefined) changes.name = parsed.data.name;
+  if (parsed.data.name !== undefined) {
+    // Renaming holds to the same rule as adding, so a row cannot be edited back
+    // into an unidentifiable one. Archiving and target changes send no name and
+    // are unaffected, which keeps rows that predate the rule manageable.
+    const problem = contributorNameProblem(parsed.data.name);
+    if (problem) {
+      res.status(400).json({ error: contributorNameMessage(problem) });
+      return;
+    }
+    changes.name = normalizeContributorName(parsed.data.name);
+  }
   if (parsed.data.monthlyTarget !== undefined) changes.monthlyTarget = parsed.data.monthlyTarget;
   // Archived, never deleted: somebody who has left still contributed what they
   // contributed, and removing them would make last year's totals disagree with

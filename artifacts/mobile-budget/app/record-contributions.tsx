@@ -18,6 +18,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch, useCreateJointAccount } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { handleLapsedError } from '@/lib/lapsedError';
+import {
+  contributorNameMessage,
+  contributorNameProblem,
+  normalizeContributorName,
+} from '@/lib/contributorName';
 
 type Contributor = { id: number; name: string; hasAccount: boolean; monthlyTarget: number | null };
 type BankAccount = { id: number; name: string };
@@ -173,15 +178,20 @@ export default function RecordContributionsScreen() {
   const total = chosen.reduce((sum, contributor) => sum + amountFor(contributor), 0);
 
   const addContributor = async () => {
-    const name = newName.trim();
+    const name = normalizeContributorName(newName);
     if (!name || adding) return;
+    const problem = contributorNameProblem(name);
+    if (problem) {
+      Alert.alert('Check the name', contributorNameMessage(problem));
+      return;
+    }
     setAdding(true);
     try {
       await customFetch('/api/contributors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
       setNewName('');
       await queryClient.invalidateQueries({ queryKey: ['contributors'] });
-    } catch {
-      Alert.alert('Could not add', 'That name was not added.');
+    } catch (error) {
+      Alert.alert('Could not add', error instanceof Error ? error.message : 'That name was not added.');
     } finally {
       setAdding(false);
     }
@@ -452,7 +462,7 @@ export default function RecordContributionsScreen() {
           <TextInput
             value={newName}
             onChangeText={setNewName}
-            placeholder="Add someone by name"
+            placeholder="Add someone — both names"
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, { flex: 1, borderColor: colors.border, color: colors.foreground }]}
           />
@@ -465,6 +475,9 @@ export default function RecordContributionsScreen() {
             <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{adding ? 'Adding…' : 'Add'}</Text>
           </Pressable>
         </View>
+        <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>
+          Use both names, for example Jane Wanjiku. One name on its own can be confused with another member's.
+        </Text>
 
         <View style={[styles.totalBar, { backgroundColor: colors.muted }]}>
           <Text style={{ color: colors.mutedForeground }}>{chosen.length} of {contributors.length} ticked</Text>

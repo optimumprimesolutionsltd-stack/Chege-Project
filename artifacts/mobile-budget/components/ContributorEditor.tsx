@@ -4,6 +4,11 @@ import { Feather } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import {
+  contributorNameMessage,
+  contributorNameProblem,
+  normalizeContributorName,
+} from '@/lib/contributorName';
 
 /**
  * The shared "edit this list" pattern for mobile: an Edit pencil on a panel's
@@ -39,14 +44,27 @@ export function useContributorEditor() {
   };
   const cancelRename = () => setEditingRow(null);
   const commitRename = (id: number, original: string) => {
-    const name = rowDraft.trim();
+    const name = normalizeContributorName(rowDraft);
+    // An unchanged name is not an edit; dropping the staged rename is right and
+    // needs no complaint.
+    if (name === normalizeContributorName(original)) {
+      setEditingRow(null);
+      setRenames((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+    // A bad name used to be dropped on the floor here: the row closed, the edit
+    // vanished, and nothing said why. Keep the row open and say what is wrong.
+    const problem = contributorNameProblem(name);
+    if (problem) {
+      Alert.alert('Check the name', contributorNameMessage(problem));
+      return;
+    }
     setEditingRow(null);
-    setRenames((current) => {
-      const next = { ...current };
-      if (name && name !== original && name.length <= 120) next[id] = name;
-      else delete next[id];
-      return next;
-    });
+    setRenames((current) => ({ ...current, [id]: name }));
   };
   const displayName = (id: number, original: string) => renames[id] ?? original;
   const open = () => {
@@ -58,10 +76,11 @@ export function useContributorEditor() {
     setEditing(false);
   };
   const commitAdd = () => {
-    const name = addName.trim();
+    const name = normalizeContributorName(addName);
     if (!name) return;
-    if (name.length > 120) {
-      Alert.alert('Name too long', 'Use 120 characters or fewer.');
+    const problem = contributorNameProblem(name);
+    if (problem) {
+      Alert.alert('Check the name', contributorNameMessage(problem));
       return;
     }
     setAdds((c) => [...c, name]);
@@ -85,11 +104,17 @@ export function useContributorEditor() {
     setSaving(true);
     try {
       for (const name of adds) {
-        await customFetch('/api/contributors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name }),
-        });
+        try {
+          await customFetch('/api/contributors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+          });
+        } catch (error) {
+          // Name the row that failed: a treasurer saving forty of them cannot
+          // act on "some changes may not have applied".
+          throw new Error(`${name}: ${error instanceof Error ? error.message : 'could not be added.'}`);
+        }
       }
       for (const [id, name] of Object.entries(renames)) {
         if (removals.has(Number(id))) continue;
@@ -186,7 +211,7 @@ export function EditableName({
 
   if (!editor.editing) {
     return (
-      <Text style={textStyle} numberOfLines={1}>
+      <Text style={textStyle} numberOfLines={2}>
         {name}
       </Text>
     );
@@ -214,7 +239,7 @@ export function EditableName({
     <Pressable onPress={() => editor.startRename(id, name)} style={styles.renameTrigger} hitSlop={6}>
       <Text
         style={[textStyle, editor.isRemoving(id) && { color: colors.mutedForeground, textDecorationLine: 'line-through' }]}
-        numberOfLines={1}
+        numberOfLines={2}
       >
         {editor.displayName(id, name)}
       </Text>

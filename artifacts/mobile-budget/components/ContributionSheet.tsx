@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { isSingleName } from '@/lib/contributorName';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import {
   ContributorEditorFooter,
@@ -70,7 +71,13 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
       </View>
     );
   }
-  if (isError || !data || data.rows.length === 0) return null;
+  if (isError || !data) return null;
+
+  // An empty group used to return null here, which took the Edit pencil with
+  // it - the only way to add the first people was gone exactly when it was
+  // needed. The card stays, and forces itself open so the way in is reachable.
+  const isEmpty = data.rows.length === 0;
+  const showBody = open || isEmpty;
 
   const last = data.months.length - 1;
   const monthLabel = data.months[last]?.label ?? '';
@@ -85,6 +92,10 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
     .filter((row) => row.owed > 0)
     .sort((a, b) => b.owed - a.owed || a.name.localeCompare(b.name));
   const totalShort = behind.reduce((sum, row) => sum + row.owed, 0);
+  // Rows stored before a full name was required. They are still perfectly good
+  // money; they are just not attributable, so they are surfaced rather than
+  // silently kept.
+  const needsFullName = data.rows.filter((row) => isSingleName(row.name)).map((row) => row.name);
   const summary =
     behind.length > 0
       ? `${behind.length} ${behind.length === 1 ? 'member' : 'members'} behind for ${monthLabel} · KES ${kes(totalShort)} short`
@@ -95,10 +106,10 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
       <Pressable style={styles.headRow} onPress={toggle}>
         <View style={styles.headingWrap}>
           <Text style={[styles.heading, { color: colors.foreground }]}>Who has paid</Text>
-          {open ? <EditListButton editor={editor} canManage={canManage} /> : null}
+          {showBody ? <EditListButton editor={editor} canManage={canManage} /> : null}
         </View>
         <View style={styles.headRight}>
-          {open ? (
+          {showBody && !isEmpty ? (
             <View style={styles.ranges}>
               {RANGES.map((range) => {
                 const active = months === range;
@@ -124,13 +135,19 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
         </View>
       </Pressable>
 
-      {!open ? (
+      {!showBody ? (
         <Text style={[styles.collapsedSummary, { color: behind.length > 0 ? colors.warning : colors.mutedForeground }]}>
           {summary}
         </Text>
       ) : null}
 
-      {!open ? null : (
+      {!showBody ? null : isEmpty ? (
+        <Text style={[styles.key, { color: colors.mutedForeground }]}>
+          {canManage
+            ? 'Nobody in the sheet yet. Tap the pencil to add the people who contribute — they do not need the app, and they need both names.'
+            : 'Nobody in the sheet yet. A group manager can add the people who contribute.'}
+        </Text>
+      ) : (
       <>
       {periodLabel ? (
         <Text style={[styles.period, { color: colors.foreground }]}>
@@ -141,6 +158,17 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
       <Text style={[styles.key, { color: colors.mutedForeground }]}>
         Each figure is what a member gave. Red = short of the expected amount. Green = a month an earlier over-payment covered.
       </Text>
+
+      {needsFullName.length > 0 && canManage ? (
+        <View style={[styles.arrears, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}44` }]}>
+          <Feather name="user-x" size={16} color={colors.warning} style={{ marginTop: 1 }} />
+          <Text style={[styles.arrearsText, { color: colors.foreground }]}>
+            {needsFullName.length === 1
+              ? `${needsFullName[0]} is recorded under one name. Tap the pencil and add a surname so the row cannot be confused with another member's.`
+              : `${needsFullName.length} people are recorded under one name only. Tap the pencil and add surnames so their rows cannot be confused with each other.`}
+          </Text>
+        </View>
+      ) : null}
 
       {behind.length > 0 ? (
         <View style={[styles.arrears, { backgroundColor: `${colors.warning}18`, borderColor: `${colors.warning}55` }]}>
@@ -171,6 +199,7 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
                 />
               </View>
               <Text style={[styles.expected, { color: colors.mutedForeground }]}>
+                {isSingleName(row.name) ? 'One name only · ' : ''}
                 {row.monthlyTarget != null && row.monthlyTarget > 0 ? `Expected KES ${kes(row.monthlyTarget)}/mo` : 'No set amount'}
               </Text>
             </View>
@@ -214,9 +243,11 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
         );
       })}
 
-      <ContributorEditorFooter editor={editor} />
       </>
       )}
+
+      {/* Outside the rows branch: an empty group needs the add row most. */}
+      {showBody ? <ContributorEditorFooter editor={editor} /> : null}
     </View>
   );
 }

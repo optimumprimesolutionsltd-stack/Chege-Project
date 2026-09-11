@@ -10,7 +10,7 @@ import {
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { getActiveGroupId, requireSharedGroupManager } from "../lib/activeGroup";
+import { getActiveGroupId, requireInviteEligibility, requireSharedGroupManager } from "../lib/activeGroup";
 import { EmailNotConfiguredError, sendEmail } from "../lib/email";
 import { memberMayJoinGroups, subscriptionRequiredMessage } from "../lib/membership-limits";
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
@@ -475,6 +475,7 @@ invitationsRouter.post("/group-invitations", async (req, res): Promise<void> => 
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireSharedGroupManager(req, res)) return;
+  if (!await requireInviteEligibility(req, res)) return;
 
   const parsed = inviteSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -500,6 +501,7 @@ invitationsRouter.post("/group-invitations/batch", async (req, res): Promise<voi
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireSharedGroupManager(req, res)) return;
+  if (!await requireInviteEligibility(req, res)) return;
 
   const parsed = batchInviteSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -535,6 +537,8 @@ invitationsRouter.post("/group-invitations/:id/resend", async (req, res): Promis
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireSharedGroupManager(req, res)) return;
+  // Resending is sending: the same email goes out again to the same person.
+  if (!await requireInviteEligibility(req, res)) return;
 
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {

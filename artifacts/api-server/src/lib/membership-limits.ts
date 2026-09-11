@@ -31,6 +31,19 @@ export function subscriptionRequiredMessage(): string {
   return "This person needs an active Jamvi subscription to join a Shared group.";
 }
 
+/**
+ * Shown to a manager whose own subscription has lapsed when they try to bring
+ * somebody new in.
+ *
+ * Separate from readOnlyMessage() because the remedy reads differently: this
+ * is not about the records they can no longer add to, it is about the person
+ * they were trying to invite, who would have been refused at the door anyway.
+ */
+export function inviteRequiresSubscriptionMessage(): string {
+  return "Your Jamvi subscription has lapsed, so you cannot invite anyone to this group. "
+    + "Nothing has been removed — subscribe to start inviting again.";
+}
+
 /** Shown to a member already in a group whose own subscription has lapsed.
  *  Says what they can still do, because they have not lost the group or their
  *  records — only the ability to add to them. */

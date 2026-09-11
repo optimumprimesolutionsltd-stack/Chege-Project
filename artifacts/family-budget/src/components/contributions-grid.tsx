@@ -3,8 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatKes } from "@/lib/utils";
-import { ChevronDown, ChevronUp, Loader2, TableProperties } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, TableProperties, UserX } from "lucide-react";
 import { useCollapsed } from "@/hooks/use-collapsed";
+import { isSingleName } from "@/lib/contributor-name";
 import {
   ContributorEditorFooter,
   EditableName,
@@ -70,6 +71,9 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
     ? rows.filter((row) => row.outstanding.some((amount) => (amount ?? 0) > 0))
     : rows;
   const behindCount = rows.filter((row) => row.outstanding.some((amount) => (amount ?? 0) > 0)).length;
+  // Rows stored before a full name was required. The money is good; the
+  // attribution is not, so it is surfaced rather than silently kept.
+  const needsFullName = rows.filter((row) => isSingleName(row.name)).map((row) => row.name);
   const summary =
     rows.length === 0
       ? "No contributors yet"
@@ -177,6 +181,22 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
               covered that month.
             </p>
 
+            {needsFullName.length > 0 && canManage ? (
+              <p
+                className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs leading-relaxed text-foreground"
+                data-testid="single-name-warning"
+              >
+                <UserX className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+                <span>
+                  {needsFullName.length === 1
+                    ? `${needsFullName[0]} is recorded under one name.`
+                    : `${needsFullName.length} people are recorded under one name only.`}{" "}
+                  Use <span className="font-semibold">Add or remove people</span> to add a surname, so a row cannot be
+                  confused with another member's.
+                </span>
+              </p>
+            ) : null}
+
             {/* Scrolls inside its own box: twelve months of columns must never
                 push the whole page sideways on a phone. */}
             <div className="-mx-1 overflow-x-auto px-1">
@@ -208,6 +228,7 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
                           <EditableName editor={editor} id={row.contributorId} name={row.name} />
                         </span>
                         <span className="block text-[11px] font-normal text-muted-foreground">
+                          {isSingleName(row.name) ? "One name only · " : ""}
                           {row.monthlyTarget != null && row.monthlyTarget > 0
                             ? `Expected ${formatKes(row.monthlyTarget)}/mo`
                             : "No set amount"}

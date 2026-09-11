@@ -7,6 +7,11 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { formatKes } from "@/lib/utils";
 import { Loader2, UserPlus } from "lucide-react";
+import {
+  contributorNameMessage,
+  contributorNameProblem,
+  normalizeContributorName,
+} from "@/lib/contributor-name";
 
 type Contributor = { id: number; name: string; hasAccount: boolean; monthlyTarget: number | null };
 type BankAccount = { id: number; name: string };
@@ -159,8 +164,13 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   const total = chosen.reduce((sum, contributor) => sum + amountFor(contributor), 0);
 
   const addContributor = async () => {
-    const name = newName.trim();
+    const name = normalizeContributorName(newName);
     if (!name) return;
+    const problem = contributorNameProblem(name);
+    if (problem) {
+      toast({ variant: "destructive", title: "Check the name", description: contributorNameMessage(problem) });
+      return;
+    }
     setAdding(true);
     try {
       const response = await fetch("/api/contributors", {
@@ -169,11 +179,18 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
-      if (!response.ok) throw new Error("Could not add that name.");
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "That name was not added.");
+      }
       setNewName("");
       await queryClient.invalidateQueries({ queryKey: ["contributors"] });
-    } catch {
-      toast({ variant: "destructive", title: "Could not add", description: "That name was not added." });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not add",
+        description: error instanceof Error ? error.message : "That name was not added.",
+      });
     } finally {
       setAdding(false);
     }
@@ -439,7 +456,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
 
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
-            placeholder="Add someone by name"
+            placeholder="Add someone — both names"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
             disabled={adding}
@@ -450,6 +467,9 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
             {adding ? "Adding…" : "Add"}
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Use both names, for example Jane Wanjiku. One name on its own can be confused with another member's.
+        </p>
 
         {/* The number the treasurer reconciles against the cash in hand. It
             never needs scrolling to find. */}
