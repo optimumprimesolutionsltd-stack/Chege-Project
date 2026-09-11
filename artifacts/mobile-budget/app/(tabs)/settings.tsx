@@ -800,21 +800,21 @@ export default function SettingsScreen() {
                    style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground }]}
                  />
                 <Text style={[styles.rowLabel, { color: colors.foreground, marginTop: 12 }]}>
-                  Budget slogan <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>(optional)</Text>
+                  Workspace slogan <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>(optional)</Text>
                 </Text>
                 <TextInput
-                  testID="settings-budget-slogan-input"
+                  testID="settings-workspace-slogan-input"
                   value={groupSlogan}
                   onChangeText={setGroupSlogan}
                   maxLength={120}
                   placeholder="e.g. Saving together, one goal at a time"
                   placeholderTextColor={colors.mutedForeground}
-                  accessibilityLabel="Budget slogan"
+                  accessibilityLabel="Workspace slogan"
                   editable={!savingGroupName && !updateGroup.isPending}
                   style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground, marginTop: 6 }]}
                 />
                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
-                  This short line appears with your budget photo and name.
+                  This short line appears with your workspace photo and name.
                 </Text>
                  <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>
                    This is the name other members see in shared groups and activity.
@@ -954,19 +954,19 @@ export default function SettingsScreen() {
             </View>
            ) : null}
         </View>
-         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGET NAME</Text>
+         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>WORKSPACE IDENTITY</Text>
          <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
            {canManageWorkspace && editingBudgetName ? (
              <View style={{ padding: 14 }}>
                <TextInput
                  ref={budgetNameInputRef}
-                 testID="settings-budget-name-input"
+                 testID="settings-workspace-name-input"
                  value={groupName}
                  onChangeText={setGroupName}
                  maxLength={60}
                  placeholder="e.g. Mwangaza Chama"
                  placeholderTextColor={colors.mutedForeground}
-                 accessibilityLabel="Budget name"
+                 accessibilityLabel="Workspace name"
                  editable={!savingGroupName && !updateGroup.isPending}
                  style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground }]}
                />
@@ -977,13 +977,13 @@ export default function SettingsScreen() {
                   <View style={{ width: 92 }}>
                     <Text style={[styles.rowLabel, { color: colors.foreground, marginTop: 12 }]}>Emoji</Text>
                     <TextInput
-                      testID="settings-budget-emoji-input"
+                      testID="settings-workspace-emoji-input"
                       value={groupEmoji}
                       onChangeText={setGroupEmoji}
                       maxLength={16}
                       placeholder="🌱"
                       placeholderTextColor={colors.mutedForeground}
-                      accessibilityLabel="Budget emoji"
+                      accessibilityLabel="Workspace emoji"
                       editable={!savingGroupName && !updateGroup.isPending}
                       style={[styles.emojiInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
                     />
@@ -998,7 +998,7 @@ export default function SettingsScreen() {
                             key={option.value}
                             accessibilityRole="button"
                             accessibilityState={{ selected }}
-                            accessibilityLabel={`Use ${option.label} budget name style`}
+                            accessibilityLabel={`Use ${option.label} workspace name style`}
                             onPress={() => setGroupNameStyle(option.value)}
                             style={[styles.nameStyleChoice, {
                               borderColor: selected ? colors.primary : colors.border,
@@ -1018,25 +1018,25 @@ export default function SettingsScreen() {
                   <Text style={{ fontSize: 22 }}>{groupEmoji || '✨'}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.summaryValue, { color: colors.foreground, marginTop: 0 }, workspaceNameTextStyle(groupNameStyle)]}>
-                      {groupName.trim() || 'Your budget'}
+                      {groupName.trim() || 'Your workspace'}
                     </Text>
-                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This is how the budget name will look.</Text>
+                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>This is how the workspace name will look.</Text>
                   </View>
                 </View>
                <View style={styles.editActions}>
                  <Pressable
-                   testID="settings-save-budget-name"
+                   testID="settings-save-workspace-name"
                    accessibilityRole="button"
-                   accessibilityLabel="Save budget name"
+                   accessibilityLabel="Save workspace name"
                    disabled={savingGroupName || updateGroup.isPending || !groupName.trim()}
                    onPress={() => void handleSaveGroupName(true)}
                    style={[styles.saveNameButton, { backgroundColor: colors.primary, opacity: savingGroupName || updateGroup.isPending || !groupName.trim() ? 0.55 : 1 }]}
                  >
-                   {savingGroupName || updateGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveNameButtonText}>Save budget name</Text>}
+                   {savingGroupName || updateGroup.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveNameButtonText}>Save workspace name</Text>}
                  </Pressable>
                  <Pressable
                    accessibilityRole="button"
-                   accessibilityLabel="Cancel editing budget name"
+                   accessibilityLabel="Cancel editing workspace name"
                    disabled={savingGroupName || updateGroup.isPending}
                    onPress={cancelBudgetNameEdit}
                    style={[styles.cancelButton, { borderColor: colors.border, opacity: savingGroupName || updateGroup.isPending ? 0.55 : 1 }]}
@@ -1049,14 +1049,14 @@ export default function SettingsScreen() {
              <View style={styles.summaryRow}>
                <View style={{ flex: 1 }}>
                   <Text style={[styles.summaryValue, { color: colors.foreground }, workspaceNameTextStyle(group?.nameStyle)]}>
-                    {group?.emoji ? `${group.emoji} ` : ''}{group?.name ?? 'Your budget'}
+                    {group?.emoji ? `${group.emoji} ` : ''}{group?.name ?? 'Your workspace'}
                   </Text>
                   {group?.slogan ? <Text style={[styles.rowSub, { color: colors.mutedForeground, fontStyle: 'italic', marginTop: 4 }]}>{group.slogan}</Text> : null}
-                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>Choose Edit when you’re ready to rename this budget.</Text>
+                 <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 4 }]}>Choose Edit when you’re ready to rename this workspace.</Text>
                </View>
                <Pressable
                  accessibilityRole="button"
-                 accessibilityLabel="Edit budget name"
+                 accessibilityLabel="Edit workspace name"
                  onPress={startBudgetNameEdit}
                  style={[styles.outlineButton, { borderColor: colors.border }]}
                >
@@ -1111,12 +1111,12 @@ export default function SettingsScreen() {
                   </View>
                   <Pressable testID="save-shared-budget-kind" onPress={() => void handleSaveGroupKind()} disabled={updateGroup.isPending}
                     style={[styles.identitySaveButton, { backgroundColor: colors.primary, opacity: updateGroup.isPending ? 0.55 : 1 }]}>
-                    <Text style={styles.saveGroupText}>{updateGroup.isPending ? 'Saving…' : 'Save budget type'}</Text>
+                    <Text style={styles.saveGroupText}>{updateGroup.isPending ? 'Saving…' : 'Save group type'}</Text>
                   </Pressable>
                 </>
               ) : null}
               <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                Your budget type suggests categories; changing it never removes or changes existing categories.
+                Your group type suggests categories; changing it never removes or changes existing categories.
               </Text>
               {recommendations.isLoading ? (
                 <ActivityIndicator color={colors.primary} />
@@ -1182,7 +1182,7 @@ export default function SettingsScreen() {
                        <Text style={[styles.rowLabel, { color: colors.foreground }]}>
                          {group?.isPrivate ? 'Personal budget photo' : 'Shared group photo'}
                        </Text>
-                         <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>This photo identifies the selected Shared group when members switch budgets. It does not change anyone’s profile photo. Use a square JPG, PNG, or WebP photo up to 15 MB; Jamvi shrinks it first for a faster upload.</Text>
+                         <Text style={[styles.rowSub, { color: colors.mutedForeground, marginTop: 3 }]}>This photo identifies the selected Shared group when members switch workspaces. It does not change anyone’s profile photo. Use a square JPG, PNG, or WebP photo up to 15 MB; Jamvi shrinks it first for a faster upload.</Text>
                       <View style={{ flexDirection: 'row', gap: 14, marginTop: 9 }}>
                         <Pressable disabled={uploadingGroupPhoto} onPress={() => void handlePickGroupPhoto()}>
                           <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
