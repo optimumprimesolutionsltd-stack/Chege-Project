@@ -10,6 +10,7 @@ import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlobalFAB } from '@/components/GlobalFAB';
+import { SubscriptionBanner } from '@/components/SubscriptionBanner';
 import { useGetGroup } from '@workspace/api-client-react';
 
 // iOS 26+: NativeTabs with liquid glass support
@@ -217,17 +218,28 @@ export default function TabLayout() {
   // change instead of mutating its children in place.
   const layoutKey = `${group === undefined ? 'loading' : isShared ? 'shared' : 'personal'}`;
 
+  // SubscriptionBanner sits above the navigator, not inside either tab
+  // layout, so it is on screen no matter which tab is active — an in-flow
+  // sibling that takes its own height and leaves the rest to the navigator,
+  // rather than an absolute overlay like GlobalFAB: a top status strip should
+  // push screen content down, not float over each screen's own header.
   if (isLiquidGlassAvailable()) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.card }}>
-        <NativeTabLayout key={layoutKey} showReports={showReports} isShared={isShared} />
+        <SubscriptionBanner />
+        <View style={{ flex: 1 }}>
+          <NativeTabLayout key={layoutKey} showReports={showReports} isShared={isShared} />
+        </View>
         <GlobalFAB />
       </View>
     );
   }
   return (
     <View style={{ flex: 1, backgroundColor: colors.card }}>
-      <ClassicTabLayout key={layoutKey} showReports={showReports} isShared={isShared} />
+      <SubscriptionBanner />
+      <View style={{ flex: 1 }}>
+        <ClassicTabLayout key={layoutKey} showReports={showReports} isShared={isShared} />
+      </View>
       <GlobalFAB />
     </View>
   );
