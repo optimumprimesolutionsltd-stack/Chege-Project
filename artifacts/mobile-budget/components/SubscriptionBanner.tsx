@@ -7,9 +7,10 @@ import { useEntitlements } from '@/hooks/useEntitlements';
 import { bannerLine } from '@/lib/subscription-status';
 
 /**
- * A slim strip above the tabs when the subscription needs attention — the last
- * days of a trial, a missed payment, or a lapse that has made Shared groups
- * read-only. Silent otherwise. Tapping opens the Subscription screen.
+ * A slim strip above the tabs whenever the subscription is worth knowing
+ * about — any day of a trial, a missed payment, or a lapse that has made
+ * Shared groups read-only. Silent only once fully, currently subscribed.
+ * Tapping opens the Subscription screen.
  */
 export function SubscriptionBanner() {
   const colors = useColors();
