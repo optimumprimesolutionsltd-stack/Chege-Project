@@ -3,7 +3,12 @@ import { db } from "@workspace/db";
 import { groupMembershipsTable, groupsTable, usersTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { getActiveGroupId, requireGroupOwner, requireSharedGroupManager } from "../lib/activeGroup";
+import {
+  getActiveGroupId,
+  requireGroupOwner,
+  requireInviteEligibility,
+  requireSharedGroupManager,
+} from "../lib/activeGroup";
 import { memberMayJoinGroups, subscriptionRequiredMessage } from "../lib/membership-limits";
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 
@@ -47,6 +52,9 @@ router.post("/members", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireSharedGroupManager(req, res)) return;
+  // Adding somebody straight in is inviting without the email step, so it
+  // answers to the same rule. The added person is checked separately below.
+  if (!await requireInviteEligibility(req, res)) return;
 
   const schema = z.object({
     userId: z.string().min(1),

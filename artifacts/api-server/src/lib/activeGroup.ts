@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { resolveMemberEntitlements } from "./subscription-catalog";
-import { readOnlyMessage } from "./membership-limits";
+import { inviteRequiresSubscriptionMessage, readOnlyMessage } from "./membership-limits";
 
 // Version this browser-session selection independently from the retired
 // persistent workspace cookie.
@@ -131,6 +131,39 @@ export async function requireSharedTransactionEligibility(
   }
 
   return canRecordSharedTransactions(req.group.id, req.group.isPrivate);
+}
+
+/**
+ * Whether this manager may bring somebody new into the group.
+ *
+ * Deliberately not requireSharedTransactionEligibility: that one ends in
+ * canRecordSharedTransactions, and inviting is precisely how a group stops
+ * being one person. The subscription rule is the same, the group rule is not.
+ *
+ * Without this the paywall had a hole on the way in: a lapsed manager was
+ * refused every write except the one that adds people. The invitee was checked
+ * at accept time, so the invitations were not dangerous, only useless - a
+ * manager could send twenty and watch all twenty fail on the recipients' side,
+ * which reads as the app being broken rather than as a lapsed subscription.
+ *
+ * Revoking is deliberately left alone. Taking access away is a safety action,
+ * and a lapsed manager who spots a stale join link must still be able to kill
+ * it.
+ */
+export async function requireInviteEligibility(
+  req: Request,
+  res: Response,
+): Promise<boolean> {
+  // Same carve-out as recording: no subscription row at all means an account
+  // that predates subscriptions, not one that is behind on payment.
+  if (req.group?.role !== "viewer" && req.user?.id) {
+    const entitlements = await resolveMemberEntitlements(req.user.id);
+    if (entitlements.status !== null && !entitlements.fullAccess) {
+      res.status(402).json({ error: inviteRequiresSubscriptionMessage() });
+      return false;
+    }
+  }
+  return true;
 }
 
 /**

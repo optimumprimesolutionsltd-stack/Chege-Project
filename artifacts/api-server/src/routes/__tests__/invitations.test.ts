@@ -2,8 +2,14 @@ import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const resolveMemberEntitlements = vi.hoisted(() =>
+  vi.fn(async () => ({ status: "active" as string | null, fullAccess: true })),
+);
 vi.mock("../../lib/subscription-catalog", () => ({
   memberMayUseSharedBudgets: vi.fn(async () => true),
+  // Sending an invitation now checks the sender's own subscription, not only
+  // the invitee's. Without this the gate calls undefined and every send 500s.
+  resolveMemberEntitlements,
 }));
 
 const sendEmail = vi.hoisted(() => vi.fn(async () => ({ id: "email-1" })));
@@ -335,5 +341,27 @@ describe("group invitation management", () => {
     // at whoever is trying to build it.
     expect(response.status).not.toBe(409);
     expect(insert).toHaveBeenCalled();
+  });
+
+  it("refuses to send when the sender's own subscription has lapsed", async () => {
+    // The paywall used to stop at money: a lapsed manager could not record a
+    // shilling but could still invite, and the invitations failed later on the
+    // recipients' side where nothing explained why.
+    resolveMemberEntitlements.mockResolvedValueOnce({ status: "expired", fullAccess: false });
+    const insert = vi.fn();
+    (db.transaction as Mock).mockImplementation(
+      (callback: (transaction: unknown) => unknown) => callback({ select: vi.fn(), insert }),
+    );
+
+    const response = await request(managerApp({ id: 7, role: "owner", isPrivate: false }))
+      .post("/group-invitations")
+      .send({ email: "newcomer@example.com", role: "member" });
+
+    expect(response.status).toBe(402);
+    expect(response.body.error).toMatch(/cannot invite/i);
+    // Refused before anything was written, so no half-made invitation is left
+    // behind for the manager to wonder about.
+    expect(insert).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 });

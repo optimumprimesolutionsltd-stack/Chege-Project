@@ -24,7 +24,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { db, groupInviteLinksTable, groupMembershipsTable, groupsTable, GROUP_ROLE } from "@workspace/db";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { Router, type IRouter } from "express";
-import { getActiveGroupId, requireSharedGroupManager, setActiveWorkspaceCookie } from "../lib/activeGroup";
+import {
+  getActiveGroupId,
+  requireInviteEligibility,
+  requireSharedGroupManager,
+  setActiveWorkspaceCookie,
+} from "../lib/activeGroup";
 import { inheritedMonthlyTarget } from "../lib/contribution-targets";
 import { hashPassword, verifyPassword } from "../lib/auth-password";
 import { rateLimit } from "../middlewares/rateLimit";
@@ -203,6 +208,9 @@ viewLinksRouter.post("/group-view-links", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireSharedGroupManager(req, res)) return;
+  // Handing the group's figures to an outsider is sharing, which is what an
+  // active subscription buys. Revoking one stays open to everybody.
+  if (!await requireInviteEligibility(req, res)) return;
 
   const rawPassphrase = (req.body as { passphrase?: unknown } | undefined)?.passphrase;
   if (rawPassphrase !== undefined && (typeof rawPassphrase !== "string" || rawPassphrase.trim().length < 4)) {

@@ -16,6 +16,7 @@ import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { Router } from "express";
 import {
   getActiveGroupId,
+  requireInviteEligibility,
   requireSharedGroupManager,
   setActiveWorkspaceCookie,
 } from "../lib/activeGroup";
@@ -191,6 +192,9 @@ inviteLinksRouter.post("/group-invite-links", async (req, res): Promise<void> =>
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireSharedGroupManager(req, res)) return;
+  // A join link is an open invitation, so it answers to the same rule as a
+  // named one. The catch below still handles the invitee-side refusal.
+  if (!await requireInviteEligibility(req, res)) return;
 
   const token = createToken();
   const expiresAt = new Date(Date.now() + INVITE_LINK_TTL_MS);

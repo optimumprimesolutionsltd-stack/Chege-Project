@@ -43,6 +43,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAppearance, type Appearance } from '@/hooks/useAppearance';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { statusChip } from '@/lib/subscription-status';
+import { handleLapsedError } from '@/lib/lapsedError';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
@@ -566,6 +567,10 @@ export default function SettingsScreen() {
         limitFailure ? `${MEMBER_LIMIT_PROMPT.message}${result.sent.length > 0 ? ' Some other invitations were sent successfully.' : ''}` : `${result.sent.map((item) => item.email).join(', ')} can sign in and accept.${failureNote}`,
       );
     } catch (error) {
+      // A lapsed subscription now refuses the send. Route it through the same
+      // prompt recording uses, so the answer is a Subscribe button rather than
+      // a message with nothing to act on.
+      if (handleLapsedError(error)) return;
       Alert.alert(
         isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.title : 'Could not send invitation',
         isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.message : error instanceof Error ? error.message : 'Please try again.',
@@ -585,6 +590,10 @@ export default function SettingsScreen() {
       queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
       Alert.alert('Invitation sent', `${contact.name} can sign in and accept the invitation.`);
     } catch (error) {
+      // A lapsed subscription now refuses the send. Route it through the same
+      // prompt recording uses, so the answer is a Subscribe button rather than
+      // a message with nothing to act on.
+      if (handleLapsedError(error)) return;
       Alert.alert(
         isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.title : 'Could not send invitation',
         isMemberLimitError(error) ? MEMBER_LIMIT_PROMPT.message : error instanceof Error ? error.message : 'Please try again.',
@@ -599,6 +608,7 @@ export default function SettingsScreen() {
       queryClient.invalidateQueries({ queryKey: ['group-invitations'] });
       Alert.alert('Invitation resent');
     } catch (error) {
+      if (handleLapsedError(error)) return;
       Alert.alert('Could not resend invitation', error instanceof Error ? error.message : 'Please try again.');
     }
   };
