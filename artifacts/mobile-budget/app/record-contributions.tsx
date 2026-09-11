@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { customFetch } from '@workspace/api-client-react';
+import { customFetch, useCreateJointAccount } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { handleLapsedError } from '@/lib/lapsedError';
 
@@ -53,6 +53,26 @@ export default function RecordContributionsScreen() {
       current != null && accounts.some((account) => account.id === current) ? current : accounts[0]?.id ?? null,
     );
   }, [accounts]);
+
+  const createBankAccount = useCreateJointAccount();
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [newAccountName, setNewAccountName] = useState('');
+  const handleAddAccount = async () => {
+    const name = newAccountName.trim();
+    if (!name) {
+      Alert.alert('Account name required', 'Enter a name for this bank account.');
+      return;
+    }
+    try {
+      const created = await createBankAccount.mutateAsync({ data: { name } });
+      setAccountId(created.id);
+      setNewAccountName('');
+      setAddingAccount(false);
+      await queryClient.invalidateQueries({ queryKey: ['joint-accounts'] });
+    } catch (error) {
+      Alert.alert('Could not add account', error instanceof Error ? error.message : 'Check the name and try again.');
+    }
+  };
 
   const now = useMemo(() => new Date(), []);
   // The one date field. The month a record counts toward is this date's month —
@@ -255,17 +275,21 @@ export default function RecordContributionsScreen() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 96, gap: 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 96, gap: 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Bank account */}
         <View style={styles.block}>
           <Text style={[styles.label, { color: colors.foreground }]}>Bank account</Text>
-          {accounts.length === 0 ? (
-            <Pressable onPress={() => router.push('/(tabs)/bank')} style={[styles.notice, { borderColor: colors.border }]}>
-              <Text style={{ color: colors.mutedForeground }}>No bank account yet. Tap to set one up on the Bank tab.</Text>
-            </Pressable>
-          ) : accounts.length === 1 ? (
+          {accounts.length === 0 && !addingAccount ? (
+            <Text style={[styles.notice, { borderColor: colors.border, color: colors.mutedForeground }]}>
+              No bank account yet. Contributions need somewhere to land.
+            </Text>
+          ) : accounts.length === 1 && !addingAccount ? (
             <Text style={{ color: colors.mutedForeground }}>Goes to <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{accounts[0].name}</Text></Text>
-          ) : (
+          ) : !addingAccount ? (
             <View style={styles.chips}>
               {accounts.map((account) => {
                 const on = account.id === accountId;
@@ -280,6 +304,37 @@ export default function RecordContributionsScreen() {
                 );
               })}
             </View>
+          ) : null}
+
+          {addingAccount ? (
+            <View style={styles.row}>
+              <TextInput
+                autoFocus
+                value={newAccountName}
+                onChangeText={setNewAccountName}
+                placeholder="e.g. Family M-Pesa"
+                placeholderTextColor={colors.mutedForeground}
+                onSubmitEditing={() => void handleAddAccount()}
+                style={[styles.input, { flex: 1, borderColor: colors.border, color: colors.foreground }]}
+              />
+              <Pressable
+                onPress={() => void handleAddAccount()}
+                disabled={createBankAccount.isPending || !newAccountName.trim()}
+                style={[styles.addBtn, { borderColor: colors.border, opacity: createBankAccount.isPending || !newAccountName.trim() ? 0.5 : 1 }]}
+              >
+                {createBankAccount.isPending ? <ActivityIndicator size="small" color={colors.foreground} /> : <Feather name="check" size={16} color={colors.foreground} />}
+              </Pressable>
+              <Pressable onPress={() => { setAddingAccount(false); setNewAccountName(''); }} hitSlop={8} style={{ padding: 10 }}>
+                <Feather name="x" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={() => setAddingAccount(true)} style={styles.addAccountLink} hitSlop={6}>
+              <Feather name="plus-circle" size={14} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 13 }}>
+                {accounts.length === 0 ? 'Add a bank account' : 'Add another account'}
+              </Text>
+            </Pressable>
           )}
         </View>
 
@@ -444,6 +499,7 @@ const styles = StyleSheet.create({
   input: { height: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
   notice: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 12, fontSize: 13, lineHeight: 18 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  addAccountLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 6, paddingVertical: 4 },
   chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
   modeHint: { fontSize: 12, lineHeight: 17, marginTop: -2 },
   list: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, overflow: 'hidden' },
