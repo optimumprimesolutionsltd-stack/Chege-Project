@@ -4,6 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import {
+  contributorNameMessage,
+  contributorNameProblem,
+  normalizeContributorName,
+} from "@/lib/contributor-name";
 
 /**
  * The shared "edit this list" pattern: an Edit pencil on a panel's headline
@@ -12,6 +17,21 @@ import { Loader2, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
  * Nothing is written until Save. Used by "Who has paid" and "Expected vs
  * actual", and meant for any panel that lists the group's contributors.
  */
+/** What the server said went wrong, named to the person it went wrong on, so a
+ *  treasurer saving forty rows knows which one to fix rather than being told
+ *  only that something did not apply. */
+async function saveError(response: Response, name?: string): Promise<string> {
+  let detail = "";
+  try {
+    const body = (await response.json()) as { error?: string };
+    detail = typeof body.error === "string" ? body.error : "";
+  } catch {
+    detail = "";
+  }
+  if (!detail) return "Some changes may not have been applied. Reopen edit to check.";
+  return name ? `${name}: ${detail}` : detail;
+}
+
 export function useContributorEditor() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -42,14 +62,27 @@ export function useContributorEditor() {
   };
   const cancelRename = () => setEditingRow(null);
   const commitRename = (id: number, original: string) => {
-    const name = rowDraft.trim();
+    const name = normalizeContributorName(rowDraft);
+    // An unchanged name is not an edit; clearing the row's staged rename is the
+    // right answer and needs no complaint.
+    if (name === normalizeContributorName(original)) {
+      setEditingRow(null);
+      setRenames((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+    // A bad name used to be dropped on the floor here: the row closed, the edit
+    // vanished, and nothing said why. Keep the row open and say what is wrong.
+    const problem = contributorNameProblem(name);
+    if (problem) {
+      toast({ variant: "destructive", title: "Check the name", description: contributorNameMessage(problem) });
+      return;
+    }
     setEditingRow(null);
-    setRenames((current) => {
-      const next = { ...current };
-      if (name && name !== original && name.length <= 120) next[id] = name;
-      else delete next[id];
-      return next;
-    });
+    setRenames((current) => ({ ...current, [id]: name }));
   };
   const displayName = (id: number, original: string) => renames[id] ?? original;
 
@@ -64,10 +97,11 @@ export function useContributorEditor() {
   };
 
   const commitAdd = () => {
-    const name = addName.trim();
+    const name = normalizeContributorName(addName);
     if (!name) return;
-    if (name.length > 120) {
-      toast({ variant: "destructive", title: "Name too long", description: "Use 120 characters or fewer." });
+    const problem = contributorNameProblem(name);
+    if (problem) {
+      toast({ variant: "destructive", title: "Check the name", description: contributorNameMessage(problem) });
       return;
     }
     setAdds((current) => [...current, name]);
@@ -99,7 +133,7 @@ export function useContributorEditor() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name }),
         });
-        if (!response.ok) throw new Error("add failed");
+        if (!response.ok) throw new Error(await saveError(response, name));
       }
       for (const [id, name] of Object.entries(renames)) {
         if (removals.has(Number(id))) continue;
@@ -109,7 +143,7 @@ export function useContributorEditor() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name }),
         });
-        if (!response.ok) throw new Error("rename failed");
+        if (!response.ok) throw new Error(await saveError(response, name));
       }
       for (const id of removals) {
         const response = await fetch(`/api/contributors/${id}`, {
@@ -118,7 +152,7 @@ export function useContributorEditor() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ archived: true }),
         });
-        if (!response.ok) throw new Error("remove failed");
+        if (!response.ok) throw new Error(await saveError(response));
       }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["contributors"] }),
@@ -132,11 +166,14 @@ export function useContributorEditor() {
       toast({ title: "Saved", description: `${parts.join(", ")}.` });
       reset();
       setEditing(false);
-    } catch {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Could not save the changes",
-        description: "Some changes may not have been applied. Reopen edit to check.",
+        description:
+          error instanceof Error && error.message
+            ? error.message
+            : "Some changes may not have been applied. Reopen edit to check.",
       });
       await queryClient.invalidateQueries({ queryKey: ["contributors"] });
     } finally {
