@@ -123,7 +123,7 @@ export default function SearchScreen() {
         <View style={styles.empty}>
           <Feather name="inbox" size={38} color={colors.mutedForeground} />
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No matching records</Text>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Try a description, category, goal, or income-source name.</Text>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Try a description, category, contributor or payer name, goal, or income-source name.</Text>
         </View>
       ) : (
         <FlatList
