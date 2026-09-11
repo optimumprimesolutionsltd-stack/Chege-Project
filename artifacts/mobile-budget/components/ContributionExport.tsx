@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -237,24 +237,31 @@ export function ContributionExport() {
   const viewFrom = mode === 'ledger' ? rangeStart : gridStart();
   const viewTo = mode === 'ledger' ? rangeEnd : isoDay(new Date());
 
-  const toggleView = async () => {
-    if (viewing) {
-      setViewing(false);
-      return;
-    }
-    setViewing(true);
+  const toggleView = () => setViewing((value) => !value);
+
+  // The report re-fetches whenever the range it should show changes — not
+  // just the moment it opens. Without this, switching from "Monthly grid" to
+  // "Dated ledger", or picking a different day while already viewing, left
+  // the old range's entries on screen under new, mismatched From/To fields.
+  useEffect(() => {
+    if (!viewing) return;
+    let active = true;
     setViewLoading(true);
-    try {
-      const statement = (await customFetch(
-        `/api/contributions/statement?from=${encodeURIComponent(viewFrom)}&to=${encodeURIComponent(viewTo)}`,
-      )) as ContributionStatement;
-      setViewData(statement);
-    } catch {
-      setViewData(null);
-    } finally {
-      setViewLoading(false);
-    }
-  };
+    customFetch(`/api/contributions/statement?from=${encodeURIComponent(viewFrom)}&to=${encodeURIComponent(viewTo)}`)
+      .then((statement) => {
+        if (active) setViewData(statement as ContributionStatement);
+      })
+      .catch(() => {
+        if (active) setViewData(null);
+      })
+      .finally(() => {
+        if (active) setViewLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewing, viewFrom, viewTo]);
 
   const viewQuery = `from=${encodeURIComponent(viewFrom)}&to=${encodeURIComponent(viewTo)}`;
 
