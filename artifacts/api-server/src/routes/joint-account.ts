@@ -20,6 +20,7 @@ import {
   isGroupManager,
   requireGroupManager,
   requireMemberSelfAttribution,
+  requireSharedTransactionEligibility,
 } from "../lib/activeGroup";
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
 
@@ -460,6 +461,7 @@ router.patch("/joint-account/opening-balance", async (req, res): Promise<void> =
 router.post("/joint-account/deposit", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
 
   const parsed = DepositInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
@@ -614,6 +616,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
 
   const parsed = DisbursementInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
@@ -669,6 +672,7 @@ router.post("/joint-account/bank-charge", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
 
   const parsed = BankChargeInput.safeParse(req.body);
   if (!parsed.success) {
@@ -702,6 +706,7 @@ async function createSavingsTransfer(
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
 
   const parsed = SavingsTransferInput.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid transfer details" }); return; }
@@ -797,6 +802,7 @@ router.post("/joint-account/transfers/bank-to-bank", async (req, res): Promise<v
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
+  if (!await requireSharedTransactionEligibility(req, res)) return;
 
   const parsed = BankToBankTransferInput.safeParse(req.body);
   if (!parsed.success) {
