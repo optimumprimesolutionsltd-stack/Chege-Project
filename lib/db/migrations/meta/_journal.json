@@ -197,6 +197,13 @@
       "when": 1788775600003,
       "tag": "0027_merry_go_round",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788862000000,
+      "tag": "0028_bank_account_number",
+      "breakpoints": true
     }
   ]
 }

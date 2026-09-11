@@ -10,7 +10,7 @@
     "migrate:legacy-photos": "node --enable-source-maps ./dist/migrateLegacyPhotos.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:integration": "vitest run --exclude '**/node_modules/**' --exclude '**/dist/**' 'src/**/*.integration.test.ts'"
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1117.0",
