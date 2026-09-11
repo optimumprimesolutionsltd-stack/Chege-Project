@@ -33,7 +33,6 @@ import ActivityCard from '@/components/ActivityCard';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { WorkspaceSetupGuide } from '@/components/WorkspaceSetupGuide';
 import { DashboardAnnouncement } from '@/components/DashboardAnnouncement';
-import { SubscriptionBanner } from '@/components/SubscriptionBanner';
 import { HomeTip } from '@/components/HomeTip';
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
@@ -473,8 +472,6 @@ export default function DashboardScreen() {
             </View>
           )}
         </LinearGradient>
-
-        <SubscriptionBanner />
 
         <HomeTip />
 
