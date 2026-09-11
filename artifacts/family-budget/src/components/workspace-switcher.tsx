@@ -43,9 +43,9 @@ export function WorkspaceSwitcher({
   const isMobileVariant = variant === "mobile";
   const [pendingWorkspace, setPendingWorkspace] = useState<Workspace | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
-  // The dashboard card names the budget you are in on its own; the list of the
-  // others stays folded away until you ask for it, so the everyday view is one
-  // budget, not a chooser.
+  // The dashboard card names the workspace you are in on its own; the list of
+  // the others stays folded away until you ask for it, so the everyday view is
+  // one workspace, not a chooser.
   const [dashboardSwitcherOpen, setDashboardSwitcherOpen] = useState(false);
   const activeBrandedBudget = activeGroup ?? null;
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
@@ -76,10 +76,10 @@ export function WorkspaceSwitcher({
       await selectWorkspace.mutateAsync({ data: { groupId: pendingWorkspace.id } });
       onWorkspaceSwitchRequested?.();
       // All financial queries use the active workspace. Reloading prevents any
-      // cached value from the previously selected budget from being shown.
+      // cached value from the previously selected workspace from being shown.
       window.location.reload();
     } catch (error) {
-      setSwitchError(error instanceof Error ? error.message : "Could not switch budget. Please try again.");
+      setSwitchError(error instanceof Error ? error.message : "Could not switch workspace. Please try again.");
     }
   };
 
@@ -91,9 +91,9 @@ export function WorkspaceSwitcher({
             type="button"
             onClick={() => setDashboardSwitcherOpen(true)}
             className={`inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline ${className}`}
-            data-testid="dashboard-open-budget-switcher"
+            data-testid="dashboard-open-workspace-switcher"
           >
-            Switch budget
+            Switch workspace
             <ChevronDown className="h-4 w-4" aria-hidden="true" />
           </button>
         ) : (
@@ -101,7 +101,7 @@ export function WorkspaceSwitcher({
         <div
           className="flex w-full snap-x snap-mandatory scroll-p-1 overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-3"
           role="group"
-          aria-label="Available budgets"
+          aria-label="Available workspaces"
         >
           {workspaces
             .slice()
@@ -189,7 +189,7 @@ export function WorkspaceSwitcher({
             onClick={() => setDashboardSwitcherOpen(false)}
             className="text-xs font-medium text-muted-foreground hover:underline"
           >
-            Hide other budgets
+            Hide other workspaces
           </button>
         </div>
         )
@@ -231,7 +231,7 @@ export function WorkspaceSwitcher({
           >
             <SelectTrigger
               id={id}
-              aria-label="Choose a budget"
+              aria-label="Choose a workspace"
               aria-busy={selectWorkspace.isPending}
               className={[
                 `min-w-0 flex-1 cursor-pointer bg-card text-foreground outline-none transition-colors disabled:cursor-wait disabled:opacity-70 ${workspaceNameClass(activeGroup?.nameStyle)}`,
@@ -241,10 +241,10 @@ export function WorkspaceSwitcher({
                 className,
               ].join(" ")}
             >
-              <SelectValue placeholder="Choose a budget">
+              <SelectValue placeholder="Choose a workspace">
                 {activeWorkspace
                   ? workspaceIdentityText(activeWorkspace, activeWorkspace.isPrivate ? "Personal budget" : "Group")
-                  : "Choose a budget"}
+                  : "Choose a workspace"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent className="z-[100] border-sidebar-border bg-popover text-popover-foreground">
@@ -262,7 +262,7 @@ export function WorkspaceSwitcher({
       )}
       {showPendingLabel && selectWorkspace.isPending ? (
         <p className="mt-2 text-xs font-medium text-muted-foreground" role="status" aria-live="polite">
-            Switching budget…
+            Switching workspace…
         </p>
       ) : null}
       <AlertDialog
@@ -276,13 +276,13 @@ export function WorkspaceSwitcher({
       >
         <AlertDialogContent className="z-[100] w-[calc(100%-2rem)] rounded-2xl sm:w-full">
           <AlertDialogHeader>
-            <AlertDialogTitle>Switch budget?</AlertDialogTitle>
+            <AlertDialogTitle>Switch workspace?</AlertDialogTitle>
             <AlertDialogDescription>
               You are about to open{" "}
               <span className="font-semibold text-foreground">
-                {pendingWorkspace ? workspaceLabel(pendingWorkspace) : "this budget"}
+                {pendingWorkspace ? workspaceLabel(pendingWorkspace) : "this workspace"}
               </span>
-              . Your balances, expenses, goals, bank activity, and reports will refresh for that budget.
+              . Your balances, expenses, goals, bank activity, and reports will refresh for that workspace.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {switchError ? (
@@ -299,7 +299,7 @@ export function WorkspaceSwitcher({
                 void confirmWorkspaceSwitch();
               }}
             >
-              {selectWorkspace.isPending ? "Switching…" : "Switch budget"}
+              {selectWorkspace.isPending ? "Switching…" : "Switch workspace"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -352,7 +352,7 @@ function OpenInvitationLinkButton() {
           </DialogHeader>
           <form onSubmit={openInvitation} className="space-y-5">
             <p className="text-sm leading-relaxed text-muted-foreground">
-               Paste the email invitation or private group link you received. It will add that Shared group alongside any other budgets you can access after you accept.
+               Paste the email invitation or private group link you received. It will add that Shared group alongside any other workspaces you can access after you accept.
             </p>
             <div className="space-y-2">
               <label htmlFor="group-invitation-link" className="text-sm font-semibold text-foreground">Invitation link</label>
@@ -423,7 +423,7 @@ function CreateSharedGroupCard({ hasExistingSharedBudget = false }: { hasExistin
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                {hasExistingSharedBudget
-                 ? "Create a separate Shared group for another family, chama, club, student group, team, or shared goal. It starts empty, stays separate from your other budgets, and only people you invite can join."
+                 ? "Create a separate Shared group for another family, chama, club, student group, team, or shared goal. It starts empty, stays separate from your other workspaces, and only people you invite can join."
                  : "Create a Shared group for your family, chama, club, student group, team, or any shared goal. It starts empty, stays separate from your Personal budget, and only people you invite can join."}
             </p>
              <p className="mt-2 text-xs font-medium text-foreground/70">
@@ -2557,7 +2557,7 @@ export default function Dashboard() {
         qc.invalidateQueries({ queryKey: getGetExpensesQueryKey() }),
       ]);
       setDeleteTarget(null);
-      toast({ title: "Expense removed", description: `${deleteTarget.description} was removed from this budget.` });
+      toast({ title: "Expense removed", description: `${deleteTarget.description} was removed from this workspace.` });
     } catch {
       toast({
         variant: "destructive",
@@ -2686,7 +2686,7 @@ export default function Dashboard() {
                 className="text-xs font-bold uppercase tracking-[0.15em]"
                 style={{ color: workspaceAccentColor }}
               >
-                Viewing budget
+                Viewing workspace
               </p>
               <p className={`mt-1 break-words text-lg text-foreground ${workspaceNameClass(group?.nameStyle)}`}>
                 {group ? workspaceLabel(group) : "Personal budget"}
@@ -2707,7 +2707,7 @@ export default function Dashboard() {
             </span>
           </div>
           <label htmlFor="dashboard-workspace-switcher" className="sr-only">
-             Choose a budget
+             Choose a workspace
           </label>
           <WorkspaceSwitcher
             id="dashboard-workspace-switcher"
@@ -2717,7 +2717,7 @@ export default function Dashboard() {
             className="mt-3 w-full"
           />
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Switching refreshes balances, goals, and activity for the selected budget.
+            Switching refreshes balances, goals, and activity for the selected workspace.
           </p>
         </section>
       </div>
@@ -3098,7 +3098,7 @@ export default function Dashboard() {
                    Bank balance is below zero
                  </p>
                  <p className="mt-1">
-                   The selected budget is short by {formatKes(Math.abs(bankAccount.balance))}. Jamvi keeps the withdrawal recorded so the shortfall stays visible until money is deposited.
+                   The selected workspace is short by {formatKes(Math.abs(bankAccount.balance))}. Jamvi keeps the withdrawal recorded so the shortfall stays visible until money is deposited.
                  </p>
                </div>
              )}
