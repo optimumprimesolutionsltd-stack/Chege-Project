@@ -1,15 +1,19 @@
 import { Router } from "express";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
   budgetCategoriesTable,
   bankAccountsTable,
   contributionsTable,
+  expenseIncomeSplitsTable,
   expensesTable,
+  groupContributorsTable,
   incomeSourcesTable,
+  jointAccountDepositSplitsTable,
   jointAccountTxTable,
   membersTable,
   savingsGoalsTable,
   groupsTable,
+  usersTable,
 } from "@workspace/db";
 import { db } from "@workspace/db";
 import { getActiveGroupId } from "../lib/activeGroup";
@@ -310,44 +314,109 @@ router.get("/search", async (req, res): Promise<void> => {
   }
   const pattern = `%${query.replace(/[%_]/g, "\\$&")}%`;
   const include = (kind: string) => tab === "all" || tab === kind;
+
+  // Shared row shapes, reused for both the plain text match below and the
+  // by-person match, so a result found either way looks identical.
+  const expenseRowShape = {
+    id: expensesTable.id,
+    date: expensesTable.date,
+    title: expensesTable.description,
+    subtitle: expensesTable.category,
+    amount: expensesTable.amount,
+  };
+  const bankRowShape = {
+    id: jointAccountTxTable.id,
+    date: jointAccountTxTable.date,
+    title: jointAccountTxTable.description,
+    subtitle: jointAccountTxTable.expenseCategory,
+    amount: jointAccountTxTable.amount,
+    type: jointAccountTxTable.type,
+  };
+  // A person's name never appears in an expense's own text fields, only in
+  // who paid — the legacy single-payer column, or a funding-split label
+  // (e.g. "Chege"). Searching "james" should still find his expense.
+  const matchExpensesByPerson = async (base: Array<{ id: number }>) => {
+    const seen = new Set(base.map((row) => row.id));
+    const matches = await db
+      .selectDistinct({ id: expensesTable.id })
+      .from(expensesTable)
+      .leftJoin(expenseIncomeSplitsTable, eq(expenseIncomeSplitsTable.expenseId, expensesTable.id))
+      .leftJoin(usersTable, eq(usersTable.id, expensesTable.paidById))
+      .where(and(
+        eq(expensesTable.groupId, groupId),
+        or(
+          ilike(expenseIncomeSplitsTable.label, pattern),
+          ilike(usersTable.firstName, pattern),
+          ilike(usersTable.preferredName, pattern),
+          ilike(usersTable.lastName, pattern),
+        ),
+      ))
+      .limit(50);
+    const extraIds = matches.map((row) => row.id).filter((id) => !seen.has(id));
+    if (extraIds.length === 0) return [];
+    return db.select(expenseRowShape).from(expensesTable)
+      .where(inArray(expensesTable.id, extraIds))
+      .orderBy(desc(expensesTable.date), desc(expensesTable.id));
+  };
+  // Same idea for bank entries: a deposit's own description rarely names the
+  // contributor, that lives in who the deposit is attributed to — a group
+  // contributor with no Jamvi account, or a member who does have one.
+  const matchBankByPerson = async (base: Array<{ id: number }>) => {
+    const seen = new Set(base.map((row) => row.id));
+    const matches = await db
+      .selectDistinct({ id: jointAccountTxTable.id })
+      .from(jointAccountTxTable)
+      .leftJoin(jointAccountDepositSplitsTable, eq(jointAccountDepositSplitsTable.transactionId, jointAccountTxTable.id))
+      .leftJoin(groupContributorsTable, eq(groupContributorsTable.id, jointAccountDepositSplitsTable.contributorId))
+      .leftJoin(usersTable, eq(usersTable.id, sql`coalesce(${jointAccountDepositSplitsTable.userId}, ${jointAccountTxTable.madeById})`))
+      .where(and(
+        eq(jointAccountTxTable.groupId, groupId),
+        or(
+          ilike(groupContributorsTable.name, pattern),
+          ilike(usersTable.firstName, pattern),
+          ilike(usersTable.preferredName, pattern),
+          ilike(usersTable.lastName, pattern),
+        ),
+      ))
+      .limit(50);
+    const extraIds = matches.map((row) => row.id).filter((id) => !seen.has(id));
+    if (extraIds.length === 0) return [];
+    return db.select(bankRowShape).from(jointAccountTxTable)
+      .where(inArray(jointAccountTxTable.id, extraIds))
+      .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id));
+  };
+
   const [expenses, bank, goals, income] = await Promise.all([
     include("expenses")
-      ? db.select({
-          id: expensesTable.id,
-          date: expensesTable.date,
-          title: expensesTable.description,
-          subtitle: expensesTable.category,
-          amount: expensesTable.amount,
-        }).from(expensesTable)
-          .where(and(
-            eq(expensesTable.groupId, groupId),
-            or(
-              ilike(expensesTable.description, pattern),
-              ilike(expensesTable.category, pattern),
-              ilike(expensesTable.notes, pattern),
-            ),
-          ))
-          .orderBy(desc(expensesTable.date), desc(expensesTable.id))
-          .limit(50)
+      ? (async () => {
+          const base = await db.select(expenseRowShape).from(expensesTable)
+            .where(and(
+              eq(expensesTable.groupId, groupId),
+              or(
+                ilike(expensesTable.description, pattern),
+                ilike(expensesTable.category, pattern),
+                ilike(expensesTable.notes, pattern),
+              ),
+            ))
+            .orderBy(desc(expensesTable.date), desc(expensesTable.id))
+            .limit(50);
+          return [...base, ...(await matchExpensesByPerson(base))];
+        })()
       : Promise.resolve([]),
     include("bank")
-      ? db.select({
-          id: jointAccountTxTable.id,
-          date: jointAccountTxTable.date,
-          title: jointAccountTxTable.description,
-          subtitle: jointAccountTxTable.expenseCategory,
-          amount: jointAccountTxTable.amount,
-          type: jointAccountTxTable.type,
-        }).from(jointAccountTxTable)
-          .where(and(
-            eq(jointAccountTxTable.groupId, groupId),
-            or(
-              ilike(jointAccountTxTable.description, pattern),
-              ilike(jointAccountTxTable.expenseCategory, pattern),
-            ),
-          ))
-          .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id))
-          .limit(50)
+      ? (async () => {
+          const base = await db.select(bankRowShape).from(jointAccountTxTable)
+            .where(and(
+              eq(jointAccountTxTable.groupId, groupId),
+              or(
+                ilike(jointAccountTxTable.description, pattern),
+                ilike(jointAccountTxTable.expenseCategory, pattern),
+              ),
+            ))
+            .orderBy(desc(jointAccountTxTable.date), desc(jointAccountTxTable.id))
+            .limit(50);
+          return [...base, ...(await matchBankByPerson(base))];
+        })()
       : Promise.resolve([]),
     include("goals")
       ? db.select({

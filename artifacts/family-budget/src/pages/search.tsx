@@ -118,7 +118,7 @@ export default function SearchPage() {
           <p className="mt-2 text-sm text-muted-foreground">Enter at least two letters. Results never cross into another budget.</p>
         </Card>
       ) : (search.data?.results ?? []).length === 0 ? (
-        <Card className="p-10 text-center"><h2 className="text-lg font-bold">No matching records</h2><p className="mt-2 text-sm text-muted-foreground">Try a description, category, goal, or income-source name.</p></Card>
+        <Card className="p-10 text-center"><h2 className="text-lg font-bold">No matching records</h2><p className="mt-2 text-sm text-muted-foreground">Try a description, category, contributor or payer name, goal, or income-source name.</p></Card>
       ) : (
         <div className="space-y-3">
           {(search.data?.results ?? []).map((item) => {
