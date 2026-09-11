@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Updates from 'expo-updates';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -681,6 +682,33 @@ export default function SettingsScreen() {
         },
       ],
     );
+  };
+
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const handleCheckForUpdates = async () => {
+    if (__DEV__ || !Updates.isEnabled) {
+      Alert.alert('Not available here', 'Update checks only run in an installed build, not this development session.');
+      return;
+    }
+    setCheckingUpdate(true);
+    try {
+      const result = await Updates.checkForUpdateAsync();
+      if (!result.isAvailable) {
+        Alert.alert('You’re up to date', 'Jamvi is already on the latest version.');
+        return;
+      }
+      await Updates.fetchUpdateAsync();
+      Alert.alert('Update downloaded', 'Jamvi will restart now to use it.', [
+        { text: 'Restart now', onPress: () => void Updates.reloadAsync() },
+      ]);
+    } catch (error) {
+      Alert.alert(
+        'Could not check for updates',
+        error instanceof Error ? error.message : 'Check your connection and try again.',
+      );
+    } finally {
+      setCheckingUpdate(false);
+    }
   };
 
   const handleLogout = () => {
@@ -1541,6 +1569,20 @@ export default function SettingsScreen() {
               {Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web'}
             </Text>
           </View>
+          <Pressable
+            testID="check-for-updates"
+            onPress={() => void handleCheckForUpdates()}
+            disabled={checkingUpdate}
+            style={[styles.row, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, opacity: checkingUpdate ? 0.6 : 1 }]}
+          >
+            <View style={styles.rowLeft}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.muted }]}>
+                <Feather name="refresh-cw" size={16} color={colors.mutedForeground} />
+              </View>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Check for updates</Text>
+            </View>
+            {checkingUpdate ? <ActivityIndicator size="small" color={colors.mutedForeground} /> : <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
+          </Pressable>
         </View>
 
         {/* Sign out */}
