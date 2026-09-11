@@ -81,6 +81,7 @@ export default function BudgetChooserScreen() {
   const [createSharedOpen, setCreateSharedOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupKind, setNewGroupKind] = useState<SharedGroupKind | null>(null);
+  const [newGroupContribution, setNewGroupContribution] = useState('');
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [pendingOnboardingDraft, setPendingOnboardingDraft] = useState<MobileOnboardingDraft | null>(null);
@@ -222,6 +223,33 @@ export default function BudgetChooserScreen() {
         storage: AsyncStorage,
         resetQueries: () => queryClient.resetQueries(),
       });
+      // A group is never left as just a name: seed the categories Jamvi
+      // recommends for this kind (additive only — never touches an existing
+      // category) and, if given, set what each member owes. Creating a group
+      // from the chooser is not run through the six-step wizard, so this is
+      // the only chance those get set unless the treasurer visits Budget or
+      // Contributions afterwards.
+      try {
+        await customFetch('/api/budget-categories/recommendations/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+      } catch {
+        // Not fatal — Budget still offers these as recommendations.
+      }
+      const perMember = Math.max(0, Math.round(Number(newGroupContribution.replace(/[^0-9]/g, '')) || 0));
+      if (perMember > 0) {
+        try {
+          await customFetch('/api/contribution-settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ defaultMonthlyTarget: perMember, applyToEveryone: true }),
+          });
+        } catch {
+          // Not fatal — settable later in Contributions.
+        }
+      }
       if (pendingOnboardingDraft && user?.id) {
         await applyMobileOnboardingToWorkspace({ workspace, draft: pendingOnboardingDraft, userId: user.id });
         await clearOnboardingDraft({ userId: user.id, storage: AsyncStorage });
@@ -506,6 +534,28 @@ export default function BudgetChooserScreen() {
                   {selected ? <Feather name="check-circle" size={20} color={colors.primary} /> : null}
                 </Pressable>;
               })}
+              <View style={[styles.customBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.choiceTitle, { color: colors.foreground }]}>What should each member contribute each month?</Text>
+                <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>Optional — sets the target for everyone. You can set or change this later in Contributions.</Text>
+                <View style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 6 }]}>
+                  <Text style={[styles.amountLabel, { color: colors.foreground }]}>Per member</Text>
+                  <View style={styles.amountInputWrap}>
+                    <Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text>
+                    <TextInput
+                      testID="new-shared-budget-contribution"
+                      keyboardType="number-pad"
+                      value={newGroupContribution}
+                      onChangeText={(value) => setNewGroupContribution(value.replace(/[^0-9]/g, ''))}
+                      placeholder="0"
+                      placeholderTextColor={colors.mutedForeground}
+                      style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]}
+                    />
+                  </View>
+                </View>
+              </View>
+              <Text style={[styles.modalCopy, { color: colors.mutedForeground, fontSize: 12 }]}>
+                Jamvi adds the categories groups like this usually track — nothing is locked in, add, rename, or remove them anytime in Budget.
+              </Text>
             </ScrollView>
             <Pressable testID="confirm-create-shared-budget" accessibilityRole="button"
               accessibilityLabel="Create Shared group" disabled={createSharedGroup.isPending}

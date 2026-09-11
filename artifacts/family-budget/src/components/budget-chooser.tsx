@@ -470,6 +470,20 @@ export function BudgetChooser({
       // well so this flow remains safe if that implementation changes.
       await queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() });
       await selectWorkspace.mutateAsync({ data: { groupId: workspace.id } });
+      // A group is never left as just a name: seed the categories recommended
+      // for its kind (additive only — never touches an existing category).
+      // This form does not run the six-step wizard, so it is the only chance
+      // that happens unless the treasurer visits Budget afterwards.
+      try {
+        await fetch("/api/budget-categories/recommendations/apply", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+      } catch {
+        // Not fatal — Budget still offers these as recommendations.
+      }
       await applyOnboardingPreferences(workspace);
       enterApp();
     } catch (error) {
@@ -805,10 +819,12 @@ export function BudgetChooser({
                         <StandaloneSharedBudgetForm
                           name={sharedBudgetName}
                           kind={sharedBudgetKind}
+                          memberContribution={memberContribution}
                           error={creationError}
                           pending={createSharedGroup.isPending || selectWorkspace.isPending}
                           onNameChange={setSharedBudgetName}
                           onKindChange={setSharedBudgetKind}
+                          onMemberContributionChange={setMemberContribution}
                           onSubmit={createStandaloneSharedBudget}
                         />
                       ) : null}
@@ -842,14 +858,16 @@ export function BudgetChooser({
 }
 
 function StandaloneSharedBudgetForm({
-  name, kind, error, pending, onNameChange, onKindChange, onSubmit,
+  name, kind, memberContribution, error, pending, onNameChange, onKindChange, onMemberContributionChange, onSubmit,
 }: {
   name: string;
   kind: SharedGroupKind | null;
+  memberContribution: string;
   error: string | null;
   pending: boolean;
   onNameChange: (name: string) => void;
   onKindChange: (kind: SharedGroupKind) => void;
+  onMemberContributionChange: (value: string) => void;
   onSubmit: (event: React.FormEvent) => void;
 }) {
   return (
@@ -876,6 +894,23 @@ function StandaloneSharedBudgetForm({
           ))}
         </div>
       </fieldset>
+      <div className="mt-4 space-y-1">
+        <label htmlFor="standalone-shared-budget-contribution" className="text-sm font-semibold text-foreground">What should each member contribute each month?</label>
+        <p className="text-xs text-muted-foreground">Optional — sets the target for everyone. You can set or change this later in Contributions.</p>
+        <div className="flex w-40 items-center gap-2">
+          <span className="text-sm text-muted-foreground">KES</span>
+          <Input
+            id="standalone-shared-budget-contribution"
+            data-testid="input-standalone-shared-budget-contribution"
+            inputMode="numeric"
+            value={memberContribution}
+            onChange={(event) => onMemberContributionChange(event.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="0"
+            disabled={pending}
+            className="h-10 text-right"
+          />
+        </div>
+      </div>
       {error ? <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert" data-testid="status-standalone-shared-budget-error">{error}</p> : null}
       <Button data-testid="button-create-standalone-shared-budget" type="submit" className="mt-5 h-12 w-full rounded-xl" disabled={pending}>
         <Plus className="mr-2 h-4 w-4" />{pending ? "Creating…" : "Create and open Shared group"}
