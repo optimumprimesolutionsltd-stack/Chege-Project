@@ -221,6 +221,57 @@ const CategoryChip = React.memo(function CategoryChip({
   );
 });
 
+/**
+ * One "who paid" pill.
+ *
+ * Split out and memoised for the same reason as the chips: a chama can have
+ * forty of these, and every keystroke anywhere on the form rebuilt all of
+ * them. A pill only changes when its own selected or disabled state does.
+ *
+ * `onToggle` takes the id rather than a closure per pill, so the prop stays
+ * referentially stable and the memo actually holds - a closure built in the
+ * map would be a new function every render and defeat it silently.
+ */
+const PayerPill = React.memo(function PayerPill({
+  userId,
+  name,
+  selected,
+  disabled,
+  dimmed,
+  hint,
+  onToggle,
+  colors,
+}: {
+  userId: string;
+  name: string;
+  selected: boolean;
+  disabled: boolean;
+  dimmed: boolean;
+  hint?: string;
+  onToggle: (userId: string) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <Pressable
+      disabled={disabled}
+      accessibilityHint={hint}
+      onPress={() => onToggle(userId)}
+      style={[
+        styles.paidByPill,
+        {
+          backgroundColor: selected ? colors.primary : colors.muted,
+          borderColor: selected ? colors.primary : colors.border,
+          borderRadius: colors.radius,
+          opacity: dimmed ? 0.4 : 1,
+        },
+      ]}
+    >
+      <Feather name="user" size={14} color={selected ? '#fff' : colors.mutedForeground} />
+      <Text style={[styles.paidByText, { color: selected ? '#fff' : colors.foreground }]}>{name}</Text>
+    </Pressable>
+  );
+});
+
 export default function AddExpenseSheet() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -347,7 +398,10 @@ export default function AddExpenseSheet() {
     : editingExpense?.category
       ? [{ category: editingExpense.category, amount: editingExpense.amount }]
       : [];
-  const categoryBalancePreviews = categoryAllocations.flatMap((allocation) => {
+  // Two scans of `breakdown` and `categories` per allocation, plus a
+  // filter-reduce, and none of it depends on the text being typed. It ran on
+  // every render all the same.
+  const categoryBalancePreviews = useMemo(() => categoryAllocations.flatMap((allocation) => {
     const categoryName = allocation.category.trim();
     const allocationAmount = Number(allocation.amount.replace(/,/g, ''));
     if (
@@ -381,8 +435,10 @@ export default function AddExpenseSheet() {
         previousAllocationAmount,
       }),
     }];
-  });
-  const hasBudgetedCategorySelection = categoryAllocations.some((allocation) => {
+  }), [categoryAllocations, breakdown, categories, originalCategoryAllocations]);
+
+  // The same two scans again, for a yes/no answer.
+  const hasBudgetedCategorySelection = useMemo(() => categoryAllocations.some((allocation) => {
     const categoryName = allocation.category.trim();
     if (!categoryName || categoryName.toLocaleLowerCase() === 'other') return false;
     const categoryBreakdown = breakdown?.find(
@@ -392,7 +448,7 @@ export default function AddExpenseSheet() {
       (item) => item.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
     );
     return (categoryBreakdown?.budgetAmount ?? categoryDefinition?.budgetAmount ?? 0) > 0;
-  });
+  }), [categoryAllocations, breakdown, categories]);
 
   useFocusEffect(
     useCallback(() => {
@@ -488,6 +544,30 @@ export default function AddExpenseSheet() {
     }
   }, [canManageShared, paidFromBank, payerIds.length, selectablePayers]);
 
+  // Stable across renders so the memoised pills below are not handed a new
+  // function every keystroke, which would defeat the memo without any sign.
+  const togglePayer = useCallback((userId: string) => {
+    if (!canManageShared) return;
+    if (isEditMode) setFundingDirty(true);
+    setPayerIds((prev) => {
+      if (!prev.includes(userId)) {
+        setPayerAmounts((previous) => ({ ...previous, [userId]: '' }));
+      }
+      const next = prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId];
+      if (!next.includes(userId)) {
+        setPayerIncomeSourceIds((sourceIds) => {
+          const copy = { ...sourceIds };
+          delete copy[userId];
+          return copy;
+        });
+      }
+      if (paidFromBank) setAllowMixedFunding(next.length > 0);
+      return next;
+    });
+  }, [canManageShared, isEditMode, paidFromBank]);
+
   // The one case where tapping a payer pill can do nothing at all.
   //
   // A budget with a single possible payer auto-selects them (the effect
@@ -497,6 +577,13 @@ export default function AddExpenseSheet() {
   // genuinely no other direct payer to choose - the alternative is the bank -
   // so the pill stops pretending to be a toggle and the reason is stated.
   const soleDirectPayer = canManageShared && !paidFromBank && selectablePayers.length === 1;
+  // Was recomputed inside the map, so a group of forty worked it out forty
+  // times per keystroke for an answer that cannot differ between pills.
+  const payersDisabled = getExpenseFundingControlState({
+    paidFromBank,
+    hasPersonalFunding: payerIds.length > 0,
+    allowMixedFunding,
+  }).personalPayersDisabled;
 
   const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];
 
@@ -1806,71 +1893,23 @@ export default function AddExpenseSheet() {
                   Bank account
                 </Text>
               </Pressable>}
-              {selectablePayers.map((m) => {
-                const selected = payerIds.includes(m.userId);
-                return (
-                  <Pressable
-                    key={m.userId}
-                    disabled={soleDirectPayer || getExpenseFundingControlState({
-                      paidFromBank,
-                      hasPersonalFunding: payerIds.length > 0,
-                      allowMixedFunding,
-                    }).personalPayersDisabled}
-                    accessibilityHint={
-                      soleDirectPayer
-                        ? 'You are the only person in this budget, so this expense is recorded as paid by you.'
-                        : undefined
-                    }
-                    onPress={() => {
-                      if (!canManageShared) return;
-                      if (isEditMode) setFundingDirty(true);
-                      setPayerIds(prev => {
-                        if (!prev.includes(m.userId)) {
-                           setPayerAmounts((previous) => ({
-                             ...previous,
-                             [m.userId]: '',
-                           }));
-                        }
-                        const next = prev.includes(m.userId)
-                          ? prev.filter(id => id !== m.userId)
-                          : [...prev, m.userId];
-                        if (!next.includes(m.userId)) {
-                          setPayerIncomeSourceIds(sourceIds => {
-                            const copy = { ...sourceIds };
-                            delete copy[m.userId];
-                            return copy;
-                          });
-                        }
-                         if (paidFromBank) setAllowMixedFunding(next.length > 0);
-                        return next;
-                      });
-                    }}
-                    style={[
-                      styles.paidByPill,
-                      {
-                        backgroundColor: selected ? colors.primary : colors.muted,
-                        borderColor: selected ? colors.primary : colors.border,
-                        borderRadius: colors.radius,
-                        opacity: paidFromBank && payerIds.length === 0 && !allowMixedFunding ? 0.4 : 1,
-                      },
-                    ]}
-                  >
-                    <Feather
-                      name="user"
-                      size={14}
-                      color={selected ? '#fff' : colors.mutedForeground}
-                    />
-                    <Text
-                      style={[
-                        styles.paidByText,
-                        { color: selected ? '#fff' : colors.foreground },
-                      ]}
-                    >
-                      {m.userName?.split(' ')[0] ?? 'Member'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {selectablePayers.map((m) => (
+                <PayerPill
+                  key={m.userId}
+                  userId={m.userId}
+                  name={m.userName?.split(' ')[0] ?? 'Member'}
+                  selected={payerIds.includes(m.userId)}
+                  disabled={soleDirectPayer || payersDisabled}
+                  dimmed={paidFromBank && payerIds.length === 0 && !allowMixedFunding}
+                  hint={
+                    soleDirectPayer
+                      ? 'You are the only person in this budget, so this expense is recorded as paid by you.'
+                      : undefined
+                  }
+                  onToggle={togglePayer}
+                  colors={colors}
+                />
+              ))}
             </View>
             {soleDirectPayer && (
               <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 6 }]}>
