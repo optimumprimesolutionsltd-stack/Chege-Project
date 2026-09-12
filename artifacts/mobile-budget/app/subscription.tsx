@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
   payWith: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' },
   // Height-driven: the mark keeps its own 2.79:1 proportions via resizeMode.
-  mpesaMark: { width: 78, height: 28 },
+  mpesaMark: { width: 89, height: 32 },
   payWithText: { flex: 1, minWidth: 140, fontSize: 12, lineHeight: 17 },
   input: { height: 46, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
   hint: { fontSize: 11, lineHeight: 16 },
