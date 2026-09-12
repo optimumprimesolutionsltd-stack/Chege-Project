@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const source = readFileSync('app/add-expense.tsx', 'utf8');
+// The save rules moved out of the screen into a pure module that can be run
+// directly; see lib/__tests__/expenseValidation.test.ts. What still belongs
+// here is that the screen keeps wiring them up.
+const rules = readFileSync('lib/expenseValidation.ts', 'utf8');
 
 describe('mobile normal expense mode', () => {
   it('starts new expenses in Normal while edits retain Advanced controls', () => {
@@ -35,6 +39,8 @@ describe('mobile normal expense mode', () => {
     expect(source).toContain('testID="normal-expense-summary"');
     expect(source).toContain('testID="normal-income-source-blocker"');
     expect(source).toContain('Switch to Detailed to add an income source');
-    expect(source).toContain("Alert.alert('Income source required', 'Add a saved income source in Detailed before you can save this expense.')");
+    expect(rules).toContain("'Income source required', 'Add a saved income source in Detailed before you can save this expense.'");
+    // Only Normal mode demands it, and never while editing.
+    expect(rules).toContain('if (!input.isAdvanced && !input.isEditMode) {');
   });
 });
