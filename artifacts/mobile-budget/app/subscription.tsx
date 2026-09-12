@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -204,6 +205,20 @@ export default function SubscriptionScreen() {
             })}
           </View>
 
+          <View style={styles.payWith}>
+            <Image
+              source={require('@/assets/images/brands/mpesa.png')}
+              style={styles.mpesaMark}
+              resizeMode="contain"
+              accessible
+              accessibilityRole="image"
+              accessibilityLabel="M-PESA"
+            />
+            <Text style={[styles.payWithText, { color: colors.mutedForeground }]}>
+              Payments are taken through M-PESA.
+            </Text>
+          </View>
+
           <Text style={[styles.label, { color: colors.foreground }]}>M-Pesa number</Text>
           <TextInput
             value={phoneNumber}
@@ -287,6 +302,10 @@ const styles = StyleSheet.create({
   intervalPrice: { fontSize: 18, fontFamily: 'Inter_700Bold' },
   intervalNote: { fontSize: 11 },
   label: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
+  payWith: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' },
+  // Height-driven: the mark keeps its own 2.79:1 proportions via resizeMode.
+  mpesaMark: { width: 78, height: 28 },
+  payWithText: { flex: 1, minWidth: 140, fontSize: 12, lineHeight: 17 },
   input: { height: 46, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
   hint: { fontSize: 11, lineHeight: 16 },
   payBtn: {
