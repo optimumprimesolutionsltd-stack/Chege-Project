@@ -306,6 +306,10 @@ export default function DashboardScreen() {
       <PageScrollView
         style={{ backgroundColor: colors.background }}
         overScrollMode="never"
+        // Which budget you are looking at should not scroll away. Index 1 is
+        // the workspace card, which is why the header gradient is in two
+        // pieces with the card between them rather than one block.
+        stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />
@@ -317,8 +321,8 @@ export default function DashboardScreen() {
       >
         {/* Dark header */}
         <LinearGradient
-          colors={[colors.brandNavy, '#05255E', colors.brandBlue]}
-          style={[styles.header, { paddingTop: topPad + 12 }]}
+          colors={[colors.brandNavy, '#05255E']}
+          style={[styles.header, styles.headerTopPiece, { paddingTop: topPad + 12 }]}
         >
           <View style={styles.homeStatus}>
             <Feather name="home" size={13} color={colors.secondary} />
@@ -371,6 +375,13 @@ export default function DashboardScreen() {
             </View>
           </View>
 
+        </LinearGradient>
+
+        {/* Sticky: the one line that says whose money this is. Sits on a solid
+            band of the gradient's own mid colour, which is also where the two
+            gradient pieces meet, so the join cannot be seen whether the card
+            is resting in the header or stuck to the top of the screen. */}
+        <View style={styles.workspaceIdentitySticky}>
           <View
             style={[
               styles.workspaceIdentity,
@@ -400,7 +411,12 @@ export default function DashboardScreen() {
               </Text>
             </View>
           </View>
+        </View>
 
+        <LinearGradient
+          colors={['#05255E', colors.brandBlue]}
+          style={styles.headerRest}
+        >
            <WorkspaceSetupGuide />
 
           {isSharedWorkspace && (
@@ -905,6 +921,12 @@ const styles = StyleSheet.create({
   accessButtonText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 
   header: { paddingHorizontal: 20, paddingBottom: 20 },
+  // The top piece runs into the sticky band, so it must not add space of its own.
+  headerTopPiece: { paddingBottom: 0 },
+  // Solid mid-gradient colour: the shade both pieces meet at, so the card
+  // looks identical resting in the header and stuck to the top.
+  workspaceIdentitySticky: { backgroundColor: '#05255E', paddingHorizontal: 20, paddingTop: 16 },
+  headerRest: { paddingHorizontal: 20, paddingBottom: 20 },
   homeStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 9 },
   homeStatusText: { fontSize: 10, color: '#FDBB0A', fontFamily: 'Inter_700Bold', letterSpacing: 1.1 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
