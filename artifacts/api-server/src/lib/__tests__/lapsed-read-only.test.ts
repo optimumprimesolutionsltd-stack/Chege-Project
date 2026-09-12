@@ -1,14 +1,20 @@
 /**
- * A lapsed member goes read-only in a Shared group.
+ * A lapsed member goes read-only, everywhere — their own Personal budget
+ * included, not only a Shared group.
  *
  * This is the behaviour the whole pricing model rests on, and it is the one
  * most likely to be got wrong in a way nobody notices: too strict and a chama
  * loses a member's contribution history, too loose and nobody ever has a
- * reason to pay.
+ * reason to pay. Personal budgets were exempt for a while — the earlier
+ * reasoning was that locking somebody out of the very budget they'd return to
+ * would remove their reason to resubscribe — but the subscription is priced
+ * to cover a Personal budget exactly as much as any group, and leaving it
+ * ungated meant anyone could let their subscription lapse and keep using the
+ * app's primary surface forever, for free. Confirmed as the intended fix,
+ * not an accident, before this test flipped.
  *
- * The rule is that they keep the group and every record in it, and stop being
- * able to add to it. Their own Personal budget is untouched, because that is
- * where they go back to when they return.
+ * The rule is that they keep the budget and every record in it, and stop
+ * being able to add to it.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,14 +33,14 @@ vi.mock("../subscription-catalog", () => ({
   resolveMemberEntitlements: mockResolve,
 }));
 
-import { requireSharedTransactionEligibility } from "../activeGroup";
+import { requireTransactionEligibility } from "../activeGroup";
 
 function contextFor({ isPrivate, userId = "member-1" }: { isPrivate: boolean; userId?: string }) {
   const json = vi.fn();
   const res = { status: vi.fn().mockReturnValue({ json }) } as unknown as Response;
   const req = {
     user: { id: userId },
-    group: { id: 7, isPrivate },
+    group: { id: 7, isPrivate, role: "owner" },
   } as unknown as Request;
   return { req, res, json, status: res.status as unknown as ReturnType<typeof vi.fn> };
 }
@@ -48,7 +54,7 @@ describe("recording in a Shared group", () => {
   it("lets a current member record", async () => {
     const { req, res } = contextFor({ isPrivate: false });
 
-    await expect(requireSharedTransactionEligibility(req, res)).resolves.toBe(true);
+    await expect(requireTransactionEligibility(req, res)).resolves.toBe(true);
   });
 
   it("refuses a lapsed member, with 402 rather than 403", async () => {
@@ -58,9 +64,10 @@ describe("recording in a Shared group", () => {
     mockResolve.mockResolvedValue({ status: "expired", fullAccess: false });
     const { req, res, json, status } = contextFor({ isPrivate: false });
 
-    await expect(requireSharedTransactionEligibility(req, res)).resolves.toBe(false);
+    await expect(requireTransactionEligibility(req, res)).resolves.toBe(false);
     expect(status).toHaveBeenCalledWith(402);
     expect(json.mock.calls[0][0].error).toMatch(/read-only/i);
+    expect(json.mock.calls[0][0].error).toMatch(/Shared group/i);
   });
 
   it("tells the member nothing has been removed", async () => {
@@ -69,19 +76,9 @@ describe("recording in a Shared group", () => {
     mockResolve.mockResolvedValue({ status: "expired", fullAccess: false });
     const { req, res, json } = contextFor({ isPrivate: false });
 
-    await requireSharedTransactionEligibility(req, res);
+    await requireTransactionEligibility(req, res);
 
     expect(json.mock.calls[0][0].error).toMatch(/nothing has been removed/i);
-  });
-
-  it("leaves a lapsed member's own Personal budget alone", async () => {
-    // Personal is where their records live and where they return to. Locking
-    // them out of it would delete the reason to resubscribe.
-    mockResolve.mockResolvedValue({ status: "expired", fullAccess: false });
-    const { req, res } = contextFor({ isPrivate: true });
-
-    await expect(requireSharedTransactionEligibility(req, res)).resolves.toBe(true);
-    expect(mockResolve).not.toHaveBeenCalled();
   });
 
   it("does not lock out an account that has no subscription at all", async () => {
@@ -92,15 +89,44 @@ describe("recording in a Shared group", () => {
     mockResolve.mockResolvedValue({ status: null, fullAccess: false });
     const { req, res, status } = contextFor({ isPrivate: false });
 
-    await expect(requireSharedTransactionEligibility(req, res)).resolves.toBe(true);
+    await expect(requireTransactionEligibility(req, res)).resolves.toBe(true);
     expect(status).not.toHaveBeenCalled();
   });
 
   it("asks about the member in front of it, not the group", async () => {
     const { req, res } = contextFor({ isPrivate: false, userId: "member-42" });
 
-    await requireSharedTransactionEligibility(req, res);
+    await requireTransactionEligibility(req, res);
 
     expect(mockResolve).toHaveBeenCalledWith("member-42");
+  });
+});
+
+describe("recording in a Personal budget", () => {
+  it("lets its owner record while their subscription is current", async () => {
+    const { req, res } = contextFor({ isPrivate: true });
+
+    await expect(requireTransactionEligibility(req, res)).resolves.toBe(true);
+  });
+
+  it("goes read-only too once the owner's subscription lapses", async () => {
+    // The subscription is priced to cover a Personal budget exactly as much
+    // as any Shared group — leaving this ungated meant a lapsed member could
+    // keep using the app's main surface forever, for free.
+    mockResolve.mockResolvedValue({ status: "expired", fullAccess: false });
+    const { req, res, json, status } = contextFor({ isPrivate: true });
+
+    await expect(requireTransactionEligibility(req, res)).resolves.toBe(false);
+    expect(status).toHaveBeenCalledWith(402);
+    expect(json.mock.calls[0][0].error).toMatch(/Personal budget is read-only/i);
+    expect(json.mock.calls[0][0].error).toMatch(/nothing has been removed/i);
+  });
+
+  it("does not lock out a Personal budget with no subscription row at all", async () => {
+    mockResolve.mockResolvedValue({ status: null, fullAccess: false });
+    const { req, res, status } = contextFor({ isPrivate: true });
+
+    await expect(requireTransactionEligibility(req, res)).resolves.toBe(true);
+    expect(status).not.toHaveBeenCalled();
   });
 });

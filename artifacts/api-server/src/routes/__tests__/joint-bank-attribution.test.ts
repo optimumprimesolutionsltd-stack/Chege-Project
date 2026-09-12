@@ -56,6 +56,15 @@ vi.mock("@workspace/db", () => {
   };
 });
 
+// requireTransactionEligibility (used by every route under test here) now
+// checks subscription status for a Personal budget too, not only a Shared
+// group. These tests are about attribution, not billing, so it is stubbed
+// to "current and in good standing" rather than fleshing out the
+// subscription tables in the @workspace/db mock above.
+vi.mock("../../lib/subscription-catalog", () => ({
+  resolveMemberEntitlements: vi.fn(async () => ({ status: "active", fullAccess: true })),
+}));
+
 import { db } from "@workspace/db";
 import jointAccountRouter from "../joint-account.js";
 import savingsGoalsRouter from "../savings-goals.js";

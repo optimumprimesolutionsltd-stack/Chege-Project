@@ -11,7 +11,7 @@ import {
   getActiveGroupId,
   requireGroupManager,
   requireMemberSelfAttribution,
-  requireSharedTransactionEligibility,
+  requireTransactionEligibility,
 } from "../lib/activeGroup";
 
 const router = Router();
@@ -143,7 +143,7 @@ router.get("/contributions/deposits", async (req, res): Promise<void> => {
 router.post("/contributions", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!await requireSharedTransactionEligibility(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
 
   const parsed = CreateContributionBody.safeParse(req.body);
   if (!parsed.success) {
@@ -195,7 +195,7 @@ router.post("/contributions", async (req, res): Promise<void> => {
 router.patch("/contributions/:id", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!await requireSharedTransactionEligibility(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
 
   const id = Number(req.params.id);
   const parsed = UpdateContributionBody.safeParse(req.body);
