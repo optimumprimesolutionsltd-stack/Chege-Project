@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -181,6 +181,46 @@ function incomeSourceIdFromKey(key: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/**
+ * One category chip.
+ *
+ * Split out and memoised because the list is rebuilt on every keystroke
+ * anywhere on this form, and a chip only changes when its own selected state
+ * does. `onSelect` takes the name rather than a closure per chip, so the prop
+ * stays referentially stable and the memo actually holds.
+ */
+const CategoryChip = React.memo(function CategoryChip({
+  name,
+  selected,
+  onSelect,
+  colors,
+}: {
+  name: string;
+  selected: boolean;
+  onSelect: (name: string) => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const icon = getCategoryIcon(name);
+  return (
+    <Pressable
+      onPress={() => onSelect(name)}
+      style={[
+        styles.categoryChip,
+        {
+          backgroundColor: selected ? colors.primary : colors.muted,
+          borderColor: selected ? colors.primary : colors.border,
+          borderRadius: colors.radius,
+        },
+      ]}
+    >
+      <Feather name={icon} size={14} color={selected ? '#fff' : colors.mutedForeground} />
+      <Text style={[styles.categoryChipText, { color: selected ? '#fff' : colors.foreground }]}>
+        {name}
+      </Text>
+    </Pressable>
+  );
+});
+
 export default function AddExpenseSheet() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -242,9 +282,14 @@ export default function AddExpenseSheet() {
   const canManageCategories = members.some(
     (member) => member.userId === user?.id && (member.role === 'owner' || member.role === 'admin'),
   );
-  const selectablePayers = canManageShared
-    ? members
-    : members.filter((member) => member.userId === user?.id);
+  // Memoised because it is an effect dependency below. For an ordinary member
+  // the filter returned a new array every render, so that effect re-ran on
+  // every render for them while managers, who get `members` straight through,
+  // were unaffected.
+  const selectablePayers = useMemo(
+    () => (canManageShared ? members : members.filter((member) => member.userId === user?.id)),
+    [canManageShared, members, user?.id],
+  );
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [categoryAllocations, setCategoryAllocations] = useState<CategoryAllocation[]>([]);
@@ -404,7 +449,7 @@ export default function AddExpenseSheet() {
     enabled: !!paidById,
     staleTime: 60_000,
   });
-  const payerSourceIds = [...new Set(payerIds)].sort();
+  const payerSourceIds = useMemo<string[]>(() => [...new Set(payerIds)].sort(), [payerIds]);
   const { data: payerIncomeSources = {}, isLoading: payerSourcesLoading } = useQuery<Record<string, IncomeSource[]>>({
     queryKey: ['income-sources', 'payers', payerSourceIds],
     queryFn: async () => {
@@ -1067,9 +1112,13 @@ export default function AddExpenseSheet() {
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
-  const categoryList = categories
-    .map((item) => item.name)
-    .filter((name) => name.trim().toLocaleLowerCase() !== 'other');
+  const categoryList = useMemo(
+    () =>
+      categories
+        .map((item: { name: string }) => item.name)
+        .filter((name: string) => name.trim().toLocaleLowerCase() !== 'other'),
+    [categories],
+  );
   const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
   const displayedCategoryAllocations = categoryAllocations;
   const fundingExpenseTotal = Number(amount.replace(/,/g, '')) || 0;
@@ -1264,34 +1313,15 @@ export default function AddExpenseSheet() {
                      : 'No categories are available. Switch to Detailed to create one, or ask a budget manager to add one.'}
                 </Text>
               )}
-              {categoryList.map((cat) => {
-                const icon = getCategoryIcon(cat);
-                const selected = categoryAllocations.some((allocation) => allocation.category === cat);
-                return (
-                  <Pressable
-                    key={cat}
-                    onPress={() => chooseCategory(cat)}
-                    style={[
-                      styles.categoryChip,
-                      {
-                        backgroundColor: selected ? colors.primary : colors.muted,
-                        borderColor: selected ? colors.primary : colors.border,
-                        borderRadius: colors.radius,
-                      },
-                    ]}
-                  >
-                    <Feather name={icon} size={14} color={selected ? '#fff' : colors.mutedForeground} />
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        { color: selected ? '#fff' : colors.foreground },
-                      ]}
-                    >
-                      {cat}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {categoryList.map((cat: string) => (
+                <CategoryChip
+                  key={cat}
+                  name={cat}
+                  selected={categoryAllocations.some((allocation) => allocation.category === cat)}
+                  onSelect={chooseCategory}
+                  colors={colors}
+                />
+              ))}
             </>
           )}
         </ScrollView>
