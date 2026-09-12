@@ -55,6 +55,7 @@ import {
 } from '@workspace/api-client-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
+import { handleLapsedError } from '@/lib/lapsedError';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
 import { getProjectedBalanceAfterOutgoing } from '@/lib/bankBalance';
@@ -638,7 +639,7 @@ export default function BankScreen() {
         setModalVisible(false);
         await invalidateBalance();
       } catch (err: unknown) {
-        Alert.alert('Error', err instanceof Error ? err.message : 'Could not create transfer.');
+        Alert.alert('Could not create transfer', err instanceof Error ? err.message : 'Nothing was transferred.');
       } finally {
         setSubmitting(false);
       }
@@ -660,7 +661,7 @@ export default function BankScreen() {
         await invalidateAccounts();
         Alert.alert('Bank transfer recorded', 'Both account balances were updated.');
       } catch (err: unknown) {
-        Alert.alert('Error', err instanceof Error ? err.message : 'Could not create transfer.');
+        Alert.alert('Could not create transfer', err instanceof Error ? err.message : 'Nothing was transferred.');
       } finally {
         setSubmitting(false);
       }
@@ -823,8 +824,12 @@ export default function BankScreen() {
       await invalidateBalance();
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      Alert.alert('Error', message);
+        err instanceof Error ? err.message : 'Nothing was recorded.';
+      // A lapsed subscription answers 402 with a reason and a way to fix it,
+      // which is more use than a box headed "Error".
+      if (!handleLapsedError(err)) {
+        Alert.alert('Could not save this bank record', message);
+      }
     } finally {
       setSubmitting(false);
     }
