@@ -787,7 +787,7 @@ export function BudgetChooser({
             <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{onboardingHeading}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your Personal budget is always private. Shared groups stay separate and are visible only to their members.</p>
             <div className="mt-4 max-w-2xl rounded-xl bg-primary-foreground/10 px-4 py-3 text-sm leading-relaxed text-primary-foreground/85">
-              <span className="font-semibold text-primary-foreground">Free for your first 14 days.</span> Then KES&nbsp;100/month or KES&nbsp;1,000/year — one subscription covers your Personal budget and every group. Nothing is ever deleted if you don't subscribe; shared groups just go read-only until you do.{" "}
+              <span className="font-semibold text-primary-foreground">Free for your first 14 days.</span> Then KES&nbsp;100/month or KES&nbsp;1,000/year — one subscription covers your Personal budget and every group. Nothing is ever deleted if you don't subscribe; recording just goes read-only until you do.{" "}
               <a href={`${import.meta.env.BASE_URL}subscription`} className="font-semibold text-primary-foreground underline underline-offset-4">See what's included</a>
             </div>
           </header>

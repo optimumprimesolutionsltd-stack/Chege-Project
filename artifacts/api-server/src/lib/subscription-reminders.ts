@@ -40,8 +40,8 @@ function compose(kind: ReminderKind, firstName: string): { subject: string; html
         subject: "A week left on your free Jamvi",
         html: `<p>${greeting}</p><p>Your free period ends in a week. After that Jamvi is `
           + `${price} a month, which covers your own budget and every group you are part of.</p>`
-          + `<p>Nothing disappears if you do not subscribe — your records stay, and Shared `
-          + `budgets simply become read-only.</p>${button}`,
+          + `<p>Nothing disappears if you do not subscribe — your records stay, and recording `
+          + `simply becomes read-only, in your own budget and any group.</p>${button}`,
       };
     case REMINDER.TRIAL_ENDING_TOMORROW:
       return {
@@ -54,8 +54,9 @@ function compose(kind: ReminderKind, firstName: string): { subject: string; html
       return {
         subject: "Your free period has ended",
         html: `<p>${greeting}</p><p>Your free period has ended. Your budget, your history and `
-          + `every figure you have entered are all still here.</p><p>Shared groups are `
-          + `read-only until you subscribe, at ${price} a month.</p>${button}`,
+          + `every figure you have entered are all still here.</p><p>Recording is `
+          + `read-only — your own budget and any Shared group — until you subscribe, at `
+          + `${price} a month.</p>${button}`,
       };
     case REMINDER.RENEWAL_DUE:
       return {
@@ -69,15 +70,16 @@ function compose(kind: ReminderKind, firstName: string): { subject: string; html
       return {
         subject: "We could not take your Jamvi payment",
         html: `<p>${greeting}</p><p>Your subscription was due and we have not received it.</p>`
-          + `<p>Nothing has changed yet — you have a week before Shared groups become `
-          + `read-only, and nothing is ever deleted.</p>${button}`,
+          + `<p>Nothing has changed yet — you have a week before recording becomes `
+          + `read-only, in your own budget and any group, and nothing is ever deleted.</p>${button}`,
       };
     case REMINDER.GRACE_ENDING:
       return {
-        subject: "Your Shared groups go read-only tomorrow",
-        html: `<p>${greeting}</p><p>Tomorrow your Shared groups become read-only. You will `
-          + `still see everything; you just will not be able to record into them.</p>`
-          + `<p>Your own budget carries on as normal, and nothing is deleted at any point.</p>`
+        subject: "Your budget goes read-only tomorrow",
+        html: `<p>${greeting}</p><p>Tomorrow your Jamvi becomes read-only — your own budget and `
+          + `any Shared group. You will still see everything; you just will not be able to `
+          + `record into them.</p>`
+          + `<p>Nothing is deleted at any point.</p>`
           + `${button}`,
       };
   }
