@@ -210,15 +210,29 @@ function attachDualWebBuilds(
       },
     }),
   );
-  // Anything with no prerendered file is a client-side route, so the shell
-  // answers and the router decides — including the 404 page.
+  // Nothing reaching here has a file behind it: express.static above runs with
+  // index: "index.html", so every prerendered route — including nested ones
+  // like /guides/chama-record-keeping/ — has already been served. A request
+  // that gets this far is a genuine miss.
+  //
+  // Still send the shell, so the client router draws its 404 page rather than
+  // the visitor getting a bare error. But send it with a 404 status: answering
+  // 200 told crawlers that every mistyped or stale URL was a real page, and
+  // since the shell carries the HOME PAGE's canonical, each one was offered to
+  // Google as another copy of the home page. An unbounded supply of duplicates
+  // is worse than a missing page.
+  //
+  // Note this makes prerendering load-bearing for reachability: a React route
+  // added to App.tsx without a matching generated page will now 404. That is
+  // the intended trade — verify-build.mjs already fails the build when the
+  // sitemap and the generated pages disagree.
   app.get("/{*splat}", (req, res, next) => {
     if (isApiRequest(req.path) || !req.accepts("html")) {
       next();
       return;
     }
 
-    res.sendFile(marketingIndexFile);
+    res.status(404).sendFile(marketingIndexFile);
   });
 }
 
