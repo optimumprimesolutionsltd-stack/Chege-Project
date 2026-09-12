@@ -81,15 +81,22 @@ describe("attachWebBuild", () => {
   it(
     "serves marketing at the root and the authenticated app under /app/",
     async () => {
+      const marketingBuildDir = await buildFixture("Jamvi marketing");
+      // /pricing is a generated page in the real build, so give the fixture one
+      // too. Asking for a path with no file behind it would now be a 404, and
+      // this test is about WHICH build answers a marketing URL, not about what
+      // a miss does — that is covered separately below.
+      await writePrerenderedRoute(marketingBuildDir, "pricing", "Jamvi marketing");
+
       const app = express();
       attachWebBuild(app, {
         enabled: true,
-        marketingBuildDir: await buildFixture("Jamvi marketing"),
+        marketingBuildDir,
         appBuildDir: await buildFixture("Jamvi budget"),
       });
 
       await expect(
-        request(app).get("/pricing").set("Accept", "text/html"),
+        request(app).get("/pricing/").set("Accept", "text/html"),
       ).resolves.toMatchObject({
         status: 200,
         text: expect.stringContaining("<title>Jamvi marketing</title>"),
@@ -184,7 +191,7 @@ describe("attachWebBuild", () => {
     expect(response.text).not.toContain("Jamvi marketing");
   });
 
-  it("still falls back to the shell for a route with no prerendered file", async () => {
+  it("answers 404 for a route with no prerendered file, but still sends the shell", async () => {
     const marketingBuildDir = await buildFixture("Jamvi marketing");
 
     const app = express();
@@ -194,10 +201,44 @@ describe("attachWebBuild", () => {
       appBuildDir: await buildFixture("Jamvi budget"),
     });
 
-    // The client router owns this one, including the 404 page.
     const response = await request(app).get("/nothing-prerendered-here");
 
+    // The client router still owns the page, so the shell has to arrive for it
+    // to draw the 404 screen...
     expect(response.text).toContain("Jamvi marketing");
+    // ...but the status has to be honest. Answering 200 offered crawlers an
+    // unbounded supply of URLs that all carry the home page's canonical.
+    expect(response.status).toBe(404);
+  });
+
+  it("keeps a prerendered page a 200, nested ones included", async () => {
+    const marketingBuildDir = await buildFixture("Jamvi marketing");
+    await writePrerenderedRoute(marketingBuildDir, "chama", "Chama | Jamvi");
+    await writePrerenderedRoute(
+      marketingBuildDir,
+      "guides/chama-record-keeping",
+      "Chama record keeping | Jamvi",
+    );
+
+    const app = express();
+    attachWebBuild(app, {
+      enabled: true,
+      marketingBuildDir,
+      appBuildDir: await buildFixture("Jamvi budget"),
+    });
+
+    const home = await request(app).get("/");
+    expect(home.status).toBe(200);
+
+    const page = await request(app).get("/chama/");
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("Chama | Jamvi");
+
+    // The nested guides are generated the same way and must not be caught by
+    // the 404 fallback.
+    const guide = await request(app).get("/guides/chama-record-keeping/");
+    expect(guide.status).toBe(200);
+    expect(guide.text).toContain("Chama record keeping | Jamvi");
   });
 
   it("does not let a browser cache HTML for a year", async () => {
