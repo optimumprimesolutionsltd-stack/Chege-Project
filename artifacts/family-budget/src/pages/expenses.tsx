@@ -945,6 +945,18 @@ export default function Expenses() {
       setUncategorizedSaveOpen(true);
       return;
     }
+    // An expense is a record of money already spent, so it cannot be dated
+    // ahead. The phone has refused this since it was written, and this form's
+    // sibling — recording contributions — bounds its own date the same way.
+    // Only the expense form here was unbounded.
+    if (addForm.date > today) {
+      toast({
+        variant: "destructive",
+        title: "Future date not allowed",
+        description: "This records actual spending — please use today or an earlier date.",
+      });
+      return;
+    }
     if (!effectivePaidById && !addForm.paidFromBank) {
       toast({
         variant: "destructive",
@@ -1185,6 +1197,18 @@ export default function Expenses() {
       toast({ variant: "destructive", title: "Recurring split expenses are not supported", description: "A recurring expense needs one category so Jamvi can update the correct monthly budget." });
       return;
     }
+    // An expense is a record of money already spent, so it cannot be dated
+    // ahead. The phone has refused this since it was written, and this form's
+    // sibling — recording contributions — bounds its own date the same way.
+    // Only the expense form here was unbounded.
+    if (editForm.date > today) {
+      toast({
+        variant: "destructive",
+        title: "Future date not allowed",
+        description: "This records actual spending — please use today or an earlier date.",
+      });
+      return;
+    }
     if (!editForm.paidById && !editForm.paidFromBank) {
       toast({
         variant: "destructive",
@@ -1380,11 +1404,15 @@ export default function Expenses() {
             <Input
               type="date"
               value={form.date}
+              
               onChange={(event) => form.setDate(event.target.value)}
               required
               disabled={!canManageExpenses}
               min={canManageExpenses ? undefined : today}
-              max={canManageExpenses ? undefined : today}
+              // A manager may still backdate, which is why min stays open for
+              // them. Nobody may date an expense ahead: it records money that
+              // has already gone.
+              max={today}
               aria-describedby={!canManageExpenses ? "normal-member-expense-date-help" : undefined}
               className="h-12 bg-card"
               data-testid="normal-expense-date"
@@ -1571,11 +1599,12 @@ export default function Expenses() {
         <Input
           type="date"
           value={form.date}
+          
           onChange={e => form.setDate(e.target.value)}
           required
           disabled={!canManageExpenses}
           min={canManageExpenses ? undefined : today}
-          max={canManageExpenses ? undefined : today}
+          max={today}
           aria-describedby={!canManageExpenses ? "member-expense-date-help" : undefined}
           className="h-12 bg-card"
         />
