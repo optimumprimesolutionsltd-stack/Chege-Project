@@ -46,6 +46,12 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
+  buildDirectSplits,
+  describeDirectSplitProblem,
+  directSplitProblem,
+  directSplitsFrom,
+} from "@/lib/expense-funding-splits";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -439,6 +445,18 @@ export default function Expenses() {
   const [newSourceName, setNewSourceName] = useState("");
   const [addDirectSourceIds, setAddDirectSourceIds] = useState<number[]>([]);
   const [addDirectSourceAmounts, setAddDirectSourceAmounts] = useState<Record<string, string>>({});
+  // The same two pieces of state for editing. Creating multi-source funding
+  // already worked here; editing it did not, so an expense split on the phone
+  // opened with its funding frozen.
+  const [editDirectSourceIds, setEditDirectSourceIds] = useState<number[]>([]);
+  const [editDirectSourceAmounts, setEditDirectSourceAmounts] = useState<Record<string, string>>({});
+  /** False when a stored portion has no saved source to represent it, which
+   *  keeps historical records on the preserve path rather than offering an
+   *  edit that cannot round-trip. */
+  const [editSplitsEditable, setEditSplitsEditable] = useState(false);
+  /** Nothing is rewritten unless the funding was actually touched, so opening
+   *  an expense to fix its description cannot disturb the money. */
+  const [editFundingDirty, setEditFundingDirty] = useState(false);
   const { data: addFormSources, refetch: refetchAddSources } = useIncomeSources(addForm.payerIds[0] ?? addForm.paidById);
   const { data: addPayerSources = {} } = useIncomeSourcesForUsers(addForm.payerIds);
   const { data: editFormSources } = useIncomeSources(editForm.paidById);
@@ -530,6 +548,11 @@ export default function Expenses() {
     editForm.setPaidFromBank(paidFromBank);
     editForm.setAccountId(expense.accountId ?? bankSplit?.accountId ?? null);
     setEditHasMultipleFundingSplits((expense.incomeSplits?.length ?? 0) > 1);
+    const storedDirect = directSplitsFrom(expense.incomeSplits);
+    setEditDirectSourceIds(storedDirect.sourceIds);
+    setEditDirectSourceAmounts(storedDirect.amounts);
+    setEditSplitsEditable(storedDirect.editable);
+    setEditFundingDirty(false);
     setEditHasBankFunding(hasBankFunding);
     editForm.setIsRecurring(expense.isRecurring);
     editForm.setRecurringMonthlyBudget(
@@ -1180,7 +1203,20 @@ export default function Expenses() {
       });
       return;
     }
-    if (!editForm.paidFromBank && !editHasMultipleFundingSplits && !editForm.incomeSourceId) {
+    // Edited portions have to add up before they replace what is stored.
+    const editingSplits = editSplitsEditable && !editForm.paidFromBank && editFundingDirty;
+    if (editingSplits) {
+      const problem = directSplitProblem({
+        total: amount,
+        sourceIds: editDirectSourceIds,
+        amounts: editDirectSourceAmounts,
+      });
+      if (problem) {
+        toast({ variant: "destructive", title: "Check the funding", description: describeDirectSplitProblem(problem) });
+        return;
+      }
+    }
+    if (!editForm.paidFromBank && !editHasMultipleFundingSplits && !editingSplits && !editForm.incomeSourceId) {
       toast({
         variant: "destructive",
         title: "Income source required",
@@ -1197,7 +1233,14 @@ export default function Expenses() {
         fromBank: true,
         accountId: editForm.accountId!,
       }]
-      : !editHasMultipleFundingSplits && editForm.incomeSourceId
+      : editingSplits
+        ? buildDirectSplits({
+          userId: editForm.paidById || null,
+          sourceIds: editDirectSourceIds,
+          amounts: editDirectSourceAmounts,
+          nameOf: (id) => editFormSources?.find((source) => source.id === id)?.name,
+        })
+        : !editHasMultipleFundingSplits && editForm.incomeSourceId
         ? [{
           userId: editForm.paidById,
           label: selectedSource?.name || "Household member",
@@ -1205,6 +1248,8 @@ export default function Expenses() {
           fromBank: false,
           incomeSourceId: editForm.incomeSourceId,
         }]
+        // Untouched funding, or portions with nothing to represent them: send
+        // no incomeSplits at all and the API keeps what it has.
         : undefined;
     try {
       if (editForm.isRecurring) {
@@ -1228,7 +1273,7 @@ export default function Expenses() {
           date: editForm.date,
           paidFromBank: editForm.paidFromBank,
           ...(editForm.paidFromBank || editHasBankFunding ? { accountId: editForm.accountId! } : {}),
-          ...(!editHasMultipleFundingSplits && editForm.incomeSourceId
+          ...(!editHasMultipleFundingSplits && !editingSplits && editForm.incomeSourceId
             ? { incomeSourceId: editForm.incomeSourceId }
             : {}),
           ...(fundingSplits ? { incomeSplits: fundingSplits } : {}),
@@ -1237,6 +1282,7 @@ export default function Expenses() {
       toast({ title: "Expense updated" });
       setEditingId(null);
       setEditHasBankFunding(false);
+      setEditFundingDirty(false);
       clearEditDeepLink();
       invalidate();
     } catch {
@@ -1287,6 +1333,20 @@ export default function Expenses() {
     submitLabel: string,
     mode: "add" | "edit",
   ) => {
+    // One set of controls, pointed at whichever form is on screen. The
+    // portions editor below was written for adding; editing needs the same
+    // thing, and duplicating it would guarantee the two drift.
+    const directSourceIds = mode === "add" ? addDirectSourceIds : editDirectSourceIds;
+    const setDirectSourceIds = mode === "add" ? setAddDirectSourceIds : setEditDirectSourceIds;
+    const directSourceAmounts = mode === "add" ? addDirectSourceAmounts : editDirectSourceAmounts;
+    const setDirectSourceAmounts = mode === "add" ? setAddDirectSourceAmounts : setEditDirectSourceAmounts;
+    // Editing portions is offered only when every stored one can be shown as a
+    // row; otherwise the old preserve-and-explain path still applies.
+    const canEditDirectSplits = mode === "edit" && editSplitsEditable && !form.paidFromBank;
+    const showDirectPortions =
+      (mode === "add" ? form.payerIds.length === 1 : canEditDirectSplits) && directSourceIds.length > 0;
+    const markFundingTouched = () => { if (mode === "edit") setEditFundingDirty(true); };
+
     const isNormalAdd = mode === "add" && !isAdvancedAdd;
     const normalSource = addFormSources?.find((source) => source.isMain) ?? addFormSources?.[0];
     const normalSourceUnavailable = isNormalAdd && addFormSources !== undefined && !normalSource;
@@ -1958,7 +2018,7 @@ export default function Expenses() {
                  )}
               </div>
             )}
-            {mode === "edit" && editHasMultipleFundingSplits && (
+            {mode === "edit" && editHasMultipleFundingSplits && !canEditDirectSplits && (
              <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-foreground" data-testid="expense-funding-summary-edit">
                <span className="font-semibold">Multiple saved funding portions</span>
                <span className="mt-1 block text-xs text-muted-foreground">The existing bank and direct portions will stay unchanged while you edit the expense details.</span>
@@ -2286,7 +2346,7 @@ export default function Expenses() {
                Financed by <span className="text-destructive">*</span>
              </label>
             <select
-              disabled={mode === "edit" && editHasMultipleFundingSplits}
+              disabled={mode === "edit" && editHasMultipleFundingSplits && !canEditDirectSplits}
               className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                value={mode === "add" && isPersonalBudget ? "" : (form.otherIncomeSourceLabel !== null ? "legacy" : (form.incomeSourceId?.toString() ?? ""))}
               onChange={e => {
@@ -2294,10 +2354,12 @@ export default function Expenses() {
                  const sourceId = value ? Number(value) : null;
                  form.setIncomeSourceId(sourceId);
                 form.setOtherIncomeSourceLabel(null);
-                  if (mode === "add" && form.payerIds.length === 1 && sourceId && !addDirectSourceIds.includes(sourceId)) {
+                  const canAddPortion = mode === "add" ? form.payerIds.length === 1 : canEditDirectSplits;
+                  if (canAddPortion && sourceId && !directSourceIds.includes(sourceId)) {
                    const key = String(sourceId);
-                     setAddDirectSourceAmounts((previous) => ({ ...previous, [key]: "" }));
-                   setAddDirectSourceIds((previous) => [...previous, sourceId]);
+                     markFundingTouched();
+                     setDirectSourceAmounts((previous) => ({ ...previous, [key]: "" }));
+                   setDirectSourceIds((previous) => [...previous, sourceId]);
                  }
                 if (mode === "add" && form.payerIds[0]) {
                   form.setPayerIncomeSourceIds(prev => ({
@@ -2308,7 +2370,7 @@ export default function Expenses() {
               }}
               required
             >
-               <option value="" disabled>{mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.length > 0 ? "Add another income source..." : "Select an income source..."}</option>
+               <option value="" disabled>{showDirectPortions ? "Add another income source..." : "Select an income source..."}</option>
               {mode === "edit" && form.otherIncomeSourceLabel !== null && (
                 <option value="legacy" disabled>
                   Historical source: {form.otherIncomeSourceLabel || "choose a saved source"}
@@ -2329,13 +2391,13 @@ export default function Expenses() {
                   Fully funded. Other income sources are unavailable until you lower an existing portion.
                 </p>
               )}
-              {mode === "add" && form.payerIds.length === 1 && addDirectSourceIds.length > 0 && (
+              {showDirectPortions && (
                 <div className="space-y-2" data-testid="expense-direct-funding-portions">
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     Enter each portion. Add another income source as many times as needed until the expense is fully funded.
                   </p>
-                  {addDirectSourceIds.map((sourceId) => {
-                    const source = addFormSources?.find((item) => item.id === sourceId);
+                  {directSourceIds.map((sourceId) => {
+                    const source = (mode === "add" ? addFormSources : editFormSources)?.find((item) => item.id === sourceId);
                     return (
                       <div key={sourceId} className="flex items-center gap-2 rounded-lg border border-border/60 bg-card p-2">
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{source?.name ?? "Income source"}</span>
@@ -2343,11 +2405,14 @@ export default function Expenses() {
                           type="number"
                           min="1"
                           step="1"
-                          value={addDirectSourceAmounts[String(sourceId)] ?? ""}
-                          onChange={(event) => setAddDirectSourceAmounts((previous) => ({
-                            ...previous,
-                            [String(sourceId)]: event.target.value,
-                          }))}
+                          value={directSourceAmounts[String(sourceId)] ?? ""}
+                          onChange={(event) => {
+                            markFundingTouched();
+                            setDirectSourceAmounts((previous) => ({
+                              ...previous,
+                              [String(sourceId)]: event.target.value,
+                            }));
+                          }}
                           placeholder="KES 0"
                           className="h-10 w-36 bg-card"
                           required
@@ -2357,8 +2422,9 @@ export default function Expenses() {
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            setAddDirectSourceIds((previous) => previous.filter((id) => id !== sourceId));
-                            setAddDirectSourceAmounts((previous) => {
+                            markFundingTouched();
+                            setDirectSourceIds((previous) => previous.filter((id) => id !== sourceId));
+                            setDirectSourceAmounts((previous) => {
                               const next = { ...previous };
                               delete next[String(sourceId)];
                               return next;
@@ -2403,9 +2469,9 @@ export default function Expenses() {
                   </span>
                </label>
              )}
-            {mode === "edit" && editHasMultipleFundingSplits && (
+            {mode === "edit" && editHasMultipleFundingSplits && !canEditDirectSplits && (
               <p className="text-xs text-muted-foreground">
-                This expense has multiple funding portions. They’ll be preserved while you edit the expense details here.
+                This expense has funding portions that predate saved income sources, so they’ll be preserved unchanged while you edit the details here.
               </p>
             )}
             {mode === "edit" && form.otherIncomeSourceLabel !== null && (
