@@ -208,6 +208,28 @@ export default function Subscription() {
             ))}
           </div>
 
+          {/* Safaricom's own mark, from their brand toolkit. A self-contained
+              lockup - green panel, white wordmark - so it sits on the card
+              surface rather than on the green pay button, where it would be
+              green on green. */}
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <img
+              // Production serves the app under /app/, so a root-absolute path
+              // would 404 there while working in dev. BASE_URL is how the rest
+              // of the app reaches public assets; see components/brand-logo.tsx.
+              src={`${import.meta.env.BASE_URL}brands/mpesa.png`}
+              alt="M-PESA"
+              width={78}
+              height={28}
+              className="h-7 w-auto shrink-0"
+              loading="lazy"
+              decoding="async"
+            />
+            <p className="min-w-[10rem] flex-1 text-xs text-muted-foreground">
+              Payments are taken through M-PESA.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <label htmlFor="mpesa-phone" className="text-sm font-semibold text-foreground">
               M-Pesa number
