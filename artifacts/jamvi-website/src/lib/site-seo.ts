@@ -53,7 +53,7 @@ const PAGES: Record<string, SeoEntry> = {
   "/guides": {
     title: "Guides: Keeping Group Money Clear",
     description:
-      "Practical guides on chama record-keeping, tracking who has paid, and splitting household bills without keeping score - useful whether or not you use Jamvi.",
+      "Practical guides on chama record-keeping, tracking who has paid and splitting household bills, plus straight answers on what Jamvi costs and how M-Pesa payments work.",
   },
   "/terms": {
     title: "Terms of Service",

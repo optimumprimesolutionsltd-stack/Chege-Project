@@ -27,7 +27,8 @@ export default function Guides() {
             </h1>
             <p className="max-w-2xl text-lg leading-relaxed text-foreground/70">
               Practical notes on the parts that cause arguments — chama records, who has paid,
-              splitting the bills at home. Useful whether or not you ever use Jamvi.
+              splitting the bills at home — plus straight answers on how Jamvi itself works, what
+              it costs and how M-Pesa payments go through.
             </p>
           </motion.div>
         </div>
