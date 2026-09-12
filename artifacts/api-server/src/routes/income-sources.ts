@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { groupMembershipsTable, incomeSourcesTable } from "@workspace/db";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
-import { getActiveGroupId, isGroupManager, requireMemberSelfAttribution } from "../lib/activeGroup";
+import { getActiveGroupId, isGroupManager, requireMemberSelfAttribution, requireTransactionEligibility } from "../lib/activeGroup";
 import { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
 export { dedupeIncomeSources, normalizeIncomeSourceName } from "./income-source-utils";
 
@@ -48,6 +48,7 @@ router.get("/income-sources", async (req, res) => {
 router.post("/income-sources", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
+  if (!await requireTransactionEligibility(req, res)) return;
 
   const schema = z.object({
     userId: z.string().min(1),

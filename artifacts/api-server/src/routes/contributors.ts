@@ -22,7 +22,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
-import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupManager, requireTransactionEligibility } from "../lib/activeGroup";
 import { buildContributionGrid, gridMonths, type ContributionGrid, type GridEntry } from "../lib/contribution-grid";
 import { createContributionReportPdf } from "../lib/contribution-report-pdf";
 import { createContributionStatementPdf } from "../lib/contribution-statement-pdf";
@@ -197,6 +197,7 @@ router.post("/contributors", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
 
   const parsed = newContributor.safeParse(req.body);
   if (!parsed.success) {

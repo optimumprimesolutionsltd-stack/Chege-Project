@@ -8,7 +8,7 @@ import {
   ApplyBudgetCategoryRecommendationsResponse,
   GetBudgetCategoryRecommendationsResponse,
 } from "@workspace/api-zod";
-import { getActiveGroupId, requireGroupManager } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupManager, requireTransactionEligibility } from "../lib/activeGroup";
 import { categoryPackChildren, categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind, subcategorySuggestions } from "../lib/categoryPacks";
 
 const router = Router();
@@ -168,6 +168,7 @@ const categoryMigrationSchema = z.object({
 router.post("/budget-categories/migration/apply", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null || !requireGroupManager(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
   const parsed = categoryMigrationSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid category migration request." }); return; }
   await db.transaction(async (tx) => {
@@ -195,6 +196,7 @@ router.post("/budget-categories/recommendations/apply", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
   const parsed = ApplyBudgetCategoryRecommendationsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid recommendation request." });
@@ -299,6 +301,7 @@ router.post("/budget-categories/subcategory-suggestions/apply", async (req, res)
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
 
   const parsed = SubcategoryMovesBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
@@ -455,6 +458,7 @@ router.post("/budget-categories", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
   const parsed = categorySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
   if (isReservedBudgetCategoryName(parsed.data.name)) {
