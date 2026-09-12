@@ -26,7 +26,18 @@
     <meta name="twitter:description" content="Track chama contributions, split household bills and see who has paid - in one shared record everybody trusts. KES 100 a month per member; groups of any size cost nothing extra. Free for 30 days." />
     <meta name="twitter:image" content="https://jamvi.co.ke/branding/jamvi-og.png" />
     <link rel="canonical" href="https://jamvi.co.ke/" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- favicon.ico has to exist as a bare path whatever is declared here: it is
+         where Google's favicon fetcher and a lot of older clients look first, and
+         it is the icon shown beside the result on mobile search. There is no SVG
+         mark for Jamvi, only PNGs, so the .ico carries 16, 32 and 48 and the PNGs
+         cover the larger sizes. -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Sampled from the mark itself: its two brand colours are gold #FDBB0A
+         and this navy. Navy is the one that works as browser chrome; gold across
+         the whole bar would not. -->
+    <meta name="theme-color" content="#011C4E" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
