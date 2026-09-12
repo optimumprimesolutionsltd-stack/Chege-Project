@@ -488,6 +488,16 @@ export default function AddExpenseSheet() {
     }
   }, [canManageShared, paidFromBank, payerIds.length, selectablePayers]);
 
+  // The one case where tapping a payer pill can do nothing at all.
+  //
+  // A budget with a single possible payer auto-selects them (the effect
+  // above). Deselecting changes payerIds.length, which that effect depends
+  // on, so it runs again and puts them straight back. The tap worked; it was
+  // undone before it could be seen, and the pill read as broken. There is
+  // genuinely no other direct payer to choose - the alternative is the bank -
+  // so the pill stops pretending to be a toggle and the reason is stated.
+  const soleDirectPayer = canManageShared && !paidFromBank && selectablePayers.length === 1;
+
   const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];
 
   // Keep the values hidden by Normal mode deterministic rather than relying on
@@ -1788,11 +1798,16 @@ export default function AddExpenseSheet() {
                 return (
                   <Pressable
                     key={m.userId}
-                    disabled={getExpenseFundingControlState({
+                    disabled={soleDirectPayer || getExpenseFundingControlState({
                       paidFromBank,
                       hasPersonalFunding: payerIds.length > 0,
                       allowMixedFunding,
                     }).personalPayersDisabled}
+                    accessibilityHint={
+                      soleDirectPayer
+                        ? 'You are the only person in this budget, so this expense is recorded as paid by you.'
+                        : undefined
+                    }
                     onPress={() => {
                       if (!canManageShared) return;
                       if (isEditMode) setFundingDirty(true);
@@ -1844,6 +1859,11 @@ export default function AddExpenseSheet() {
                 );
               })}
             </View>
+            {soleDirectPayer && (
+              <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 6 }]}>
+                You are the only person in this budget, so this is paid by you. Choose Bank account if the money came from one.
+              </Text>
+            )}
             {paidFromBank && (
               <View style={{ marginTop: 10, gap: 7 }}>
                 <Text style={[styles.hintText, { color: colors.mutedForeground }]}>BANK ACCOUNT <Text style={{ color: '#ef4444' }}>*</Text></Text>
