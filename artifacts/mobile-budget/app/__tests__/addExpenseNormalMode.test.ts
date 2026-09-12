@@ -17,7 +17,7 @@ describe('mobile normal expense mode', () => {
 
   it('synchronizes Normal mode hidden fields without overwriting the chosen date', () => {
     const synchronization = source.slice(
-      source.indexOf('// Keep the values hidden by Normal mode deterministic'),
+      source.indexOf('// Keep the values hidden by Quick mode deterministic'),
       source.indexOf('const handleCreateIncomeSource'),
     );
 
@@ -40,8 +40,8 @@ describe('mobile normal expense mode', () => {
     expect(source).toContain('testID="normal-income-source-blocker"');
     // "Advanced", not "Detailed": the two clients named the same mode
     // differently, which is what this pass is putting right.
-    expect(source).toContain('Use Advanced to add an income source');
-    expect(source).not.toContain('Switch to Detailed');
+    expect(source).toContain('Use Detailed to add an income source');
+    expect(source).not.toContain('Use Advanced');
     expect(rules).toContain("'Income source required', 'Add a saved income source in Detailed before you can save this expense.'");
     // Only Normal mode demands it, and never while editing.
     expect(rules).toContain('if (!input.isAdvanced && !input.isEditMode) {');

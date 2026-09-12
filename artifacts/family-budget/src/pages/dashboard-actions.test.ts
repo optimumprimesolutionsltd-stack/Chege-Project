@@ -120,6 +120,6 @@ describe("dashboard quick actions", () => {
     expect(expenseFormSource).toContain('setIsRecurring(false);');
     expect(expenseFormSource).toContain('setPaidFromBank(false);');
     expect(expenseFormSource).toContain('No income source is available for quick log.');
-    expect(expenseFormSource).toContain('Switch to Advanced');
+    expect(expenseFormSource).toContain('Switch to Detailed');
   });
 });

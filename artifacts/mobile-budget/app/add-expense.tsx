@@ -500,7 +500,7 @@ export default function AddExpenseSheet() {
 
   const normalIncomeSource = incomeSources.find((source) => source.isMain) ?? incomeSources[0];
 
-  // Keep the values hidden by Normal mode deterministic rather than relying on
+  // Keep the values hidden by Quick mode deterministic rather than relying on
   // stale selections left by a previous Advanced-mode visit.
   useEffect(() => {
     if (isAdvanced || isEditMode || !user?.id) return;
@@ -1202,20 +1202,20 @@ export default function AddExpenseSheet() {
               style={[styles.modeButton, { backgroundColor: !isAdvanced ? colors.primary : colors.muted, borderColor: !isAdvanced ? colors.primary : colors.border }]}
               testID="expense-mode-normal"
             >
-              <Text style={[styles.modeButtonText, { color: !isAdvanced ? '#fff' : colors.foreground }]}>Normal</Text>
+              <Text style={[styles.modeButtonText, { color: !isAdvanced ? '#fff' : colors.foreground }]}>Quick</Text>
             </Pressable>
             <Pressable
               onPress={() => setIsAdvanced(true)}
               style={[styles.modeButton, { backgroundColor: isAdvanced ? colors.primary : colors.muted, borderColor: isAdvanced ? colors.primary : colors.border }]}
               testID="expense-mode-advanced"
             >
-              <Text style={[styles.modeButtonText, { color: isAdvanced ? '#fff' : colors.foreground }]}>Advanced</Text>
+              <Text style={[styles.modeButtonText, { color: isAdvanced ? '#fff' : colors.foreground }]}>Detailed</Text>
             </Pressable>
           </View>
           <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>
             {isAdvanced
-              ? 'Advanced: split one payment across categories or people, backdate it, or make it recurring.'
-              : 'Normal mode keeps everyday expenses quick to record.'}
+              ? 'Detailed: split one payment across categories or people, backdate it, or make it recurring.'
+              : 'Quick: one category, paid by you, today. Enough for most expenses.'}
           </Text>
         </View>
       )}
@@ -1320,7 +1320,7 @@ export default function AddExpenseSheet() {
                 <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>
                    {isAdvanced
                      ? (canManageCategories ? 'No categories yet. You can create one below or save without a category.' : 'No categories are available. You can save without one or ask a budget manager to add one.')
-                     : 'No categories are available. Use Advanced to create one, or ask a budget manager to add one.'}
+                     : 'No categories are available. Use Detailed to create one, or ask a budget manager to add one.'}
                 </Text>
               )}
               {categoryList.map((cat: string) => (
@@ -1686,7 +1686,7 @@ export default function AddExpenseSheet() {
               <Feather name="check-circle" size={16} color={colors.primary} />
               <View style={{ flex: 1 }}>
                 {/* Mirrors the web form's "Jamvi will record this as:" block.
-                    Normal mode decides several things on your behalf - who
+                    Quick mode decides several things on your behalf - who
                     paid, that no bank account was involved, that it does not
                     repeat - and the web states each of them. Mobile stated
                     only the date, category and source, so the same mode
@@ -1701,13 +1701,13 @@ export default function AddExpenseSheet() {
                 <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
                   {normalIncomeSource
                     ? `• funded in full from ${normalIncomeSource.name}${normalIncomeSource.isMain ? ' (your main income source)' : ''}.`
-                    : '• funded from your saved income source once you select Advanced.'}
+                    : '• funded from your saved income source once you select Detailed.'}
                 </Text>
                 {!sourcesLoading && !normalIncomeSource && (
                   <>
                     <Text style={[styles.normalBlockerText, { color: colors.destructive }]}>Add an income source before recording this expense.</Text>
                     <Pressable onPress={() => setIsAdvanced(true)} testID="normal-income-source-blocker">
-                      <Text style={[styles.normalAdvancedLink, { color: colors.primary }]}>Use Advanced to add an income source</Text>
+                      <Text style={[styles.normalAdvancedLink, { color: colors.primary }]}>Use Detailed to add an income source</Text>
                     </Pressable>
                   </>
                 )}

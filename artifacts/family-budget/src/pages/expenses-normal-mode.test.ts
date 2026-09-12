@@ -23,8 +23,8 @@ describe("Normal expense entry mode", () => {
   it("shows assumptions and blocks Normal saves without a source while offering Advanced", () => {
     expect(expensesSource).toContain('data-testid="normal-expense-assumptions"');
     expect(expensesSource).toContain('data-testid="normal-expense-source-blocker"');
-    expect(expensesSource).toContain("Normal mode needs a saved income source");
+    expect(expensesSource).toContain("Quick mode needs a saved income source");
     expect(expensesSource).toContain('data-testid="expense-advanced-mode"');
-    expect(expensesSource).toContain("Normal mode records the full expense in one category.");
+    expect(expensesSource).toContain("Quick mode records the full expense in one category.");
   });
 });
