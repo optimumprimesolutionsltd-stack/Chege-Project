@@ -592,7 +592,11 @@ async function contributorForMember(
   if (existing) return existing.id;
 
   const [user] = await tx
-    .select({ firstName: usersTable.firstName, lastName: usersTable.lastName })
+    .select({
+      preferredName: usersTable.preferredName,
+      firstName: usersTable.firstName,
+      lastName: usersTable.lastName,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
@@ -602,7 +606,7 @@ async function contributorForMember(
   // and unlike a typed name this one nobody chose to be ambiguous. A deposit
   // must never fail for want of a surname, so an account carrying only one
   // name still gets a row; the sheet marks it for the treasurer to complete.
-  const ledgerName = memberLedgerName(user?.firstName, user?.lastName);
+  const ledgerName = memberLedgerName(user?.preferredName, user?.firstName, user?.lastName);
 
   const [created] = await tx
     .insert(groupContributorsTable)

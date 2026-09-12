@@ -480,7 +480,13 @@ router.put('/auth/display-name', async (req: Request, res: Response) => {
       // Mirror the chosen name into firstName so household activity and member
       // lists use the same friendly name without a separate lookup strategy.
       firstName: parsed.data.name,
-      lastName: null,
+      // lastName is deliberately left alone. It used to be nulled here, which
+      // threw away the surname the sign-in provider supplied - permanently,
+      // on the first time anybody edited their display name. Nothing shows it
+      // while a preferred name exists (authUserPayload suppresses it), so
+      // keeping it costs nothing and it is the only surname we hold for
+      // somebody who chose to be known by one word. The contribution ledger
+      // falls back to it rather than recording an unidentifiable "John".
       updatedAt: new Date(),
     })
     .where(eq(usersTable.id, req.user.id))
