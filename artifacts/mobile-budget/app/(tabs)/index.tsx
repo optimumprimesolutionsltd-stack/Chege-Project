@@ -925,7 +925,23 @@ const styles = StyleSheet.create({
   headerTopPiece: { paddingBottom: 0 },
   // Solid mid-gradient colour: the shade both pieces meet at, so the card
   // looks identical resting in the header and stuck to the top.
-  workspaceIdentitySticky: { backgroundColor: '#05255E', paddingHorizontal: 20, paddingTop: 16 },
+  workspaceIdentitySticky: {
+    backgroundColor: '#05255E',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    // An edge, because the band holds still while the gradient behind it
+    // scrolls. Matching the colour where the two gradient pieces meet keeps
+    // the join invisible while the card is resting, but once it is pinned the
+    // tone beneath it has moved on and content passes under a line that is
+    // not drawn - which reads as clipped rather than deliberate.
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.10)',
+    shadowColor: '#000',
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
   headerRest: { paddingHorizontal: 20, paddingBottom: 20 },
   homeStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 9 },
   homeStatusText: { fontSize: 10, color: '#FDBB0A', fontFamily: 'Inter_700Bold', letterSpacing: 1.1 },

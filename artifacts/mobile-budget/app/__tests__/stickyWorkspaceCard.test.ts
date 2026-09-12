@@ -44,4 +44,16 @@ describe('the workspace card on Home', () => {
   it('does not let the top piece add space before the band', () => {
     expect(source).toContain('headerTopPiece: { paddingBottom: 0 }');
   });
+
+  it('draws an edge under the band, because only the band holds still', () => {
+    // Matching the gradient colour keeps the join invisible while the card is
+    // resting. Once pinned, the tone behind it has scrolled on and content
+    // passes under an undrawn line, which reads as clipped rather than
+    // deliberate. Checked on a rendered page, not by reading.
+    expect(source).toContain('borderBottomWidth: StyleSheet.hairlineWidth');
+    expect(source).toContain("borderBottomColor: 'rgba(255,255,255,0.10)'");
+    // Android ignores shadow* and needs elevation; iOS the reverse.
+    expect(source).toContain('elevation: 4');
+    expect(source).toContain('shadowOpacity: 0.45');
+  });
 });
