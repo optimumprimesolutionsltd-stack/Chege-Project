@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatKes } from "@/lib/utils";
-import { ChevronDown, ChevronUp, Loader2, TableProperties, UserX } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, TableProperties, UserPlus, UserX } from "lucide-react";
 import { useCollapsed } from "@/hooks/use-collapsed";
 import { isSingleName } from "@/lib/contributor-name";
 import {
@@ -156,9 +156,20 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
           </p>
         ) : rows.length === 0 ? (
           <>
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No contributors yet. Add people by name, or record a contribution, and they appear here.
-            </p>
+            <div className="flex flex-col items-center gap-3 py-6">
+              <p className="text-center text-sm text-muted-foreground">
+                No contributors yet. Add the people who contribute — they do not need the app, and each needs both names.
+              </p>
+              {/* The footer is hidden until the editor is open, so without this
+                  the only way in was the small header control, which the copy
+                  did not point at. */}
+              {canManage && !editor.editing ? (
+                <Button size="sm" onClick={editor.open} data-testid="contributions-add-first-people">
+                  <UserPlus className="mr-1 h-4 w-4" aria-hidden="true" />
+                  Add people
+                </Button>
+              ) : null}
+            </div>
             <ContributorEditorFooter editor={editor} />
           </>
         ) : (
