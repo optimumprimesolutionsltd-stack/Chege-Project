@@ -100,7 +100,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   // But only for names not seen before: a background refetch of the list
   // (window focus, staleness, or the refetch right after adding a name) hands
   // back a new array, and blindly re-ticking everyone would silently undo a
-  // deselection the treasurer just made — worst in Advanced mode, where they
+  // deselection the treasurer just made — worst in Per person mode, where they
   // linger typing amounts.
   const seenContributorIds = useRef<Set<number>>(new Set());
   useEffect(() => {
@@ -310,8 +310,8 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
             </p>
             <p className="mt-1 text-xs text-muted-foreground" data-testid="contribution-mode-hint">
               {mode === "simple"
-                ? "Simple: everyone paid the same amount — type it once below."
-                : "Advanced: each row is filled with the expected amount. Change the ones that differ, or clear a row for someone who paid nothing."}
+                ? "Same amount: everyone paid the same — type it once below. Switching to Per person fills every row with it."
+                : "Per person: each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing."}
             </p>
           </div>
           <div className="flex shrink-0 gap-1" role="group" aria-label="Entry mode">
@@ -323,7 +323,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
                 onClick={() => setMode(option)}
                 data-testid={`contribution-mode-${option}`}
               >
-                {option === "simple" ? "Simple" : "Advanced"}
+                {option === "simple" ? "Same amount" : "Per person"}
               </Button>
             ))}
           </div>

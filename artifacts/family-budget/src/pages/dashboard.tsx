@@ -628,7 +628,7 @@ function IncomeForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {/* Simple keeps a deposit to the four things that always matter. The
+      {/* Quick keeps a deposit to the four things that always matter. The
           state existed here already and did nothing; expenses have had this
           for a while and deposits were left behind. */}
       <div className="flex gap-1" role="group" aria-label="Entry mode">
@@ -645,7 +645,7 @@ function IncomeForm({
             }`}
             data-testid={`deposit-mode-${value}`}
           >
-            {value === "simple" ? "Simple" : "Advanced"}
+            {value === "simple" ? "Quick" : "Detailed"}
           </button>
         ))}
       </div>
@@ -780,7 +780,7 @@ function IncomeForm({
           <p className="text-xs text-muted-foreground">Members can record deposits for today only.</p>
         )}
       </div>
-      {/* Income source. Attribution detail, so it belongs in Advanced - most
+      {/* Income source. Attribution detail, so it belongs in Detailed - most
           deposits are recorded without anybody choosing one. */}
       {formMode === "advanced" && incomeSources && incomeSources.length > 0 && (
         <div className="space-y-1.5">
@@ -888,7 +888,7 @@ function ExpenseForm({
 
   // Simple quick log keeps one funding path: a direct expense paid by the
   // current member from their primary saved income source. The date remains
-  // editable so Simple and Advanced apply the same date semantics.
+  // editable so Quick and Detailed apply the same date semantics.
   useEffect(() => {
     if (formMode !== "simple") return;
     setIsRecurring(false);
@@ -1234,7 +1234,7 @@ function ExpenseForm({
       toast({
         variant: "destructive",
         title: "Income source required",
-        description: "Add an income source in Budget, or switch to Advanced to choose another funding method.",
+        description: "Add an income source in Budget, or switch to Detailed to choose another funding method.",
       });
       return;
     }
@@ -1437,14 +1437,14 @@ function ExpenseForm({
       <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 p-2">
         <div>
           <p className="text-sm font-bold text-foreground">Quick log mode</p>
-          <p className="text-xs text-muted-foreground">Simple keeps the essentials to hand. Use Advanced for splits, bank funding, notes, or recurring expenses.</p>
+          <p className="text-xs text-muted-foreground">Quick keeps the essentials to hand. Use Detailed for splits, bank funding, notes, or recurring expenses.</p>
         </div>
         <div
           role="group"
           aria-label="Quick log mode"
           className="grid shrink-0 grid-cols-2 gap-1 rounded-lg border border-border/60 bg-card p-1"
         >
-          {([["simple", "Simple"], ["advanced", "Advanced"]] as const).map(([value, label]) => (
+          {([["simple", "Quick"], ["advanced", "Detailed"]] as const).map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -1535,7 +1535,7 @@ function ExpenseForm({
             <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
               <p className="text-sm font-semibold text-destructive">No income source is available for quick log.</p>
               <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => setFormMode("advanced")}>
-                Switch to Advanced
+                Switch to Detailed
               </Button>
             </div>
           )}

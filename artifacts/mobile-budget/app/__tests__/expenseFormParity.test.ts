@@ -18,22 +18,33 @@ const mobile = readFileSync('app/add-expense.tsx', 'utf8');
 const web = readFileSync('../family-budget/src/pages/expenses.tsx', 'utf8');
 
 describe('the mode is called the same thing on both', () => {
-  it('uses Normal and Advanced, not Quick and Detailed', () => {
-    expect(mobile).toContain('>Normal</Text>');
-    expect(mobile).toContain('>Advanced</Text>');
-    expect(mobile).not.toContain('>Quick</Text>');
-    expect(mobile).not.toContain('>Detailed</Text>');
+  it('uses Quick and Detailed, the plainer pair, on both', () => {
+    expect(mobile).toContain('>Quick</Text>');
+    expect(mobile).toContain('>Detailed</Text>');
+    // The web had two more names for the same pair: "Normal/Advanced" on the
+    // expenses page and "Simple/Advanced" in the dashboard quick log. Both
+    // are checked, because unifying only one of them leaves the drift.
+    expect(web).toContain('Quick mode');
+    expect(web).toContain('Use Detailed');
+    const dashboard = readFileSync('../family-budget/src/pages/dashboard.tsx', 'utf8');
+    expect(dashboard).toContain('["simple", "Quick"]');
+    expect(dashboard).toContain('["advanced", "Detailed"]');
+    expect(dashboard).not.toContain('"Simple"');
   });
 
   it('matches the word the web uses for the same control', () => {
-    expect(web).toContain('Use Advanced');
-    expect(mobile).toContain('Use Advanced');
+    expect(web).toContain('Use Detailed');
+    expect(mobile).toContain('Use Detailed');
+    expect(web).not.toContain('Use Advanced');
+    expect(mobile).not.toContain('Use Advanced');
   });
 
-  it('carries the web’s description of Normal mode', () => {
-    const line = 'Normal mode keeps everyday expenses quick to record.';
-    expect(web).toContain(line);
-    expect(mobile).toContain(line);
+  it('keeps each surface’s own description rather than flattening them', () => {
+    // Renaming the mode should not cost the web the detail it already had:
+    // its hint names splits, bank funding, notes and recurrence.
+    const dashboard = readFileSync('../family-budget/src/pages/dashboard.tsx', 'utf8');
+    expect(dashboard).toContain('Use Detailed for splits, bank funding, notes, or recurring expenses.');
+    expect(mobile).toContain('Quick: one category, paid by you, today.');
   });
 });
 
@@ -47,7 +58,7 @@ describe('Normal mode states what it decided for you', () => {
     ['who paid, and that no bank or repeat is involved', 'paid by you, not from a bank account, and not recurring'],
     ['that the whole amount goes to one category', 'the full whole-KES amount in'],
     ['which income source funded it', 'funded in full from'],
-    ['what to do when there is no income source yet', 'funded from your saved income source once you select Advanced'],
+    ['what to do when there is no income source yet', 'funded from your saved income source once you select Detailed'],
   ])('states %s', (_label, phrase) => {
     // Mobile used to state only the date, category and source, so the same
     // mode promised less on the smaller screen.
@@ -59,5 +70,49 @@ describe('Normal mode states what it decided for you', () => {
     const blocker = 'Add an income source before recording this expense.';
     expect(web).toContain(blocker);
     expect(mobile).toContain(blocker);
+  });
+});
+
+/**
+ * The contributions forms, which had drifted the other way.
+ *
+ * Here it was the web that was thinner: its modes were called "Simple" and
+ * "Advanced", which describe how hard they are rather than what they do,
+ * while the phone called them "Same amount" and "Per person". But the web
+ * carried a line the phone did not - that the list arrives fully ticked - and
+ * that is the one thing a treasurer has to act on.
+ *
+ * Parity here meant taking the better half of each rather than picking a
+ * winner, so both are pinned.
+ */
+describe('the contributions forms', () => {
+  const webContrib = readFileSync('../family-budget/src/components/record-contributions.tsx', 'utf8');
+  const mobileContrib = readFileSync('app/record-contributions.tsx', 'utf8');
+
+  it('names the modes for what they do, on both', () => {
+    for (const source of [webContrib, mobileContrib]) {
+      expect(source).toContain('Same amount');
+      expect(source).toContain('Per person');
+    }
+    // "Simple"/"Advanced" said nothing about what either mode did.
+    expect(webContrib).not.toContain('"Simple" : "Advanced"');
+  });
+
+  it('keeps the phone’s explanation of what switching does', () => {
+    const clause = 'Switching to Per person fills every row with it.';
+    expect(mobileContrib).toContain(clause);
+    expect(webContrib).toContain(clause);
+  });
+
+  it('keeps the web’s line about everyone starting ticked', () => {
+    const line = 'Everyone is ticked to start. Untick anyone who has not paid.';
+    expect(webContrib).toContain(line);
+    expect(mobileContrib).toContain(line);
+  });
+
+  it('explains the per-person mode the same way on both', () => {
+    const clause = 'clear a row for someone who paid nothing';
+    expect(webContrib).toContain(clause);
+    expect(mobileContrib).toContain(clause);
   });
 });

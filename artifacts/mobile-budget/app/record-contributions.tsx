@@ -392,10 +392,16 @@ export default function RecordContributionsScreen() {
             );
           })}
         </View>
+        {/* The web says this above the modes and mobile did not, which left
+            the phone quieter about the one thing a treasurer has to act on:
+            the list arrives fully ticked, so the work is unticking. */}
+        <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>
+          Everyone is ticked to start. Untick anyone who has not paid.
+        </Text>
         <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>
           {mode === 'simple'
-            ? 'Everyone paid the same amount — type it once below. Switching to Per person fills every row with it.'
-            : 'Each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing.'}
+            ? 'Same amount: everyone paid the same — type it once below. Switching to Per person fills every row with it.'
+            : 'Per person: each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing.'}
         </Text>
 
         {mode === 'simple' && (

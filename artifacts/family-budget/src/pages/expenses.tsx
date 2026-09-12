@@ -445,7 +445,7 @@ export default function Expenses() {
 
   const normalAddSource = addFormSources?.find((source) => source.isMain) ?? addFormSources?.[0];
 
-  // Keep all fields that Normal mode deliberately hides valid and explicit.
+  // Keep all fields that Quick mode deliberately hides valid and explicit.
   // This also means the regular create path retains its existing validations.
   useEffect(() => {
     if (!isAdding || isAdvancedAdd || !user?.id) return;
@@ -889,7 +889,7 @@ export default function Expenses() {
       toast({
         variant: "destructive",
         title: "Choose a category",
-        description: "Normal mode records the full expense in one category.",
+        description: "Quick mode records the full expense in one category.",
       });
       return;
     }
@@ -1296,10 +1296,10 @@ export default function Expenses() {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-4">
             <div>
               <h3 className="text-lg font-bold font-display text-foreground">{title}</h3>
-              <p className="text-xs text-muted-foreground">Normal mode keeps everyday expenses quick to record.</p>
+              <p className="text-xs text-muted-foreground">Quick mode keeps everyday expenses fast to record.</p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={() => setIsAdvancedAdd(true)} data-testid="expense-advanced-mode">
-              Use Advanced
+              Use Detailed
             </Button>
           </div>
 
@@ -1357,16 +1357,16 @@ export default function Expenses() {
             <ul className="mt-1 list-disc space-y-1 pl-5 text-xs leading-relaxed text-muted-foreground">
               <li>{form.date === today ? "today’s expense" : `an expense dated ${formatDate(form.date)}`}, paid by you, not from a bank account, and not recurring;</li>
               <li>the full whole-KES amount in {form.category ? `"${form.category}"` : "the category you select"};</li>
-              <li>{normalSource ? `funded in full from ${normalSource.name}${normalSource.isMain ? " (your main income source)" : ""}.` : "funded from your saved income source once you select Advanced."}</li>
+              <li>{normalSource ? `funded in full from ${normalSource.name}${normalSource.isMain ? " (your main income source)" : ""}.` : "funded from your saved income source once you select Detailed."}</li>
             </ul>
           </div>
 
           {normalSourceUnavailable && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" role="alert" data-testid="normal-expense-source-blocker">
               <p className="font-bold">Add an income source before recording this expense.</p>
-              <p className="mt-1 text-xs">Normal mode needs a saved income source to show where the money came from. Use Advanced to add one or choose another funding option.</p>
+              <p className="mt-1 text-xs">Quick mode needs a saved income source to show where the money came from. Use Detailed to add one or choose another funding option.</p>
               <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => setIsAdvancedAdd(true)}>
-                Use Advanced
+                Use Detailed
               </Button>
             </div>
           )}
@@ -1489,7 +1489,7 @@ export default function Expenses() {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-4">
          <div>
            <h3 className="text-lg sm:text-xl font-bold font-display text-foreground">{title}</h3>
-           {mode === "add" && <button type="button" onClick={() => setIsAdvancedAdd(false)} className="mt-1 text-xs font-semibold text-primary underline underline-offset-2">Switch to Normal mode</button>}
+           {mode === "add" && <button type="button" onClick={() => setIsAdvancedAdd(false)} className="mt-1 text-xs font-semibold text-primary underline underline-offset-2">Switch to Quick mode</button>}
          </div>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
