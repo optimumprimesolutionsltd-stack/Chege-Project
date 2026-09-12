@@ -7,6 +7,14 @@ const mobileSource = readFileSync(
   new URL("../../../mobile-budget/app/add-expense.tsx", import.meta.url),
   "utf8",
 );
+// The mobile save rules moved out of the screen into a pure module, where they
+// are tested by running them (mobile-budget/lib/__tests__/expenseValidation.test.ts)
+// rather than by matching text. The wording they produce is still pinned here,
+// because these messages have to stay in step with the web wording above.
+const mobileRules = readFileSync(
+  new URL("../../../mobile-budget/lib/expenseValidation.ts", import.meta.url),
+  "utf8",
+);
 const budgetSource = readFileSync(new URL("./budget.tsx", import.meta.url), "utf8");
 const mobileBudgetSource = readFileSync(
   new URL("../../../mobile-budget/app/(tabs)/budget.tsx", import.meta.url),
@@ -47,7 +55,7 @@ describe("expense funding amount entry", () => {
 
   it("requires selected mobile sources to account for the full expense", () => {
     expect(mobileSource).toContain("selectedSources.length > 0");
-    expect(mobileSource).toContain("'Add another funding source'");
+    expect(mobileRules).toContain("'Add another funding source'");
     expect(mobileSource).toContain("Enter each amount manually. This prevents a mistaken automatic allocation.");
     expect(mobileSource).toContain("TYPE THE AMOUNT FROM THIS ACCOUNT TO CONFIRM");
     expect(mobileSource).toContain("Enter the amount from each selected source manually");
@@ -56,7 +64,7 @@ describe("expense funding amount entry", () => {
     expect(mobileSource).toContain('addIncomeSourceToSelection({');
     expect(mobileSource).toContain('newSourceId: key');
     expect(mobileSource).not.toContain("addFundingSourceWithRemainder");
-    expect(mobileSource).toContain('is still unfunded. Select another income source.');
+    expect(mobileRules).toContain('is still unfunded. Select another income source.');
     expect(mobileSource).not.toContain("if (previous.length >= 2)");
   });
 
