@@ -21,6 +21,12 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/lib/auth';
 import {
+  collectExpenseProblems,
+  describeProblems,
+  normalizeAllocations,
+  parseExpenseAmount,
+} from '@/lib/expenseValidation';
+import {
   useCreateExpense,
   useUpdateExpense,
   useDeleteExpense,
@@ -843,29 +849,51 @@ export default function AddExpenseSheet() {
       handleRemove();
       return;
     }
-    const parsed = parseFloat(amount.replace(/,/g, ''));
-    if (!parsed || parsed <= 0) {
-      Alert.alert('Amount required', 'Please enter a valid amount.');
+    // Everything wrong with the form, worked out in one pass. This used to be
+    // two dozen sequential early returns, each raising its own alert, so a
+    // half-filled form was a queue: fix one thing, tap Save, be told the next.
+    const parsed = parseExpenseAmount(amount);
+    const normalizedAllocations = normalizeAllocations(categoryAllocations);
+    const effectivePayerIds = canManageShared ? payerIds : user?.id ? [user.id] : [];
+    const effectivePaidFromBank = canManageShared ? paidFromBank : false;
+    const effectiveIsRecurring = canManageShared ? isRecurring : false;
+    const recurringBudget = Number(recurringMonthlyBudget);
+    // An edit that never touched funding keeps the splits it already had, so
+    // none of the funding rules apply to it.
+    const preservesExistingFunding = Boolean(isEditMode && editingExpense && !fundingDirty);
+
+    const problems = collectExpenseProblems({
+      amount,
+      description,
+      notes,
+      date,
+      todayIso: todayIso(),
+      isAdvanced,
+      isEditMode,
+      category,
+      hasNormalIncomeSource: Boolean(normalIncomeSource),
+      categoryAllocations,
+      isRecurring: effectiveIsRecurring,
+      recurringMonthlyBudget,
+      payerIds: effectivePayerIds,
+      payerAmounts,
+      payerIncomeSourceIds,
+      paidFromBank: effectivePaidFromBank,
+      selectedBankAccountId,
+      selectedSources,
+      splitAmounts,
+      fundingDirty,
+      skipFundingChecks: preservesExistingFunding,
+    });
+    if (problems.length > 0) {
+      const { title, message } = describeProblems(problems);
+      Alert.alert(title, message);
       return;
     }
-    if (!description.trim()) {
-      Alert.alert('Description required', 'Please add a description.');
-      return;
-    }
-    if (!isAdvanced && !isEditMode) {
-      if (!category.trim()) {
-        Alert.alert('Category required', 'Choose one category for this expense, or switch to Detailed for more options.');
-        return;
-      }
-      if (!normalIncomeSource) {
-        Alert.alert('Income source required', 'Add a saved income source in Detailed before you can save this expense.');
-        return;
-      }
-    }
-    if (categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other') && notes.trim().length < 3) {
-      Alert.alert('Note required', 'Add a short note explaining what this one-off expense was for.');
-      return;
-    }
+
+    // Asked only once the form is otherwise sound: this is an optional
+    // question with three answers, not a fault, and it has no business
+    // interrupting somebody who still has real errors to clear.
     if (!categoryAllocations.length && !isEditMode && !allowUncategorized) {
       const expenseDraft: ExpenseBudgetDraft = {
         amount, category, categoryAllocations, description, notes, payerIds, payerAmounts,
@@ -890,56 +918,6 @@ export default function AddExpenseSheet() {
           },
         ],
       );
-      return;
-    }
-    const normalizedAllocations = categoryAllocations
-      .filter((allocation) => allocation.category.trim())
-      .map((allocation) => ({
-        category: allocation.category.trim(),
-        amount: Number(allocation.amount.replace(/,/g, '')),
-      }));
-    if (normalizedAllocations.length > 0 && normalizedAllocations.some(
-      (allocation) => !Number.isInteger(allocation.amount) || allocation.amount <= 0,
-    )) {
-      Alert.alert('Allocation amounts required', 'Enter a positive whole-KES amount for every category.');
-      return;
-    }
-    const allocatedTotal = normalizedAllocations.reduce((sum, allocation) => sum + allocation.amount, 0);
-    if (normalizedAllocations.length > 0 && allocatedTotal !== parsed) {
-      const difference = parsed - allocatedTotal;
-      Alert.alert(
-        difference > 0 ? 'Category amounts still needed' : 'Category amounts exceed the expense',
-        difference > 0
-          ? `Allocate the remaining KES ${difference.toLocaleString()} before saving.`
-          : `Reduce category allocations by KES ${Math.abs(difference).toLocaleString()}.`,
-      );
-      return;
-    }
-    const effectivePayerIds = canManageShared ? payerIds : user?.id ? [user.id] : [];
-    const effectivePaidFromBank = canManageShared ? paidFromBank : false;
-    const effectiveIsRecurring = canManageShared ? isRecurring : false;
-    if (effectiveIsRecurring && normalizedAllocations.length > 1) {
-      Alert.alert(
-        'Recurring expenses need one category',
-        'A recurring expense cannot be split across categories yet because each recurring expense updates one category budget. Save this as a one-time expense or use one category.',
-      );
-      return;
-    }
-    const recurringBudget = Number(recurringMonthlyBudget);
-    if (effectiveIsRecurring && (!Number.isInteger(recurringBudget) || recurringBudget <= 0)) {
-      Alert.alert('Monthly budget required', 'Enter a whole KES amount greater than zero for this recurring expense.');
-      return;
-    }
-    if (effectivePayerIds.length === 0 && !effectivePaidFromBank) {
-      Alert.alert('Paid by required', 'Please choose who paid.');
-      return;
-    }
-    if (effectivePaidFromBank && !selectedBankAccountId) {
-      Alert.alert('Bank account required', 'Choose the bank account that funded this expense.');
-      return;
-    }
-    if (date > todayIso()) {
-      Alert.alert('Future date not allowed', 'This records actual spending — please use today or an earlier date.');
       return;
     }
 
@@ -988,65 +966,6 @@ export default function AddExpenseSheet() {
     const sourceCount = effectivePayerIds.length + (effectivePaidFromBank ? 1 : 0);
     const isSplitPayment = sourceCount > 1;
 
-    if (isSplitPayment) {
-      if (
-        effectivePayerIds.some((id) => (parseFloat(payerAmounts[id] || '0') || 0) <= 0) ||
-        (effectivePaidFromBank && (parseFloat(payerAmounts.__joint_bank__ || '0') || 0) <= 0)
-      ) {
-        Alert.alert('Enter every funding portion', 'Each direct-payment and bank-deposit portion must be greater than zero.');
-        return;
-      }
-      const missingSourcePayer = effectivePayerIds.find((id) => !payerIncomeSourceIds[id]);
-      if (missingSourcePayer) {
-        Alert.alert('Income source required', 'Choose the saved income stream that funded every direct-payment portion.');
-        return;
-      }
-      const splitTotal = effectivePayerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)
-        + (effectivePaidFromBank ? parseFloat(payerAmounts.__joint_bank__ || '0') || 0 : 0);
-      if (!Number.isInteger(parsed) || splitTotal !== parsed) {
-        Alert.alert("Amounts don't add up", `Payer portions total KES ${splitTotal.toLocaleString()} but the expense is KES ${parsed.toLocaleString()}.`);
-        return;
-      }
-    } else {
-      if (effectivePaidFromBank) {
-        const bankAmount = parseFloat(payerAmounts.__joint_bank__ || '0') || 0;
-        if (!Number.isInteger(bankAmount) || bankAmount <= 0) {
-          Alert.alert('Enter the funding amount', 'Enter how much came from the selected bank account.');
-          return;
-        }
-        if (bankAmount !== parsed) {
-          const remaining = parsed - bankAmount;
-          Alert.alert(
-            remaining > 0 ? 'Add another funding source' : 'Funding exceeds the expense',
-            remaining > 0
-              ? `KES ${remaining.toLocaleString()} is still unfunded. Add a direct-payment portion.`
-              : `Reduce the bank funding by KES ${Math.abs(remaining).toLocaleString()}.`,
-          );
-          return;
-        }
-      }
-      if (!effectivePaidFromBank && selectedSources.length === 0 && (!isEditMode || fundingDirty)) {
-        Alert.alert('Source required', 'Please choose where this money came from.');
-        return;
-      }
-      if (!effectivePaidFromBank && selectedSources.length > 0) {
-        if (selectedSources.some((key) => (parseFloat(splitAmounts[key] || '0') || 0) <= 0)) {
-          Alert.alert('Enter the funding amount', 'Enter how much came from every selected income source.');
-          return;
-        }
-        const splitsTotal = selectedSources.reduce((s, k) => s + (parseFloat(splitAmounts[k] || '0') || 0), 0);
-        if (Math.abs(splitsTotal - parsed) >= 1) {
-          const remaining = parsed - splitsTotal;
-          Alert.alert(
-            remaining > 0 ? 'Add another funding source' : 'Funding exceeds the expense',
-            remaining > 0
-              ? `KES ${remaining.toLocaleString()} is still unfunded. Select another income source.`
-              : `Reduce the funding amounts by KES ${Math.abs(remaining).toLocaleString()}.`,
-          );
-          return;
-        }
-      }
-    }
 
     setIsPending(true);
     try {

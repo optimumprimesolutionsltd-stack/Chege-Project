@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const source = readFileSync('app/add-expense.tsx', 'utf8');
+// The save rules moved into a pure module that these behaviours are now tested
+// against directly; see lib/__tests__/expenseValidation.test.ts.
+const rules = readFileSync('lib/expenseValidation.ts', 'utf8');
 const budgetSource = readFileSync('app/(tabs)/budget.tsx', 'utf8');
 const homeSource = readFileSync('app/(tabs)/index.tsx', 'utf8');
 
@@ -109,8 +112,9 @@ describe('optional expense category layout', () => {
   });
 
   it('requires an explanatory note for one-off spending', () => {
-    expect(source).toContain("allocation.category.trim().toLocaleLowerCase() === 'other') && notes.trim().length < 3");
-    expect(source).toContain("Add a short note explaining what this one-off expense was for.");
+    expect(rules).toContain("allocation.category.trim().toLocaleLowerCase() === 'other'");
+    expect(rules).toContain('input.notes.trim().length < 3');
+    expect(rules).toContain('Add a short note explaining what this one-off expense was for.');
     expect(source).toContain("'NOTES (required for one-off spending)'");
   });
 
@@ -126,7 +130,7 @@ describe('optional expense category layout', () => {
   it('creates the first allocation when an uncategorized expense is recategorized', () => {
     expect(source).toContain("const next = addStandardCategory(previous, name);");
     expect(source).toContain("standard.push({ category: categoryName, amount: '' });");
-    expect(source).toContain('.filter((allocation) => allocation.category.trim())');
+    expect(rules).toContain('.filter((allocation) => allocation.category.trim())');
   });
 
   it('keeps one-off spending independent from regular category allocations', () => {
@@ -137,8 +141,11 @@ describe('optional expense category layout', () => {
 
   it('lets uncategorized creates and edits pass allocation validation', () => {
     expect(source).toContain("setCategory(hydratedAllocations[0]?.category ?? '')");
-    expect(source).toContain('normalizedAllocations.length > 0 && normalizedAllocations.some(');
-    expect(source).toContain('normalizedAllocations.length > 0 && allocatedTotal !== parsed');
+    // Both rules still exist, now as one guarded branch: an allocation must be
+    // a positive whole number, and the allocations must total the expense.
+    expect(rules).toContain('if (allocations.length > 0) {');
+    expect(rules).toContain('!Number.isInteger(allocation.amount) || allocation.amount <= 0');
+    expect(rules).toContain('if (allocated !== parsed) {');
     expect(source).toContain("category: normalizedAllocations[0]?.category ?? ''");
     expect(source).toContain('categoryAllocations: expenseAllocations');
   });
