@@ -219,9 +219,9 @@ export default function Subscription() {
               // of the app reaches public assets; see components/brand-logo.tsx.
               src={`${import.meta.env.BASE_URL}brands/mpesa.png`}
               alt="M-PESA"
-              width={78}
-              height={28}
-              className="h-7 w-auto shrink-0"
+              width={89}
+              height={32}
+              className="h-8 w-auto shrink-0"
               loading="lazy"
               decoding="async"
             />
