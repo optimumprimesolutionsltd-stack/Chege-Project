@@ -546,7 +546,7 @@ export function BudgetChooser({
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 {([
                   ["personal", "My money", "A private budget for my income, spending, and goals.", Wallet],
-                  ["shared", "Money with others", "Set up a group budget first; your free Personal budget stays private.", UsersRound],
+                  ["shared", "Money with others", "Set up a group budget first; your Personal budget stays private.", UsersRound],
                   ["both", "Both", "Keep my personal money private and manage shared money too.", Heart],
                 ] as const).map(([value, title, description, Icon]) => (
                   <button key={value} type="button" onClick={() => { setOnboardingMode(value); setShowPurposeSetup(true); }} className="group rounded-2xl border border-border bg-background p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -785,7 +785,7 @@ export function BudgetChooser({
               </button> : null}
             </div>
             <h1 className="mt-2 max-w-2xl font-display text-3xl font-bold sm:text-5xl">{onboardingHeading}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your free Personal budget is always private. Shared groups stay separate and are visible only to their members.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary-foreground/75 sm:text-base">Your Personal budget is always private. Shared groups stay separate and are visible only to their members.</p>
             <div className="mt-4 max-w-2xl rounded-xl bg-primary-foreground/10 px-4 py-3 text-sm leading-relaxed text-primary-foreground/85">
               <span className="font-semibold text-primary-foreground">Free for your first 14 days.</span> Then KES&nbsp;100/month or KES&nbsp;1,000/year — one subscription covers your Personal budget and every group. Nothing is ever deleted if you don't subscribe; shared groups just go read-only until you do.{" "}
               <a href={`${import.meta.env.BASE_URL}subscription`} className="font-semibold text-primary-foreground underline underline-offset-4">See what's included</a>
@@ -810,7 +810,7 @@ export function BudgetChooser({
 
                     <div className="mt-6 border-l-2 border-border pl-4">
                     <div className="mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-bold text-foreground">Personal budget</h3></div>
-                    {personal.length ? <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} personalPhotoUrl={user.profileImageUrl} label="Free · Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground"><p>Jamvi is preparing your free Personal budget before you continue.</p><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refetchWorkspaces()}>Check again</Button></div>}
+                    {personal.length ? <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} personalPhotoUrl={user.profileImageUrl} label="Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground"><p>Jamvi is preparing your Personal budget before you continue.</p><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refetchWorkspaces()}>Check again</Button></div>}
                   </div>
 
                   <div className="mt-7 border-l-2 border-border pl-4">
