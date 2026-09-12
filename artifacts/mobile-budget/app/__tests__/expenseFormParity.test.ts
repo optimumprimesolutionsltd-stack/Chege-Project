@@ -116,3 +116,44 @@ describe('the contributions forms', () => {
     expect(mobileContrib).toContain(clause);
   });
 });
+
+/**
+ * What keeps the expense form quick to type in.
+ *
+ * The form holds thirty-odd pieces of state, so every keystroke re-renders the
+ * whole of it. That is tolerable only while the expensive parts skip the work:
+ * the lists that do not depend on the text, and the derived figures that scan
+ * other lists to produce their answer.
+ *
+ * All of it rests on useColors returning a stable object; see
+ * hooks/__tests__/useColors.test.ts. Without that every memo here is decorative.
+ */
+describe('the expense form stays cheap to re-render', () => {
+  const form = readFileSync('app/add-expense.tsx', 'utf8');
+
+  it.each([
+    ['the category chips', 'const CategoryChip = React.memo('],
+    ['the payer pills', 'const PayerPill = React.memo('],
+  ])('memoises %s', (_label, marker) => {
+    expect(form).toContain(marker);
+  });
+
+  it('hands the rows stable callbacks rather than a closure each', () => {
+    // A closure built inside the map is a new function every render and would
+    // defeat the memo without leaving any sign that it had.
+    expect(form).toContain('const togglePayer = useCallback(');
+    expect(form).toContain('onToggle={togglePayer}');
+    expect(form).toContain('onSelect={chooseCategory}');
+  });
+
+  it('works out the disabled state once, not once per pill', () => {
+    // A group of forty computed the same answer forty times per keystroke.
+    expect(form).toContain('const payersDisabled = getExpenseFundingControlState({');
+    expect(form).toContain('disabled={soleDirectPayer || payersDisabled}');
+  });
+
+  it('memoises the derived figures that scan other lists', () => {
+    expect(form).toContain('const categoryBalancePreviews = useMemo(');
+    expect(form).toContain('const hasBudgetedCategorySelection = useMemo(');
+  });
+});

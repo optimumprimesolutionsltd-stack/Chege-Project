@@ -87,7 +87,7 @@ describe('optional expense category layout', () => {
   });
 
   it('keeps the running-balance notice visible in Funding before category amounts are entered', () => {
-    expect(source).toContain('const hasBudgetedCategorySelection = categoryAllocations.some');
+    expect(source).toContain('const hasBudgetedCategorySelection = useMemo(() => categoryAllocations.some');
     expect(source).toContain('(categoryBalancePreviews.length > 0 || hasBudgetedCategorySelection)');
     expect(source).toContain('Enter the amount covered by each category above to see its running balance here.');
     expect(source).toContain('These running balances use each category amount entered above.');

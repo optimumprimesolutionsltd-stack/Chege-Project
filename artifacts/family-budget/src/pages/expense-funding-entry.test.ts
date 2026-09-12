@@ -111,7 +111,11 @@ describe("expense funding amount entry", () => {
 
   it("keeps Shared group member amounts blank until the user enters them", () => {
     expect(expensesSource).toContain('[m.userId]: ""');
-    expect(mobileSource).toContain("[m.userId]: ''");
+    // The phone's handler was lifted out of the map into a stable useCallback
+    // so the memoised pills are not handed a new function every keystroke, so
+    // it keys on `userId` rather than `m.userId`. The behaviour is the one this
+    // test is about: a newly selected payer starts with a blank amount.
+    expect(mobileSource).toContain("[userId]: ''");
     expect(expensesSource).not.toContain("[next[0]]: remainder");
     expect(mobileSource).not.toContain("[next[0]]: remainder");
   });
