@@ -44,10 +44,14 @@ export function inviteRequiresSubscriptionMessage(): string {
     + "Nothing has been removed — subscribe to start inviting again.";
 }
 
-/** Shown to a member already in a group whose own subscription has lapsed.
- *  Says what they can still do, because they have not lost the group or their
- *  records — only the ability to add to them. */
-export function readOnlyMessage(): string {
-  return "Your Jamvi subscription has lapsed, so this Shared group is read-only. "
-    + "Nothing has been removed — subscribe to start recording again.";
+/** Shown to a member whose own subscription has lapsed, in either a Shared
+ *  group or their own Personal budget. Says what they can still do, because
+ *  they have not lost the budget or their records — only the ability to add
+ *  to them. */
+export function readOnlyMessage(isPrivate: boolean): string {
+  return isPrivate
+    ? "Your Jamvi subscription has lapsed, so your Personal budget is read-only. "
+      + "Nothing has been removed — subscribe to start recording again."
+    : "Your Jamvi subscription has lapsed, so this Shared group is read-only. "
+      + "Nothing has been removed — subscribe to start recording again.";
 }

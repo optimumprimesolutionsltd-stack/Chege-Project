@@ -92,7 +92,7 @@ describe("inviting into a Shared group", () => {
 
 describe("the invite gate is not the recording gate", () => {
   it("does not consult the one-member group rule", async () => {
-    // requireSharedTransactionEligibility ends in canRecordSharedTransactions.
+    // requireTransactionEligibility ends in canRecordSharedTransactions.
     // Reusing it here would have meant a one-member group could never invite
     // its second member - the group rule and the subscription rule are not the
     // same question.

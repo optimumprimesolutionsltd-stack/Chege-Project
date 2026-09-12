@@ -44,8 +44,8 @@ export function statusLine(
     return {
       heading: "Your subscription has lapsed",
       detail:
-        "Nothing has been removed. Your records are all still here, and Shared groups are "
-        + "read-only until you subscribe.",
+        "Nothing has been removed. Your records are all still here, and recording — in your "
+        + "Personal budget and any Shared group — is read-only until you subscribe.",
     };
   }
 
@@ -70,7 +70,7 @@ export function statusLine(
   if (entitlements.status === "past_due") {
     return {
       heading: "We could not take your last payment",
-      detail: "Nothing has changed yet. Pay to keep your Shared groups working.",
+      detail: "Nothing has changed yet. Pay to keep recording.",
     };
   }
 

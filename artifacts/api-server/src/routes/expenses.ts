@@ -24,7 +24,7 @@ import {
   getActiveGroupId,
   requireGroupManager,
   requireMemberSelfAttribution,
-  requireSharedTransactionEligibility,
+  requireTransactionEligibility,
 } from "../lib/activeGroup";
 import { canonicalExpenseCategoryName, normalizeExpenseCategoryName } from "../lib/categoryNames";
 
@@ -407,7 +407,7 @@ router.get("/expenses", async (req, res) => {
 router.post("/expenses/apply-recurring", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!await requireSharedTransactionEligibility(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
   const parsed = ApplyRecurringExpensesBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const { month, year } = parsed.data;
@@ -521,7 +521,7 @@ router.post("/expenses/apply-recurring", async (req, res) => {
 router.post("/expenses", async (req, res) => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
-  if (!await requireSharedTransactionEligibility(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
   const parsed = CreateExpenseBody.safeParse(req.body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];

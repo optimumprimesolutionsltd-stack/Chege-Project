@@ -18,7 +18,7 @@ import {
   jointAccountTxTable,
 } from "@workspace/db";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
-import { getActiveGroupId, requireGroupManager, requireSharedTransactionEligibility } from "../lib/activeGroup";
+import { getActiveGroupId, requireGroupManager, requireTransactionEligibility } from "../lib/activeGroup";
 
 const router: IRouter = Router();
 
@@ -103,7 +103,7 @@ router.post("/payouts", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
   if (!requireGroupManager(req, res)) return;
-  if (!await requireSharedTransactionEligibility(req, res)) return;
+  if (!await requireTransactionEligibility(req, res)) return;
 
   if (!(await isMerryGoRoundEnabled(groupId))) {
     res.status(400).json({
