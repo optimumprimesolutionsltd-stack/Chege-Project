@@ -57,13 +57,32 @@ export function isSingleName(raw: string): boolean {
   return contributorNameProblem(raw) === "single-name";
 }
 
-/** The ledger name for somebody who has an account: both names when we know
- *  them. Used when a member is folded into the sheet automatically, where
- *  taking only the first name is how most unidentifiable rows were created. */
+/**
+ * The ledger name for somebody who has an account: the most identifying name
+ * we hold for them.
+ *
+ * Three fields can carry it, and they disagree. `preferredName` is what the
+ * person typed into Jamvi and is mirrored into `firstName`, so concatenating
+ * first and last blindly yields "Jane Wanjiku Wanjiku" for anybody who typed
+ * their full name. But somebody who typed only "John" while signing in through
+ * Google as John Kamau is better served by the provider's pair than by their
+ * own single word.
+ *
+ * So: take the chosen name when it identifies a person on its own, otherwise
+ * fall back to the provider's first and last together, otherwise whatever
+ * single name exists. A single name is still returned rather than refused - a
+ * deposit must never fail for want of a surname - and the sheet marks it.
+ */
 export function memberLedgerName(
+  preferredName: string | null | undefined,
   firstName: string | null | undefined,
   lastName: string | null | undefined,
 ): string | null {
-  const full = normalizeContributorName(`${firstName ?? ""} ${lastName ?? ""}`);
-  return full.length > 0 ? full : null;
+  const chosen = normalizeContributorName(preferredName ?? "");
+  if (chosen.length > 0 && !isSingleName(chosen)) return chosen;
+
+  const provided = normalizeContributorName(`${firstName ?? ""} ${lastName ?? ""}`);
+  if (provided.length > 0 && !isSingleName(provided)) return provided;
+
+  return chosen || provided || null;
 }

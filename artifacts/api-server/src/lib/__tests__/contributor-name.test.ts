@@ -64,16 +64,31 @@ describe("isSingleName", () => {
 
 describe("memberLedgerName", () => {
   it("keeps the surname, which taking firstName alone threw away", () => {
-    expect(memberLedgerName("John", "Kamau")).toBe("John Kamau");
+    expect(memberLedgerName(null, "John", "Kamau")).toBe("John Kamau");
   });
 
-  it("falls back to whichever name the account has", () => {
-    expect(memberLedgerName("John", null)).toBe("John");
-    expect(memberLedgerName(null, "Kamau")).toBe("Kamau");
+  it("uses the name the person chose when it identifies them on its own", () => {
+    // preferredName is mirrored into firstName, so concatenating first and
+    // last would read "Jane Wanjiku Wanjiku".
+    expect(memberLedgerName("Jane Wanjiku", "Jane Wanjiku", "Wanjiku")).toBe("Jane Wanjiku");
+  });
+
+  it("prefers the provider's pair over a chosen single word", () => {
+    // Somebody who typed "John" while signing in through Google as John Kamau
+    // is better identified by the pair than by their own one word. This is the
+    // case that the old lastName: null made impossible.
+    expect(memberLedgerName("John", "John", "Kamau")).toBe("John Kamau");
+  });
+
+  it("falls back to whichever single name exists rather than refusing", () => {
+    // A deposit must never fail for want of a surname; the sheet flags it.
+    expect(memberLedgerName("John", "John", null)).toBe("John");
+    expect(memberLedgerName(null, "John", null)).toBe("John");
+    expect(memberLedgerName(null, null, "Kamau")).toBe("Kamau");
   });
 
   it("reports nothing when the account has no name at all", () => {
-    expect(memberLedgerName(null, null)).toBeNull();
-    expect(memberLedgerName("  ", "")).toBeNull();
+    expect(memberLedgerName(null, null, null)).toBeNull();
+    expect(memberLedgerName("", "  ", "")).toBeNull();
   });
 });
