@@ -803,7 +803,24 @@ export default function SettingsScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete your account?',
-      "You'll be signed out right away. If you don't sign back in within 14 days, your Personal budget is permanently erased and you leave every Shared group you're in — ownership passes to someone else where that applies. Sign back in before then to cancel this.",
+      // The same facts the web dialog lists, in the order they happen. The
+      // kept billing history is the one people are most likely to assume the
+      // opposite of, so it is said rather than left out.
+      "You are signed out immediately.
+
+"
+        + "Nothing is erased for 14 days. Sign back in before then and the deletion is cancelled — your budgets and groups are exactly as you left them.
+
+"
+        + "If you do not sign back in, after 14 days:
+"
+        + "• Your Personal budget and everything recorded in it is erased.
+"
+        + "• You leave every Shared group. Where you own one, ownership passes to the longest-standing member left; a group with nobody left in it is erased too.
+"
+        + "• Your name, email address and photo are removed.
+"
+        + "• Records of payments you have made are kept as billing history.",
       [
         { text: 'Cancel', style: 'cancel' },
         {

@@ -102,6 +102,7 @@ async function optimizePhotoForUpload(file: File): Promise<File> {
 export default function Settings() {
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [confirmingDeleteAccount, setConfirmingDeleteAccount] = useState(false);
   const { data: members, isLoading } = useGetMembers();
   const removeMember = useRemoveMember();
   const leaveGroup = useLeaveGroup();
@@ -580,12 +581,14 @@ export default function Settings() {
     }
   };
 
+  // The confirmation is an AlertDialog rather than window.confirm. Deleting an
+  // expense here already asks that way, and it would be a strange app that
+  // takes more care over one expense than over the whole account. A native
+  // confirm also cannot be themed, and a browser set to block dialogs returns
+  // false from it silently - safe, because that cancels, but the button then
+  // looks broken rather than declined.
   const handleDeleteAccount = async () => {
-    if (!confirm(
-      "Delete your account? You'll be signed out right away. If you don't sign back in within 14 days, your Personal "
-      + "budget is permanently erased and you leave every Shared group you're in — ownership passes to someone else "
-      + "where that applies. Sign back in before then to cancel this.",
-    )) return;
+    setConfirmingDeleteAccount(false);
     setDeletingAccount(true);
     try {
       const response = await fetch("/api/auth/delete-account", { method: "POST", credentials: "include" });
@@ -1358,8 +1361,9 @@ export default function Settings() {
               <Button
                 variant="outline"
                 className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto sm:shrink-0"
-                onClick={() => void handleDeleteAccount()}
+                onClick={() => setConfirmingDeleteAccount(true)}
                 disabled={deletingAccount}
+                data-testid="delete-account"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 {deletingAccount ? "Deleting…" : "Delete account"}
@@ -1368,6 +1372,48 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={confirmingDeleteAccount} onOpenChange={setConfirmingDeleteAccount}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              {/* Each line is something the erasure actually does; see
+                  api-server/src/lib/account-deletion.ts. The kept billing
+                  history is the one people are most likely to assume the
+                  opposite of, so it is stated rather than left out. */}
+              <div className="space-y-2">
+                <p className="font-semibold text-foreground">You are signed out immediately.</p>
+                <p>
+                  Nothing is erased for 14 days. Sign back in before then and the deletion is cancelled — your budgets
+                  and groups are exactly as you left them.
+                </p>
+                <p className="font-semibold text-foreground">If you do not sign back in, after 14 days:</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>Your Personal budget and everything recorded in it is erased.</li>
+                  <li>
+                    You leave every Shared group. Where you own one, ownership passes to the longest-standing member
+                    left; a group with nobody left in it is erased too.
+                  </li>
+                  <li>Your name, email address and photo are removed.</li>
+                  <li>Records of payments you have made are kept as billing history.</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {/* Named for what it does, so the safe choice is not the vague one. */}
+            <AlertDialogCancel data-testid="keep-account">Keep my account</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="confirm-delete-account"
+              onClick={() => void handleDeleteAccount()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete my account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -372,7 +372,7 @@ export default function BudgetChooserScreen() {
             {pendingInvites.length === 1 ? 'Join this budget.' : 'Join a budget.'}
           </Text>
           <Text style={[styles.intro, { color: colors.mutedForeground }]}>
-            Accepting adds you as a {pendingInvites[0].role === 'admin' ? 'admin' : 'member'}. You keep your own free Personal budget separate.
+            Accepting adds you as a {pendingInvites[0].role === 'admin' ? 'admin' : 'member'}. You keep your own Personal budget separate.
           </Text>
           {error ? <View accessibilityRole="alert" style={[styles.error, { backgroundColor: colors.destructive + '14' }]}><Feather name="alert-circle" size={17} color={colors.destructive} /><Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text></View> : null}
           {pendingInvites.map((invite) => (
@@ -834,7 +834,7 @@ function MobileOnboardingFlow({
     : ['Your starting point', 'Make it yours', 'Choose your horizon', 'Personalize your budget', 'Add income streams', 'Set your plan'];
   const modeOptions: Array<[MobileOnboardingMode, string, string]> = [
     ['personal', 'My money', 'A private budget for my income, spending, and goals.'],
-    ['shared', 'Money with others', 'Set up a group you run first; your free Personal budget stays private.'],
+    ['shared', 'Money with others', 'Set up a group you run first; your Personal budget stays private.'],
     ['both', 'Both', 'Keep my personal money private and manage shared money too.'],
   ];
   const purposeOptions = draft.usageMode === 'shared' ? PURPOSE_OPTIONS.shared : PURPOSE_OPTIONS.personal;

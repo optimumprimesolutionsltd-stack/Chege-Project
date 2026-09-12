@@ -46,7 +46,7 @@ export const PARITY_ITEMS: ParityItem[] = [
     feature: "Budget chooser before Home",
     web: "done",
     mobile: "done",
-    note: "Every login gets one free Personal budget before Shared groups can be created; both platforms keep Personal and Shared records separate",
+    note: "Every login gets one Personal budget before Shared groups can be created; both platforms keep Personal and Shared records separate",
   },
   {
     category: "Core screens",
