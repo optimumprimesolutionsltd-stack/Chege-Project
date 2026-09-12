@@ -188,6 +188,106 @@ export const GUIDES: readonly Guide[] = [
         "Jamvi keeps that shared history for a couple, a family or roommates: one record everyone can see, uneven splits recorded honestly, and your own private budget alongside it in the same subscription.",
     },
   },
+  {
+    slug: "/guides/what-jamvi-actually-costs",
+    title: "What a Chama Actually Pays for Jamvi",
+    description:
+      "Jamvi's pricing explained plainly: why the chama itself is never billed, what the 14-day trial covers, and what a lapsed subscription does and does not lock you out of.",
+    label: "What Jamvi costs",
+    readingMinutes: 4,
+    updated: "2026-09-13",
+    heading: "What a chama actually pays for Jamvi",
+    intro:
+      "The question that stalls most chamas before they even try an app is the same one: who pays, and for what. It is a fair question, and the honest answer is short enough that it should not take a search to find.",
+    sections: [
+      {
+        heading: "The subscription belongs to a person, not the chama",
+        body: [
+          "Jamvi is KES 100 a month, or KES 1,000 a year — two months free for paying once. That figure is per person, not per group, and it is never billed to the chama itself. A chama of fifty members is not one bill for fifty people; it is however many of those fifty members choose to have their own subscription.",
+          "One subscription covers everything that person does in Jamvi: their own Personal budget and every Shared group they belong to. Joining a second chama, or a third, adds nothing to what they pay.",
+        ],
+      },
+      {
+        heading: "Fourteen days free, no card, no commitment",
+        body: [
+          "Every new account starts with fourteen days of full access — record contributions, add expenses, invite the group, download a report — before Jamvi asks for anything. There is no card on file during that period and nothing is charged automatically when it ends.",
+          "When the trial does end, paying is one M-Pesa prompt: enter a Safaricom number in the app, a genuine Safaricom prompt reaches that phone, and a PIN entered there finishes it. Jamvi never sees or asks for the PIN itself.",
+        ],
+      },
+      {
+        heading: "A chama can run on just the treasurer's subscription",
+        body: [
+          "Viewing a group is always free — a member who has never paid a shilling can still open the app and see every contribution, every expense, and the running balance. Subscribing only matters for the person doing the recording.",
+          "In practice that is usually one or two people: the treasurer, and perhaps a second admin who also records. A chama does not need every member subscribed for the record to work, only the ones actually writing to it.",
+        ],
+      },
+      {
+        heading: "A lapsed subscription never deletes anything",
+        body: [
+          "If a subscription runs out and is not renewed, nothing in Jamvi is removed — every contribution, every member, every past month stays exactly as it was, and stays visible to the whole group.",
+          "What changes is that the lapsed person can no longer add to the record: not a new contribution, not a new expense, not a new category — in their own Personal budget as much as in any Shared group. The moment they subscribe again, recording opens back up exactly where it left off.",
+        ],
+      },
+    ],
+    takeaway:
+      "One person pays for their own access, not the chama for its group. Fourteen days are free, nothing is ever deleted, and the only thing a lapsed subscription switches off is adding something new.",
+    related: {
+      slug: "/pricing",
+      label: "See Jamvi's pricing",
+      blurb:
+        "The full breakdown — monthly, annual, what the trial includes, and exactly what one subscription covers.",
+    },
+  },
+  {
+    slug: "/guides/mpesa-payments-in-jamvi",
+    title: "How M-Pesa Payments Work in Jamvi",
+    description:
+      "What actually happens when you pay for Jamvi with M-Pesa: whose prompt it is, why any Safaricom line works, and why renewing takes one tap rather than a silent deduction.",
+    label: "Paying with M-Pesa",
+    readingMinutes: 4,
+    updated: "2026-09-13",
+    heading: "How M-Pesa payments work in Jamvi",
+    intro:
+      "A prompt asking for your M-Pesa PIN is worth being cautious about, and Kenyans have good reason to be. Here is exactly what happens, in order, when that prompt comes from paying for Jamvi.",
+    sections: [
+      {
+        heading: "The prompt is Safaricom's, not Jamvi's",
+        body: [
+          "Type a phone number into the app and tap pay, and Jamvi asks Safaricom to send that phone an STK Push — the same kind of prompt you get paying a till or a paybill. It appears on the phone itself, carrying Safaricom's own name, not Jamvi's.",
+          "The PIN is entered there, on the phone, inside that Safaricom prompt. It never passes through Jamvi, is never typed into the app, and is never something Jamvi's support could see even if asked.",
+        ],
+      },
+      {
+        heading: "Any Safaricom number works — it does not have to be your own",
+        body: [
+          "The number that pays does not have to match the number or email an account was created with. A treasurer can pay from whichever line has the float that day — their own, a co-signatory's, whoever is closest to a working phone.",
+          "That flexibility also means the record does not care which number the money came from — the payment is attributed to the account it was made for, and the receipt is kept against that payment.",
+        ],
+      },
+      {
+        heading: "Paying early adds to your period, it never restarts it",
+        body: [
+          "Subscribing again while a subscription is still active does not throw away the days already paid for. The new period is added on top of whatever is left, so paying a week early, or a month early, never costs a single day.",
+          "This matters most for a monthly subscriber deciding whether to switch to annual: switching does not waste the days remaining on the current month, they carry forward before the annual period begins.",
+        ],
+      },
+      {
+        heading: "Renewal is a tap, not an automatic deduction",
+        body: [
+          "STK Push is a one-time prompt — it cannot deduct money on a schedule the way a card can. Safaricom does have a product for that, M-Pesa Ratiba, but Jamvi does not use it, so nothing is ever taken without that month's or year's prompt being answered.",
+          "The trade-off is a small one: renewal needs a moment of attention rather than happening silently. Jamvi reminds a subscription that is due, but the safest habit is the same one that works for any other recurring Kenyan bill — put the renewal date somewhere you will actually see it.",
+        ],
+      },
+    ],
+    takeaway:
+      "The PIN goes to Safaricom, not Jamvi. Any Safaricom line can pay, paying early never wastes a day already bought, and because STK Push cannot deduct on its own, renewing is always a deliberate tap.",
+    related: {
+      slug: "/chama",
+      label: "Jamvi for chamas",
+      blurb:
+        "See how a chama uses Jamvi day to day — recording contributions, tracking who is behind, and keeping one bank record everyone can trust.",
+    },
+  },
 ];
 
 export function guideFor(slug: string): Guide | undefined {
