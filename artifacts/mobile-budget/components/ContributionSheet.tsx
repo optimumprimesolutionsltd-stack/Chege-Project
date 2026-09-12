@@ -142,11 +142,25 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
       ) : null}
 
       {!showBody ? null : isEmpty ? (
-        <Text style={[styles.key, { color: colors.mutedForeground }]}>
-          {canManage
-            ? 'Nobody in the sheet yet. Tap the pencil to add the people who contribute — they do not need the app, and they need both names.'
-            : 'Nobody in the sheet yet. A group manager can add the people who contribute.'}
-        </Text>
+        <View style={styles.emptyWrap}>
+          <Text style={[styles.key, { color: colors.mutedForeground }]}>
+            {canManage
+              ? 'Nobody in the sheet yet. Add the people who contribute — they do not need the app, and each needs both names.'
+              : 'Nobody in the sheet yet. A group manager can add the people who contribute.'}
+          </Text>
+          {canManage && !editor.editing ? (
+            <Pressable
+              testID="contributions-add-first-people"
+              accessibilityRole="button"
+              accessibilityLabel="Add the first people to the sheet"
+              onPress={editor.open}
+              style={[styles.emptyAction, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="user-plus" size={16} color={colors.primaryForeground} />
+              <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Add people</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : (
       <>
       {periodLabel ? (
@@ -266,6 +280,16 @@ const styles = StyleSheet.create({
   rangeBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
   rangeLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
   key: { fontSize: 12, lineHeight: 17 },
+  emptyWrap: { gap: 10, alignItems: 'flex-start' },
+  emptyAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    height: 38,
+    borderRadius: 9,
+  },
+  emptyActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   arrears: { flexDirection: 'row', gap: 8, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, padding: 10 },
   arrearsText: { flex: 1, fontSize: 13, fontFamily: 'Inter_600SemiBold', lineHeight: 18 },
   memberRow: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, gap: 6 },

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -247,7 +248,13 @@ export default function BudgetChooserScreen() {
             body: JSON.stringify({ defaultMonthlyTarget: perMember, applyToEveryone: true }),
           });
         } catch {
-          // Not fatal — settable later in Contributions.
+          // Not fatal to the group, but the treasurer typed a figure and it did
+          // not take. Staying quiet leaves them believing every member owes an
+          // amount that was never saved, and arrears measured against nothing.
+          Alert.alert(
+            'Group created, but the amount was not saved',
+            `Set what each member contributes per month in Contributions → Expected. Nothing else about ${name} was affected.`,
+          );
         }
       }
       if (pendingOnboardingDraft && user?.id) {
