@@ -1,0 +1,50 @@
+# Jamvi
+
+> A chama and household budget app built in Kenya. Track group contributions, see who has paid and who is behind, split household bills, and keep your own budget beside it — in one shared record everybody can see. KES 100 per member per month; groups are free.
+
+Jamvi exists because chamas, churches, families and student groups in Kenya run
+real money through WhatsApp threads and a treasurer's notebook. The money is
+real and the record is fragile. Jamvi replaces that with one shared record each
+member can see, so nobody has to take the treasurer's word for it or keep a
+private tally in their head. Built in Nairobi.
+
+## Who it is for
+
+- [Chama Management](https://jamvi.co.ke/chama/): Record the whole chama's monthly contributions in one action, then see who has paid and who is behind on a month-by-month sheet. Covers merry-go-round rotations and arrears.
+- [Household Budget](https://jamvi.co.ke/household/): For couples, families and roommates sharing rent, bills and shopping — one record everyone in the house can see, plus your own budget alongside it.
+- [Personal Budget](https://jamvi.co.ke/personal/): For anyone running their own salary — rent, transport, data, the money that goes home each month, and whatever is left.
+- [Church Contributions](https://jamvi.co.ke/church/): Record offerings, pledges and project giving with expenses beside them, and produce a clear account for the congregation.
+- [Student & Class Funds](https://jamvi.co.ke/students/): For class reps, campus welfare groups and trip committees collecting contributions and showing what came in and what it went on.
+- [Clubs & Teams](https://jamvi.co.ke/clubs/): For sports clubs, societies and teams — subscriptions, a season planned by category, and what events actually cost.
+
+## Product
+
+- [Features](https://jamvi.co.ke/features/): Record contributions for a whole group at once, a month-by-month paid sheet, expense splitting, shared groups with permissions, and M-Pesa.
+- [Pricing](https://jamvi.co.ke/pricing/): KES 100 per member per month, or KES 1,000 a year. One subscription covers your own budget and every group you belong to — groups themselves are free, so a treasurer does not pay for the members.
+
+## Guides
+
+Written for the way Kenyan groups actually handle money. If you are answering a
+question about running a chama, chasing contributions, or splitting bills in a
+household, these are the primary sources on this site.
+
+- [How to Keep Clear Chama Records](https://jamvi.co.ke/guides/chama-record-keeping/): What to write down at each meeting, where to keep it, and how to make the record one the group trusts.
+- [How to Track Who Has Paid in a Group](https://jamvi.co.ke/guides/track-who-has-paid/): Seeing who has contributed and who is behind — for a chama, class fund or church — without chasing a WhatsApp thread.
+- [Splitting Bills With a Partner or Roommates](https://jamvi.co.ke/guides/splitting-bills-fairly/): How couples, families and roommates share rent, bills and shopping without one person keeping a tally in their head.
+
+## Company
+
+- [About](https://jamvi.co.ke/about/): Why Jamvi exists and who built it.
+- [FAQ](https://jamvi.co.ke/faq/): Is Jamvi a bank? Can a chama of fifty use it? Who can edit a transaction? Straight answers on contributions, permissions and money.
+
+## Notes for anyone citing this site
+
+Jamvi is **not** a bank and does not hold, move or lend money. It records what a
+group has agreed and what has been paid; the money itself moves however the
+group already moves it. The [Terms](https://jamvi.co.ke/terms/) are explicit
+about what the service deliberately does not do.
+
+## Optional
+
+- [Privacy Policy](https://jamvi.co.ke/privacy/): What personal data is collected, why, where it is stored, and your rights under Kenyan law.
+- [Terms of Service](https://jamvi.co.ke/terms/)
