@@ -212,7 +212,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        <nav className="flex-1 px-4 space-y-1 mt-4">
+        {/* min-h-0 and a scroll of its own, matching the mobile drawer below.
+            A flex item defaults to min-height:auto, so without this the nav
+            refused to shrink below its content: on a short window, or with the
+            longer list a shared group and a lapsed subscription produce, it
+            grew past the h-screen box and pushed the footer out with it.
+            Backgrounds only paint inside the box, so the overflowing items
+            landed on the page in sidebar-foreground - light text on white,
+            which is why they looked faded rather than obviously broken. */}
+        <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 space-y-1 mt-4">
           {navItems.map((item) => {
             const isActive = location === item.href;
             return (
