@@ -20,6 +20,24 @@ import {
 export const publicPaymentsRouter = Router();
 export const paymentsRouter = Router();
 
+/**
+ * Daraja STK-push-query result codes that genuinely mean the attempt is over
+ * and did not succeed: 1 is insufficient balance, 1032 is the member
+ * cancelling the prompt, 1037 is the phone being unreachable or the PIN never
+ * being entered in time.
+ *
+ * Deliberately not "anything non-zero": Daraja also returns codes that mean
+ * nothing definite yet, most commonly 4999 ("The transaction is still under
+ * processing"), which it hands back when this query lands before Safaricom
+ * has finished the transaction on their side. Treating that as a failure was
+ * a real incident - it discarded the genuine success callback that landed
+ * seconds later, because the callback below only ever updates a payment
+ * still sitting at PENDING. An unrecognised code is left PENDING rather than
+ * guessed at; leaving it pending is always safe, since the callback (or a
+ * later poll) can still resolve it correctly.
+ */
+const TERMINAL_FAILURE_CODES = new Set([1, 1032, 1037]);
+
 function billingIntervalFrom(value: unknown): BillingInterval | null {
   if (value === BILLING_INTERVAL.MONTHLY || value === BILLING_INTERVAL.ANNUAL) return value;
   return null;
@@ -143,10 +161,40 @@ paymentsRouter.get("/payments/:id/status", async (req, res): Promise<void> => {
   if (payment.status === PAYMENT_STATUS.PENDING && payment.checkoutRequestId) {
     try {
       const result = await queryStkStatus(payment.checkoutRequestId);
-      // 1032 is the member cancelling; anything non-zero means it did not
-      // complete. Only the callback carries a receipt, so a success seen here
-      // is left pending for the callback to finish.
-      if (result.resultCode > 0) {
+
+      if (result.resultCode === 0) {
+        // Confirmed here rather than waiting on the callback: a lost or
+        // delayed callback must not leave somebody who was genuinely charged
+        // stuck on a lapsed subscription with nothing to self-heal it. The
+        // receipt number is callback-only, so it is left blank here — the
+        // callback's own guard (only updates a payment still PENDING) makes a
+        // later-arriving callback for this payment a safe no-op.
+        const now = new Date();
+        await db.transaction(async (tx) => {
+          await tx
+            .update(paymentsTable)
+            .set({
+              status: PAYMENT_STATUS.SUCCEEDED,
+              resultCode: result.resultCode,
+              resultDesc: result.resultDesc,
+              paidAt: now,
+              updatedAt: now,
+            })
+            .where(eq(paymentsTable.id, payment.id));
+          await activateSubscription({
+            userId: payment.userId,
+            interval: payment.billingInterval as BillingInterval,
+            promoCode: payment.promoCode,
+            executor: tx,
+            now,
+          });
+          if (payment.promoCode) await recordRedemption(payment.promoCode, tx);
+        });
+        res.json({ status: PAYMENT_STATUS.SUCCEEDED, amountKes: payment.amountKes });
+        return;
+      }
+
+      if (TERMINAL_FAILURE_CODES.has(result.resultCode)) {
         await db
           .update(paymentsTable)
           .set({
@@ -159,6 +207,15 @@ paymentsRouter.get("/payments/:id/status", async (req, res): Promise<void> => {
         res.json({ status: PAYMENT_STATUS.FAILED, detail: result.resultDesc });
         return;
       }
+
+      // Any other code (4999 chief among them) means Safaricom has not
+      // settled the transaction yet, not that it failed. Leave it pending —
+      // the member is told to keep waiting, and either the callback or the
+      // next poll will resolve it correctly.
+      req.log.info(
+        { paymentId: payment.id, resultCode: result.resultCode, resultDesc: result.resultDesc },
+        "M-Pesa status query was inconclusive; left pending",
+      );
     } catch (error) {
       // A query that fails says nothing about the payment, so the member is
       // told it is still pending rather than that it failed.
@@ -211,8 +268,24 @@ publicPaymentsRouter.post("/mpesa/callback", async (req, res): Promise<void> => 
       }
 
       // Retries land here. Settled payments are left exactly as they are, so
-      // one payment can never extend a subscription twice.
-      if (payment.status !== PAYMENT_STATUS.PENDING) return;
+      // one payment can never extend a subscription twice. Logged with the
+      // facts the callback actually carried - a payment that reaches here
+      // already FAILED (wrongly, from a status-poll misread) drops its real
+      // outcome silently otherwise, which is exactly what cost a member their
+      // subscription until this line existed.
+      if (payment.status !== PAYMENT_STATUS.PENDING) {
+        req.log.warn(
+          {
+            paymentId: payment.id,
+            existingStatus: payment.status,
+            callbackResultCode: facts.resultCode,
+            callbackResultDesc: facts.resultDesc,
+            callbackReceipt: facts.mpesaReceiptNumber,
+          },
+          "Discarded an M-Pesa callback for a payment that was no longer pending",
+        );
+        return;
+      }
 
       if (facts.resultCode !== 0) {
         await tx
