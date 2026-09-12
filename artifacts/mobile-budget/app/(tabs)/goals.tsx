@@ -342,9 +342,13 @@ export default function GoalsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
       setNewGoalVisible(false);
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to create goal. Please try again.');
+      // A lapsed subscription answers 402 with a reason. Telling somebody to
+      // "try again" sends them round a loop that cannot succeed.
+      if (!handleLapsedError(error)) {
+        Alert.alert('Could not create goal', error instanceof Error ? error.message : 'The goal was not created.');
+      }
     } finally {
       setSubmittingGoal(false);
     }
@@ -426,9 +430,13 @@ export default function GoalsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
       setEditGoalVisible(false);
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to update goal. Please try again.');
+      // A lapsed subscription answers 402 with a reason. Telling somebody to
+      // "try again" sends them round a loop that cannot succeed.
+      if (!handleLapsedError(error)) {
+        Alert.alert('Could not update goal', error instanceof Error ? error.message : 'The goal was not changed.');
+      }
     } finally {
       setSubmittingEdit(false);
     }
@@ -452,9 +460,11 @@ export default function GoalsScreen() {
               await deleteGoal({ id: goal.id });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
-            } catch {
+            } catch (error) {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              Alert.alert('Error', 'Failed to delete goal. Please try again.');
+              if (!handleLapsedError(error)) {
+                Alert.alert('Could not delete goal', error instanceof Error ? error.message : 'The goal was not deleted.');
+              }
             }
           },
         },
@@ -515,9 +525,13 @@ export default function GoalsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: getGetSavingsGoalsQueryKey() });
       setRenameVisible(false);
-    } catch {
+    } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to rename goal. Please try again.');
+      // A lapsed subscription answers 402 with a reason. Telling somebody to
+      // "try again" sends them round a loop that cannot succeed.
+      if (!handleLapsedError(error)) {
+        Alert.alert('Could not rename goal', error instanceof Error ? error.message : 'The goal was not renamed.');
+      }
     } finally {
       setSubmittingRename(false);
     }
@@ -706,9 +720,14 @@ export default function GoalsScreen() {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               invalidateGoalQueries();
               invalidateContribHistory(historyGoal.id);
-            } catch {
+            } catch (error) {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              Alert.alert('Could not remove entry', 'The savings entry was not changed. Please try again.');
+              if (!handleLapsedError(error)) {
+                Alert.alert(
+                  'Could not remove entry',
+                  error instanceof Error ? error.message : 'The savings entry was not changed.',
+                );
+              }
             }
           },
         },
@@ -848,7 +867,7 @@ export default function GoalsScreen() {
     } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (!handleLapsedError(error)) {
-        Alert.alert('Error', 'Failed to distribute payment. Please try again.');
+        Alert.alert('Could not distribute payment', error instanceof Error ? error.message : 'Nothing was distributed.');
       }
     } finally {
       setSubmittingCascade(false);
@@ -957,7 +976,7 @@ export default function GoalsScreen() {
     } catch (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (!handleLapsedError(error)) {
-        Alert.alert('Error', 'Failed to record contribution. Please try again.');
+        Alert.alert('Could not record contribution', error instanceof Error ? error.message : 'Nothing was recorded.');
       }
     } finally {
       setSubmittingContrib(false);
