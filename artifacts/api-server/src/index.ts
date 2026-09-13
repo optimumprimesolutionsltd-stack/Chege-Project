@@ -8,7 +8,7 @@ import { sql } from "drizzle-orm";
 import { assertExternalProductionConfiguration } from "./lib/productionConfig";
 import { ensureSubscriptionPlanCatalogue } from "./lib/subscription-catalog";
 import { runSubscriptionLifecycle } from "./lib/subscription-reminders";
-import { runAccountDeletions } from "./lib/account-deletion";
+import { runAccountDeletions, sendAccountDeletionReminders } from "./lib/account-deletion";
 
 // Backfill removed — contributions are now derived from deposits + direct expense payments
 
@@ -132,6 +132,12 @@ cronSchedule(
 cronSchedule(
   "15 7 * * *",
   async () => {
+    try {
+      const reminders = await sendAccountDeletionReminders();
+      logger.info(reminders, "Account deletion reminder run complete");
+    } catch (err) {
+      logger.error({ err }, "Account deletion reminder run failed");
+    }
     try {
       const result = await runAccountDeletions();
       logger.info(result, "Account deletion run complete");
