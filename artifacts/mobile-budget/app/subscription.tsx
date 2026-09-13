@@ -17,7 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useEntitlements, MEMBER_ENTITLEMENTS_KEY } from '@/hooks/useEntitlements';
-import { statusLine } from '@/lib/subscription-status';
+import { formatDeadline, statusLine } from '@/lib/subscription-status';
 
 // Prices are fixed; source of truth is @workspace/jamvi-pricing JAMVI_PACKAGE.
 const MONTHLY_KES = 100;
@@ -42,6 +42,7 @@ type PaymentStatus = {
   amountKes?: number;
   receipt?: string | null;
   detail?: string | null;
+  currentPeriodEnd?: string | null;
 };
 
 const kes = (value: number) => `KES ${value.toLocaleString('en-KE')}`;
@@ -82,7 +83,9 @@ export default function SubscriptionScreen() {
           stopPolling();
           setPaymentId(null);
           void queryClient.invalidateQueries({ queryKey: MEMBER_ENTITLEMENTS_KEY });
-          Alert.alert('Payment received', payment.receipt ? `M-Pesa code ${payment.receipt}.` : 'You are subscribed.');
+          const until = formatDeadline(payment.currentPeriodEnd ?? null);
+          const receiptLine = payment.receipt ? `M-Pesa code ${payment.receipt}.` : 'You are subscribed.';
+          Alert.alert('Payment received', until ? `${receiptLine} Active until ${until}.` : receiptLine);
           return;
         }
         if (payment.status === 'failed' || payment.status === 'timed_out') {

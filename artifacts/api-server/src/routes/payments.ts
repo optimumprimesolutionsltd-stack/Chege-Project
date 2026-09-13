@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, paymentsTable, PAYMENT_STATUS } from "@workspace/db";
+import { db, paymentsTable, PAYMENT_STATUS, userSubscriptionsTable } from "@workspace/db";
 import { BILLING_INTERVAL, type BillingInterval } from "@workspace/jamvi-pricing";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   isMpesaConfigured,
   missingMpesaSettings,
@@ -37,6 +37,31 @@ export const paymentsRouter = Router();
  * later poll) can still resolve it correctly.
  */
 const TERMINAL_FAILURE_CODES = new Set([1, 1032, 1037]);
+
+/**
+ * How long a still-PENDING payment is treated as "a prompt is genuinely on
+ * its way" rather than abandoned. Set above the app's own poll window (2
+ * minutes on both platforms - 40 tries, 3 seconds apart) so a member who is
+ * actually mid-prompt cannot start a second one under it, while a prompt
+ * they dismissed or never saw stops blocking new attempts shortly after the
+ * app itself would have given up waiting on it.
+ */
+const RECENT_PENDING_WINDOW_MS = 3 * 60 * 1000;
+
+/** The deadline to show alongside a "succeeded" answer, so a member reading
+ *  it right after paying sees the actual date their access now runs to, not
+ *  just a receipt. Read fresh rather than threaded through from
+ *  activateSubscription: this same response also covers a payment whose
+ *  activation happened earlier, on the callback, not on this request. */
+async function currentPeriodEndFor(userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ currentPeriodEnd: userSubscriptionsTable.currentPeriodEnd })
+    .from(userSubscriptionsTable)
+    .where(eq(userSubscriptionsTable.userId, userId))
+    .orderBy(desc(userSubscriptionsTable.createdAt))
+    .limit(1);
+  return row?.currentPeriodEnd?.toISOString() ?? null;
+}
 
 function billingIntervalFrom(value: unknown): BillingInterval | null {
   if (value === BILLING_INTERVAL.MONTHLY || value === BILLING_INTERVAL.ANNUAL) return value;
@@ -75,6 +100,27 @@ paymentsRouter.post("/payments/stk-push", async (req, res): Promise<void> => {
     phoneNumber = normalizeMsisdn(String(req.body?.phoneNumber ?? ""));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Enter a valid number." });
+    return;
+  }
+
+  // Refuse a second prompt while one already sent is still live. Without
+  // this, a double-tap, a slow network retry, or the same account open in
+  // two places at once sends two STK Push prompts - and a member confused
+  // about which one is real can enter their PIN on both, paying twice for
+  // one subscription with no easy way back. This never blocks paying again
+  // once a subscription is active: renewing early is a different, allowed
+  // action that only ever extends the current period.
+  const [recentPending] = await db
+    .select({ id: paymentsTable.id, createdAt: paymentsTable.createdAt })
+    .from(paymentsTable)
+    .where(and(eq(paymentsTable.userId, req.user!.id), eq(paymentsTable.status, PAYMENT_STATUS.PENDING)))
+    .orderBy(desc(paymentsTable.createdAt))
+    .limit(1);
+  if (recentPending && Date.now() - recentPending.createdAt.getTime() < RECENT_PENDING_WINDOW_MS) {
+    res.status(409).json({
+      error: "A payment prompt is already on its way to your phone. Check there before trying again.",
+      paymentId: recentPending.id,
+    });
     return;
   }
 
@@ -190,7 +236,11 @@ paymentsRouter.get("/payments/:id/status", async (req, res): Promise<void> => {
           });
           if (payment.promoCode) await recordRedemption(payment.promoCode, tx);
         });
-        res.json({ status: PAYMENT_STATUS.SUCCEEDED, amountKes: payment.amountKes });
+        res.json({
+          status: PAYMENT_STATUS.SUCCEEDED,
+          amountKes: payment.amountKes,
+          currentPeriodEnd: await currentPeriodEndFor(payment.userId),
+        });
         return;
       }
 
@@ -228,6 +278,9 @@ paymentsRouter.get("/payments/:id/status", async (req, res): Promise<void> => {
     amountKes: payment.amountKes,
     receipt: payment.mpesaReceiptNumber,
     detail: payment.resultDesc,
+    currentPeriodEnd: payment.status === PAYMENT_STATUS.SUCCEEDED
+      ? await currentPeriodEndFor(payment.userId)
+      : null,
   });
 });
 

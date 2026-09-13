@@ -26,6 +26,15 @@ export function daysUntil(iso: string | null, now: Date = new Date()): number | 
   return Math.ceil((end - now.getTime()) / 86_400_000);
 }
 
+/** A calendar date a member can actually remember, alongside the relative
+ *  day-count — "45 days left" is easy to lose track of; a date is not. */
+export function formatDeadline(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 /**
  * What the member is told about where they stand. The wording carries weight:
  * this is what a lapsed member reads before deciding whether to come back, so
@@ -59,11 +68,13 @@ export function statusLine(
   }
 
   if (entitlements.status === 'cancelled') {
+    const until = formatDeadline(entitlements.currentPeriodEnd);
     return {
       heading: 'Cancelled',
       detail:
         periodDays !== null && periodDays > 0
-          ? `You keep everything for another ${periodDays} ${plural(periodDays)}.`
+          ? `You keep everything for another ${periodDays} ${plural(periodDays)}`
+            + (until ? ` — until ${until}.` : '.')
           : 'Your paid period is ending.',
     };
   }
@@ -75,14 +86,18 @@ export function statusLine(
     };
   }
 
-  return {
-    heading: 'Subscribed',
-    detail:
-      periodDays !== null
-        ? `Your ${entitlements.billingInterval === 'annual' ? 'year' : 'month'} runs for another `
-          + `${periodDays} ${plural(periodDays)}.`
-        : 'Everything is active.',
-  };
+  {
+    const until = formatDeadline(entitlements.currentPeriodEnd);
+    return {
+      heading: 'Subscribed',
+      detail:
+        periodDays !== null
+          ? `Your ${entitlements.billingInterval === 'annual' ? 'year' : 'month'} runs for another `
+            + `${periodDays} ${plural(periodDays)}`
+            + (until ? ` — until ${until}.` : '.')
+          : 'Everything is active.',
+    };
+  }
 }
 
 /**

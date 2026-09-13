@@ -23,28 +23,48 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   selectRows,
   updateSet,
+  insertValues,
+  insertedPayment,
   queryStkStatus,
   readCallback,
+  sendStkPush,
   activateSubscription,
   recordRedemption,
 } = vi.hoisted(() => ({
-  selectRows: { current: [] as unknown[] },
+  // `current` is the default every select resolves to; `queue` lets a test
+  // give successive select calls (e.g. the payment lookup, then a later
+  // currentPeriodEndFor lookup) different rows without them colliding.
+  selectRows: { current: [] as unknown[], queue: [] as unknown[][] },
   updateSet: vi.fn((_values: Record<string, unknown>) => undefined),
+  insertValues: vi.fn((_values: Record<string, unknown>) => undefined),
+  insertedPayment: { current: { id: 99 } as { id: number } },
   queryStkStatus: vi.fn(async (_checkoutRequestId: string) => ({ resultCode: 0, resultDesc: "" })),
   readCallback: vi.fn((_body: unknown): unknown => null),
+  sendStkPush: vi.fn(async (_params: Record<string, unknown>) => ({ merchantRequestId: "m", checkoutRequestId: "c", customerMessage: "Check your phone." })),
   activateSubscription: vi.fn(async (_params: Record<string, unknown>) => undefined),
   recordRedemption: vi.fn(async (_code: string, _tx: unknown) => undefined),
 }));
+
+function nextSelectResult(): unknown[] {
+  return selectRows.queue.length > 0 ? selectRows.queue.shift()! : selectRows.current;
+}
 
 function makeQueryable() {
   return {
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => Promise.resolve(selectRows.current),
-          for: () => ({ limit: () => Promise.resolve(selectRows.current) }),
+          limit: () => Promise.resolve(nextSelectResult()),
+          for: () => ({ limit: () => Promise.resolve(nextSelectResult()) }),
+          orderBy: () => ({ limit: () => Promise.resolve(nextSelectResult()) }),
         }),
       }),
+    }),
+    insert: () => ({
+      values: (values: Record<string, unknown>) => {
+        insertValues(values);
+        return { returning: () => Promise.resolve([insertedPayment.current]) };
+      },
     }),
     update: () => ({
       set: (values: Record<string, unknown>) => {
@@ -70,7 +90,7 @@ vi.mock("../../lib/mpesa", () => ({
   isMpesaConfigured: vi.fn(() => true),
   missingMpesaSettings: vi.fn(() => [] as string[]),
   normalizeMsisdn: vi.fn((value: string) => value),
-  sendStkPush: vi.fn(async () => ({ merchantRequestId: "m", checkoutRequestId: "c", customerMessage: "" })),
+  sendStkPush,
   queryStkStatus,
   readCallback,
 }));
@@ -117,6 +137,44 @@ function pendingPayment(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   selectRows.current = [];
+  selectRows.queue = [];
+  insertedPayment.current = { id: 99 };
+});
+
+describe("POST /api/payments/stk-push", () => {
+  const body = { billingInterval: "monthly", phoneNumber: "254700000000" };
+
+  it("refuses a second push while a prompt sent moments ago is still pending", async () => {
+    selectRows.current = [pendingPayment({ id: 30, createdAt: new Date() })];
+
+    const response = await request(appForPayments()).post("/api/payments/stk-push").send(body);
+
+    expect(response.status).toBe(409);
+    expect(response.body.paymentId).toBe(30);
+    expect(sendStkPush).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("starts a new push when there is nothing pending", async () => {
+    selectRows.current = [];
+
+    const response = await request(appForPayments()).post("/api/payments/stk-push").send(body);
+
+    expect(response.status).toBe(202);
+    expect(sendStkPush).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a new push once the old pending one is stale enough to be abandoned", async () => {
+    // Well past the app's own 2-minute poll window - the member has moved on.
+    const staleCreatedAt = new Date(Date.now() - 10 * 60 * 1000);
+    selectRows.current = [pendingPayment({ id: 31, createdAt: staleCreatedAt })];
+
+    const response = await request(appForPayments()).post("/api/payments/stk-push").send(body);
+
+    expect(response.status).toBe(202);
+    expect(sendStkPush).toHaveBeenCalledTimes(1);
+  });
+
 });
 
 describe("GET /api/payments/:id/status", () => {
@@ -132,6 +190,18 @@ describe("GET /api/payments/:id/status", () => {
       expect.objectContaining({ userId: "user-1", interval: "monthly", promoCode: null }),
     );
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ status: "succeeded" }));
+  });
+
+  it("reports the actual deadline alongside a success, not just a receipt", async () => {
+    selectRows.queue = [
+      [pendingPayment()], // the initial payment lookup
+      [{ currentPeriodEnd: new Date("2026-11-12T00:00:00.000Z") }], // currentPeriodEndFor
+    ];
+    queryStkStatus.mockResolvedValue({ resultCode: 0, resultDesc: "ok" });
+
+    const response = await request(appForPayments()).get("/api/payments/21/status");
+
+    expect(response.body.currentPeriodEnd).toBe("2026-11-12T00:00:00.000Z");
   });
 
   it("leaves the payment pending on an inconclusive code (4999), instead of marking it failed", async () => {
@@ -165,6 +235,25 @@ describe("GET /api/payments/:id/status", () => {
     expect(response.status).toBe(200);
     expect(response.body.status).toBe("succeeded");
     expect(queryStkStatus).not.toHaveBeenCalled();
+  });
+
+  it("still reports the deadline for a payment that succeeded earlier, on the callback", async () => {
+    selectRows.queue = [
+      [pendingPayment({ id: 24, status: "succeeded" })],
+      [{ currentPeriodEnd: new Date("2027-01-05T00:00:00.000Z") }],
+    ];
+
+    const response = await request(appForPayments()).get("/api/payments/24/status");
+
+    expect(response.body.currentPeriodEnd).toBe("2027-01-05T00:00:00.000Z");
+  });
+
+  it("never reports a deadline for a payment that has not succeeded", async () => {
+    selectRows.current = [pendingPayment({ id: 26, status: "failed" })];
+
+    const response = await request(appForPayments()).get("/api/payments/26/status");
+
+    expect(response.body.currentPeriodEnd).toBeNull();
   });
 });
 
