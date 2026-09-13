@@ -103,9 +103,14 @@ describe("a past due subscription", () => {
     expect(planFor(pastDue(inDays(1)), NOW).reminders[0].kind).toBe(REMINDER.GRACE_ENDING);
   });
 
-  it("expires once grace is spent", () => {
-    expect(planFor(pastDue(inDays(-1)), NOW).transition?.status)
-      .toBe(SUBSCRIPTION_STATUS.EXPIRED);
+  it("expires once grace is spent, and says so", () => {
+    // The renewal-path twin of a trial's own TRIAL_ENDED: without it, a
+    // paying member's last word was "tomorrow", with nothing said once
+    // recording actually closed.
+    const plan = planFor(pastDue(inDays(-1)), NOW);
+
+    expect(plan.transition?.status).toBe(SUBSCRIPTION_STATUS.EXPIRED);
+    expect(plan.reminders[0].kind).toBe(REMINDER.GRACE_ENDED);
   });
 
   it("grants a window to a row that somehow has none, rather than expiring it", () => {
