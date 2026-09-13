@@ -21,6 +21,7 @@
 
 import { and, eq, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { EmailNotConfiguredError, sendEmail } from "./email";
 import {
   bankAccountsTable,
   budgetCategoriesTable,
@@ -39,29 +40,170 @@ import {
   onboardingPreferencesTable,
   passwordResetTokensTable,
   savingsGoalsTable,
+  // The name is a holdover from when this table only ever held subscription
+  // reminders. Its schema (user, kind, sentFor, sentAt, unique on the first
+  // three) is generic - "send this kind of notice about this date at most
+  // once" - and reusing it here avoids a migration for what is the same
+  // problem: telling somebody about a deadline exactly once.
+  subscriptionRemindersTable,
   usersTable,
 } from "@workspace/db";
 
 export type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export const ACCOUNT_DELETION_GRACE_DAYS = 14;
+/** How long before erasure the one reminder goes out. Late enough that
+ *  "in a couple of days" is still true when it lands, early enough to
+ *  actually act on. */
+const ACCOUNT_DELETION_REMINDER_DAYS_BEFORE = 2;
+const ACCOUNT_DELETION_REMINDER_KIND = "account_deletion_reminder";
 const DAY_MS = 86_400_000;
+
+function daysBetween(from: Date, to: Date): number {
+  return Math.ceil((to.getTime() - from.getTime()) / DAY_MS);
+}
+
+function fromAddress(): string {
+  return process.env.INVITATION_FROM_EMAIL?.trim() || "Jamvi <info@jamvi.co.ke>";
+}
+
+function formatDeletionDate(date: Date): string {
+  return date.toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" });
+}
+
+/**
+ * What each account-deletion email says. Written the same way as the
+ * subscription reminders: what is still true (nothing erased yet, how to
+ * cancel) before what happens if nothing is done.
+ */
+function composeDeletionEmail(
+  kind: "requested" | "reminder",
+  firstName: string,
+  scheduledFor: Date,
+): { subject: string; html: string } {
+  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
+  const when = formatDeletionDate(scheduledFor);
+  const whatHappens =
+    `<p>On ${when}, if you have not signed back in:</p>`
+    + `<ul><li>Your Personal budget and everything recorded in it is erased.</li>`
+    + `<li>You leave every Shared group you belong to — where you own one, ownership passes to the `
+    + `longest-standing member left.</li>`
+    + `<li>Your name, email address and photo are removed. Records of payments you have made are kept `
+    + `as billing history.</li></ul>`;
+  const howToCancel =
+    `<p>Signing back in any time before then cancels this automatically — your budgets and groups `
+    + `will be exactly as you left them.</p>`;
+
+  if (kind === "requested") {
+    return {
+      subject: "Your Jamvi account is scheduled for deletion",
+      html: `<p>${greeting}</p><p>We have received your request to delete your Jamvi account. `
+        + `Nothing has been erased yet.</p>${howToCancel}${whatHappens}`,
+    };
+  }
+
+  return {
+    subject: `Your Jamvi account will be deleted on ${when}`,
+    html: `<p>${greeting}</p><p>A reminder: your Jamvi account is scheduled for deletion on ${when} — `
+      + `about ${ACCOUNT_DELETION_REMINDER_DAYS_BEFORE} days from now.</p>${howToCancel}${whatHappens}`,
+  };
+}
+
+/** Best-effort send: a mail failure must never be the reason an account
+ *  deletion could not be requested, or block the run that erases due
+ *  accounts. Mirrors subscription-reminders.ts's own handling. */
+async function trySendDeletionEmail(
+  to: string,
+  firstName: string,
+  kind: "requested" | "reminder",
+  scheduledFor: Date,
+): Promise<void> {
+  const { subject, html } = composeDeletionEmail(kind, firstName, scheduledFor);
+  try {
+    await sendEmail({ from: fromAddress(), to: [to], subject, html });
+  } catch (error) {
+    if (error instanceof EmailNotConfiguredError) {
+      logger.warn("Account-deletion email was not sent: no mailer is configured");
+      return;
+    }
+    logger.error({ err: error, kind }, "Could not send an account-deletion email");
+  }
+}
 
 export function scheduledDeletionDate(requestedAt: Date): Date {
   return new Date(requestedAt.getTime() + ACCOUNT_DELETION_GRACE_DAYS * DAY_MS);
 }
 
-/** Starts the grace period. Calling this again while one is already running
- *  restarts the clock from now, which only matters if a client retries. */
+/**
+ * Starts the grace period. Calling this again while one is already running
+ * restarts the clock from now, which only matters if a client retries -
+ * and is also why the confirmation email only ever fires on the first call:
+ * a retry restarting the clock must not also restart the inbox.
+ */
 export async function requestAccountDeletion(
   userId: string,
   now: Date = new Date(),
 ): Promise<Date> {
+  const scheduledFor = scheduledDeletionDate(now);
+
+  const [existing] = await db
+    .select({ email: usersTable.email, firstName: usersTable.firstName, deletionRequestedAt: usersTable.deletionRequestedAt })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
   await db
     .update(usersTable)
     .set({ deletionRequestedAt: now })
     .where(eq(usersTable.id, userId));
-  return scheduledDeletionDate(now);
+
+  if (existing?.email && !existing.deletionRequestedAt) {
+    await trySendDeletionEmail(existing.email, existing.firstName ?? "", "requested", scheduledFor);
+  }
+
+  return scheduledFor;
+}
+
+/**
+ * Emails everyone whose account will be erased in
+ * ACCOUNT_DELETION_REMINDER_DAYS_BEFORE days, once - the one nudge between
+ * the confirmation sent at request time and the erasure itself. Somebody who
+ * requested deletion is signed out immediately, so unlike a lapsed
+ * subscription they cannot simply open the app and see a banner; this email
+ * is the only thing that would remind them in time.
+ */
+export async function sendAccountDeletionReminders(
+  now: Date = new Date(),
+): Promise<{ examined: number; sent: number }> {
+  const pending = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      firstName: usersTable.firstName,
+      deletionRequestedAt: usersTable.deletionRequestedAt,
+    })
+    .from(usersTable)
+    .where(and(isNotNull(usersTable.deletionRequestedAt), isNull(usersTable.deletedAt)));
+
+  let sent = 0;
+  for (const row of pending) {
+    if (!row.email || !row.deletionRequestedAt) continue;
+    const scheduledFor = scheduledDeletionDate(row.deletionRequestedAt);
+    if (scheduledFor <= now) continue; // Already due - runAccountDeletions handles it, not a reminder.
+    if (daysBetween(now, scheduledFor) > ACCOUNT_DELETION_REMINDER_DAYS_BEFORE) continue;
+
+    const claimed = await db
+      .insert(subscriptionRemindersTable)
+      .values({ userId: row.id, kind: ACCOUNT_DELETION_REMINDER_KIND, sentFor: scheduledFor })
+      .onConflictDoNothing()
+      .returning({ id: subscriptionRemindersTable.id });
+    if (claimed.length === 0) continue;
+
+    await trySendDeletionEmail(row.email, row.firstName ?? "", "reminder", scheduledFor);
+    sent += 1;
+  }
+
+  return { examined: pending.length, sent };
 }
 
 /**
