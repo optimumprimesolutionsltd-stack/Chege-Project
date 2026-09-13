@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, paymentsTable, PAYMENT_STATUS } from "@workspace/db";
+import { db, paymentsTable, PAYMENT_STATUS, userSubscriptionsTable } from "@workspace/db";
 import { BILLING_INTERVAL, type BillingInterval } from "@workspace/jamvi-pricing";
 import { and, desc, eq } from "drizzle-orm";
 import {
@@ -47,6 +47,21 @@ const TERMINAL_FAILURE_CODES = new Set([1, 1032, 1037]);
  * app itself would have given up waiting on it.
  */
 const RECENT_PENDING_WINDOW_MS = 3 * 60 * 1000;
+
+/** The deadline to show alongside a "succeeded" answer, so a member reading
+ *  it right after paying sees the actual date their access now runs to, not
+ *  just a receipt. Read fresh rather than threaded through from
+ *  activateSubscription: this same response also covers a payment whose
+ *  activation happened earlier, on the callback, not on this request. */
+async function currentPeriodEndFor(userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ currentPeriodEnd: userSubscriptionsTable.currentPeriodEnd })
+    .from(userSubscriptionsTable)
+    .where(eq(userSubscriptionsTable.userId, userId))
+    .orderBy(desc(userSubscriptionsTable.createdAt))
+    .limit(1);
+  return row?.currentPeriodEnd?.toISOString() ?? null;
+}
 
 function billingIntervalFrom(value: unknown): BillingInterval | null {
   if (value === BILLING_INTERVAL.MONTHLY || value === BILLING_INTERVAL.ANNUAL) return value;
@@ -221,7 +236,11 @@ paymentsRouter.get("/payments/:id/status", async (req, res): Promise<void> => {
           });
           if (payment.promoCode) await recordRedemption(payment.promoCode, tx);
         });
-        res.json({ status: PAYMENT_STATUS.SUCCEEDED, amountKes: payment.amountKes });
+        res.json({
+          status: PAYMENT_STATUS.SUCCEEDED,
+          amountKes: payment.amountKes,
+          currentPeriodEnd: await currentPeriodEndFor(payment.userId),
+        });
         return;
       }
 
@@ -259,6 +278,9 @@ paymentsRouter.get("/payments/:id/status", async (req, res): Promise<void> => {
     amountKes: payment.amountKes,
     receipt: payment.mpesaReceiptNumber,
     detail: payment.resultDesc,
+    currentPeriodEnd: payment.status === PAYMENT_STATUS.SUCCEEDED
+      ? await currentPeriodEndFor(payment.userId)
+      : null,
   });
 });
 

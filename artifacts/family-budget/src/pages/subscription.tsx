@@ -6,13 +6,14 @@ import { Input } from "@/components/ui/input";
 import { formatKes } from "@/lib/utils";
 import { Loader2, Check, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { statusLine, type MemberEntitlements } from "@/lib/subscription-status";
+import { formatDeadline, statusLine, type MemberEntitlements } from "@/lib/subscription-status";
 
 type PaymentStatus = {
   status: "pending" | "succeeded" | "failed" | "timed_out";
   amountKes?: number;
   receipt?: string | null;
   detail?: string | null;
+  currentPeriodEnd?: string | null;
 };
 
 const MONTHLY_KES = 100;
@@ -62,9 +63,13 @@ export default function Subscription() {
         if (payment.status === "succeeded") {
           stopPolling();
           setPaymentId(null);
+          const until = formatDeadline(payment.currentPeriodEnd ?? null);
+          const receiptLine = payment.receipt ? `M-Pesa code ${payment.receipt}.` : undefined;
           toast({
             title: "Payment received",
-            description: payment.receipt ? `M-Pesa code ${payment.receipt}.` : undefined,
+            description: until
+              ? `${receiptLine ? `${receiptLine} ` : ""}Active until ${until}.`
+              : receiptLine,
           });
           queryClient.invalidateQueries({ queryKey: ["member-entitlements"] });
           return;
