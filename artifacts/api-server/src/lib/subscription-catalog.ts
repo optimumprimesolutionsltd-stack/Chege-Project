@@ -23,14 +23,29 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 
 type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-/** Statuses that describe a live subscription, whether or not it is paid up.
- *  Cancelled belongs here: access runs to the end of the period already paid. */
+/**
+ * Statuses worth reading the dates on - every status the app ever assigns
+ * except one it never touches.
+ *
+ * Excluding EXPIRED here used to make an already-expired row invisible to
+ * resolveMemberEntitlements: the query would find no row at all, which every
+ * caller reads as "this account predates subscriptions, never lock them out"
+ * - restoring full access instead of denying it, the moment the nightly
+ * lifecycle job relabels a lapsed trial or grace period EXPIRED. A trial or
+ * past-due row past its date was still caught correctly before that
+ * relabelling, which is what let this hide: the gap only opened once a
+ * subscription had been lapsed long enough for the job to actually run.
+ *
+ * Cancelled belongs here too: access runs to the end of the period already
+ * paid, so its dates still matter.
+ */
 const liveStatuses = [
   SUBSCRIPTION_STATUS.TRIAL,
   SUBSCRIPTION_STATUS.PENDING,
   SUBSCRIPTION_STATUS.ACTIVE,
   SUBSCRIPTION_STATUS.PAST_DUE,
   SUBSCRIPTION_STATUS.CANCELLED,
+  SUBSCRIPTION_STATUS.EXPIRED,
 ] as const;
 
 export function subscriptionStatusGrantsEntitlements(status: string): boolean {
