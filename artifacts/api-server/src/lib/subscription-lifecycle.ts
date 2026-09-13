@@ -25,6 +25,12 @@ export const REMINDER = {
   PAYMENT_MISSED: "payment_missed",
   /** Last word before recording goes read-only. */
   GRACE_ENDING: "grace_ending",
+  /** Sent at the moment the grace period actually runs out and recording
+   *  closes - the renewal-path twin of TRIAL_ENDED, which already told a
+   *  lapsed trial member the same thing at their equivalent cutoff. Without
+   *  this, a paying member's last word was "tomorrow", with nothing said
+   *  once it actually happened. */
+  GRACE_ENDED: "grace_ended",
 } as const;
 
 export type ReminderKind = (typeof REMINDER)[keyof typeof REMINDER];
@@ -127,7 +133,10 @@ export function planFor(subscription: SubscriptionRow, now: Date = new Date()): 
       }
 
       if (now >= graceEndsAt) {
-        return { transition: { status: SUBSCRIPTION_STATUS.EXPIRED }, reminders };
+        return {
+          transition: { status: SUBSCRIPTION_STATUS.EXPIRED },
+          reminders: [{ kind: REMINDER.GRACE_ENDED, dueFor: graceEndsAt }],
+        };
       }
       if (daysBetween(now, graceEndsAt) <= 1) {
         reminders.push({ kind: REMINDER.GRACE_ENDING, dueFor: graceEndsAt });

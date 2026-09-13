@@ -82,6 +82,14 @@ function compose(kind: ReminderKind, firstName: string): { subject: string; html
           + `<p>Nothing is deleted at any point.</p>`
           + `${button}`,
       };
+    case REMINDER.GRACE_ENDED:
+      return {
+        subject: "Your grace period has ended",
+        html: `<p>${greeting}</p><p>Your grace period has ended. Your budget, your history and `
+          + `every figure you have entered are all still here.</p><p>Recording is `
+          + `read-only — your own budget and any Shared group — until you subscribe, at `
+          + `${price} a month.</p>${button}`,
+      };
   }
 }
 
