@@ -15,6 +15,7 @@ import {
   recordRedemption,
   resolvePrice,
 } from "../lib/subscription-billing";
+import { stkPushLimiter, stkPushPhoneLimiter } from "../middlewares/rateLimit";
 
 /** Safaricom posts here with no signature, so it cannot sit behind requireMember. */
 export const publicPaymentsRouter = Router();
@@ -75,7 +76,7 @@ function billingIntervalFrom(value: unknown): BillingInterval | null {
  * to reconcile against. A prompt that is sent with nothing recorded is a
  * payment nobody can account for.
  */
-paymentsRouter.post("/payments/stk-push", async (req, res): Promise<void> => {
+paymentsRouter.post("/payments/stk-push", stkPushLimiter, stkPushPhoneLimiter, async (req, res): Promise<void> => {
   if (!isMpesaConfigured()) {
     // The names go to the logs and to the caller so that whoever is deploying
     // is told which value to set, instead of checking five of them by hand.

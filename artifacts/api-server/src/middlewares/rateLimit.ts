@@ -21,6 +21,7 @@
  */
 
 import type { NextFunction, Request, Response } from "express";
+import { normalizeMsisdn } from "../lib/mpesa";
 
 export interface RateLimitOptions {
   /** Length of the window in milliseconds. */
@@ -186,4 +187,42 @@ export const resetPasswordLimiter = rateLimit({
   max: 20,
   countsAgainstLimit: failed,
   message: "Too many attempts. Ask for a new reset link.",
+});
+
+/** STK Push attempts, per connection. The 3-minute PENDING guard in
+ *  payments.ts stops rapid duplicates against one payment; this is the
+ *  longer-window backstop against sustained abuse spread across many
+ *  otherwise-ordinary-looking single attempts, aimed at one number or many. */
+export const stkPushLimiter = rateLimit({
+  name: "stk-push",
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: "Too many payment attempts from this connection. Wait a while and try again.",
+});
+
+/**
+ * STK Push attempts, per phone number.
+ *
+ * Stops one number being sent repeated M-Pesa prompts from many different
+ * connections, which the per-IP limit above cannot see - the actual harm
+ * here is the prompt itself landing on a stranger's phone, not the money
+ * (a push nobody answers costs nothing). Normalised the same way the route
+ * itself does before counting, so 07... and 254... for the same number
+ * cannot be used to dodge this by varying the format each time; an input
+ * that will not normalise is left for the route's own validation to refuse.
+ */
+export const stkPushPhoneLimiter = rateLimit({
+  name: "stk-push-phone",
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: "Too many payment prompts sent to this number recently. Wait a while and try again.",
+  keyFor: (req) => {
+    const raw = (req.body as { phoneNumber?: unknown } | undefined)?.phoneNumber;
+    if (typeof raw !== "string") return null;
+    try {
+      return normalizeMsisdn(raw);
+    } catch {
+      return null;
+    }
+  },
 });
