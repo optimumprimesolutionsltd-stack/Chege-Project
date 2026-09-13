@@ -114,7 +114,6 @@ export default function SettingsScreen() {
   const queryClient = useQueryClient();
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'admin' | 'member'>('member');
   const [managingMembers, setManagingMembers] = useState(false);
@@ -807,9 +806,9 @@ export default function SettingsScreen() {
       // kept billing history is the one people are most likely to assume the
       // opposite of, so it is said rather than left out.
       [
-        'You are signed out immediately.',
+        "You'll be asked to confirm with a code sent to your email — you stay signed in until then.",
         '',
-        'Nothing is erased for 14 days. Sign back in before then and the deletion is cancelled — your budgets and groups are exactly as you left them.',
+        'Nothing is erased for 14 days after that. Sign back in before then and the deletion is cancelled — your budgets and groups are exactly as you left them.',
         '',
         'If you do not sign back in, after 14 days:',
         '• Your Personal budget and everything recorded in it is erased.',
@@ -820,22 +819,9 @@ export default function SettingsScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete my account',
+          text: 'Continue',
           style: 'destructive',
-          onPress: async () => {
-            setDeletingAccount(true);
-            try {
-              await customFetch('/api/auth/delete-account', { method: 'POST' });
-              await logout();
-            } catch (error) {
-              Alert.alert(
-                'Could not delete your account',
-                error instanceof Error ? error.message : 'Check your connection and try again.',
-              );
-            } finally {
-              setDeletingAccount(false);
-            }
-          },
+          onPress: () => router.push('/delete-account-code'),
         },
       ],
     );
@@ -1739,11 +1725,10 @@ export default function SettingsScreen() {
         <Pressable
           testID="delete-account"
           onPress={handleDeleteAccount}
-          disabled={deletingAccount}
-          style={({ pressed }) => [styles.deleteAccountBtn, { opacity: pressed || deletingAccount ? 0.6 : 1 }]}
+          style={({ pressed }) => [styles.deleteAccountBtn, { opacity: pressed ? 0.6 : 1 }]}
         >
           <Text style={[styles.deleteAccountText, { color: colors.mutedForeground }]}>
-            {deletingAccount ? 'Deleting…' : 'Delete account'}
+            Delete account
           </Text>
         </Pressable>
       </PageScrollView>
