@@ -23,15 +23,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   selectRows,
   updateSet,
+  insertValues,
+  insertedPayment,
   queryStkStatus,
   readCallback,
+  sendStkPush,
   activateSubscription,
   recordRedemption,
 } = vi.hoisted(() => ({
   selectRows: { current: [] as unknown[] },
   updateSet: vi.fn((_values: Record<string, unknown>) => undefined),
+  insertValues: vi.fn((_values: Record<string, unknown>) => undefined),
+  insertedPayment: { current: { id: 99 } as { id: number } },
   queryStkStatus: vi.fn(async (_checkoutRequestId: string) => ({ resultCode: 0, resultDesc: "" })),
   readCallback: vi.fn((_body: unknown): unknown => null),
+  sendStkPush: vi.fn(async (_params: Record<string, unknown>) => ({ merchantRequestId: "m", checkoutRequestId: "c", customerMessage: "Check your phone." })),
   activateSubscription: vi.fn(async (_params: Record<string, unknown>) => undefined),
   recordRedemption: vi.fn(async (_code: string, _tx: unknown) => undefined),
 }));
@@ -43,8 +49,15 @@ function makeQueryable() {
         where: () => ({
           limit: () => Promise.resolve(selectRows.current),
           for: () => ({ limit: () => Promise.resolve(selectRows.current) }),
+          orderBy: () => ({ limit: () => Promise.resolve(selectRows.current) }),
         }),
       }),
+    }),
+    insert: () => ({
+      values: (values: Record<string, unknown>) => {
+        insertValues(values);
+        return { returning: () => Promise.resolve([insertedPayment.current]) };
+      },
     }),
     update: () => ({
       set: (values: Record<string, unknown>) => {
@@ -70,7 +83,7 @@ vi.mock("../../lib/mpesa", () => ({
   isMpesaConfigured: vi.fn(() => true),
   missingMpesaSettings: vi.fn(() => [] as string[]),
   normalizeMsisdn: vi.fn((value: string) => value),
-  sendStkPush: vi.fn(async () => ({ merchantRequestId: "m", checkoutRequestId: "c", customerMessage: "" })),
+  sendStkPush,
   queryStkStatus,
   readCallback,
 }));
@@ -117,6 +130,43 @@ function pendingPayment(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   selectRows.current = [];
+  insertedPayment.current = { id: 99 };
+});
+
+describe("POST /api/payments/stk-push", () => {
+  const body = { billingInterval: "monthly", phoneNumber: "254700000000" };
+
+  it("refuses a second push while a prompt sent moments ago is still pending", async () => {
+    selectRows.current = [pendingPayment({ id: 30, createdAt: new Date() })];
+
+    const response = await request(appForPayments()).post("/api/payments/stk-push").send(body);
+
+    expect(response.status).toBe(409);
+    expect(response.body.paymentId).toBe(30);
+    expect(sendStkPush).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("starts a new push when there is nothing pending", async () => {
+    selectRows.current = [];
+
+    const response = await request(appForPayments()).post("/api/payments/stk-push").send(body);
+
+    expect(response.status).toBe(202);
+    expect(sendStkPush).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a new push once the old pending one is stale enough to be abandoned", async () => {
+    // Well past the app's own 2-minute poll window - the member has moved on.
+    const staleCreatedAt = new Date(Date.now() - 10 * 60 * 1000);
+    selectRows.current = [pendingPayment({ id: 31, createdAt: staleCreatedAt })];
+
+    const response = await request(appForPayments()).post("/api/payments/stk-push").send(body);
+
+    expect(response.status).toBe(202);
+    expect(sendStkPush).toHaveBeenCalledTimes(1);
+  });
+
 });
 
 describe("GET /api/payments/:id/status", () => {
