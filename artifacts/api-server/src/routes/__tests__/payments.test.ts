@@ -19,6 +19,7 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetRateLimits } from "../../middlewares/rateLimit";
 
 const {
   selectRows,
@@ -139,6 +140,10 @@ beforeEach(() => {
   selectRows.current = [];
   selectRows.queue = [];
   insertedPayment.current = { id: 99 };
+  // stk-push now sits behind real rate limiters (not mocked - the point is
+  // to exercise the actual wiring); its counters are process-global and
+  // would otherwise leak between these tests.
+  resetRateLimits();
 });
 
 describe("POST /api/payments/stk-push", () => {

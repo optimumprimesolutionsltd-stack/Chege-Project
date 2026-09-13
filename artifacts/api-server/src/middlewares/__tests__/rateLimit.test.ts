@@ -11,7 +11,7 @@
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { rateLimit, resetRateLimits } from "../rateLimit";
+import { rateLimit, resetRateLimits, stkPushPhoneLimiter } from "../rateLimit";
 
 function appWith(
   middleware: ReturnType<typeof rateLimit>,
@@ -141,6 +141,41 @@ describe("counting by something other than the caller", () => {
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await expect(request(app).post("/thing").send({})).resolves.toMatchObject({ status: 200 });
+    }
+  });
+});
+
+describe("stkPushPhoneLimiter", () => {
+  it("treats 07... and 254... for the same number as the same subject", async () => {
+    const app = appWith(stkPushPhoneLimiter);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await expect(request(app).post("/thing").send({ phoneNumber: "0758449475" }))
+        .resolves.toMatchObject({ status: 200 });
+    }
+
+    // The 6th, however the number is written, is the same subject's 6th.
+    const refused = await request(app).post("/thing").send({ phoneNumber: "254758449475" });
+    expect(refused.status).toBe(429);
+  });
+
+  it("does not limit a different number by another one's attempts", async () => {
+    const app = appWith(stkPushPhoneLimiter);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await request(app).post("/thing").send({ phoneNumber: "0758449475" });
+    }
+
+    await expect(request(app).post("/thing").send({ phoneNumber: "0711111111" }))
+      .resolves.toMatchObject({ status: 200 });
+  });
+
+  it("lets a phone number that will not normalise through, for the route's own validation to refuse", async () => {
+    const app = appWith(stkPushPhoneLimiter);
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await expect(request(app).post("/thing").send({ phoneNumber: "not-a-number" }))
+        .resolves.toMatchObject({ status: 200 });
     }
   });
 });
