@@ -85,3 +85,36 @@ export const passwordResetTokensTable = pgTable(
 );
 
 export type PasswordResetToken = typeof passwordResetTokensTable.$inferSelect;
+
+/**
+ * One-time codes confirming an account-deletion request.
+ *
+ * Only the hash is stored, the same reasoning as password reset tokens - but
+ * unlike a reset token, a 6-digit code is not random enough for the hash
+ * itself to be treated as unique across every member: two different people
+ * really can be issued the same code. What actually stops guessing is that a
+ * code is single-use, expires quickly, and is rate-limited at the point it
+ * is issued - so lookups are always scoped to one member's own rows, never a
+ * bare hash search across everyone's.
+ */
+export const accountDeletionCodesTable = pgTable(
+  'account_deletion_codes',
+  {
+    id: varchar('id').primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar('user_id')
+      .notNull()
+      .references(() => usersTable.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** Set the moment a code is spent, so a second attempt with the same
+     *  code - or one read off an old email - finds it used rather than valid. */
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('account_deletion_codes_user_idx').on(table.userId),
+    index('account_deletion_codes_expires_idx').on(table.expiresAt),
+  ],
+);
+
+export type AccountDeletionCode = typeof accountDeletionCodesTable.$inferSelect;

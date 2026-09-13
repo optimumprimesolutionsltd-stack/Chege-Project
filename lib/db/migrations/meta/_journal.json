@@ -211,6 +211,13 @@
       "when": 1788862000001,
       "tag": "0029_account_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1789267800000,
+      "tag": "0030_account_deletion_codes",
+      "breakpoints": true
     }
   ]
 }

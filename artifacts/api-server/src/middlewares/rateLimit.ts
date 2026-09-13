@@ -226,3 +226,27 @@ export const stkPushPhoneLimiter = rateLimit({
     }
   },
 });
+
+/** Account-deletion codes, per signed-in member. Every request counts: a
+ *  code that is actually sent and used is exactly what this is limiting -
+ *  three an hour is well above what anyone confirming in earnest needs. */
+export const accountDeletionCodeLimiter = rateLimit({
+  name: "account-deletion-code",
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: "Too many codes requested. Check your email, including spam, or try again shortly.",
+  keyFor: (req) => req.user?.id ?? null,
+});
+
+/** Spending an account-deletion code. Counts only failures, the same
+ *  reasoning as resetPasswordLimiter: guessing a 6-digit code inside its own
+ *  10-minute lifetime is not realistic even without this, so it is a
+ *  backstop against retry noise rather than the actual defence. */
+export const accountDeletionConfirmLimiter = rateLimit({
+  name: "account-deletion-confirm",
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  countsAgainstLimit: failed,
+  message: "Too many attempts. Request a new code.",
+  keyFor: (req) => req.user?.id ?? null,
+});

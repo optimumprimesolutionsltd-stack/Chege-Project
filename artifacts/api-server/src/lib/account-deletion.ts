@@ -19,10 +19,12 @@
  * identifies the person and stays only as that anchor.
  */
 
-import { and, eq, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
+import crypto from "node:crypto";
+import { and, desc, eq, gt, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { EmailNotConfiguredError, sendEmail } from "./email";
 import {
+  accountDeletionCodesTable,
   bankAccountsTable,
   budgetCategoriesTable,
   contributionsTable,
@@ -217,6 +219,114 @@ export async function cancelPendingAccountDeletion(userId: string): Promise<void
     .update(usersTable)
     .set({ deletionRequestedAt: null })
     .where(and(eq(usersTable.id, userId), isNull(usersTable.deletedAt)));
+}
+
+/**
+ * A one-time code confirming intent to delete an account, so someone's
+ * session being left open on a shared device cannot end in a scheduled
+ * deletion from a single tap. requestAccountDeletion itself is only ever
+ * reached through confirmAccountDeletionCode below - never directly from a
+ * route - once a code has actually been verified.
+ */
+const DELETION_CODE_LENGTH = 6;
+const DELETION_CODE_TTL_MS = 10 * 60 * 1000;
+
+export class IncorrectDeletionCodeError extends Error {
+  constructor() {
+    super("That code is incorrect or has expired.");
+  }
+}
+
+function hashDeletionCode(code: string): string {
+  return crypto.createHash("sha256").update(code).digest("hex");
+}
+
+function generateDeletionCode(): string {
+  // crypto.randomInt is uniform, unlike Math.random - worth it even for a
+  // 6-digit code, since this is the one thing standing before deletion.
+  return String(crypto.randomInt(0, 10 ** DELETION_CODE_LENGTH)).padStart(DELETION_CODE_LENGTH, "0");
+}
+
+/**
+ * Emails a fresh code and stores its hash, expiring in ten minutes. Does not
+ * touch deletionRequestedAt - nothing about the account changes until the
+ * code is actually confirmed.
+ *
+ * Unlike the deletion emails above, a failure here is not best-effort: this
+ * email is the entire mechanism, not a courtesy notice, so if it cannot be
+ * sent the caller needs to know and say so rather than silently leaving the
+ * member with no way to ever confirm.
+ */
+export async function requestAccountDeletionCode(userId: string, now: Date = new Date()): Promise<void> {
+  const [user] = await db
+    .select({ email: usersTable.email, firstName: usersTable.firstName })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!user?.email) {
+    throw new Error("This account has no email on file to send a code to.");
+  }
+
+  const code = generateDeletionCode();
+  await db.insert(accountDeletionCodesTable).values({
+    userId,
+    codeHash: hashDeletionCode(code),
+    expiresAt: new Date(now.getTime() + DELETION_CODE_TTL_MS),
+  });
+
+  const greeting = user.firstName ? `Hi ${user.firstName},` : "Hi,";
+  try {
+    await sendEmail({
+      from: fromAddress(),
+      to: [user.email],
+      subject: "Your Jamvi account-deletion code",
+      html: `<p>${greeting}</p><p>Use this code to confirm you want to delete your Jamvi account:</p>`
+        + `<p style="font-size:28px;font-weight:700;letter-spacing:4px;">${code}</p>`
+        + `<p>It expires in 10 minutes. If you did not ask to delete your account, ignore this message — `
+        + `nothing happens without the code.</p>`,
+    });
+  } catch (error) {
+    if (error instanceof EmailNotConfiguredError) {
+      logger.error("Could not send an account-deletion code: no mailer is configured");
+    } else {
+      logger.error({ err: error }, "Could not send an account-deletion code");
+    }
+    throw new Error("Could not send a confirmation code. Try again shortly.");
+  }
+}
+
+/**
+ * Verifies a code and, only if it checks out, actually starts the grace
+ * period. Single-use: consumed the moment it is spent, so a code cannot
+ * confirm a second deletion later, and scoped to this member's own rows, so
+ * verifying is never a search across every code ever issued.
+ */
+export async function confirmAccountDeletionCode(
+  userId: string,
+  code: string,
+  now: Date = new Date(),
+): Promise<Date> {
+  const [pending] = await db
+    .select({ id: accountDeletionCodesTable.id, codeHash: accountDeletionCodesTable.codeHash })
+    .from(accountDeletionCodesTable)
+    .where(and(
+      eq(accountDeletionCodesTable.userId, userId),
+      isNull(accountDeletionCodesTable.usedAt),
+      gt(accountDeletionCodesTable.expiresAt, now),
+    ))
+    .orderBy(desc(accountDeletionCodesTable.createdAt))
+    .limit(1);
+
+  if (!pending || pending.codeHash !== hashDeletionCode(code)) {
+    throw new IncorrectDeletionCodeError();
+  }
+
+  await db
+    .update(accountDeletionCodesTable)
+    .set({ usedAt: now })
+    .where(eq(accountDeletionCodesTable.id, pending.id));
+
+  return requestAccountDeletion(userId, now);
 }
 
 /** Every account whose grace period has run out and has not been erased yet. */

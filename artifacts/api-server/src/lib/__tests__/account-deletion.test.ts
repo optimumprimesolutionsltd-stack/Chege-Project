@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import crypto from "node:crypto";
 
 // Every table account-deletion.ts imports needs *some* export here — Vitest's
 // module mock throws "no X export is defined" for one that's missing, even
@@ -40,6 +41,7 @@ vi.mock("@workspace/db", () => ({
   passwordResetTokensTable: makeTable("password_reset_tokens"),
   savingsGoalsTable: makeTable("savings_goals"),
   subscriptionRemindersTable: makeTable("subscription_reminders"),
+  accountDeletionCodesTable: makeTable("account_deletion_codes"),
   GROUP_ROLE: { OWNER: "owner", ADMIN: "admin", MEMBER: "member", VIEWER: "viewer" },
 }));
 
@@ -53,7 +55,10 @@ const {
   ACCOUNT_DELETION_GRACE_DAYS,
   accountsDueForErasure,
   cancelPendingAccountDeletion,
+  confirmAccountDeletionCode,
+  IncorrectDeletionCodeError,
   requestAccountDeletion,
+  requestAccountDeletionCode,
   scheduledDeletionDate,
   sendAccountDeletionReminders,
 } = await import("../account-deletion");
@@ -67,6 +72,23 @@ function selectReturning(rows: unknown[]) {
       }),
     }),
   };
+}
+
+/** The extra .orderBy() step confirmAccountDeletionCode's own lookup takes. */
+function selectPendingCode(rows: unknown[]) {
+  return {
+    from: () => ({
+      where: () => ({
+        orderBy: () => ({
+          limit: () => Promise.resolve(rows),
+        }),
+      }),
+    }),
+  };
+}
+
+function sha256(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
 }
 
 beforeEach(() => {
@@ -142,6 +164,89 @@ describe("requestAccountDeletion", () => {
 
     expect(captured.set).toMatchObject({ deletionRequestedAt: now });
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("requestAccountDeletionCode", () => {
+  it("emails a code and stores exactly that code's hash", async () => {
+    dbMocks.select.mockReturnValue(selectReturning([{ email: "ann@example.com", firstName: "Ann" }]));
+    const insertValues = vi.fn((values: unknown) => values);
+    dbMocks.insert.mockReturnValue({ values: insertValues });
+
+    await requestAccountDeletionCode("user-1", new Date("2026-09-11T00:00:00.000Z"));
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const html = sendEmail.mock.calls[0][0].html;
+    const code = /(\d{6})/.exec(html)?.[1];
+    expect(code).toMatch(/^\d{6}$/);
+
+    const stored = insertValues.mock.calls[0][0] as { codeHash: string; expiresAt: Date };
+    expect(stored.codeHash).toBe(sha256(code as string));
+    expect(stored.expiresAt.getTime() - new Date("2026-09-11T00:00:00.000Z").getTime()).toBe(10 * 60 * 1000);
+  });
+
+  it("refuses an account with no email on file, without sending anything", async () => {
+    dbMocks.select.mockReturnValue(selectReturning([{ email: null, firstName: "Ann" }]));
+
+    await expect(requestAccountDeletionCode("user-1")).rejects.toThrow(/no email on file/i);
+    expect(dbMocks.insert).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a failure to send as an error the caller must act on", async () => {
+    // Unlike the other account-deletion emails, this one is not best-effort:
+    // it is the entire mechanism, so a silent failure would leave the member
+    // with no way to ever confirm.
+    dbMocks.select.mockReturnValue(selectReturning([{ email: "ann@example.com", firstName: "Ann" }]));
+    dbMocks.insert.mockReturnValue({ values: vi.fn() });
+    sendEmail.mockRejectedValueOnce(new Error("Resend is down"));
+
+    await expect(requestAccountDeletionCode("user-1")).rejects.toThrow(/could not send/i);
+  });
+});
+
+describe("confirmAccountDeletionCode", () => {
+  const NOW = new Date("2026-09-11T00:00:00.000Z");
+
+  /** Two different tables get updated here — the code row, then (inside the
+   *  delegated requestAccountDeletion call) the user row — so every set()
+   *  call is collected in order rather than keeping only the last. */
+  function stubUpdateAll() {
+    const calls: unknown[] = [];
+    dbMocks.update.mockReturnValue({
+      set: (values: unknown) => {
+        calls.push(values);
+        return { where: () => Promise.resolve() };
+      },
+    });
+    return calls;
+  }
+
+  it("starts the grace period and marks the code used when it matches", async () => {
+    dbMocks.select
+      .mockReturnValueOnce(selectPendingCode([{ id: "code-1", codeHash: sha256("482913") }]))
+      .mockReturnValueOnce(selectReturning([{ email: "ann@example.com", firstName: "Ann", deletionRequestedAt: null }]));
+    const updates = stubUpdateAll();
+
+    const scheduledFor = await confirmAccountDeletionCode("user-1", "482913", NOW);
+
+    expect(scheduledFor.getTime() - NOW.getTime()).toBe(ACCOUNT_DELETION_GRACE_DAYS * 86_400_000);
+    expect(updates[0]).toMatchObject({ usedAt: NOW });
+    expect(updates[1]).toMatchObject({ deletionRequestedAt: NOW });
+  });
+
+  it("refuses a code that does not match, and starts nothing", async () => {
+    dbMocks.select.mockReturnValueOnce(selectPendingCode([{ id: "code-1", codeHash: sha256("482913") }]));
+
+    await expect(confirmAccountDeletionCode("user-1", "000000", NOW)).rejects.toThrow(IncorrectDeletionCodeError);
+    expect(dbMocks.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses when nothing is pending — already used, expired, or never requested", async () => {
+    dbMocks.select.mockReturnValueOnce(selectPendingCode([]));
+
+    await expect(confirmAccountDeletionCode("user-1", "482913", NOW)).rejects.toThrow(IncorrectDeletionCodeError);
+    expect(dbMocks.update).not.toHaveBeenCalled();
   });
 });
 
