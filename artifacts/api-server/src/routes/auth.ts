@@ -50,9 +50,16 @@ import { clearActiveWorkspaceCookie } from '../lib/activeGroup';
 import { resolvePhotoUrl } from '../lib/photoStorage';
 import { resolveOrigin } from '../lib/requestOrigin.js';
 import { ensureTrialSubscription } from "../lib/subscription-catalog";
-import { cancelPendingAccountDeletion, requestAccountDeletion } from "../lib/account-deletion";
+import {
+  cancelPendingAccountDeletion,
+  confirmAccountDeletionCode,
+  IncorrectDeletionCodeError,
+  requestAccountDeletionCode,
+} from "../lib/account-deletion";
 import { sendEmail } from '../lib/email';
 import {
+  accountDeletionCodeLimiter,
+  accountDeletionConfirmLimiter,
   forgotPasswordEmailLimiter,
   forgotPasswordLimiter,
   registerLimiter,
@@ -441,18 +448,55 @@ router.get('/auth/user', async (req: Request, res: Response) => {
 });
 
 /**
- * Requests account deletion. Ends the session immediately, in the same
- * request — the client only needs to treat this response like a logout. The
- * account is not actually erased until ACCOUNT_DELETION_GRACE_DAYS later
- * (see lib/account-deletion.ts); signing back in before then cancels it.
+ * Step one of deleting an account: emails a 6-digit code. Nothing about the
+ * account changes yet — the session stays live, and deletion is only ever
+ * scheduled once that code comes back to /auth/delete-account/confirm below.
+ * Without this, a session left open on a shared device could end in a
+ * scheduled deletion from a single tap.
  */
-router.post('/auth/delete-account', async (req: Request, res: Response) => {
+router.post('/auth/delete-account/request-code', accountDeletionCodeLimiter, async (req: Request, res: Response) => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: 'Sign in first.' });
     return;
   }
 
-  const scheduledFor = await requestAccountDeletion(req.user.id);
+  try {
+    await requestAccountDeletionCode(req.user.id);
+    res.json({ sent: true });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : 'Could not send a confirmation code.' });
+  }
+});
+
+/**
+ * Step two: spends the code and, only once it checks out, actually starts
+ * the grace period and ends the session — the client treats this response
+ * like a logout. The account is not erased until
+ * ACCOUNT_DELETION_GRACE_DAYS later (see lib/account-deletion.ts); signing
+ * back in before then cancels it.
+ */
+router.post('/auth/delete-account/confirm', accountDeletionConfirmLimiter, async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: 'Sign in first.' });
+    return;
+  }
+
+  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+  if (!/^\d{6}$/.test(code)) {
+    res.status(400).json({ error: 'Enter the 6-digit code we emailed you.' });
+    return;
+  }
+
+  let scheduledFor: Date;
+  try {
+    scheduledFor = await confirmAccountDeletionCode(req.user.id, code);
+  } catch (error) {
+    if (error instanceof IncorrectDeletionCodeError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
 
   const sid = getSessionId(req);
   await clearSession(res, sid);
