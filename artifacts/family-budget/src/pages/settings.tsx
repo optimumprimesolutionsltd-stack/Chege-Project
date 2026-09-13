@@ -101,8 +101,11 @@ async function optimizePhotoForUpload(file: File): Promise<File> {
 
 export default function Settings() {
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
-  const [deletingAccount, setDeletingAccount] = useState(false);
   const [confirmingDeleteAccount, setConfirmingDeleteAccount] = useState(false);
+  const [deletionStep, setDeletionStep] = useState<"intro" | "code">("intro");
+  const [deletionCode, setDeletionCode] = useState("");
+  const [sendingDeletionCode, setSendingDeletionCode] = useState(false);
+  const [confirmingDeletionCode, setConfirmingDeletionCode] = useState(false);
   const { data: members, isLoading } = useGetMembers();
   const removeMember = useRemoveMember();
   const leaveGroup = useLeaveGroup();
@@ -587,11 +590,41 @@ export default function Settings() {
   // confirm also cannot be themed, and a browser set to block dialogs returns
   // false from it silently - safe, because that cancels, but the button then
   // looks broken rather than declined.
-  const handleDeleteAccount = async () => {
-    setConfirmingDeleteAccount(false);
-    setDeletingAccount(true);
+  //
+  // Two steps, not one: a session left open on a shared device can reach the
+  // intro step, but cannot get past it without also reading the code emailed
+  // to the account's own inbox. requestDeletionCode moves the dialog to the
+  // code step; nothing about the account changes until confirmDeletionCode
+  // actually spends that code.
+  const requestDeletionCode = async () => {
+    setSendingDeletionCode(true);
     try {
-      const response = await fetch("/api/auth/delete-account", { method: "POST", credentials: "include" });
+      const response = await fetch("/api/auth/delete-account/request-code", { method: "POST", credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error);
+      }
+      setDeletionStep("code");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not send a code",
+        description: error instanceof Error && error.message ? error.message : "Check your connection and try again.",
+      });
+    } finally {
+      setSendingDeletionCode(false);
+    }
+  };
+
+  const confirmDeletionCode = async () => {
+    setConfirmingDeletionCode(true);
+    try {
+      const response = await fetch("/api/auth/delete-account/confirm", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: deletionCode }),
+      });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         throw new Error(body?.error);
@@ -600,10 +633,10 @@ export default function Settings() {
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Could not delete your account",
-        description: error instanceof Error && error.message ? error.message : "Check your connection and try again.",
+        title: "Could not confirm",
+        description: error instanceof Error && error.message ? error.message : "Check the code and try again.",
       });
-      setDeletingAccount(false);
+      setConfirmingDeletionCode(false);
     }
   };
 
@@ -1362,56 +1395,116 @@ export default function Settings() {
                 variant="outline"
                 className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto sm:shrink-0"
                 onClick={() => setConfirmingDeleteAccount(true)}
-                disabled={deletingAccount}
                 data-testid="delete-account"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                {deletingAccount ? "Deleting…" : "Delete account"}
+                Delete account
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <AlertDialog open={confirmingDeleteAccount} onOpenChange={setConfirmingDeleteAccount}>
+      <AlertDialog
+        open={confirmingDeleteAccount}
+        onOpenChange={(open) => {
+          setConfirmingDeleteAccount(open);
+          if (!open) {
+            setDeletionStep("intro");
+            setDeletionCode("");
+          }
+        }}
+      >
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              {/* Each line is something the erasure actually does; see
-                  api-server/src/lib/account-deletion.ts. The kept billing
-                  history is the one people are most likely to assume the
-                  opposite of, so it is stated rather than left out. */}
-              <div className="space-y-2">
-                <p className="font-semibold text-foreground">You are signed out immediately.</p>
-                <p>
-                  Nothing is erased for 14 days. Sign back in before then and the deletion is cancelled — your budgets
-                  and groups are exactly as you left them.
-                </p>
-                <p className="font-semibold text-foreground">If you do not sign back in, after 14 days:</p>
-                <ul className="list-disc space-y-1 pl-5">
-                  <li>Your Personal budget and everything recorded in it is erased.</li>
-                  <li>
-                    You leave every Shared group. Where you own one, ownership passes to the longest-standing member
-                    left; a group with nobody left in it is erased too.
-                  </li>
-                  <li>Your name, email address and photo are removed.</li>
-                  <li>Records of payments you have made are kept as billing history.</li>
-                </ul>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            {/* Named for what it does, so the safe choice is not the vague one. */}
-            <AlertDialogCancel data-testid="keep-account">Keep my account</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="confirm-delete-account"
-              onClick={() => void handleDeleteAccount()}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete my account
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {deletionStep === "intro" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  {/* Each line is something the erasure actually does; see
+                      api-server/src/lib/account-deletion.ts. The kept billing
+                      history is the one people are most likely to assume the
+                      opposite of, so it is stated rather than left out. */}
+                  <div className="space-y-2">
+                    <p className="font-semibold text-foreground">
+                      You'll be asked to confirm with a code sent to your email — you stay signed in until then.
+                    </p>
+                    <p>
+                      Nothing is erased for 14 days after that. Sign back in before then and the deletion is cancelled
+                      — your budgets and groups are exactly as you left them.
+                    </p>
+                    <p className="font-semibold text-foreground">If you do not sign back in, after 14 days:</p>
+                    <ul className="list-disc space-y-1 pl-5">
+                      <li>Your Personal budget and everything recorded in it is erased.</li>
+                      <li>
+                        You leave every Shared group. Where you own one, ownership passes to the longest-standing member
+                        left; a group with nobody left in it is erased too.
+                      </li>
+                      <li>Your name, email address and photo are removed.</li>
+                      <li>Records of payments you have made are kept as billing history.</li>
+                    </ul>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                {/* Named for what it does, so the safe choice is not the vague one. */}
+                <AlertDialogCancel data-testid="keep-account">Keep my account</AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="confirm-delete-account"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void requestDeletionCode();
+                  }}
+                  disabled={sendingDeletionCode}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {sendingDeletionCode ? "Sending code…" : "Continue"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirm with the code we emailed you</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Enter the 6-digit code — this is what actually schedules your account for deletion. Nothing
+                  happens without it.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <Input
+                value={deletionCode}
+                onChange={(event) => setDeletionCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="000000"
+                inputMode="numeric"
+                maxLength={6}
+                autoFocus
+                className="text-center text-2xl font-bold tracking-[0.5em]"
+                data-testid="delete-account-code-input"
+              />
+              <button
+                type="button"
+                onClick={() => void requestDeletionCode()}
+                disabled={sendingDeletionCode}
+                className="mx-auto block text-sm font-semibold text-primary hover:underline disabled:opacity-50"
+              >
+                {sendingDeletionCode ? "Sending…" : "Resend code"}
+              </button>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="keep-account">Keep my account</AlertDialogCancel>
+                <AlertDialogAction
+                  data-testid="delete-account-confirm-code"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void confirmDeletionCode();
+                  }}
+                  disabled={confirmingDeletionCode || deletionCode.length !== 6}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {confirmingDeletionCode ? "Deleting…" : "Delete my account"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
         </AlertDialogContent>
       </AlertDialog>
     </div>
