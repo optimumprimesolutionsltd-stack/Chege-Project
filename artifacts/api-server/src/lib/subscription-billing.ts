@@ -6,7 +6,7 @@ import {
   SUBSCRIPTION_STATUS,
   type BillingInterval,
 } from "@workspace/jamvi-pricing";
-import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 
 type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -110,6 +110,17 @@ export async function activateSubscription(params: {
   const executor = params.executor ?? db;
   const now = params.now ?? new Date();
 
+  // EXPIRED belongs in this list for the same reason it was added to
+  // resolveMemberEntitlements's own status filter: excluding it made a
+  // fully-expired row invisible to this lookup, so renewing after being
+  // expired long enough for the nightly job to relabel it inserted a second,
+  // orphaned subscription row instead of reactivating the existing one in
+  // place. Never produced a wrong outcome on its own — an expired row's
+  // currentPeriodEnd is already in the past, so it was always going to lose
+  // to `now` in the paidUntil comparison below regardless of whether it was
+  // found — but it left old rows behind for no reason. Ordered by createdAt
+  // so, if any such orphan already exists from before this fix, the most
+  // recent row is the one extended, not an arbitrary one.
   const [existing] = await executor
     .select({
       id: userSubscriptionsTable.id,
@@ -124,8 +135,10 @@ export async function activateSubscription(params: {
         SUBSCRIPTION_STATUS.ACTIVE,
         SUBSCRIPTION_STATUS.PAST_DUE,
         SUBSCRIPTION_STATUS.CANCELLED,
+        SUBSCRIPTION_STATUS.EXPIRED,
       ]),
     ))
+    .orderBy(desc(userSubscriptionsTable.createdAt))
     .limit(1);
 
   const paidUntil = existing?.currentPeriodEnd && existing.currentPeriodEnd > now
