@@ -39,6 +39,28 @@ export function getInitialOnboardingMode(setupComplete: boolean): OnboardingMode
   return setupComplete ? "returning" : null;
 }
 
+/**
+ * Whether an empty Personal budget list means "none was ever going to be
+ * made" or "one is still being created". PUT /onboarding/preferences
+ * deliberately skips creating a Personal budget for "shared" mode — so
+ * treating that as a pending state and polling for it with "Check again"
+ * left a shared-only person stuck waiting on something that would never
+ * arrive.
+ */
+export function personalBudgetEmptyState(onboardingMode: OnboardingMode | null): "not-created-by-design" | "preparing" {
+  return onboardingMode === "shared" ? "not-created-by-design" : "preparing";
+}
+
+/**
+ * Whether to offer the inline "create a Shared group" form on the chooser.
+ * Deliberately does not require a Personal budget to already exist — one is
+ * never created for "shared" mode, so requiring it made the form permanently
+ * unreachable for exactly the people who asked for it.
+ */
+export function shouldOfferSharedGroupForm(onboardingMode: OnboardingMode | null, sharedCount: number): boolean {
+  return sharedCount === 0 && (onboardingMode === "shared" || onboardingMode === "both");
+}
+
 const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
   "food & meals": "Food",
   groceries: "Food",
@@ -808,28 +830,47 @@ export function BudgetChooser({
                   <h2 className="mt-2 font-display text-2xl font-bold text-foreground">Choose a workspace</h2>
                   <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">Tap one to open it.</p>
 
-                    <div className="mt-6 border-l-2 border-border pl-4">
-                    <div className="mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-bold text-foreground">Personal budget</h3></div>
-                    {personal.length ? <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} personalPhotoUrl={user.profileImageUrl} label="Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground"><p>Jamvi is preparing your Personal budget before you continue.</p><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refetchWorkspaces()}>Check again</Button></div>}
-                  </div>
-
-                  <div className="mt-7 border-l-2 border-border pl-4">
-                    <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#087F8C]" /><h3 className="text-sm font-bold text-foreground">Shared groups</h3></div>
-                      {personal.length > 0 && shared.length === 0 && (onboardingMode === "shared" || onboardingMode === "both") ? (
-                        <StandaloneSharedBudgetForm
-                          name={sharedBudgetName}
-                          kind={sharedBudgetKind}
-                          memberContribution={memberContribution}
-                          error={creationError}
-                          pending={createSharedGroup.isPending || selectWorkspace.isPending}
-                          onNameChange={setSharedBudgetName}
-                          onKindChange={setSharedBudgetKind}
-                          onMemberContributionChange={setMemberContribution}
-                          onSubmit={createStandaloneSharedBudget}
-                        />
-                      ) : null}
-                    {shared.length ? <div className="grid gap-3">{shared.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label={groupKindPresentation(workspace.kind).label} selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : personal.length > 0 && (onboardingMode === "shared" || onboardingMode === "both") ? null : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No Shared groups yet. Open your Personal budget to create one, or use an invitation link to join an existing group.</p>}
-                  </div>
+                  {(() => {
+                    // Someone who said "shared" never gets a Personal budget made
+                    // for them (see the PUT /onboarding/preferences handler) — so
+                    // for that mode, an empty personal.length is the correct,
+                    // permanent state, not something to poll for with "Check
+                    // again". Showing that copy anyway, and gating the Shared
+                    // group form behind a Personal budget that will never appear,
+                    // is exactly what left a group-only person stuck here.
+                    const personalSection = (
+                      <div key="personal-section" className="mt-6 border-l-2 border-border pl-4 first:mt-0">
+                        <div className="mb-3 flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" /><h3 className="text-sm font-bold text-foreground">Personal budget</h3></div>
+                        {personal.length ? (
+                          <div className="grid gap-3">{personal.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} personalPhotoUrl={user.profileImageUrl} label="Private to you" selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div>
+                        ) : personalBudgetEmptyState(onboardingMode) === "not-created-by-design" ? (
+                          <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">You chose Shared groups, so Jamvi did not create a Personal budget for you. Add one anytime from My budget &amp; groups if you want one later.</p>
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground"><p>Jamvi is preparing your Personal budget before you continue.</p><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => void refetchWorkspaces()}>Check again</Button></div>
+                        )}
+                      </div>
+                    );
+                    const sharedSection = (
+                      <div key="shared-section" className="mt-6 border-l-2 border-border pl-4 first:mt-0">
+                        <div className="mb-3 flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#087F8C]" /><h3 className="text-sm font-bold text-foreground">Shared groups</h3></div>
+                        {shouldOfferSharedGroupForm(onboardingMode, shared.length) ? (
+                          <StandaloneSharedBudgetForm
+                            name={sharedBudgetName}
+                            kind={sharedBudgetKind}
+                            memberContribution={memberContribution}
+                            error={creationError}
+                            pending={createSharedGroup.isPending || selectWorkspace.isPending}
+                            onNameChange={setSharedBudgetName}
+                            onKindChange={setSharedBudgetKind}
+                            onMemberContributionChange={setMemberContribution}
+                            onSubmit={createStandaloneSharedBudget}
+                          />
+                        ) : null}
+                        {shared.length ? <div className="grid gap-3">{shared.map((workspace) => <WorkspaceButton key={workspace.id} workspace={workspace} label={groupKindPresentation(workspace.kind).label} selected={selectedWorkspace?.id === workspace.id} pending={selectWorkspace.isPending} onChoose={(item) => { setSelectedWorkspaceId(item.id); void chooseWorkspace(item); }} />)}</div> : (onboardingMode === "shared" || onboardingMode === "both") ? null : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No Shared groups yet. Open your Personal budget to create one, or use an invitation link to join an existing group.</p>}
+                      </div>
+                    );
+                    return onboardingMode === "shared" ? <>{sharedSection}{personalSection}</> : <>{personalSection}{sharedSection}</>;
+                  })()}
                 </div>
 
                 <aside className="order-first rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-6 lg:order-none" aria-live="polite">
@@ -844,7 +885,9 @@ export function BudgetChooser({
                     <Button type="button" className="mt-6 h-12 w-full justify-between rounded-xl px-4" disabled={selectWorkspace.isPending} onClick={() => void chooseWorkspace(selectedWorkspace)}>
                       <span>{selectWorkspace.isPending ? "Opening…" : `Open ${selectedName}`}</span><ArrowUpRight className="h-4 w-4" />
                     </Button>
-                  </> : <p className="text-sm text-muted-foreground">Choose one to see the next step.</p>}
+                  </> : onboardingMode === "shared" ? (
+                    <p className="text-sm text-muted-foreground">Create your Shared group to see the next step.</p>
+                  ) : <p className="text-sm text-muted-foreground">Choose one to see the next step.</p>}
 
                 </aside>
               </div>

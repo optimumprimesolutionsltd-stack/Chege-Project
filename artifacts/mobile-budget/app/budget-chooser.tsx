@@ -156,7 +156,13 @@ export default function BudgetChooserScreen() {
   const privateWorkspace = workspaces.find((workspace) => workspace.isPrivate);
   const sharedWorkspaces = workspaces.filter((workspace) => !workspace.isPrivate);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
-  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? privateWorkspace ?? sharedWorkspaces[0] ?? null;
+  // Someone who told onboarding "shared" should not land on their Personal
+  // budget by default just because it happens to exist — the chooser should
+  // point at what they said they came here to do, not at whatever workspace
+  // is first in an arbitrary priority order.
+  const prefersShared = pendingOnboardingDraft?.usageMode === 'shared';
+  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId)
+    ?? (prefersShared ? sharedWorkspaces[0] ?? null : privateWorkspace ?? sharedWorkspaces[0] ?? null);
   const selectedName = selectedWorkspace?.isPrivate ? 'Personal budget' : selectedWorkspace?.name ?? '';
   const finish = async () => {
     if (!user?.id) throw new Error('Your account could not be identified. Please sign in again.');
@@ -451,66 +457,85 @@ export default function BudgetChooserScreen() {
           </>
         ) : null}
 
-        {loadingWorkspaces ? <ActivityIndicator color={colors.primary} style={styles.loader} /> : (
-          <>
-            <View style={[styles.selectedPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {selectedWorkspace ? <>
-                <View style={styles.selectedHeader}>
-                  <View style={[styles.selectedIcon, { backgroundColor: colors.accent }]}><Feather name="check" size={19} color={colors.accentForeground} /></View>
-                  <View style={styles.workspaceText}>
-                    <Text style={[styles.selectedLabel, { color: colors.primary }]}>READY TO OPEN</Text>
-                    <Text style={[styles.selectedTitle, { color: colors.foreground }, selectedWorkspace.isPrivate ? null : workspaceNameTextStyle(selectedWorkspace.nameStyle)]}>{selectedName}</Text>
+        {loadingWorkspaces ? <ActivityIndicator color={colors.primary} style={styles.loader} /> : (() => {
+          const personalSection = (
+            <React.Fragment key="personal-section">
+              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PERSONAL BUDGET · FREE</Text>
+              {privateWorkspace ? workspaceRow(privateWorkspace, true) : (
+                <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.createCardCopy}>
+                    <Text style={[styles.createTitle, { color: colors.foreground }]}>Add a Personal budget</Text>
+                    <Text style={[styles.createText, { color: colors.mutedForeground }]}>A free, private budget for your own money. Optional — you can run Shared groups without one.</Text>
                   </View>
+                  <Pressable
+                    testID="create-personal-budget"
+                    accessibilityRole="button"
+                    accessibilityLabel="Create my Personal budget"
+                    disabled={creatingPersonal}
+                    onPress={() => void createPersonalBudget()}
+                    style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, (pressed || creatingPersonal) && styles.pressed]}
+                  >
+                    {creatingPersonal ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name="plus" size={18} color={colors.primaryForeground} />}
+                    <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>{creatingPersonal ? 'Creating…' : 'Create Personal budget'}</Text>
+                  </Pressable>
                 </View>
-                <Pressable testID="open-selected-budget" accessibilityRole="button" accessibilityLabel={`Open ${selectedName}`} disabled={selectWorkspace.isPending} onPress={() => void chooseWorkspace(selectedWorkspace)} style={[styles.openButton, { backgroundColor: colors.accent }, selectWorkspace.isPending && styles.disabled]}><Text style={[styles.openButtonText, { color: colors.accentForeground }]}>{selectWorkspace.isPending ? 'Opening…' : `Open ${selectedName}`}</Text><Feather name="arrow-up-right" size={18} color={colors.accentForeground} /></Pressable>
-              </> : <Text style={[styles.empty, { color: colors.mutedForeground }]}>Choose one to see the next step.</Text>}
-            </View>
-
-            <Text style={[styles.sectionLabel, { color: colors.brandTeal }]}>YOUR WORKSPACES</Text>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Choose a workspace</Text>
-            <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>Tap one to open it.</Text>
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>PERSONAL BUDGET · FREE</Text>
-            {privateWorkspace ? workspaceRow(privateWorkspace, true) : (
+              )}
+            </React.Fragment>
+          );
+          const sharedSection = (
+            <React.Fragment key="shared-section">
+              <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED GROUPS</Text></View>
+              {sharedWorkspaces.length ? sharedWorkspaces.map((workspace) => workspaceRow(workspace)) : null}
               <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.createCardCopy}>
-                  <Text style={[styles.createTitle, { color: colors.foreground }]}>Add a Personal budget</Text>
-                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>A free, private budget for your own money. Optional — you can run Shared groups without one.</Text>
+                  <Text style={[styles.createTitle, { color: colors.foreground }]}>{sharedWorkspaces.length ? 'Create another Shared group' : 'Create a Shared group'}</Text>
+                  <Text style={[styles.createText, { color: colors.mutedForeground }]}>A group budget you own — for a chama, family, church, or team. Add members after it is made, or join one from an invite link.</Text>
                 </View>
                 <Pressable
-                  testID="create-personal-budget"
+                  testID="create-shared-budget"
                   accessibilityRole="button"
-                  accessibilityLabel="Create my Personal budget"
-                  disabled={creatingPersonal}
-                  onPress={() => void createPersonalBudget()}
-                  style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, (pressed || creatingPersonal) && styles.pressed]}
+                  accessibilityLabel="Create a Shared group"
+                  onPress={() => { setError(null); setCreateSharedOpen(true); }}
+                  style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
                 >
-                  {creatingPersonal ? <ActivityIndicator color={colors.primaryForeground} /> : <Feather name="plus" size={18} color={colors.primaryForeground} />}
-                  <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>{creatingPersonal ? 'Creating…' : 'Create Personal budget'}</Text>
+                  <Feather name="plus" size={18} color={colors.primaryForeground} />
+                  <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared group</Text>
                 </Pressable>
               </View>
-            )}
-
-            <View style={styles.sectionHead}><Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SHARED GROUPS</Text></View>
-            {sharedWorkspaces.length ? sharedWorkspaces.map((workspace) => workspaceRow(workspace)) : null}
-            <View style={[styles.createCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.createCardCopy}>
-                <Text style={[styles.createTitle, { color: colors.foreground }]}>{sharedWorkspaces.length ? 'Create another Shared group' : 'Create a Shared group'}</Text>
-                <Text style={[styles.createText, { color: colors.mutedForeground }]}>A group budget you own — for a chama, family, church, or team. Add members after it is made, or join one from an invite link.</Text>
+            </React.Fragment>
+          );
+          return (
+            <>
+              <View style={[styles.selectedPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {selectedWorkspace ? <>
+                  <View style={styles.selectedHeader}>
+                    <View style={[styles.selectedIcon, { backgroundColor: colors.accent }]}><Feather name="check" size={19} color={colors.accentForeground} /></View>
+                    <View style={styles.workspaceText}>
+                      <Text style={[styles.selectedLabel, { color: colors.primary }]}>READY TO OPEN</Text>
+                      <Text style={[styles.selectedTitle, { color: colors.foreground }, selectedWorkspace.isPrivate ? null : workspaceNameTextStyle(selectedWorkspace.nameStyle)]}>{selectedName}</Text>
+                    </View>
+                  </View>
+                  <Pressable testID="open-selected-budget" accessibilityRole="button" accessibilityLabel={`Open ${selectedName}`} disabled={selectWorkspace.isPending} onPress={() => void chooseWorkspace(selectedWorkspace)} style={[styles.openButton, { backgroundColor: colors.accent }, selectWorkspace.isPending && styles.disabled]}><Text style={[styles.openButtonText, { color: colors.accentForeground }]}>{selectWorkspace.isPending ? 'Opening…' : `Open ${selectedName}`}</Text><Feather name="arrow-up-right" size={18} color={colors.accentForeground} /></Pressable>
+                </> : prefersShared ? <>
+                  <View style={styles.selectedHeader}>
+                    <View style={[styles.selectedIcon, { backgroundColor: colors.accent }]}><Feather name="users" size={19} color={colors.accentForeground} /></View>
+                    <View style={styles.workspaceText}>
+                      <Text style={[styles.selectedLabel, { color: colors.primary }]}>YOUR NEXT STEP</Text>
+                      <Text style={[styles.selectedTitle, { color: colors.foreground }]}>Create your Shared group</Text>
+                    </View>
+                  </View>
+                  <Pressable testID="create-shared-budget-primary" accessibilityRole="button" accessibilityLabel="Create a Shared group" onPress={() => { setError(null); setCreateSharedOpen(true); }} style={[styles.openButton, { backgroundColor: colors.accent }]}><Text style={[styles.openButtonText, { color: colors.accentForeground }]}>Create Shared group</Text><Feather name="arrow-up-right" size={18} color={colors.accentForeground} /></Pressable>
+                </> : <Text style={[styles.empty, { color: colors.mutedForeground }]}>Choose one to see the next step.</Text>}
               </View>
-              <Pressable
-                testID="create-shared-budget"
-                accessibilityRole="button"
-                accessibilityLabel="Create a Shared group"
-                onPress={() => { setError(null); setCreateSharedOpen(true); }}
-                style={({ pressed }) => [styles.createButton, { backgroundColor: colors.primary }, pressed && styles.pressed]}
-              >
-                <Feather name="plus" size={18} color={colors.primaryForeground} />
-                <Text style={[styles.createButtonText, { color: colors.primaryForeground }]}>Create Shared group</Text>
-              </Pressable>
-            </View>
-            {workspaceError ? <Text style={[styles.errorText, { color: colors.destructive }]}>Could not load your budgets. Pull down or reopen the app to try again.</Text> : null}
-          </>
-        )}
+
+              <Text style={[styles.sectionLabel, { color: colors.brandTeal }]}>YOUR WORKSPACES</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Choose a workspace</Text>
+              <Text style={[styles.sectionDescription, { color: colors.mutedForeground }]}>Tap one to open it.</Text>
+              {prefersShared ? <>{sharedSection}{personalSection}</> : <>{personalSection}{sharedSection}</>}
+              {workspaceError ? <Text style={[styles.errorText, { color: colors.destructive }]}>Could not load your budgets. Pull down or reopen the app to try again.</Text> : null}
+            </>
+          );
+        })()}
       </ScrollView>
       <Modal visible={createSharedOpen} transparent animationType="fade" onRequestClose={() => setCreateSharedOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.scrim}>
