@@ -56,8 +56,8 @@ import {
 } from '@/lib/workspace';
 import { clearQueryClientCache } from '@/lib/queryPersist';
 import {
-  BUDGET_DURATION_LABELS,
   budgetDurationEditError,
+  budgetDurationLabels,
   isoDate,
   tomorrow,
   type MobileBudgetDuration,
@@ -1304,7 +1304,7 @@ export default function SettingsScreen() {
                      {budgetPlan.purpose ? budgetPlan.purpose : 'No purpose set'}
                    </Text>
                    <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                     {BUDGET_DURATION_LABELS[budgetPlan.durationType].title}
+                     {budgetDurationLabels(group?.isPrivate === false)[budgetPlan.durationType].title}
                      {budgetPlan.durationType === 'custom' && budgetPlan.endDate ? ` · ends ${budgetPlan.endDate}` : ''}
                    </Text>
                  </View>
@@ -1330,9 +1330,9 @@ export default function SettingsScreen() {
                      style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground, marginTop: 0 }]}
                    />
                    <View style={styles.kindChoices}>
-                     {(Object.keys(BUDGET_DURATION_LABELS) as MobileBudgetDuration[]).map((value) => {
+                     {(['ongoing', 'week', 'month', 'quarter', 'custom'] as MobileBudgetDuration[]).map((value) => {
                        const selected = budgetDurationDraft === value;
-                       const { title, description } = BUDGET_DURATION_LABELS[value];
+                       const { title, description } = budgetDurationLabels(group?.isPrivate === false)[value];
                        return (
                          <Pressable
                            key={value}

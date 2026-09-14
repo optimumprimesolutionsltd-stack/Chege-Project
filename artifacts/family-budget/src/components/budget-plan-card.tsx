@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { BUDGET_DURATION_LABELS, budgetDurationEditError, type BudgetDurationType } from "@/lib/budget-plan";
+import { budgetDurationEditError, budgetDurationLabels, type BudgetDurationType } from "@/lib/budget-plan";
 import { Loader2, Target } from "lucide-react";
 
 type BudgetPlan = {
@@ -21,9 +21,10 @@ type BudgetPlan = {
  * streams stay editable where they already are (Budget); this only ever
  * covered the two fields nothing else lets you touch.
  */
-export function BudgetPlanCard({ canManage }: { canManage: boolean }) {
+export function BudgetPlanCard({ canManage, isShared }: { canManage: boolean; isShared: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const durationLabels = budgetDurationLabels(isShared);
   const [editing, setEditing] = useState(false);
   const [purposeDraft, setPurposeDraft] = useState("");
   const [durationDraft, setDurationDraft] = useState<BudgetDurationType>("ongoing");
@@ -100,7 +101,7 @@ export function BudgetPlanCard({ canManage }: { canManage: boolean }) {
             <div>
               <p className="text-sm font-semibold text-foreground">{plan?.purpose ? plan.purpose : "No purpose set"}</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                {BUDGET_DURATION_LABELS[plan!.durationType].title}
+                {durationLabels[plan!.durationType].title}
                 {plan?.durationType === "custom" && plan.endDate ? ` · ends ${plan.endDate}` : ""}
               </p>
             </div>
@@ -127,9 +128,9 @@ export function BudgetPlanCard({ canManage }: { canManage: boolean }) {
             <fieldset className="space-y-2">
               <legend className="text-sm font-semibold text-foreground">How long does it run?</legend>
               <div className="grid gap-2 sm:grid-cols-2">
-                {(Object.keys(BUDGET_DURATION_LABELS) as BudgetDurationType[]).map((value) => {
+                {(Object.keys(durationLabels) as BudgetDurationType[]).map((value) => {
                   const selected = durationDraft === value;
-                  const { title, description } = BUDGET_DURATION_LABELS[value];
+                  const { title, description } = durationLabels[value];
                   return (
                     <button
                       key={value}
