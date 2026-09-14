@@ -36,6 +36,14 @@ describe('mobile normal expense mode', () => {
     expect(source).toContain('{isAdvanced && <>');
     expect(source).toContain('{isAdvanced && (canManageShared || selectablePayers.length > 0) && (');
     expect(source).toContain('{isAdvanced && canManageShared && <View');
+    // Quick mode's own sync effect sets payerIds/selectedSources to the same
+    // defaults (current user, main income source, full amount) this card
+    // would otherwise let someone set by hand - without the isAdvanced check
+    // here too, that auto-fill alone satisfied showPersonalIncomeSources and
+    // Quick mode showed the manual "PAID DIRECTLY" chip-and-amount picker
+    // right underneath its own "funded in full from ..." summary saying the
+    // same thing already happened automatically.
+    expect(source).toContain('{isAdvanced && getExpenseFundingControlState({');
     expect(source).toContain('testID="normal-expense-summary"');
     expect(source).toContain('testID="normal-income-source-blocker"');
     // "Advanced", not "Detailed": the two clients named the same mode
