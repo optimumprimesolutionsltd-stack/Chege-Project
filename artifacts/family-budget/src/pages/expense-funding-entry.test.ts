@@ -149,7 +149,7 @@ describe("expense funding amount entry", () => {
     expect(dashboardSource).not.toContain('<option value="Other"');
     expect(dashboardSource).toContain('data-testid="one-off-spending-category-dashboard"');
     expect(dashboardSource).toContain("Use One-off spending as the last category");
-    expect(dashboardSource).toContain('value={isPrimaryOtherCategory ? "" : category}');
+    expect(dashboardSource).toContain('value={isPrimaryOtherCategory ? "" : selectedParentCategory}');
     expect(dashboardSource).toContain('placeholder="Enter KES amount"');
     expect(dashboardSource).toContain("onChange={e => setAmount(e.target.value)}");
     expect(dashboardSource).not.toContain("setCategoryAllocations(current => current.length === 1 ? [{ ...current[0], amount: e.target.value }]");
@@ -174,7 +174,7 @@ describe("expense funding amount entry", () => {
     expect(expensesSource).not.toContain('<option value="Other"');
     expect(expensesSource).toContain('data-testid={`one-off-spending-category-${mode}`}');
     expect(expensesSource).toContain("Use One-off spending as the last category");
-    expect(expensesSource).toContain('value={isPrimaryOtherCategory ? "" : form.category}');
+    expect(expensesSource).toContain('value={isPrimaryOtherCategory ? "" : selectedParentCategory}');
     expect(expensesSource).toContain("{!hasStandardAdditionalCategory && (");
     expect(expensesSource).toContain('aria-required="true"');
     expect(expensesSource).toContain('placeholder="Enter KES amount"');
@@ -335,16 +335,26 @@ describe("expense funding amount entry", () => {
     }
   });
 
-  // The web forms still let an expense be saved without a category; the mobile
-  // form no longer does, so it has no "Uncategorized" outcome left to explain.
-  // That is a deliberate divergence, not drift — the two clients are meant to
-  // say the same things, so the web forms are expected to follow.
-  it("explains where an expense goes when no category is selected", () => {
-    for (const source of [dashboardSource, expensesSource]) {
-      expect(source).toContain("Uncategorized");
-      expect(source).toContain("outside any budget category");
+  it("requires a category on every form, and offers the subcategory as the optional part", () => {
+    // No form offers an uncategorized outcome any more, so none of them
+    // explains one. "Uncategorized" survives only as the label for expenses
+    // saved before the rule, which the lists still have to render.
+    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+      expect(source).not.toContain("outside any budget category");
+      expect(source).not.toContain("Categories are optional");
+      expect(source).toContain("Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.");
     }
-    expect(mobileSource).not.toContain("outside any budget category");
+    // The phone says the same thing from its rules module rather than the screen.
+    for (const source of [dashboardSource, expensesSource, mobileRules]) {
+      expect(source).toContain("Choose a category for this expense. You can add a subcategory under it, or split it across several categories.");
+    }
+    // Only the parents are offered up front; the children follow underneath.
+    expect(dashboardSource).toContain("{categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}");
+    expect(expensesSource).toContain("{categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}");
+    expect(mobileSource).toContain("{categoryTree.map(({ name }) => (");
+    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+      expect(source).toContain("subcategory (optional)");
+    }
     expect(dashboardSource).toContain('<option value="">Select a category</option>');
     expect(expensesSource).toContain('<option value="">Select a category</option>');
     expect(dashboardSource).not.toContain('<option value="">No category</option>');
