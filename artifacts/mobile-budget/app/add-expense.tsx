@@ -59,6 +59,7 @@ import {
   ApiError,
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
+import { groupCategoriesForPicker, type CategoryRow } from '@/lib/categoryPicker';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { handleLapsedError } from '@/lib/lapsedError';
 import {
@@ -197,11 +198,15 @@ function incomeSourceIdFromKey(key: string): number | null {
  */
 const CategoryChip = React.memo(function CategoryChip({
   name,
+  label,
   selected,
   onSelect,
   colors,
 }: {
   name: string;
+  /** What the chip displays. Defaults to `name`; a subcategory passes
+   *  "Parent: Child" here while still selecting the plain `name`. */
+  label?: string;
   selected: boolean;
   onSelect: (name: string) => void;
   colors: ReturnType<typeof useColors>;
@@ -221,7 +226,7 @@ const CategoryChip = React.memo(function CategoryChip({
     >
       <Feather name={icon} size={14} color={selected ? '#fff' : colors.mutedForeground} />
       <Text style={[styles.categoryChipText, { color: selected ? '#fff' : colors.foreground }]}>
-        {name}
+        {label ?? name}
       </Text>
     </Pressable>
   );
@@ -1215,11 +1220,20 @@ export default function AddExpenseSheet() {
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
+  // Subcategories (e.g. Groceries under Food) are otherwise invisible here:
+  // the API returns every category flat, with no indication of which ones
+  // are children of another. Ordering each parent's children right after it,
+  // and prefixing the child's chip label with the parent's name, is the only
+  // sign of that relationship a rider can see at the moment it matters most —
+  // logging the expense. `name` (the actual selectable value) is unchanged;
+  // only `label` (what the chip displays) carries the parent's name.
   const categoryList = useMemo(
     () =>
-      categories
-        .map((item: { name: string }) => item.name)
-        .filter((name: string) => name.trim().toLocaleLowerCase() !== 'other'),
+      // The generated BudgetCategory type doesn't declare parentId (the
+      // OpenAPI spec is incomplete here), but GET /budget-categories returns
+      // the full row and always has — routes/budget-categories.ts's GET does
+      // a plain db.select().
+      groupCategoriesForPicker(categories as unknown as CategoryRow[]),
     [categories],
   );
   const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
@@ -1416,11 +1430,12 @@ export default function AddExpenseSheet() {
                      : 'No categories are available. Use Detailed to create one, or ask a budget manager to add one.'}
                 </Text>
               )}
-              {categoryList.map((cat: string) => (
+              {categoryList.map(({ name, label }) => (
                 <CategoryChip
-                  key={cat}
-                  name={cat}
-                  selected={categoryAllocations.some((allocation) => allocation.category === cat)}
+                  key={name}
+                  name={name}
+                  label={label}
+                  selected={categoryAllocations.some((allocation) => allocation.category === name)}
                   onSelect={chooseCategory}
                   colors={colors}
                 />
