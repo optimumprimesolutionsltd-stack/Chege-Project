@@ -18,6 +18,7 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BudgetSectionsCard } from "@/components/budget-sections-card";
 import { SubcategorySuggestionsCard } from "@/components/subcategory-suggestions-card";
+import { BudgetPlanCard } from "@/components/budget-plan-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -1130,6 +1131,8 @@ export default function Settings() {
            </CardContent>
          </Card>
        )}
+
+      <BudgetPlanCard canManage={canManageWorkspace} />
 
       <SubcategorySuggestionsCard canManage={isPrivateWorkspace || canManageShared} />
 

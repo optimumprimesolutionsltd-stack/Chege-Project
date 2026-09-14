@@ -1,6 +1,36 @@
 export type MobileOnboardingMode = "personal" | "shared" | "both";
 export type MobileBudgetDuration = "ongoing" | "week" | "month" | "quarter" | "custom";
 
+/** Same labels shown during onboarding, kept in one place so a later edit
+ *  screen (Settings) cannot drift from what the duration meant when chosen. */
+export const BUDGET_DURATION_LABELS: Record<MobileBudgetDuration, { title: string; description: string }> = {
+  ongoing: { title: "Everyday budgeting", description: "For your regular personal or shared money." },
+  week: { title: "Up to 1 week", description: "For a short trip, event, or weekly plan." },
+  month: { title: "Up to 1 month", description: "For a monthly challenge, project, or trip." },
+  quarter: { title: "Up to 3 months", description: "For a school term, campaign, or longer project." },
+  custom: { title: "Set an end date", description: "Choose the exact date this budget should finish." },
+};
+
+const pad = (value: number) => String(value).padStart(2, "0");
+export const isoDate = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+/** The earliest a budget can be set to finish: one ending today has no room
+ *  left to record anything in. */
+export const tomorrow = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date;
+};
+
+/** Same rule the onboarding wizard applies to its own duration step, reused
+ *  so editing a budget's duration later cannot accept what choosing it the
+ *  first time would have refused. */
+export function budgetDurationEditError(durationType: MobileBudgetDuration, customEndDate: string): string | null {
+  if (durationType !== "custom") return null;
+  if (!customEndDate) return "Choose an end date for this budget.";
+  if (customEndDate <= isoDate(new Date())) return "Choose an end date in the future.";
+  return null;
+}
+
 export type MobileOnboardingDraft = {
   usageMode: MobileOnboardingMode;
   persona: string | null;
