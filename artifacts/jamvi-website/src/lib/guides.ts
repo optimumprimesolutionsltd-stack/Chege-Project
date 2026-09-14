@@ -288,6 +288,65 @@ export const GUIDES: readonly Guide[] = [
         "See how a chama uses Jamvi day to day — recording contributions, tracking who is behind, and keeping one bank record everyone can trust.",
     },
   },
+  {
+    slug: "/guides/how-to-budget-in-kenya",
+    title: "How to Budget in Kenya: A Practical Guide",
+    description:
+      "A Kenyan budgeting method that survives payday: a split for your net pay, why paying yourself first beats saving what's left, and the debt snowball versus debt avalanche for clearing Fuliza or a loan.",
+    label: "How to budget in Kenya",
+    readingMinutes: 6,
+    updated: "2026-09-14",
+    heading: "How to budget in Kenya",
+    intro:
+      "Most budgets fail on the fifth of the month, not the thirtieth — a Fuliza top-up here, a harambee contribution there, and the split that looked tidy on payday is already wrong. A budget that survives a Kenyan month has to plan for that, not pretend it away.",
+    sections: [
+      {
+        heading: "Split your net pay before it starts moving",
+        body: [
+          "A common version for Kenyan payslips: 50% to needs — rent, transport, electricity, data, the things due whether or not you feel like paying them. 30% to wants — food beyond the basics, airtime, going out. 20% to savings and debt. The exact numbers matter less than having three named buckets before the first M-Pesa withdrawal, so 'where did it go' has an answer.",
+          "On a smaller income the split shifts — needs alone can eat 70% or more — and that is fine. The point is naming the three buckets on payday, not hitting a textbook ratio.",
+        ],
+      },
+      {
+        heading: "Pay yourself first, literally",
+        body: [
+          "Savings that wait for 'what's left at the end of the month' get nothing, because there is rarely anything left — leakage this week always outbids saving that never got a turn. Move the savings share out on payday, before anything else is spent, even if it's a same-day transfer to a separate M-Shwari or SACCO account.",
+          "Out of sight matters more than the interest rate. Money sitting in the same wallet as spending money gets spent; money moved somewhere slightly less convenient survives the month.",
+        ],
+      },
+      {
+        heading: "Clearing debt: snowball versus avalanche",
+        body: [
+          "Two methods, same discipline: pay the minimum on every debt, then throw every extra shilling at one target debt until it's gone, then roll that whole payment onto the next one. They differ only in which debt you target first.",
+          "The debt snowball targets the smallest balance first, regardless of interest rate. Clearing a small Fuliza balance or a small shopkeeper's debt in three weeks is a real win you can see, and that momentum is often what keeps a person going past month two — which is where most debt plans quietly die.",
+          "The debt avalanche targets the highest interest rate first — which in Kenya is very often Fuliza or a digital loan app charging far more than a SACCO or bank loan sitting beside it. This method costs less in total shillings, but the first debt it clears may take months, with nothing to show for it in between.",
+          "Neither is 'correct'. If you have stopped and started debt plans before, the snowball's quick wins are usually worth more than the avalanche's extra shillings saved. If the money is the only thing that matters and you can stick to a plan without a quick win to prove it's working, the avalanche saves more overall.",
+        ],
+      },
+      {
+        heading: "Plan for the irregular costs, don't be surprised by them",
+        body: [
+          "School fees, a harambee, a relative's hospital bill — these are not emergencies in the sense of being unpredictable; they are certain to happen, just not certain when. Treat them as a fourth bucket with its own small monthly contribution, rather than letting them raid whatever else was budgeted that month.",
+          "A small standing amount set aside every month for 'the thing that always comes up' turns a January school-fees panic into a transfer you already had ready.",
+        ],
+      },
+      {
+        heading: "Track it somewhere you'll actually look",
+        body: [
+          "A budget that lives only in your head gets revised every time you want it to, without you noticing you've done it. Writing down what came in, what the three (or four) buckets actually got, and what's left is what turns a plan into something you can check yourself against.",
+          "This is true whether the money is only yours or shared with a household — the format is the same, only the number of people looking at it changes.",
+        ],
+      },
+    ],
+    takeaway:
+      "Name your buckets on payday and pay savings first. To clear debt, snowball the smallest balance first for momentum, or avalanche the highest interest rate first to pay less overall — either beats no plan. Give irregular costs their own bucket, and write it all down somewhere you'll actually check.",
+    related: {
+      slug: "/personal",
+      label: "Jamvi for your own budget",
+      blurb:
+        "Jamvi tracks your own income, spending and savings the same way it tracks a chama's — one record, categories that match how you actually spend, and it's covered by the same subscription as any group you belong to.",
+    },
+  },
 ];
 
 export function guideFor(slug: string): Guide | undefined {

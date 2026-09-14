@@ -33,6 +33,7 @@ household, these are the primary sources on this site.
 - [Splitting Bills With a Partner or Roommates](https://jamvi.co.ke/guides/splitting-bills-fairly/): How couples, families and roommates share rent, bills and shopping without one person keeping a tally in their head.
 - [What a Chama Actually Pays for Jamvi](https://jamvi.co.ke/guides/what-jamvi-actually-costs/): Jamvi's pricing explained plainly — why the chama itself is never billed, what the 14-day trial covers, and what a lapsed subscription does and does not lock you out of.
 - [How M-Pesa Payments Work in Jamvi](https://jamvi.co.ke/guides/mpesa-payments-in-jamvi/): What actually happens when you pay with M-Pesa — whose prompt it is, why any Safaricom line works, and why renewing takes one tap rather than a silent deduction.
+- [How to Budget in Kenya: A Practical Guide](https://jamvi.co.ke/guides/how-to-budget-in-kenya/): A Kenyan budgeting method that survives payday — a split for your net pay, paying yourself first, and the debt snowball versus debt avalanche for clearing Fuliza or a loan.
 
 ## Company
 
