@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert } from 'react-native';
+// From gesture-handler, not react-native — this screen is a native
+// formSheet, and a plain RN ScrollView's pan responder fights the sheet's
+// own drag-to-resize gesture over the same touch. See add-expense.tsx.
+import { ScrollView } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
