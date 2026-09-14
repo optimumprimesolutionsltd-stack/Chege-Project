@@ -9,6 +9,8 @@ import {
   hasSavedOnboardingDraft,
   normalizeIncomeStreamName,
   onboardingDraftStorageKey,
+  personalBudgetEmptyState,
+  shouldOfferSharedGroupForm,
 } from "./budget-chooser";
 
 describe("budget chooser completion", () => {
@@ -76,5 +78,34 @@ describe("budget chooser completion", () => {
       " salary OR WAGES ",
       "Freelance work",
     ])).toEqual(["Salary or wages", "Freelance work"]);
+  });
+});
+
+describe("shared-only onboarding is never stuck waiting on a Personal budget", () => {
+  it("treats a missing Personal budget as by-design, not pending, for shared mode", () => {
+    expect(personalBudgetEmptyState("shared")).toBe("not-created-by-design");
+  });
+
+  it("treats a missing Personal budget as still preparing for every other mode", () => {
+    expect(personalBudgetEmptyState("personal")).toBe("preparing");
+    expect(personalBudgetEmptyState("both")).toBe("preparing");
+    expect(personalBudgetEmptyState("returning")).toBe("preparing");
+    expect(personalBudgetEmptyState(null)).toBe("preparing");
+  });
+
+  it("offers the Shared group form for shared or both mode with no group yet, regardless of a Personal budget", () => {
+    // This is the exact bug: requiring a Personal budget first made the form
+    // permanently unreachable for someone who picked "shared", since one is
+    // never created for that mode.
+    expect(shouldOfferSharedGroupForm("shared", 0)).toBe(true);
+    expect(shouldOfferSharedGroupForm("both", 0)).toBe(true);
+  });
+
+  it("does not offer the Shared group form once a group already exists, or for personal-only mode", () => {
+    expect(shouldOfferSharedGroupForm("shared", 1)).toBe(false);
+    expect(shouldOfferSharedGroupForm("both", 1)).toBe(false);
+    expect(shouldOfferSharedGroupForm("personal", 0)).toBe(false);
+    expect(shouldOfferSharedGroupForm("returning", 0)).toBe(false);
+    expect(shouldOfferSharedGroupForm(null, 0)).toBe(false);
   });
 });
