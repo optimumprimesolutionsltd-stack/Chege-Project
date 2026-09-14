@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   budgetDurationEditError,
+  budgetDurationLabels,
   canonicalCategoryName,
   categoryPriority,
   dedupeCategoryNames,
@@ -121,5 +122,26 @@ describe('editing a budget plan’s duration after setup', () => {
     const future = new Date();
     future.setDate(future.getDate() + 7);
     expect(budgetDurationEditError('custom', future.toISOString().slice(0, 10))).toBeNull();
+  });
+});
+
+describe('budgetDurationLabels', () => {
+  it('calls the ongoing option "budgeting" for a personal account', () => {
+    expect(budgetDurationLabels(false).ongoing.title).toBe('Everyday budgeting');
+  });
+
+  it('calls the ongoing option "contributions" for a shared group, not "budgeting"', () => {
+    const label = budgetDurationLabels(true).ongoing;
+    expect(label.title).toBe('Everyday contributions');
+    expect(label.title.toLowerCase()).not.toContain('budgeting');
+    expect(label.description.toLowerCase()).not.toContain('budgeting');
+  });
+
+  it('leaves every other duration option worded the same regardless of context', () => {
+    const personal = budgetDurationLabels(false);
+    const shared = budgetDurationLabels(true);
+    for (const key of ['week', 'month', 'quarter', 'custom'] as const) {
+      expect(shared[key]).toEqual(personal[key]);
+    }
   });
 });

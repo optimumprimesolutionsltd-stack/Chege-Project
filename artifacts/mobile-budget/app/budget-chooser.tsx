@@ -51,6 +51,7 @@ import {
 import { workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import {
   COMMON_INCOME_STREAMS,
+  budgetDurationLabels,
   incomeStreamsForMode,
   ONBOARDING_CATEGORY_TIERS,
   PURPOSE_OPTIONS,
@@ -863,13 +864,10 @@ function MobileOnboardingFlow({
     ['both', 'Both', 'Keep my personal money private and manage shared money too.'],
   ];
   const purposeOptions = draft.usageMode === 'shared' ? PURPOSE_OPTIONS.shared : PURPOSE_OPTIONS.personal;
-  const durationOptions: Array<[MobileBudgetDuration, string, string]> = [
-    ['ongoing', 'Everyday budgeting', 'For regular personal or shared money.'],
-    ['week', 'Up to 1 week', 'For a short trip, event, or weekly plan.'],
-    ['month', 'Up to 1 month', 'For a monthly challenge, project, or trip.'],
-    ['quarter', 'Up to 3 months', 'For a school term or longer project.'],
-    ['custom', 'Set an end date', 'Choose the exact date this budget should finish.'],
-  ];
+  const durationLabels = budgetDurationLabels(isShared);
+  const durationOptions: Array<[MobileBudgetDuration, string, string]> = (
+    ['ongoing', 'week', 'month', 'quarter', 'custom'] as MobileBudgetDuration[]
+  ).map((value) => [value, durationLabels[value].title, durationLabels[value].description]);
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.onboardingPage, { backgroundColor: colors.background, paddingTop: insets.top + 18 }]}>

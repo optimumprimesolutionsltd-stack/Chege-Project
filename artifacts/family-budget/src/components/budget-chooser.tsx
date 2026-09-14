@@ -14,6 +14,7 @@ import { groupKindPresentation, SHARED_GROUP_KINDS, type SharedGroupKind } from 
 import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
 import { Input } from "@/components/ui/input";
 import { getBudgetIncomeCheck, getKnownIncomeTotal } from "@/lib/onboarding-budget-utils";
+import { budgetDurationLabels } from "@/lib/budget-plan";
 
 const CHOOSER_STORAGE_PREFIX = "jamvi:budget-chooser:completed:";
 const ONBOARDING_DRAFT_STORAGE_PREFIX = "jamvi:onboarding-draft:";
@@ -598,13 +599,10 @@ export function BudgetChooser({
   }
 
   if (showDurationSetup) {
-    const durationOptions = [
-      ["ongoing", "Everyday budgeting", "For your regular personal or shared money."],
-      ["week", "Up to 1 week", "For a short trip, event, or weekly plan."],
-      ["month", "Up to 1 month", "For a monthly challenge, project, or trip."],
-      ["quarter", "Up to 3 months", "For a school term, campaign, or longer project."],
-      ["custom", "Set an end date", "Choose the exact date this budget should finish."],
-    ] as const;
+    const durationLabels = budgetDurationLabels(onboardingMode === "shared");
+    const durationOptions = (["ongoing", "week", "month", "quarter", "custom"] as const).map(
+      (value) => [value, durationLabels[value].title, durationLabels[value].description] as const,
+    );
     const canContinue = budgetDuration !== null && (budgetDuration !== "custom" || Boolean(customEndDate));
     return (
       <main className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background px-4 py-6 sm:px-6 sm:py-10">

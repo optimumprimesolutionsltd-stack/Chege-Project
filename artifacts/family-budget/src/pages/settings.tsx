@@ -1132,7 +1132,7 @@ export default function Settings() {
          </Card>
        )}
 
-      <BudgetPlanCard canManage={canManageWorkspace} />
+      <BudgetPlanCard canManage={canManageWorkspace} isShared={!isPrivateWorkspace} />
 
       <SubcategorySuggestionsCard canManage={isPrivateWorkspace || canManageShared} />
 
