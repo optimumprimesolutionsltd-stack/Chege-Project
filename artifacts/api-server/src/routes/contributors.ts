@@ -36,6 +36,7 @@ import {
 import {
   filterStatementToRange,
   monthsToCover,
+  prorateExpected,
   type ContributionStatement,
   type StatementEntry,
 } from "../lib/contribution-statement";
@@ -64,7 +65,7 @@ export async function loadContributionStatement(
 
   const [contributors, recorded, deposited] = await Promise.all([
     db
-      .select({ id: groupContributorsTable.id, name: groupContributorsTable.name, userId: groupContributorsTable.userId })
+      .select({ id: groupContributorsTable.id, name: groupContributorsTable.name, userId: groupContributorsTable.userId, monthlyTarget: groupContributorsTable.monthlyTarget })
       .from(groupContributorsTable)
       .where(and(eq(groupContributorsTable.groupId, groupId), isNull(groupContributorsTable.archivedAt)))
       .orderBy(asc(groupContributorsTable.name)),
@@ -133,7 +134,7 @@ export async function loadContributionStatement(
 
   const statement: ContributionStatement = {
     periodLabel,
-    contributors: contributors.map((row) => ({ id: row.id, name: row.name, userId: row.userId ?? null })),
+    contributors: contributors.map((row) => ({ id: row.id, name: row.name, userId: row.userId ?? null, monthlyTarget: row.monthlyTarget ?? null })),
     entries,
     totalsByContributor,
     grandTotal: entries.reduce((sum, entry) => sum + entry.amount, 0),
@@ -460,6 +461,41 @@ router.get("/contributions/grid", async (req, res): Promise<void> => {
 
   const monthsBack = Math.min(Math.max(Number(req.query.months) || 6, 1), 12);
   res.json(await loadContributionGrid(groupId, monthsBack));
+});
+
+/**
+ * Expected versus actual for an exact `?from=&to=` day range, the day-precise
+ * sibling of /contributions/grid's whole-month view — same access level (any
+ * member can view; this is not the manager-only report/statement).
+ *
+ * "Expected" is the contributor's current monthlyTarget, prorated by the
+ * exact days each touched month contributes (see prorateExpected). "Given"
+ * still comes from the statement's own range filter, which keeps a
+ * hand-recorded contribution pinned to the first of its month - there is no
+ * day to prorate it by. A day-range expected compared against a
+ * month-granular given is still more useful mid-month than only ever being
+ * able to ask about whole months.
+ */
+router.get("/contributions/variance", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const range = statementRange(req);
+  if (!range) { res.status(400).json({ error: "A valid from and to date are required." }); return; }
+
+  const statement = await loadContributionStatement(groupId, monthsToCover(range.from), range);
+  const rows = statement.contributors.map((contributor) => {
+    const given = statement.totalsByContributor[contributor.id] ?? 0;
+    const expected = contributor.monthlyTarget != null ? prorateExpected(contributor.monthlyTarget, range.from, range.to) : null;
+    return { contributorId: contributor.id, name: contributor.name, expected, given, variance: expected != null ? given - expected : null };
+  });
+
+  res.json({
+    periodLabel: statement.periodLabel,
+    rows,
+    totalExpected: rows.reduce((sum, row) => sum + (row.expected ?? 0), 0),
+    totalGiven: rows.reduce((sum, row) => sum + row.given, 0),
+  });
 });
 
 /**

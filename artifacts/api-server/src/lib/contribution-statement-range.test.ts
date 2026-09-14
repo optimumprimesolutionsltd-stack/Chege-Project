@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { filterStatementToRange, formatStatementDate, type ContributionStatement } from "./contribution-statement";
+import { filterStatementToRange, formatStatementDate, prorateExpected, type ContributionStatement } from "./contribution-statement";
 
 function statement(): ContributionStatement {
   return {
     periodLabel: "Jul 2026 – Sep 2026",
     contributors: [
-      { id: 1, name: "Mary", userId: "u-mary" },
-      { id: 2, name: "John", userId: null },
+      { id: 1, name: "Mary", userId: "u-mary", monthlyTarget: 2000 },
+      { id: 2, name: "John", userId: null, monthlyTarget: null },
     ],
     entries: [
       { contributorId: 1, contributorName: "Mary", date: "2026-07-01", amount: 2000, source: "recorded", description: null, bankName: null },
@@ -55,5 +55,43 @@ describe("filterStatementToRange", () => {
     expect(result.entries).toHaveLength(0);
     expect(result.contributors).toHaveLength(2);
     expect(result.grandTotal).toBe(0);
+  });
+});
+
+describe("prorateExpected", () => {
+  it("returns the full target for a whole 30-day month", () => {
+    expect(prorateExpected(3000, "2026-09-01", "2026-09-30")).toBe(3000);
+  });
+
+  it("prorates a half-covered 30-day month", () => {
+    // Sep 16-30 is 15 of September's 30 days.
+    expect(prorateExpected(3000, "2026-09-16", "2026-09-30")).toBe(1500);
+  });
+
+  it("treats a 31-day month differently from a 30-day one for the same day count", () => {
+    // Aug 1-15 is 15 of August's 31 days, not the same fraction as 15/30.
+    const augustHalf = prorateExpected(3100, "2026-08-01", "2026-08-15");
+    expect(augustHalf).toBe(1500); // 3100 * 15/31 = 1500
+  });
+
+  it("handles February correctly, leap or not", () => {
+    expect(prorateExpected(2800, "2026-02-01", "2026-02-28")).toBe(2800); // 2026: not a leap year, 28 days
+    expect(prorateExpected(2900, "2028-02-01", "2028-02-29")).toBe(2900); // 2028: leap year, 29 days
+  });
+
+  it("sums a fair share across each month a range spans, not a whole month for each", () => {
+    // Aug 20-31 (12 of 31 days) + Sep 1-10 (10 of 30 days), same target each month.
+    const result = prorateExpected(3100, "2026-08-20", "2026-09-10");
+    const augustShare = Math.round(3100 * (12 / 31));
+    const septemberShare = Math.round(3100 * (10 / 30));
+    expect(result).toBe(augustShare + septemberShare);
+  });
+
+  it("normalises a reversed range the same way as the forward one", () => {
+    expect(prorateExpected(3000, "2026-09-30", "2026-09-16")).toBe(prorateExpected(3000, "2026-09-16", "2026-09-30"));
+  });
+
+  it("prorates a single day as one day's share of its month", () => {
+    expect(prorateExpected(3000, "2026-09-15", "2026-09-15")).toBe(100); // 3000/30 = 100
   });
 });

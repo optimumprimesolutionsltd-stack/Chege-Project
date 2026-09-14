@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
@@ -30,7 +31,23 @@ type ContributionGrid = {
   grandTotal: number;
 };
 
+type VarianceRow = { contributorId: number; name: string; expected: number | null; given: number; variance: number | null };
+type ContributionVarianceResponse = { periodLabel: string; rows: VarianceRow[]; totalExpected: number; totalGiven: number };
+
 const RANGES = [1, 3, 6, 12] as const;
+
+function isoDay(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function monthStartIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+function longDay(iso: string): string {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 function kes(value: number): string {
   return value.toLocaleString('en-KE', { maximumFractionDigits: 0 });
@@ -50,34 +67,54 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
   const editor = useContributorEditor();
   const { open, toggle } = useCollapsed('expected-vs-actual');
   const [months, setMonths] = useState<number>(6);
+  // A day-precise range alongside the whole-month presets, for a mid-month
+  // "are we on track so far" check rather than only ever whole months.
+  const [isCustom, setIsCustom] = useState(false);
+  const [dayFrom, setDayFrom] = useState<string>(monthStartIso);
+  const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
+  const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
+  const [rangeFrom, rangeTo] = dayFrom <= dayTo ? [dayFrom, dayTo] : [dayTo, dayFrom];
 
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
     queryKey: ['contribution-grid', months],
     queryFn: () => customFetch(`/api/contributions/grid?months=${months}`),
     retry: false,
+    enabled: !isCustom,
+  });
+  const { data: customData, isLoading: customLoading, isError: customError } = useQuery<ContributionVarianceResponse>({
+    queryKey: ['contribution-variance', rangeFrom, rangeTo],
+    queryFn: () => customFetch(`/api/contributions/variance?from=${rangeFrom}&to=${rangeTo}`),
+    retry: false,
+    enabled: isCustom,
   });
 
   const monthCount = data?.months.length ?? 0;
-  const periodLabel =
-    monthCount === 0
+  const periodLabel = isCustom
+    ? customData?.periodLabel ?? ''
+    : monthCount === 0
       ? ''
       : monthCount === 1
         ? data!.months[0].label
         : `${data!.months[0].label} – ${data!.months[monthCount - 1].label}`;
-  const rows = (data?.rows ?? []).map((row) => {
-    const given = row.amounts.reduce((sum, amount) => sum + amount, 0);
-    const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : null;
-    return {
-      contributorId: row.contributorId,
-      name: row.name,
-      expected,
-      given,
-      variance: expected != null ? given - expected : null,
-    };
-  });
-  const totalExpected = rows.reduce((sum, row) => sum + (row.expected ?? 0), 0);
-  const totalGiven = rows.reduce((sum, row) => sum + row.given, 0);
+  const rows = isCustom
+    ? (customData?.rows ?? [])
+    : (data?.rows ?? []).map((row) => {
+      const given = row.amounts.reduce((sum, amount) => sum + amount, 0);
+      const expected = row.monthlyTarget != null ? row.monthlyTarget * monthCount : null;
+      return {
+        contributorId: row.contributorId,
+        name: row.name,
+        expected,
+        given,
+        variance: expected != null ? given - expected : null,
+      };
+    });
+  const totalExpected = isCustom ? customData?.totalExpected ?? 0 : rows.reduce((sum, row) => sum + (row.expected ?? 0), 0);
+  const totalGiven = isCustom ? customData?.totalGiven ?? 0 : rows.reduce((sum, row) => sum + row.given, 0);
   const groupVariance = totalExpected > 0 ? totalGiven - totalExpected : null;
+  const loading = isCustom ? customLoading : isLoading;
+  const hasError = isCustom ? customError : isError;
+  const hasData = isCustom ? !!customData : !!data;
 
   const varianceText = (value: number | null) => {
     if (value == null) return { label: '—', color: colors.mutedForeground };
@@ -122,11 +159,11 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
           {open ? (
             <View style={styles.ranges}>
               {RANGES.map((range) => {
-                const active = months === range;
+                const active = !isCustom && months === range;
                 return (
                   <Pressable
                     key={range}
-                    onPress={() => setMonths(range)}
+                    onPress={() => { setIsCustom(false); setMonths(range); }}
                     style={[
                       styles.rangeBtn,
                       { borderColor: colors.border },
@@ -144,17 +181,68 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
                   </Pressable>
                 );
               })}
+              <Pressable
+                onPress={() => setIsCustom(true)}
+                testID="contribution-variance-custom-range"
+                style={[
+                  styles.rangeBtn,
+                  { borderColor: colors.border },
+                  isCustom && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+              >
+                <Feather name="calendar" size={11} color={isCustom ? colors.primaryForeground : colors.mutedForeground} />
+              </Pressable>
             </View>
           ) : null}
           <Feather name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
         </View>
       </Pressable>
 
-      {!open ? null : isLoading ? (
+      {open && isCustom ? (
+        <View style={styles.dayRow}>
+          {(['from', 'to'] as const).map((which) => {
+            const value = which === 'from' ? dayFrom : dayTo;
+            return (
+              <Pressable
+                key={which}
+                onPress={() => setPicker(which)}
+                style={[styles.dayField, { borderColor: colors.border }]}
+                testID={`contribution-variance-day-${which}`}
+              >
+                <Text style={[styles.dayLabel, { color: colors.mutedForeground }]}>{which === 'from' ? 'From' : 'To'}</Text>
+                <View style={styles.dayValueRow}>
+                  <Feather name="calendar" size={13} color={colors.primary} />
+                  <Text style={[styles.dayValue, { color: colors.foreground }]}>{longDay(value)}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {open && isCustom && picker && (
+        <DateTimePicker
+          value={new Date((picker === 'from' ? dayFrom : dayTo) + 'T00:00:00')}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+          maximumDate={new Date()}
+          onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+            const which = picker;
+            setPicker(Platform.OS === 'ios' ? which : null);
+            if (selected && which) {
+              const iso = isoDay(selected);
+              if (which === 'from') setDayFrom(iso);
+              else setDayTo(iso);
+            }
+          }}
+        />
+      )}
+
+      {!open ? null : loading ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : isError || !data ? (
+      ) : hasError || !hasData ? (
         <Text style={[styles.empty, { color: colors.mutedForeground }]}>
           These figures could not be loaded.
         </Text>
@@ -225,6 +313,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   rangeLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  dayRow: { flexDirection: 'row', gap: 10, marginTop: 2 },
+  dayField: { flex: 1, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingVertical: 8, gap: 3 },
+  dayLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
+  dayValueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dayValue: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   loading: { paddingVertical: 20, alignItems: 'center' },
   empty: { paddingVertical: 18, textAlign: 'center', fontSize: 13 },
   memberRow: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, gap: 3 },

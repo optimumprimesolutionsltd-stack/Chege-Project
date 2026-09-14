@@ -22,7 +22,7 @@ export interface StatementEntry {
 
 export interface ContributionStatement {
   periodLabel: string;
-  contributors: Array<{ id: number; name: string; userId: string | null }>;
+  contributors: Array<{ id: number; name: string; userId: string | null; monthlyTarget: number | null }>;
   /** Oldest first, so a running total reads top to bottom. */
   entries: StatementEntry[];
   totalsByContributor: Record<number, number>;
@@ -74,4 +74,46 @@ export function monthsToCover(fromIso: string): number {
   const [year, month] = fromIso.split("-").map(Number);
   const now = new Date();
   return (now.getFullYear() - (year ?? now.getFullYear())) * 12 + (now.getMonth() + 1 - (month ?? 1)) + 1;
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+/**
+ * A monthly target, prorated across an exact `[from, to]` day range.
+ *
+ * Each calendar month the range touches contributes `target * (days of that
+ * month inside the range / days in that month)` — a month the range only
+ * partly covers (the first and last, usually) counts for its own share, not
+ * a whole month. February and a 31-day month are not treated alike.
+ *
+ * This is deliberately the only side of "expected vs actual" that gets this
+ * precision: `given` still comes from filterStatementToRange, which keeps a
+ * hand-recorded contribution pinned to the first of its month (there is no
+ * day to prorate it by — see StatementEntry.date). A day-range "expected"
+ * compared against a month-granular "given" is still more useful mid-month
+ * than only ever being able to ask about whole months.
+ */
+export function prorateExpected(monthlyTarget: number, from: string, to: string): number {
+  const [start, end] = from <= to ? [from, to] : [to, from];
+  const [startYear, startMonth, startDay] = start.split("-").map(Number);
+  const [endYear, endMonth, endDay] = end.split("-").map(Number);
+  if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) return 0;
+
+  let total = 0;
+  let year = startYear;
+  let month = startMonth;
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    const monthLength = daysInMonth(year, month);
+    const isFirst = year === startYear && month === startMonth;
+    const isLast = year === endYear && month === endMonth;
+    const firstDay = isFirst ? startDay : 1;
+    const lastDay = isLast ? endDay : monthLength;
+    const coveredDays = Math.max(0, lastDay - firstDay + 1);
+    total += monthlyTarget * (coveredDays / monthLength);
+
+    if (month === 12) { month = 1; year += 1; } else { month += 1; }
+  }
+  return Math.round(total);
 }
