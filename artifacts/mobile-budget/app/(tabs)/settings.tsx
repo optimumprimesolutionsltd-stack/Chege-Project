@@ -20,6 +20,7 @@ import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Updates from 'expo-updates';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -54,6 +55,13 @@ import {
   leaveMobileSharedWorkspace,
 } from '@/lib/workspace';
 import { clearQueryClientCache } from '@/lib/queryPersist';
+import {
+  BUDGET_DURATION_LABELS,
+  budgetDurationEditError,
+  isoDate,
+  tomorrow,
+  type MobileBudgetDuration,
+} from '@/lib/onboarding';
 import { WORKSPACE_NAME_STYLES, workspaceBudgetName, workspaceIdentityText, workspaceNameTextStyle } from '@/lib/workspaceIdentity';
 import { SHARED_GROUP_KINDS, sharedGroupKindDetails, type SharedGroupKind } from '@/lib/groupKinds';
 import { isMemberLimitError, MEMBER_LIMIT_PROMPT } from '@/lib/memberLimit';
@@ -91,6 +99,14 @@ function getSharedBudgetIcon(icon?: string): keyof typeof Feather.glyphMap {
   return SHARED_BUDGET_ICONS.some((option) => option.value === icon)
     ? icon as SharedBudgetIcon
     : 'users';
+}
+
+interface BudgetPlanSummary {
+  id: number;
+  purpose: string | null;
+  durationType: MobileBudgetDuration;
+  startDate: string;
+  endDate: string | null;
 }
 
 function workspaceLabel(workspace: { isPrivate: boolean; name: string }): string {
@@ -139,6 +155,12 @@ export default function SettingsScreen() {
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [uploadingGroupPhoto, setUploadingGroupPhoto] = useState(false);
   const [sharingInvite, setSharingInvite] = useState(false);
+  const [editingBudgetPlan, setEditingBudgetPlan] = useState(false);
+  const [budgetPurposeDraft, setBudgetPurposeDraft] = useState('');
+  const [budgetDurationDraft, setBudgetDurationDraft] = useState<MobileBudgetDuration>('ongoing');
+  const [budgetEndDateDraft, setBudgetEndDateDraft] = useState('');
+  const [showBudgetEndDatePicker, setShowBudgetEndDatePicker] = useState(false);
+  const [savingBudgetPlan, setSavingBudgetPlan] = useState(false);
   const displayNameInputRef = useRef<TextInput>(null);
   const budgetNameInputRef = useRef<TextInput>(null);
 
@@ -147,6 +169,11 @@ export default function SettingsScreen() {
   const { data: members = [] } = useQuery<GroupMember[]>({
     queryKey: ['members'],
     queryFn: () => customFetch<GroupMember[]>('/api/members'),
+    enabled: !!user?.id,
+  });
+  const { data: budgetPlan } = useQuery<BudgetPlanSummary | null>({
+    queryKey: ['budget-plan-current'],
+    queryFn: () => customFetch<BudgetPlanSummary | null>('/api/budget-plans/current'),
     enabled: !!user?.id,
   });
   const { data: group } = useGetGroup();
@@ -520,6 +547,37 @@ export default function SettingsScreen() {
       setEditingGroupKind(false);
     } catch (error) {
       Alert.alert('Could not update group type', error instanceof Error ? error.message : 'Please try again.');
+    }
+  };
+  const startBudgetPlanEdit = () => {
+    setBudgetPurposeDraft(budgetPlan?.purpose ?? '');
+    setBudgetDurationDraft(budgetPlan?.durationType ?? 'ongoing');
+    setBudgetEndDateDraft(budgetPlan?.endDate ?? '');
+    setEditingBudgetPlan(true);
+  };
+  const handleSaveBudgetPlan = async () => {
+    const validationError = budgetDurationEditError(budgetDurationDraft, budgetEndDateDraft);
+    if (validationError) {
+      Alert.alert('Check the budget duration', validationError);
+      return;
+    }
+    setSavingBudgetPlan(true);
+    try {
+      await customFetch('/api/budget-plans/current', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          purpose: budgetPurposeDraft.trim() || null,
+          durationType: budgetDurationDraft,
+          endDate: budgetDurationDraft === 'custom' ? budgetEndDateDraft : null,
+        }),
+      });
+      await queryClient.invalidateQueries({ queryKey: ['budget-plan-current'] });
+      setEditingBudgetPlan(false);
+    } catch (error) {
+      Alert.alert('Could not update your budget setup', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setSavingBudgetPlan(false);
     }
   };
   const handleApplyRecommendations = async () => {
@@ -1236,6 +1294,102 @@ export default function SettingsScreen() {
             </View>
            </>
          )}
+         {canManageWorkspace && budgetPlan ? (
+           <>
+             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BUDGET SETUP</Text>
+             <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 14, gap: 10 }]}>
+               <View style={styles.kindHeader}>
+                 <View style={{ flex: 1 }}>
+                   <Text style={[styles.rowLabel, { color: colors.foreground }]}>
+                     {budgetPlan.purpose ? budgetPlan.purpose : 'No purpose set'}
+                   </Text>
+                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
+                     {BUDGET_DURATION_LABELS[budgetPlan.durationType].title}
+                     {budgetPlan.durationType === 'custom' && budgetPlan.endDate ? ` · ends ${budgetPlan.endDate}` : ''}
+                   </Text>
+                 </View>
+                 <Pressable
+                   testID="edit-budget-plan"
+                   accessibilityRole="button"
+                   accessibilityLabel="Edit budget setup"
+                   onPress={() => (editingBudgetPlan ? setEditingBudgetPlan(false) : startBudgetPlanEdit())}
+                 >
+                   <Text style={[styles.kindAction, { color: colors.primary }]}>{editingBudgetPlan ? 'Cancel' : 'Edit'}</Text>
+                 </Pressable>
+               </View>
+               {editingBudgetPlan ? (
+                 <>
+                   <TextInput
+                     testID="budget-plan-purpose-input"
+                     value={budgetPurposeDraft}
+                     onChangeText={setBudgetPurposeDraft}
+                     placeholder="What is this budget for? (optional)"
+                     placeholderTextColor={colors.mutedForeground}
+                     maxLength={80}
+                     editable={!savingBudgetPlan}
+                     style={[styles.profileNameInput, { borderColor: colors.border, color: colors.foreground, marginTop: 0 }]}
+                   />
+                   <View style={styles.kindChoices}>
+                     {(Object.keys(BUDGET_DURATION_LABELS) as MobileBudgetDuration[]).map((value) => {
+                       const selected = budgetDurationDraft === value;
+                       const { title, description } = BUDGET_DURATION_LABELS[value];
+                       return (
+                         <Pressable
+                           key={value}
+                           testID={`budget-plan-duration-${value}`}
+                           accessibilityRole="radio"
+                           accessibilityState={{ checked: selected }}
+                           onPress={() => setBudgetDurationDraft(value)}
+                           style={[styles.kindChoice, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary + '12' : colors.background }]}
+                         >
+                           <Text style={[styles.kindChoiceLabel, { color: selected ? colors.primary : colors.foreground }]}>{title}</Text>
+                           <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>{description}</Text>
+                         </Pressable>
+                       );
+                     })}
+                   </View>
+                   {budgetDurationDraft === 'custom' ? (
+                     <>
+                       <Pressable
+                         testID="budget-plan-end-date"
+                         accessibilityRole="button"
+                         accessibilityLabel="Choose the end date for this budget"
+                         onPress={() => setShowBudgetEndDatePicker(true)}
+                         style={[styles.profileNameInput, { borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                       >
+                         <Text style={{ color: budgetEndDateDraft ? colors.foreground : colors.mutedForeground, fontSize: 15 }}>
+                           {budgetEndDateDraft || 'Choose an end date'}
+                         </Text>
+                         <Feather name="calendar" size={17} color={colors.mutedForeground} />
+                       </Pressable>
+                       {showBudgetEndDatePicker ? (
+                         <DateTimePicker
+                           mode="date"
+                           value={budgetEndDateDraft ? new Date(`${budgetEndDateDraft}T12:00:00`) : tomorrow()}
+                           minimumDate={tomorrow()}
+                           onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                             if (Platform.OS !== 'ios') setShowBudgetEndDatePicker(false);
+                             if (selected) setBudgetEndDateDraft(isoDate(selected));
+                           }}
+                         />
+                       ) : null}
+                     </>
+                   ) : null}
+                   <Pressable
+                     testID="save-budget-plan"
+                     accessibilityRole="button"
+                     accessibilityLabel="Save budget setup"
+                     disabled={savingBudgetPlan}
+                     onPress={() => void handleSaveBudgetPlan()}
+                     style={[styles.identitySaveButton, { backgroundColor: colors.primary, opacity: savingBudgetPlan ? 0.55 : 1 }]}
+                   >
+                     {savingBudgetPlan ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveGroupText}>Save budget setup</Text>}
+                   </Pressable>
+                 </>
+               ) : null}
+             </View>
+           </>
+         ) : null}
          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
            {group?.isPrivate ? 'PERSONAL BUDGET IDENTITY' : 'SHARED GROUP IDENTITY'}
          </Text>
