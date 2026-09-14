@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
 // From gesture-handler, not react-native — this screen is a native
 // formSheet, and a plain RN ScrollView's pan responder fights the sheet's
@@ -61,6 +62,11 @@ export default function RecordContributionsScreen() {
       current != null && accounts.some((account) => account.id === current) ? current : accounts[0]?.id ?? null,
     );
   }, [accounts]);
+  // A dropdown rather than the same pill-chip style used for the Same
+  // amount/Per person mode toggle just below it — the two looked like one
+  // continuous row of options when they were styled the same way, and were
+  // reported as confusing to tell apart.
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
   const createBankAccount = useCreateJointAccount();
   const [addingAccount, setAddingAccount] = useState(false);
@@ -307,21 +313,43 @@ export default function RecordContributionsScreen() {
           ) : accounts.length === 1 && !addingAccount ? (
             <Text style={{ color: colors.mutedForeground }}>Goes to <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{accounts[0].name}</Text></Text>
           ) : !addingAccount ? (
-            <View style={styles.chips}>
-              {accounts.map((account) => {
-                const on = account.id === accountId;
-                return (
-                  <Pressable
-                    key={account.id}
-                    onPress={() => setAccountId(account.id)}
-                    style={[styles.chip, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}18` : 'transparent' }]}
-                  >
-                    <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>{account.name}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <Pressable
+              onPress={() => setAccountPickerOpen(true)}
+              style={[styles.field, { borderColor: colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel="Choose bank account"
+              testID="record-contributions-account-picker"
+            >
+              <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
+                {accounts.find((account) => account.id === accountId)?.name ?? 'Choose an account'}
+              </Text>
+              <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+            </Pressable>
           ) : null}
+
+          <Modal visible={accountPickerOpen} transparent animationType="fade" onRequestClose={() => setAccountPickerOpen(false)}>
+            <Pressable style={styles.pickerOverlay} onPress={() => setAccountPickerOpen(false)}>
+              <View style={[styles.pickerSheet, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Text style={[styles.label, { color: colors.foreground, marginBottom: 4 }]}>Bank account</Text>
+                {accounts.map((account) => {
+                  const on = account.id === accountId;
+                  return (
+                    <Pressable
+                      key={account.id}
+                      onPress={() => { setAccountId(account.id); setAccountPickerOpen(false); }}
+                      style={[styles.pickerRow, { borderColor: colors.border }]}
+                      testID={`record-contributions-account-option-${account.id}`}
+                    >
+                      <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>
+                        {account.name}
+                      </Text>
+                      {on && <Feather name="check" size={16} color={colors.primary} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Pressable>
+          </Modal>
 
           {addingAccount ? (
             <View style={styles.row}>
@@ -525,6 +553,9 @@ const styles = StyleSheet.create({
   input: { height: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
   notice: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, padding: 12, fontSize: 13, lineHeight: 18 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 },
+  pickerSheet: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 4 },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
   addAccountLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 6, paddingVertical: 4 },
   chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
   modeHint: { fontSize: 12, lineHeight: 17, marginTop: -2 },
