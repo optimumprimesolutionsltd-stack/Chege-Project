@@ -276,7 +276,8 @@ export function ContributionExport() {
       const file = new File(Paths.cache, `jamvi-contribution-ledger-${viewFrom}-to-${viewTo}.pdf`);
       file.write(new Uint8Array(await blob.arrayBuffer()));
       if (!(await Sharing.isAvailableAsync())) {
-        throw new Error('unavailable');
+        Alert.alert('Sharing is not available', 'This device cannot open the share sheet. The PDF was saved to the app, but there is no way to hand it off from here.');
+        return;
       }
       await Sharing.shareAsync(file.uri, {
         mimeType: 'application/pdf',
@@ -284,7 +285,12 @@ export function ContributionExport() {
         UTI: 'com.adobe.pdf',
       });
     } catch {
-      Alert.alert('Could not create the report', 'Check your group access and try again in a moment.');
+      // This screen is already owner/admin-only (see isManager above), so a
+      // failure here is never actually a permissions problem — telling an
+      // owner to "check their group access" just contradicts what they
+      // already know to be true. It's almost always the PDF request itself
+      // (network, or the server could not build it).
+      Alert.alert('Could not create the report', 'The PDF could not be generated. Check your connection and try again.');
     } finally {
       setBusy(null);
     }
@@ -557,11 +563,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 44,
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     borderRadius: 12,
   },
-  btnLabel: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  // "Send on WhatsApp" is the longest label sharing this style, in a
+  // flex:1 half-width button next to "Download PDF" - at the previous fixed
+  // height:44 with no allowance for wrapping, it overflowed the button on
+  // narrower screens instead of wrapping inside it. minHeight above lets the
+  // button grow for a wrapped second line; flexShrink/textAlign keep that
+  // line centered instead of pushing the icon out of the row.
+  btnLabel: { flexShrink: 1, textAlign: 'center', fontSize: 13, fontFamily: 'Inter_700Bold' },
   viewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
