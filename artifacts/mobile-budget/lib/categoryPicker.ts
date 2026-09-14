@@ -4,41 +4,51 @@ export interface CategoryRow {
   parentId: number | null;
 }
 
-export interface CategoryPickerEntry {
-  /** The actual selectable value — never the composite label. */
+export interface CategoryPickerGroup {
+  /** A top-level category — the only thing Quick mode ever offers. */
   name: string;
-  /** What the chip displays: "Parent: Child" for a subcategory, else just the name. */
-  label: string;
+  /** This parent's subcategories, in the order the API returned them. */
+  children: string[];
 }
 
+const isOther = (row: CategoryRow) => row.name.trim().toLocaleLowerCase("en-US") === "other";
+
 /**
- * Orders categories for a picker so each parent is immediately followed by
- * its own subcategories, and labels a subcategory's chip with its parent's
- * name — the only way that relationship is visible at the moment an expense
- * is actually logged, since the API returns every category flat.
+ * Splits the flat category list the API returns into parents and their
+ * subcategories, so the picker can offer them in two stages: the category
+ * first, then — in Detailed mode only — an optional subcategory under it.
  *
- * "Other" is dropped throughout: it's the app's own sentinel for an
- * unspecified category, not something to offer as a choice.
+ * "Other" is dropped throughout: it's the app's own sentinel for a one-off
+ * expense, not something to offer as a category.
  */
-export function groupCategoriesForPicker(categories: readonly CategoryRow[]): CategoryPickerEntry[] {
+export function buildCategoryTree(categories: readonly CategoryRow[]): CategoryPickerGroup[] {
   const byId = new Map(categories.map((row) => [row.id, row]));
-  const notOther = (row: CategoryRow) => row.name.trim().toLocaleLowerCase("en-US") !== "other";
+  const notOther = (row: CategoryRow) => !isOther(row);
   const topLevel = categories.filter((row) => row.parentId === null || !byId.has(row.parentId)).filter(notOther);
 
-  const ordered: CategoryPickerEntry[] = [];
+  const groups: CategoryPickerGroup[] = [];
   const placed = new Set<number>();
   for (const parent of topLevel) {
-    ordered.push({ name: parent.name, label: parent.name });
+    const children = categories.filter((row) => row.parentId === parent.id).filter(notOther);
+    groups.push({ name: parent.name, children: children.map((child) => child.name) });
     placed.add(parent.id);
-    for (const child of categories.filter((row) => row.parentId === parent.id).filter(notOther)) {
-      ordered.push({ name: child.name, label: `${parent.name}: ${child.name}` });
-      placed.add(child.id);
-    }
+    for (const child of children) placed.add(child.id);
   }
   // A child whose parent was filtered out above (e.g. the parent is "Other")
   // still needs to be selectable, on its own.
   for (const row of categories.filter(notOther)) {
-    if (!placed.has(row.id)) ordered.push({ name: row.name, label: row.name });
+    if (!placed.has(row.id)) groups.push({ name: row.name, children: [] });
   }
-  return ordered;
+  return groups;
+}
+
+/**
+ * The parent a category sits under, or `null` when it is itself top-level.
+ * Lets the form keep a parent chip selected while one of its subcategories
+ * is the value actually being saved.
+ */
+export function parentOf(tree: readonly CategoryPickerGroup[], name: string): string | null {
+  const wanted = name.trim();
+  if (!wanted) return null;
+  return tree.find((group) => group.children.includes(wanted))?.name ?? null;
 }

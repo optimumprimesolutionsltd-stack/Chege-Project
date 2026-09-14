@@ -46,7 +46,7 @@ describe('the expense form relies on that stability', () => {
 
   it('memoises the derived lists, one of which is an effect dependency', () => {
     expect(form).toContain('const selectablePayers = useMemo(');
-    expect(form).toContain('const categoryList = useMemo(');
+    expect(form).toContain('const categoryTree = useMemo(');
     expect(form).toContain('const payerSourceIds = useMemo<string[]>(');
   });
 });

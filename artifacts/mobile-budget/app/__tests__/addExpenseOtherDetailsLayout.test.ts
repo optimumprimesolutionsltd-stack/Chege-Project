@@ -67,8 +67,9 @@ describe('optional expense category layout', () => {
   });
 
   it('explains categories and offers a clearly named one-off option below them', () => {
-    expect(source).toContain('CATEGORY (OPTIONAL)');
-    expect(source).toContain('Leave this blank to save the expense as Uncategorized, outside any budget category.');
+    expect(source).toContain("<Text style={[styles.stageLabelText, { color: colors.primary }]}>CATEGORY *</Text>");
+    expect(source).not.toContain('CATEGORY (OPTIONAL)');
+    expect(source).toContain('Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.');
     expect(source).toContain("onPress={() => chooseCategory('Other')}");
     expect(source).toContain('testID="one-off-spending-category"');
     expect(source).toContain('Use this as the last category when part of the expense does not fit any listed category.');
@@ -118,8 +119,9 @@ describe('optional expense category layout', () => {
     expect(source).toContain("'NOTES (required for one-off spending)'");
   });
 
-  it('offers explicit uncategorized save and preserves the draft while creating a budget', () => {
-    expect(source).toContain("text: 'Save without category'");
+  it('blocks an uncategorized save but preserves the draft while creating a budget', () => {
+    expect(source).not.toContain("text: 'Save without category'");
+    expect(source).toContain("problems.length === 1 && problems[0].field === 'category' && !isEditMode");
     expect(source).toContain("text: 'Create a monthly budget'");
     expect(source).toContain('JSON.stringify({ expenseDraft })');
     expect(source).toContain("params: { recurringSetup: '1', category: description.trim() }");
@@ -148,5 +150,36 @@ describe('optional expense category layout', () => {
     expect(rules).toContain('if (allocated !== parsed) {');
     expect(source).toContain("category: normalizedAllocations[0]?.category ?? ''");
     expect(source).toContain('categoryAllocations: expenseAllocations');
+  });
+});
+describe('subcategories belong to Detailed mode', () => {
+  it('offers only top-level categories in the main chip row', () => {
+    expect(source).toContain('const categoryTree = useMemo(');
+    expect(source).toContain('buildCategoryTree(categories as unknown as CategoryRow[])');
+    expect(source).toContain('{categoryTree.map(({ name }) => (');
+    // The old flat list labelled children "Parent: Child" among the parents.
+    expect(source).not.toContain('groupCategoriesForPicker');
+  });
+
+  it('renders the subcategory row only under a selected parent, and only in Detailed', () => {
+    expect(source).toContain('{isAdvanced && categoryTree');
+    expect(source).toContain('.filter((group) => selectedParents.has(group.name) && group.children.length > 0)');
+    expect(source).toContain('testID={`subcategory-row-${group.name}`}');
+    expect(source).toContain('onSelect={chooseSubcategory}');
+    expect(source).toContain('`${group.name} subcategory (optional)`');
+  });
+
+  it('moves the parent allocation onto the subcategory rather than adding a second one', () => {
+    const start = source.indexOf('const chooseSubcategory = useCallback');
+    const handler = source.slice(start, source.indexOf('}, [categoryAllocations, categoryTree]);', start));
+    expect(handler).toContain('const parent = parentOf(categoryTree, child);');
+    expect(handler).toContain('owns(allocation.category) ? { ...allocation, category: replacement } : allocation');
+    expect(handler).not.toContain('addStandardCategory');
+  });
+
+  it('keeps a parent chip selected while one of its children is the saved value', () => {
+    expect(source).toContain('const selectedParents = useMemo(');
+    expect(source).toContain('names.add(parentOf(categoryTree, chosen) ?? chosen);');
+    expect(source).toContain('selected={selectedParents.has(name)}');
   });
 });

@@ -92,10 +92,22 @@ export function collectExpenseProblems(input: ExpenseValidationInput): ExpensePr
     add('description', 'Description required', 'Please add a description.');
   }
 
-  if (!input.isAdvanced && !input.isEditMode) {
-    if (!input.category.trim()) {
-      add('category', 'Category required', 'Choose one category for this expense, or switch to Detailed for more options.');
+  // A category is required in both modes. Detailed only widens *how* it is
+  // given — one category, several, or a subcategory under one of them — so it
+  // is satisfied by the allocations as well as by the single `category`.
+  // Edits stay exempt: expenses saved before this rule may have no category,
+  // and re-opening one to fix a typo should not be blocked by that.
+  if (!input.isEditMode) {
+    const named = input.category.trim()
+      || input.categoryAllocations.find((allocation) => allocation.category.trim())?.category.trim();
+    if (!named) {
+      add('category', 'Category required', input.isAdvanced
+        ? 'Choose a category for this expense. You can add a subcategory under it, or split it across several categories.'
+        : 'Choose one category for this expense, or switch to Detailed for more options.');
     }
+  }
+
+  if (!input.isAdvanced && !input.isEditMode) {
     if (!input.hasNormalIncomeSource) {
       add('incomeSource', 'Income source required', 'Add a saved income source in Detailed before you can save this expense.');
     }
