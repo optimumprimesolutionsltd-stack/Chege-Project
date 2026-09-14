@@ -23,6 +23,7 @@ import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Load
 import { useCollapsed } from "@/hooks/use-collapsed";
 import { useListEditor } from "@/hooks/use-list-editor";
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
+import { DebtPayoffCard } from "@/components/debt-payoff-card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { getCategoryIcon } from "@/lib/category-icons";
@@ -1248,6 +1249,8 @@ export default function Budget() {
            )}
          </CardContent>
        </Card>
+
+       <DebtPayoffCard canManage={canManageShared} />
 
        {!isLoading && (
          <Card className="border-none shadow-sm bg-card">
