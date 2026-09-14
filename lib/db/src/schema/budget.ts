@@ -67,10 +67,25 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   isRecurring: boolean("is_recurring").notNull().default(true),
   activeMonth: integer("active_month"),
   activeYear: integer("active_year"),
+  // A category becomes a tracked debt (rather than a plain spending category)
+  // when this is set — null means "not a debt", not "zero owed". No separate
+  // ledger: the balance is edited directly as it is paid down, the same way a
+  // budget amount is. The rate is basis points (1/100 of a percent) so it is
+  // an exact integer rather than a float that drifts on repeated writes.
+  debtBalance: integer("debt_balance"),
+  debtInterestRateBps: integer("debt_interest_rate_bps"),
 }, (table) => [
   check(
     "budget_categories_name_valid_check",
     sql`btrim(${table.name}) <> '' AND char_length(${table.name}) <= 80`,
+  ),
+  check(
+    "budget_categories_debt_balance_non_negative_check",
+    sql`${table.debtBalance} IS NULL OR ${table.debtBalance} >= 0`,
+  ),
+  check(
+    "budget_categories_debt_rate_range_check",
+    sql`${table.debtInterestRateBps} IS NULL OR ${table.debtInterestRateBps} BETWEEN 0 AND 10000`,
   ),
   uniqueIndex("budget_categories_group_name_normalized_unique")
     .on(table.groupId, sql`lower(btrim(${table.name}))`),

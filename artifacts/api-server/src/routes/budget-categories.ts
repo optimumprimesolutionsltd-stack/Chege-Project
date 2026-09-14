@@ -398,6 +398,10 @@ const categoryFields = z.object({
   activeMonth: z.number().int().min(1).max(12).nullable().optional(),
   activeYear: z.number().int().min(2000).max(2200).nullable().optional(),
   parentId: z.number().int().positive().nullable().optional(),
+  // Present (non-null) marks this category as a tracked debt. Basis points
+  // (1/100 of a percent) so the rate is an exact integer.
+  debtBalance: z.number().int().min(0).nullable().optional(),
+  debtInterestRateBps: z.number().int().min(0).max(10000).nullable().optional(),
 });
 
 const categorySchema = categoryFields.superRefine((data, ctx) => {
