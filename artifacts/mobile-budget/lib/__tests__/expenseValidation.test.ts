@@ -74,10 +74,22 @@ describe('one fault at a time', () => {
     expect(fields(validForm({ description: '   ' }))).toContain('description');
   });
 
-  it('catches a missing category only in simple mode', () => {
-    expect(fields(validForm({ category: '' }))).toContain('category');
-    expect(fields(validForm({ category: '', isAdvanced: true }))).not.toContain('category');
-    expect(fields(validForm({ category: '', isEditMode: true }))).not.toContain('category');
+  it('catches a missing category in both modes', () => {
+    expect(fields(validForm({ category: '', categoryAllocations: [] }))).toContain('category');
+    expect(fields(validForm({ category: '', categoryAllocations: [], isAdvanced: true }))).toContain('category');
+  });
+
+  it('accepts a Detailed expense categorised only through its allocations', () => {
+    const form = validForm({
+      category: '',
+      isAdvanced: true,
+      categoryAllocations: [{ category: 'Groceries', amount: '1000' }],
+    });
+    expect(fields(form)).not.toContain('category');
+  });
+
+  it('leaves an edit of an already-uncategorised expense saveable', () => {
+    expect(fields(validForm({ category: '', categoryAllocations: [], isEditMode: true }))).not.toContain('category');
   });
 
   it('requires a note when a category is "Other"', () => {

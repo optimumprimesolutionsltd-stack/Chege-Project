@@ -323,7 +323,7 @@ describe("expense funding amount entry", () => {
 
     const mobileDate = mobileSource.indexOf('testID="expense-date-section"');
     const mobileAmount = mobileSource.indexOf("EXPENSE TOTAL");
-    const mobileCategory = mobileSource.indexOf("CATEGORY (OPTIONAL)");
+    const mobileCategory = mobileSource.indexOf("CATEGORY *");
     const mobileFunding = mobileSource.indexOf("FUNDING OPTIONS");
     expect(mobileDate).toBeGreaterThan(-1);
     expect(mobileDate).toBeLessThan(mobileAmount);
@@ -335,11 +335,16 @@ describe("expense funding amount entry", () => {
     }
   });
 
+  // The web forms still let an expense be saved without a category; the mobile
+  // form no longer does, so it has no "Uncategorized" outcome left to explain.
+  // That is a deliberate divergence, not drift — the two clients are meant to
+  // say the same things, so the web forms are expected to follow.
   it("explains where an expense goes when no category is selected", () => {
-    for (const source of [dashboardSource, expensesSource, mobileSource]) {
+    for (const source of [dashboardSource, expensesSource]) {
       expect(source).toContain("Uncategorized");
       expect(source).toContain("outside any budget category");
     }
+    expect(mobileSource).not.toContain("outside any budget category");
     expect(dashboardSource).toContain('<option value="">Select a category</option>');
     expect(expensesSource).toContain('<option value="">Select a category</option>');
     expect(dashboardSource).not.toContain('<option value="">No category</option>');

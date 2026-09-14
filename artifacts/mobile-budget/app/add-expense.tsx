@@ -59,7 +59,7 @@ import {
   ApiError,
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
-import { groupCategoriesForPicker, type CategoryRow } from '@/lib/categoryPicker';
+import { buildCategoryTree, parentOf, type CategoryRow } from '@/lib/categoryPicker';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { handleLapsedError } from '@/lib/lapsedError';
 import {
@@ -923,6 +923,31 @@ export default function AddExpenseSheet() {
     }
   }, [createBankAccount, newBankAccountName, newBankAccountNumber, newBankOpeningBalance, queryClient]);
 
+  // The API returns every category flat, with no indication of which ones are
+  // children of another, so the picker rebuilds the parent/child split itself.
+  // Both modes offer the parents; only Detailed goes on to offer the
+  // subcategories underneath the parent that was chosen.
+  const categoryTree = useMemo(
+    () =>
+      // The generated BudgetCategory type doesn't declare parentId (the
+      // OpenAPI spec is incomplete here), but GET /budget-categories returns
+      // the full row and always has — routes/budget-categories.ts's GET does
+      // a plain db.select().
+      buildCategoryTree(categories as unknown as CategoryRow[]),
+    [categories],
+  );
+  // Selecting a subcategory keeps its parent's chip lit, so the sub-row it
+  // came from stays on screen instead of collapsing under the selection.
+  const selectedParents = useMemo(() => {
+    const names = new Set<string>();
+    for (const allocation of categoryAllocations) {
+      const chosen = allocation.category.trim();
+      if (!chosen) continue;
+      names.add(parentOf(categoryTree, chosen) ?? chosen);
+    }
+    return names;
+  }, [categoryAllocations, categoryTree]);
+
   const chooseCategory = useCallback((name: string) => {
     if (!isAdvanced && !isEditMode) {
       setCategory(name);
@@ -946,6 +971,25 @@ export default function AddExpenseSheet() {
       setShowAdditionalCategoryPicker(false);
     }
   }, [amount, isAdvanced, isEditMode]);
+
+  // A subcategory refines the allocation its parent already made rather than
+  // adding a second one: the expense went to Groceries *instead of* the rest
+  // of Food, so the row — and the amount typed into it — moves over. Tapping
+  // the selected child again gives the allocation back to the parent.
+  const chooseSubcategory = useCallback((child: string) => {
+    const parent = parentOf(categoryTree, child);
+    if (!parent) return;
+    const siblings = categoryTree.find((group) => group.name === parent)?.children ?? [];
+    const owns = (name: string) => name === parent || siblings.includes(name);
+    const replacement = categoryAllocations.some((allocation) => allocation.category === child) ? parent : child;
+    setCategoryAllocations((previous) => {
+      const next = previous.map((allocation) => (
+        owns(allocation.category) ? { ...allocation, category: replacement } : allocation
+      ));
+      setCategory((current) => (owns(current) ? replacement : current));
+      return next;
+    });
+  }, [categoryAllocations, categoryTree]);
 
   const updateAllocationAmount = useCallback((allocationCategory: string, value: string) => {
     setCategoryAllocations((previous) => previous.map((allocation) => (
@@ -990,7 +1034,7 @@ export default function AddExpenseSheet() {
     );
   }, [canRemoveExpense, deleteExpense, editingExpense, group, invalidateExpenses]);
 
-  const handleSubmit = useCallback(async (allowUncategorized = false) => {
+  const handleSubmit = useCallback(async () => {
     if (isEditMode && (!editingExpense || !canEditExpense)) {
       Alert.alert(
         'You cannot edit this expense',
@@ -1040,37 +1084,38 @@ export default function AddExpenseSheet() {
     });
     if (problems.length > 0) {
       const { title, message } = describeProblems(problems);
-      Alert.alert(title, message);
-      return;
-    }
-
-    // Asked only once the form is otherwise sound: this is an optional
-    // question with three answers, not a fault, and it has no business
-    // interrupting somebody who still has real errors to clear.
-    if (!categoryAllocations.length && !isEditMode && !allowUncategorized) {
-      const expenseDraft: ExpenseBudgetDraft = {
-        amount, category, categoryAllocations, description, notes, payerIds, payerAmounts,
-        payerIncomeSourceIds, isRecurring, recurringMonthlyBudget, paidFromBank,
-        selectedBankAccountId, selectedSources, splitAmounts, allowMixedFunding, date,
-      };
-      Alert.alert(
-        'Add a category later?',
-        'Categories are optional. You can save this expense without one, or create a monthly budget now.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Save without category', onPress: () => void handleSubmit(true) },
-          {
-            text: 'Create a monthly budget',
-            onPress: async () => {
-              await AsyncStorage.setItem(RECURRING_BUDGET_HANDOFF_KEY, JSON.stringify({ expenseDraft }));
-              router.push({
-                pathname: '/(tabs)/budget',
-                params: { recurringSetup: '1', category: description.trim() },
-              });
+      // A missing category is now a fault rather than a choice, but the
+      // expense still deserves the offer it used to get here: turn it into a
+      // monthly budget rather than sending someone off to build the category
+      // by hand and retype the whole form. Only when nothing else is wrong —
+      // this offer has no business interrupting somebody who still has real
+      // errors to clear.
+      if (problems.length === 1 && problems[0].field === 'category' && !isEditMode) {
+        const expenseDraft: ExpenseBudgetDraft = {
+          amount, category, categoryAllocations, description, notes, payerIds, payerAmounts,
+          payerIncomeSourceIds, isRecurring, recurringMonthlyBudget, paidFromBank,
+          selectedBankAccountId, selectedSources, splitAmounts, allowMixedFunding, date,
+        };
+        Alert.alert(
+          title,
+          message,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Create a monthly budget',
+              onPress: async () => {
+                await AsyncStorage.setItem(RECURRING_BUDGET_HANDOFF_KEY, JSON.stringify({ expenseDraft }));
+                router.push({
+                  pathname: '/(tabs)/budget',
+                  params: { recurringSetup: '1', category: description.trim() },
+                });
+              },
             },
-          },
-        ],
-      );
+          ],
+        );
+        return;
+      }
+      Alert.alert(title, message);
       return;
     }
 
@@ -1220,22 +1265,6 @@ export default function AddExpenseSheet() {
 
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
-  // Subcategories (e.g. Groceries under Food) are otherwise invisible here:
-  // the API returns every category flat, with no indication of which ones
-  // are children of another. Ordering each parent's children right after it,
-  // and prefixing the child's chip label with the parent's name, is the only
-  // sign of that relationship a rider can see at the moment it matters most —
-  // logging the expense. `name` (the actual selectable value) is unchanged;
-  // only `label` (what the chip displays) carries the parent's name.
-  const categoryList = useMemo(
-    () =>
-      // The generated BudgetCategory type doesn't declare parentId (the
-      // OpenAPI spec is incomplete here), but GET /budget-categories returns
-      // the full row and always has — routes/budget-categories.ts's GET does
-      // a plain db.select().
-      groupCategoriesForPicker(categories as unknown as CategoryRow[]),
-    [categories],
-  );
   const hasOneOffAllocation = categoryAllocations.some((allocation) => allocation.category.trim().toLocaleLowerCase() === 'other');
   const displayedCategoryAllocations = categoryAllocations;
   const fundingExpenseTotal = Number(amount.replace(/,/g, '')) || 0;
@@ -1399,11 +1428,11 @@ export default function AddExpenseSheet() {
 
         {/* Category */}
         <View style={[styles.stageLabel, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '55', borderRadius: colors.radius }]}>
-          <Text style={[styles.stageLabelText, { color: colors.primary }]}>{isAdvanced ? 'CATEGORY (OPTIONAL)' : 'CATEGORY *'}</Text>
+          <Text style={[styles.stageLabelText, { color: colors.primary }]}>CATEGORY *</Text>
         </View>
         <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
           {isAdvanced
-            ? 'Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.'
+            ? 'Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.'
             : 'Choose the one category this expense belongs to.'}
         </Text>
         <ScrollView
@@ -1423,19 +1452,18 @@ export default function AddExpenseSheet() {
             </Pressable>
           ) : (
             <>
-              {categoryList.length === 0 && (
+              {categoryTree.length === 0 && (
                 <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>
                    {isAdvanced
-                     ? (canManageCategories ? 'No categories yet. You can create one below or save without a category.' : 'No categories are available. You can save without one or ask a budget manager to add one.')
+                     ? (canManageCategories ? 'No categories yet. Create one below before you can save this expense.' : 'No categories are available. Ask a budget manager to add one.')
                      : 'No categories are available. Use Detailed to create one, or ask a budget manager to add one.'}
                 </Text>
               )}
-              {categoryList.map(({ name, label }) => (
+              {categoryTree.map(({ name }) => (
                 <CategoryChip
                   key={name}
                   name={name}
-                  label={label}
-                  selected={categoryAllocations.some((allocation) => allocation.category === name)}
+                  selected={selectedParents.has(name)}
                   onSelect={chooseCategory}
                   colors={colors}
                 />
@@ -1443,6 +1471,33 @@ export default function AddExpenseSheet() {
             </>
           )}
         </ScrollView>
+        {/* Subcategories are a Detailed-mode refinement: Quick mode is meant to
+            be one tap on one category, so it never offers them. */}
+        {isAdvanced && categoryTree
+          .filter((group) => selectedParents.has(group.name) && group.children.length > 0)
+          .map((group) => (
+            <View key={`sub-${group.name}`} testID={`subcategory-row-${group.name}`} style={{ gap: 4 }}>
+              <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
+                {`${group.name} subcategory (optional)`}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoryScroll}
+                contentContainerStyle={styles.categoryScrollContent}
+              >
+                {group.children.map((child) => (
+                  <CategoryChip
+                    key={child}
+                    name={child}
+                    selected={categoryAllocations.some((allocation) => allocation.category === child)}
+                    onSelect={chooseSubcategory}
+                    colors={colors}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ))}
         {isAdvanced && categoryAllocations.length === 0 && (
           <Pressable
             disabled
