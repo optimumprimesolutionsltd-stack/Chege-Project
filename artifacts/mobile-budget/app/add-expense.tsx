@@ -6,11 +6,17 @@ import {
   TextInput,
   Pressable,
   Switch,
-  ScrollView,
   ActivityIndicator,
   Platform,
   Alert,
 } from 'react-native';
+// From gesture-handler, not react-native: this screen is presented as a
+// native formSheet, whose own drag-to-resize gesture and a plain RN
+// ScrollView's pan responder fight over the same touch, which is what made
+// scrolling up drag the whole sheet instead of just the content. The
+// gesture-handler ScrollView participates in the same recognizer system the
+// sheet's own gesture uses, so the two can be told apart.
+import { ScrollView } from 'react-native-gesture-handler';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
