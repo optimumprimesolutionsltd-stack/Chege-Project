@@ -49,6 +49,7 @@ const CRAWL = {
   "/guides/splitting-bills-fairly": { changefreq: "yearly", priority: "0.7" },
   "/guides/what-jamvi-actually-costs": { changefreq: "yearly", priority: "0.7" },
   "/guides/mpesa-payments-in-jamvi": { changefreq: "yearly", priority: "0.7" },
+  "/guides/how-to-budget-in-kenya": { changefreq: "yearly", priority: "0.7" },
   "/terms": { changefreq: "yearly", priority: "0.3" },
   "/privacy": { changefreq: "yearly", priority: "0.3" },
 };
