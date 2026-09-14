@@ -2227,8 +2227,16 @@ export default function AddExpenseSheet() {
           </>
         )}
 
-         {/* Financed by is only shown inside the paid-directly path. */}
-        {getExpenseFundingControlState({
+         {/* Financed by is only shown inside the paid-directly path, and only
+             in Detailed mode. Quick mode's own effect above silently fills
+             payerIds/selectedSources with the same defaults this card would
+             let someone set by hand (current user, main income source, full
+             amount) - without this isAdvanced check, that auto-fill also
+             satisfies showPersonalIncomeSources, so Quick mode ended up
+             showing this manual chip-and-amount picker right underneath its
+             own "Jamvi will record this as: funded in full from ..." summary,
+             which already says the same thing is happening automatically. */}
+        {isAdvanced && getExpenseFundingControlState({
           paidFromBank,
           hasPersonalFunding: payerIds.length === 1,
           allowMixedFunding,
