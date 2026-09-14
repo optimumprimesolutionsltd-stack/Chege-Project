@@ -4,11 +4,12 @@ import { describe, expect, it } from "vitest";
 const dashboardSource = readFileSync(new URL("./dashboard.tsx", import.meta.url), "utf8");
 const expensesSource = readFileSync(new URL("./expenses.tsx", import.meta.url), "utf8");
 
-describe("optional web expense categorization", () => {
-  it("starts dashboard quick expenses without a category and confirms an uncategorized save", () => {
+describe("required web expense categorization", () => {
+  it("starts dashboard quick expenses blank and blocks the save until a category is chosen", () => {
     expect(dashboardSource).toContain('useState([{ category: "", amount: "" }])');
-    expect(dashboardSource).toContain("Save without a category?");
-    expect(dashboardSource).toContain("Save without category");
+    expect(dashboardSource).toContain("Category required");
+    // The way out of the dialog is to create the category, never to skip it.
+    expect(dashboardSource).not.toContain("Save without category");
     expect(dashboardSource).toContain("Create a monthly budget");
     expect(dashboardSource).toContain("const hasCategoryAllocation = allocations.some((allocation) => allocation.category);");
     expect(dashboardSource).toContain('category: hasCategoryAllocation ? expenseCategory : ""');
@@ -17,9 +18,10 @@ describe("optional web expense categorization", () => {
     expect(dashboardSource).toContain('"Uncategorized"');
   });
 
-  it("allows uncategorized add and edit saves while validating deliberate allocations", () => {
-    expect(expensesSource).toContain("Save without a category?");
-    expect(expensesSource).toContain("Save without category");
+  it("blocks uncategorized add saves while validating deliberate allocations", () => {
+    expect(expensesSource).toContain("Category required");
+    // The way out of the dialog is to create the category, never to skip it.
+    expect(expensesSource).not.toContain("Save without category");
     expect(expensesSource).toContain("Create a monthly budget");
     expect(expensesSource).toContain("const hasCategoryAllocation = categoryAllocations.some((allocation) => allocation.category);");
     expect(expensesSource).toContain("if (hasCategoryAllocation && (categoryAllocations.some");

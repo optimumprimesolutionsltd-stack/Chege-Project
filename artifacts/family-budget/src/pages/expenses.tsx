@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 // Expense priority tiers from the budget document
 const EXPENSE_TIERS = [
@@ -64,6 +64,7 @@ import {
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { appPath } from "@/lib/base-path";
 import { workspaceLabel } from "@/lib/workspace-identity";
+import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@/lib/category-tree";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -349,6 +350,10 @@ export default function Expenses() {
 
   const { data: expenses, isLoading } = useGetExpenses({ month, year });
   const { data: categories } = useGetBudgetCategories();
+  // Parents and their subcategories, rebuilt from the flat rows the API
+  // returns: the select offers the parents, and a second select underneath
+  // offers the children of whichever parent is chosen. Mirrors the phone.
+  const categoryTree = useMemo(() => buildCategoryTree((categories ?? []) as unknown as CategoryRow[]), [categories]);
   const { data: members } = useGetMembers();
   const { data: group } = useGetGroup();
   const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
@@ -868,7 +873,7 @@ export default function Expenses() {
     }
   };
 
-  const handleCreate = async (e: React.FormEvent, saveWithoutCategory = false) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     const addDescription = addForm.description.trim();
     const payerIds = addForm.payerIds.length > 0
@@ -941,7 +946,10 @@ export default function Expenses() {
       });
       return;
     }
-    if (!hasCategoryAllocation && !saveWithoutCategory) {
+    // A category is required now, so this dialog blocks the save rather than
+    // offering to skip it. It still opens instead of a plain toast because the
+    // way out — turning the expense into a monthly budget — lives inside it.
+    if (!hasCategoryAllocation) {
       setUncategorizedSaveOpen(true);
       return;
     }
@@ -1475,6 +1483,10 @@ export default function Expenses() {
     const otherCategoryIndex = form.categoryAllocations.findIndex((allocation) => allocation.category.trim().toLocaleLowerCase() === "other");
     const isOtherCategory = otherCategoryIndex >= 0;
     const isPrimaryOtherCategory = form.categoryAllocations[0]?.category.trim().toLocaleLowerCase() === "other";
+    // A chosen subcategory keeps its parent showing in the first select, so
+    // the second select it came from stays on screen rather than emptying.
+    const selectedParentCategory = parentOf(categoryTree, form.category) ?? form.category;
+    const subcategoryOptions = childrenFor(categoryTree, form.category);
     const hasStandardAdditionalCategory = form.categoryAllocations.slice(1).some((allocation) => allocation.category.trim().toLocaleLowerCase() !== "other");
     const directFundingTotal = mode === "edit"
       ? (!editHasMultipleFundingSplits && form.paidById && form.incomeSourceId ? expenseTotal : 0)
@@ -1624,9 +1636,9 @@ export default function Expenses() {
 
         <div className="space-y-2 md:col-span-2 rounded-xl border border-primary/35 bg-primary/[0.04] p-4">
           <div>
-            <label className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">2. What did this expense cover? <span className="ml-1 font-normal text-muted-foreground">(optional)</span></label>
+            <label className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">2. What did this expense cover? <span className="ml-1 text-destructive">*</span></label>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-               Categories are optional. Leave this blank to save the expense as Uncategorized, outside any budget category.
+               Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.
             </p>
           </div>
             <div className="space-y-2">
@@ -1634,13 +1646,11 @@ export default function Expenses() {
                <select
                   className="flex h-[72px] min-w-0 flex-1 cursor-pointer rounded-md border-2 border-input bg-card px-6 py-4 text-base font-semibold leading-7 text-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/35 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                  aria-label="Expense category"
-                   value={isPrimaryOtherCategory ? "" : form.category}
+                   value={isPrimaryOtherCategory ? "" : selectedParentCategory}
                  onChange={e => chooseCategory(form, e.target.value)}
                >
                  <option value="">Select a category</option>
-                 {categories
-                   ?.filter(c => c.name.trim().toLocaleLowerCase() !== "other")
-                   .map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                 {categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}
                </select>
                 {form.category.trim() && !isPrimaryOtherCategory && (
                  <div data-testid={`primary-category-allocation-${mode}`} className="sm:w-48">
@@ -1676,6 +1686,32 @@ export default function Expenses() {
                     </div>
                   </div>
                 )}
+             {subcategoryOptions.length > 0 && !isPrimaryOtherCategory && (
+               <div className="space-y-1" data-testid={`subcategory-select-${mode}`}>
+                 <label htmlFor={`${mode}-subcategory`} className="text-xs font-semibold text-muted-foreground">
+                   {`${selectedParentCategory} subcategory (optional)`}
+                 </label>
+                 <select
+                   id={`${mode}-subcategory`}
+                   value={parentOf(categoryTree, form.category) ? form.category : ""}
+                   onChange={(event) => {
+                     // A subcategory refines the allocation its parent already
+                     // made rather than adding a second one, so the row keeps
+                     // the amount already typed against it. Clearing the select
+                     // hands that row back to the parent.
+                     const nextCategory = event.target.value || selectedParentCategory;
+                     form.setCategory(nextCategory);
+                     form.setCategoryAllocations((current) => current.map((allocation, index) => (
+                       index === 0 ? { ...allocation, category: nextCategory } : allocation
+                     )));
+                   }}
+                   className="h-12 w-full rounded-md border border-input bg-card px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                 >
+                   <option value="">No subcategory</option>
+                   {subcategoryOptions.map(child => <option key={child} value={child}>{child}</option>)}
+                 </select>
+               </div>
+             )}
              </div>
           </div>
             {!hasStandardAdditionalCategory && (
@@ -3070,22 +3106,13 @@ export default function Expenses() {
       <AlertDialog open={uncategorizedSaveOpen} onOpenChange={setUncategorizedSaveOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Save without a category?</AlertDialogTitle>
+            <AlertDialogTitle>Category required</AlertDialogTitle>
             <AlertDialogDescription>
-              This expense will be recorded but will not count toward a monthly budget category.
+              Choose a category for this expense. You can add a subcategory under it, or split it across several categories.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep editing</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                setUncategorizedSaveOpen(false);
-                void handleCreate({ preventDefault() {} } as React.FormEvent, true);
-              }}
-            >
-              Save without category
-            </AlertDialogAction>
             <AlertDialogAction
               onClick={(event) => {
                 event.preventDefault();
