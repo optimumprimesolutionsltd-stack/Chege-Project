@@ -284,13 +284,20 @@ export function ContributionExport() {
         dialogTitle: 'Save or share the contribution report',
         UTI: 'com.adobe.pdf',
       });
-    } catch {
+    } catch (error) {
       // This screen is already owner/admin-only (see isManager above), so a
-      // failure here is never actually a permissions problem — telling an
-      // owner to "check their group access" just contradicts what they
-      // already know to be true. It's almost always the PDF request itself
-      // (network, or the server could not build it).
-      Alert.alert('Could not create the report', 'The PDF could not be generated. Check your connection and try again.');
+      // failure here is never actually a permissions problem. It is either the
+      // request not reaching the server or the server failing to build the
+      // PDF, and those want different things from the reader — blaming the
+      // connection for a 500 sends people to restart their router.
+      const status = (error as { response?: { status?: number }; status?: number } | null)?.response?.status
+        ?? (error as { status?: number } | null)?.status;
+      Alert.alert(
+        'Could not create the report',
+        status != null && status >= 500
+          ? 'The report could not be generated on the server. This is our fault, not yours — please try again shortly.'
+          : 'The PDF could not be generated. Check your connection and try again.',
+      );
     } finally {
       setBusy(null);
     }
