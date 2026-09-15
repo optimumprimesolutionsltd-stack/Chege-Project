@@ -1436,9 +1436,11 @@ export default function Expenses() {
             <label className="text-sm font-bold text-primary">Category <span className="text-destructive">*</span></label>
             <select value={form.category} onChange={(event) => chooseCategory(form, event.target.value)} required
               aria-label="Normal expense category" className="flex h-12 w-full rounded-md border border-input bg-card px-3 text-base">
+              {/* Quick mode is one category, so it offers the parents only —
+                  subcategories are a Detailed-mode refinement. */}
               <option value="">Select a category</option>
-              {categories?.filter((category) => category.name.trim().toLocaleLowerCase() !== "other").map((category) =>
-                <option key={category.id} value={category.name}>{category.name}</option>,
+              {categoryTree.map((group) =>
+                <option key={group.name} value={group.name}>{group.name}</option>,
               )}
             </select>
           </div>
@@ -1686,6 +1688,7 @@ export default function Expenses() {
                     </div>
                   </div>
                 )}
+             </div>
              {subcategoryOptions.length > 0 && !isPrimaryOtherCategory && (
                <div className="space-y-1" data-testid={`subcategory-select-${mode}`}>
                  <label htmlFor={`${mode}-subcategory`} className="text-xs font-semibold text-muted-foreground">
@@ -1712,7 +1715,6 @@ export default function Expenses() {
                  </select>
                </div>
              )}
-             </div>
           </div>
             {!hasStandardAdditionalCategory && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">

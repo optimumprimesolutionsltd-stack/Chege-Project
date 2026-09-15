@@ -355,6 +355,39 @@ describe("expense funding amount entry", () => {
     for (const source of [dashboardSource, expensesSource, mobileSource]) {
       expect(source).toContain("subcategory (optional)");
     }
+  });
+
+  // Both web forms have a second, simpler category select for Quick mode that
+  // the detailed one's wiring never touched. It shipped listing subcategories
+  // flat beside their parents — the very thing Quick mode must not show —
+  // because every assertion here only ever looked at the detailed select.
+  it("offers parents only in the Quick-mode selects too", () => {
+    for (const source of [dashboardSource, expensesSource]) {
+      expect(source).toContain("Quick mode is one category, so it offers the parents only");
+      // Scoped to the Quick section. The additional-allocation selects further
+      // down still list categories flat, on purpose, and must not be caught.
+      const quickSection = source.slice(0, source.indexOf("2. What did this expense cover?"));
+      expect(quickSection).toContain("categoryTree.map((group)");
+      expect(quickSection).not.toContain("<option key={item.id}");
+      expect(quickSection).not.toContain("<option key={category.id}");
+      // Quick mode never offers the subcategory step either.
+      expect(quickSection).not.toContain("subcategory (optional)");
+    }
+  });
+
+  // The subcategory select is a sibling of the row holding the category select
+  // and its amount box, never a third column inside it. Nested inside, flex
+  // squeezed the category select to 52px wide on a 963px viewport.
+  it("puts the subcategory select below the category row, not inside it", () => {
+    for (const source of [dashboardSource, expensesSource]) {
+      const sub = source.indexOf("{subcategoryOptions.length > 0");
+      expect(sub).toBeGreaterThan(-1);
+      // Between the amount box's own closing `)}` and the subcategory block
+      // there must be a `</div>` — the flex row's closing tag. Without it the
+      // block is still a child of that row and shares its width.
+      const between = source.slice(source.lastIndexOf(")}", sub), sub);
+      expect(between).toContain("</div>");
+    }
     expect(dashboardSource).toContain('<option value="">Select a category</option>');
     expect(expensesSource).toContain('<option value="">Select a category</option>');
     expect(dashboardSource).not.toContain('<option value="">No category</option>');
