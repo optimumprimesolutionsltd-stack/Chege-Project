@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
+import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import {
@@ -36,19 +37,6 @@ type ContributionVarianceResponse = { periodLabel: string; rows: VarianceRow[]; 
 
 const RANGES = [1, 3, 6, 12] as const;
 
-function isoDay(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function monthStartIso(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-}
-
-function longDay(iso: string): string {
-  return new Date(iso + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 function kes(value: number): string {
   return value.toLocaleString('en-KE', { maximumFractionDigits: 0 });
 }
@@ -73,7 +61,7 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
   const [dayFrom, setDayFrom] = useState<string>(monthStartIso);
   const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
-  const [rangeFrom, rangeTo] = dayFrom <= dayTo ? [dayFrom, dayTo] : [dayTo, dayFrom];
+  const [rangeFrom, rangeTo] = orderedRange(dayFrom, dayTo);
 
   const { data, isLoading, isError } = useQuery<ContributionGrid>({
     queryKey: ['contribution-grid', months],
