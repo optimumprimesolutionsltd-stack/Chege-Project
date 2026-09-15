@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert, Platform } from 'react-native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 // From gesture-handler, not react-native — this screen is a native
 // formSheet, and a plain RN ScrollView's pan responder fights the sheet's
 // own drag-to-resize gesture over the same touch. See add-expense.tsx.
@@ -10,6 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { EditPill } from '@/components/ListEditor';
+import { isoDay, longDay, monthStartIso } from '@/lib/dayRange';
 
 type Contributor = { id: number; name: string; hasAccount: boolean; monthlyTarget: number | null };
 
@@ -49,6 +52,12 @@ export default function ContributionPlanScreen() {
 
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
+  // What a member is expected to give now applies from a date, so raising
+  // somebody does not reach back and turn months they had already settled
+  // into arrears. Defaults to the first of this month, which keeps the
+  // current month whole at the new amount.
+  const [editFrom, setEditFrom] = useState<string>(monthStartIso);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [renaming, setRenaming] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [busyContributor, setBusyContributor] = useState<number | null>(null);
@@ -158,12 +167,17 @@ export default function ContributionPlanScreen() {
       await customFetch(`/api/contributors/${contributorId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monthlyTarget: value }),
+        // Sent with a date, the server records a dated change and leaves the
+        // undated column alone — that column is what every earlier month is
+        // still measured against.
+        body: JSON.stringify({ monthlyTarget: value, effectiveFrom: editFrom }),
       });
       setEditing(null);
+      setDatePickerOpen(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['contributors'] }),
         queryClient.invalidateQueries({ queryKey: ['contribution-grid'] }),
+        queryClient.invalidateQueries({ queryKey: ['contribution-variance'] }),
       ]);
     } catch {
       Alert.alert('Could not save', 'That amount was not changed.');
@@ -258,34 +272,81 @@ export default function ContributionPlanScreen() {
                     </Pressable>
 
                     {editing === contributor.id ? (
-                      <View style={styles.editRow}>
-                        <TextInput
-                          value={editValue}
-                          onChangeText={setEditValue}
-                          keyboardType="number-pad"
-                          autoFocus
-                          placeholder="blank = none"
-                          placeholderTextColor={colors.mutedForeground}
-                          style={[styles.editInput, { borderColor: colors.border, color: colors.foreground }]}
-                        />
-                        <Pressable onPress={() => void saveMemberTarget(contributor.id)} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
-                          <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Save</Text>
+                      <View style={styles.editStack}>
+                        <View style={styles.editRow}>
+                          <TextInput
+                            value={editValue}
+                            onChangeText={setEditValue}
+                            keyboardType="number-pad"
+                            autoFocus
+                            placeholder="blank = none"
+                            placeholderTextColor={colors.mutedForeground}
+                            style={[styles.editInput, { borderColor: colors.border, color: colors.foreground }]}
+                          />
+                          <Pressable
+                            onPress={() => { setEditing(null); setDatePickerOpen(false); }}
+                            style={[styles.cancelBtn, { borderColor: colors.border }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Cancel this change"
+                          >
+                            <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => void saveMemberTarget(contributor.id)}
+                            style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Save ${contributor.name}'s amount from ${longDay(editFrom)}`}
+                          >
+                            <Text style={{ color: colors.primaryForeground, fontFamily: 'Inter_600SemiBold' }}>Save</Text>
+                          </Pressable>
+                        </View>
+                        <Pressable
+                          onPress={() => setDatePickerOpen(true)}
+                          style={styles.fromRow}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Applies from ${longDay(editFrom)}. Tap to change.`}
+                          testID={`contribution-plan-from-${contributor.id}`}
+                        >
+                          <Feather name="calendar" size={12} color={colors.primary} />
+                          <Text style={[styles.fromText, { color: colors.mutedForeground }]}>
+                            Applies from <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{longDay(editFrom)}</Text>
+                          </Text>
                         </Pressable>
+                        <Text style={[styles.fromHint, { color: colors.mutedForeground }]}>
+                          Months before this keep the amount they were measured against.
+                        </Text>
+                        {datePickerOpen && (
+                          <DateTimePicker
+                            value={new Date(editFrom + 'T00:00:00')}
+                            mode="date"
+                            display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+                            onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                              setDatePickerOpen(Platform.OS === 'ios');
+                              if (selected) setEditFrom(isoDay(selected));
+                            }}
+                          />
+                        )}
                       </View>
                     ) : (
-                      <Pressable
-                        onPress={() => {
-                          setEditing(contributor.id);
-                          setEditValue(contributor.monthlyTarget != null ? String(contributor.monthlyTarget) : '');
-                        }}
-                        style={styles.valueRow}
-                        hitSlop={8}
-                      >
+                      // The figure is no longer an invisible button. Tapping a
+                      // row was enough to start editing what somebody owes, so
+                      // it took one stray touch to change it; now the amount is
+                      // plain text and only the Edit control opens it.
+                      <View style={styles.valueRow}>
                         <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
                           {contributor.monthlyTarget != null ? `KES ${kes(contributor.monthlyTarget)}/mo` : 'Not set'}
                         </Text>
-                        <Feather name="edit-2" size={14} color={colors.mutedForeground} />
-                      </Pressable>
+                        <EditPill
+                          onPress={() => {
+                            setEditing(contributor.id);
+                            setEditValue(contributor.monthlyTarget != null ? String(contributor.monthlyTarget) : '');
+                            setEditFrom(monthStartIso());
+                            setDatePickerOpen(false);
+                          }}
+                          accessibilityLabel={`Change what ${contributor.name} is expected to give`}
+                          testID={`contribution-plan-edit-${contributor.id}`}
+                        />
+                      </View>
                     )}
 
                     <Pressable
@@ -351,4 +412,9 @@ const styles = StyleSheet.create({
   renameRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   renameInput: { flex: 1, height: 38, borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 10, fontSize: 14 },
   saveBtn: { height: 38, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  cancelBtn: { height: 38, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  editStack: { gap: 6, flex: 1 },
+  fromRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32 },
+  fromText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  fromHint: { fontSize: 11, fontFamily: 'Inter_400Regular', lineHeight: 15 },
 });
