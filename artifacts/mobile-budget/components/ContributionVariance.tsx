@@ -144,63 +144,67 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
           )}
         </View>
         <View style={styles.headRight}>
-          {open ? (
-            <View style={styles.ranges}>
-              {RANGES.map((range) => {
-                const active = !isCustom && months === range;
-                return (
-                  <Pressable
-                    key={range}
-                    onPress={() => { setIsCustom(false); setMonths(range); }}
-                    style={[
-                      styles.rangeBtn,
-                      { borderColor: colors.border },
-                      active && { backgroundColor: colors.primary, borderColor: colors.primary },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.rangeLabel,
-                        { color: active ? colors.primaryForeground : colors.mutedForeground },
-                      ]}
-                    >
-                      {range}m
-                    </Text>
-                  </Pressable>
-                );
-              })}
-              <Pressable
-                onPress={() => setIsCustom(true)}
-                testID="contribution-variance-custom-range"
-                accessibilityRole="button"
-                accessibilityState={{ selected: isCustom }}
-                accessibilityLabel="Pick an exact date range"
-                hitSlop={6}
-                style={[
-                  styles.rangeBtn,
-                  styles.customRangeBtn,
-                  { borderColor: colors.border },
-                  isCustom && { backgroundColor: colors.primary, borderColor: colors.primary },
-                ]}
-              >
-                {/* An 11px bare calendar among the 3m/6m/12m pills read as an
-                    icon someone had left behind rather than a fourth choice —
-                    it needs the same word-shaped weight as its neighbours. */}
-                <Feather name="calendar" size={13} color={isCustom ? colors.primaryForeground : colors.mutedForeground} />
-                <Text
-                  style={[
-                    styles.rangeLabel,
-                    { color: isCustom ? colors.primaryForeground : colors.mutedForeground },
-                  ]}
-                >
-                  Dates
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
           <Feather name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.mutedForeground} />
         </View>
       </Pressable>
+
+      {/* The range controls sit on their own line. Beside the heading they
+          left it a few characters wide once the pills carried labels, and
+          "Expected vs actual" wrapped one letter per line. */}
+      {open ? (
+              <View style={styles.ranges}>
+                {RANGES.map((range) => {
+                  const active = !isCustom && months === range;
+                  return (
+                    <Pressable
+                      key={range}
+                      onPress={() => { setIsCustom(false); setMonths(range); }}
+                      style={[
+                        styles.rangeBtn,
+                        { borderColor: colors.border },
+                        active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.rangeLabel,
+                          { color: active ? colors.primaryForeground : colors.mutedForeground },
+                        ]}
+                      >
+                        {range}m
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  onPress={() => setIsCustom(true)}
+                  testID="contribution-variance-custom-range"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isCustom }}
+                  accessibilityLabel="Pick an exact date range"
+                  hitSlop={6}
+                  style={[
+                    styles.rangeBtn,
+                    styles.customRangeBtn,
+                    { borderColor: colors.border },
+                    isCustom && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  ]}
+                >
+                  {/* An 11px bare calendar among the 3m/6m/12m pills read as an
+                      icon someone had left behind rather than a fourth choice —
+                      it needs the same word-shaped weight as its neighbours. */}
+                  <Feather name="calendar" size={13} color={isCustom ? colors.primaryForeground : colors.mutedForeground} />
+                  <Text
+                    style={[
+                      styles.rangeLabel,
+                      { color: isCustom ? colors.primaryForeground : colors.mutedForeground },
+                    ]}
+                  >
+                    Dates
+                  </Text>
+                </Pressable>
+              </View>
+      ) : null}
 
       {open && isCustom ? (
         <View style={styles.dayRow}>
@@ -303,13 +307,16 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
 const styles = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16, gap: 10 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  headerText: { flex: 1, gap: 3 },
-  headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heading: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  // minWidth 0 is what stops a flex child being squeezed narrower than its
+  // own content: without it the heading kept its share of the row only until
+  // the controls beside it grew, then wrapped one letter per line.
+  headerText: { flex: 1, minWidth: 0, gap: 3 },
+  headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  heading: { fontSize: 15, fontFamily: 'Inter_700Bold', flexShrink: 1 },
   nameWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
   sub: { fontSize: 12, lineHeight: 17 },
-  ranges: { flexDirection: 'row', gap: 4, alignSelf: 'flex-start' },
+  ranges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignSelf: 'flex-start', marginTop: 8 },
   rangeBtn: {
     paddingHorizontal: 8,
     paddingVertical: 4,
