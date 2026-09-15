@@ -212,8 +212,20 @@ export default function ReportsScreen() {
         dialogTitle: 'Save or share monthly report',
         UTI: 'com.adobe.pdf',
       });
-    } catch {
-      setExportError('Couldn’t create the PDF. Check your group access and try again.');
+    } catch (error) {
+      // This used to blame group access for everything, which sent people
+      // hunting through permissions while the real fault was a 500 from the
+      // report route. Say which side failed, and never claim it was access
+      // unless the server actually said so.
+      const status = (error as { response?: { status?: number }; status?: number } | null)?.response?.status
+        ?? (error as { status?: number } | null)?.status;
+      setExportError(
+        status === 401 || status === 403
+          ? 'You do not have access to this group’s report.'
+          : status != null && status >= 500
+            ? 'The report could not be generated on the server. This is our fault, not yours — please try again shortly.'
+            : 'Couldn’t create the PDF. Check your connection and try again.',
+      );
     } finally {
       setIsExporting(false);
     }
