@@ -1,0 +1,64 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+const reports = readFileSync('app/(tabs)/reports.tsx', 'utf8');
+const scrollReset = readFileSync('components/PageScrollReset.tsx', 'utf8');
+const variance = readFileSync('components/ContributionVariance.tsx', 'utf8');
+
+describe('Bank accounts scrolls as one page', () => {
+  // The balance, the account chips and the five actions were pinned above the
+  // transaction list, so the top of the screen could never be scrolled away
+  // and the list itself was left a narrow strip.
+  it('puts the balance panel inside the list rather than above it', () => {
+    const header = bank.slice(bank.indexOf('ListHeaderComponent={'), bank.indexOf('ListFooterComponent={'));
+    expect(header).toContain('<LinearGradient');
+    expect(header).toContain('</LinearGradient>');
+    expect(header).toContain('TRANSACTIONS');
+  });
+
+  it('no longer renders the gradient as a sibling of the list', () => {
+    const beforeList = bank.slice(bank.indexOf('return ('), bank.indexOf('<PageFlatList'));
+    expect(beforeList).not.toContain('<LinearGradient');
+  });
+});
+
+describe('Reports summary cards', () => {
+  // Only "Categories to watch" was pressable; the other two read as dead tiles.
+  it('makes all three cards pressable', () => {
+    const cards = reports.slice(reports.indexOf('styles.progressStats'), reports.indexOf('Overall budget utilisation'));
+    expect(cards).not.toContain('<View style={[styles.progressStat,');
+    expect(cards.match(/onPress=\{\(\) => /g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('sends each card to the section it summarises', () => {
+    expect(reports).toContain("jumpToSection('spending')");
+    expect(reports).toContain("jumpToSection('income')");
+    expect(reports).toContain("onLayout={captureSection('income')}");
+    expect(reports).toContain("onLayout={captureSection('spending')}");
+  });
+
+  it('scrolls through a forwarded ref, keeping the focus reset intact', () => {
+    expect(reports).toContain('ref={scrollRef}');
+    expect(scrollReset).toContain('React.forwardRef<ScrollView, ScrollViewProps>');
+    // Both handles must reach the node: ours resets on focus, the caller's scrolls.
+    expect(scrollReset).toContain('const setRef = useCallback((node: ScrollView | null) => {');
+    expect(scrollReset).toContain("ref.current?.scrollTo({ x: 0, y: 0, animated: false });");
+  });
+});
+
+describe('the exact-date control on Expected vs actual', () => {
+  // An 11px bare calendar among the 3m/6m/12m pills was mistaken for not
+  // being there at all.
+  it('is labelled rather than a bare icon', () => {
+    const control = variance.slice(variance.indexOf('contribution-variance-custom-range'), variance.indexOf('</Pressable>', variance.indexOf('contribution-variance-custom-range')));
+    expect(control).toContain('Dates');
+    expect(control).toContain('size={13}');
+    expect(control).not.toContain('size={11}');
+  });
+
+  it('has a real touch target and an accessible name', () => {
+    expect(variance).toContain("customRangeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 }");
+    expect(variance).toContain('accessibilityLabel="Pick an exact date range"');
+  });
+});

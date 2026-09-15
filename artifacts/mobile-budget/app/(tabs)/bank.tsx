@@ -896,254 +896,6 @@ export default function BankScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Sticky header */}
-      <LinearGradient
-        colors={['#0a1a10', '#0f2217', '#132a1c']}
-        style={[styles.header, { paddingTop: topPad + 16 }]}
-      >
-        <WorkspaceIdentityRow group={group} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <Text style={styles.headerTitle}>Bank accounts</Text>
-          {canManageAccount && !accountEditor.editing && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              {hasBankAccounts && (
-                <TouchableOpacity onPress={accountEditor.open} hitSlop={10} testID="bank-edit-accounts">
-                  <Feather name="edit-2" size={19} color="#86efac" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={() => openAccountEditor()} hitSlop={10} testID="bank-add-account">
-                <Feather name="plus-circle" size={24} color="#86efac" />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-        {accountEditor.editing ? (
-          <View style={{ marginTop: 10, gap: 8 }}>
-            {accounts.map((account) => {
-              const staged = accountEditor.isRemoving(account.id);
-              const renaming = accountEditor.editingRow === account.id;
-              return (
-                <View
-                  key={account.id}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1f3a2b', borderRadius: 12, paddingHorizontal: 12, minHeight: 44 }}
-                >
-                  <TouchableOpacity onPress={() => accountEditor.toggleRemoval(account.id)} hitSlop={8} testID={`bank-remove-account-${account.id}`}>
-                    <Feather name={staged ? 'rotate-ccw' : 'trash-2'} size={16} color={staged ? '#86efac' : '#fca5a5'} />
-                  </TouchableOpacity>
-                  {renaming ? (
-                    <>
-                      <TextInput
-                        autoFocus
-                        value={accountEditor.rowDraft}
-                        onChangeText={accountEditor.setRowDraft}
-                        onSubmitEditing={() => accountEditor.commitRename(account.id, account.name)}
-                        maxLength={120}
-                        style={{ flex: 1, color: '#ecfdf5', fontFamily: 'Inter_600SemiBold', paddingVertical: 8 }}
-                        placeholderTextColor="#6ee7b7"
-                      />
-                      <TouchableOpacity onPress={() => accountEditor.commitRename(account.id, account.name)} hitSlop={8}>
-                        <Feather name="check" size={17} color="#86efac" />
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity
-                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}
-                      onPress={() => accountEditor.startRename(account.id, account.name)}
-                    >
-                      <Text
-                        style={{ color: '#d1fae5', fontFamily: 'Inter_600SemiBold', textDecorationLine: staged ? 'line-through' : 'none' }}
-                        numberOfLines={1}
-                      >
-                        {accountEditor.displayName(account.id, account.name)}
-                      </Text>
-                      <Feather name="edit-2" size={11} color="#6ee7b7" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            })}
-            {accountEditor.adds.map((name, index) => (
-              <TouchableOpacity
-                key={`add-${index}`}
-                onPress={() => accountEditor.dropAdd(index)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#14532d', borderRadius: 12, paddingHorizontal: 12, minHeight: 40 }}
-              >
-                <Feather name="plus" size={14} color="#86efac" />
-                <Text style={{ flex: 1, color: '#ecfdf5' }}>{name}</Text>
-                <Feather name="x" size={13} color="#6ee7b7" />
-              </TouchableOpacity>
-            ))}
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
-              <TextInput
-                value={accountEditor.addName}
-                onChangeText={accountEditor.setAddName}
-                onSubmitEditing={accountEditor.commitAdd}
-                maxLength={120}
-                placeholder="Add a bank account by name"
-                placeholderTextColor="#6ee7b7"
-                style={{ flex: 1, height: 42, borderWidth: 1, borderColor: '#2f6f4c', borderRadius: 10, paddingHorizontal: 12, color: '#ecfdf5' }}
-              />
-              <TouchableOpacity onPress={accountEditor.commitAdd} style={{ width: 42, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#2f6f4c', alignItems: 'center', justifyContent: 'center' }}>
-                <Feather name="plus" size={18} color="#86efac" />
-              </TouchableOpacity>
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 14, marginTop: 4 }}>
-              <TouchableOpacity onPress={accountEditor.cancel} disabled={accountEditor.saving} hitSlop={8}>
-                <Text style={{ color: '#9ca3af', fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => void accountEditor.save()}
-                disabled={accountEditor.saving || !accountEditor.dirty}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#22c55e', paddingHorizontal: 16, height: 40, borderRadius: 10, opacity: accountEditor.saving || !accountEditor.dirty ? 0.5 : 1 }}
-                testID="bank-save-accounts"
-              >
-                {accountEditor.saving ? <ActivityIndicator size="small" color="#052e16" /> : null}
-                <Text style={{ color: '#052e16', fontFamily: 'Inter_700Bold' }}>Save changes</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={{ color: '#6ee7b7', fontSize: 11, lineHeight: 16 }}>
-              An account with transactions cannot be removed — move or delete its transactions first.
-            </Text>
-          </View>
-        ) : (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-          {accounts.map((account) => {
-            const active = account.id === selectedAccount?.id;
-            return (
-              <TouchableOpacity
-                key={account.id}
-                onPress={() => selectAccount(account.id)}
-                style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: active ? '#dcfce7' : '#1f3a2b' }}
-                testID={`bank-account-${account.id}`}
-              >
-                <Text style={{ color: active ? '#14532d' : '#d1fae5', fontFamily: 'Inter_600SemiBold' }}>{account.name}</Text>
-                {canManageAccount && active && (
-                  <TouchableOpacity onPress={() => openAccountEditor(account.id)} hitSlop={8} testID={`bank-edit-account-${account.id}`}>
-                    <Feather name="edit-2" size={13} color="#14532d" />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        )}
-        {!hasBankAccounts && canManageAccount && (
-          <Pressable
-            onPress={() => openAccountEditor()}
-            style={[styles.firstAccountCta, { borderColor: '#86efac', backgroundColor: '#1f3a2b' }]}
-            testID="bank-create-first-account"
-          >
-            <Feather name="plus-circle" size={18} color="#86efac" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.firstAccountCtaTitle}>Create your first bank account</Text>
-              <Text style={styles.firstAccountCtaText}>Jamvi will not create a main or placeholder account for you.</Text>
-            </View>
-          </Pressable>
-        )}
-        {isSharedWorkspace && !canManageAccount && (
-          <Text style={styles.managerGuidance}>
-            You can add your own deposit today. An owner or admin handles withdrawals, transfers, and account changes.
-          </Text>
-        )}
-        {isLoading ? (
-          <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
-        ) : (
-          <>
-            <Text style={styles.balanceLabel}>Closing balance</Text>
-            <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.balance)}</Text>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Feather name="arrow-down-circle" size={14} color="#4ade80" />
-                <Text style={styles.statLabel}>Deposits</Text>
-                <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDeposits)}</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Feather name="arrow-up-circle" size={14} color="#f87171" />
-                <Text style={styles.statLabel}>Withdrawn</Text>
-                <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDisbursements)}</Text>
-              </View>
-            </View>
-            <View style={styles.openingBalanceRow}>
-              <View>
-                <Text style={styles.openingBalanceLabel}>Opening balance</Text>
-                 <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.openingBalance)}</Text>
-                {data?.openingBalanceDate && (
-                  <Text style={styles.openingBalanceDate}>
-                     As of {formatDisplayDate(data.openingBalanceDate)}
-                  </Text>
-                )}
-              </View>
-              {canManageAccount && (
-                <TouchableOpacity
-                  style={styles.editOpeningBalanceBtn}
-                  onPress={openOpeningBalanceEditor}
-                  activeOpacity={0.8}
-                  testID="bank-edit-opening-balance"
-                >
-                  <Feather name="edit-2" size={14} color="#d1fae5" />
-                  <Text style={styles.editOpeningBalanceText}>Edit starting balance</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Action buttons inside header */}
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => openModal('deposit')}
-                activeOpacity={0.8}
-                testID="bank-deposit-action"
-              >
-                <Feather name="arrow-down-left" size={16} color="#0a1a10" />
-                <Text style={styles.actionBtnText}>Deposit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnDisburse, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
-                onPress={() => openModal('disbursement')}
-                activeOpacity={0.8}
-                disabled={!canManageAccount || !hasBankAccounts}
-                accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can withdraw money.' : undefined}
-                testID="bank-withdraw-action"
-              >
-                <Feather name="arrow-up-right" size={16} color="#f87171" />
-                <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
-                onPress={() => openModal('transfer')}
-                activeOpacity={0.8}
-                disabled={!canManageAccount || !hasBankAccounts}
-                accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can transfer shared money.' : undefined}
-                testID="bank-transfer-action"
-              >
-                <Feather name="repeat" size={16} color="#67e8f9" />
-                <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Transfer</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || accounts.length < 2) && styles.actionBtnDisabled]}
-                onPress={() => openModal('bank_transfer')}
-                disabled={!canManageAccount || accounts.length < 2}
-                testID="bank-to-bank-action"
-              >
-                <Feather name="shuffle" size={16} color="#67e8f9" />
-                <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#78350f' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
-                onPress={() => openModal('bank_charge')}
-                activeOpacity={0.8}
-                disabled={!canManageAccount || !hasBankAccounts}
-                accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can record a bank charge.' : undefined}
-                testID="bank-charge-action"
-              >
-                <Feather name="file-minus" size={16} color="#fde68a" />
-                <Text style={[styles.actionBtnText, { color: '#fde68a' }]}>Charge</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </LinearGradient>
 
       <PageFlatList
         data={transactions}
@@ -1161,12 +913,265 @@ export default function BankScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          transactions.length > 0 ? (
+          // The balance, the account chips and the five actions used to
+          // sit above the list, pinned, so only the transactions moved and
+          // the top of the screen could never be scrolled away. As the
+          // list header they scroll with everything else.
+          <>
+        <LinearGradient
+          colors={['#0a1a10', '#0f2217', '#132a1c']}
+          style={[styles.header, { paddingTop: topPad + 16 }]}
+        >
+          <WorkspaceIdentityRow group={group} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <Text style={styles.headerTitle}>Bank accounts</Text>
+            {canManageAccount && !accountEditor.editing && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                {hasBankAccounts && (
+                  <TouchableOpacity onPress={accountEditor.open} hitSlop={10} testID="bank-edit-accounts">
+                    <Feather name="edit-2" size={19} color="#86efac" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => openAccountEditor()} hitSlop={10} testID="bank-add-account">
+                  <Feather name="plus-circle" size={24} color="#86efac" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          {accountEditor.editing ? (
+            <View style={{ marginTop: 10, gap: 8 }}>
+              {accounts.map((account) => {
+                const staged = accountEditor.isRemoving(account.id);
+                const renaming = accountEditor.editingRow === account.id;
+                return (
+                  <View
+                    key={account.id}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1f3a2b', borderRadius: 12, paddingHorizontal: 12, minHeight: 44 }}
+                  >
+                    <TouchableOpacity onPress={() => accountEditor.toggleRemoval(account.id)} hitSlop={8} testID={`bank-remove-account-${account.id}`}>
+                      <Feather name={staged ? 'rotate-ccw' : 'trash-2'} size={16} color={staged ? '#86efac' : '#fca5a5'} />
+                    </TouchableOpacity>
+                    {renaming ? (
+                      <>
+                        <TextInput
+                          autoFocus
+                          value={accountEditor.rowDraft}
+                          onChangeText={accountEditor.setRowDraft}
+                          onSubmitEditing={() => accountEditor.commitRename(account.id, account.name)}
+                          maxLength={120}
+                          style={{ flex: 1, color: '#ecfdf5', fontFamily: 'Inter_600SemiBold', paddingVertical: 8 }}
+                          placeholderTextColor="#6ee7b7"
+                        />
+                        <TouchableOpacity onPress={() => accountEditor.commitRename(account.id, account.name)} hitSlop={8}>
+                          <Feather name="check" size={17} color="#86efac" />
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity
+                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}
+                        onPress={() => accountEditor.startRename(account.id, account.name)}
+                      >
+                        <Text
+                          style={{ color: '#d1fae5', fontFamily: 'Inter_600SemiBold', textDecorationLine: staged ? 'line-through' : 'none' }}
+                          numberOfLines={1}
+                        >
+                          {accountEditor.displayName(account.id, account.name)}
+                        </Text>
+                        <Feather name="edit-2" size={11} color="#6ee7b7" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+              {accountEditor.adds.map((name, index) => (
+                <TouchableOpacity
+                  key={`add-${index}`}
+                  onPress={() => accountEditor.dropAdd(index)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#14532d', borderRadius: 12, paddingHorizontal: 12, minHeight: 40 }}
+                >
+                  <Feather name="plus" size={14} color="#86efac" />
+                  <Text style={{ flex: 1, color: '#ecfdf5' }}>{name}</Text>
+                  <Feather name="x" size={13} color="#6ee7b7" />
+                </TouchableOpacity>
+              ))}
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
+                <TextInput
+                  value={accountEditor.addName}
+                  onChangeText={accountEditor.setAddName}
+                  onSubmitEditing={accountEditor.commitAdd}
+                  maxLength={120}
+                  placeholder="Add a bank account by name"
+                  placeholderTextColor="#6ee7b7"
+                  style={{ flex: 1, height: 42, borderWidth: 1, borderColor: '#2f6f4c', borderRadius: 10, paddingHorizontal: 12, color: '#ecfdf5' }}
+                />
+                <TouchableOpacity onPress={accountEditor.commitAdd} style={{ width: 42, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#2f6f4c', alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name="plus" size={18} color="#86efac" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 14, marginTop: 4 }}>
+                <TouchableOpacity onPress={accountEditor.cancel} disabled={accountEditor.saving} hitSlop={8}>
+                  <Text style={{ color: '#9ca3af', fontFamily: 'Inter_600SemiBold' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => void accountEditor.save()}
+                  disabled={accountEditor.saving || !accountEditor.dirty}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#22c55e', paddingHorizontal: 16, height: 40, borderRadius: 10, opacity: accountEditor.saving || !accountEditor.dirty ? 0.5 : 1 }}
+                  testID="bank-save-accounts"
+                >
+                  {accountEditor.saving ? <ActivityIndicator size="small" color="#052e16" /> : null}
+                  <Text style={{ color: '#052e16', fontFamily: 'Inter_700Bold' }}>Save changes</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ color: '#6ee7b7', fontSize: 11, lineHeight: 16 }}>
+                An account with transactions cannot be removed — move or delete its transactions first.
+              </Text>
+            </View>
+          ) : (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+            {accounts.map((account) => {
+              const active = account.id === selectedAccount?.id;
+              return (
+                <TouchableOpacity
+                  key={account.id}
+                  onPress={() => selectAccount(account.id)}
+                  style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: active ? '#dcfce7' : '#1f3a2b' }}
+                  testID={`bank-account-${account.id}`}
+                >
+                  <Text style={{ color: active ? '#14532d' : '#d1fae5', fontFamily: 'Inter_600SemiBold' }}>{account.name}</Text>
+                  {canManageAccount && active && (
+                    <TouchableOpacity onPress={() => openAccountEditor(account.id)} hitSlop={8} testID={`bank-edit-account-${account.id}`}>
+                      <Feather name="edit-2" size={13} color="#14532d" />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          )}
+          {!hasBankAccounts && canManageAccount && (
+            <Pressable
+              onPress={() => openAccountEditor()}
+              style={[styles.firstAccountCta, { borderColor: '#86efac', backgroundColor: '#1f3a2b' }]}
+              testID="bank-create-first-account"
+            >
+              <Feather name="plus-circle" size={18} color="#86efac" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.firstAccountCtaTitle}>Create your first bank account</Text>
+                <Text style={styles.firstAccountCtaText}>Jamvi will not create a main or placeholder account for you.</Text>
+              </View>
+            </Pressable>
+          )}
+          {isSharedWorkspace && !canManageAccount && (
+            <Text style={styles.managerGuidance}>
+              You can add your own deposit today. An owner or admin handles withdrawals, transfers, and account changes.
+            </Text>
+          )}
+          {isLoading ? (
+            <ActivityIndicator color="#4ade80" style={{ marginTop: 16, marginBottom: 8 }} />
+          ) : (
+            <>
+              <Text style={styles.balanceLabel}>Closing balance</Text>
+              <Text style={styles.balance} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.balance)}</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Feather name="arrow-down-circle" size={14} color="#4ade80" />
+                  <Text style={styles.statLabel}>Deposits</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDeposits)}</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Feather name="arrow-up-circle" size={14} color="#f87171" />
+                  <Text style={styles.statLabel}>Withdrawn</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDisbursements)}</Text>
+                </View>
+              </View>
+              <View style={styles.openingBalanceRow}>
+                <View>
+                  <Text style={styles.openingBalanceLabel}>Opening balance</Text>
+                   <Text style={styles.openingBalanceValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.openingBalance)}</Text>
+                  {data?.openingBalanceDate && (
+                    <Text style={styles.openingBalanceDate}>
+                       As of {formatDisplayDate(data.openingBalanceDate)}
+                    </Text>
+                  )}
+                </View>
+                {canManageAccount && (
+                  <TouchableOpacity
+                    style={styles.editOpeningBalanceBtn}
+                    onPress={openOpeningBalanceEditor}
+                    activeOpacity={0.8}
+                    testID="bank-edit-opening-balance"
+                  >
+                    <Feather name="edit-2" size={14} color="#d1fae5" />
+                    <Text style={styles.editOpeningBalanceText}>Edit starting balance</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Action buttons inside header */}
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() => openModal('deposit')}
+                  activeOpacity={0.8}
+                  testID="bank-deposit-action"
+                >
+                  <Feather name="arrow-down-left" size={16} color="#0a1a10" />
+                  <Text style={styles.actionBtnText}>Deposit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnDisburse, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
+                  onPress={() => openModal('disbursement')}
+                  activeOpacity={0.8}
+                  disabled={!canManageAccount || !hasBankAccounts}
+                  accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can withdraw money.' : undefined}
+                  testID="bank-withdraw-action"
+                >
+                  <Feather name="arrow-up-right" size={16} color="#f87171" />
+                  <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
+                  onPress={() => openModal('transfer')}
+                  activeOpacity={0.8}
+                  disabled={!canManageAccount || !hasBankAccounts}
+                  accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can transfer shared money.' : undefined}
+                  testID="bank-transfer-action"
+                >
+                  <Feather name="repeat" size={16} color="#67e8f9" />
+                  <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Transfer</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || accounts.length < 2) && styles.actionBtnDisabled]}
+                  onPress={() => openModal('bank_transfer')}
+                  disabled={!canManageAccount || accounts.length < 2}
+                  testID="bank-to-bank-action"
+                >
+                  <Feather name="shuffle" size={16} color="#67e8f9" />
+                  <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: '#78350f' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
+                  onPress={() => openModal('bank_charge')}
+                  activeOpacity={0.8}
+                  disabled={!canManageAccount || !hasBankAccounts}
+                  accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can record a bank charge.' : undefined}
+                  testID="bank-charge-action"
+                >
+                  <Feather name="file-minus" size={16} color="#fde68a" />
+                  <Text style={[styles.actionBtnText, { color: '#fde68a' }]}>Charge</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </LinearGradient>
+          {transactions.length > 0 ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.listHeader, { color: colors.mutedForeground }]}>TRANSACTIONS</Text>
               <ListEditButton editor={txEditor} canManage={canManageAccount} />
             </View>
-          ) : null
+          ) : null}
+          </>
         }
         ListFooterComponent={
           txEditor.editing ? (

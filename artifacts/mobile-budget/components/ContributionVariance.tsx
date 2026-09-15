@@ -172,13 +172,29 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
               <Pressable
                 onPress={() => setIsCustom(true)}
                 testID="contribution-variance-custom-range"
+                accessibilityRole="button"
+                accessibilityState={{ selected: isCustom }}
+                accessibilityLabel="Pick an exact date range"
+                hitSlop={6}
                 style={[
                   styles.rangeBtn,
+                  styles.customRangeBtn,
                   { borderColor: colors.border },
                   isCustom && { backgroundColor: colors.primary, borderColor: colors.primary },
                 ]}
               >
-                <Feather name="calendar" size={11} color={isCustom ? colors.primaryForeground : colors.mutedForeground} />
+                {/* An 11px bare calendar among the 3m/6m/12m pills read as an
+                    icon someone had left behind rather than a fourth choice —
+                    it needs the same word-shaped weight as its neighbours. */}
+                <Feather name="calendar" size={13} color={isCustom ? colors.primaryForeground : colors.mutedForeground} />
+                <Text
+                  style={[
+                    styles.rangeLabel,
+                    { color: isCustom ? colors.primaryForeground : colors.mutedForeground },
+                  ]}
+                >
+                  Dates
+                </Text>
               </Pressable>
             </View>
           ) : null}
@@ -301,6 +317,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   rangeLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  customRangeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 },
   dayRow: { flexDirection: 'row', gap: 10, marginTop: 2 },
   dayField: { flex: 1, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 10, paddingVertical: 8, gap: 3 },
   dayLabel: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },

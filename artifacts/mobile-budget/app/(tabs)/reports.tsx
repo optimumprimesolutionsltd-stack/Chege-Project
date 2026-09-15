@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Pressable,
   Platform,
   Modal,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -179,6 +180,24 @@ export default function ReportsScreen() {
   const [dayFrom, setDayFrom] = useState<string>(monthStartIso);
   const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
   const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
+
+  // The summary cards describe sections that are already further down this
+  // page, but only one of the three was pressable, so the other two read as
+  // dead tiles. Tapping one now jumps to the section it summarises.
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionTops = useRef<Record<string, number>>({});
+  const captureSection = useCallback(
+    (key: string) => (event: LayoutChangeEvent) => {
+      sectionTops.current[key] = event.nativeEvent.layout.y;
+    },
+    [],
+  );
+  const jumpToSection = useCallback((key: string) => {
+    const y = sectionTops.current[key];
+    if (y == null) return;
+    // A little above the heading, so it does not sit flush under the header.
+    scrollRef.current?.scrollTo({ y: Math.max(y - 12, 0), animated: true });
+  }, []);
   const [watchDetailsOpen, setWatchDetailsOpen] = useState(false);
 
   const handleMonthChange = useCallback((m: number, y: number) => {
@@ -450,6 +469,7 @@ export default function ReportsScreen() {
         </View>
       ) : (
         <PageScrollView
+          ref={scrollRef}
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
           refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
@@ -495,13 +515,39 @@ export default function ReportsScreen() {
             )}
             {!progressLoading && !progressError && (
               <View style={styles.progressStats}>
-                <View style={[styles.progressStat, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Spending</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Spending: ${formatKES(totalSpent)} of ${formatKES(totalBudget)} budget. Tap for the category breakdown.`}
+                  accessibilityHint="Jumps to Budget vs Actual"
+                  onPress={() => jumpToSection('spending')}
+                  style={({ pressed }) => [
+                    styles.progressStat,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    pressed && styles.progressStatPressed,
+                  ]}
+                >
+                  <View style={styles.progressStatHeading}>
+                    <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Spending</Text>
+                    <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+                  </View>
                   <Text style={[styles.progressStatAmount, { color: colors.foreground }]}>{formatKES(totalSpent)}</Text>
                   <Text style={[styles.progressStatSub, { color: colors.mutedForeground }]}>of {formatKES(totalBudget)} budget</Text>
-                </View>
-                <View style={[styles.progressStat, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Recorded funding</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Recorded funding: ${formatKES(incomeStreamReport?.totalFunding ?? 0)}. Tap for the income streams.`}
+                  accessibilityHint="Jumps to Income Streams"
+                  onPress={() => jumpToSection('income')}
+                  style={({ pressed }) => [
+                    styles.progressStat,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                    pressed && styles.progressStatPressed,
+                  ]}
+                >
+                  <View style={styles.progressStatHeading}>
+                    <Text style={[styles.progressStatLabel, { color: colors.mutedForeground }]}>Recorded funding</Text>
+                    <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+                  </View>
                   <Text style={[styles.progressStatAmount, { color: colors.foreground }]}>{formatKES(incomeStreamReport?.totalFunding ?? 0)}</Text>
                   <Text style={[styles.progressStatSub, { color: colors.mutedForeground }]}>
                     {incomeStreamReport && incomeStreamReport.totalExpected > 0
@@ -510,7 +556,7 @@ export default function ReportsScreen() {
                         : `${formatKES(Math.abs(fundingGap ?? 0))} above expected`
                       : 'No expected-income target'}
                   </Text>
-                </View>
+                </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Categories to watch: ${overBudgetCount}. Tap to see which categories are over budget.`}
@@ -678,7 +724,7 @@ export default function ReportsScreen() {
           )}
 
           {/* ── Income streams ── */}
-          <View style={styles.section}>
+          <View style={styles.section} onLayout={captureSection('income')}>
             <View style={styles.incomeStreamHeading}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Income Streams</Text>
@@ -831,7 +877,7 @@ export default function ReportsScreen() {
 
           {/* ── Budget vs Actual by category ── */}
           {sortedCategories.length > 0 && (
-            <View style={styles.section}>
+            <View style={styles.section} onLayout={captureSection('spending')}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Budget vs Actual</Text>
               <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
                 Over-budget categories shown first
