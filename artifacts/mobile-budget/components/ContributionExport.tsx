@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { File, Paths } from 'expo-file-system';
+import { Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useQuery } from '@tanstack/react-query';
 import { customFetch, useGetGroup } from '@workspace/api-client-react';
+import { writePdf } from '@/lib/savePdf';
 import { useColors } from '@/hooks/useColors';
 
 type GridMonth = { month: number; year: number; label: string };
@@ -273,8 +274,7 @@ export function ContributionExport() {
         responseType: 'blob',
         cache: 'no-store',
       })) as Blob;
-      const file = new File(Paths.cache, `jamvi-contribution-ledger-${viewFrom}-to-${viewTo}.pdf`);
-      file.write(new Uint8Array(await blob.arrayBuffer()));
+      const file = await writePdf(Paths.cache, `jamvi-contribution-ledger-${viewFrom}-to-${viewTo}.pdf`, blob);
       if (!(await Sharing.isAvailableAsync())) {
         Alert.alert('Sharing is not available', 'This device cannot open the share sheet. The PDF was saved to the app, but there is no way to hand it off from here.');
         return;
