@@ -351,7 +351,11 @@ describe("expense funding amount entry", () => {
     // Only the parents are offered up front; the children follow underneath.
     expect(dashboardSource).toContain("{categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}");
     expect(expensesSource).toContain("{categoryTree.map(group => <option key={group.name} value={group.name}>{group.name}</option>)}");
-    expect(mobileSource).toContain("{categoryTree.map(({ name }) => (");
+    // The phone renders chips rather than options, and its chips also carry a
+    // subcategory count, so pin what it maps over rather than the exact
+    // destructuring — the shape of the chip is that client's own business.
+    expect(mobileSource).toMatch(/\{categoryTree\.map\(\(\{ name[^)]*\}\) => \(/);
+    expect(mobileSource).toContain("<CategoryChip");
     for (const source of [dashboardSource, expensesSource, mobileSource]) {
       expect(source).toContain("subcategory (optional)");
     }
