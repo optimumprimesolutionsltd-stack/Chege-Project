@@ -95,6 +95,64 @@ function daysInMonth(year: number, month: number): number {
  * compared against a month-granular "given" is still more useful mid-month
  * than only ever being able to ask about whole months.
  */
+/** One dated change to what a contributor is expected to give. */
+export type DatedTarget = { amount: number | null; effectiveFrom: string };
+
+/**
+ * What was expected of somebody on a given day: the latest dated amount that
+ * had come into force by then, or `legacy` — the old undated
+ * `group_contributors.monthly_target` — for any day before the first one.
+ *
+ * That fallback is what let dated targets ship without a backfill: a group
+ * that has never set one still measures every month against the figure it
+ * always had.
+ */
+export function targetOn(day: string, dated: readonly DatedTarget[], legacy: number | null): number | null {
+  let inForce: DatedTarget | null = null;
+  for (const row of dated) {
+    if (row.effectiveFrom > day) continue;
+    if (!inForce || row.effectiveFrom > inForce.effectiveFrom) inForce = row;
+  }
+  return inForce ? inForce.amount : legacy;
+}
+
+/**
+ * `prorateExpected` over a history of dated amounts rather than one fixed
+ * figure — each day counts at whatever was expected *that* day, so raising
+ * someone's amount today leaves every month before it measured against what
+ * they actually owed then.
+ *
+ * A month's share is still its own length: a day in February is worth more of
+ * a monthly amount than a day in March.
+ */
+export function prorateExpectedDated(
+  from: string,
+  to: string,
+  dated: readonly DatedTarget[],
+  legacy: number | null,
+): number {
+  const [start, end] = from <= to ? [from, to] : [to, from];
+  const [startYear, startMonth, startDay] = start.split("-").map(Number);
+  const [endYear, endMonth, endDay] = end.split("-").map(Number);
+  if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) return 0;
+
+  let total = 0;
+  let year = startYear;
+  let month = startMonth;
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    const monthLength = daysInMonth(year, month);
+    const firstDay = year === startYear && month === startMonth ? startDay : 1;
+    const lastDay = year === endYear && month === endMonth ? endDay : monthLength;
+    for (let day = firstDay; day <= lastDay; day += 1) {
+      const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const amount = targetOn(iso, dated, legacy);
+      if (amount) total += amount / monthLength;
+    }
+    if (month === 12) { month = 1; year += 1; } else { month += 1; }
+  }
+  return Math.round(total);
+}
+
 export function prorateExpected(monthlyTarget: number, from: string, to: string): number {
   const [start, end] = from <= to ? [from, to] : [to, from];
   const [startYear, startMonth, startDay] = start.split("-").map(Number);

@@ -15,6 +15,7 @@ import {
   db,
   groupsTable as groups,
   groupContributorsTable,
+  groupContributorTargetsTable,
   groupMembershipsTable,
   groupsTable,
   jointAccountDepositSplitsTable,
@@ -37,6 +38,8 @@ import {
   filterStatementToRange,
   monthsToCover,
   prorateExpected,
+  prorateExpectedDated,
+  type DatedTarget,
   type ContributionStatement,
   type StatementEntry,
 } from "../lib/contribution-statement";
@@ -249,6 +252,11 @@ const contributorUpdate = z.object({
   // Explicit null is meaningful: it says this person is not expected to give a
   // set amount, which is different from not saying.
   monthlyTarget: z.number().int().min(0).nullable().optional(),
+  /** The day a new monthlyTarget starts applying, as YYYY-MM-DD. Given, the
+   *  amount is recorded as a dated change and the undated column is left
+   *  alone, so months before that day keep the figure they were measured
+   *  against. Omitted, the old behaviour stands and the column is rewritten. */
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   archived: z.boolean().optional(),
 });
 
@@ -289,28 +297,62 @@ router.patch("/contributors/:id", async (req, res): Promise<void> => {
     }
     changes.name = normalizeContributorName(parsed.data.name);
   }
-  if (parsed.data.monthlyTarget !== undefined) changes.monthlyTarget = parsed.data.monthlyTarget;
+  // A dated change is recorded alongside, and deliberately does not touch the
+  // undated column: that column is what every month before the first dated row
+  // is measured against, so rewriting it is exactly the rewriting-of-history
+  // this replaces.
+  const datedChange = parsed.data.effectiveFrom !== undefined && parsed.data.monthlyTarget !== undefined
+    ? { effectiveFrom: parsed.data.effectiveFrom, amount: parsed.data.monthlyTarget }
+    : null;
+  if (parsed.data.monthlyTarget !== undefined && !datedChange) {
+    changes.monthlyTarget = parsed.data.monthlyTarget;
+  }
   // Archived, never deleted: somebody who has left still contributed what they
   // contributed, and removing them would make last year's totals disagree with
   // last year's rows.
   if (parsed.data.archived !== undefined) changes.archivedAt = parsed.data.archived ? new Date() : null;
 
-  if (Object.keys(changes).length === 0) {
+  if (Object.keys(changes).length === 0 && !datedChange) {
     res.status(400).json({ error: "Nothing to change." });
     return;
   }
 
-  const [updated] = await db
-    .update(groupContributorsTable)
-    .set(changes)
-    // Scoped to the active group: an id from another group must not be
-    // reachable by guessing.
-    .where(and(eq(groupContributorsTable.id, id), eq(groupContributorsTable.groupId, groupId)))
-    .returning();
+  // Scoped to the active group: an id from another group must not be reachable
+  // by guessing. Read first when there is nothing to set, so a dated-only
+  // change still proves the contributor belongs here before writing.
+  const [updated] = Object.keys(changes).length > 0
+    ? await db
+        .update(groupContributorsTable)
+        .set(changes)
+        .where(and(eq(groupContributorsTable.id, id), eq(groupContributorsTable.groupId, groupId)))
+        .returning()
+    : await db
+        .select()
+        .from(groupContributorsTable)
+        .where(and(eq(groupContributorsTable.id, id), eq(groupContributorsTable.groupId, groupId)))
+        .limit(1);
 
   if (!updated) {
     res.status(404).json({ error: "That contributor is not in this group." });
     return;
+  }
+
+  if (datedChange) {
+    // Setting the same day twice is a correction, not two facts, so the later
+    // write replaces the earlier one.
+    await db
+      .insert(groupContributorTargetsTable)
+      .values({
+        groupId,
+        contributorId: id,
+        amount: datedChange.amount,
+        effectiveFrom: datedChange.effectiveFrom,
+        createdByUserId: req.user?.id ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [groupContributorTargetsTable.contributorId, groupContributorTargetsTable.effectiveFrom],
+        set: { amount: datedChange.amount, createdByUserId: req.user?.id ?? null },
+      });
   }
 
   res.json({
@@ -484,9 +526,17 @@ router.get("/contributions/variance", async (req, res): Promise<void> => {
   if (!range) { res.status(400).json({ error: "A valid from and to date are required." }); return; }
 
   const statement = await loadContributionStatement(groupId, monthsToCover(range.from), range);
+  // Each change to what somebody is expected to give is its own dated row, so
+  // a stretch that spans a change is charged at whichever amount was in force
+  // on each day rather than today's figure applied backwards.
+  const datedByContributor = await loadDatedTargets(groupId);
   const rows = statement.contributors.map((contributor) => {
     const given = statement.totalsByContributor[contributor.id] ?? 0;
-    const expected = contributor.monthlyTarget != null ? prorateExpected(contributor.monthlyTarget, range.from, range.to) : null;
+    const dated = datedByContributor.get(contributor.id) ?? [];
+    const everExpected = dated.length > 0 || contributor.monthlyTarget != null;
+    const expected = everExpected
+      ? prorateExpectedDated(range.from, range.to, dated, contributor.monthlyTarget)
+      : null;
     return { contributorId: contributor.id, name: contributor.name, expected, given, variance: expected != null ? given - expected : null };
   });
 
@@ -563,6 +613,31 @@ router.get("/contributions/report.pdf", async (req, res): Promise<void> => {
   res.setHeader("Cache-Control", "private, no-store");
   res.send(pdf);
 });
+
+/**
+ * Every dated target in the group, grouped by contributor. One query rather
+ * than one per person: a chama can have forty members and the variance grid
+ * asks about all of them at once.
+ */
+async function loadDatedTargets(groupId: number): Promise<Map<number, DatedTarget[]>> {
+  const rows = await db
+    .select({
+      contributorId: groupContributorTargetsTable.contributorId,
+      amount: groupContributorTargetsTable.amount,
+      effectiveFrom: groupContributorTargetsTable.effectiveFrom,
+    })
+    .from(groupContributorTargetsTable)
+    .where(eq(groupContributorTargetsTable.groupId, groupId))
+    .orderBy(asc(groupContributorTargetsTable.effectiveFrom));
+
+  const byContributor = new Map<number, DatedTarget[]>();
+  for (const row of rows) {
+    const list = byContributor.get(row.contributorId) ?? [];
+    list.push({ amount: row.amount, effectiveFrom: row.effectiveFrom });
+    byContributor.set(row.contributorId, list);
+  }
+  return byContributor;
+}
 
 function statementMonths(req: { query: Record<string, unknown> }): number {
   return Math.min(Math.max(Number(req.query.months) || 6, 1), 12);

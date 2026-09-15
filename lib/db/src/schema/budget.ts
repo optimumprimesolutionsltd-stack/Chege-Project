@@ -213,6 +213,48 @@ export const groupContributorsTable = pgTable("group_contributors", {
 
 export type GroupContributor = typeof groupContributorsTable.$inferSelect;
 
+/**
+ * What a contributor is expected to give, from a date onwards.
+ *
+ * `group_contributors.monthly_target` is a single number with no history, so
+ * changing it silently rewrote the past: raise a member from 500 to 1,000 and
+ * last year's arrears were recalculated against 1,000, which they had never
+ * owed. Each change is now its own dated row, and a month is measured against
+ * whichever row was in force then.
+ *
+ * The old scalar is still the value for any month before the first dated row,
+ * so nothing needed backfilling and existing groups keep the figures they
+ * already had. It is deliberately not updated when a dated amount is set —
+ * that is what leaves the past alone.
+ *
+ * A null `amount` ends an expectation from that date without deleting the
+ * history behind it: someone who stops pledging is not someone who never did.
+ */
+export const groupContributorTargetsTable = pgTable("group_contributor_targets", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => groupsTable.id, { onDelete: "restrict" }),
+  contributorId: integer("contributor_id").notNull().references(() => groupContributorsTable.id, { onDelete: "cascade" }),
+  /** KES per month from `effectiveFrom`. Null ends the expectation. */
+  amount: integer("amount"),
+  /** The first day this amount applies to, as YYYY-MM-DD. */
+  effectiveFrom: date("effective_from").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdByUserId: text("created_by_user_id"),
+}, (table) => [
+  check(
+    "group_contributor_targets_amount_check",
+    sql`${table.amount} IS NULL OR ${table.amount} >= 0`,
+  ),
+  // One amount per person per day: setting it twice in a day is a correction,
+  // not two facts, and the second should replace the first.
+  uniqueIndex("group_contributor_targets_contributor_date_unique")
+    .on(table.contributorId, table.effectiveFrom),
+  index("group_contributor_targets_contributor_idx").on(table.contributorId, table.effectiveFrom),
+  index("group_contributor_targets_group_idx").on(table.groupId),
+]);
+
+export type GroupContributorTarget = typeof groupContributorTargetsTable.$inferSelect;
+
 export const contributionsTable = pgTable("contributions", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "restrict" }),
