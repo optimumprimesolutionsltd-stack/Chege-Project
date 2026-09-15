@@ -8,6 +8,7 @@ import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 // Layout
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
+import { ChatWidget } from '@/components/chat-widget';
 
 // Pages
 import Home from '@/pages/home';
@@ -56,6 +57,9 @@ function Router() {
         </RoutedErrorBoundary>
       </main>
       <Footer />
+      {/* Inside the Router because both buttons read the current path to
+          pre-fill what the visitor is asking about. */}
+      <ChatWidget />
     </div>
   );
 }
