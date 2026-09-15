@@ -57,6 +57,28 @@ describe('the exact-date control on Expected vs actual', () => {
     expect(control).not.toContain('size={11}');
   });
 
+  // Labelling the pills made them wide enough to starve the heading beside
+  // them: "Expected vs actual" wrapped one letter per line, and the summary
+  // under it became a vertical column of fragments.
+  it('sits on its own line rather than beside the heading', () => {
+    const header = variance.slice(variance.indexOf('<View style={styles.headRight}>'), variance.indexOf('</Pressable>', variance.indexOf('<View style={styles.headRight}>')));
+    expect(header).not.toContain('styles.ranges');
+    // The row is emitted after the header, not inside it.
+    expect(variance.indexOf('<View style={styles.ranges}>')).toBeGreaterThan(variance.indexOf('</Pressable>'));
+  });
+
+  it('keeps the heading from being squeezed narrower than its own words', () => {
+    // minWidth 0 is the flex rule that actually prevents it; without it a
+    // flex child yields to whatever grows beside it.
+    expect(variance).toContain("headerText: { flex: 1, minWidth: 0, gap: 3 }");
+    expect(variance).toContain("flexShrink: 1, minWidth: 0 }");
+    expect(variance).toContain("headRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 }");
+  });
+
+  it('lets the pills wrap instead of overflowing a narrow phone', () => {
+    expect(variance).toContain("flexWrap: 'wrap'");
+  });
+
   it('has a real touch target and an accessible name', () => {
     expect(variance).toContain("customRangeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 }");
     expect(variance).toContain('accessibilityLabel="Pick an exact date range"');
