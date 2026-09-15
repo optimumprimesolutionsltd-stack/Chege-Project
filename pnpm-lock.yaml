@@ -377,6 +377,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/category-tree':
+        specifier: workspace:*
+        version: link:../../lib/category-tree
       '@workspace/replit-auth-web':
         specifier: workspace:*
         version: link:../../lib/replit-auth-web
@@ -711,6 +714,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/category-tree':
+        specifier: workspace:*
+        version: link:../../lib/category-tree
       babel-plugin-react-compiler:
         specifier: ^19.0.0-beta-e993439-20250117
         version: 19.0.0-beta-ebf51a3-20250411
@@ -1206,6 +1212,8 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 3.25.76
+
+  lib/category-tree: {}
 
   lib/db:
     dependencies:

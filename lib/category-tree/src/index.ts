@@ -5,7 +5,7 @@ export interface CategoryRow {
 }
 
 export interface CategoryGroup {
-  /** A top-level category — the only thing the simple form ever offers. */
+  /** A top-level category — the only thing a simple form ever offers. */
   name: string;
   /** This parent's subcategories, in the order the API returned them. */
   children: string[];
@@ -21,8 +21,9 @@ const isOther = (row: CategoryRow) => row.name.trim().toLocaleLowerCase("en-US")
  * "Other" is dropped throughout: it's the app's own sentinel for a one-off
  * expense, not something to offer as a category.
  *
- * Mirrors `buildCategoryTree` in the mobile client, which owns the same rule
- * for the phone's Log Expense picker.
+ * Shared by the web forms and the phone's Log Expense picker, which have to
+ * agree on what a category picker offers — the cross-client test in
+ * family-budget/src/pages/expense-funding-entry.test.ts holds them to it.
  */
 export function buildCategoryTree(categories: readonly CategoryRow[]): CategoryGroup[] {
   const byId = new Map(categories.map((row) => [row.id, row]));

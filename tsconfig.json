@@ -17,6 +17,9 @@
     },
     {
       "path": "./lib/jamvi-pricing"
+    },
+    {
+      "path": "./lib/category-tree"
     }
   ]
 }

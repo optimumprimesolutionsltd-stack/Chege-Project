@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "./category-tree";
+import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
+
+// Covers the shared @workspace/category-tree package, which both expense forms
+// and the phone's picker read. It lives here because this is where vitest is
+// wired up; the package itself carries no test runner of its own.
 
 const FOOD: CategoryRow = { id: 1, name: "Food", parentId: null };
 const GROCERIES: CategoryRow = { id: 2, name: "Groceries", parentId: 1 };

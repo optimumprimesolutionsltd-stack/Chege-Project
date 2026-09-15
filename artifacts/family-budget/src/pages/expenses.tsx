@@ -64,7 +64,7 @@ import {
 import { formatKes, formatDate, formatMonthYear } from "@/lib/utils";
 import { appPath } from "@/lib/base-path";
 import { workspaceLabel } from "@/lib/workspace-identity";
-import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@/lib/category-tree";
+import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
 import { Trash2, Plus, ArrowLeft, ArrowRight, Loader2, Calendar, RefreshCw, Repeat, Pencil, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
