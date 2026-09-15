@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   RefreshControl,
   ActivityIndicator,
   Platform,
@@ -1316,40 +1317,42 @@ export default function BankScreen() {
       >
         <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
-            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-              {editingAccountId ? 'Personalize account' : 'Add bank account'}
-            </Text>
-            <TextInput
-              value={accountNameDraft}
-              onChangeText={setAccountNameDraft}
-              placeholder="e.g. M-Pesa, Family savings"
-              placeholderTextColor={colors.mutedForeground}
-              autoFocus
-              style={[styles.input, { color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
-              testID="bank-account-name"
-            />
-            <TextInput
-              value={accountNumberDraft}
-              onChangeText={setAccountNumberDraft}
-              placeholder="Account number (optional)"
-              placeholderTextColor={colors.mutedForeground}
-              style={[styles.input, { marginTop: 12, color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
-              testID="bank-account-number"
-            />
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-              {editingAccountId !== null && (
-                <TouchableOpacity
-                  style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#7f1d1d' }}
-                  onPress={() => { setAccountModalVisible(false); removeAccount(editingAccountId); }}
-                  testID="bank-remove-account"
-                >
-                  <Text style={{ color: '#fee2e2', fontFamily: 'Inter_600SemiBold' }}>Remove</Text>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
+                {editingAccountId ? 'Personalize account' : 'Add bank account'}
+              </Text>
+              <TextInput
+                value={accountNameDraft}
+                onChangeText={setAccountNameDraft}
+                placeholder="e.g. M-Pesa, Family savings"
+                placeholderTextColor={colors.mutedForeground}
+                autoFocus
+                style={[styles.input, { color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
+                testID="bank-account-name"
+              />
+              <TextInput
+                value={accountNumberDraft}
+                onChangeText={setAccountNumberDraft}
+                placeholder="Account number (optional)"
+                placeholderTextColor={colors.mutedForeground}
+                style={[styles.input, { marginTop: 12, color: colors.foreground, backgroundColor: colors.muted, borderColor: colors.border }]}
+                testID="bank-account-number"
+              />
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+                {editingAccountId !== null && (
+                  <TouchableOpacity
+                    style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#7f1d1d' }}
+                    onPress={() => { setAccountModalVisible(false); removeAccount(editingAccountId); }}
+                    testID="bank-remove-account"
+                  >
+                    <Text style={{ color: '#fee2e2', fontFamily: 'Inter_600SemiBold' }}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={[styles.submitBtn, { flex: 1, opacity: savingAccount ? 0.6 : 1 }]} disabled={savingAccount} onPress={saveAccount} testID="bank-save-account">
+                  <Text style={styles.submitText}>{savingAccount ? 'Saving…' : 'Save account'}</Text>
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity style={[styles.submitBtn, { flex: 1, opacity: savingAccount ? 0.6 : 1 }]} disabled={savingAccount} onPress={saveAccount} testID="bank-save-account">
-                <Text style={styles.submitText}>{savingAccount ? 'Saving…' : 'Save account'}</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1372,916 +1375,925 @@ export default function BankScreen() {
           <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 24 }]}>
             {/* Sheet handle */}
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
+            {/* The form scrolls inside the capped sheet. Unbounded and
+                pinned to the bottom, a long form grew off the top of the
+                screen and its first fields could not be reached. */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 8 }}
+            >
 
-            {/* Type stays fixed when editing so a deposit cannot become a withdrawal. */}
-            {editingTransactionId === null ? (
-            <View style={[styles.toggle, { backgroundColor: colors.muted }]}>
-              <TouchableOpacity
-                style={[
-                  styles.toggleOption,
-                  txType === 'deposit' && styles.toggleActive,
-                ]}
-                onPress={() => setTxType('deposit')}
-                testID="bank-toggle-deposit"
-              >
-                <Text
-                  style={[
-                    styles.toggleText,
-                    { color: txType === 'deposit' ? '#0a1a10' : colors.mutedForeground },
-                  ]}
-                >
-                  Deposit
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.toggleOption,
-                  txType === 'disbursement' && styles.toggleActiveDisburse,
-                ]}
-                onPress={() => setTxType('disbursement')}
-                testID="bank-toggle-withdraw"
-              >
-                <Text
-                  style={[
-                    styles.toggleText,
-                    { color: txType === 'disbursement' ? '#fff' : colors.mutedForeground },
-                  ]}
-                >
-                  Withdraw
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleOption, txType === 'transfer' && styles.toggleActiveDisburse]}
-                onPress={() => setTxType('transfer')}
-                testID="bank-toggle-transfer"
-              >
-                <Text style={[styles.toggleText, { color: txType === 'transfer' ? '#fff' : colors.mutedForeground }]}>Transfer</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleOption, txType === 'bank_transfer' && styles.toggleActiveDisburse]}
-                onPress={() => setTxType('bank_transfer')}
-                testID="bank-toggle-bank-transfer"
-              >
-                <Text style={[styles.toggleText, { color: txType === 'bank_transfer' ? '#fff' : colors.mutedForeground }]}>Bank</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleOption, txType === 'bank_charge' && styles.toggleActiveDisburse]}
-                onPress={() => setTxType('bank_charge')}
-                testID="bank-toggle-charge"
-              >
-                <Text style={[styles.toggleText, { color: txType === 'bank_charge' ? '#fff' : colors.mutedForeground }]}>Charge</Text>
-              </TouchableOpacity>
-            </View>
-            ) : null}
-
-            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
-              {editingTransactionId !== null
-                ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Transfer' : isBankCharge ? 'Bank Charge' : 'Withdrawal'}`
-                : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankTransfer ? 'Move Between Bank Accounts' : isBankCharge ? 'Record Bank Charge' : 'Take Money Out'}
-            </Text>
-
-            {isBankCharge && (
-              <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account</Text>
-                <View style={styles.memberRow}>
-                  {accounts.map((candidate) => {
-                    const selected = candidate.id === selectedAccountId;
-                    return (
-                      <TouchableOpacity
-                        key={candidate.id}
-                        testID={`bank-charge-account-${candidate.id}`}
-                        style={[
-                          styles.memberPill,
-                          {
-                            backgroundColor: selected ? '#166534' : colors.muted,
-                            borderColor: selected ? '#22c55e' : colors.border,
-                          },
-                        ]}
-                        onPress={() => selectAccount(candidate.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
-                          {candidate.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
-                  This charge reduces only the selected account.
-                </Text>
-              </>
-            )}
-            {(isDeposit || isWithdrawal) && (
-              <View style={{ marginBottom: 14 }}>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account *</Text>
-                <View style={{ gap: 8 }}>
-                  {accounts.length === 0 ? (
-                    <View style={{ gap: 10 }}>
-                      <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>
-                        Add a bank account before recording this transaction.
-                      </Text>
-                      {canManageAccount ? (
-                        <TouchableOpacity
-                          style={[styles.inlineAccountButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}18` }]}
-                          onPress={() => {
-                            setModalVisible(false);
-                            openAccountEditor();
-                          }}
-                          testID="bank-create-account-from-transaction"
-                        >
-                          <Feather name="plus-circle" size={16} color={colors.primary} />
-                          <Text style={[styles.inlineAccountButtonText, { color: colors.primary }]}>Create bank account</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
-                          Ask an owner or admin to create an account before recording a deposit.
-                        </Text>
-                      )}
-                    </View>
-                  ) : accounts.map((accountOption) => (
-                    <TouchableOpacity key={accountOption.id} onPress={() => selectAccount(accountOption.id)} style={{ borderWidth: 1, borderColor: selectedAccountId === accountOption.id ? colors.primary : colors.border, backgroundColor: selectedAccountId === accountOption.id ? `${colors.primary}18` : colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }} accessibilityRole="radio" accessibilityState={{ selected: selectedAccountId === accountOption.id }}>
-                      <Text style={{ color: colors.foreground, fontWeight: selectedAccountId === accountOption.id ? '700' : '500' }}>{accountOption.name}{accountOption.accountNumber ? ` · ${accountOption.accountNumber}` : ''}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>This account will receive the deposit or be reduced by the withdrawal.</Text>
-                {selectedAccountId && data && (
-                  <View style={[styles.transactionBalanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]} testID="bank-transaction-account-balance">
-                    <View style={styles.transactionBalanceRow}>
-                      <Text style={[styles.transactionBalanceLabel, { color: colors.foreground }]}>
-                        {selectedAccount?.name ?? 'Selected account'} current balance
-                      </Text>
-                      <Text style={[styles.transactionBalanceValue, { color: colors.foreground }]}>
-                        KES {formatKES(data.balance)}
-                      </Text>
-                    </View>
-                    <Text style={[styles.transactionBalanceHelp, { color: colors.mutedForeground }]}>
-                      This is the balance before the transaction is saved.
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Amount */}
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount (KES)</Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.foreground,
-                  borderColor: colors.border,
-                  backgroundColor: colors.muted,
-                },
-              ]}
-              placeholder="e.g. 5000"
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="decimal-pad"
-              value={amount}
-              onChangeText={setAmount}
-              returnKeyType="next"
-              testID="bank-amount-input"
-            />
-             {/* Date stays beside the amount so every bank entry starts with its transaction date. */}
-             <Text style={[styles.label, { color: colors.mutedForeground }]}>
-               {isDeposit ? 'Deposit date' : 'Date'}
-             </Text>
-             <Pressable
-               onPress={() => {
-                 if (canManageShared || editingTransactionId === null) setShowDatePicker(true);
-               }}
-               style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-               testID="bank-date-picker"
-             >
-               <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
-               <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
-                 {new Date(date + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
-               </Text>
-               <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
-             </Pressable>
-             {isSharedWorkspace && !canManageShared && editingTransactionId === null && (
-               <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
-                 Shared-budget members can record bank deposits for today only.
-               </Text>
-             )}
-             {showDatePicker && (
-               <DateTimePicker
-                 value={new Date(date + 'T00:00:00')}
-                 mode="date"
-                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                 minimumDate={isSharedWorkspace && !canManageShared ? new Date() : undefined}
-                 maximumDate={new Date()}
-                 onChange={(_event: DateTimePickerEvent, selected?: Date) => {
-                   setShowDatePicker(Platform.OS === 'ios');
-                   if (selected) {
-                     const y = selected.getFullYear();
-                     const m = String(selected.getMonth() + 1).padStart(2, '0');
-                     const d = String(selected.getDate()).padStart(2, '0');
-                     setDate(`${y}-${m}-${d}`);
-                   }
-                 }}
-               />
-             )}
-            {projectedBalance !== null && projectedBalance < 0 && (
-              <View
-                style={styles.negativeBalanceWarning}
-                accessibilityRole="alert"
-                testID="bank-negative-balance-warning"
-              >
-                <View style={styles.negativeBalanceWarningHeader}>
-                  <Feather name="flag" size={15} color="#ef4444" />
-                  <Text style={styles.negativeBalanceWarningTitle}>This will take the account below zero.</Text>
-                </View>
-                <Text style={styles.negativeBalanceWarningText}>
-                  The projected closing balance is KES {formatKES(projectedBalance)}. Jamvi will still save the record because it tracks what happened.
-                </Text>
-              </View>
-            )}
-
-            {/* Deposits require a description. Withdrawal details come after the required category. */}
-            {(isDeposit || isBankCharge) && (
-              <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  {isBankCharge ? 'Narration *' : 'Description'}
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.foreground,
-                      borderColor: colors.border,
-                      backgroundColor: colors.muted,
-                    },
-                  ]}
-                  placeholder={isBankCharge ? 'e.g. Monthly account maintenance fee' : 'e.g. Monthly contribution'}
-                  placeholderTextColor={colors.mutedForeground}
-                  value={description}
-                  onChangeText={setDescription}
-                  returnKeyType="done"
-                  onSubmitEditing={Keyboard.dismiss}
-                  testID="bank-description-input"
-                />
-              </>
-            )}
-
-            {isTransfer && (
-              <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Transfer direction</Text>
-                <View style={styles.memberRow}>
-                  <TouchableOpacity
-                    style={[styles.memberPill, { backgroundColor: transferDirection === 'to_savings' ? '#0891b2' : colors.muted, borderColor: transferDirection === 'to_savings' ? '#0891b2' : colors.border }]}
-                    onPress={() => setTransferDirection('to_savings')}
-                  >
-                    <Text style={[styles.memberPillText, { color: transferDirection === 'to_savings' ? '#fff' : colors.foreground }]}>Bank → Savings</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.memberPill, { backgroundColor: transferDirection === 'from_savings' ? '#0891b2' : colors.muted, borderColor: transferDirection === 'from_savings' ? '#0891b2' : colors.border }]}
-                    onPress={() => setTransferDirection('from_savings')}
-                  >
-                    <Text style={[styles.memberPillText, { color: transferDirection === 'from_savings' ? '#fff' : colors.foreground }]}>Savings → Bank</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Savings goal</Text>
+              {/* Type stays fixed when editing so a deposit cannot become a withdrawal. */}
+              {editingTransactionId === null ? (
+              <View style={[styles.toggle, { backgroundColor: colors.muted }]}>
                 <TouchableOpacity
-                  style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-                  onPress={() => setShowGoalPicker(!showGoalPicker)}
-                  testID="bank-transfer-goal"
+                  style={[
+                    styles.toggleOption,
+                    txType === 'deposit' && styles.toggleActive,
+                  ]}
+                  onPress={() => setTxType('deposit')}
+                  testID="bank-toggle-deposit"
                 >
-                  <Text style={{ flex: 1, color: selectedGoal ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                    {selectedGoal?.name ?? 'Choose a savings goal'}
+                  <Text
+                    style={[
+                      styles.toggleText,
+                      { color: txType === 'deposit' ? '#0a1a10' : colors.mutedForeground },
+                    ]}
+                  >
+                    Deposit
                   </Text>
-                  <Feather name={showGoalPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
-                {showGoalPicker && (
-                  <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                    {savingsGoals.map(goal => (
-                      <TouchableOpacity key={goal.id} style={styles.categoryOption} onPress={() => { setWithdrawGoalId(goal.id); setShowGoalPicker(false); }}>
-                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{goal.name}</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleOption,
+                    txType === 'disbursement' && styles.toggleActiveDisburse,
+                  ]}
+                  onPress={() => setTxType('disbursement')}
+                  testID="bank-toggle-withdraw"
+                >
+                  <Text
+                    style={[
+                      styles.toggleText,
+                      { color: txType === 'disbursement' ? '#fff' : colors.mutedForeground },
+                    ]}
+                  >
+                    Withdraw
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleOption, txType === 'transfer' && styles.toggleActiveDisburse]}
+                  onPress={() => setTxType('transfer')}
+                  testID="bank-toggle-transfer"
+                >
+                  <Text style={[styles.toggleText, { color: txType === 'transfer' ? '#fff' : colors.mutedForeground }]}>Transfer</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleOption, txType === 'bank_transfer' && styles.toggleActiveDisburse]}
+                  onPress={() => setTxType('bank_transfer')}
+                  testID="bank-toggle-bank-transfer"
+                >
+                  <Text style={[styles.toggleText, { color: txType === 'bank_transfer' ? '#fff' : colors.mutedForeground }]}>Bank</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleOption, txType === 'bank_charge' && styles.toggleActiveDisburse]}
+                  onPress={() => setTxType('bank_charge')}
+                  testID="bank-toggle-charge"
+                >
+                  <Text style={[styles.toggleText, { color: txType === 'bank_charge' ? '#fff' : colors.mutedForeground }]}>Charge</Text>
+                </TouchableOpacity>
+              </View>
+              ) : null}
+
+              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
+                {editingTransactionId !== null
+                  ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Transfer' : isBankCharge ? 'Bank Charge' : 'Withdrawal'}`
+                  : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankTransfer ? 'Move Between Bank Accounts' : isBankCharge ? 'Record Bank Charge' : 'Take Money Out'}
+              </Text>
+
+              {isBankCharge && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account</Text>
+                  <View style={styles.memberRow}>
+                    {accounts.map((candidate) => {
+                      const selected = candidate.id === selectedAccountId;
+                      return (
+                        <TouchableOpacity
+                          key={candidate.id}
+                          testID={`bank-charge-account-${candidate.id}`}
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#166534' : colors.muted,
+                              borderColor: selected ? '#22c55e' : colors.border,
+                            },
+                          ]}
+                          onPress={() => selectAccount(candidate.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                            {candidate.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                    This charge reduces only the selected account.
+                  </Text>
+                </>
+              )}
+              {(isDeposit || isWithdrawal) && (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account *</Text>
+                  <View style={{ gap: 8 }}>
+                    {accounts.length === 0 ? (
+                      <View style={{ gap: 10 }}>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 13 }}>
+                          Add a bank account before recording this transaction.
+                        </Text>
+                        {canManageAccount ? (
+                          <TouchableOpacity
+                            style={[styles.inlineAccountButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}18` }]}
+                            onPress={() => {
+                              setModalVisible(false);
+                              openAccountEditor();
+                            }}
+                            testID="bank-create-account-from-transaction"
+                          >
+                            <Feather name="plus-circle" size={16} color={colors.primary} />
+                            <Text style={[styles.inlineAccountButtonText, { color: colors.primary }]}>Create bank account</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>
+                            Ask an owner or admin to create an account before recording a deposit.
+                          </Text>
+                        )}
+                      </View>
+                    ) : accounts.map((accountOption) => (
+                      <TouchableOpacity key={accountOption.id} onPress={() => selectAccount(accountOption.id)} style={{ borderWidth: 1, borderColor: selectedAccountId === accountOption.id ? colors.primary : colors.border, backgroundColor: selectedAccountId === accountOption.id ? `${colors.primary}18` : colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }} accessibilityRole="radio" accessibilityState={{ selected: selectedAccountId === accountOption.id }}>
+                        <Text style={{ color: colors.foreground, fontWeight: selectedAccountId === accountOption.id ? '700' : '500' }}>{accountOption.name}{accountOption.accountNumber ? ` · ${accountOption.accountNumber}` : ''}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
-                )}
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
-                <TextInput
-                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
-                  placeholder="e.g. Set aside for school fees"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={description}
-                  onChangeText={setDescription}
-                  testID="bank-transfer-narration"
-                />
-              </>
-            )}
-            {isBankTransfer && (
-              <>
-                {/* "From" was a label showing whichever account happened to be
-                    selected behind the sheet, with no way to change it here —
-                    you had to close the form, pick a different account, and
-                    start again. Both ends are chosen in place now. */}
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>From account</Text>
-                <View style={styles.memberRow}>
-                  {accounts.map((candidate) => (
-                    <TouchableOpacity
-                      key={candidate.id}
-                      style={[styles.memberPill, { backgroundColor: selectedAccountId === candidate.id ? '#0891b2' : colors.muted, borderColor: selectedAccountId === candidate.id ? '#0891b2' : colors.border }]}
-                      onPress={() => {
-                        setSelectedAccountId(candidate.id);
-                        // Never let both ends be the same account.
-                        if (bankTransferDestinationId === candidate.id) setBankTransferDestinationId(null);
-                      }}
-                      testID={`bank-transfer-source-${candidate.id}`}
-                    >
-                      <Text style={[styles.memberPillText, { color: selectedAccountId === candidate.id ? '#fff' : colors.foreground }]}>{candidate.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>To account</Text>
-                <View style={styles.memberRow}>
-                  {accounts.filter((candidate) => candidate.id !== selectedAccountId).map((candidate) => (
-                    <TouchableOpacity key={candidate.id} style={[styles.memberPill, { backgroundColor: bankTransferDestinationId === candidate.id ? '#0891b2' : colors.muted, borderColor: bankTransferDestinationId === candidate.id ? '#0891b2' : colors.border }]} onPress={() => setBankTransferDestinationId(candidate.id)} testID={`bank-transfer-destination-${candidate.id}`}>
-                      <Text style={[styles.memberPillText, { color: bankTransferDestinationId === candidate.id ? '#fff' : colors.foreground }]}>{candidate.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  {/* Moving money between accounts needs a second one, and
-                      with only one there was nothing here and no way to make
-                      it without leaving the form. */}
-                  {canManageAccount && (
-                    <TouchableOpacity
-                      style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
-                      onPress={() => openAccountEditor()}
-                      testID="bank-transfer-new-account"
-                    >
-                      <Feather name="plus-circle" size={13} color={colors.foreground} />
-                      <Text style={[styles.memberPillText, { color: colors.foreground }]}>New account</Text>
-                    </TouchableOpacity>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>This account will receive the deposit or be reduced by the withdrawal.</Text>
+                  {selectedAccountId && data && (
+                    <View style={[styles.transactionBalanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]} testID="bank-transaction-account-balance">
+                      <View style={styles.transactionBalanceRow}>
+                        <Text style={[styles.transactionBalanceLabel, { color: colors.foreground }]}>
+                          {selectedAccount?.name ?? 'Selected account'} current balance
+                        </Text>
+                        <Text style={[styles.transactionBalanceValue, { color: colors.foreground }]}>
+                          KES {formatKES(data.balance)}
+                        </Text>
+                      </View>
+                      <Text style={[styles.transactionBalanceHelp, { color: colors.mutedForeground }]}>
+                        This is the balance before the transaction is saved.
+                      </Text>
+                    </View>
                   )}
                 </View>
-                {accounts.length < 2 && (
-                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
-                    A transfer needs a second account to move the money into.
-                  </Text>
-                )}
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
-                <TextInput style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]} placeholder="e.g. Move operating funds" placeholderTextColor={colors.mutedForeground} value={description} onChangeText={setDescription} maxLength={200} testID="bank-to-bank-narration" />
-                {selectedAccount && bankTransferDestinationId && parsedOutgoingAmount !== null && parsedOutgoingAmount > 0 && (
-                  <Text style={[styles.managerGuidance, { color: colors.mutedForeground }]} testID="bank-transfer-preview">
-                    {selectedAccount.name}: KES {formatKES(data?.balance)} → KES {formatKES((data?.balance ?? 0) - parsedOutgoingAmount)}. {accounts.find((candidate) => candidate.id === bankTransferDestinationId)?.name} receives KES {formatKES(parsedOutgoingAmount)}.
-                  </Text>
-                )}
-              </>
-            )}
+              )}
 
-            {/* ── Deposited by (deposits only) ── */}
-            {isDeposit && members.length > 0 && (
-              <>
-                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  {isSharedWorkspace ? 'Who is depositing?' : 'Deposited by'}{' '}
-                  {canManageShared && <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>}
-                </Text>
-                {!isSharedWorkspace ? (
-                  <View style={[styles.personalAccountNotice, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                    <Feather name="user" size={15} color={colors.primary} />
-                    <Text style={[styles.personalAccountNoticeText, { color: colors.mutedForeground }]}>
-                      This deposit is recorded in your name and stays in your Personal budget.
-                    </Text>
+              {/* Amount */}
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Amount (KES)</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.foreground,
+                    borderColor: colors.border,
+                    backgroundColor: colors.muted,
+                  },
+                ]}
+                placeholder="e.g. 5000"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="decimal-pad"
+                value={amount}
+                onChangeText={setAmount}
+                returnKeyType="next"
+                testID="bank-amount-input"
+              />
+               {/* Date stays beside the amount so every bank entry starts with its transaction date. */}
+               <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                 {isDeposit ? 'Deposit date' : 'Date'}
+               </Text>
+               <Pressable
+                 onPress={() => {
+                   if (canManageShared || editingTransactionId === null) setShowDatePicker(true);
+                 }}
+                 style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                 testID="bank-date-picker"
+               >
+                 <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+                 <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                   {new Date(date + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                 </Text>
+                 <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+               </Pressable>
+               {isSharedWorkspace && !canManageShared && editingTransactionId === null && (
+                 <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                   Shared-budget members can record bank deposits for today only.
+                 </Text>
+               )}
+               {showDatePicker && (
+                 <DateTimePicker
+                   value={new Date(date + 'T00:00:00')}
+                   mode="date"
+                   display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                   minimumDate={isSharedWorkspace && !canManageShared ? new Date() : undefined}
+                   maximumDate={new Date()}
+                   onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                     setShowDatePicker(Platform.OS === 'ios');
+                     if (selected) {
+                       const y = selected.getFullYear();
+                       const m = String(selected.getMonth() + 1).padStart(2, '0');
+                       const d = String(selected.getDate()).padStart(2, '0');
+                       setDate(`${y}-${m}-${d}`);
+                     }
+                   }}
+                 />
+               )}
+              {projectedBalance !== null && projectedBalance < 0 && (
+                <View
+                  style={styles.negativeBalanceWarning}
+                  accessibilityRole="alert"
+                  testID="bank-negative-balance-warning"
+                >
+                  <View style={styles.negativeBalanceWarningHeader}>
+                    <Feather name="flag" size={15} color="#ef4444" />
+                    <Text style={styles.negativeBalanceWarningTitle}>This will take the account below zero.</Text>
                   </View>
-                ) : <View style={styles.memberRow}>
-                  {/* Joint bank chip — selected when no named members chosen */}
-                  {canManageShared && <TouchableOpacity
-                    testID="bank-deposit-joint-chip"
-                    style={[
-                      styles.memberPill,
-                      {
-                        backgroundColor: depositorIds.length === 0 ? '#1a6b3a' : colors.muted,
-                        borderColor: depositorIds.length === 0 ? '#4ade80' : colors.border,
-                      },
-                    ]}
-                    onPress={selectJointBank}
-                    activeOpacity={0.7}
-                  >
-                    <Feather
-                      name="home"
-                      size={13}
-                      color={depositorIds.length === 0 ? '#4ade80' : colors.mutedForeground}
-                    />
-                    <Text
-                      style={[
-                        styles.memberPillText,
-                        { color: depositorIds.length === 0 ? '#4ade80' : colors.foreground },
-                      ]}
-                    >
-                      Joint bank
-                    </Text>
-                  </TouchableOpacity>}
-
-                  {/* Named member chips */}
-                  {selectableDepositors.map((m) => {
-                    const selected = depositorIds.includes(m.userId);
-                    const name = m.userName?.split(' ')[0] ?? 'Member';
-                    return (
-                      <TouchableOpacity
-                        key={m.userId}
-                        testID={`bank-deposit-member-${m.userId}`}
-                        style={[
-                          styles.memberPill,
-                          {
-                            backgroundColor: selected ? '#4ade80' : colors.muted,
-                            borderColor: selected ? '#4ade80' : colors.border,
-                          },
-                        ]}
-                        onPress={() => toggleDepositor(m.userId)}
-                        activeOpacity={0.7}
-                      >
-                        <Feather
-                          name="user"
-                          size={13}
-                          color={selected ? '#0a1a10' : colors.mutedForeground}
-                        />
-                        <Text
-                          style={[
-                            styles.memberPillText,
-                            { color: selected ? '#0a1a10' : colors.foreground },
-                          ]}
-                        >
-                          {name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>}
-
-                {/* Per-depositor split rows (multi only) */}
-                {validDepositorIds.length > 1 && (() => {
-                  const total = parseFloat(amount.replace(/,/g, '')) || 0;
-                  const splitTotal = validDepositorIds.reduce(
-                    (s, id) => s + (parseBankAmount(depositorAmounts[id] || '') ?? 0), 0
-                  );
-                  const diff = total - splitTotal;
-                  return (
-                    <View style={{ marginTop: 8, gap: 8 }}>
-                      <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                        How much is each person depositing?
-                        {total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
-                      </Text>
-                      {validDepositorIds.map((did) => {
-                        const member = members.find(m => m.userId === did);
-                        const name = member?.userName?.split(' ')[0] ?? 'Member';
-                        return (
-                          <View key={did} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
-                              <Feather name="user" size={13} color={colors.mutedForeground} />
-                              <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
-                                {name}
-                              </Text>
-                            </View>
-                            <TextInput
-                              style={{
-                                flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
-                                borderColor: colors.border, backgroundColor: colors.background,
-                                paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
-                                fontFamily: 'Inter_400Regular',
-                              }}
-                              keyboardType="decimal-pad"
-                              placeholder="0"
-                              placeholderTextColor={colors.mutedForeground}
-                              value={depositorAmounts[did] || ''}
-                              onChangeText={val =>
-                                setDepositorAmounts(prev => ({ ...prev, [did]: val }))
-                              }
-                              testID={`bank-deposit-split-${did}`}
-                            />
-                          </View>
-                        );
-                      })}
-                      {Math.abs(diff) >= 1 && (
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: diff > 0 ? '#f59e0b' : '#f87171',
-                            fontFamily: 'Inter_400Regular',
-                          }}
-                        >
-                          {diff > 0
-                            ? `KES ${diff.toLocaleString()} still unassigned`
-                            : `Over by KES ${Math.abs(diff).toLocaleString()}`}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })()}
-              </>
-            )}
-
-            {/* Saved income sources are for one named depositor; Joint bank can choose Other. */}
-            {isDeposit && (singleDepositorId || depositorIds.length === 0) && (
-              <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  {singleDepositorId ? 'Which of their income streams?' : 'Where did this money come from?'}{' '}
-                  <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
-                </Text>
-                <View style={styles.memberRow}>
-                  {depositSources.map((src) => {
-                    const selected = incomeSourceId === src.id;
-                    return (
-                      <TouchableOpacity
-                        key={src.id}
-                        testID={`bank-income-source-${src.id}`}
-                        style={[
-                          styles.memberPill,
-                          {
-                            backgroundColor: selected ? '#6366f1' : colors.muted,
-                            borderColor: selected ? '#6366f1' : colors.border,
-                          },
-                        ]}
-                        onPress={() => {
-                          setIncomeSourceId(selected ? null : src.id);
-                          setDepositSourceKind(selected ? null : 'income_source');
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.memberPillText,
-                            { color: selected ? '#fff' : colors.foreground },
-                          ]}
-                        >
-                          {src.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  <TouchableOpacity
-                    testID="bank-income-source-other"
-                    style={[
-                      styles.memberPill,
-                      {
-                        backgroundColor: depositSourceKind === 'other' ? '#64748b' : colors.muted,
-                        borderColor: depositSourceKind === 'other' ? '#64748b' : colors.border,
-                      },
-                    ]}
-                    onPress={() => { setDepositSourceKind(depositSourceKind === 'other' ? null : 'other'); setIncomeSourceId(null); }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.memberPillText, { color: depositSourceKind === 'other' ? '#fff' : colors.foreground }]}>Other</Text>
-                  </TouchableOpacity>
-                </View>
-                {depositSourceKind === 'other' && (
-                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
-                    Use the required description above as the source narration.
+                  <Text style={styles.negativeBalanceWarningText}>
+                    The projected closing balance is KES {formatKES(projectedBalance)}. Jamvi will still save the record because it tracks what happened.
                   </Text>
-                )}
-              </>
-            )}
+                </View>
+              )}
 
-            {/* ── Withdrawal payer (disbursements only) ── */}
-            {isWithdrawal && members.length > 0 && (
-              <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  Who is withdrawing?
-                </Text>
-                <View style={styles.memberRow}>
-                  {/* Joint bank chip */}
-                  <TouchableOpacity
-                    testID="bank-withdraw-joint-chip"
+              {/* Deposits require a description. Withdrawal details come after the required category. */}
+              {(isDeposit || isBankCharge) && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    {isBankCharge ? 'Narration *' : 'Description'}
+                  </Text>
+                  <TextInput
                     style={[
-                      styles.memberPill,
+                      styles.input,
                       {
-                        backgroundColor: withdrawerId === null ? '#3a1820' : colors.muted,
-                        borderColor: withdrawerId === null ? '#f87171' : colors.border,
+                        color: colors.foreground,
+                        borderColor: colors.border,
+                        backgroundColor: colors.muted,
                       },
                     ]}
-                    onPress={() => setWithdrawerId(null)}
-                    activeOpacity={0.7}
-                  >
-                    <Feather
-                      name="home"
-                      size={13}
-                      color={withdrawerId === null ? '#f87171' : colors.mutedForeground}
-                    />
-                    <Text
-                      style={[
-                        styles.memberPillText,
-                        { color: withdrawerId === null ? '#f87171' : colors.foreground },
-                      ]}
+                    placeholder={isBankCharge ? 'e.g. Monthly account maintenance fee' : 'e.g. Monthly contribution'}
+                    placeholderTextColor={colors.mutedForeground}
+                    value={description}
+                    onChangeText={setDescription}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                    testID="bank-description-input"
+                  />
+                </>
+              )}
+
+              {isTransfer && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Transfer direction</Text>
+                  <View style={styles.memberRow}>
+                    <TouchableOpacity
+                      style={[styles.memberPill, { backgroundColor: transferDirection === 'to_savings' ? '#0891b2' : colors.muted, borderColor: transferDirection === 'to_savings' ? '#0891b2' : colors.border }]}
+                      onPress={() => setTransferDirection('to_savings')}
                     >
-                      Joint bank
+                      <Text style={[styles.memberPillText, { color: transferDirection === 'to_savings' ? '#fff' : colors.foreground }]}>Bank → Savings</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.memberPill, { backgroundColor: transferDirection === 'from_savings' ? '#0891b2' : colors.muted, borderColor: transferDirection === 'from_savings' ? '#0891b2' : colors.border }]}
+                      onPress={() => setTransferDirection('from_savings')}
+                    >
+                      <Text style={[styles.memberPillText, { color: transferDirection === 'from_savings' ? '#fff' : colors.foreground }]}>Savings → Bank</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Savings goal</Text>
+                  <TouchableOpacity
+                    style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                    onPress={() => setShowGoalPicker(!showGoalPicker)}
+                    testID="bank-transfer-goal"
+                  >
+                    <Text style={{ flex: 1, color: selectedGoal ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                      {selectedGoal?.name ?? 'Choose a savings goal'}
                     </Text>
+                    <Feather name={showGoalPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
                   </TouchableOpacity>
-
-                  {/* Named member chips (one at a time) */}
-                  {members.map((m) => {
-                    const selected = withdrawerId === m.userId;
-                    const name = m.userName?.split(' ')[0] ?? 'Member';
-                    return (
+                  {showGoalPicker && (
+                    <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
+                      {savingsGoals.map(goal => (
+                        <TouchableOpacity key={goal.id} style={styles.categoryOption} onPress={() => { setWithdrawGoalId(goal.id); setShowGoalPicker(false); }}>
+                          <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{goal.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
+                  <TextInput
+                    style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                    placeholder="e.g. Set aside for school fees"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={description}
+                    onChangeText={setDescription}
+                    testID="bank-transfer-narration"
+                  />
+                </>
+              )}
+              {isBankTransfer && (
+                <>
+                  {/* "From" was a label showing whichever account happened to be
+                      selected behind the sheet, with no way to change it here —
+                      you had to close the form, pick a different account, and
+                      start again. Both ends are chosen in place now. */}
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>From account</Text>
+                  <View style={styles.memberRow}>
+                    {accounts.map((candidate) => (
                       <TouchableOpacity
-                        key={m.userId}
-                        testID={`bank-withdraw-member-${m.userId}`}
-                        style={[
-                          styles.memberPill,
-                          {
-                            backgroundColor: selected ? '#f87171' : colors.muted,
-                            borderColor: selected ? '#f87171' : colors.border,
-                          },
-                        ]}
-                        onPress={() => setWithdrawerId(m.userId)}
-                        activeOpacity={0.7}
-                      >
-                        <Feather
-                          name="user"
-                          size={13}
-                          color={selected ? '#fff' : colors.mutedForeground}
-                        />
-                        <Text
-                          style={[
-                            styles.memberPillText,
-                            { color: selected ? '#fff' : colors.foreground },
-                          ]}
-                        >
-                          {name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            {/* ── Withdrawal destination ────────────────────────────────────── */}
-            {isWithdrawal && (
-              <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  Where is this money going?{' '}
-                  <Text style={{ fontWeight: '400', fontSize: 11 }}>* required</Text>
-                </Text>
-                <View style={styles.memberRow}>
-                  {/* Income source chips for the selected withdrawer */}
-                  {withdrawSources.map((src) => {
-                    const selected = withdrawDest === 'source' && withdrawSourceName === src.name;
-                    return (
-                      <TouchableOpacity
-                        key={src.id}
-                        testID={`bank-withdraw-dest-src-${src.id}`}
-                        style={[
-                          styles.memberPill,
-                          {
-                            backgroundColor: selected ? '#6366f1' : colors.muted,
-                            borderColor: selected ? '#6366f1' : colors.border,
-                          },
-                        ]}
+                        key={candidate.id}
+                        style={[styles.memberPill, { backgroundColor: selectedAccountId === candidate.id ? '#0891b2' : colors.muted, borderColor: selectedAccountId === candidate.id ? '#0891b2' : colors.border }]}
                         onPress={() => {
-                          setWithdrawDest('source');
-                          setWithdrawSourceName(src.name);
-                          setWithdrawGoalId(null);
-                          setShowGoalPicker(false);
+                          setSelectedAccountId(candidate.id);
+                          // Never let both ends be the same account.
+                          if (bankTransferDestinationId === candidate.id) setBankTransferDestinationId(null);
                         }}
-                        activeOpacity={0.7}
+                        testID={`bank-transfer-source-${candidate.id}`}
                       >
-                        <Feather name="briefcase" size={12} color={selected ? '#fff' : colors.mutedForeground} />
-                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
-                          {src.name}
-                        </Text>
+                        <Text style={[styles.memberPillText, { color: selectedAccountId === candidate.id ? '#fff' : colors.foreground }]}>{candidate.name}</Text>
                       </TouchableOpacity>
-                    );
-                  })}
-
-                  {/* Savings chip */}
-                  {(() => {
-                    const selected = withdrawDest === 'savings';
-                    return (
+                    ))}
+                  </View>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>To account</Text>
+                  <View style={styles.memberRow}>
+                    {accounts.filter((candidate) => candidate.id !== selectedAccountId).map((candidate) => (
+                      <TouchableOpacity key={candidate.id} style={[styles.memberPill, { backgroundColor: bankTransferDestinationId === candidate.id ? '#0891b2' : colors.muted, borderColor: bankTransferDestinationId === candidate.id ? '#0891b2' : colors.border }]} onPress={() => setBankTransferDestinationId(candidate.id)} testID={`bank-transfer-destination-${candidate.id}`}>
+                        <Text style={[styles.memberPillText, { color: bankTransferDestinationId === candidate.id ? '#fff' : colors.foreground }]}>{candidate.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {/* Moving money between accounts needs a second one, and
+                        with only one there was nothing here and no way to make
+                        it without leaving the form. */}
+                    {canManageAccount && (
                       <TouchableOpacity
-                        testID="bank-withdraw-dest-savings"
-                        style={[
-                          styles.memberPill,
-                          {
-                            backgroundColor: selected ? '#0891b2' : colors.muted,
-                            borderColor: selected ? '#0891b2' : colors.border,
-                          },
-                        ]}
-                        onPress={() => {
-                          setWithdrawDest('savings');
-                          setWithdrawSourceName(null);
-                          setShowGoalPicker(true);
-                        }}
-                        activeOpacity={0.7}
+                        style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                        onPress={() => openAccountEditor()}
+                        testID="bank-transfer-new-account"
                       >
-                        <Feather name="target" size={12} color={selected ? '#fff' : colors.mutedForeground} />
-                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
-                          Savings
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })()}
-
-                  {/* Other chip */}
-                  {(() => {
-                    const selected = withdrawDest === 'other';
-                    return (
-                      <TouchableOpacity
-                        testID="bank-withdraw-dest-other"
-                        style={[
-                          styles.memberPill,
-                          {
-                            backgroundColor: selected ? '#64748b' : colors.muted,
-                            borderColor: selected ? '#64748b' : colors.border,
-                          },
-                        ]}
-                        onPress={() => {
-                          setWithdrawDest('other');
-                          setWithdrawSourceName(null);
-                          setWithdrawGoalId(null);
-                          setShowGoalPicker(false);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Feather name="edit-3" size={12} color={selected ? '#fff' : colors.mutedForeground} />
-                        <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
-                          Other
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })()}
-                </View>
-
-                {/* Savings goal dropdown */}
-                {withdrawDest === 'savings' && showGoalPicker && savingsGoals.length > 0 && (
-                  <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                    {savingsGoals
-                      .filter(g => !g.isCompleted)
-                      .map(g => {
-                        const pct = g.targetAmount > 0
-                          ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100))
-                          : 0;
-                        return (
-                          <TouchableOpacity
-                            key={g.id}
-                            style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
-                            onPress={() => {
-                              setWithdrawGoalId(g.id);
-                              setShowGoalPicker(false);
-                            }}
-                          >
-                            <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{g.name}</Text>
-                            <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
-                              {pct}% funded
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    {savingsGoals.filter(g => !g.isCompleted).length === 0 && (
-                      <TouchableOpacity style={styles.categoryOption}>
-                        <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular' }}>No active goals</Text>
+                        <Feather name="plus-circle" size={13} color={colors.foreground} />
+                        <Text style={[styles.memberPillText, { color: colors.foreground }]}>New account</Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                )}
-
-                {/* Selected goal badge */}
-                {withdrawDest === 'savings' && selectedGoal && !showGoalPicker && (
-                  <TouchableOpacity
-                    onPress={() => setShowGoalPicker(true)}
-                    style={{
-                      flexDirection: 'row', alignItems: 'center', gap: 8,
-                      paddingVertical: 10, paddingHorizontal: 14,
-                      borderRadius: 10, borderWidth: 1,
-                      borderColor: '#0891b2', backgroundColor: '#0891b222',
-                      marginTop: 6,
-                    }}
-                  >
-                    <Feather name="target" size={14} color="#0891b2" />
-                    <Text style={{ flex: 1, color: '#0891b2', fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>
-                      {selectedGoal.name}
+                  {accounts.length < 2 && (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                      A transfer needs a second account to move the money into.
                     </Text>
-                    <Feather name="chevron-down" size={14} color="#0891b2" />
-                  </TouchableOpacity>
-                )}
+                  )}
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
+                  <TextInput style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]} placeholder="e.g. Move operating funds" placeholderTextColor={colors.mutedForeground} value={description} onChangeText={setDescription} maxLength={200} testID="bank-to-bank-narration" />
+                  {selectedAccount && bankTransferDestinationId && parsedOutgoingAmount !== null && parsedOutgoingAmount > 0 && (
+                    <Text style={[styles.managerGuidance, { color: colors.mutedForeground }]} testID="bank-transfer-preview">
+                      {selectedAccount.name}: KES {formatKES(data?.balance)} → KES {formatKES((data?.balance ?? 0) - parsedOutgoingAmount)}. {accounts.find((candidate) => candidate.id === bankTransferDestinationId)?.name} receives KES {formatKES(parsedOutgoingAmount)}.
+                    </Text>
+                  )}
+                </>
+              )}
 
-                {/* No goal selected yet hint */}
-                {withdrawDest === 'savings' && !selectedGoal && !showGoalPicker && savingsGoals.length === 0 && (
-                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-                    No savings goals set up yet
+              {/* ── Deposited by (deposits only) ── */}
+              {isDeposit && members.length > 0 && (
+                <>
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    {isSharedWorkspace ? 'Who is depositing?' : 'Deposited by'}{' '}
+                    {canManageShared && <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>}
                   </Text>
-                )}
-              </>
-            )}
-
-            {/* Expense category (disbursements only) */}
-            {isWithdrawal && (
-              <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
-                </Text>
-                <TouchableOpacity
-                  style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-                  onPress={() => setShowCategoryPicker(!showCategoryPicker)}
-                  activeOpacity={0.7}
-                  testID="bank-category-picker"
-                >
-                  <Text
-                    style={{
-                      color: expenseCategory ? colors.foreground : colors.mutedForeground,
-                      fontSize: 16,
-                      fontFamily: 'Inter_400Regular',
-                      flex: 1,
-                    }}
-                  >
-                    {expenseCategory || 'Choose a category'}
-                  </Text>
-                  <Feather
-                    name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color={colors.mutedForeground}
-                  />
-                </TouchableOpacity>
-                {showCategoryPicker && (
-                  <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
-                    {categories.map(c => (
-                      <TouchableOpacity
-                        key={c.id}
-                        style={styles.categoryOption}
-                        onPress={() => { setExpenseCategory(c.name); setShowCategoryPicker(false); }}
-                      >
-                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{c.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }}>
-                      <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
-                        CAN'T FIND IT? ADD A CATEGORY
+                  {!isSharedWorkspace ? (
+                    <View style={[styles.personalAccountNotice, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                      <Feather name="user" size={15} color={colors.primary} />
+                      <Text style={[styles.personalAccountNoticeText, { color: colors.mutedForeground }]}>
+                        This deposit is recorded in your name and stays in your Personal budget.
                       </Text>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TextInput
-                          value={newCategoryName}
-                          onChangeText={setNewCategoryName}
-                          editable={!addingCategory}
-                          placeholder="e.g. Transport"
-                          placeholderTextColor={colors.mutedForeground}
-                          style={{
-                            flex: 1, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
-                            borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
-                            fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
-                          }}
-                          testID="bank-new-category-input"
-                        />
+                    </View>
+                  ) : <View style={styles.memberRow}>
+                    {/* Joint bank chip — selected when no named members chosen */}
+                    {canManageShared && <TouchableOpacity
+                      testID="bank-deposit-joint-chip"
+                      style={[
+                        styles.memberPill,
+                        {
+                          backgroundColor: depositorIds.length === 0 ? '#1a6b3a' : colors.muted,
+                          borderColor: depositorIds.length === 0 ? '#4ade80' : colors.border,
+                        },
+                      ]}
+                      onPress={selectJointBank}
+                      activeOpacity={0.7}
+                    >
+                      <Feather
+                        name="home"
+                        size={13}
+                        color={depositorIds.length === 0 ? '#4ade80' : colors.mutedForeground}
+                      />
+                      <Text
+                        style={[
+                          styles.memberPillText,
+                          { color: depositorIds.length === 0 ? '#4ade80' : colors.foreground },
+                        ]}
+                      >
+                        Joint bank
+                      </Text>
+                    </TouchableOpacity>}
+
+                    {/* Named member chips */}
+                    {selectableDepositors.map((m) => {
+                      const selected = depositorIds.includes(m.userId);
+                      const name = m.userName?.split(' ')[0] ?? 'Member';
+                      return (
                         <TouchableOpacity
-                          disabled={addingCategory}
-                          onPress={handleCreateCategory}
-                          style={{
-                            minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-                            backgroundColor: colors.primary, opacity: addingCategory ? 0.55 : 1,
-                          }}
-                          testID="bank-add-category"
+                          key={m.userId}
+                          testID={`bank-deposit-member-${m.userId}`}
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#4ade80' : colors.muted,
+                              borderColor: selected ? '#4ade80' : colors.border,
+                            },
+                          ]}
+                          onPress={() => toggleDepositor(m.userId)}
+                          activeOpacity={0.7}
                         >
-                          {addingCategory ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
+                          <Feather
+                            name="user"
+                            size={13}
+                            color={selected ? '#0a1a10' : colors.mutedForeground}
+                          />
+                          <Text
+                            style={[
+                              styles.memberPillText,
+                              { color: selected ? '#0a1a10' : colors.foreground },
+                            ]}
+                          >
+                            {name}
+                          </Text>
                         </TouchableOpacity>
+                      );
+                    })}
+                  </View>}
+
+                  {/* Per-depositor split rows (multi only) */}
+                  {validDepositorIds.length > 1 && (() => {
+                    const total = parseFloat(amount.replace(/,/g, '')) || 0;
+                    const splitTotal = validDepositorIds.reduce(
+                      (s, id) => s + (parseBankAmount(depositorAmounts[id] || '') ?? 0), 0
+                    );
+                    const diff = total - splitTotal;
+                    return (
+                      <View style={{ marginTop: 8, gap: 8 }}>
+                        <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                          How much is each person depositing?
+                          {total > 0 ? ` (total: KES ${total.toLocaleString()})` : ''}
+                        </Text>
+                        {validDepositorIds.map((did) => {
+                          const member = members.find(m => m.userId === did);
+                          const name = member?.userName?.split(' ')[0] ?? 'Member';
+                          return (
+                            <View key={did} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: 76 }}>
+                                <Feather name="user" size={13} color={colors.mutedForeground} />
+                                <Text style={{ fontSize: 14, color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>
+                                  {name}
+                                </Text>
+                              </View>
+                              <TextInput
+                                style={{
+                                  flex: 1, height: 44, borderRadius: 10, borderWidth: 1,
+                                  borderColor: colors.border, backgroundColor: colors.background,
+                                  paddingHorizontal: 12, fontSize: 16, color: colors.foreground,
+                                  fontFamily: 'Inter_400Regular',
+                                }}
+                                keyboardType="decimal-pad"
+                                placeholder="0"
+                                placeholderTextColor={colors.mutedForeground}
+                                value={depositorAmounts[did] || ''}
+                                onChangeText={val =>
+                                  setDepositorAmounts(prev => ({ ...prev, [did]: val }))
+                                }
+                                testID={`bank-deposit-split-${did}`}
+                              />
+                            </View>
+                          );
+                        })}
+                        {Math.abs(diff) >= 1 && (
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: diff > 0 ? '#f59e0b' : '#f87171',
+                              fontFamily: 'Inter_400Regular',
+                            }}
+                          >
+                            {diff > 0
+                              ? `KES ${diff.toLocaleString()} still unassigned`
+                              : `Over by KES ${Math.abs(diff).toLocaleString()}`}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })()}
+                </>
+              )}
+
+              {/* Saved income sources are for one named depositor; Joint bank can choose Other. */}
+              {isDeposit && (singleDepositorId || depositorIds.length === 0) && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    {singleDepositorId ? 'Which of their income streams?' : 'Where did this money come from?'}{' '}
+                    <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
+                  </Text>
+                  <View style={styles.memberRow}>
+                    {depositSources.map((src) => {
+                      const selected = incomeSourceId === src.id;
+                      return (
+                        <TouchableOpacity
+                          key={src.id}
+                          testID={`bank-income-source-${src.id}`}
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#6366f1' : colors.muted,
+                              borderColor: selected ? '#6366f1' : colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setIncomeSourceId(selected ? null : src.id);
+                            setDepositSourceKind(selected ? null : 'income_source');
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.memberPillText,
+                              { color: selected ? '#fff' : colors.foreground },
+                            ]}
+                          >
+                            {src.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    <TouchableOpacity
+                      testID="bank-income-source-other"
+                      style={[
+                        styles.memberPill,
+                        {
+                          backgroundColor: depositSourceKind === 'other' ? '#64748b' : colors.muted,
+                          borderColor: depositSourceKind === 'other' ? '#64748b' : colors.border,
+                        },
+                      ]}
+                      onPress={() => { setDepositSourceKind(depositSourceKind === 'other' ? null : 'other'); setIncomeSourceId(null); }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.memberPillText, { color: depositSourceKind === 'other' ? '#fff' : colors.foreground }]}>Other</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {depositSourceKind === 'other' && (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                      Use the required description above as the source narration.
+                    </Text>
+                  )}
+                </>
+              )}
+
+              {/* ── Withdrawal payer (disbursements only) ── */}
+              {isWithdrawal && members.length > 0 && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    Who is withdrawing?
+                  </Text>
+                  <View style={styles.memberRow}>
+                    {/* Joint bank chip */}
+                    <TouchableOpacity
+                      testID="bank-withdraw-joint-chip"
+                      style={[
+                        styles.memberPill,
+                        {
+                          backgroundColor: withdrawerId === null ? '#3a1820' : colors.muted,
+                          borderColor: withdrawerId === null ? '#f87171' : colors.border,
+                        },
+                      ]}
+                      onPress={() => setWithdrawerId(null)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather
+                        name="home"
+                        size={13}
+                        color={withdrawerId === null ? '#f87171' : colors.mutedForeground}
+                      />
+                      <Text
+                        style={[
+                          styles.memberPillText,
+                          { color: withdrawerId === null ? '#f87171' : colors.foreground },
+                        ]}
+                      >
+                        Joint bank
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Named member chips (one at a time) */}
+                    {members.map((m) => {
+                      const selected = withdrawerId === m.userId;
+                      const name = m.userName?.split(' ')[0] ?? 'Member';
+                      return (
+                        <TouchableOpacity
+                          key={m.userId}
+                          testID={`bank-withdraw-member-${m.userId}`}
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#f87171' : colors.muted,
+                              borderColor: selected ? '#f87171' : colors.border,
+                            },
+                          ]}
+                          onPress={() => setWithdrawerId(m.userId)}
+                          activeOpacity={0.7}
+                        >
+                          <Feather
+                            name="user"
+                            size={13}
+                            color={selected ? '#fff' : colors.mutedForeground}
+                          />
+                          <Text
+                            style={[
+                              styles.memberPillText,
+                              { color: selected ? '#fff' : colors.foreground },
+                            ]}
+                          >
+                            {name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+
+              {/* ── Withdrawal destination ────────────────────────────────────── */}
+              {isWithdrawal && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    Where is this money going?{' '}
+                    <Text style={{ fontWeight: '400', fontSize: 11 }}>* required</Text>
+                  </Text>
+                  <View style={styles.memberRow}>
+                    {/* Income source chips for the selected withdrawer */}
+                    {withdrawSources.map((src) => {
+                      const selected = withdrawDest === 'source' && withdrawSourceName === src.name;
+                      return (
+                        <TouchableOpacity
+                          key={src.id}
+                          testID={`bank-withdraw-dest-src-${src.id}`}
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#6366f1' : colors.muted,
+                              borderColor: selected ? '#6366f1' : colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setWithdrawDest('source');
+                            setWithdrawSourceName(src.name);
+                            setWithdrawGoalId(null);
+                            setShowGoalPicker(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="briefcase" size={12} color={selected ? '#fff' : colors.mutedForeground} />
+                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                            {src.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {/* Savings chip */}
+                    {(() => {
+                      const selected = withdrawDest === 'savings';
+                      return (
+                        <TouchableOpacity
+                          testID="bank-withdraw-dest-savings"
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#0891b2' : colors.muted,
+                              borderColor: selected ? '#0891b2' : colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setWithdrawDest('savings');
+                            setWithdrawSourceName(null);
+                            setShowGoalPicker(true);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="target" size={12} color={selected ? '#fff' : colors.mutedForeground} />
+                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                            Savings
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
+
+                    {/* Other chip */}
+                    {(() => {
+                      const selected = withdrawDest === 'other';
+                      return (
+                        <TouchableOpacity
+                          testID="bank-withdraw-dest-other"
+                          style={[
+                            styles.memberPill,
+                            {
+                              backgroundColor: selected ? '#64748b' : colors.muted,
+                              borderColor: selected ? '#64748b' : colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setWithdrawDest('other');
+                            setWithdrawSourceName(null);
+                            setWithdrawGoalId(null);
+                            setShowGoalPicker(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="edit-3" size={12} color={selected ? '#fff' : colors.mutedForeground} />
+                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
+                            Other
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
+                  </View>
+
+                  {/* Savings goal dropdown */}
+                  {withdrawDest === 'savings' && showGoalPicker && savingsGoals.length > 0 && (
+                    <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
+                      {savingsGoals
+                        .filter(g => !g.isCompleted)
+                        .map(g => {
+                          const pct = g.targetAmount > 0
+                            ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100))
+                            : 0;
+                          return (
+                            <TouchableOpacity
+                              key={g.id}
+                              style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                              onPress={() => {
+                                setWithdrawGoalId(g.id);
+                                setShowGoalPicker(false);
+                              }}
+                            >
+                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{g.name}</Text>
+                              <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                                {pct}% funded
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      {savingsGoals.filter(g => !g.isCompleted).length === 0 && (
+                        <TouchableOpacity style={styles.categoryOption}>
+                          <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular' }}>No active goals</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Selected goal badge */}
+                  {withdrawDest === 'savings' && selectedGoal && !showGoalPicker && (
+                    <TouchableOpacity
+                      onPress={() => setShowGoalPicker(true)}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 8,
+                        paddingVertical: 10, paddingHorizontal: 14,
+                        borderRadius: 10, borderWidth: 1,
+                        borderColor: '#0891b2', backgroundColor: '#0891b222',
+                        marginTop: 6,
+                      }}
+                    >
+                      <Feather name="target" size={14} color="#0891b2" />
+                      <Text style={{ flex: 1, color: '#0891b2', fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>
+                        {selectedGoal.name}
+                      </Text>
+                      <Feather name="chevron-down" size={14} color="#0891b2" />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* No goal selected yet hint */}
+                  {withdrawDest === 'savings' && !selectedGoal && !showGoalPicker && savingsGoals.length === 0 && (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+                      No savings goals set up yet
+                    </Text>
+                  )}
+                </>
+              )}
+
+              {/* Expense category (disbursements only) */}
+              {isWithdrawal && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                    onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+                    activeOpacity={0.7}
+                    testID="bank-category-picker"
+                  >
+                    <Text
+                      style={{
+                        color: expenseCategory ? colors.foreground : colors.mutedForeground,
+                        fontSize: 16,
+                        fontFamily: 'Inter_400Regular',
+                        flex: 1,
+                      }}
+                    >
+                      {expenseCategory || 'Choose a category'}
+                    </Text>
+                    <Feather
+                      name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={colors.mutedForeground}
+                    />
+                  </TouchableOpacity>
+                  {showCategoryPicker && (
+                    <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
+                      {categories.map(c => (
+                        <TouchableOpacity
+                          key={c.id}
+                          style={styles.categoryOption}
+                          onPress={() => { setExpenseCategory(c.name); setShowCategoryPicker(false); }}
+                        >
+                          <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{c.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }}>
+                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                          CAN'T FIND IT? ADD A CATEGORY
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TextInput
+                            value={newCategoryName}
+                            onChangeText={setNewCategoryName}
+                            editable={!addingCategory}
+                            placeholder="e.g. Transport"
+                            placeholderTextColor={colors.mutedForeground}
+                            style={{
+                              flex: 1, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                              borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                              fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                            }}
+                            testID="bank-new-category-input"
+                          />
+                          <TouchableOpacity
+                            disabled={addingCategory}
+                            onPress={handleCreateCategory}
+                            style={{
+                              minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
+                              backgroundColor: colors.primary, opacity: addingCategory ? 0.55 : 1,
+                            }}
+                            testID="bank-add-category"
+                          >
+                            {addingCategory ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                )}
-              </>
-            )}
-
-            {/* Categories drive withdrawal reports; details remain optional context. */}
-            {isWithdrawal && (
-              <>
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  Details <Text style={{ fontWeight: '400' }}>(optional)</Text>
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted },
-                  ]}
-                  placeholder="e.g. School books for term two"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={description}
-                  onChangeText={setDescription}
-                  returnKeyType="done"
-                  onSubmitEditing={Keyboard.dismiss}
-                  testID="bank-description-input"
-                />
-              </>
-            )}
-
-            {/* Submit */}
-            <TouchableOpacity
-              style={[
-                styles.submitBtn,
-                isDeposit ? styles.submitDeposit : styles.submitDisburse,
-                submitting && { opacity: 0.6 },
-              ]}
-              onPress={handleSubmit}
-              disabled={submitting}
-              activeOpacity={0.85}
-              testID="bank-submit-btn"
-            >
-              {submitting ? (
-                <ActivityIndicator color={isDeposit ? '#0a1a10' : '#fff'} />
-              ) : (
-                <Text style={[styles.submitText, !isDeposit && { color: '#fff' }]}>
-                  {editingTransactionId !== null ? 'Save Changes' : isDeposit ? 'Add Money' : 'Withdraw'}
-                </Text>
+                  )}
+                </>
               )}
-            </TouchableOpacity>
+
+              {/* Categories drive withdrawal reports; details remain optional context. */}
+              {isWithdrawal && (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    Details <Text style={{ fontWeight: '400' }}>(optional)</Text>
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted },
+                    ]}
+                    placeholder="e.g. School books for term two"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={description}
+                    onChangeText={setDescription}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                    testID="bank-description-input"
+                  />
+                </>
+              )}
+
+              {/* Submit */}
+              <TouchableOpacity
+                style={[
+                  styles.submitBtn,
+                  isDeposit ? styles.submitDeposit : styles.submitDisburse,
+                  submitting && { opacity: 0.6 },
+                ]}
+                onPress={handleSubmit}
+                disabled={submitting}
+                activeOpacity={0.85}
+                testID="bank-submit-btn"
+              >
+                {submitting ? (
+                  <ActivityIndicator color={isDeposit ? '#0a1a10' : '#fff'} />
+                ) : (
+                  <Text style={[styles.submitText, !isDeposit && { color: '#fff' }]}>
+                    {editingTransactionId !== null ? 'Save Changes' : isDeposit ? 'Add Money' : 'Withdraw'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -2303,79 +2315,81 @@ export default function BankScreen() {
         >
           <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 24 }]}>
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Set starting balance</Text>
-            <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
-              Enter the money already in this Shared group’s bank account before the transactions shown below.
-              This does not create a transaction.
-            </Text>
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>Opening balance (KES)</Text>
-            <TextInput
-              value={openingBalanceDraft}
-              onChangeText={setOpeningBalanceDraft}
-              keyboardType="decimal-pad"
-              editable={!savingOpeningBalance}
-              style={[
-                styles.input,
-                { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted },
-              ]}
-              placeholder="e.g. 25000"
-              placeholderTextColor={colors.mutedForeground}
-              autoFocus
-              testID="bank-opening-balance-input"
-            />
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>Balance date</Text>
-            <Pressable
-              onPress={() => setShowOpeningBalanceDatePicker(true)}
-              style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
-              testID="bank-opening-balance-date"
-            >
-              <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
-              <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
-                {new Date(openingBalanceDate + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Set starting balance</Text>
+              <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
+                Enter the money already in this Shared group’s bank account before the transactions shown below.
+                This does not create a transaction.
               </Text>
-              <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
-            </Pressable>
-            {showOpeningBalanceDatePicker && (
-              <DateTimePicker
-                value={new Date(openingBalanceDate + 'T00:00:00')}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                maximumDate={new Date()}
-                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
-                  setShowOpeningBalanceDatePicker(Platform.OS === 'ios');
-                  if (selected) {
-                    const y = selected.getFullYear();
-                    const m = String(selected.getMonth() + 1).padStart(2, '0');
-                    const d = String(selected.getDate()).padStart(2, '0');
-                    setOpeningBalanceDate(`${y}-${m}-${d}`);
-                  }
-                }}
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Opening balance (KES)</Text>
+              <TextInput
+                value={openingBalanceDraft}
+                onChangeText={setOpeningBalanceDraft}
+                keyboardType="decimal-pad"
+                editable={!savingOpeningBalance}
+                style={[
+                  styles.input,
+                  { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted },
+                ]}
+                placeholder="e.g. 25000"
+                placeholderTextColor={colors.mutedForeground}
+                autoFocus
+                testID="bank-opening-balance-input"
               />
-            )}
-            <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
-              The date marks when this starting amount applied. Current balance = opening balance + deposits − withdrawals.
-            </Text>
-            <View style={styles.openingBalanceActions}>
-              <TouchableOpacity
-                style={[styles.cancelOpeningBalanceBtn, { borderColor: colors.border }]}
-                onPress={closeOpeningBalanceEditor}
-                disabled={savingOpeningBalance}
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Balance date</Text>
+              <Pressable
+                onPress={() => setShowOpeningBalanceDatePicker(true)}
+                style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                testID="bank-opening-balance-date"
               >
-                <Text style={[styles.cancelOpeningBalanceText, { color: colors.foreground }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveOpeningBalanceBtn, savingOpeningBalance && { opacity: 0.6 }]}
-                onPress={handleOpeningBalanceSubmit}
-                disabled={savingOpeningBalance}
-                testID="bank-save-opening-balance"
-              >
-                {savingOpeningBalance ? (
-                  <ActivityIndicator color="#0a1a10" />
-                ) : (
-                  <Text style={styles.saveOpeningBalanceText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+                <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                  {new Date(openingBalanceDate + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </Text>
+                <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+              </Pressable>
+              {showOpeningBalanceDatePicker && (
+                <DateTimePicker
+                  value={new Date(openingBalanceDate + 'T00:00:00')}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                  maximumDate={new Date()}
+                  onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                    setShowOpeningBalanceDatePicker(Platform.OS === 'ios');
+                    if (selected) {
+                      const y = selected.getFullYear();
+                      const m = String(selected.getMonth() + 1).padStart(2, '0');
+                      const d = String(selected.getDate()).padStart(2, '0');
+                      setOpeningBalanceDate(`${y}-${m}-${d}`);
+                    }
+                  }}
+                />
+              )}
+              <Text style={[styles.openingBalanceHelp, { color: colors.mutedForeground }]}>
+                The date marks when this starting amount applied. Current balance = opening balance + deposits − withdrawals.
+              </Text>
+              <View style={styles.openingBalanceActions}>
+                <TouchableOpacity
+                  style={[styles.cancelOpeningBalanceBtn, { borderColor: colors.border }]}
+                  onPress={closeOpeningBalanceEditor}
+                  disabled={savingOpeningBalance}
+                >
+                  <Text style={[styles.cancelOpeningBalanceText, { color: colors.foreground }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveOpeningBalanceBtn, savingOpeningBalance && { opacity: 0.6 }]}
+                  onPress={handleOpeningBalanceSubmit}
+                  disabled={savingOpeningBalance}
+                  testID="bank-save-opening-balance"
+                >
+                  {savingOpeningBalance ? (
+                    <ActivityIndicator color="#0a1a10" />
+                  ) : (
+                    <Text style={styles.saveOpeningBalanceText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -2675,6 +2689,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 12,
+    // The wrapper pins this to the bottom of the screen, so without a ceiling
+    // a form taller than the screen grew upwards past the top edge and its
+    // first fields — amount, date, the account it applies to — were cut off
+    // with no way to reach them. Capped, with the body scrolling inside.
+    maxHeight: '88%',
   },
   handle: {
     width: 40,
