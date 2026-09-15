@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -121,6 +121,36 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  await copyPdfkitFontMetrics(distDir);
+}
+
+/**
+ * pdfkit reads the metrics for its built-in fonts from `__dirname/data/*.afm`
+ * at runtime. The banner above points `__dirname` at dist/, and esbuild does
+ * not carry data files across a bundle, so the built server threw ENOENT on
+ * the first PDF it tried to draw. The monthly-report route has no try/catch,
+ * so that surfaced as a bare 500 — and the phone reported it as "Couldn't
+ * create the PDF. Check your group access", blaming permissions for a missing
+ * font file. Copying the metrics next to the bundle is what makes the built
+ * server able to draw at all.
+ *
+ * Throws when it finds nothing to copy: a silent miss here is only visible in
+ * production, on the one route that draws a PDF.
+ */
+async function copyPdfkitFontMetrics(distDir) {
+  const requireFromHere = createRequire(import.meta.url);
+  const sourceDir = path.join(path.dirname(requireFromHere.resolve("pdfkit")), "data");
+  const metrics = (await readdir(sourceDir)).filter((name) => name.endsWith(".afm"));
+  if (metrics.length === 0) {
+    throw new Error(`No .afm font metrics found in ${sourceDir} — the built server cannot draw a PDF.`);
+  }
+  const targetDir = path.join(distDir, "data");
+  await mkdir(targetDir, { recursive: true });
+  for (const name of metrics) {
+    await copyFile(path.join(sourceDir, name), path.join(targetDir, name));
+  }
+  console.log(`Copied ${metrics.length} pdfkit font metrics into dist/data`);
 }
 
 buildAll().catch((err) => {
