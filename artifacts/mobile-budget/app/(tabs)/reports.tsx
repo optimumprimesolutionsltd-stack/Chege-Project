@@ -257,12 +257,16 @@ export default function ReportsScreen() {
       // unless the server actually said so.
       const status = (error as { response?: { status?: number }; status?: number } | null)?.response?.status
         ?? (error as { status?: number } | null)?.status;
+      // Same reason as the contributions export: guessing at the cause hid it.
+      const detail = error instanceof Error ? error.message : String(error);
       setExportError(
         status === 401 || status === 403
           ? 'You do not have access to this group’s report.'
-          : status != null && status >= 500
-            ? 'The report could not be generated on the server. This is our fault, not yours — please try again shortly.'
-            : 'Couldn’t create the PDF. Check your connection and try again.',
+          : `${status != null && status >= 500
+              ? 'The server could not build the report.'
+              : status != null
+                ? `The server refused the request (${status}).`
+                : 'The report failed on this phone, not on the server.'} ${detail}`,
       );
     } finally {
       setIsExporting(false);

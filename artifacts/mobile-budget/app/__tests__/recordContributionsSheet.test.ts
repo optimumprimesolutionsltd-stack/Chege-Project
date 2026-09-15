@@ -31,11 +31,20 @@ describe('Record contributions', () => {
 });
 
 describe('the contribution statement PDF error', () => {
-  // Blaming the connection for a 500 sends people to restart their router.
+  // Blaming the connection for a 500 sends people to restart their router —
+  // but guessing at the cause at all hid it for three rounds of "still not
+  // working", so the message now carries what actually failed.
   it('separates a server failure from a local one', () => {
     expect(exportSource).toContain('status != null && status >= 500');
-    expect(exportSource).toContain('This is our fault, not yours');
-    expect(exportSource).toContain('Check your connection and try again.');
+    expect(exportSource).toContain('The server could not build the report.');
+    expect(exportSource).toContain('The report failed on this phone, not on the server.');
+  });
+
+  it('shows the underlying error rather than throwing it away', () => {
+    expect(exportSource).toContain('const detail = error instanceof Error ? error.message : String(error);');
+    expect(exportSource).toContain('detail,');
+    // A refusal that is neither 5xx nor a local fault still names its status.
+    expect(exportSource).toContain('The server refused the request (${status}).');
   });
 
   it('never blames group access on a manager-only screen', () => {
