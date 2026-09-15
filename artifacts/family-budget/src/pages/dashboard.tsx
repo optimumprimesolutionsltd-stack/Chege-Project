@@ -64,7 +64,7 @@ import { appPath, routePath } from "@/lib/base-path";
 import { canManageBankAccount } from "@/lib/bank-access";
 import { DashboardAnnouncement, DashboardSummaryCards } from "@/components/dashboard-home-cards";
 import { getCategoryAllocationStatus, getExpenseFundingStatus, getFundingRemainder, getProjectedCategoryBalance } from "@/lib/expense-funding-utils";
-import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@/lib/category-tree";
+import { buildCategoryTree, childrenFor, parentOf, type CategoryRow } from "@workspace/category-tree";
 
 type QuickAction = "none" | "income" | "expense" | "goal";
 const RECURRING_DASHBOARD_DRAFT_KEY = "jamvi-recurring-dashboard-draft";

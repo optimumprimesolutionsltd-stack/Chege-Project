@@ -59,7 +59,7 @@ import {
   ApiError,
 } from '@workspace/api-client-react';
 import { getCategoryIcon } from '@/lib/categoryIcons';
-import { buildCategoryTree, parentOf, type CategoryRow } from '@/lib/categoryPicker';
+import { buildCategoryTree, parentOf, type CategoryRow } from '@workspace/category-tree';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { handleLapsedError } from '@/lib/lapsedError';
 import {
