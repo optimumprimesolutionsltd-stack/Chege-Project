@@ -392,6 +392,10 @@ export default function AddExpenseSheet() {
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  // Making a subcategory meant leaving the expense and going to Settings on
+  // the web, which is a poor thing to discover mid-expense. When a parent is
+  // already chosen, a new category can be nested under it here.
+  const [newCategoryNestUnderParent, setNewCategoryNestUnderParent] = useState(true);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryBudget, setNewCategoryBudget] = useState('');
   const [newCategoryRecurring, setNewCategoryRecurring] = useState(true);
@@ -837,6 +841,39 @@ export default function AddExpenseSheet() {
     splitAmounts,
   ]);
 
+  // The API returns every category flat, with no indication of which ones are
+  // children of another, so the picker rebuilds the parent/child split itself.
+  // Both modes offer the parents; only Detailed goes on to offer the
+  // subcategories underneath the parent that was chosen.
+  const categoryTree = useMemo(
+    () =>
+      // The generated BudgetCategory type doesn't declare parentId (the
+      // OpenAPI spec is incomplete here), but GET /budget-categories returns
+      // the full row and always has — routes/budget-categories.ts's GET does
+      // a plain db.select().
+      buildCategoryTree(categories as unknown as CategoryRow[]),
+    [categories],
+  );
+  // Selecting a subcategory keeps its parent's chip lit, so the sub-row it
+  // came from stays on screen instead of collapsing under the selection.
+  // The top-level category currently in play: the selection itself, or its
+  // parent when a subcategory is what is selected. Subcategories only go one
+  // level deep, so a new child always hangs off this.
+  const nestingParentName = parentOf(categoryTree, category) ?? category;
+  const nestingParent = categories.find(
+    (row) => row.name.trim().toLocaleLowerCase() === nestingParentName.trim().toLocaleLowerCase(),
+  ) as { id: number } | undefined;
+
+  const selectedParents = useMemo(() => {
+    const names = new Set<string>();
+    for (const allocation of categoryAllocations) {
+      const chosen = allocation.category.trim();
+      if (!chosen) continue;
+      names.add(parentOf(categoryTree, chosen) ?? chosen);
+    }
+    return names;
+  }, [categoryAllocations, categoryTree]);
+
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();
     if (!name) {
@@ -866,6 +903,10 @@ export default function AddExpenseSheet() {
       return;
     }
 
+    // Captured before the awaits: the selection can move while the request is
+    // in flight, and a child must not land under whatever happens to be
+    // selected by the time it returns.
+    const nestUnder = newCategoryNestUnderParent && nestingParent ? nestingParent : null;
     const budgetAmount = Number(newCategoryBudget);
     const priority = Number(newCategoryPriority);
     const [expenseYear, expenseMonth] = date.split('-').map(Number);
@@ -887,6 +928,9 @@ export default function AddExpenseSheet() {
           isRecurring: newCategoryRecurring,
           activeMonth: newCategoryRecurring ? null : expenseMonth,
           activeYear: newCategoryRecurring ? null : expenseYear,
+          // Only ever nested under a top-level category, and only when one is
+          // actually selected — the server refuses a second level anyway.
+          ...(nestUnder ? { parentId: nestUnder.id } : {}),
         },
       });
       setCategoryAllocations((current) => {
@@ -906,7 +950,13 @@ export default function AddExpenseSheet() {
         queryClient.invalidateQueries({ queryKey: getGetDashboardCategoryBreakdownQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
       ]);
-       Alert.alert('Category added', `${created.name} was added to this expense.`);
+       setNewCategoryNestUnderParent(true);
+       Alert.alert(
+         'Category added',
+         nestUnder
+           ? `${created.name} was added under ${nestingParentName} and selected for this expense.`
+           : `${created.name} was added to this expense.`,
+       );
     } catch (error) {
       const duplicate = error instanceof ApiError && error.status === 409;
       Alert.alert(
@@ -916,7 +966,7 @@ export default function AddExpenseSheet() {
           : error instanceof Error ? error.message : 'Check the category details and try again.',
       );
     }
-  }, [canManageCategories, categories, createCategory, date, newCategoryAddToBudget, newCategoryBudget, newCategoryName, newCategoryPriority, newCategoryRecurring, queryClient]);
+  }, [canManageCategories, categories, createCategory, date, newCategoryAddToBudget, newCategoryBudget, newCategoryName, newCategoryNestUnderParent, newCategoryPriority, newCategoryRecurring, nestingParent, nestingParentName, queryClient]);
 
   const handleCreateBankAccount = useCallback(async () => {
     const name = newBankAccountName.trim();
@@ -941,30 +991,6 @@ export default function AddExpenseSheet() {
     }
   }, [createBankAccount, newBankAccountName, newBankAccountNumber, newBankOpeningBalance, queryClient]);
 
-  // The API returns every category flat, with no indication of which ones are
-  // children of another, so the picker rebuilds the parent/child split itself.
-  // Both modes offer the parents; only Detailed goes on to offer the
-  // subcategories underneath the parent that was chosen.
-  const categoryTree = useMemo(
-    () =>
-      // The generated BudgetCategory type doesn't declare parentId (the
-      // OpenAPI spec is incomplete here), but GET /budget-categories returns
-      // the full row and always has — routes/budget-categories.ts's GET does
-      // a plain db.select().
-      buildCategoryTree(categories as unknown as CategoryRow[]),
-    [categories],
-  );
-  // Selecting a subcategory keeps its parent's chip lit, so the sub-row it
-  // came from stays on screen instead of collapsing under the selection.
-  const selectedParents = useMemo(() => {
-    const names = new Set<string>();
-    for (const allocation of categoryAllocations) {
-      const chosen = allocation.category.trim();
-      if (!chosen) continue;
-      names.add(parentOf(categoryTree, chosen) ?? chosen);
-    }
-    return names;
-  }, [categoryAllocations, categoryTree]);
 
   const chooseCategory = useCallback((name: string) => {
     if (!isAdvanced && !isEditMode) {
@@ -1657,6 +1683,29 @@ export default function AddExpenseSheet() {
               editable={!createCategory.isPending}
               style={[styles.categoryCreateInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
             />
+            {/* Only offered when a parent is already chosen. With nothing
+                selected this creates a top-level category exactly as before,
+                and subcategories only go one level deep, so a child of a
+                child is never on the table. */}
+            {nestingParent && nestingParentName.trim() ? (
+              <Pressable
+                onPress={() => setNewCategoryNestUnderParent((on) => !on)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: newCategoryNestUnderParent }}
+                accessibilityLabel={`Add this category under ${nestingParentName}`}
+                testID="create-category-nest-under-parent"
+                style={styles.nestRow}
+              >
+                <Feather
+                  name={newCategoryNestUnderParent ? 'check-square' : 'square'}
+                  size={16}
+                  color={newCategoryNestUnderParent ? colors.primary : colors.mutedForeground}
+                />
+                <Text style={[styles.nestLabel, { color: colors.foreground }]}>
+                  Add under <Text style={{ fontFamily: 'Inter_700Bold' }}>{nestingParentName}</Text>
+                </Text>
+              </Pressable>
+            ) : null}
             {canManageCategories ? (
               <View style={[styles.categoryRecurringRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
                 <View style={{ flex: 1 }}>
@@ -2631,6 +2680,8 @@ const styles = StyleSheet.create({
   },
   content: { paddingHorizontal: 20, paddingTop: 20, gap: 6 },
   subcategoryBadge: { flexDirection: 'row', alignItems: 'center', gap: 1, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
+  nestRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 },
+  nestLabel: { fontSize: 13, fontFamily: 'Inter_400Regular', flexShrink: 1 },
   subcategoryBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   modeBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   modeRow: { flexDirection: 'row', gap: 8 },

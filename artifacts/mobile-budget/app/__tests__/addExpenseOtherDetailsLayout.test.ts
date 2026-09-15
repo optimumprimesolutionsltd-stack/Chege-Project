@@ -173,6 +173,33 @@ describe('subcategories belong to Detailed mode', () => {
     expect(source).toContain('subcategoryCount = 0,');
   });
 
+  // Making a subcategory meant leaving the expense for Settings on the web —
+  // a poor thing to discover mid-expense.
+  it('can nest a new category under the one already chosen', () => {
+    expect(source).toContain('testID="create-category-nest-under-parent"');
+    expect(source).toContain('...(nestUnder ? { parentId: nestUnder.id } : {})');
+    expect(source).toContain('Add under');
+  });
+
+  it('only offers nesting when a parent is actually selected', () => {
+    expect(source).toContain('{nestingParent && nestingParentName.trim() ? (');
+    // One level deep: a child of a child is never on the table, because the
+    // parent resolves through parentOf first.
+    expect(source).toContain('const nestingParentName = parentOf(categoryTree, category) ?? category;');
+  });
+
+  it('captures the parent before the request, not after it', () => {
+    // The selection can move while the create is in flight; a child must not
+    // land under whatever happens to be selected by the time it returns.
+    expect(source).toContain('const nestUnder = newCategoryNestUnderParent && nestingParent ? nestingParent : null;');
+    const handler = source.slice(source.indexOf('const handleCreateCategory'), source.indexOf('await createCategory.mutateAsync'));
+    expect(handler).toContain('const nestUnder =');
+  });
+
+  it('says where the category landed', () => {
+    expect(source).toContain('was added under ${nestingParentName} and selected for this expense.');
+  });
+
   // Focusing the amount on mount scrolled a 0.85-detent formSheet past its own
   // date section, and an upward drag resizes the sheet instead of scrolling
   // back — the top of the form was simply unreachable.
