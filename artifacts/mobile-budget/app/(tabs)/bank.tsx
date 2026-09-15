@@ -256,14 +256,17 @@ export default function BankScreen() {
     : members.filter((member) => member.userId === user?.id);
 
   // Fetch income sources for selected depositor (single named only)
+  // Whose income streams to offer: the person depositing, when it is one
+  // named person, and the group's when the money is coming from the joint
+  // bank (depositorIds is empty for that — see the note above). The endpoint
+  // has always answered both; the client simply never asked in the second
+  // case, so choosing Joint bank left "Other" as the only thing on offer.
   const { data: depositSources = [] } = useQuery<MemberIncomeSource[]>({
-    queryKey: ['income-sources', singleDepositorId],
-    queryFn: async () => {
-      if (!singleDepositorId) return [];
-      return customFetch<MemberIncomeSource[]>(`/api/income-sources?userId=${singleDepositorId}`);
-    },
-    enabled: !!singleDepositorId && txType === 'deposit',
-    staleTime: 60_000,
+    queryKey: ['income-sources', singleDepositorId ?? '__group__'],
+    queryFn: () => customFetch<MemberIncomeSource[]>(
+      singleDepositorId ? `/api/income-sources?userId=${singleDepositorId}` : '/api/income-sources',
+    ),
+    enabled: txType === 'deposit' && (!!singleDepositorId || depositorIds.length === 0),
   });
 
   // Fetch income sources for the selected withdrawer (withdrawal destination chips)
@@ -1672,9 +1675,26 @@ export default function BankScreen() {
             )}
             {isBankTransfer && (
               <>
+                {/* "From" was a label showing whichever account happened to be
+                    selected behind the sheet, with no way to change it here —
+                    you had to close the form, pick a different account, and
+                    start again. Both ends are chosen in place now. */}
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>From account</Text>
-                <View style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}>
-                  <Text style={{ color: colors.foreground }}>{selectedAccount?.name ?? 'Selected account'}</Text>
+                <View style={styles.memberRow}>
+                  {accounts.map((candidate) => (
+                    <TouchableOpacity
+                      key={candidate.id}
+                      style={[styles.memberPill, { backgroundColor: selectedAccountId === candidate.id ? '#0891b2' : colors.muted, borderColor: selectedAccountId === candidate.id ? '#0891b2' : colors.border }]}
+                      onPress={() => {
+                        setSelectedAccountId(candidate.id);
+                        // Never let both ends be the same account.
+                        if (bankTransferDestinationId === candidate.id) setBankTransferDestinationId(null);
+                      }}
+                      testID={`bank-transfer-source-${candidate.id}`}
+                    >
+                      <Text style={[styles.memberPillText, { color: selectedAccountId === candidate.id ? '#fff' : colors.foreground }]}>{candidate.name}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>To account</Text>
                 <View style={styles.memberRow}>
@@ -1683,7 +1703,25 @@ export default function BankScreen() {
                       <Text style={[styles.memberPillText, { color: bankTransferDestinationId === candidate.id ? '#fff' : colors.foreground }]}>{candidate.name}</Text>
                     </TouchableOpacity>
                   ))}
+                  {/* Moving money between accounts needs a second one, and
+                      with only one there was nothing here and no way to make
+                      it without leaving the form. */}
+                  {canManageAccount && (
+                    <TouchableOpacity
+                      style={[styles.memberPill, { backgroundColor: colors.muted, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                      onPress={() => openAccountEditor()}
+                      testID="bank-transfer-new-account"
+                    >
+                      <Feather name="plus-circle" size={13} color={colors.foreground} />
+                      <Text style={[styles.memberPillText, { color: colors.foreground }]}>New account</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
+                {accounts.length < 2 && (
+                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                    A transfer needs a second account to move the money into.
+                  </Text>
+                )}
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
                 <TextInput style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]} placeholder="e.g. Move operating funds" placeholderTextColor={colors.mutedForeground} value={description} onChangeText={setDescription} maxLength={200} testID="bank-to-bank-narration" />
                 {selectedAccount && bankTransferDestinationId && parsedOutgoingAmount !== null && parsedOutgoingAmount > 0 && (
@@ -1839,7 +1877,7 @@ export default function BankScreen() {
             {isDeposit && (singleDepositorId || depositorIds.length === 0) && (
               <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  Where did this money come from?{' '}
+                  {singleDepositorId ? 'Which of their income streams?' : 'Where did this money come from?'}{' '}
                   <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
                 </Text>
                 <View style={styles.memberRow}>
