@@ -23,6 +23,24 @@ describe('Bank accounts scrolls as one page', () => {
   });
 });
 
+describe('the banking sheets fit on the screen', () => {
+  // The wrapper pins a sheet to the bottom of the screen. With no ceiling, a
+  // form taller than the screen grew upwards past the top edge — amount, date
+  // and the account it applies to were cut off with no way to reach them.
+  it('caps every sheet and lets its body scroll', () => {
+    expect(bank).toContain("maxHeight: '88%'");
+    // All three banking sheets share the style, and each scrolls.
+    expect(bank.match(/styles\.sheet,/g)?.length).toBe(3);
+    expect(bank.match(/<ScrollView showsVerticalScrollIndicator=\{false\} keyboardShouldPersistTaps="handled">/g)?.length).toBe(2);
+    expect(bank).toContain('keyboardShouldPersistTaps="handled"');
+  });
+
+  it('keeps taps working while the keyboard is up', () => {
+    // Without this a tap on Save is swallowed dismissing the keyboard.
+    expect(bank.match(/keyboardShouldPersistTaps="handled"/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('Reports summary cards', () => {
   // Only "Categories to watch" was pressable; the other two read as dead tiles.
   it('makes all three cards pressable', () => {
