@@ -15,10 +15,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { File, Paths } from 'expo-file-system';
+import { Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
+import { writePdf } from '@/lib/savePdf';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import {
@@ -235,13 +236,13 @@ export default function ReportsScreen() {
         { responseType: 'blob', cache: 'no-store' },
       );
       const [fileFrom, fileTo] = orderedRange(dayFrom, dayTo);
-      const file = new File(
+      const file = await writePdf(
         Paths.cache,
         customDates
           ? `jamvi-report-${fileFrom}-to-${fileTo}.pdf`
           : `jamvi-monthly-report-${year}-${String(month).padStart(2, '0')}.pdf`,
+        pdf as Blob,
       );
-      file.write(new Uint8Array(await pdf.arrayBuffer()));
       if (!(await Sharing.isAvailableAsync())) {
         throw new Error('Sharing is not available on this device.');
       }
