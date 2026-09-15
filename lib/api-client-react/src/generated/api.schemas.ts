@@ -1620,6 +1620,16 @@ month?: number;
  * @maximum 2200
  */
 year?: number;
+/**
+ * Start of an exact day range (YYYY-MM-DD). Given with `to`, the report covers those days instead of the whole month. Ignored unless both are present and well formed.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * End of the day range (YYYY-MM-DD), inclusive.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
 };
 
 export type GetDashboardTrendsParams = {

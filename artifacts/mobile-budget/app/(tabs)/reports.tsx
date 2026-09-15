@@ -16,6 +16,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import {
@@ -170,6 +172,13 @@ export default function ReportsScreen() {
   const [year, setYear] = useState(now.getFullYear());
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  // The report could only ever cover a whole month. A day range answers the
+  // question people actually bring to it — "what did we spend between these
+  // two dates" — without waiting for the month to end.
+  const [customDates, setCustomDates] = useState(false);
+  const [dayFrom, setDayFrom] = useState<string>(monthStartIso);
+  const [dayTo, setDayTo] = useState<string>(() => isoDay(new Date()));
+  const [picker, setPicker] = useState<null | 'from' | 'to'>(null);
   const [watchDetailsOpen, setWatchDetailsOpen] = useState(false);
 
   const handleMonthChange = useCallback((m: number, y: number) => {
@@ -201,8 +210,18 @@ export default function ReportsScreen() {
     setIsExporting(true);
     setExportError(null);
     try {
-      const pdf = await getDashboardMonthlyReportPdf({ month, year }, { responseType: 'blob', cache: 'no-store' });
-      const file = new File(Paths.cache, `jamvi-monthly-report-${year}-${String(month).padStart(2, '0')}.pdf`);
+      const [rangeFrom, rangeTo] = orderedRange(dayFrom, dayTo);
+      const pdf = await getDashboardMonthlyReportPdf(
+        customDates ? { month, year, from: rangeFrom, to: rangeTo } : { month, year },
+        { responseType: 'blob', cache: 'no-store' },
+      );
+      const [fileFrom, fileTo] = orderedRange(dayFrom, dayTo);
+      const file = new File(
+        Paths.cache,
+        customDates
+          ? `jamvi-report-${fileFrom}-to-${fileTo}.pdf`
+          : `jamvi-monthly-report-${year}-${String(month).padStart(2, '0')}.pdf`,
+      );
       file.write(new Uint8Array(await pdf.arrayBuffer()));
       if (!(await Sharing.isAvailableAsync())) {
         throw new Error('Sharing is not available on this device.');
@@ -229,7 +248,7 @@ export default function ReportsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [month, year]);
+  }, [month, year, customDates, dayFrom, dayTo]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
 
@@ -366,12 +385,62 @@ export default function ReportsScreen() {
               disabled={isLoading || isExporting}
               style={[styles.pdfButton, (isLoading || isExporting) && styles.pdfButtonDisabled]}
               accessibilityRole="button"
-              accessibilityLabel={`Download ${MONTHS[month - 1]} ${year} report as PDF`}
+              accessibilityLabel={customDates
+                ? `Download report for ${longDay(orderedRange(dayFrom, dayTo)[0])} to ${longDay(orderedRange(dayFrom, dayTo)[1])} as PDF`
+                : `Download ${MONTHS[month - 1]} ${year} report as PDF`}
             >
               {isExporting ? <ActivityIndicator color={colors.brandNavy} size="small" /> : <Feather name="download" size={16} color={colors.brandNavy} />}
               <Text style={styles.pdfButtonText}>{isExporting ? 'Creating…' : 'PDF'}</Text>
             </Pressable>
           </View>
+          <Pressable
+            onPress={() => setCustomDates((on) => !on)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: customDates }}
+            accessibilityLabel={customDates ? 'Use the whole month for the report' : 'Choose exact dates for the report'}
+            testID="report-custom-dates-toggle"
+            style={styles.customDatesToggle}
+          >
+            <Feather name={customDates ? 'check-square' : 'square'} size={14} color="#FFFFFF" />
+            <Text style={styles.customDatesToggleText}>Exact dates</Text>
+          </Pressable>
+          {customDates && (
+            <View style={styles.dayRow}>
+              {(['from', 'to'] as const).map((which) => (
+                <Pressable
+                  key={which}
+                  onPress={() => setPicker(which)}
+                  style={styles.dayField}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${which === 'from' ? 'Start' : 'End'} date for the report`}
+                  testID={`report-day-${which}`}
+                >
+                  <Text style={styles.dayLabel}>{which === 'from' ? 'From' : 'To'}</Text>
+                  <View style={styles.dayValueRow}>
+                    <Feather name="calendar" size={12} color="#FFFFFF" />
+                    <Text style={styles.dayValue}>{longDay(which === 'from' ? dayFrom : dayTo)}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {customDates && picker && (
+            <DateTimePicker
+              value={new Date((picker === 'from' ? dayFrom : dayTo) + 'T00:00:00')}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+              maximumDate={new Date()}
+              onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                const which = picker;
+                setPicker(Platform.OS === 'ios' ? which : null);
+                if (selected && which) {
+                  const iso = isoDay(selected);
+                  if (which === 'from') setDayFrom(iso);
+                  else setDayTo(iso);
+                }
+              }}
+            />
+          )}
           {exportError && <Text style={styles.pdfError}>{exportError}</Text>}
       </LinearGradient>
 
@@ -1026,6 +1095,25 @@ const styles = StyleSheet.create({
   pdfButtonDisabled: { opacity: 0.55 },
   pdfButtonText: { color: '#011C4E', fontSize: 12, fontFamily: 'Inter_700Bold' },
   pdfError: { color: '#fee2e2', fontSize: 12, fontFamily: 'Inter_500Medium', lineHeight: 17 },
+  // The range controls sit on the navy header gradient, so they are drawn in
+  // white on translucent white rather than the usual card tokens.
+  customDatesToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, minHeight: 32, alignSelf: 'flex-start' },
+  customDatesToggleText: { color: '#FFFFFF', fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  dayRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  dayField: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dayLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontFamily: 'Inter_500Medium' },
+  dayValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
+  dayValue: { color: '#FFFFFF', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
 
   monthPicker: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   monthArrow: { padding: 4 },

@@ -4,15 +4,63 @@ import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import type { ListEditor } from '@/hooks/useListEditor';
 
-/** The Edit pencil for a panel heading. Hidden for non-managers and while editing. */
-export function ListEditButton({ editor, canManage }: { editor: ListEditor; canManage: boolean }) {
+/**
+ * The Edit control for a panel heading, shared by every panel that has one.
+ *
+ * It used to be a bare 14px pencil in muted grey with no label, which read as
+ * decoration next to the heading rather than something to press — people could
+ * not tell a list was editable at all. It is now a labelled pill in the accent
+ * colour, with a touch target that clears the 44px guideline.
+ */
+export function EditPill({
+  onPress,
+  accessibilityLabel,
+  testID,
+}: {
+  onPress: () => void;
+  accessibilityLabel: string;
+  testID?: string;
+}) {
   const colors = useColors();
-  if (!canManage || editor.editing) return null;
   return (
-    <Pressable onPress={editor.open} hitSlop={8} accessibilityLabel="Edit this list" testID="list-edit">
-      <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      style={({ pressed }) => [
+        editPillStyles.pill,
+        {
+          borderColor: colors.primary + '66',
+          backgroundColor: pressed ? colors.primary + '22' : colors.primary + '12',
+          borderRadius: colors.radius,
+        },
+      ]}
+    >
+      <Feather name="edit-2" size={13} color={colors.primary} />
+      <Text style={[editPillStyles.label, { color: colors.primary }]}>Edit</Text>
     </Pressable>
   );
+}
+
+const editPillStyles = StyleSheet.create({
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    minHeight: 32,
+    paddingVertical: 4,
+  },
+  label: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+});
+
+/** The Edit control for a panel heading. Hidden for non-managers and while editing. */
+export function ListEditButton({ editor, canManage }: { editor: ListEditor; canManage: boolean }) {
+  if (!canManage || editor.editing) return null;
+  return <EditPill onPress={editor.open} accessibilityLabel="Edit this list" testID="list-edit" />;
 }
 
 /** A per-row remove toggle. Only rendered in edit mode. */

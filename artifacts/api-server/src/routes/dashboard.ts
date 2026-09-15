@@ -1174,6 +1174,30 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
   res.json(response);
 });
 
+/**
+ * "1 – 14 September 2026" when the ends share a month, "28 August – 3 September
+ * 2026" when they do not, and a single date when from and to are the same day.
+ */
+export function formatDayRangeLabel(from: string, to: string): string {
+  const startDate = new Date(`${from}T00:00:00Z`);
+  const endDate = new Date(`${to}T00:00:00Z`);
+  const day = (value: Date) => String(value.getUTCDate());
+  const monthYear = (value: Date) =>
+    new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric", timeZone: "UTC" }).format(value);
+  const monthOnly = (value: Date) =>
+    new Intl.DateTimeFormat("en-KE", { month: "long", timeZone: "UTC" }).format(value);
+
+  if (from === to) return `${day(startDate)} ${monthYear(startDate)}`;
+  const sameMonth = startDate.getUTCFullYear() === endDate.getUTCFullYear()
+    && startDate.getUTCMonth() === endDate.getUTCMonth();
+  if (sameMonth) return `${day(startDate)} – ${day(endDate)} ${monthYear(startDate)}`;
+  const sameYear = startDate.getUTCFullYear() === endDate.getUTCFullYear();
+  const startPart = sameYear
+    ? `${day(startDate)} ${monthOnly(startDate)}`
+    : `${day(startDate)} ${monthYear(startDate)}`;
+  return `${startPart} – ${day(endDate)} ${monthYear(endDate)}`;
+}
+
 router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
@@ -1182,6 +1206,23 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const parsed = GetDashboardMonthlyReportPdfQueryParams.safeParse(req.query);
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
+  // An explicit `?from=&to=` day range, else the whole month. The report could
+  // only ever answer "this month"; over a range it is the same report for the
+  // days asked for.
+  const isoDay = /^\d{4}-\d{2}-\d{2}$/;
+  const askedFrom = typeof req.query.from === "string" && isoDay.test(req.query.from) ? req.query.from : null;
+  const askedTo = typeof req.query.to === "string" && isoDay.test(req.query.to) ? req.query.to : null;
+  // Both or neither: one bare end would quietly report a different span than
+  // the caller asked for. Reversed ends are normalised rather than rejected.
+  const dayRange = askedFrom && askedTo
+    ? (askedFrom <= askedTo ? { from: askedFrom, to: askedTo } : { from: askedTo, to: askedFrom })
+    : null;
+  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  // Day 0 of the next month is the last day of this one, leap years included.
+  const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  const rangeFrom = dayRange?.from ?? monthStart;
+  const rangeTo = dayRange?.to ?? monthEnd;
+
   const [group] = await db
     .select({ name: groupsTable.name })
     .from(groupsTable)
@@ -1200,36 +1241,36 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         FROM expense_category_allocations allocation
         INNER JOIN expenses expense ON expense.id = allocation.expense_id AND expense.group_id = allocation.group_id
         WHERE allocation.group_id = ${groupId}
-          AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND expense.date >= ${rangeFrom} AND expense.date <= ${rangeTo}
         UNION ALL
         SELECT expense.category, expense.amount
         FROM expenses expense
         WHERE expense.group_id = ${groupId}
-          AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND expense.date >= ${rangeFrom} AND expense.date <= ${rangeTo}
           AND NOT EXISTS (SELECT 1 FROM expense_category_allocations allocation WHERE allocation.expense_id = expense.id AND allocation.group_id = ${groupId})
       ) allocated GROUP BY category
     `).then((result) => (result.rows as { category: string; total: string }[]).map((row) => ({ category: row.category, total: Number(row.total) }))),
     db
       .select({ category: jointAccountTxTable.expenseCategory, total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
       .from(jointAccountTxTable)
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`)
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${jointAccountTxTable.date} >= ${rangeFrom} AND ${jointAccountTxTable.date} <= ${rangeTo}`)
       .groupBy(jointAccountTxTable.expenseCategory),
     db
       .select({ count: sql<number>`COUNT(*)` })
       .from(expensesTable)
-      .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`),
+      .where(sql`${expensesTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${rangeFrom} AND ${expensesTable.date} <= ${rangeTo}`),
     db.execute(sql`
       WITH funding AS (
         SELECT split.income_source_id, split.amount, 'expense'::text AS record_type, expense.id AS record_id
         FROM expense_income_splits split
         INNER JOIN expenses expense ON expense.id = split.expense_id AND expense.group_id = ${groupId}
         WHERE split.group_id = ${groupId} AND split.from_bank = false
-          AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND expense.date >= ${rangeFrom} AND expense.date <= ${rangeTo}
         UNION ALL
         SELECT expense.income_source_id, expense.amount, 'expense'::text, expense.id
         FROM expenses expense
         WHERE expense.group_id = ${groupId} AND expense.paid_from_bank = false
-          AND EXTRACT(MONTH FROM expense.date) = ${month} AND EXTRACT(YEAR FROM expense.date) = ${year}
+          AND expense.date >= ${rangeFrom} AND expense.date <= ${rangeTo}
           AND NOT EXISTS (SELECT 1 FROM expense_income_splits split WHERE split.expense_id = expense.id AND split.group_id = ${groupId})
         UNION ALL
         SELECT split.income_source_id, split.amount, 'deposit'::text, deposit.id
@@ -1238,14 +1279,14 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         WHERE split.group_id = ${groupId} AND deposit.type = 'deposit'
           AND deposit.bank_transfer_id IS NULL
           AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
-          AND EXTRACT(MONTH FROM deposit.date) = ${month} AND EXTRACT(YEAR FROM deposit.date) = ${year}
+          AND deposit.date >= ${rangeFrom} AND deposit.date <= ${rangeTo}
         UNION ALL
         SELECT deposit.income_source_id, deposit.amount, 'deposit'::text, deposit.id
         FROM joint_account_transactions deposit
         WHERE deposit.group_id = ${groupId} AND deposit.type = 'deposit'
           AND deposit.bank_transfer_id IS NULL
           AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
-          AND EXTRACT(MONTH FROM deposit.date) = ${month} AND EXTRACT(YEAR FROM deposit.date) = ${year}
+          AND deposit.date >= ${rangeFrom} AND deposit.date <= ${rangeTo}
           AND NOT EXISTS (SELECT 1 FROM joint_account_deposit_splits split WHERE split.transaction_id = deposit.id AND split.group_id = ${groupId})
         UNION ALL
         SELECT NULL::integer, contribution.amount, 'savings'::text, contribution.id
@@ -1253,7 +1294,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         WHERE contribution.group_id = ${groupId} AND contribution.created_by_user_id IS NOT NULL
           AND contribution.is_balance_correction = false
           AND contribution.note IS NULL
-          AND EXTRACT(MONTH FROM contribution.created_at) = ${month} AND EXTRACT(YEAR FROM contribution.created_at) = ${year}
+          AND contribution.created_at >= ${rangeFrom} AND contribution.created_at <= ${rangeTo}
       )
       SELECT
         CASE WHEN source.id IS NULL THEN 'Unattributed' ELSE source.name END AS "sourceName",
@@ -1275,8 +1316,8 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         AND ${jointAccountTxTable.type} = 'disbursement'
         AND ${jointAccountTxTable.bankTransferId} IS NULL
         AND ${jointAccountTxTable.bankCharge} = true
-        AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
-        AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`),
+        AND ${jointAccountTxTable.date} >= ${rangeFrom}
+        AND ${jointAccountTxTable.date} <= ${rangeTo}`),
   ]);
 
   const spentMap = new Map(spentByCategory.map((item) => [item.category, item.total]));
@@ -1315,11 +1356,17 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     transactionCount: string | number;
   }>;
   const totalFunding = rawIncomeRows.reduce((sum, row) => sum + Number(row.total), 0);
-  const monthLabel = new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+  // The label has to say what the report actually covers. A whole month keeps
+  // reading "September 2026"; a day range names its own ends, so a handed-out
+  // PDF cannot be mistaken for the full month.
+  const monthLabel = dayRange
+    ? formatDayRangeLabel(dayRange.from, dayRange.to)
+    : new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
   const totalBudget = categoryRows.reduce((sum, category) => sum + category.budgetAmount, 0);
   const pdf = await createMonthlyReportPdf({
     groupName: group?.name ?? "Shared group",
     monthLabel,
+    coversWholeMonth: dayRange === null,
     totalBudget,
     totalSpent: totalActual,
     remaining: totalBudget - totalActual,

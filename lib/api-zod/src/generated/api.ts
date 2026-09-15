@@ -802,11 +802,15 @@ export const getDashboardMonthlyReportPdfQueryMonthMax = 12;
 export const getDashboardMonthlyReportPdfQueryYearMin = 2000;
 export const getDashboardMonthlyReportPdfQueryYearMax = 2200;
 
+export const getDashboardMonthlyReportPdfQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getDashboardMonthlyReportPdfQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const GetDashboardMonthlyReportPdfQueryParams = zod.object({
   "month": zod.coerce.number().min(1).max(getDashboardMonthlyReportPdfQueryMonthMax).optional(),
-  "year": zod.coerce.number().min(getDashboardMonthlyReportPdfQueryYearMin).max(getDashboardMonthlyReportPdfQueryYearMax).optional()
+  "year": zod.coerce.number().min(getDashboardMonthlyReportPdfQueryYearMin).max(getDashboardMonthlyReportPdfQueryYearMax).optional(),
+  "from": zod.coerce.string().regex(getDashboardMonthlyReportPdfQueryFromRegExp).optional().describe('Start of an exact day range (YYYY-MM-DD). Given with `to`, the report covers those days instead of the whole month. Ignored unless both are present and well formed.'),
+  "to": zod.coerce.string().regex(getDashboardMonthlyReportPdfQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.')
 })
 
 export const GetDashboardMonthlyReportPdfResponse = zod.unknown()

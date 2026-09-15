@@ -18,7 +18,15 @@ type IncomeStreamRow = {
 
 export type MonthlyReportPdfData = {
   groupName: string;
+  /** What the report covers: a month ("September 2026") or a day range. */
   monthLabel: string;
+  /**
+   * False when `monthLabel` names a day range rather than a whole month, so
+   * the wording stops calling itself monthly. A handed-out PDF that says
+   * "monthly report" across the top while covering nine days misrepresents
+   * its own contents.
+   */
+  coversWholeMonth?: boolean;
   totalBudget: number;
   totalSpent: number;
   remaining: number;
@@ -54,7 +62,7 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
       margin: SIDE_MARGIN,
       compress: false,
       info: {
-        Title: `${data.monthLabel} monthly report`,
+        Title: `${data.monthLabel} ${data.coversWholeMonth === false ? "report" : "monthly report"}`,
         Author: "Jamvi",
         Subject: "Shared group report",
       },
@@ -121,7 +129,11 @@ export function createMonthlyReportPdf(data: MonthlyReportPdfData): Promise<Buff
     };
 
     header();
-    document.font("Helvetica-Bold").fontSize(22).fillColor("#103A2D").text("Monthly financial report", SIDE_MARGIN, y);
+    document.font("Helvetica-Bold").fontSize(22).fillColor("#103A2D").text(
+      data.coversWholeMonth === false ? "Financial report" : "Monthly financial report",
+      SIDE_MARGIN,
+      y,
+    );
     y += 30;
     document.font("Helvetica").fontSize(10).fillColor("#60736C").text(
       "A clear snapshot of your shared group, spending, and recorded income-stream funding.",

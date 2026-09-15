@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
+import { EditPill } from '@/components/ListEditor';
 import {
   contributorNameMessage,
   contributorNameProblem,
@@ -172,13 +173,11 @@ export function useContributorEditor() {
 type Editor = ReturnType<typeof useContributorEditor>;
 
 export function EditListButton({ editor, canManage }: { editor: Editor; canManage: boolean }) {
-  const colors = useColors();
   if (!canManage || editor.editing) return null;
-  return (
-    <Pressable onPress={editor.open} hitSlop={8} accessibilityLabel="Add or remove people">
-      <Feather name="edit-2" size={14} color={colors.mutedForeground} />
-    </Pressable>
-  );
+  // Same pill as every other panel heading — the contributions cards had the
+  // same invisible pencil, and this is the control people could not find on
+  // Expected vs actual.
+  return <EditPill onPress={editor.open} accessibilityLabel="Add or remove people" testID="contributor-edit" />;
 }
 
 export function RemoveRowButton({ editor, id }: { editor: Editor; id: number }) {
