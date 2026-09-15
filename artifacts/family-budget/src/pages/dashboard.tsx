@@ -1516,9 +1516,11 @@ function ExpenseForm({
               className="h-12 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               data-testid="quick-expense-simple-category"
             >
+              {/* Quick mode is one category, so it offers the parents only —
+                  subcategories are a Detailed-mode refinement. */}
               <option value="">Select a category</option>
-              {categories.filter((item) => item.name.trim().toLocaleLowerCase() !== "other").map((item) => (
-                <option key={item.id} value={item.name}>{item.name}</option>
+              {categoryTree.map((group) => (
+                <option key={group.name} value={group.name}>{group.name}</option>
               ))}
             </select>
           </div>
@@ -1661,6 +1663,7 @@ function ExpenseForm({
                 </div>
               )}
               </div>
+          </div>
               {subcategoryOptions.length > 0 && !isPrimaryOtherCategory && (
                 <div className="space-y-1" data-testid="subcategory-select-dashboard">
                   <label htmlFor="dashboard-subcategory" className="text-xs font-semibold text-muted-foreground">
@@ -1687,7 +1690,6 @@ function ExpenseForm({
                   </select>
                 </div>
               )}
-          </div>
             {!hasStandardAdditionalCategory && (
              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                <p className="text-xs text-muted-foreground">
