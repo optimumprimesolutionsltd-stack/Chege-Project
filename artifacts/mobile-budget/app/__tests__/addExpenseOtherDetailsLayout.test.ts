@@ -156,9 +156,32 @@ describe('subcategories belong to Detailed mode', () => {
   it('offers only top-level categories in the main chip row', () => {
     expect(source).toContain('const categoryTree = useMemo(');
     expect(source).toContain('buildCategoryTree(categories as unknown as CategoryRow[])');
-    expect(source).toContain('{categoryTree.map(({ name }) => (');
+    expect(source).toContain('{categoryTree.map(({ name, children }) => (');
     // The old flat list labelled children "Parent: Child" among the parents.
     expect(source).not.toContain('groupCategoriesForPicker');
+  });
+
+  // Nothing marked which chips had subcategories, so the second row looked
+  // like it did not exist until you happened to tap the right one — reported
+  // as "I cannot see sub categories in detailed mode".
+  it('marks which parent chips open a subcategory row, in Detailed only', () => {
+    expect(source).toContain('subcategoryCount={isAdvanced ? children.length : 0}');
+    expect(source).toContain('{subcategoryCount > 0 && (');
+    expect(source).toContain('subcategoryBadge');
+    expect(source).toContain("name=\"chevron-down\" size={11}");
+    // Quick mode passes 0, so the badge never shows there.
+    expect(source).toContain('subcategoryCount = 0,');
+  });
+
+  // Focusing the amount on mount scrolled a 0.85-detent formSheet past its own
+  // date section, and an upward drag resizes the sheet instead of scrolling
+  // back — the top of the form was simply unreachable.
+  it('does not focus the amount field on mount', () => {
+    const amountField = source.slice(source.indexOf('EXPENSE TOTAL'), source.indexOf('CATEGORY *'));
+    // The prop on a line of its own — the note explaining its absence
+    // naturally mentions the word, so a substring check would match that.
+    expect(amountField).not.toMatch(/^\s*autoFocus\s*$/m);
+    expect(source).toContain('Deliberately not autoFocus');
   });
 
   it('renders the subcategory row only under a selected parent, and only in Detailed', () => {

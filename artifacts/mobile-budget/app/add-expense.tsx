@@ -202,6 +202,7 @@ const CategoryChip = React.memo(function CategoryChip({
   selected,
   onSelect,
   colors,
+  subcategoryCount = 0,
 }: {
   name: string;
   /** What the chip displays. Defaults to `name`; a subcategory passes
@@ -210,11 +211,20 @@ const CategoryChip = React.memo(function CategoryChip({
   selected: boolean;
   onSelect: (name: string) => void;
   colors: ReturnType<typeof useColors>;
+  /** How many subcategories tapping this chip would reveal. Zero hides the
+   *  cue entirely, which is every chip in Quick mode and every parent with
+   *  no children of its own. */
+  subcategoryCount?: number;
 }) {
   const icon = getCategoryIcon(name);
   return (
     <Pressable
       onPress={() => onSelect(name)}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={subcategoryCount > 0
+        ? `${label ?? name}, ${subcategoryCount} ${subcategoryCount === 1 ? 'subcategory' : 'subcategories'}`
+        : (label ?? name)}
       style={[
         styles.categoryChip,
         {
@@ -228,6 +238,14 @@ const CategoryChip = React.memo(function CategoryChip({
       <Text style={[styles.categoryChipText, { color: selected ? '#fff' : colors.foreground }]}>
         {label ?? name}
       </Text>
+      {subcategoryCount > 0 && (
+        <View style={[styles.subcategoryBadge, { backgroundColor: selected ? '#ffffff33' : colors.primary + '1F' }]}>
+          <Text style={[styles.subcategoryBadgeText, { color: selected ? '#fff' : colors.primary }]}>
+            {subcategoryCount}
+          </Text>
+          <Feather name="chevron-down" size={11} color={selected ? '#fff' : colors.primary} />
+        </View>
+      )}
     </Pressable>
   );
 });
@@ -1422,7 +1440,11 @@ export default function AddExpenseSheet() {
             keyboardType="numeric"
             value={amount}
             onChangeText={setAmount}
-            autoFocus
+            // Deliberately not autoFocus. This screen is a formSheet opening at
+            // an 0.85 detent; focusing on mount raised the keyboard, scrolled
+            // the content down past the date section, and left no way back —
+            // an upward drag at the top resizes the sheet instead of scrolling
+            // its content, so the top of the form was simply unreachable.
           />
         </View>
 
@@ -1459,13 +1481,17 @@ export default function AddExpenseSheet() {
                      : 'No categories are available. Use Detailed to create one, or ask a budget manager to add one.'}
                 </Text>
               )}
-              {categoryTree.map(({ name }) => (
+              {categoryTree.map(({ name, children }) => (
                 <CategoryChip
                   key={name}
                   name={name}
                   selected={selectedParents.has(name)}
                   onSelect={chooseCategory}
                   colors={colors}
+                  // Nothing said which categories had subcategories, so the
+                  // second row looked like it did not exist until you happened
+                  // to tap the right chip. Only Detailed can open that row.
+                  subcategoryCount={isAdvanced ? children.length : 0}
                 />
               ))}
             </>
@@ -2604,6 +2630,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   content: { paddingHorizontal: 20, paddingTop: 20, gap: 6 },
+  subcategoryBadge: { flexDirection: 'row', alignItems: 'center', gap: 1, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
+  subcategoryBadgeText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
   modeBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   modeRow: { flexDirection: 'row', gap: 8 },
   modeButton: { flex: 1, minHeight: 40, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

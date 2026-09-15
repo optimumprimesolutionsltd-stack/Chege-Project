@@ -43,6 +43,11 @@ const kes = (value: number) => value.toLocaleString('en-KE', { maximumFractionDi
 export default function RecordContributionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  // Inside a formSheet the safe-area inset is reported as 0, because the sheet
+  // is not the window — but on a phone with a gesture bar or 3-button nav the
+  // sheet still ends behind it, which is what kept clipping the Record button.
+  // Floor it so the footer always clears that strip.
+  const sheetBottomInset = Math.max(insets.bottom, 16);
   const queryClient = useQueryClient();
 
   const { data: contributors = [], isLoading } = useQuery<Contributor[]>({
@@ -58,9 +63,17 @@ export default function RecordContributionsScreen() {
 
   const [accountId, setAccountId] = useState<number | null>(null);
   useEffect(() => {
-    setAccountId((current) =>
-      current != null && accounts.some((account) => account.id === current) ? current : accounts[0]?.id ?? null,
-    );
+    setAccountId((current) => {
+      // Keep a still-valid choice across refetches.
+      if (current != null && accounts.some((account) => account.id === current)) return current;
+      // With one account there is no choice to make, and the form says "Goes
+      // to <name>" rather than offering a picker, so it has to be selected or
+      // Record would never enable. With two or more, picking the first on
+      // someone's behalf is how money lands in the wrong account without
+      // anyone noticing — leave it unset and let Record stay disabled until
+      // an account is actually chosen.
+      return accounts.length === 1 ? accounts[0].id : null;
+    });
   }, [accounts]);
   // A dropdown rather than the same pill-chip style used for the Same
   // amount/Per person mode toggle just below it — the two looked like one
@@ -300,7 +313,7 @@ export default function RecordContributionsScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 96, gap: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: sheetBottomInset + 96, gap: 16 }}
         keyboardShouldPersistTaps="handled"
       >
         {/* Bank account */}
@@ -526,7 +539,7 @@ export default function RecordContributionsScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { borderTopColor: colors.border, paddingBottom: insets.bottom + 12, backgroundColor: colors.background }]}>
+      <View style={[styles.footer, { borderTopColor: colors.border, paddingBottom: sheetBottomInset + 12, backgroundColor: colors.background }]}>
         <Pressable
           onPress={record}
           disabled={!canRecord}
