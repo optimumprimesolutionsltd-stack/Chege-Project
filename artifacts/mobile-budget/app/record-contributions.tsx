@@ -316,8 +316,11 @@ export default function RecordContributionsScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: sheetBottomInset + 96, gap: 16 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Bank account */}
-        <View style={styles.block}>
+        {/* Bank account — its own panel. Every part of this form used to run
+            together as one column of unlabelled controls, so where the money
+            lands read as just another field rather than the decision it is. */}
+        <View style={[styles.block, styles.sectionCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionHeading, { color: colors.primary }]}>WHERE IT LANDS</Text>
           <Text style={[styles.label, { color: colors.foreground }]}>Bank account</Text>
           {accounts.length === 0 && !addingAccount ? (
             <Text style={[styles.notice, { borderColor: colors.border, color: colors.mutedForeground }]}>
@@ -419,7 +422,12 @@ export default function RecordContributionsScreen() {
           />
         )}
 
-        {/* Mode */}
+        {/* Mode — the toggle and the two sentences that explain it belong
+            together in one panel. Loose in the column they read as unrelated
+            chips, and the rule that matters (everyone starts ticked) was easy
+            to skim past. */}
+        <View style={[styles.block, styles.sectionCard, { borderColor: colors.primary + '55', backgroundColor: colors.primary + '0A' }]}>
+        <Text style={[styles.sectionHeading, { color: colors.primary }]}>HOW MUCH EACH PERSON PAID</Text>
         <View style={styles.chips}>
           {(['simple', 'advanced'] as const).map((option) => {
             const on = mode === option;
@@ -447,6 +455,7 @@ export default function RecordContributionsScreen() {
             ? 'Same amount: everyone paid the same — type it once below. Switching to Per person fills every row with it.'
             : 'Per person: each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing.'}
         </Text>
+        </View>
 
         {mode === 'simple' && (
           <View style={styles.block}>
@@ -560,6 +569,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
   title: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   block: { gap: 6 },
+  sectionCard: { borderWidth: 1, borderRadius: 12, padding: 12 },
+  sectionHeading: { fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 0.6 },
   label: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   row: { flexDirection: 'row', gap: 12, alignItems: 'flex-end' },
   field: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 44, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12 },
