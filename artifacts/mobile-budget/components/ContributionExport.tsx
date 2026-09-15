@@ -292,11 +292,21 @@ export function ContributionExport() {
       // connection for a 500 sends people to restart their router.
       const status = (error as { response?: { status?: number }; status?: number } | null)?.response?.status
         ?? (error as { status?: number } | null)?.status;
+      // The reason was thrown away and replaced with a guess, so three rounds
+      // of "still not working" told nobody anything. Whatever actually failed
+      // — the request, writing the file, or the share sheet — says so here.
+      const detail = error instanceof Error ? error.message : String(error);
       Alert.alert(
         'Could not create the report',
-        status != null && status >= 500
-          ? 'The report could not be generated on the server. This is our fault, not yours — please try again shortly.'
-          : 'The PDF could not be generated. Check your connection and try again.',
+        [
+          status != null && status >= 500
+            ? 'The server could not build the report.'
+            : status != null
+              ? `The server refused the request (${status}).`
+              : 'The report failed on this phone, not on the server.',
+          '',
+          detail,
+        ].join('\n'),
       );
     } finally {
       setBusy(null);
