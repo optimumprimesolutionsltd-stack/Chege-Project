@@ -23,15 +23,13 @@ services:
     region: frankfurt
     plan: starter
     branch: main
-    # Every push to main goes live. This is correct while there is no preview
-    # environment to check against. When jamvi-preview exists, turn this off so
-    # main lands on preview first and production is promoted deliberately.
-    # Production does not move on its own. Two agents push to main, and with
-    # autoDeploy on, whatever either of them landed was live in three minutes
-    # with nobody deciding — including, on 31 August, a sync commit that
-    # reverted a day of work and this very setting, then shipped itself.
-    # Pushes still reach GitHub and still run CI; a person presses Deploy.
-    autoDeploy: false
+    # Every push to main goes live within minutes, with no human review step
+    # in between. This was turned off after an incident on 31 August: a sync
+    # commit reverted a day of work and this very setting, then auto-deployed
+    # itself to production before anyone noticed. Turned back on 16 September
+    # by explicit request, accepting that risk. If a bad commit reaches main
+    # unreviewed again, this is why it went live.
+    autoDeploy: true
     buildCommand: corepack pnpm@11.20.0 install --frozen-lockfile --prod=false --config.strictDepBuilds=false && corepack pnpm@11.20.0 run build:render
     startCommand: corepack pnpm@11.20.0 --filter @workspace/api-server run start
     healthCheckPath: /api/healthz
