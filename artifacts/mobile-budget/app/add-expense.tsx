@@ -1467,10 +1467,8 @@ export default function AddExpenseSheet() {
             value={amount}
             onChangeText={setAmount}
             // Deliberately not autoFocus. This screen is a formSheet opening at
-            // an 0.85 detent; focusing on mount raised the keyboard, scrolled
-            // the content down past the date section, and left no way back —
-            // an upward drag at the top resizes the sheet instead of scrolling
-            // its content, so the top of the form was simply unreachable.
+            // an 0.85 detent; focusing on mount raised the keyboard and scrolled
+            // the content down past the date section immediately.
           />
         </View>
 
