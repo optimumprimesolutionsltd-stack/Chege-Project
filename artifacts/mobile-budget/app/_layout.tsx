@@ -291,6 +291,11 @@ function RootLayoutNav() {
           presentation: 'formSheet',
           sheetAllowedDetents: [0.85, 1],
           sheetGrabberVisible: true,
+          // iOS defaults this to true: reaching either edge of the content
+          // hands the drag to the sheet, which expands it a detent instead of
+          // letting the ScrollView keep scrolling — felt like scrolling had
+          // stopped working. The content already scrolls fine on its own.
+          sheetExpandsWhenScrolledToEdge: false,
           headerShown: false,
           contentStyle: { backgroundColor: 'transparent' },
         }}
@@ -301,6 +306,7 @@ function RootLayoutNav() {
           presentation: 'formSheet',
           sheetAllowedDetents: [0.9, 1],
           sheetGrabberVisible: true,
+          sheetExpandsWhenScrolledToEdge: false,
           headerShown: false,
           contentStyle: { backgroundColor: 'transparent' },
         }}
@@ -311,6 +317,7 @@ function RootLayoutNav() {
           presentation: 'formSheet',
           sheetAllowedDetents: [0.85, 1],
           sheetGrabberVisible: true,
+          sheetExpandsWhenScrolledToEdge: false,
           headerShown: false,
           contentStyle: { backgroundColor: 'transparent' },
         }}
