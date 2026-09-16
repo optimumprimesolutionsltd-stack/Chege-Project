@@ -253,6 +253,63 @@ const priorityGuide: Record<number, string> = {
   999: "Spending recorded without a matching budget category yet.",
 };
 
+/**
+ * The "Inside this category" box listing a parent's subcategories.
+ *
+ * Shared by the funded-category card and the no-spending-yet card below it:
+ * a subcategory is just as real before its parent has recorded any spending
+ * this month, so both cards need to be able to show it.
+ */
+function CategoryLedgers({
+  ledgers,
+  categoryName,
+  categoryBudgetAmount,
+  isBudgeted,
+  spentByCategoryName,
+  onSelectLedger,
+}: {
+  ledgers: BudgetCategory[];
+  categoryName: string;
+  categoryBudgetAmount: number;
+  isBudgeted: boolean;
+  spentByCategoryName: Map<string, number>;
+  onSelectLedger: (ledger: BudgetCategory) => void;
+}) {
+  if (ledgers.length === 0) return null;
+  const allocated = ledgers.reduce((sum, ledger) => sum + ledger.budgetAmount, 0);
+  const unallocated = categoryBudgetAmount - allocated;
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/30 p-3" data-testid={`budget-ledgers-${categoryName}`}>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inside this category</p>
+      <ul className="space-y-1.5">
+        {ledgers.map(ledger => (
+          <li key={ledger.id} className="flex items-baseline justify-between gap-3 text-sm">
+            <button
+              type="button"
+              className="min-w-0 truncate text-left text-foreground hover:underline"
+              onClick={() => onSelectLedger(ledger)}
+              data-testid={`budget-ledger-child-${ledger.name}`}
+            >
+              {ledger.name}
+            </button>
+            <span className="shrink-0 tabular-nums text-muted-foreground">
+              {formatKes(spentByCategoryName.get(ledger.name) ?? 0)}
+              {ledger.budgetAmount > 0 ? ` / ${formatKes(ledger.budgetAmount)}` : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {isBudgeted && unallocated !== 0 ? (
+        <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+          {unallocated > 0
+            ? <>Unallocated: <span className="tabular-nums font-medium">{formatKes(unallocated)}</span></>
+            : <>These add up to <span className="tabular-nums font-medium">{formatKes(Math.abs(unallocated))}</span> more than the category budget.</>}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function CategoryDialog({
   open, onClose, initial, onSaved, reportMonth, reportYear, defaultPriority = 1,
   recurringSetup = false, defaultName = "", defaultAmount = "", tiers,
@@ -1430,45 +1487,19 @@ export default function Budget() {
                             <Progress value={Math.min(cat.percentUsed, 100)} indicatorColor={isOver ? "hsl(var(--destructive))" : isNear ? "hsl(var(--secondary))" : cat.color || "hsl(var(--primary))"} className="h-2" />
                             <div className="flex justify-end text-xs font-medium text-muted-foreground">{Math.round(cat.percentUsed)}%</div>
                           </div>
-                          {(() => {
-                            const ledgers = fullCat ? childrenByParentId.get(fullCat.id) ?? [] : [];
-                            // In Advanced each of these is its own row further
-                            // up, so repeating them here would say everything
-                            // twice.
-                            if (showChildrenAsRows || ledgers.length === 0) return null;
-                            const allocated = ledgers.reduce((sum, ledger) => sum + ledger.budgetAmount, 0);
-                            const unallocated = cat.budgetAmount - allocated;
-                            return (
-                              <div className="rounded-xl border border-border/60 bg-muted/30 p-3" data-testid={`budget-ledgers-${cat.category}`}>
-                                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inside this category</p>
-                                <ul className="space-y-1.5">
-                                  {ledgers.map(ledger => (
-                                    <li key={ledger.id} className="flex items-baseline justify-between gap-3 text-sm">
-                                      <button
-                                        type="button"
-                                        className="min-w-0 truncate text-left text-foreground hover:underline"
-                                        onClick={() => setLedgerCategory({ category: ledger.name, isBudgeted: ledger.budgetAmount > 0 })}
-                                        data-testid={`budget-ledger-child-${ledger.name}`}
-                                      >
-                                        {ledger.name}
-                                      </button>
-                                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                                        {formatKes(spentByCategoryName.get(ledger.name) ?? 0)}
-                                        {ledger.budgetAmount > 0 ? ` / ${formatKes(ledger.budgetAmount)}` : ""}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                                {cat.isBudgeted && unallocated !== 0 ? (
-                                  <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
-                                    {unallocated > 0
-                                      ? <>Unallocated: <span className="tabular-nums font-medium">{formatKes(unallocated)}</span></>
-                                      : <>These add up to <span className="tabular-nums font-medium">{formatKes(Math.abs(unallocated))}</span> more than the category budget.</>}
-                                  </p>
-                                ) : null}
-                              </div>
-                            );
-                          })()}
+                          {/* In Advanced each of these is its own row further
+                              up, so repeating them here would say everything
+                              twice. */}
+                          {!showChildrenAsRows && (
+                            <CategoryLedgers
+                              ledgers={fullCat ? childrenByParentId.get(fullCat.id) ?? [] : []}
+                              categoryName={cat.category}
+                              categoryBudgetAmount={cat.budgetAmount}
+                              isBudgeted={cat.isBudgeted}
+                              spentByCategoryName={spentByCategoryName}
+                              onSelectLedger={(ledger) => setLedgerCategory({ category: ledger.name, isBudgeted: ledger.budgetAmount > 0 })}
+                            />
+                          )}
                            <Button
                              variant="outline"
                              className="w-full justify-between"
@@ -1513,6 +1544,16 @@ export default function Budget() {
                           ) : null}
                         </div>
                         <Progress value={0} className="h-2" />
+                        {!showChildrenAsRows && (
+                          <CategoryLedgers
+                            ledgers={childrenByParentId.get(cat.id) ?? []}
+                            categoryName={cat.name}
+                            categoryBudgetAmount={cat.budgetAmount}
+                            isBudgeted={true}
+                            spentByCategoryName={spentByCategoryName}
+                            onSelectLedger={(ledger) => setLedgerCategory({ category: ledger.name, isBudgeted: ledger.budgetAmount > 0 })}
+                          />
+                        )}
                         <Button
                           variant="outline"
                           className="w-full justify-between"
