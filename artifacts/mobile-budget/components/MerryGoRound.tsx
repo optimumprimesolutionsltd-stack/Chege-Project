@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextIn
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { customFetch, getGetJointAccountQueryKey, getGetJointAccountsQueryKey } from '@workspace/api-client-react';
+import { customFetch, getGetJointAccountQueryKey, getGetJointAccountsQueryKey, useGetJointAccounts } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import { handleLapsedError } from '@/lib/lapsedError';
@@ -63,11 +63,22 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
   const [date, setDate] = useState(todayIso);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [note, setNote] = useState('');
+
+  // Which account the money left is the basis of reconciling the round later,
+  // so it is chosen rather than defaulted. With one account there is nothing
+  // to choose and it resolves on its own; with more, the payout cannot be
+  // recorded until one is named.
+  const { data: bankAccounts = [] } = useGetJointAccounts();
+  const [accountId, setAccountId] = useState<number | null>(null);
+  const soleAccountId = bankAccounts.length === 1 ? bankAccounts[0].id : null;
+  const effectiveAccountId = accountId ?? soleAccountId;
+
   const resetForm = () => {
     setRecipientId(null);
     setAmount('');
     setDate(todayIso());
     setNote('');
+    setAccountId(null);
   };
 
   const recordPayout = useMutation({
@@ -79,6 +90,7 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
           contributorId: recipientId,
           amount: Math.round(Number(amount)),
           date,
+          accountId: effectiveAccountId ?? undefined,
           note: note.trim() || undefined,
         }),
       }),
@@ -169,6 +181,14 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       Alert.alert('Enter the date as YYYY-MM-DD.');
+      return;
+    }
+    if (bankAccounts.length === 0) {
+      Alert.alert('No bank account', 'A payout leaves a bank account. Add one first.');
+      return;
+    }
+    if (!effectiveAccountId) {
+      Alert.alert('Choose the account', 'Say which bank account this payout comes out of.');
       return;
     }
     recordPayout.mutate();
@@ -326,6 +346,43 @@ export function MerryGoRound({ canManage = false }: { canManage?: boolean }) {
                 />
               )}
 
+              <Text style={[styles.label, { color: colors.foreground }]}>
+                Paid from <Text style={{ color: '#ef4444' }}>*</Text>
+              </Text>
+              {bankAccounts.length === 0 ? (
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                  A payout leaves a bank account. Add one before recording a round.
+                </Text>
+              ) : bankAccounts.length === 1 ? (
+                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                  Comes out of <Text style={{ color: colors.foreground, fontFamily: 'Inter_600SemiBold' }}>{bankAccounts[0].name}</Text>
+                </Text>
+              ) : (
+                <View style={styles.accountRow}>
+                  {bankAccounts.map((bankAccount) => {
+                    const on = effectiveAccountId === bankAccount.id;
+                    return (
+                      <Pressable
+                        key={bankAccount.id}
+                        onPress={() => setAccountId(bankAccount.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        accessibilityLabel={`Pay from ${bankAccount.name}`}
+                        testID={`payout-account-${bankAccount.id}`}
+                        style={[
+                          styles.accountChip,
+                          { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? colors.primary + '1A' : 'transparent' },
+                        ]}
+                      >
+                        <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular', fontSize: 13 }}>
+                          {bankAccount.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+
               <Text style={[styles.label, { color: colors.foreground }]}>Note (optional)</Text>
               <TextInput
                 value={note}
@@ -400,6 +457,8 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   chipText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   form: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, gap: 8 },
+  accountRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  accountChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, minHeight: 36, justifyContent: 'center' },
   label: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   recipientWrap: { gap: 6 },
   recipient: {
