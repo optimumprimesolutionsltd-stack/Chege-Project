@@ -123,6 +123,7 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   });
 
   await copyPdfkitFontMetrics(distDir);
+  await copyBrandMark(distDir);
 }
 
 /**
@@ -151,6 +152,27 @@ async function copyPdfkitFontMetrics(distDir) {
     await copyFile(path.join(sourceDir, name), path.join(targetDir, name));
   }
   console.log(`Copied ${metrics.length} pdfkit font metrics into dist/data`);
+}
+
+/**
+ * The Jamvi mark that heads every PDF. Same reasoning as the font metrics: a
+ * bundled server cannot reach back into the repository, so a file it needs at
+ * runtime is copied beside it rather than hunted for through relative paths
+ * that happen to work in development.
+ *
+ * A missing mark is not fatal at runtime — the wordmark still prints — so this
+ * warns rather than throws. Nobody should lose a report over a logo.
+ */
+async function copyBrandMark(distDir) {
+  const source = path.resolve(artifactDir, "../jamvi-website/public/branding/jamvi-mark-inline.png");
+  const targetDir = path.join(distDir, "assets");
+  try {
+    await mkdir(targetDir, { recursive: true });
+    await copyFile(source, path.join(targetDir, "jamvi-mark-inline.png"));
+    console.log("Copied the Jamvi mark into dist/assets");
+  } catch (error) {
+    console.warn(`Could not copy the Jamvi mark from ${source}: ${error.message}. PDFs will print the wordmark alone.`);
+  }
 }
 
 buildAll().catch((err) => {
