@@ -25,6 +25,7 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { DebtSummaryCard } from '@/components/DebtSummaryCard';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
@@ -448,6 +449,11 @@ export default function DashboardScreen() {
               </View>
             </View>
           )}
+
+          {/* Debt sits on Home with the same weight savings has. It renders
+              nothing when no debt is tracked, so a household that owes
+              nothing never sees it. */}
+          <DebtSummaryCard />
 
           {isSharedWorkspace && (
             <View style={styles.ringWrap}>
