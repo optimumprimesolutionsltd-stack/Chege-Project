@@ -185,6 +185,7 @@ export default function BudgetChooserScreen() {
     const skipped: MobileOnboardingDraft = {
       usageMode: 'shared',
       persona: null,
+      coupleStage: null,
       budgetDuration: 'ongoing',
       customEndDate: '',
       lastStep: 0,
@@ -697,12 +698,14 @@ function MobileOnboardingFlow({
     budgetDuration: 'month',
     customEndDate: '',
     lastStep: 0,
+    coupleStage: null,
     selectedCategories: [],
     customCategories: [],
     categoryBudgets: {},
     selectedIncomeStreams: [],
     incomeAmounts: {},
     memberContribution: '',
+    expectedMemberCount: '',
   });
   const [customCategory, setCustomCategory] = useState('');
   const [customIncomeStream, setCustomIncomeStream] = useState('');
@@ -725,8 +728,8 @@ function MobileOnboardingFlow({
   }, [user?.id]);
 
   const recommendedCategories = useMemo(
-    () => dedupeCategoryNames([...recommendedCategoriesForPurpose(draft.persona), ...draft.customCategories]),
-    [draft.persona, draft.customCategories],
+    () => dedupeCategoryNames([...recommendedCategoriesForPurpose(draft.persona, draft.coupleStage), ...draft.customCategories]),
+    [draft.persona, draft.coupleStage, draft.customCategories],
   );
   const visibleTiers = useMemo(() => {
     const tiers: Array<{ priority: number; label: string; description: string; categories: string[] }> = ONBOARDING_CATEGORY_TIERS
@@ -844,7 +847,7 @@ function MobileOnboardingFlow({
       setError(`${existing} is already selected.`);
       return;
     }
-    const preset = incomeStreamsForMode(draft.usageMode).find((item) => normalizeIncomeStreamName(item) === normalized);
+    const preset = incomeStreamsForMode(draft.usageMode, draft.persona, draft.coupleStage).find((item) => normalizeIncomeStreamName(item) === normalized);
     updateDraft((current) => ({
       ...current,
       selectedIncomeStreams: dedupeIncomeStreamNames([...current.selectedIncomeStreams, preset ?? value]),
@@ -914,7 +917,42 @@ function MobileOnboardingFlow({
         {step === 1 ? <>
           <Text style={[styles.onboardingQuestion, { color: colors.foreground }]}>{headingName}{isShared ? 'what kind of group is it?' : 'what are you using Jamvi for?'}</Text>
           <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>{isShared ? 'This helps Jamvi recommend the right categories for the group.' : 'This helps Jamvi recommend categories that fit your life instead of showing a generic budget.'}</Text>
-          {purposeOptions.map(([value, title, description]) => <ChoiceRow key={value} testID={`onboarding-purpose-${value}`} title={title} description={description} selected={draft.persona === value} onPress={() => setDraftValue('persona', value)} colors={colors} />)}
+          {purposeOptions.map(([value, title, description]) => <ChoiceRow key={value} testID={`onboarding-purpose-${value}`} title={title} description={description} selected={draft.persona === value} onPress={() => updateDraft((current) => ({ ...current, persona: value, coupleStage: value === 'couple' ? current.coupleStage : null }))} colors={colors} />)}
+
+          {/* A couple sharing bills already and a couple still saving for the
+              wedding need different categories and income sources — one is
+              pooled household money, the other is each person's own money set
+              aside for one event. */}
+          {isShared && draft.persona === 'couple' ? (
+            <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.choiceTitle, { color: colors.foreground }]}>Living together, or planning a wedding?</Text>
+              {([
+                ['together', 'Living together', 'Sharing bills and everyday household money.'],
+                ['wedding', 'Planning a wedding', 'Saving and paying for the wedding itself.'],
+              ] as const).map(([value, title, description]) => (
+                <ChoiceRow key={value} testID={`onboarding-couple-stage-${value}`} title={title} description={description} selected={draft.coupleStage === value} onPress={() => setDraftValue('coupleStage', value)} colors={colors} />
+              ))}
+            </View>
+          ) : null}
+
+          {/* Asked for every shared type, not just couples: a family of two
+              and a family of eight are different budgets, and a chama of
+              five plans differently from one of fifty. */}
+          {isShared && draft.persona ? (
+            <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.choiceTitle, { color: colors.foreground }]}>How many people do you expect in this group?</Text>
+              <Text style={[styles.choiceDescription, { color: colors.mutedForeground }]}>A guess is fine — this only steers what Jamvi recommends, not a limit.</Text>
+              <TextInput
+                testID="onboarding-expected-member-count"
+                keyboardType="number-pad"
+                value={draft.expectedMemberCount ?? ''}
+                onChangeText={(value) => setDraftValue('expectedMemberCount', value.replace(/[^0-9]/g, ''))}
+                placeholder="e.g. 2"
+                placeholderTextColor={colors.mutedForeground}
+                style={[styles.onboardingInput, { borderColor: colors.border, color: colors.foreground, marginTop: 8 }]}
+              />
+            </View>
+          ) : null}
         </> : null}
 
         {step === 2 ? <>
@@ -967,9 +1005,13 @@ function MobileOnboardingFlow({
             {headingName}{draft.usageMode === 'shared' ? 'what brings money into the group?' : 'what brings money into your budget?'}
           </Text>
           <Text style={[styles.onboardingHint, { color: colors.mutedForeground }]}>
-            {draft.usageMode === 'shared'
-              ? "Member contributions are usually the main source. Pick what applies — amounts are optional and change later."
-              : 'Choose the sources you rely on. Amounts are optional and can be changed later.'}
+            {draft.usageMode !== 'shared'
+              ? 'Choose the sources you rely on. Amounts are optional and can be changed later.'
+              : draft.persona === 'couple' && draft.coupleStage === 'wedding'
+                ? "Pick every source paying for the wedding — savings, salary, family, gifts. Amounts are optional and change later."
+                : draft.persona === 'couple' || draft.persona === 'friends' || draft.persona === 'family'
+                  ? "Pick every income source that funds this together — amounts are optional and change later."
+                  : "Member contributions are usually the main source. Pick what applies — amounts are optional and change later."}
           </Text>
           {isShared ? (
             <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 0 }]}>
@@ -992,7 +1034,7 @@ function MobileOnboardingFlow({
               </View>
             </View>
           ) : null}
-          {incomeStreamsForMode(draft.usageMode).map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
+          {incomeStreamsForMode(draft.usageMode, draft.persona, draft.coupleStage).map((income) => <ChoiceRow key={income} testID={`onboarding-income-${income}`} title={income} selected={draft.selectedIncomeStreams.includes(income)} onPress={() => toggleIncome(income)} colors={colors} />)}
           {draft.selectedIncomeStreams.length > 0 ? <View style={styles.incomeAmountList}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Expected monthly amount (optional)</Text>{draft.selectedIncomeStreams.map((income) => <View key={income} style={[styles.incomeAmountRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.amountLabel, { color: colors.foreground }]}>{income}</Text><View style={styles.amountInputWrap}><Text style={[styles.currency, { color: colors.mutedForeground }]}>KES</Text><TextInput testID={`onboarding-income-amount-${income}`} keyboardType="decimal-pad" value={draft.incomeAmounts[income] ?? ''} onChangeText={(value) => setDraftValue('incomeAmounts', { ...draft.incomeAmounts, [income]: value.replace(/[^0-9.]/g, '') })} placeholder="0" placeholderTextColor={colors.mutedForeground} style={[styles.amountInput, { borderColor: colors.border, color: colors.foreground }]} /></View></View>)}</View> : null}
           <View style={[styles.customBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Text style={[styles.choiceTitle, { color: colors.foreground }]}>Add another income stream</Text><View style={styles.inlineInput}><TextInput testID="onboarding-custom-income" value={customIncomeStream} onChangeText={setCustomIncomeStream} onSubmitEditing={addCustomIncome} placeholder="e.g. dividends" placeholderTextColor={colors.mutedForeground} style={[styles.onboardingInput, styles.flexInput, { borderColor: colors.border, color: colors.foreground }]} /><Pressable onPress={addCustomIncome} style={[styles.smallButton, { backgroundColor: colors.primary }]}><Text style={[styles.smallButtonText, { color: colors.primaryForeground }]}>Add</Text></Pressable></View></View>
         </> : null}

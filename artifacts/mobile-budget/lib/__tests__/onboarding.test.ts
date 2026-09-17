@@ -6,6 +6,7 @@ import {
   categoryPriority,
   dedupeCategoryNames,
   dedupeIncomeStreamNames,
+  incomeStreamsForMode,
   normalizeOnboardingDraft,
   normalizeIncomeStreamName,
   onboardingDraftStorageKey,
@@ -19,6 +20,7 @@ describe('mobile onboarding', () => {
   const draft: MobileOnboardingDraft = {
     usageMode: 'personal',
     persona: 'student',
+    coupleStage: null,
     budgetDuration: 'month',
     customEndDate: '',
     lastStep: 0,
@@ -28,6 +30,7 @@ describe('mobile onboarding', () => {
     selectedIncomeStreams: [],
     incomeAmounts: {},
     memberContribution: '',
+    expectedMemberCount: '',
   };
 
   it('recommends categories by purpose without preselecting any', () => {
@@ -46,6 +49,38 @@ describe('mobile onboarding', () => {
     expect(recommendedCategoriesForPurpose('student')).toContain('Housing');
     expect(recommendedCategoriesForPurpose('student')).not.toContain('Accommodation');
     expect(recommendedCategoriesForPurpose('student')).not.toContain('Rent');
+  });
+
+  it('gives a couple or family household income sources, not chama dues', () => {
+    const couple = incomeStreamsForMode('shared', 'couple');
+    expect(couple).toContain('Salary or wages');
+    expect(couple).not.toContain('Fines and penalties');
+    expect(couple).not.toContain('Member contributions');
+
+    const chama = incomeStreamsForMode('shared', 'chama');
+    expect(chama).toContain('Member contributions');
+    expect(chama).toContain('Fines and penalties');
+  });
+
+  it('gives a couple planning a wedding wedding-specific income sources', () => {
+    const wedding = incomeStreamsForMode('shared', 'couple', 'wedding');
+    expect(wedding).toContain('Wedding gifts or cash gifts');
+    expect(wedding).toContain('Family contributions');
+    expect(wedding).not.toContain('Fines and penalties');
+  });
+
+  it('ignores persona for a personal budget', () => {
+    expect(incomeStreamsForMode('personal', 'chama')).toContain('Salary or wages');
+  });
+
+  it('recommends wedding categories for a couple planning a wedding, not household bills', () => {
+    const wedding = recommendedCategoriesForPurpose('couple', 'wedding');
+    expect(wedding).toContain('Venue');
+    expect(wedding).not.toContain('Shared bills');
+
+    const together = recommendedCategoriesForPurpose('couple', 'together');
+    expect(together).toContain('Shared bills');
+    expect(together).not.toContain('Venue');
   });
 
   it('scopes saved drafts to the user and restores a valid draft', async () => {

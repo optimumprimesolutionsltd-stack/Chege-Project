@@ -15,6 +15,7 @@ import type { MobileOnboardingDraft } from '../onboarding';
 const draftFor = (usageMode: MobileOnboardingDraft['usageMode']): MobileOnboardingDraft => ({
   usageMode,
   persona: usageMode === 'shared' ? 'chama' : 'family',
+  coupleStage: null,
   budgetDuration: 'month',
   customEndDate: '',
   selectedCategories: ['Food', 'Transport'],
