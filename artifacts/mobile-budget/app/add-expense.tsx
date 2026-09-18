@@ -323,6 +323,14 @@ export default function AddExpenseSheet() {
   const [isAdvanced, setIsAdvanced] = useState(isEditMode);
 
   const categoriesQuery = useGetBudgetCategories();
+  // A form with no categories cannot be completed at all — the required field
+  // has nothing in it — so a failed load is worth chasing rather than leaving
+  // behind a link somebody has to notice. Coming back to the screen retries.
+  useFocusEffect(
+    useCallback(() => {
+      if (categoriesQuery.isError) void categoriesQuery.refetch();
+    }, [categoriesQuery.isError, categoriesQuery.refetch]),
+  );
   const categories = categoriesQuery.data ?? [];
   const { data: members = [] } = useGetMembers();
   const { data: group } = useGetGroup();

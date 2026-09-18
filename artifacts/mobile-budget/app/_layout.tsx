@@ -109,8 +109,18 @@ const queryClient = new QueryClient({
       retry: (failureCount, error) => {
         // Never retry 401s — the session is gone, retrying won't help.
         if (error instanceof ApiError && error.status === 401) return false;
-        return failureCount < 1;
+        // A phone loses its connection constantly: in a lift, on a matatu,
+        // switching from wifi to data. One retry was not enough, and a query
+        // that gave up left a screen stuck on "couldn't load, tap to retry"
+        // until somebody noticed the link. A 4xx other than 401 is an answer,
+        // not a blip, so it is not retried.
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+        return failureCount < 3;
       },
+      retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 8_000),
+      // The commonest fix for a failed load on a phone is simply being back on
+      // the network, or coming back to the screen. Neither should need a tap.
+      refetchOnReconnect: true,
       staleTime: 30_000,
     },
   },
@@ -315,7 +325,11 @@ function RootLayoutNav() {
         name="add-expense"
         options={{
           presentation: 'formSheet',
-          sheetAllowedDetents: [0.85, 1],
+          // Opens full height. At 0.85 the form is taller than the sheet, so
+          // its first fields — the date and the amount's own label — sat above
+          // the visible area with the sheet's own drag competing for the
+          // gesture that would bring them back. A form is not a peek.
+          sheetAllowedDetents: [1],
           sheetGrabberVisible: true,
           // iOS defaults this to true: reaching either edge of the content
           // hands the drag to the sheet, which expands it a detent instead of
@@ -330,7 +344,10 @@ function RootLayoutNav() {
         name="record-contributions"
         options={{
           presentation: 'formSheet',
-          sheetAllowedDetents: [0.9, 1],
+          // Full height, for the same reason as the expense form: these are
+          // forms taller than a partial sheet, and a partial sheet hides their
+          // first fields behind a drag that fights the scroll.
+          sheetAllowedDetents: [1],
           sheetGrabberVisible: true,
           sheetExpandsWhenScrolledToEdge: false,
           headerShown: false,
@@ -341,7 +358,10 @@ function RootLayoutNav() {
         name="contribution-plan"
         options={{
           presentation: 'formSheet',
-          sheetAllowedDetents: [0.85, 1],
+          // Full height, for the same reason as the expense form: these are
+          // forms taller than a partial sheet, and a partial sheet hides their
+          // first fields behind a drag that fights the scroll.
+          sheetAllowedDetents: [1],
           sheetGrabberVisible: true,
           sheetExpandsWhenScrolledToEdge: false,
           headerShown: false,
