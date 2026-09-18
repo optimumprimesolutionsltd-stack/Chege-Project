@@ -685,6 +685,23 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
   const { category } = parsed.data;
   const isBudgeted = rawIsBudgeted === "true";
 
+  // The ledger could only ever answer "this month". A ledger is the thing
+  // somebody opens to settle an argument about what was spent between two
+  // dates, so it takes an exact `?from=&to=` range, defaulting to the month it
+  // already showed — every existing caller asks for exactly what it did before.
+  const { from: askedFrom, to: askedTo } = parsed.data;
+  if ((askedFrom == null) !== (askedTo == null)) {
+    // One bare end would quietly answer about a different span than was asked
+    // for, and a ledger that answers the wrong question is worse than no ledger.
+    res.status(400).json({ error: "Give both a start and an end date, or neither." });
+    return;
+  }
+  const range = askedFrom != null && askedTo != null
+    ? (askedFrom <= askedTo ? { from: askedFrom, to: askedTo } : { from: askedTo, to: askedFrom })
+    : null;
+  const ledgerFrom = range?.from ?? `${year}-${String(month).padStart(2, "0")}-01`;
+  const ledgerTo = range?.to ?? new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+
   const [activeCategories, expenses, disbursements, allocations] = await Promise.all([
     db
       .select({ name: budgetCategoriesTable.name })
@@ -702,7 +719,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
       })
       .from(expensesTable)
       .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
-      .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`),
+      .where(sql`${expensesTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${ledgerFrom} AND ${expensesTable.date} <= ${ledgerTo}`),
     db
       .select({
         id: jointAccountTxTable.id,
@@ -714,7 +731,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
       })
       .from(jointAccountTxTable)
       .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`),
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${jointAccountTxTable.date} >= ${ledgerFrom} AND ${jointAccountTxTable.date} <= ${ledgerTo}`),
     db.select({
       expenseId: expenseCategoryAllocationsTable.expenseId,
       category: expenseCategoryAllocationsTable.category,
@@ -725,7 +742,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
         eq(expenseCategoryAllocationsTable.expenseId, expensesTable.id),
         eq(expenseCategoryAllocationsTable.groupId, expensesTable.groupId),
       ))
-      .where(sql`${expenseCategoryAllocationsTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
+      .where(sql`${expenseCategoryAllocationsTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${ledgerFrom} AND ${expensesTable.date} <= ${ledgerTo}`)
       .orderBy(expenseCategoryAllocationsTable.position),
   ]);
 

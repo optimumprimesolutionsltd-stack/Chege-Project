@@ -186,3 +186,66 @@ describe("GET /dashboard/category-ledger", () => {
     }]);
   });
 });
+// A ledger is what somebody opens to settle an argument about what was spent
+// between two dates. This one could only ever answer "this calendar month".
+describe("the span the ledger answers about", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /** Every date bound handed to the SQL builder, in the order it was built. */
+  function boundsAskedFor(): string[] {
+    return sqlMock.mock.calls
+      .flatMap((call) => call.slice(1) as unknown[])
+      .filter((value): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value));
+  }
+
+  async function askLedger(query: string) {
+    queueLedgerQueries([{ name: "Food" }], [], []);
+    const response = await request(buildApp()).get(`/dashboard/category-ledger?${query}`);
+    expect(response.status).toBe(200);
+    return boundsAskedFor();
+  }
+
+  it("still answers about the whole month when no dates are given", async () => {
+    // Every caller that existed before the range did asks for exactly this.
+    const bounds = await askLedger("month=2&year=2024&category=Food&isBudgeted=true");
+    expect(bounds).toContain("2024-02-01");
+    // 2024 is a leap year — the last day is found, not assumed to be the 28th.
+    expect(bounds).toContain("2024-02-29");
+    expect(bounds).not.toContain("2024-03-01");
+  });
+
+  it("answers about the exact days asked for", async () => {
+    const bounds = await askLedger("month=8&year=2026&category=Food&isBudgeted=true&from=2026-08-10&to=2026-09-05");
+    expect(bounds).toContain("2026-08-10");
+    expect(bounds).toContain("2026-09-05");
+    // The month it was opened from no longer bounds it.
+    expect(bounds).not.toContain("2026-08-31");
+  });
+
+  it("reads a backwards range as the span between the two dates", async () => {
+    const bounds = await askLedger("month=8&year=2026&category=Food&isBudgeted=true&from=2026-09-05&to=2026-08-10");
+    expect(bounds).toContain("2026-08-10");
+    expect(bounds).toContain("2026-09-05");
+  });
+
+  it("refuses half a range rather than answering about a different span", async () => {
+    for (const half of ["from=2026-08-10", "to=2026-09-05"]) {
+      vi.clearAllMocks();
+      queueLedgerQueries([{ name: "Food" }], [], []);
+      const response = await request(buildApp())
+        .get(`/dashboard/category-ledger?month=8&year=2026&category=Food&isBudgeted=true&${half}`);
+      expect(response.status).toBe(400);
+      // A ledger that quietly answers the wrong question is worse than none.
+      expect(boundsAskedFor()).toEqual([]);
+    }
+  });
+
+  it("refuses a date it cannot read", async () => {
+    queueLedgerQueries([{ name: "Food" }], [], []);
+    const response = await request(buildApp())
+      .get("/dashboard/category-ledger?month=8&year=2026&category=Food&isBudgeted=true&from=last-tuesday&to=2026-09-05");
+    expect(response.status).toBe(400);
+  });
+});

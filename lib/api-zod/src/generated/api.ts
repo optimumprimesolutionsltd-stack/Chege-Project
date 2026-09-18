@@ -703,13 +703,17 @@ export const GetDashboardCategoryBreakdownResponse = zod.array(GetDashboardCateg
 export const getDashboardCategoryLedgerQueryMonthMax = 12;
 
 
+export const getDashboardCategoryLedgerQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getDashboardCategoryLedgerQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const GetDashboardCategoryLedgerQueryParams = zod.object({
   "month": zod.coerce.number().min(1).max(getDashboardCategoryLedgerQueryMonthMax).optional(),
   "year": zod.coerce.number().optional(),
   "category": zod.coerce.string().min(1),
-  "isBudgeted": zod.coerce.boolean().describe('Whether this is an active budget category or the synthetic Unbudgeted spending row')
+  "isBudgeted": zod.coerce.boolean().describe('Whether this is an active budget category or the synthetic Unbudgeted spending row'),
+  "from": zod.coerce.string().regex(getDashboardCategoryLedgerQueryFromRegExp).optional().describe('Start of an exact day range (YYYY-MM-DD). Given with `to`, the ledger covers those days instead of the whole month.'),
+  "to": zod.coerce.string().regex(getDashboardCategoryLedgerQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.')
 })
 
 export const GetDashboardCategoryLedgerResponse = zod.object({

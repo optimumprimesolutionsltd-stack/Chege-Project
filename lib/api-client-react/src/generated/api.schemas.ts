@@ -1608,6 +1608,16 @@ category: string;
  * Whether this is an active budget category or the synthetic Unbudgeted spending row
  */
 isBudgeted: boolean;
+/**
+ * Start of an exact day range (YYYY-MM-DD). Given with `to`, the ledger covers those days instead of the whole month.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * End of the day range (YYYY-MM-DD), inclusive.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
 };
 
 export type GetDashboardIncomeStreamsParams = {
