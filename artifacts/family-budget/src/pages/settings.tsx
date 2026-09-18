@@ -26,7 +26,8 @@ import { GroupInviteLinks } from "@/components/group-invite-links";
 import { ReadOnlyLink } from "@/components/read-only-link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getGetMembersQueryKey } from "@workspace/api-client-react";
-import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Moon, Palette, Pencil, Star, Sun, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X } from "lucide-react";
+import { Award, BriefcaseBusiness, Camera, Heart, Home, LockKeyhole, LogOut, Moon, Palette, Pencil, Star, Sun, Trash2, UserPlus, Users, Shield, Send, RotateCcw, X, MessageSquare } from "lucide-react";
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WORKSPACE_NAME_STYLES, workspaceNameClass } from "@/lib/workspace-identity";
 import type { WorkspaceNameStyle } from "@workspace/api-client-react";
@@ -103,6 +104,7 @@ async function optimizePhotoForUpload(file: File): Promise<File> {
 export default function Settings() {
   const { user, logout, saveDisplayName, saveProfilePhoto } = useAuth();
   const [confirmingDeleteAccount, setConfirmingDeleteAccount] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [deletionStep, setDeletionStep] = useState<"intro" | "code">("intro");
   const [deletionCode, setDeletionCode] = useState("");
   const [sendingDeletionCode, setSendingDeletionCode] = useState(false);
@@ -1381,6 +1383,29 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Send feedback</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Tell us what's working, what's not, or what would make Jamvi more useful.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto sm:shrink-0"
+              onClick={() => setFeedbackOpen(true)}
+              data-testid="send-feedback"
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Send feedback
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} context="settings" />
 
       <Card>
         <CardContent className="p-5">
