@@ -666,6 +666,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/CategoryLedger"
 
+  /dashboard/spending-by-item:
+    get:
+      operationId: getDashboardSpendingByItem
+      tags: [dashboard]
+      summary: What was spent on each named thing, rather than on each category
+      description: >-
+        Groups expenses by their description, so "how much have I spent on
+        Netflix" has an answer even though nobody budgets a category called
+        Netflix. Grouping ignores case and surrounding spaces. With no date
+        range the answer covers the last twelve months.
+      parameters:
+        - name: from
+          in: query
+          description: >-
+            Start of an exact day range (YYYY-MM-DD). Must be given together
+            with `to`.
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+        - name: to
+          in: query
+          description: End of the day range (YYYY-MM-DD), inclusive.
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+        - name: q
+          in: query
+          description: Narrows the list to names containing this text, ignoring case.
+          schema:
+            type: string
+        - name: category
+          in: query
+          description: Narrows the list to things charged to this category.
+          schema:
+            type: string
+            minLength: 1
+        - name: item
+          in: query
+          description: >-
+            One thing by name, ignoring case and surrounding spaces. The
+            response then carries the individual expenses behind its total.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Totals per named thing, largest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpendingByItem"
+
   /dashboard/income-streams:
     get:
       operationId: getDashboardIncomeStreams
@@ -2564,6 +2616,89 @@ components:
       required:
         - category
         - total
+        - entries
+
+    SpendingByItemRow:
+      type: object
+      properties:
+        description:
+          type: string
+          description: The name as it was last typed, standing for every spelling of it
+        total:
+          type: number
+        count:
+          type: number
+          description: How many separate expenses make up the total
+        firstDate:
+          type: string
+        lastDate:
+          type: string
+        categories:
+          type: array
+          description: Every category this thing has been charged to
+          items:
+            type: string
+      required:
+        - description
+        - total
+        - count
+        - firstDate
+        - lastDate
+        - categories
+
+    SpendingByItemEntry:
+      type: object
+      properties:
+        id:
+          type: number
+        date:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+        category:
+          type: string
+        paidFromBank:
+          type: boolean
+        payerName:
+          type: string
+      required:
+        - id
+        - date
+        - description
+        - amount
+        - category
+        - paidFromBank
+        - payerName
+
+    SpendingByItem:
+      type: object
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        total:
+          type: number
+          description: The total of the rows listed, which the 200-row cap may have shortened
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpendingByItemRow"
+        entries:
+          type: array
+          nullable: true
+          description: >-
+            The individual expenses behind one thing's total. Null unless
+            `item` named one.
+          items:
+            $ref: "#/components/schemas/SpendingByItemEntry"
+      required:
+        - from
+        - to
+        - total
+        - items
         - entries
 
     IncomeStreamReport:

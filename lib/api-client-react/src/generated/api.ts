@@ -58,6 +58,7 @@ import type {
   GetDashboardIncomeStreamsParams,
   GetDashboardMonthlyReportPdfParams,
   GetDashboardPeriodTotalsParams,
+  GetDashboardSpendingByItemParams,
   GetDashboardSummaryParams,
   GetDashboardTrendsParams,
   GetExpensesParams,
@@ -93,6 +94,7 @@ import type {
   SavingsGoalUpdateInput,
   SavingsTransferInput,
   SharedGroupInput,
+  SpendingByItem,
   SuccessResponse,
   UpdateGroupInput,
   UpdateJointAccountTransactionInput,
@@ -1996,6 +1998,91 @@ export function useGetDashboardCategoryLedger<TData = Awaited<ReturnType<typeof 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardCategoryLedgerQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardSpendingByItemUrl = (params?: GetDashboardSpendingByItemParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/spending-by-item?${stringifiedParams}` : `/api/dashboard/spending-by-item`
+}
+
+/**
+ * Groups expenses by their description, so "how much have I spent on Netflix" has an answer even though nobody budgets a category called Netflix. Grouping ignores case and surrounding spaces. With no date range the answer covers the last twelve months.
+ * @summary What was spent on each named thing, rather than on each category
+ */
+export const getDashboardSpendingByItem = async (params?: GetDashboardSpendingByItemParams, options?: Parameters<typeof customFetch>[1]): Promise<SpendingByItem> => {
+
+  return customFetch<SpendingByItem>(getGetDashboardSpendingByItemUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardSpendingByItemQueryKey = (params?: GetDashboardSpendingByItemParams,) => {
+    return [
+    `/api/dashboard/spending-by-item`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardSpendingByItemQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardSpendingByItem>>, TError = ErrorType<unknown>>(params?: GetDashboardSpendingByItemParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardSpendingByItem>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardSpendingByItemQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardSpendingByItem>>> = ({ signal }) => getDashboardSpendingByItem(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardSpendingByItem>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardSpendingByItemQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardSpendingByItem>>>
+export type GetDashboardSpendingByItemQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary What was spent on each named thing, rather than on each category
+ */
+
+export function useGetDashboardSpendingByItem<TData = Awaited<ReturnType<typeof getDashboardSpendingByItem>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardSpendingByItemParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardSpendingByItem>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardSpendingByItemQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

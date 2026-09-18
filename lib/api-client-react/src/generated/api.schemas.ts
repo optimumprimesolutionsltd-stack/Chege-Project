@@ -544,6 +544,38 @@ export interface CategoryLedger {
   entries: CategoryLedgerEntry[];
 }
 
+export interface SpendingByItemRow {
+  /** The name as it was last typed, standing for every spelling of it */
+  description: string;
+  total: number;
+  /** How many separate expenses make up the total */
+  count: number;
+  firstDate: string;
+  lastDate: string;
+  /** Every category this thing has been charged to */
+  categories: string[];
+}
+
+export interface SpendingByItemEntry {
+  id: number;
+  date: string;
+  description: string;
+  amount: number;
+  category: string;
+  paidFromBank: boolean;
+  payerName: string;
+}
+
+export interface SpendingByItem {
+  from: string;
+  to: string;
+  /** The total of the rows listed, which the 200-row cap may have shortened */
+  total: number;
+  items: SpendingByItemRow[];
+  /** The individual expenses behind one thing's total. Null unless `item` named one. */
+  entries: SpendingByItemEntry[] | null;
+}
+
 export type IncomeStreamEntryRecordType = typeof IncomeStreamEntryRecordType[keyof typeof IncomeStreamEntryRecordType];
 
 
@@ -1618,6 +1650,33 @@ from?: string;
  * @pattern ^\d{4}-\d{2}-\d{2}$
  */
 to?: string;
+};
+
+export type GetDashboardSpendingByItemParams = {
+/**
+ * Start of an exact day range (YYYY-MM-DD). Must be given together with `to`.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * End of the day range (YYYY-MM-DD), inclusive.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
+/**
+ * Narrows the list to names containing this text, ignoring case.
+ */
+q?: string;
+/**
+ * Narrows the list to things charged to this category.
+ * @minLength 1
+ */
+category?: string;
+/**
+ * One thing by name, ignoring case and surrounding spaces. The response then carries the individual expenses behind its total.
+ * @minLength 1
+ */
+item?: string;
 };
 
 export type GetDashboardIncomeStreamsParams = {
