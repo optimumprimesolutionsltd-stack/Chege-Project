@@ -120,6 +120,7 @@ export * from './savingsGoalUpdateInput';
 export * from './savingsTransferInput';
 export * from './sharedGroupInput';
 export * from './sharedGroupInputNameStyle';
+export * from './sharedGroupInputPurpose';
 export * from './successResponse';
 export * from './updateGroupInput';
 export * from './updateGroupInputAccentColor';

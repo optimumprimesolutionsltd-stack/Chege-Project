@@ -59,6 +59,47 @@ const DEFAULTS: Record<string, readonly BudgetSection[]> = {
   other: ALL_BUDGET_SECTIONS,
 };
 
+/**
+ * What a budget is mainly for, as answered during onboarding.
+ *
+ * Mirrors BudgetGoal in the mobile client; kept here because the sections a
+ * budget starts with are decided from it and both sides need the same rule.
+ */
+export type BudgetPurpose = "budgeting" | "saving" | "debt";
+
+/**
+ * Whether budgeting applies, given what the budget is for.
+ *
+ * Budgeting without amounts is worse than no budgeting: the tab reads
+ * "KES 0 of KES 0 (0%)", every category looks on track, and the over-budget
+ * warnings mean nothing — the app looks broken rather than empty. Somebody
+ * here to save towards something, or to clear a loan, is not going to sit down
+ * and set a monthly ceiling per category, so offering them the machinery is
+ * offering them that failure.
+ *
+ * Off is not permanent. The setting is one switch, and a budget that later
+ * gains an actual amount surfaces the tab on its own — the same way the Debt
+ * tab appears once a debt is tracked. Nobody is trapped by an answer they gave
+ * before they knew what the app did.
+ */
+export function budgetingAppliesTo(purpose: BudgetPurpose | null | undefined): boolean {
+  return purpose !== "saving" && purpose !== "debt";
+}
+
+/**
+ * The sections a new budget starts with, once its purpose is known. Purpose
+ * only ever removes budgeting; everything else the kind decided still stands,
+ * so a chama that never had the budget section is unaffected either way.
+ */
+export function sectionsForKindAndPurpose(
+  kind: string | null | undefined,
+  purpose: BudgetPurpose | null | undefined,
+): readonly BudgetSection[] {
+  const fromKind = defaultSectionsForKind(kind);
+  if (budgetingAppliesTo(purpose)) return fromKind;
+  return fromKind.filter((section) => section !== BUDGET_SECTION.BUDGET);
+}
+
 export function defaultSectionsForKind(kind: string | null | undefined): readonly BudgetSection[] {
   return DEFAULTS[kind ?? ""] ?? ALL_BUDGET_SECTIONS;
 }

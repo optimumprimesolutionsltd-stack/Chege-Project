@@ -6,6 +6,7 @@ import {
   groupsTable,
   resolveEnabledSections,
   defaultSectionsForKind,
+  sectionsForKindAndPurpose,
 } from "@workspace/db";
 import {
   CreateSharedGroupBody,
@@ -103,9 +104,12 @@ router.post("/groups", async (req, res): Promise<void> => {
         nameStyle: parsed.data.nameStyle,
         kind: parsed.data.kind,
         // Seeded from the kind, so a chama opens showing what a chama does and
-        // nobody has to find a setting first. Changeable afterwards; the kind
-        // only decides where it starts.
-        enabledSections: [...defaultSectionsForKind(parsed.data.kind)],
+        // nobody has to find a setting first, then narrowed by what the budget
+        // is for: a budget with no amounts in it reads as zero of zero on
+        // every screen, which looks broken rather than empty. Changeable
+        // afterwards, and the Budget tab returns on its own once any category
+        // carries a real amount.
+        enabledSections: [...sectionsForKindAndPurpose(parsed.data.kind, parsed.data.purpose ?? null)],
         ...(parsed.data.defaultMonthlyTarget !== undefined
           ? { defaultMonthlyTarget: parsed.data.defaultMonthlyTarget }
           : {}),

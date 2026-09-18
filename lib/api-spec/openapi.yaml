@@ -2880,6 +2880,15 @@ components:
             group does not work to a fixed amount.
           type: ["number", "null"]
           minimum: 0
+        purpose:
+          description: >-
+            What this budget is mainly for, as answered during onboarding.
+            Saving and debt start without the budget section: a budget with no
+            amounts in it reads as zero of zero on every screen, which looks
+            broken rather than empty. Changeable afterwards, and the tab
+            returns on its own once any category carries a real amount.
+          type: string
+          enum: [budgeting, saving, debt]
       required: [name]
 
     WorkspaceSelectionInput:

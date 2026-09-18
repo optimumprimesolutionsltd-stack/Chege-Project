@@ -7,6 +7,7 @@
  */
 import type { GroupKind } from './groupKind';
 import type { SharedGroupInputNameStyle } from './sharedGroupInputNameStyle';
+import type { SharedGroupInputPurpose } from './sharedGroupInputPurpose';
 
 export interface SharedGroupInput {
   /**
@@ -27,4 +28,6 @@ export interface SharedGroupInput {
      * @nullable
      */
   defaultMonthlyTarget?: number | null;
+  /** What this budget is mainly for, as answered during onboarding. Saving and debt start without the budget section: a budget with no amounts in it reads as zero of zero on every screen, which looks broken rather than empty. Changeable afterwards, and the tab returns on its own once any category carries a real amount. */
+  purpose?: SharedGroupInputPurpose;
 }

@@ -62,6 +62,29 @@ export type CoupleStage = "together" | "wedding";
  */
 export type BudgetGoal = "budgeting" | "saving" | "debt";
 
+/**
+ * Whether budgeting applies, given what the budget is for.
+ *
+ * Budgeting without amounts is worse than no budgeting: every screen reads
+ * "KES 0 of KES 0 (0%)", every category looks on track, and the over-budget
+ * warnings mean nothing — the app looks broken rather than empty. Somebody
+ * here to save towards something, or to clear a loan, is not going to sit down
+ * and set a monthly ceiling per category, so offering them the machinery is
+ * offering them that failure.
+ *
+ * Off is never permanent: it is one switch in settings, and a budget that
+ * later gains a real amount surfaces the tab on its own, the way the Debt tab
+ * appears once a debt is tracked.
+ *
+ * Mirrors `budgetingAppliesTo` in @workspace/db's budget-sections, which the
+ * server uses to seed a new budget's sections. The phone cannot import that
+ * package without pulling drizzle into the bundle, so the rule is stated in
+ * both places and held together by a test.
+ */
+export function budgetingAppliesTo(goal: BudgetGoal | null | undefined): boolean {
+  return goal !== "saving" && goal !== "debt";
+}
+
 export const BUDGET_GOALS: Record<BudgetGoal, { title: string; description: string }> = {
   budgeting: {
     title: "Keeping track of spending",

@@ -44,7 +44,12 @@ describe('the wizard keeps its place', () => {
     expect(source).toContain('Welcome back — your setup is saved.');
   });
 
-  it('clamps a restored step to the six that exist', () => {
-    expect(source).toContain('Math.max(0, Math.min(5, saved.lastStep ?? 0))');
+  it('clamps a restored step to the ones that exist for this budget', () => {
+    // The wizard is six steps for a budget that budgets and five for one that
+    // does not — the last asks a monthly amount per category, which a saver
+    // or somebody clearing a loan is never shown. A restored draft must not
+    // land on a step its own budget no longer has.
+    expect(source).toContain("const resumeCeiling = budgetingAppliesTo(saved.budgetGoal ?? null) ? 5 : 4;");
+    expect(source).toContain('Math.max(0, Math.min(resumeCeiling, saved.lastStep ?? 0))');
   });
 });
