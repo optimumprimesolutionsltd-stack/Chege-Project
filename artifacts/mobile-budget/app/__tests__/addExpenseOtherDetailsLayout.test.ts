@@ -173,6 +173,24 @@ describe('subcategories belong to Detailed mode', () => {
     expect(source).toContain('subcategoryCount = 0,');
   });
 
+  // The create form had a Save and a Cancel and nothing that opened it: a
+  // sync commit removed the only `setIsCreatingCategory(true)` in the file, so
+  // no category could be created from the expense form at all — and therefore
+  // no subcategory ever appeared, however much logic sat behind it.
+  it('has a control that actually opens the create form', () => {
+    expect(source).toContain('setIsCreatingCategory(true);');
+    expect(source).toContain('testID="open-create-category"');
+  });
+
+  it('names the subcategory it would create, when a parent is chosen', () => {
+    expect(source).toContain('`New subcategory under ${nestingParentName}`');
+    expect(source).toContain("'New category'");
+  });
+
+  it('arrives with nesting already ticked when a parent is selected', () => {
+    expect(source).toContain('setNewCategoryNestUnderParent(Boolean(nestingParent));');
+  });
+
   // Making a subcategory meant leaving the expense for Settings on the web —
   // a poor thing to discover mid-expense.
   it('can nest a new category under the one already chosen', () => {
