@@ -149,6 +149,15 @@ export const registerLimiter = rateLimit({
   message: "Too many accounts created from this connection. Try again later.",
 });
 
+/** Feedback submissions, per address. Every request counts - free text sent
+ *  to another service is exactly what abuse would look like here. */
+export const feedbackLimiter = rateLimit({
+  name: "feedback",
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: "Too much feedback sent from this connection. Try again later.",
+});
+
 /** Reset requests, per address. This endpoint answers 200 whatever happens, so
  *  there is no failure to count - every request counts. */
 export const forgotPasswordLimiter = rateLimit({

@@ -52,6 +52,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FeedbackDialog } from "@/components/feedback-dialog";
+import {
+  browserFeedbackStorage,
+  markFeedbackPromptShown,
+  markFeedbackSubmitted,
+  recordAppLaunch,
+  shouldShowFeedbackPrompt,
+} from "@/lib/feedback-prompt";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { workspaceLabel, workspaceNameClass } from "@/lib/workspace-identity";
@@ -2499,6 +2507,16 @@ export default function Dashboard() {
   const deleteExpense = useDeleteExpense();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
+
+  // Landing on the Dashboard, signed in, is the one moment guaranteed not to
+  // interrupt something the person was doing. Checked once per page load,
+  // same rule as the mobile app's launch counter.
+  useEffect(() => {
+    const storage = browserFeedbackStorage();
+    const launchCount = recordAppLaunch(storage);
+    if (shouldShowFeedbackPrompt(launchCount, storage)) setFeedbackPromptOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!requestedQuickAction) return;
@@ -3266,6 +3284,15 @@ export default function Dashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <FeedbackDialog
+        open={feedbackPromptOpen}
+        onOpenChange={(open) => {
+          if (!open) markFeedbackPromptShown(browserFeedbackStorage());
+          setFeedbackPromptOpen(open);
+        }}
+        context="random-prompt"
+        onSubmitted={() => markFeedbackSubmitted(browserFeedbackStorage())}
+      />
     </div>
   );
 }

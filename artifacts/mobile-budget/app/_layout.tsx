@@ -1,7 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, BackHandler, Platform } from 'react-native';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
+import { FeedbackModal } from '@/components/FeedbackModal';
 import { AppLoading } from '@/components/AppLoading';
+import {
+  markFeedbackPromptShown,
+  markFeedbackSubmitted,
+  recordAppLaunch,
+  shouldShowFeedbackPrompt,
+} from '@/lib/feedbackPrompt';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -124,6 +131,24 @@ function RootLayoutNav() {
   const isTabsHome = isTabsRoute && segments.length === 1;
   const allowWebExitRef = useRef(false);
   const [checkingChooser, setCheckingChooser] = useState(true);
+  const [feedbackPromptOpen, setFeedbackPromptOpen] = useState(false);
+  const feedbackCheckedRef = useRef(false);
+
+  // Landing on Home, authenticated, is the one moment guaranteed not to
+  // interrupt something the person was in the middle of — never mid-onboarding,
+  // mid-expense, or mid-anything else. Checked once per cold start: a launch
+  // is the process starting, not every time Home happens to be visited again
+  // in the same session.
+  useEffect(() => {
+    if (!isAuthenticated || !isTabsHome || feedbackCheckedRef.current) return;
+    feedbackCheckedRef.current = true;
+    void (async () => {
+      const launchCount = await recordAppLaunch(AsyncStorage);
+      if (await shouldShowFeedbackPrompt(launchCount, AsyncStorage)) {
+        setFeedbackPromptOpen(true);
+      }
+    })();
+  }, [isAuthenticated, isTabsHome]);
   const {
     data: workspaces = NO_WORKSPACES,
     isLoading: loadingWorkspaces,
@@ -280,6 +305,7 @@ function RootLayoutNav() {
   }
 
   return (
+    <>
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="login" options={{ headerShown: false }} />
@@ -325,6 +351,16 @@ function RootLayoutNav() {
       <Stack.Screen name="subscription" options={{ headerShown: false }} />
       <Stack.Screen name="delete-account-code" options={{ headerShown: false, gestureEnabled: false }} />
     </Stack>
+    <FeedbackModal
+      visible={feedbackPromptOpen}
+      context="random-prompt"
+      onSubmitted={() => void markFeedbackSubmitted(AsyncStorage)}
+      onClose={() => {
+        void markFeedbackPromptShown(AsyncStorage);
+        setFeedbackPromptOpen(false);
+      }}
+    />
+    </>
   );
 }
 

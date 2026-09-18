@@ -70,6 +70,15 @@ services:
       - key: CRM_SYNC_KEY
         sync: false
 
+      # POST /api/feedback relays here — the Optimum Prime CRM's
+      # receiveProductFeedback Cloud Function. FEEDBACK_CRM_KEY must match
+      # that function's FEEDBACK_INGEST_KEY. Absent = feedback answers
+      # "not configured" instead of being silently dropped.
+      - key: FEEDBACK_CRM_URL
+        sync: false
+      - key: FEEDBACK_CRM_KEY
+        sync: false
+
       - key: DATABASE_URL
         sync: false
       - key: GOOGLE_CLIENT_ID

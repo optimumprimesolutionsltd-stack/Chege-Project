@@ -50,6 +50,8 @@ import { useAuth } from '@/lib/auth';
 import { getDisplayName } from '@/utils/avatarHelper';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { ReadOnlyLinkCard } from '@/components/ReadOnlyLinkCard';
+import { FeedbackModal } from '@/components/FeedbackModal';
+import { markFeedbackSubmitted } from '@/lib/feedbackPrompt';
 import {
   ACTIVE_WORKSPACE_STORAGE_KEY,
   leaveMobileSharedWorkspace,
@@ -808,6 +810,7 @@ export default function SettingsScreen() {
   };
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const handleCheckForUpdates = async () => {
     if (__DEV__ || !Updates.isEnabled) {
       Alert.alert('Not available here', 'Update checks only run in an installed build, not this development session.');
@@ -1861,7 +1864,26 @@ export default function SettingsScreen() {
             </View>
             {checkingUpdate ? <ActivityIndicator size="small" color={colors.mutedForeground} /> : <Feather name="chevron-right" size={16} color={colors.mutedForeground} />}
           </Pressable>
+          <Pressable
+            testID="send-feedback"
+            onPress={() => setFeedbackOpen(true)}
+            style={[styles.row, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+          >
+            <View style={styles.rowLeft}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.muted }]}>
+                <Feather name="message-circle" size={16} color={colors.mutedForeground} />
+              </View>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Send feedback</Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          </Pressable>
         </View>
+        <FeedbackModal
+          visible={feedbackOpen}
+          onClose={() => setFeedbackOpen(false)}
+          context="settings"
+          onSubmitted={() => void markFeedbackSubmitted(AsyncStorage)}
+        />
 
         {/* Sign out */}
         <Pressable
