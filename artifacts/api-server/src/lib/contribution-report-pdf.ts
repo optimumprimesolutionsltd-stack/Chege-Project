@@ -3,24 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import PDFDocument from "pdfkit";
 
-// The small Jamvi mark, read once from whichever built web bundle sits next to
-// this server at runtime. Missing is fine — the "JAMVI" wordmark still prints.
-const BRAND_MARK: Buffer | null = (() => {
-  const candidates = [
-    "../jamvi-website/dist/public/branding/jamvi-mark-inline.png",
-    "../../jamvi-website/dist/public/branding/jamvi-mark-inline.png",
-    "../../../jamvi-website/public/branding/jamvi-mark-inline.png",
-    "../../../jamvi-website/dist/public/branding/jamvi-mark-inline.png",
-  ];
-  for (const relative of candidates) {
-    try {
-      return readFileSync(path.resolve(__dirname, relative));
-    } catch {
-      // try the next
-    }
-  }
-  return null;
-})();
+import { drawBrandMark } from "./brand-mark";
 
 export type ContributionReportRow = {
   name: string;
@@ -112,15 +95,7 @@ export function createContributionReportPdf(data: ContributionReportPdfData): Pr
     let y = 0;
     const header = (continued = false) => {
       document.rect(0, 0, PAGE_WIDTH, 88).fill("#0A3D2E");
-      let markWidth = 0;
-      if (BRAND_MARK) {
-        try {
-          document.image(BRAND_MARK, SIDE_MARGIN, 22, { width: 26, height: 26 });
-          markWidth = 34;
-        } catch {
-          markWidth = 0;
-        }
-      }
+      const markWidth = drawBrandMark(document, SIDE_MARGIN);
       document.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(19).text("JAMVI", SIDE_MARGIN + markWidth, 25);
       document.font("Helvetica").fontSize(9).fillColor("#D7F3E8").text(
         continued ? `Contributions ${data.periodLabel} — continued` : `Contributions ${data.periodLabel}`,

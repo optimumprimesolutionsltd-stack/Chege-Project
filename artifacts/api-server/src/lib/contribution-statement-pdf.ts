@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import PDFDocument from "pdfkit";
+import { drawBrandMark } from "./brand-mark";
 
 export type StatementPdfEntry = {
   /** YYYY-MM-DD */
@@ -90,7 +91,8 @@ export function createContributionStatementPdf(data: ContributionStatementPdfDat
     let y = 0;
     const header = (continued = false) => {
       document.rect(0, 0, PAGE_WIDTH, 88).fill("#0A3D2E");
-      document.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(19).text("JAMVI", SIDE_MARGIN, 25);
+      const markWidth = drawBrandMark(document, SIDE_MARGIN);
+      document.fillColor("#FFFFFF").font("Helvetica-Bold").fontSize(19).text("JAMVI", SIDE_MARGIN + markWidth, 25);
       document.font("Helvetica").fontSize(9).fillColor("#D7F3E8").text(
         continued
           ? `${data.memberName ?? "Group"} statement ${data.periodLabel} — continued`
