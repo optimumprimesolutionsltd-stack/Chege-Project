@@ -774,6 +774,18 @@ export const SharedGroupInputNameStyle = {
   serif: 'serif',
 } as const;
 
+/**
+ * What this budget is mainly for, as answered during onboarding. Saving and debt start without the budget section: a budget with no amounts in it reads as zero of zero on every screen, which looks broken rather than empty. Changeable afterwards, and the tab returns on its own once any category carries a real amount.
+ */
+export type SharedGroupInputPurpose = typeof SharedGroupInputPurpose[keyof typeof SharedGroupInputPurpose];
+
+
+export const SharedGroupInputPurpose = {
+  budgeting: 'budgeting',
+  saving: 'saving',
+  debt: 'debt',
+} as const;
+
 export interface SharedGroupInput {
   /**
      * @minLength 2
@@ -793,6 +805,8 @@ export interface SharedGroupInput {
      * @nullable
      */
   defaultMonthlyTarget?: number | null;
+  /** What this budget is mainly for, as answered during onboarding. Saving and debt start without the budget section: a budget with no amounts in it reads as zero of zero on every screen, which looks broken rather than empty. Changeable afterwards, and the tab returns on its own once any category carries a real amount. */
+  purpose?: SharedGroupInputPurpose;
 }
 
 export interface WorkspaceSelectionInput {

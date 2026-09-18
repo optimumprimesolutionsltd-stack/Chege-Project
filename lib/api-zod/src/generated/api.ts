@@ -1785,7 +1785,8 @@ export const CreateSharedGroupBody = zod.object({
   "emoji": zod.string().max(createSharedGroupBodyEmojiMax).nullish(),
   "nameStyle": zod.enum(['plain', 'italic', 'bold', 'serif']).optional(),
   "kind": zod.enum(['personal', 'family', 'chama', 'church', 'club', 'team', 'student_group', 'other']).default(createSharedGroupBodyKindDefault),
-  "defaultMonthlyTarget": zod.number().min(createSharedGroupBodyDefaultMonthlyTargetMin).nullish().describe('What each member is expected to contribute per month, in KES. Members who join inherit it as their own target. Null means the group does not work to a fixed amount.')
+  "defaultMonthlyTarget": zod.number().min(createSharedGroupBodyDefaultMonthlyTargetMin).nullish().describe('What each member is expected to contribute per month, in KES. Members who join inherit it as their own target. Null means the group does not work to a fixed amount.'),
+  "purpose": zod.enum(['budgeting', 'saving', 'debt']).optional().describe('What this budget is mainly for, as answered during onboarding. Saving and debt start without the budget section: a budget with no amounts in it reads as zero of zero on every screen, which looks broken rather than empty. Changeable afterwards, and the tab returns on its own once any category carries a real amount.')
 })
 
 export const createSharedGroupResponseEmojiMax = 16;

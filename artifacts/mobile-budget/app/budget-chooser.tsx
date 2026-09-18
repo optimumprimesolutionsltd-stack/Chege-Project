@@ -61,6 +61,7 @@ import {
   dedupeIncomeStreamNames,
   normalizeCategoryName,
   normalizeIncomeStreamName,
+  budgetingAppliesTo,
   groupKindForPersona,
   readOnboardingDraft,
   recommendedCategoriesForPurpose,
@@ -98,6 +99,7 @@ export default function BudgetChooserScreen() {
   // Whether the person has asked to override what onboarding implied.
   const [editingGroupKind, setEditingGroupKind] = useState(false);
   const [impliedGroupKind, setImpliedGroupKind] = useState<SharedGroupKind | null>(null);
+  const [newGroupPurpose, setNewGroupPurpose] = useState<'budgeting' | 'saving' | 'debt' | null>(null);
   const [newGroupContribution, setNewGroupContribution] = useState('');
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -146,6 +148,7 @@ export default function BudgetChooserScreen() {
         if (!active) return;
         // Carry what onboarding already established, so creating a group does
         // not ask the same question a second time.
+        setNewGroupPurpose(savedDraft?.budgetGoal ?? null);
         const implied = groupKindForPersona(savedDraft?.persona ?? null) as SharedGroupKind | null;
         if (implied) {
           setImpliedGroupKind(implied);
@@ -248,7 +251,11 @@ export default function BudgetChooserScreen() {
     }
     setError(null);
     try {
-      const workspace = await createSharedGroup.mutateAsync({ data: { name, kind: newGroupKind } });
+      // Carries what onboarding established, so the new budget starts with the
+      // sections its purpose implies rather than every section by default.
+      const workspace = await createSharedGroup.mutateAsync({
+        data: { name, kind: newGroupKind, ...(newGroupPurpose ? { purpose: newGroupPurpose } : {}) },
+      });
       await activateMobileWorkspace({
         groupId: workspace.id,
         storage: AsyncStorage,
@@ -759,7 +766,9 @@ function MobileOnboardingFlow({
     void readOnboardingDraft({ userId: user.id, storage: AsyncStorage }).then((saved) => {
       if (active && saved) {
         setDraft(saved);
-        setStep(Math.max(0, Math.min(5, saved.lastStep ?? 0)));
+        // A resumed draft must not land on a step this budget no longer has.
+        const resumeCeiling = budgetingAppliesTo(saved.budgetGoal ?? null) ? 5 : 4;
+        setStep(Math.max(0, Math.min(resumeCeiling, saved.lastStep ?? 0)));
         setRestoredDraft(true);
       }
     });
@@ -791,6 +800,14 @@ function MobileOnboardingFlow({
   const setDraftValue = <K extends keyof MobileOnboardingDraft>(key: K, value: MobileOnboardingDraft[K]) => {
     updateDraft((current) => ({ ...current, [key]: value } as MobileOnboardingDraft));
   };
+
+  // Step 5 asks a monthly amount per category — the budgeting step. Somebody
+  // here to save towards something, or to clear a loan, will not sit and set a
+  // ceiling per category, and a budget of zeros reads as "KES 0 of KES 0 (0%)"
+  // on every screen afterwards: the app looks broken rather than empty. So the
+  // step is skipped rather than shown and ignored.
+  const budgetingApplies = budgetingAppliesTo(draft.budgetGoal ?? null);
+  const lastStep = budgetingApplies ? 5 : 4;
 
   const goBack = () => {
     setError(null);
@@ -824,7 +841,7 @@ function MobileOnboardingFlow({
       setError('Choose at least one category, or select all recommended categories.');
       return;
     }
-    if (step < 5) {
+    if (step < lastStep) {
       const nextStep = step + 1;
       updateDraft((current) => ({ ...current, lastStep: nextStep }));
       void saveMobileOnboardingProgress({ ...draft, lastStep: nextStep }).catch(() => undefined);

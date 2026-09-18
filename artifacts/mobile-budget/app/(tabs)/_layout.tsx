@@ -19,7 +19,7 @@ import { useGetGroup } from '@workspace/api-client-react';
 // 5 core tabs — Bank and Settings remain accessible from Home/header controls.
 // A shared group swaps Search out for Contributions, which is a core shared
 // activity; Search stays reachable from the Home header.
-function NativeTabLayout({ showReports, isShared, showDebt }: { showReports: boolean; isShared: boolean; showDebt: boolean }) {
+function NativeTabLayout({ showReports, isShared, showDebt, showBudget }: { showReports: boolean; isShared: boolean; showDebt: boolean; showBudget: boolean }) {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -30,10 +30,12 @@ function NativeTabLayout({ showReports, isShared, showDebt }: { showReports: boo
         <Icon sf={{ default: 'clock', selected: 'clock.fill' }} />
         <Label>Activity</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="budget">
+{showBudget && (
+              <NativeTabs.Trigger name="budget">
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
         <Label>Budget</Label>
       </NativeTabs.Trigger>
+      )}
       {isShared && (
         <NativeTabs.Trigger name="contributions">
           <Icon sf={{ default: 'arrow.down.circle', selected: 'arrow.down.circle.fill' }} />
@@ -66,7 +68,7 @@ function NativeTabLayout({ showReports, isShared, showDebt }: { showReports: boo
   );
 }
 
-function ClassicTabLayout({ showReports, isShared, showDebt }: { showReports: boolean; isShared: boolean; showDebt: boolean }) {
+function ClassicTabLayout({ showReports, isShared, showDebt, showBudget }: { showReports: boolean; isShared: boolean; showDebt: boolean; showBudget: boolean }) {
   const colors = useColors();
   const { resolvedScheme } = useAppearance();
   const isDark = resolvedScheme === 'dark';
@@ -139,15 +141,17 @@ function ClassicTabLayout({ showReports, isShared, showDebt }: { showReports: bo
       />
       <Tabs.Screen
         name="budget"
-        options={{
-          title: 'Budget',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="chart.bar.fill" tintColor={color} size={24} />
-            ) : (
-              <Feather name="bar-chart-2" size={22} color={color} />
-            ),
-        }}
+        options={showBudget
+          ? {
+              title: 'Budget',
+              tabBarIcon: ({ color }) =>
+                isIOS ? (
+                  <SymbolView name="chart.bar.fill" tintColor={color} size={24} />
+                ) : (
+                  <Feather name="bar-chart-2" size={22} color={color} />
+                ),
+            }
+          : { href: null }}
       />
       <Tabs.Screen
         name="goals"
@@ -238,12 +242,25 @@ export default function TabLayout() {
   // debt gets no tab — an empty Debt tab on every household's phone would be
   // the opposite of making debt matter — and the moment a category is marked
   // as a debt, it appears.
-  const { data: debtCategories = [] } = useQuery<Array<{ debtBalance: number | null }>>({
+  const { data: debtCategories = [] } = useQuery<Array<{ debtBalance: number | null; budgetAmount?: number | null }>>({
     queryKey: ['budget-categories-full'],
-    queryFn: () => customFetch<Array<{ debtBalance: number | null }>>('/api/budget-categories'),
+    queryFn: () => customFetch<Array<{ debtBalance: number | null; budgetAmount?: number | null }>>('/api/budget-categories'),
     staleTime: 60_000,
   });
   const showDebt = debtCategories.some((row) => row.debtBalance !== null && row.debtBalance !== undefined);
+  // Budgeting is off for a budget whose purpose is saving or clearing a debt,
+  // because a budget of zeros reads as "KES 0 of KES 0 (0%)" everywhere and
+  // makes the app look broken. It is not off forever: the moment any category
+  // carries a real amount, the tab comes back on its own, so nobody has to
+  // find a setting to undo an answer they gave before they knew what the app
+  // did. `enabledSections` is what the budget itself says; a real amount
+  // overrides it, never the other way round.
+  const hasBudgetedAmount = debtCategories.some((row) => Number((row as { budgetAmount?: number | null }).budgetAmount ?? 0) > 0);
+  // An empty or absent list means "everything", which is what every budget
+  // made before sections existed carries.
+  const sections = group?.enabledSections;
+  const budgetSectionOn = !Array.isArray(sections) || sections.length === 0 || sections.includes('budget');
+  const showBudget = budgetSectionOn || hasBudgetedAmount;
   const isShared = group?.isPrivate === false;
   // The shared and personal layouts have a different set of tabs (Contributions
   // vs Search). A native tab bar does not reliably add or drop a trigger when
@@ -253,7 +270,7 @@ export default function TabLayout() {
   // tab bar does not reliably grow a trigger when the set changes, so marking
   // the first category as a debt has to remount the navigator for the tab to
   // actually appear.
-  const layoutKey = `${group === undefined ? 'loading' : isShared ? 'shared' : 'personal'}-${showDebt ? 'debt' : 'nodebt'}`;
+  const layoutKey = `${group === undefined ? 'loading' : isShared ? 'shared' : 'personal'}-${showDebt ? 'debt' : 'nodebt'}-${showBudget ? 'budget' : 'nobudget'}`;
 
   // SubscriptionBanner sits above the navigator, not inside either tab
   // layout, so it is on screen no matter which tab is active — an in-flow
@@ -265,7 +282,7 @@ export default function TabLayout() {
       <View style={{ flex: 1, backgroundColor: colors.card }}>
         <SubscriptionBanner />
         <View style={{ flex: 1 }}>
-          <NativeTabLayout key={layoutKey} showReports={showReports} isShared={isShared} showDebt={showDebt} />
+          <NativeTabLayout key={layoutKey} showReports={showReports} isShared={isShared} showDebt={showDebt} showBudget={showBudget} />
         </View>
         <GlobalFAB />
       </View>
@@ -275,7 +292,7 @@ export default function TabLayout() {
     <View style={{ flex: 1, backgroundColor: colors.card }}>
       <SubscriptionBanner />
       <View style={{ flex: 1 }}>
-        <ClassicTabLayout key={layoutKey} showReports={showReports} isShared={isShared} showDebt={showDebt} />
+        <ClassicTabLayout key={layoutKey} showReports={showReports} isShared={isShared} showDebt={showDebt} showBudget={showBudget} />
       </View>
       <GlobalFAB />
     </View>
