@@ -1548,6 +1548,32 @@ export default function AddExpenseSheet() {
               </ScrollView>
             </View>
           ))}
+        {/* The way into the create form. It had one once; a sync commit took
+            it away, leaving the form reachable by nothing at all — which is
+            why no category could be created here, and so why no subcategory
+            ever appeared. The label follows the selection, so the commonest
+            reason to open it says what it will do. */}
+        {isAdvanced && canManageCategories && !isCreatingCategory && (
+          <Pressable
+            onPress={() => {
+              setIsCreatingCategory(true);
+              setNewCategoryNestUnderParent(Boolean(nestingParent));
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={nestingParent
+              ? `Create a new subcategory under ${nestingParentName}`
+              : 'Create a new category'}
+            testID="open-create-category"
+            style={styles.addSourceLink}
+            hitSlop={6}
+          >
+            <Feather name="plus-circle" size={15} color={colors.primary} />
+            <Text style={[styles.addSourceLinkText, { color: colors.primary }]}>
+              {nestingParent ? `New subcategory under ${nestingParentName}` : 'New category'}
+            </Text>
+          </Pressable>
+        )}
+
         {isAdvanced && categoryAllocations.length === 0 && (
           <Pressable
             disabled
