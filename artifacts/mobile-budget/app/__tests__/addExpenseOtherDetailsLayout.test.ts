@@ -173,6 +173,27 @@ describe('subcategories belong to Detailed mode', () => {
     expect(source).toContain('subcategoryCount = 0,');
   });
 
+  // The form opened at an 0.85 detent while being taller than that, so its
+  // first fields sat above the visible area with the sheet's own drag
+  // competing for the gesture that would bring them back.
+  it('opens the expense sheet at full height', () => {
+    const layout = readFileSync('app/_layout.tsx', 'utf8');
+    const expenseScreen = layout.slice(layout.indexOf('name="add-expense"'), layout.indexOf('name="record-contributions"'));
+    expect(expenseScreen).toContain('sheetAllowedDetents: [1]');
+    expect(expenseScreen).not.toContain('[0.85, 1]');
+  });
+
+  // A form whose required field has nothing in it cannot be completed, so a
+  // failed category load is worth chasing rather than leaving a link behind.
+  it('retries a failed category load instead of waiting to be tapped', () => {
+    expect(source).toContain('if (categoriesQuery.isError) void categoriesQuery.refetch();');
+    const layout = readFileSync('app/_layout.tsx', 'utf8');
+    expect(layout).toContain('return failureCount < 3;');
+    expect(layout).toContain('refetchOnReconnect: true');
+    // A 4xx other than 401 is an answer, not a blip.
+    expect(layout).toContain('if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;');
+  });
+
   // The create form had a Save and a Cancel and nothing that opened it: a
   // sync commit removed the only `setIsCreatingCategory(true)` in the file, so
   // no category could be created from the expense form at all — and therefore
