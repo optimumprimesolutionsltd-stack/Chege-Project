@@ -575,6 +575,14 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
     .from(budgetCategoriesTable)
     .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`)
     .orderBy(budgetCategoriesTable.priority);
+
+  // Every category in the group, not just this month's, so a child whose
+  // parent is not itself active this month still knows whose it is.
+  const allGroupCategories = await db
+    .select({ id: budgetCategoriesTable.id, name: budgetCategoriesTable.name })
+    .from(budgetCategoriesTable)
+    .where(eq(budgetCategoriesTable.groupId, groupId));
+  const categoryNameById = new Map(allGroupCategories.map((row) => [row.id, row.name]));
   // Child allocations replace the legacy category only when they exist, so
   // historical rows remain visible without a data rewrite and totals remain
   // one expense amount per transaction.
@@ -625,6 +633,11 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
       activeMonth: cat.activeMonth,
       activeYear: cat.activeYear,
       isBudgeted: true,
+      // The breakdown is keyed by name throughout, so the parent is named
+      // rather than referenced by id. Without it the Budget tab had no way to
+      // tell a subcategory from a category and listed Groceries as a sibling
+      // of Food.
+      parentName: cat.parentId != null ? (categoryNameById.get(cat.parentId) ?? null) : null,
     };
   });
 
@@ -647,6 +660,8 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
       activeMonth: null,
       activeYear: null,
       isBudgeted: false,
+      // Spending with no budget behind it belongs to no parent.
+      parentName: null,
     });
   }
 

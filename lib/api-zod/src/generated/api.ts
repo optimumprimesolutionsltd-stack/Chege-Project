@@ -691,7 +691,8 @@ export const GetDashboardCategoryBreakdownResponseItem = zod.object({
   "isRecurring": zod.boolean(),
   "activeMonth": zod.number().nullish(),
   "activeYear": zod.number().nullish(),
-  "isBudgeted": zod.boolean().describe('False for actual spending that has no active budget in the selected month')
+  "isBudgeted": zod.boolean().describe('False for actual spending that has no active budget in the selected month'),
+  "parentName": zod.string().nullish().describe('The category this one sits under, by name, or null when it is top-level. Named rather than referenced by id because the whole breakdown is keyed by name.')
 })
 export const GetDashboardCategoryBreakdownResponse = zod.array(GetDashboardCategoryBreakdownResponseItem)
 

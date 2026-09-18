@@ -21,4 +21,9 @@ export interface CategoryBreakdown {
   activeYear?: number | null;
   /** False for actual spending that has no active budget in the selected month */
   isBudgeted: boolean;
+  /**
+     * The category this one sits under, by name, or null when it is top-level. Named rather than referenced by id because the whole breakdown is keyed by name.
+     * @nullable
+     */
+  parentName?: string | null;
 }

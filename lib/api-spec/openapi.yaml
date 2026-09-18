@@ -2490,6 +2490,12 @@ components:
         isBudgeted:
           type: boolean
           description: False for actual spending that has no active budget in the selected month
+        parentName:
+          description: >-
+            The category this one sits under, by name, or null when it is
+            top-level. Named rather than referenced by id because the whole
+            breakdown is keyed by name.
+          type: ["string", "null"]
       required:
         - category
         - budgetAmount
