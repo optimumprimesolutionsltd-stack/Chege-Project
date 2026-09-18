@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -270,6 +270,40 @@ export default function BudgetScreen() {
   // Panel-level edit mode for BY CATEGORY: rename or remove several at once,
   // one Save. Adding a category still uses the + / modal, which also sets its
   // amount and priority.
+  // Parents first, each followed by its own children, with a parent's row
+  // carrying both its own figure and the total including everything under it.
+  // The breakdown arrives flat and keyed by name, so Groceries used to sit
+  // beside Food as though the two were unrelated.
+  const orderedBreakdown = useMemo(() => {
+    const children = new Map<string, typeof breakdown>();
+    for (const row of breakdown) {
+      if (!row.parentName) continue;
+      const siblings = children.get(row.parentName) ?? [];
+      siblings.push(row);
+      children.set(row.parentName, siblings);
+    }
+    const ordered: Array<{
+      row: (typeof breakdown)[number];
+      isChild: boolean;
+      rollup: { budgetAmount: number; spentAmount: number } | null;
+    }> = [];
+    for (const row of breakdown) {
+      // A child whose parent is not in this month's breakdown would otherwise
+      // vanish, so it is listed on its own rather than dropped.
+      if (row.parentName && breakdown.some((candidate) => candidate.category === row.parentName)) continue;
+      const mine = children.get(row.category) ?? [];
+      const rollup = mine.length > 0
+        ? {
+          budgetAmount: mine.reduce((sum, child) => sum + child.budgetAmount, row.budgetAmount),
+          spentAmount: mine.reduce((sum, child) => sum + child.spentAmount, row.spentAmount),
+        }
+        : null;
+      ordered.push({ row, isChild: Boolean(row.parentName), rollup });
+      for (const child of mine) ordered.push({ row: child, isChild: true, rollup: null });
+    }
+    return ordered;
+  }, [breakdown]);
+
   const catEditor = useListEditor({
     rename: async (id, name) => {
       await customFetch(`/api/budget-categories/${id}`, {
@@ -1263,7 +1297,7 @@ export default function BudgetScreen() {
             </View>
           ) : (
             <>
-              {breakdown.map((cat) => {
+              {orderedBreakdown.map(({ row: cat, isChild, rollup }) => {
                 const pct = cat.budgetAmount > 0 ? Math.min(cat.spentAmount / cat.budgetAmount, 1) : 0;
                 const isOver = cat.spentAmount > cat.budgetAmount && cat.budgetAmount > 0;
                 const icon = getCategoryIcon(cat.category);
@@ -1277,7 +1311,15 @@ export default function BudgetScreen() {
                     testID={`budget-ledger-${cat.category}`}
                     accessibilityRole="button"
                     accessibilityLabel={`View ${cat.category} spending`}
-                    style={[styles.catCard, { backgroundColor: colors.card, borderColor: colors.border }, rowEditing && fullCat && catEditor.isRemoving(fullCat.id) && { opacity: 0.55 }]}
+                    style={[
+                      styles.catCard,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                      // A subcategory sits under its parent rather than beside
+                      // it: indented, and drawn as a branch of the row above.
+                      isChild && styles.catCardChild,
+                      isChild && { borderLeftColor: colors.primary + '55' },
+                      rowEditing && fullCat && catEditor.isRemoving(fullCat.id) && { opacity: 0.55 },
+                    ]}
                   >
                     <View style={styles.catTop}>
                       {rowEditing && fullCat ? (
@@ -1309,6 +1351,14 @@ export default function BudgetScreen() {
                         <Text style={[styles.catRemaining, { color: isOver ? '#f87171' : colors.mutedForeground }]}>
                           {isOver ? `KES ${formatKES(cat.spentAmount - cat.budgetAmount)} over` : `KES ${formatKES(cat.remaining)} left`}
                         </Text>
+                        {/* A parent's own figure is above; this is the same
+                            question asked of the whole branch, which is what
+                            people mean by "what did Food cost me". */}
+                        {rollup ? (
+                          <Text style={[styles.rollupLine, { color: colors.primary }]}>
+                            With subcategories: {formatKES(rollup.spentAmount)} / {formatKES(rollup.budgetAmount)}
+                          </Text>
+                        ) : null}
                       </View>
                       <View style={styles.catActions}>
                         <View style={styles.catAmounts}>
@@ -1482,6 +1532,8 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginBottom: 12, marginLeft: 4 },
   sectionHint: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginHorizontal: 4, marginTop: -6, marginBottom: 12 },
   catCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 10 },
+  catCardChild: { marginLeft: 16, borderLeftWidth: 3, borderTopLeftRadius: 4, borderBottomLeftRadius: 4 },
+  rollupLine: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 },
   catCardMuted: { opacity: 0.76 },
   catTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   catIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
