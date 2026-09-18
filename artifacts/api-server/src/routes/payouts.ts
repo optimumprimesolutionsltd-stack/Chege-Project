@@ -132,16 +132,32 @@ router.post("/payouts", async (req, res): Promise<void> => {
     return;
   }
 
-  const [account] = await db
+  // A payout is money leaving a named account, and which account it left is
+  // the whole basis of reconciling the round later. Defaulting to whichever
+  // account happened to have the lowest id decided that silently, so with
+  // more than one account the caller has to say. One account is not a choice,
+  // so it still resolves on its own.
+  const groupAccounts = await db
     .select({ id: bankAccountsTable.id })
     .from(bankAccountsTable)
-    .where(parsed.data.accountId === undefined
-      ? eq(bankAccountsTable.groupId, groupId)
-      : and(eq(bankAccountsTable.id, parsed.data.accountId), eq(bankAccountsTable.groupId, groupId)))
-    .orderBy(asc(bankAccountsTable.id))
-    .limit(1);
-  if (!account) {
+    .where(eq(bankAccountsTable.groupId, groupId))
+    .orderBy(asc(bankAccountsTable.id));
+
+  if (groupAccounts.length === 0) {
     res.status(400).json({ error: "Set up a bank account first — the payout comes out of it." });
+    return;
+  }
+
+  const account = parsed.data.accountId === undefined
+    ? (groupAccounts.length === 1 ? groupAccounts[0] : null)
+    : groupAccounts.find((row) => row.id === parsed.data.accountId) ?? null;
+
+  if (!account) {
+    res.status(400).json({
+      error: parsed.data.accountId === undefined
+        ? "Choose which bank account the payout comes out of."
+        : "That bank account is not in this group.",
+    });
     return;
   }
 
