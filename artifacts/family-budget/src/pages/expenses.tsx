@@ -1730,6 +1730,29 @@ export default function Expenses() {
                </Button>
              </div>
            )}
+          {/* The way into the create form. It had one once; a sync commit took
+              it away and left the form reachable by nothing at all, so no
+              category could be created while logging an expense — the same
+              way the phone's was dead until #212. Everything below this line
+              was already here and working; only the opener was missing. */}
+          {canManageCategories && !isCreatingCategory && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/25 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                Nothing here fits? Create a category without leaving this expense.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-14 w-full justify-start sm:w-auto"
+                onClick={() => setIsCreatingCategory(true)}
+                data-testid="open-create-category"
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> New category
+              </Button>
+            </div>
+          )}
+
           {isCreatingCategory && (
             <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-3 text-foreground">
               <div>
