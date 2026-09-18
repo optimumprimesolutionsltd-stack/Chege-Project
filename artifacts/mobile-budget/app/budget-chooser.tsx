@@ -61,6 +61,7 @@ import {
   dedupeIncomeStreamNames,
   normalizeCategoryName,
   normalizeIncomeStreamName,
+  groupKindForPersona,
   readOnboardingDraft,
   recommendedCategoriesForPurpose,
   saveOnboardingDraft,
@@ -94,6 +95,9 @@ export default function BudgetChooserScreen() {
   const [createSharedOpen, setCreateSharedOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupKind, setNewGroupKind] = useState<SharedGroupKind | null>(null);
+  // Whether the person has asked to override what onboarding implied.
+  const [editingGroupKind, setEditingGroupKind] = useState(false);
+  const [impliedGroupKind, setImpliedGroupKind] = useState<SharedGroupKind | null>(null);
   const [newGroupContribution, setNewGroupContribution] = useState('');
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -140,6 +144,13 @@ export default function BudgetChooserScreen() {
     ])
       .then(([preferences, savedDraft]) => {
         if (!active) return;
+        // Carry what onboarding already established, so creating a group does
+        // not ask the same question a second time.
+        const implied = groupKindForPersona(savedDraft?.persona ?? null) as SharedGroupKind | null;
+        if (implied) {
+          setImpliedGroupKind(implied);
+          setNewGroupKind((current) => current ?? implied);
+        }
         const onboardingStartedButIncomplete = Boolean(savedDraft) || preferences?.completed === false;
         // Existing workspaces remain proof of completion only for legacy users
         // who have no explicit incomplete setup or saved draft.
@@ -568,8 +579,36 @@ export default function BudgetChooserScreen() {
                 accessibilityLabel="Shared group name"
                 style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
               />
-              <Text style={[styles.kindTitle, { color: colors.foreground }]}>What is this group for?</Text>
-              {SHARED_GROUP_KINDS.map((choice) => {
+              {/* Onboarding already asked who this budget is for. Asking the
+                  same question again as "kind" reads as the app not having
+                  listened, so a remembered answer is applied and simply
+                  stated — with a way to change it, because a mis-tap in
+                  onboarding should not be permanent. */}
+              {impliedGroupKind && !editingGroupKind ? (
+                <View style={[styles.kind, { borderColor: colors.primary, backgroundColor: colors.primary + '12' }]}>
+                  <View style={styles.workspaceText}>
+                    <Text style={[styles.kindTitle, { color: colors.primary }]}>
+                      {sharedGroupKindDetails(impliedGroupKind).label}
+                    </Text>
+                    <Text style={[styles.kindDescription, { color: colors.mutedForeground }]}>
+                      From what you told us at the start. Tap change if that is not right.
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setEditingGroupKind(true)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Change what this group is for"
+                    testID="shared-budget-kind-change"
+                  >
+                    <Text style={[styles.secondaryText, { color: colors.primary }]}>Change</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {impliedGroupKind && !editingGroupKind ? null : (
+                <Text style={[styles.kindTitle, { color: colors.foreground }]}>What is this group for?</Text>
+              )}
+              {impliedGroupKind && !editingGroupKind ? [] : SHARED_GROUP_KINDS.map((choice) => {
                 const selected = newGroupKind === choice.value;
                 return <Pressable key={choice.value} testID={`shared-budget-kind-${choice.value}`}
                   accessibilityRole="radio" accessibilityState={{ checked: selected }}

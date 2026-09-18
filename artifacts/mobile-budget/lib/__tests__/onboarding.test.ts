@@ -93,7 +93,15 @@ describe('mobile onboarding', () => {
 
     await saveOnboardingDraft({ userId: 'person/a', draft, storage });
     expect(values.has(onboardingDraftStorageKey('person/a'))).toBe(true);
-    await expect(readOnboardingDraft({ userId: 'person/a', storage })).resolves.toEqual(draft);
+    // Normalising fills in the fields added since this fixture was written:
+    // what the budget is for, and any debt balances against it. Both default
+    // to "not asked", which is what every draft made before the question
+    // existed should read as.
+    await expect(readOnboardingDraft({ userId: 'person/a', storage })).resolves.toEqual({
+      ...draft,
+      budgetGoal: null,
+      debtBalances: {},
+    });
     await expect(readOnboardingDraft({ userId: 'person/b', storage })).resolves.toBeNull();
   });
 

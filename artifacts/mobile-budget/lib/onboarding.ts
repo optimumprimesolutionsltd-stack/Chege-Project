@@ -49,6 +49,49 @@ export function budgetDurationEditError(durationType: MobileBudgetDuration, cust
  *  saved and paid for. */
 export type CoupleStage = "together" | "wedding";
 
+/**
+ * What the budget is mainly FOR — distinct from `persona`, which is who it is
+ * for (a couple, friends, a chama).
+ *
+ * Somebody whose reason for using Jamvi is clearing a loan was handed a
+ * budgeting app and left to discover that debt existed. Asking once, at the
+ * start, is what makes the app feel like it was built for them — and it is
+ * only worth asking if the answer changes something, so it does: a debt-led
+ * budget is offered debt-shaped categories first and arrives with one already
+ * tracked, which is also what makes the Debt tab appear.
+ */
+export type BudgetGoal = "budgeting" | "saving" | "debt";
+
+export const BUDGET_GOALS: Record<BudgetGoal, { title: string; description: string }> = {
+  budgeting: {
+    title: "Keeping track of spending",
+    description: "Where the money goes each month, and staying inside a plan.",
+  },
+  saving: {
+    title: "Saving towards something",
+    description: "Building up an amount for a goal, with spending in service of it.",
+  },
+  debt: {
+    title: "Paying off debt",
+    description: "Clearing a loan or advance, and seeing the date it ends.",
+  },
+};
+
+/**
+ * Categories a debt-led budget starts from. Deliberately the kinds of debt
+ * people in Kenya actually carry, not a generic "Loan" — a name somebody
+ * recognises is a name they will keep.
+ */
+export const DEBT_ONBOARDING_CATEGORIES = [
+  "Bank loan",
+  "Sacco loan",
+  "Chama advance",
+  "Mobile loan",
+  "Shylock",
+  "Credit card",
+  "Family debt",
+] as const;
+
 export type MobileOnboardingDraft = {
   usageMode: MobileOnboardingMode;
   persona: string | null;
@@ -68,6 +111,13 @@ export type MobileOnboardingDraft = {
   /** How many people the group expects, as a plain string. A guess, not an
    *  enforced cap — it only steers what Jamvi recommends. */
   expectedMemberCount?: string;
+  /** What this budget is mainly for. Null until asked, and null on every
+   *  budget made before the question existed. */
+  budgetGoal?: BudgetGoal | null;
+  /** For a debt-led budget: what is owed on each chosen debt category, as a
+   *  plain KES string. These become tracked debts rather than plain
+   *  categories, which is what gives the Debt tab something to show. */
+  debtBalances?: Record<string, string>;
 };
 
 const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
@@ -222,6 +272,39 @@ export const PURPOSE_OPTIONS = {
   ],
 } as const;
 
+/**
+ * The shared-group kind implied by what somebody already said in onboarding.
+ *
+ * The two lists ask the same question in different words: onboarding asks who
+ * the budget is for, and creating the group then asks again as "kind". Saying
+ * "a couple" and then being asked to choose between Family, Chama, Club and
+ * the rest reads as the app not having listened.
+ *
+ * A couple and a group of roommates both land on `family`, which the kind list
+ * itself defines as "family members or housemates" — there is no separate
+ * couple kind, and inventing one would change what every budget of that kind
+ * already means.
+ */
+const PERSONA_TO_GROUP_KIND: Record<string, string> = {
+  couple: "family",
+  friends: "family",
+  family: "family",
+  chama: "chama",
+  church: "church",
+  club: "club",
+  student_group: "student_group",
+  other: "other",
+};
+
+/**
+ * What to preselect as the group kind, or null when onboarding said nothing
+ * that implies one — in which case the question is still worth asking.
+ */
+export function groupKindForPersona(persona: string | null | undefined): string | null {
+  if (!persona) return null;
+  return PERSONA_TO_GROUP_KIND[persona] ?? null;
+}
+
 const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
   student: ["Food", "Housing", "Transport", "Education", "Books & supplies", "Airtime & data", "Personal care", "Entertainment", "Other"],
   working: ["Food", "Housing", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
@@ -247,6 +330,46 @@ export function recommendedCategoriesForPurpose(purpose: string | null, coupleSt
   return dedupeCategoryNames(key ? (PURPOSE_CATEGORY_MAP[key] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES);
 }
 
+/**
+ * The categories offered first, given what the budget is for.
+ *
+ * A debt-led budget leads with debts and keeps the ordinary ones underneath —
+ * somebody clearing a loan still eats. Every other goal is unchanged, so the
+ * question costs nothing to anyone who does not pick debt.
+ */
+export function recommendedCategoriesForGoal(
+  goal: BudgetGoal | null | undefined,
+  persona: string | null,
+  coupleStage: CoupleStage | null = null,
+): string[] {
+  const usual = recommendedCategoriesForPurpose(persona, coupleStage);
+  if (goal !== "debt") return usual;
+  return dedupeCategoryNames([...DEBT_ONBOARDING_CATEGORIES, ...usual]);
+}
+
+/** True for a category this onboarding offers as a debt rather than a spend. */
+export function isDebtOnboardingCategory(category: string): boolean {
+  const normalized = normalizeCategoryName(category);
+  return DEBT_ONBOARDING_CATEGORIES.some((item) => normalizeCategoryName(item) === normalized);
+}
+
+/**
+ * The debt categories a draft actually chose, with the balance entered against
+ * each. Only these become tracked debts; a debt category picked without a
+ * balance is still just a category, because a debt with no balance has nothing
+ * to count down.
+ */
+export function trackedDebtsFromDraft(
+  draft: Pick<MobileOnboardingDraft, "selectedCategories" | "debtBalances" | "budgetGoal">,
+): Array<{ name: string; balance: number }> {
+  if (draft.budgetGoal !== "debt") return [];
+  const balances = draft.debtBalances ?? {};
+  return draft.selectedCategories
+    .filter((category) => isDebtOnboardingCategory(category))
+    .map((category) => ({ name: category, balance: Number(balances[canonicalCategoryName(category)] ?? balances[category] ?? "") }))
+    .filter((row) => Number.isFinite(row.balance) && row.balance > 0);
+}
+
 export function categoryPriority(category: string): number {
   const canonical = canonicalCategoryName(category);
   return ONBOARDING_CATEGORY_TIERS.find((tier) => tier.categories.some((item) => item === canonical))?.priority ?? 4;
@@ -259,6 +382,15 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
   if (raw.budgetDuration !== "ongoing" && raw.budgetDuration !== "week" && raw.budgetDuration !== "month" && raw.budgetDuration !== "quarter" && raw.budgetDuration !== "custom") return null;
   if (!Array.isArray(raw.selectedCategories) || !Array.isArray(raw.customCategories) || !Array.isArray(raw.selectedIncomeStreams)) return null;
   const persona = typeof raw.persona === "string" ? raw.persona : null;
+  const budgetGoal = raw.budgetGoal === "budgeting" || raw.budgetGoal === "saving" || raw.budgetGoal === "debt"
+    ? raw.budgetGoal
+    : null;
+  const debtBalances = raw.debtBalances && typeof raw.debtBalances === "object"
+    ? Object.entries(raw.debtBalances as Record<string, unknown>).reduce<Record<string, string>>((result, [name, amount]) => {
+      if (typeof amount === "string") result[canonicalCategoryName(name)] = amount;
+      return result;
+    }, {})
+    : {};
   const coupleStage = raw.coupleStage === "together" || raw.coupleStage === "wedding" ? raw.coupleStage : null;
   const selectedCategories = dedupeCategoryNames(raw.selectedCategories.filter((item): item is string => typeof item === "string"));
   const recommendedCategories = recommendedCategoriesForPurpose(persona, coupleStage);
@@ -286,6 +418,8 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     incomeAmounts: raw.incomeAmounts && typeof raw.incomeAmounts === "object" ? raw.incomeAmounts as Record<string, string> : {},
     memberContribution: typeof raw.memberContribution === "string" ? raw.memberContribution.replace(/[^0-9]/g, "") : "",
     expectedMemberCount: typeof raw.expectedMemberCount === "string" ? raw.expectedMemberCount.replace(/[^0-9]/g, "") : "",
+    budgetGoal,
+    debtBalances,
   };
 }
 
