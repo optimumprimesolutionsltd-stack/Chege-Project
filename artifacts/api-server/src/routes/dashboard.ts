@@ -20,6 +20,7 @@ import {
   GetDashboardSummaryQueryParams,
   GetDashboardCategoryBreakdownQueryParams,
   GetDashboardCategoryLedgerQueryParams,
+  GetDashboardSpendingByItemQueryParams,
   GetDashboardActivityQueryParams,
   GetDashboardIncomeStreamsQueryParams,
   GetDashboardIncomeStreamsResponse,
@@ -27,6 +28,7 @@ import {
   GetDashboardPeriodTotalsResponse,
   GetDashboardMonthlyReportPdfQueryParams,
 } from "@workspace/api-zod";
+import { memberLedgerName } from "../lib/contributor-name";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
@@ -685,6 +687,23 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
   const { category } = parsed.data;
   const isBudgeted = rawIsBudgeted === "true";
 
+  // The ledger could only ever answer "this month". A ledger is the thing
+  // somebody opens to settle an argument about what was spent between two
+  // dates, so it takes an exact `?from=&to=` range, defaulting to the month it
+  // already showed — every existing caller asks for exactly what it did before.
+  const { from: askedFrom, to: askedTo } = parsed.data;
+  if ((askedFrom == null) !== (askedTo == null)) {
+    // One bare end would quietly answer about a different span than was asked
+    // for, and a ledger that answers the wrong question is worse than no ledger.
+    res.status(400).json({ error: "Give both a start and an end date, or neither." });
+    return;
+  }
+  const range = askedFrom != null && askedTo != null
+    ? (askedFrom <= askedTo ? { from: askedFrom, to: askedTo } : { from: askedTo, to: askedFrom })
+    : null;
+  const ledgerFrom = range?.from ?? `${year}-${String(month).padStart(2, "0")}-01`;
+  const ledgerTo = range?.to ?? new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+
   const [activeCategories, expenses, disbursements, allocations] = await Promise.all([
     db
       .select({ name: budgetCategoriesTable.name })
@@ -702,7 +721,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
       })
       .from(expensesTable)
       .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
-      .where(sql`${expensesTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`),
+      .where(sql`${expensesTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${ledgerFrom} AND ${expensesTable.date} <= ${ledgerTo}`),
     db
       .select({
         id: jointAccountTxTable.id,
@@ -714,7 +733,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
       })
       .from(jointAccountTxTable)
       .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`),
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND ${jointAccountTxTable.date} >= ${ledgerFrom} AND ${jointAccountTxTable.date} <= ${ledgerTo}`),
     db.select({
       expenseId: expenseCategoryAllocationsTable.expenseId,
       category: expenseCategoryAllocationsTable.category,
@@ -725,7 +744,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
         eq(expenseCategoryAllocationsTable.expenseId, expensesTable.id),
         eq(expenseCategoryAllocationsTable.groupId, expensesTable.groupId),
       ))
-      .where(sql`${expenseCategoryAllocationsTable.groupId} = ${groupId} AND EXTRACT(MONTH FROM ${expensesTable.date}) = ${month} AND EXTRACT(YEAR FROM ${expensesTable.date}) = ${year}`)
+      .where(sql`${expenseCategoryAllocationsTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${ledgerFrom} AND ${expensesTable.date} <= ${ledgerTo}`)
       .orderBy(expenseCategoryAllocationsTable.position),
   ]);
 
@@ -767,6 +786,149 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
   res.json({
     category,
     total: entries.reduce((sum, entry) => sum + entry.amount, 0),
+    entries,
+  });
+});
+
+/**
+ * "How much have I spent on this?" — where "this" is a thing, not a category.
+ *
+ * Categories answer "how much on Food"; nobody budgets a category called
+ * Netflix. The one field that already names the thing is the expense's own
+ * description, so this groups by it and adds the money up. Grouping is on the
+ * trimmed, lower-cased description, because "Netflix", "netflix " and
+ * "NETFLIX" are one subscription; the label shown back is the spelling used
+ * most recently, so it reads the way the person last typed it.
+ *
+ * The amount is the expense's full amount, not a category portion: a 5,000
+ * shop split across Food and Household still cost 5,000.
+ */
+router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const parsed = GetDashboardSpendingByItemQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid query" });
+    return;
+  }
+  const { from: askedFrom, to: askedTo, q, category, item } = parsed.data;
+  if ((askedFrom == null) !== (askedTo == null)) {
+    res.status(400).json({ error: "Give both a start and an end date, or neither." });
+    return;
+  }
+
+  // Asked with no range at all, this answers about the last twelve months.
+  // "How much do I spend on rent" is not a question about one month, and a
+  // default that only ever covered the current one would answer it wrongly
+  // more often than not.
+  const today = new Date();
+  const defaultTo = today.toISOString().slice(0, 10);
+  const defaultFrom = new Date(Date.UTC(today.getUTCFullYear() - 1, today.getUTCMonth(), 1))
+    .toISOString()
+    .slice(0, 10);
+  const [from, to] = askedFrom != null && askedTo != null
+    ? (askedFrom <= askedTo ? [askedFrom, askedTo] : [askedTo, askedFrom])
+    : [defaultFrom, defaultTo];
+
+  // A search is a plain substring on the name, not a pattern: somebody typing
+  // "50% off" is naming a shop, not writing SQL.
+  // `!` is the escape character rather than a backslash so the pattern needs
+  // no escaping of its own on the way here.
+  const search = q?.trim() ? `%${q.trim().replace(/[!%_]/g, (ch) => `!${ch}`)}%` : null;
+
+  const rows = await db.execute(sql`
+    SELECT (array_agg(e.description ORDER BY e.date DESC, e.id DESC))[1] AS "description",
+           COALESCE(SUM(e.amount), 0) AS "total",
+           COUNT(*) AS "count",
+           MIN(e.date) AS "firstDate",
+           MAX(e.date) AS "lastDate",
+           array_agg(DISTINCT e.category) AS "categories"
+    FROM expenses e
+    WHERE e.group_id = ${groupId}
+      AND e.date >= ${from}
+      AND e.date <= ${to}
+      ${search ? sql`AND e.description ILIKE ${search} ESCAPE '!'` : sql``}
+      ${item ? sql`AND lower(btrim(e.description)) = lower(btrim(${item}))` : sql``}
+      ${category ? sql`AND (
+        e.category = ${category}
+        OR EXISTS (
+          SELECT 1 FROM expense_category_allocations a
+          WHERE a.expense_id = e.id AND a.group_id = ${groupId} AND a.category = ${category}
+        )
+      )` : sql``}
+    GROUP BY lower(btrim(e.description))
+    ORDER BY "total" DESC
+    LIMIT 200
+  `);
+
+  const items = (rows.rows as {
+    description: string;
+    total: string | number;
+    count: string | number;
+    firstDate: string;
+    lastDate: string;
+    categories: string[] | null;
+  }[]).map((row) => ({
+    description: row.description,
+    total: Number(row.total),
+    count: Number(row.count),
+    firstDate: String(row.firstDate).slice(0, 10),
+    lastDate: String(row.lastDate).slice(0, 10),
+    categories: (row.categories ?? []).filter((name): name is string => typeof name === "string"),
+  }));
+
+  // "KES 3,600 on Netflix" invites "which three?". Naming an item returns the
+  // expenses behind the figure, so the total can be checked rather than
+  // believed.
+  const entries = item == null ? null : await db.execute(sql`
+    SELECT e.id AS "id",
+           e.date AS "date",
+           e.description AS "description",
+           e.amount AS "amount",
+           e.category AS "category",
+           e.paid_from_bank AS "paidFromBank",
+           u.preferred_name AS "preferredName",
+           u.first_name AS "firstName",
+           u.last_name AS "lastName"
+    FROM expenses e
+    LEFT JOIN users u ON u.id = e.paid_by_id
+    WHERE e.group_id = ${groupId}
+      AND e.date >= ${from}
+      AND e.date <= ${to}
+      AND lower(btrim(e.description)) = lower(btrim(${item}))
+    ORDER BY e.date DESC, e.id DESC
+    LIMIT 500
+  `).then((result) => (result.rows as {
+    id: number;
+    date: string;
+    description: string;
+    amount: string | number;
+    category: string;
+    paidFromBank: boolean;
+    preferredName: string | null;
+    firstName: string | null;
+    lastName: string | null;
+  }[]).map((row) => ({
+    id: Number(row.id),
+    date: String(row.date).slice(0, 10),
+    description: row.description,
+    amount: Number(row.amount),
+    category: row.category,
+    paidFromBank: Boolean(row.paidFromBank),
+    // The same rule the rest of the ledgers name people by, rather than a
+    // bare first name that reads as somebody else in a group of cousins.
+    payerName: memberLedgerName(row.preferredName, row.firstName, row.lastName)
+      ?? (row.paidFromBank ? "Joint bank" : "Payer not recorded"),
+  })));
+
+  res.json({
+    from,
+    to,
+    // The total of what is listed, so it always agrees with the rows above it
+    // even when the 200-row cap has cut the tail off.
+    total: items.reduce((sum, row) => sum + row.total, 0),
+    items,
     entries,
   });
 });

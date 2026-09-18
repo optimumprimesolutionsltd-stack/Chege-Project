@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, BackHandler, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, AppState, BackHandler, Platform } from 'react-native';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { AppLoading } from '@/components/AppLoading';
@@ -44,33 +44,58 @@ import {
   mobileBudgetEntryRedirect,
 } from '@/lib/workspace';
 
+// How long to leave between checks, so a quick switch to WhatsApp and back
+// does not ask Expo about updates every few seconds.
+const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+
 // Check for OTA updates and show an update prompt when one is available.
 // Skipped in development (Expo Go / dev-client) where Updates is not active.
 // Returns state consumed by RootLayout to render the <UpdatePrompt> overlay.
 function useUpdatePrompt() {
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const lastCheckedAt = useRef(0);
+  // Read inside the listener without making it a dependency, so subscribing
+  // does not tear down and re-subscribe every time the message changes.
+  const showing = useRef(false);
+  showing.current = updateMessage !== null;
+
+  const check = useCallback(async () => {
+    if (__DEV__ || !Updates.isEnabled) return;
+    if (showing.current) return;
+    const now = Date.now();
+    if (now - lastCheckedAt.current < UPDATE_CHECK_INTERVAL_MS) return;
+    lastCheckedAt.current = now;
+    try {
+      const result = await Updates.checkForUpdateAsync();
+      if (!result.isAvailable) return;
+      // Pull the message from the EAS Update manifest (set via --message flag).
+      // The field is present at runtime even though it is not typed on the manifest type.
+      const manifest = result.manifest as Record<string, unknown> | undefined;
+      const metadata = manifest?.metadata as Record<string, unknown> | undefined;
+      const raw = metadata?.message;
+      const message =
+        typeof raw === 'string' && raw.trim()
+          ? raw.trim()
+          : 'A new version of Jamvi is ready with the latest improvements and fixes.';
+      setUpdateMessage(message);
+    } catch {
+      // Network unavailable or server error — silently ignore.
+    }
+  }, []);
 
   useEffect(() => {
-    if (__DEV__ || !Updates.isEnabled) return;
-    (async () => {
-      try {
-        const result = await Updates.checkForUpdateAsync();
-        if (!result.isAvailable) return;
-        // Pull the message from the EAS Update manifest (set via --message flag).
-        // The field is present at runtime even though it is not typed on the manifest type.
-        const manifest = result.manifest as Record<string, unknown> | undefined;
-        const metadata = manifest?.metadata as Record<string, unknown> | undefined;
-        const raw = metadata?.message;
-        const message =
-          typeof raw === 'string' && raw.trim()
-            ? raw.trim()
-            : 'A new version of Jamvi is ready with the latest improvements and fixes.';
-        setUpdateMessage(message);
-      } catch {
-        // Network unavailable or server error — silently ignore.
-      }
-    })();
-  }, []);
+    void check();
+
+    // Nobody force-quits a phone app. Checking only on mount meant the prompt
+    // appeared solely after a genuinely cold start — so somebody who leaves
+    // Jamvi open and comes back to it was never offered an update at all, and
+    // published OTAs looked as though they had not shipped. Ask again whenever
+    // the app returns to the foreground.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void check();
+    });
+    return () => subscription.remove();
+  }, [check]);
 
   return { updateMessage, dismiss: () => setUpdateMessage(null) };
 }
@@ -368,6 +393,7 @@ function RootLayoutNav() {
           contentStyle: { backgroundColor: 'transparent' },
         }}
       />
+      <Stack.Screen name="spending-by-item" options={{ headerShown: false }} />
       <Stack.Screen name="subscription" options={{ headerShown: false }} />
       <Stack.Screen name="delete-account-code" options={{ headerShown: false, gestureEnabled: false }} />
     </Stack>

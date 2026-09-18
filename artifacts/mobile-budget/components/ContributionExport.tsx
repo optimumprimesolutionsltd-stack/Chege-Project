@@ -222,8 +222,6 @@ export function ContributionExport() {
     enabled: false,
   });
 
-  if (!isManager) return null;
-
   const [rangeStart, rangeEnd] = dayFrom <= dayTo ? [dayFrom, dayTo] : [dayTo, dayFrom];
   const statementQuery = `from=${encodeURIComponent(rangeStart)}&to=${encodeURIComponent(rangeEnd)}`;
 
@@ -245,7 +243,7 @@ export function ContributionExport() {
   // "Dated ledger", or picking a different day while already viewing, left
   // the old range's entries on screen under new, mismatched From/To fields.
   useEffect(() => {
-    if (!viewing) return;
+    if (!viewing || !isManager) return;
     let active = true;
     setViewLoading(true);
     customFetch(`/api/contributions/statement?from=${encodeURIComponent(viewFrom)}&to=${encodeURIComponent(viewTo)}`)
@@ -262,7 +260,14 @@ export function ContributionExport() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewing, viewFrom, viewTo]);
+  }, [viewing, viewFrom, viewTo, isManager]);
+
+  // Every hook above runs on every render. This used to sit above the effect,
+  // so the first render — before useGetGroup had answered, when isManager is
+  // still false — registered one hook fewer than the render after it. React
+  // threw on the mismatch and the card came up blank for the very people it is
+  // for. A guard that skips hooks has to come after all of them.
+  if (!isManager) return null;
 
   const viewQuery = `from=${encodeURIComponent(viewFrom)}&to=${encodeURIComponent(viewTo)}`;
 

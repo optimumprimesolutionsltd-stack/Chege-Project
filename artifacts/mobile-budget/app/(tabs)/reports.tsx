@@ -479,6 +479,29 @@ export default function ReportsScreen() {
           refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
         >
+          {/* Categories answer "how much on Food". This answers "how much on
+              that thing", which is the question people actually ask. */}
+          <Pressable
+            onPress={() => router.push('/spending-by-item')}
+            accessibilityRole="button"
+            accessibilityLabel="See what you spend on each shop, bill or subscription"
+            testID="open-spending-by-item"
+            style={({ pressed }) => [
+              styles.spendOnCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Feather name="search" size={18} color={colors.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>What you spend on</Text>
+              <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                How much a particular shop, bill or subscription has cost you over time.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+
           {/* ── Plain-language monthly progress ── */}
           <View
             testID="monthly-progress-summary"
@@ -1255,6 +1278,9 @@ const styles = StyleSheet.create({
   contribHeaderInfo: { flex: 1 },
   contribName: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   contribShare: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 1 },
+  spendOnCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 14 },
+  spendOnTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  spendOnSub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   contribAmountBlock: { alignItems: 'flex-end' },
   contribAmount: { fontSize: 15, fontFamily: 'Inter_700Bold' },
   contribAmountSub: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 1 },

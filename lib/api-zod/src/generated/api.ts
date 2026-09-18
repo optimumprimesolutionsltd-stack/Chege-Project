@@ -703,13 +703,17 @@ export const GetDashboardCategoryBreakdownResponse = zod.array(GetDashboardCateg
 export const getDashboardCategoryLedgerQueryMonthMax = 12;
 
 
+export const getDashboardCategoryLedgerQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getDashboardCategoryLedgerQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const GetDashboardCategoryLedgerQueryParams = zod.object({
   "month": zod.coerce.number().min(1).max(getDashboardCategoryLedgerQueryMonthMax).optional(),
   "year": zod.coerce.number().optional(),
   "category": zod.coerce.string().min(1),
-  "isBudgeted": zod.coerce.boolean().describe('Whether this is an active budget category or the synthetic Unbudgeted spending row')
+  "isBudgeted": zod.coerce.boolean().describe('Whether this is an active budget category or the synthetic Unbudgeted spending row'),
+  "from": zod.coerce.string().regex(getDashboardCategoryLedgerQueryFromRegExp).optional().describe('Start of an exact day range (YYYY-MM-DD). Given with `to`, the ledger covers those days instead of the whole month.'),
+  "to": zod.coerce.string().regex(getDashboardCategoryLedgerQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.')
 })
 
 export const GetDashboardCategoryLedgerResponse = zod.object({
@@ -724,6 +728,48 @@ export const GetDashboardCategoryLedgerResponse = zod.object({
   "payerName": zod.string(),
   "date": zod.coerce.date()
 }))
+})
+
+
+/**
+ * Groups expenses by their description, so "how much have I spent on Netflix" has an answer even though nobody budgets a category called Netflix. Grouping ignores case and surrounding spaces. With no date range the answer covers the last twelve months.
+ * @summary What was spent on each named thing, rather than on each category
+ */
+export const getDashboardSpendingByItemQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getDashboardSpendingByItemQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+
+
+export const GetDashboardSpendingByItemQueryParams = zod.object({
+  "from": zod.coerce.string().regex(getDashboardSpendingByItemQueryFromRegExp).optional().describe('Start of an exact day range (YYYY-MM-DD). Must be given together with `to`.'),
+  "to": zod.coerce.string().regex(getDashboardSpendingByItemQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.'),
+  "q": zod.coerce.string().optional().describe('Narrows the list to names containing this text, ignoring case.'),
+  "category": zod.coerce.string().min(1).optional().describe('Narrows the list to things charged to this category.'),
+  "item": zod.coerce.string().min(1).optional().describe('One thing by name, ignoring case and surrounding spaces. The response then carries the individual expenses behind its total.')
+})
+
+export const GetDashboardSpendingByItemResponse = zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "total": zod.number().describe('The total of the rows listed, which the 200-row cap may have shortened'),
+  "items": zod.array(zod.object({
+  "description": zod.string().describe('The name as it was last typed, standing for every spelling of it'),
+  "total": zod.number(),
+  "count": zod.number().describe('How many separate expenses make up the total'),
+  "firstDate": zod.string(),
+  "lastDate": zod.string(),
+  "categories": zod.array(zod.string()).describe('Every category this thing has been charged to')
+})),
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "category": zod.string(),
+  "paidFromBank": zod.boolean(),
+  "payerName": zod.string()
+})).nullable().describe('The individual expenses behind one thing\'s total. Null unless `item` named one.')
 })
 
 

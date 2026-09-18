@@ -20,6 +20,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import { useListEditor } from '@/hooks/useListEditor';
@@ -148,6 +150,13 @@ export default function BudgetScreen() {
   const [manageOpen, setManageOpen] = useState(false);
   const [managePriority, setManagePriority] = useState<number | null>(null);
   const [ledgerCategory, setLedgerCategory] = useState<LedgerTarget | null>(null);
+  // A ledger is what somebody opens to settle an argument about what was spent
+  // between two dates, so it is not stuck on whole months.
+  const [ledgerCustomDates, setLedgerCustomDates] = useState(false);
+  const [ledgerFrom, setLedgerFrom] = useState<string>(monthStartIso);
+  const [ledgerTo, setLedgerTo] = useState<string>(() => isoDay(new Date()));
+  const [ledgerPicker, setLedgerPicker] = useState<null | 'from' | 'to'>(null);
+  const [ledgerRangeFrom, ledgerRangeTo] = orderedRange(ledgerFrom, ledgerTo);
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
   const [formPriority, setFormPriority] = useState('1');
@@ -177,14 +186,18 @@ export default function BudgetScreen() {
       year,
       category: ledgerCategory?.category ?? '',
       isBudgeted: ledgerCategory?.isBudgeted ?? true,
+      ...(ledgerCustomDates ? { from: ledgerRangeFrom, to: ledgerRangeTo } : {}),
     },
     {
       query: {
+        // The range belongs in the key, or changing the dates would show the
+        // previous range's entries from cache.
         queryKey: getGetDashboardCategoryLedgerQueryKey({
           month,
           year,
           category: ledgerCategory?.category ?? '',
           isBudgeted: ledgerCategory?.isBudgeted ?? true,
+          ...(ledgerCustomDates ? { from: ledgerRangeFrom, to: ledgerRangeTo } : {}),
         }),
         enabled: !!ledgerCategory,
       },
@@ -863,6 +876,59 @@ export default function BudgetScreen() {
               </View>
             ) : null}
             <ScrollView contentContainerStyle={styles.ledgerBody} showsVerticalScrollIndicator={false}>
+              {/* The month this ledger opened on, or an exact span. */}
+              <View style={styles.ledgerDates}>
+                <Pressable
+                  onPress={() => setLedgerCustomDates((on) => !on)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: ledgerCustomDates }}
+                  accessibilityLabel={ledgerCustomDates ? 'Use the whole month' : 'Choose exact dates'}
+                  testID="ledger-custom-dates"
+                  style={styles.ledgerDatesToggle}
+                  hitSlop={6}
+                >
+                  <Feather name={ledgerCustomDates ? 'check-square' : 'square'} size={15} color={colors.primary} />
+                  <Text style={[styles.ledgerDatesLabel, { color: colors.primary }]}>Exact dates</Text>
+                </Pressable>
+                {ledgerCustomDates ? (
+                  <View style={styles.ledgerDateRow}>
+                    {(['from', 'to'] as const).map((which) => (
+                      <Pressable
+                        key={which}
+                        onPress={() => setLedgerPicker(which)}
+                        style={[styles.ledgerDateField, { borderColor: colors.border }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${which === 'from' ? 'Start' : 'End'} date for this ledger`}
+                        testID={`ledger-day-${which}`}
+                      >
+                        <Text style={[styles.ledgerDateCaption, { color: colors.mutedForeground }]}>
+                          {which === 'from' ? 'From' : 'To'}
+                        </Text>
+                        <Text style={[styles.ledgerDateValue, { color: colors.foreground }]}>
+                          {longDay(which === 'from' ? ledgerFrom : ledgerTo)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+                {ledgerCustomDates && ledgerPicker ? (
+                  <DateTimePicker
+                    value={new Date((ledgerPicker === 'from' ? ledgerFrom : ledgerTo) + 'T00:00:00')}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+                    maximumDate={new Date()}
+                    onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                      const which = ledgerPicker;
+                      setLedgerPicker(Platform.OS === 'ios' ? which : null);
+                      if (selected && which) {
+                        const iso = isoDay(selected);
+                        if (which === 'from') setLedgerFrom(iso);
+                        else setLedgerTo(iso);
+                      }
+                    }}
+                  />
+                ) : null}
+              </View>
               <View style={[styles.ledgerSummary, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                 <Text style={[styles.ledgerSummaryValue, { color: colors.foreground }]}>
                   {ledgerLoading ? 'Loading…' : `KES ${formatKES(ledgerCategoryTotal)}`}
@@ -1533,6 +1599,13 @@ const styles = StyleSheet.create({
   sectionHint: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17, marginHorizontal: 4, marginTop: -6, marginBottom: 12 },
   catCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 10 },
   catCardChild: { marginLeft: 16, borderLeftWidth: 3, borderTopLeftRadius: 4, borderBottomLeftRadius: 4 },
+  ledgerDates: { gap: 8, marginBottom: 10 },
+  ledgerDatesToggle: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 34, alignSelf: 'flex-start' },
+  ledgerDatesLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  ledgerDateRow: { flexDirection: 'row', gap: 8 },
+  ledgerDateField: { flex: 1, minHeight: 46, justifyContent: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 10 },
+  ledgerDateCaption: { fontSize: 10, fontFamily: 'Inter_500Medium' },
+  ledgerDateValue: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 1 },
   rollupLine: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 },
   catCardMuted: { opacity: 0.76 },
   catTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
