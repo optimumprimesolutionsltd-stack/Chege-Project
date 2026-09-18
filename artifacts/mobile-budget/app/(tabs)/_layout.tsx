@@ -1,5 +1,7 @@
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { customFetch } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { useAppearance } from '@/hooks/useAppearance';
 import { Feather } from '@expo/vector-icons';
@@ -17,7 +19,7 @@ import { useGetGroup } from '@workspace/api-client-react';
 // 5 core tabs — Bank and Settings remain accessible from Home/header controls.
 // A shared group swaps Search out for Contributions, which is a core shared
 // activity; Search stays reachable from the Home header.
-function NativeTabLayout({ showReports, isShared }: { showReports: boolean; isShared: boolean }) {
+function NativeTabLayout({ showReports, isShared, showDebt }: { showReports: boolean; isShared: boolean; showDebt: boolean }) {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -54,11 +56,17 @@ function NativeTabLayout({ showReports, isShared }: { showReports: boolean; isSh
           <Label>Reports</Label>
         </NativeTabs.Trigger>
       )}
+      {showDebt && (
+        <NativeTabs.Trigger name="debt">
+          <Icon sf={{ default: 'chart.line.downtrend.xyaxis', selected: 'chart.line.downtrend.xyaxis' }} />
+          <Label>Debt</Label>
+        </NativeTabs.Trigger>
+      )}
     </NativeTabs>
   );
 }
 
-function ClassicTabLayout({ showReports, isShared }: { showReports: boolean; isShared: boolean }) {
+function ClassicTabLayout({ showReports, isShared, showDebt }: { showReports: boolean; isShared: boolean; showDebt: boolean }) {
   const colors = useColors();
   const { resolvedScheme } = useAppearance();
   const isDark = resolvedScheme === 'dark';
@@ -200,6 +208,21 @@ function ClassicTabLayout({ showReports, isShared }: { showReports: boolean; isS
         }
       />
 
+      <Tabs.Screen
+        name="debt"
+        options={showDebt
+          ? {
+              title: 'Debt',
+              tabBarIcon: ({ color }) =>
+                isIOS ? (
+                  <SymbolView name="chart.line.downtrend.xyaxis" tintColor={color} size={24} />
+                ) : (
+                  <Feather name="trending-down" size={22} color={color} />
+                ),
+            }
+          : { href: null }}
+      />
+
       {/* ── Hidden — accessible via Home/header controls ── */}
       <Tabs.Screen name="bank"     options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />
@@ -211,12 +234,26 @@ export default function TabLayout() {
   const colors = useColors();
   const { data: group } = useGetGroup();
   const showReports = group?.isPrivate !== false;
+  // Debt earns its tab rather than being handed one. A budget that tracks no
+  // debt gets no tab — an empty Debt tab on every household's phone would be
+  // the opposite of making debt matter — and the moment a category is marked
+  // as a debt, it appears.
+  const { data: debtCategories = [] } = useQuery<Array<{ debtBalance: number | null }>>({
+    queryKey: ['budget-categories-full'],
+    queryFn: () => customFetch<Array<{ debtBalance: number | null }>>('/api/budget-categories'),
+    staleTime: 60_000,
+  });
+  const showDebt = debtCategories.some((row) => row.debtBalance !== null && row.debtBalance !== undefined);
   const isShared = group?.isPrivate === false;
   // The shared and personal layouts have a different set of tabs (Contributions
   // vs Search). A native tab bar does not reliably add or drop a trigger when
   // this flips after the group query resolves, so remount the navigator on the
   // change instead of mutating its children in place.
-  const layoutKey = `${group === undefined ? 'loading' : isShared ? 'shared' : 'personal'}`;
+  // showDebt belongs in the key for the same reason isShared does: the native
+  // tab bar does not reliably grow a trigger when the set changes, so marking
+  // the first category as a debt has to remount the navigator for the tab to
+  // actually appear.
+  const layoutKey = `${group === undefined ? 'loading' : isShared ? 'shared' : 'personal'}-${showDebt ? 'debt' : 'nodebt'}`;
 
   // SubscriptionBanner sits above the navigator, not inside either tab
   // layout, so it is on screen no matter which tab is active — an in-flow
@@ -228,7 +265,7 @@ export default function TabLayout() {
       <View style={{ flex: 1, backgroundColor: colors.card }}>
         <SubscriptionBanner />
         <View style={{ flex: 1 }}>
-          <NativeTabLayout key={layoutKey} showReports={showReports} isShared={isShared} />
+          <NativeTabLayout key={layoutKey} showReports={showReports} isShared={isShared} showDebt={showDebt} />
         </View>
         <GlobalFAB />
       </View>
@@ -238,7 +275,7 @@ export default function TabLayout() {
     <View style={{ flex: 1, backgroundColor: colors.card }}>
       <SubscriptionBanner />
       <View style={{ flex: 1 }}>
-        <ClassicTabLayout key={layoutKey} showReports={showReports} isShared={isShared} />
+        <ClassicTabLayout key={layoutKey} showReports={showReports} isShared={isShared} showDebt={showDebt} />
       </View>
       <GlobalFAB />
     </View>

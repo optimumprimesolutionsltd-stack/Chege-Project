@@ -40,7 +40,6 @@ import {
 import { useAuth } from '@/lib/auth';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
-import { DebtPayoffCard } from '@/components/DebtPayoffCard';
 import { getLedgerExpenseEditHref } from '@/lib/expenseEditLink';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 
@@ -1210,8 +1209,6 @@ export default function BudgetScreen() {
             })
           )}
         </View>
-
-        <DebtPayoffCard canManage={canManageCategories} />
 
         {/* Category list */}
         <View style={styles.list}>
