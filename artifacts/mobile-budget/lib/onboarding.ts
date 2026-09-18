@@ -44,9 +44,16 @@ export function budgetDurationEditError(durationType: MobileBudgetDuration, cust
   return null;
 }
 
+/** A couple's two starting points need different categories and income
+ *  sources: a household already sharing bills, or a wedding still being
+ *  saved and paid for. */
+export type CoupleStage = "together" | "wedding";
+
 export type MobileOnboardingDraft = {
   usageMode: MobileOnboardingMode;
   persona: string | null;
+  /** Only meaningful when persona is "couple". */
+  coupleStage: CoupleStage | null;
   budgetDuration: MobileBudgetDuration;
   customEndDate: string;
   lastStep?: number;
@@ -58,6 +65,9 @@ export type MobileOnboardingDraft = {
   /** For a group: what each member is expected to contribute per month, as a
    *  plain KES string. Applied as the group's default contribution target. */
   memberContribution?: string;
+  /** How many people the group expects, as a plain string. A guess, not an
+   *  enforced cap — it only steers what Jamvi recommends. */
+  expectedMemberCount?: string;
 };
 
 const ONBOARDING_CATEGORY_ALIASES: Record<string, string> = {
@@ -146,9 +156,37 @@ export const GROUP_INCOME_STREAMS = [
   "Other group income",
 ] as const;
 
+/**
+ * A couple saving toward a wedding is not living on pooled income yet — the
+ * money is each person's own, set aside for one event, often topped up by
+ * family. None of GROUP_INCOME_STREAMS' membership fees or fines apply, and
+ * COMMON_INCOME_STREAMS misses the gifts and family top-ups that pay for a
+ * lot of weddings.
+ */
+export const WEDDING_INCOME_STREAMS = [
+  "Salary or wages",
+  "Personal savings",
+  "Family contributions",
+  "Wedding gifts or cash gifts",
+  "Business or side hustle",
+  "Other income",
+] as const;
+
+// A couple, friends, or family pool money each of them already earns
+// elsewhere — the same question COMMON_INCOME_STREAMS asks a single person.
+// A chama, church, club, or student group instead collects money that only
+// exists because the group does: dues, fines, fundraising, grants.
+const HOUSEHOLD_LIKE_PERSONAS = new Set(["couple", "friends", "family"]);
+
 /** The income options for whichever way Jamvi is being set up. */
-export function incomeStreamsForMode(usageMode: MobileOnboardingMode): readonly string[] {
-  return usageMode === "shared" ? GROUP_INCOME_STREAMS : COMMON_INCOME_STREAMS;
+export function incomeStreamsForMode(
+  usageMode: MobileOnboardingMode,
+  persona: string | null = null,
+  coupleStage: CoupleStage | null = null,
+): readonly string[] {
+  if (usageMode !== "shared") return COMMON_INCOME_STREAMS;
+  if (persona === "couple" && coupleStage === "wedding") return WEDDING_INCOME_STREAMS;
+  return HOUSEHOLD_LIKE_PERSONAS.has(persona ?? "") ? COMMON_INCOME_STREAMS : GROUP_INCOME_STREAMS;
 }
 
 export function normalizeIncomeStreamName(name: string): string {
@@ -189,6 +227,7 @@ const PURPOSE_CATEGORY_MAP: Record<string, readonly string[]> = {
   working: ["Food", "Housing", "Utilities", "Transport", "Health", "Insurance", "Personal care", "Other"],
   business: ["Food", "Transport", "Health", "Work & business", "Business supplies", "Stock & inventory", "Airtime & data", "Other"],
   couple: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Health", "Dates & activities", "Other"],
+  couple_wedding: ["Venue", "Catering", "Attire", "Photography & video", "Decor", "Invitations & stationery", "Gifts", "Transport", "Other"],
   friends: ["Food", "Housing", "Shared bills", "Utilities", "Transport", "Entertainment", "Dates & activities", "Airtime & data"],
   family: ["Food", "Housing", "Utilities", "Transport", "Health", "Education", "Family support", "Insurance", "Household"],
   chama: ["Member welfare", "Loans", "Events", "Transport", "Projects", "Other"],
@@ -203,8 +242,9 @@ export function onboardingDraftStorageKey(userId: string): string {
   return `${ONBOARDING_DRAFT_STORAGE_PREFIX}${encodeURIComponent(userId)}`;
 }
 
-export function recommendedCategoriesForPurpose(purpose: string | null): string[] {
-  return dedupeCategoryNames(purpose ? (PURPOSE_CATEGORY_MAP[purpose] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES);
+export function recommendedCategoriesForPurpose(purpose: string | null, coupleStage: CoupleStage | null = null): string[] {
+  const key = purpose === "couple" && coupleStage === "wedding" ? "couple_wedding" : purpose;
+  return dedupeCategoryNames(key ? (PURPOSE_CATEGORY_MAP[key] ?? ALL_ONBOARDING_CATEGORIES) : ALL_ONBOARDING_CATEGORIES);
 }
 
 export function categoryPriority(category: string): number {
@@ -219,8 +259,9 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
   if (raw.budgetDuration !== "ongoing" && raw.budgetDuration !== "week" && raw.budgetDuration !== "month" && raw.budgetDuration !== "quarter" && raw.budgetDuration !== "custom") return null;
   if (!Array.isArray(raw.selectedCategories) || !Array.isArray(raw.customCategories) || !Array.isArray(raw.selectedIncomeStreams)) return null;
   const persona = typeof raw.persona === "string" ? raw.persona : null;
+  const coupleStage = raw.coupleStage === "together" || raw.coupleStage === "wedding" ? raw.coupleStage : null;
   const selectedCategories = dedupeCategoryNames(raw.selectedCategories.filter((item): item is string => typeof item === "string"));
-  const recommendedCategories = recommendedCategoriesForPurpose(persona);
+  const recommendedCategories = recommendedCategoriesForPurpose(persona, coupleStage);
   const customCategories = dedupeCategoryNames(raw.customCategories.filter((item): item is string => typeof item === "string"))
     .filter((category) => !recommendedCategories.some((item) => normalizeCategoryName(item) === normalizeCategoryName(category)));
   const categoryBudgets = raw.categoryBudgets && typeof raw.categoryBudgets === "object"
@@ -234,6 +275,7 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
   return {
     usageMode: raw.usageMode,
     persona,
+    coupleStage,
     budgetDuration: raw.budgetDuration,
     customEndDate: typeof raw.customEndDate === "string" ? raw.customEndDate : "",
     lastStep: typeof raw.lastStep === "number" && Number.isInteger(raw.lastStep) ? Math.max(0, Math.min(5, raw.lastStep)) : 0,
@@ -243,6 +285,7 @@ export function normalizeOnboardingDraft(value: unknown): MobileOnboardingDraft 
     selectedIncomeStreams: dedupeIncomeStreamNames(raw.selectedIncomeStreams.filter((item): item is string => typeof item === "string")),
     incomeAmounts: raw.incomeAmounts && typeof raw.incomeAmounts === "object" ? raw.incomeAmounts as Record<string, string> : {},
     memberContribution: typeof raw.memberContribution === "string" ? raw.memberContribution.replace(/[^0-9]/g, "") : "",
+    expectedMemberCount: typeof raw.expectedMemberCount === "string" ? raw.expectedMemberCount.replace(/[^0-9]/g, "") : "",
   };
 }
 
