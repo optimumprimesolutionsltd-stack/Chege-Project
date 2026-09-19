@@ -1443,6 +1443,9 @@ export default function Expenses() {
                 <option key={group.name} value={group.name}>{group.name}</option>,
               )}
             </select>
+            {/* Saying nothing made subcategories look as though they did not
+                exist, so the rule is stated where somebody meets it. */}
+            <p className="text-xs text-muted-foreground">Subcategories live in Detailed.</p>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-foreground">Description <span className="text-destructive">*</span></label>
