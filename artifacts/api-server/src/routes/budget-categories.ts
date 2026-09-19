@@ -11,6 +11,8 @@ import {
 import { getActiveGroupId, requireGroupManager, requireTransactionEligibility } from "../lib/activeGroup";
 import { categoryPackChildren, categoryPackForKind, categoryPackRows, normalizedCategoryPackKind, priorityTiersForKind, subcategorySuggestions } from "../lib/categoryPacks";
 
+import { canonicalExpenseCategoryName } from "../lib/categoryNames";
+
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
 
@@ -496,13 +498,29 @@ router.post("/budget-categories", async (req, res) => {
     res.status(400).json({ error: `"${UNCATEGORIZED_CATEGORY}" is reserved for uncategorized expenses.` });
     return;
   }
+  // Expenses have always been stored under the canonical name, so a category
+  // created as "Rent" could never collect any spending — every expense tagged
+  // to it was filed as "Housing". The category has to agree with the expenses.
+  const requestedName = parsed.data.name.trim();
+  const canonicalName = canonicalExpenseCategoryName(requestedName);
+  const wasCanonicalised = canonicalName !== requestedName;
+  parsed.data.name = canonicalName;
   const duplicate = await db.query.budgetCategoriesTable.findFirst({
     where: and(
       eq(budgetCategoriesTable.name, parsed.data.name),
       eq(budgetCategoriesTable.groupId, groupId),
     ),
   });
-  if (duplicate) { res.status(409).json({ error: "A category with this name already exists" }); return; }
+  if (duplicate) {
+    // Saying "this name already exists" about a name they did not type reads
+    // as a bug. Name both, so the reason is obvious.
+    res.status(409).json({
+      error: wasCanonicalised
+        ? `"${requestedName}" is recorded as "${canonicalName}", which this budget already has.`
+        : "A category with this name already exists",
+    });
+    return;
+  }
   if (parsed.data.parentId != null) {
     const rejection = await parentRejection(groupId, parsed.data.parentId, null);
     if (rejection) { res.status(400).json({ error: rejection }); return; }
@@ -555,6 +573,11 @@ router.put("/budget-categories/:id", async (req, res) => {
   }
   const merged = categorySchema.safeParse({ ...existing, ...parsed.data });
   if (!merged.success) { res.status(400).json({ error: "Invalid input", details: merged.error.flatten() }); return; }
+  // Renaming a category to an alias would reopen the same gap as creating one.
+  const requestedName = merged.data.name.trim();
+  const canonicalName = canonicalExpenseCategoryName(requestedName);
+  const wasCanonicalised = canonicalName !== requestedName;
+  merged.data.name = canonicalName;
   const duplicate = await db.query.budgetCategoriesTable.findFirst({
     where: and(
       eq(budgetCategoriesTable.name, merged.data.name),
@@ -562,7 +585,14 @@ router.put("/budget-categories/:id", async (req, res) => {
       ne(budgetCategoriesTable.id, id),
     ),
   });
-  if (duplicate) { res.status(409).json({ error: "A category with this name already exists" }); return; }
+  if (duplicate) {
+    res.status(409).json({
+      error: wasCanonicalised
+        ? `"${requestedName}" is recorded as "${canonicalName}", which this budget already has.`
+        : "A category with this name already exists",
+    });
+    return;
+  }
   try {
     const row = await db.transaction(async (tx) => {
       // Nesting this category under a parent leaves that parent budgeted
