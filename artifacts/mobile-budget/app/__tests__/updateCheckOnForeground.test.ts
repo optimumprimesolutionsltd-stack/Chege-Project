@@ -18,7 +18,12 @@ describe('asking for updates more than once', () => {
   });
 
   it('still asks on the first load', () => {
-    expect(layout).toContain('void check();\n\n    //');
+    // Pinned by order rather than by surrounding whitespace — this file is
+    // CRLF on disk, so an assertion spelling out '\n\n' matched nothing.
+    const mountCheck = layout.indexOf('void check();');
+    const subscribe = layout.indexOf('AppState.addEventListener');
+    expect(mountCheck).toBeGreaterThan(-1);
+    expect(mountCheck).toBeLessThan(subscribe);
   });
 });
 

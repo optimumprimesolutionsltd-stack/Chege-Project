@@ -1380,6 +1380,12 @@ export default function BudgetScreen() {
                     style={[
                       styles.catCard,
                       { backgroundColor: colors.card, borderColor: colors.border },
+                      // A parent heads a branch, so it is drawn as one: a
+                      // tinted panel the plain children sit beneath. Indenting
+                      // alone left the two reading as the same kind of row at a
+                      // glance. A category with no subcategories is neither, and
+                      // keeps the plain card it always had.
+                      rollup ? { backgroundColor: colors.accent, borderColor: colors.accentForeground + '55' } : null,
                       // A subcategory sits under its parent rather than beside
                       // it: indented, and drawn as a branch of the row above.
                       isChild && styles.catCardChild,
@@ -1421,7 +1427,7 @@ export default function BudgetScreen() {
                             question asked of the whole branch, which is what
                             people mean by "what did Food cost me". */}
                         {rollup ? (
-                          <Text style={[styles.rollupLine, { color: colors.primary }]}>
+                          <Text style={[styles.rollupLine, { color: colors.accentForeground }]}>
                             With subcategories: {formatKES(rollup.spentAmount)} / {formatKES(rollup.budgetAmount)}
                           </Text>
                         ) : null}
