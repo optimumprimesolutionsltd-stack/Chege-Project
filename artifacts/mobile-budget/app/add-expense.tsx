@@ -1487,7 +1487,11 @@ export default function AddExpenseSheet() {
         <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
           {isAdvanced
             ? 'Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.'
-            : 'Choose the one category this expense belongs to.'}
+            // Quick only ever offers the top-level categories. Saying nothing
+            // made subcategories look as though they did not exist, so the
+            // rule is stated where somebody meets it rather than left to be
+            // discovered.
+            : 'Choose the one category this expense belongs to. Subcategories live in Detailed.'}
         </Text>
         <ScrollView
           horizontal
