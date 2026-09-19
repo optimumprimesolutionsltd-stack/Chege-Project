@@ -232,6 +232,13 @@
       "when": 1789786800000,
       "tag": "0032_contributor_dated_targets",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789873200000,
+      "tag": "0033_clear_parent_budget_amounts",
+      "breakpoints": true
     }
   ]
 }
