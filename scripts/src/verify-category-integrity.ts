@@ -2,10 +2,17 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-const connectionString = process.env.STAGING_DATABASE_URL;
+// Named for what it is, not for where it was assumed to point. The secret
+// called STAGING_DATABASE_URL turned out to hold a production connection
+// string, so the job named "staging" had been checking live data for weeks
+// while everyone read its failures as a staging problem. The connection is
+// still deliberately separate from DATABASE_URL, so nothing falls back to
+// whatever database happens to be at hand.
+const connectionString =
+  process.env.CATEGORY_CHECK_DATABASE_URL ?? process.env.STAGING_DATABASE_URL;
 
 if (!connectionString) {
-  console.error("STAGING_DATABASE_URL is required; refusing to use DATABASE_URL or run against an unspecified database.");
+  console.error("CATEGORY_CHECK_DATABASE_URL is required; refusing to use DATABASE_URL or run against an unspecified database.");
   process.exit(2);
 }
 
@@ -241,7 +248,13 @@ async function main(): Promise<void> {
     transactionStarted = false;
 
     if (!passed) {
-      console.error("Staging verification failed: legacy aliases, normalized duplicates, or foreign-key violations were found.");
+      // Naming the database is the whole point: "staging verification failed"
+      // is what let this run against production unnoticed.
+      console.error(
+        `Category integrity check FAILED against database "${database.rows[0]?.database ?? "unknown"}" `
+        + `as user "${database.rows[0]?.user ?? "unknown"}": legacy aliases, normalized duplicates, `
+        + "or foreign-key violations were found. Confirm which database that is before acting on it.",
+      );
       process.exitCode = 1;
     }
   } finally {
@@ -254,6 +267,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(`Staging verification failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`Category integrity check failed to run: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });
