@@ -59,3 +59,23 @@ describe('the breakdown says who a category belongs to', () => {
     expect(unbudgeted.slice(0, 600)).toContain('parentName: null');
   });
 });
+
+// Indenting alone left a parent and its children reading as the same kind of
+// row at a glance.
+describe('a parent is drawn as a different colour from its children', () => {
+  it('gives a parent a tinted panel, and leaves the children plain', () => {
+    expect(budget).toContain("rollup ? { backgroundColor: colors.accent, borderColor: colors.accentForeground + '55' } : null,");
+  });
+
+  it('changes nothing for a category with no subcategories', () => {
+    // `rollup` is null unless the row actually heads a branch, so a plain
+    // category keeps the card it always had.
+    expect(budget).toContain('const rollup = mine.length > 0');
+  });
+
+  it('keeps the rolled-up line readable on that panel', () => {
+    // `primary` on the accent panel is 2.02:1 in dark mode — unreadable. This
+    // line only ever renders on a parent, so it always sits on that panel.
+    expect(budget).toContain('<Text style={[styles.rollupLine, { color: colors.accentForeground }]}>');
+  });
+});
