@@ -21,6 +21,7 @@ import {
   GetDashboardCategoryBreakdownQueryParams,
   GetDashboardCategoryLedgerQueryParams,
   GetDashboardSpendingByItemQueryParams,
+  GetDashboardExpenseLedgerQueryParams,
   GetDashboardActivityQueryParams,
   GetDashboardIncomeStreamsQueryParams,
   GetDashboardIncomeStreamsResponse,
@@ -785,6 +786,133 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
 
   res.json({
     category,
+    total: entries.reduce((sum, entry) => sum + entry.amount, 0),
+    entries,
+  });
+});
+
+/**
+ * Every expense in one list, newest first — a statement for the whole budget.
+ *
+ * Every other way into the expenses goes through something first: a category,
+ * or a named thing. All of them answer "show me this one thing's entries".
+ * None of them answers "show me everything that happened", which is the
+ * question you have when you do not yet know which category to look in, or
+ * when you are reconciling against an M-Pesa statement that knows nothing
+ * about your categories.
+ *
+ * One row per expense, not per category portion: a shop split across Food and
+ * Household is one thing that happened, and listing it twice would read as
+ * two trips. The portions are named on the row instead.
+ */
+router.get("/dashboard/expense-ledger", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+
+  const parsed = GetDashboardExpenseLedgerQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid query" });
+    return;
+  }
+  const { from: askedFrom, to: askedTo, q } = parsed.data;
+  if ((askedFrom == null) !== (askedTo == null)) {
+    res.status(400).json({ error: "Give both a start and an end date, or neither." });
+    return;
+  }
+
+  const now = new Date();
+  const month = parsed.data.month ?? now.getMonth() + 1;
+  const year = parsed.data.year ?? now.getFullYear();
+  const [from, to] = askedFrom != null && askedTo != null
+    ? (askedFrom <= askedTo ? [askedFrom, askedTo] : [askedTo, askedFrom])
+    : [
+        `${year}-${String(month).padStart(2, "0")}-01`,
+        new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
+      ];
+
+  const search = q?.trim() ? `%${q.trim().replace(/[!%_]/g, (ch) => `!${ch}`)}%` : null;
+
+  const [expenses, disbursements, allocations] = await Promise.all([
+    db
+      .select({
+        id: expensesTable.id,
+        category: expensesTable.category,
+        description: expensesTable.description,
+        amount: expensesTable.amount,
+        paidFromBank: expensesTable.paidFromBank,
+        payerName: usersTable.firstName,
+        date: expensesTable.date,
+      })
+      .from(expensesTable)
+      .leftJoin(usersTable, eq(expensesTable.paidById, usersTable.id))
+      .where(sql`${expensesTable.groupId} = ${groupId}
+        AND ${expensesTable.date} >= ${from}
+        AND ${expensesTable.date} <= ${to}
+        ${search ? sql`AND ${expensesTable.description} ILIKE ${search} ESCAPE '!'` : sql``}`),
+    db
+      .select({
+        id: jointAccountTxTable.id,
+        category: jointAccountTxTable.expenseCategory,
+        description: jointAccountTxTable.description,
+        amount: jointAccountTxTable.amount,
+        payerName: usersTable.firstName,
+        date: jointAccountTxTable.date,
+      })
+      .from(jointAccountTxTable)
+      .leftJoin(usersTable, eq(jointAccountTxTable.madeById, usersTable.id))
+      .where(sql`${jointAccountTxTable.groupId} = ${groupId}
+        AND ${jointAccountTxTable.type} = 'disbursement'
+        AND ${jointAccountTxTable.bankTransferId} IS NULL
+        AND ${jointAccountTxTable.expenseCategory} IS NOT NULL
+        AND ${jointAccountTxTable.expenseId} IS NULL
+        AND ${jointAccountTxTable.date} >= ${from}
+        AND ${jointAccountTxTable.date} <= ${to}
+        ${search ? sql`AND ${jointAccountTxTable.description} ILIKE ${search} ESCAPE '!'` : sql``}`),
+    db.select({
+      expenseId: expenseCategoryAllocationsTable.expenseId,
+      category: expenseCategoryAllocationsTable.category,
+      position: expenseCategoryAllocationsTable.position,
+    }).from(expenseCategoryAllocationsTable)
+      .innerJoin(expensesTable, and(
+        eq(expenseCategoryAllocationsTable.expenseId, expensesTable.id),
+        eq(expenseCategoryAllocationsTable.groupId, expensesTable.groupId),
+      ))
+      .where(sql`${expenseCategoryAllocationsTable.groupId} = ${groupId} AND ${expensesTable.date} >= ${from} AND ${expensesTable.date} <= ${to}`)
+      .orderBy(expenseCategoryAllocationsTable.position),
+  ]);
+
+  const entries = [
+    ...expenses.map((expense) => {
+      const portions = allocations.filter((allocation) => allocation.expenseId === expense.id);
+      return {
+        id: `expense-${expense.id}`,
+        source: "expense" as const,
+        // Named in the order they were allocated, so a split reads the way it
+        // was entered rather than alphabetically.
+        categories: (portions.length > 0 ? portions.map((portion) => portion.category) : [expense.category])
+          .map(displayExpenseCategory),
+        description: expense.description,
+        amount: expense.amount,
+        paidFromBank: expense.paidFromBank,
+        payerName: expense.payerName ?? (expense.paidFromBank ? "Joint bank" : "Payer not recorded"),
+        date: String(expense.date),
+      };
+    }),
+    ...disbursements.map((disbursement) => ({
+      id: `bank-disbursement-${disbursement.id}`,
+      source: "bank_disbursement" as const,
+      categories: [displayExpenseCategory(disbursement.category ?? "Uncategorized")],
+      description: disbursement.description,
+      amount: disbursement.amount,
+      paidFromBank: true,
+      payerName: disbursement.payerName ?? "Joint bank",
+      date: String(disbursement.date),
+    })),
+  ].sort((a, b) => (a.date === b.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date)));
+
+  res.json({
+    from,
+    to,
     total: entries.reduce((sum, entry) => sum + entry.amount, 0),
     entries,
   });

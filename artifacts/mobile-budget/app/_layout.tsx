@@ -394,6 +394,7 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen name="spending-by-item" options={{ headerShown: false }} />
+      <Stack.Screen name="expense-ledger" options={{ headerShown: false }} />
       <Stack.Screen name="subscription" options={{ headerShown: false }} />
       <Stack.Screen name="delete-account-code" options={{ headerShown: false, gestureEnabled: false }} />
     </Stack>

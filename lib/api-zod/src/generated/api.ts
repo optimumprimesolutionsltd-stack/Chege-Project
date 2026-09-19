@@ -732,6 +732,41 @@ export const GetDashboardCategoryLedgerResponse = zod.object({
 
 
 /**
+ * A statement for the whole budget, rather than for one category or one named thing. One row per expense: a shop split across two categories is one thing that happened, and its portions are named on the row. With no date range the answer covers the selected month.
+ * @summary Every expense in one list, newest first
+ */
+export const getDashboardExpenseLedgerQueryMonthMax = 12;
+
+export const getDashboardExpenseLedgerQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getDashboardExpenseLedgerQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetDashboardExpenseLedgerQueryParams = zod.object({
+  "month": zod.coerce.number().min(1).max(getDashboardExpenseLedgerQueryMonthMax).optional(),
+  "year": zod.coerce.number().optional(),
+  "from": zod.coerce.string().regex(getDashboardExpenseLedgerQueryFromRegExp).optional().describe('Start of an exact day range (YYYY-MM-DD). Must be given together with `to`, and overrides the month.'),
+  "to": zod.coerce.string().regex(getDashboardExpenseLedgerQueryToRegExp).optional().describe('End of the day range (YYYY-MM-DD), inclusive.'),
+  "q": zod.coerce.string().optional().describe('Narrows the list to descriptions containing this text, ignoring case.')
+})
+
+export const GetDashboardExpenseLedgerResponse = zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "total": zod.number(),
+  "entries": zod.array(zod.object({
+  "id": zod.string(),
+  "source": zod.enum(['expense', 'bank_disbursement']),
+  "date": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "categories": zod.array(zod.string()).describe('One name, or several when the expense was split across categories'),
+  "paidFromBank": zod.boolean(),
+  "payerName": zod.string()
+}))
+})
+
+
+/**
  * Groups expenses by their description, so "how much have I spent on Netflix" has an answer even though nobody budgets a category called Netflix. Grouping ignores case and surrounding spaces. With no date range the answer covers the last twelve months.
  * @summary What was spent on each named thing, rather than on each category
  */
