@@ -32,8 +32,8 @@ const { selectRows, inserted } = vi.hoisted(() => ({
   inserted: { values: [] as unknown[] },
 }));
 
-vi.mock("@workspace/db", () => ({
-  db: {
+vi.mock("@workspace/db", () => {
+  const mockDb: Record<string, unknown> = {
     select: vi.fn(() => {
       const rows = selectRows.queue.shift() ?? [];
       const chain: Record<string, unknown> = {};
@@ -54,14 +54,21 @@ vi.mock("@workspace/db", () => ({
       where: () => ({ returning: () => Promise.resolve([{ id: 7 }]) }),
     })),
     query: { budgetCategoriesTable: { findFirst: vi.fn(async () => undefined) } },
-    transaction: vi.fn(),
-  },
-  budgetCategoriesTable: tables.budgetCategoriesTable,
-  expensesTable: tables.expensesTable,
-  expenseCategoryAllocationsTable: tables.expenseCategoryAllocationsTable,
-  jointAccountTxTable: tables.jointAccountTxTable,
-  groupsTable: tables.groupsTable,
-}));
+    update: vi.fn(() => ({ set: () => ({ where: () => Promise.resolve() }) })),
+  };
+  // Creating a category runs in a transaction now, because nesting one also
+  // clears the parent's budget amount. A mock that never called its callback
+  // reported no insert at all.
+  mockDb.transaction = vi.fn((run: (tx: unknown) => unknown) => run(mockDb));
+  return {
+    db: mockDb,
+    budgetCategoriesTable: tables.budgetCategoriesTable,
+    expensesTable: tables.expensesTable,
+    expenseCategoryAllocationsTable: tables.expenseCategoryAllocationsTable,
+    jointAccountTxTable: tables.jointAccountTxTable,
+    groupsTable: tables.groupsTable,
+  };
+});
 
 vi.mock("drizzle-orm", () => ({
   and: vi.fn((...conditions: unknown[]) => conditions),

@@ -18,10 +18,17 @@ const tables = vi.hoisted(() => ({
   budgetCategoriesTable: { id: "category.id", groupId: "category.groupId", name: "category.name" },
 }));
 
-const dbMocks = vi.hoisted(() => ({
-  insert: vi.fn(),
-  query: { budgetCategoriesTable: { findFirst: vi.fn() } },
-}));
+const dbMocks: Record<string, any> = vi.hoisted(() => {
+  const mocks: Record<string, any> = {
+    insert: vi.fn(),
+    update: vi.fn(() => ({ set: () => ({ where: () => Promise.resolve() }) })),
+    query: { budgetCategoriesTable: { findFirst: vi.fn() } },
+  };
+  // Creating a category runs in a transaction now: nesting one under a parent
+  // clears that parent's budget amount in the same write.
+  mocks.transaction = vi.fn((run: (tx: unknown) => unknown) => run(mocks));
+  return mocks;
+});
 
 const { mockResolve } = vi.hoisted(() => ({
   mockResolve: vi.fn(

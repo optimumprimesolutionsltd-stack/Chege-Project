@@ -255,6 +255,10 @@ router.post("/budget-categories/recommendations/apply", async (req, res) => {
 
       if (childRows.length > 0) {
         await tx.insert(budgetCategoriesTable).values(childRows).onConflictDoNothing();
+        // Each of those parents is now budgeted through its children.
+        for (const parentId of new Set(childRows.map((child) => child.parentId))) {
+          await clearParentBudgetAmount(tx, groupId, parentId);
+        }
       }
     }
   });
@@ -379,6 +383,7 @@ router.post("/budget-categories/subcategory-suggestions/apply", async (req, res)
         await tx.update(budgetCategoriesTable)
           .set({ parentId })
           .where(and(eq(budgetCategoriesTable.id, move.categoryId), eq(budgetCategoriesTable.groupId, groupId)));
+        await clearParentBudgetAmount(tx, groupId, parentId);
       }
     });
   } catch (error) {
@@ -425,6 +430,28 @@ const categorySchema = categoryFields.superRefine((data, ctx) => {
  * Returns an explanation rather than a boolean so the caller can say which of
  * the several ways this can be wrong actually happened.
  */
+/**
+ * Clear the budget amount on a category that has just gained a subcategory.
+ *
+ * A parent is budgeted through its subcategories — its figure is theirs added
+ * up — so the number on the parent stops counting the moment one is nested
+ * under it. Leaving it in the column is a trap: nothing displays it, so nobody
+ * can correct it, and anything reading the table directly finds a figure that
+ * looks authoritative and is not.
+ *
+ * Clearing it changes no number anybody sees; it only makes the storage agree
+ * with what is already reported.
+ */
+async function clearParentBudgetAmount(
+  runner: Pick<typeof db, "update">,
+  groupId: number,
+  parentId: number,
+): Promise<void> {
+  await runner.update(budgetCategoriesTable)
+    .set({ budgetAmount: 0 })
+    .where(and(eq(budgetCategoriesTable.id, parentId), eq(budgetCategoriesTable.groupId, groupId)));
+}
+
 async function parentRejection(
   groupId: number,
   parentId: number,
@@ -481,12 +508,19 @@ router.post("/budget-categories", async (req, res) => {
     if (rejection) { res.status(400).json({ error: rejection }); return; }
   }
   try {
-    const [row] = await db.insert(budgetCategoriesTable).values({
-      ...parsed.data,
-      groupId,
-      activeMonth: parsed.data.isRecurring ? null : parsed.data.activeMonth,
-      activeYear: parsed.data.isRecurring ? null : parsed.data.activeYear,
-    }).returning();
+    const row = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(budgetCategoriesTable).values({
+        ...parsed.data,
+        groupId,
+        activeMonth: parsed.data.isRecurring ? null : parsed.data.activeMonth,
+        activeYear: parsed.data.isRecurring ? null : parsed.data.activeYear,
+      }).returning();
+      // The parent this was nested under is now budgeted through its children.
+      if (parsed.data.parentId != null) {
+        await clearParentBudgetAmount(tx, groupId, parsed.data.parentId);
+      }
+      return created;
+    });
     res.status(201).json(row);
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
@@ -531,6 +565,11 @@ router.put("/budget-categories/:id", async (req, res) => {
   if (duplicate) { res.status(409).json({ error: "A category with this name already exists" }); return; }
   try {
     const row = await db.transaction(async (tx) => {
+      // Nesting this category under a parent leaves that parent budgeted
+      // through its children, so the figure on it stops counting.
+      if (parsed.data.parentId != null) {
+        await clearParentBudgetAmount(tx, groupId, parsed.data.parentId);
+      }
       const [updated] = await tx.update(budgetCategoriesTable).set({
         ...merged.data,
         activeMonth: merged.data.isRecurring ? null : merged.data.activeMonth,
