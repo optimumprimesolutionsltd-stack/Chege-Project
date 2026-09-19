@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { isoDay, longDay, monthStartIso, orderedRange } from '@/lib/dayRange';
+import { effectiveBudgets } from '@workspace/category-tree';
 import { useColors } from '@/hooks/useColors';
 import { useCollapsed } from '@/hooks/useCollapsed';
 import { useListEditor } from '@/hooks/useListEditor';
@@ -545,8 +546,14 @@ export default function BudgetScreen() {
   function prevMonth() { if (month === 1) { setMonth(12); setYear(y => y - 1); } else setMonth(m => m - 1); }
   function nextMonth() { if (month === 12) { setMonth(1); setYear(y => y + 1); } else setMonth(m => m + 1); }
 
-  const reportBudget = breakdown.reduce((sum, category) => sum + category.budgetAmount, 0);
-  const reportActual = breakdown.reduce((sum, category) => sum + category.spentAmount, 0);
+  // Not every row: a parent's figures are its subcategories added up — budget
+  // and spending both — so adding the parent alongside them counted each
+  // subcategory twice and inflated the month's headline.
+  const leafBreakdown = breakdown.filter(
+    (category) => !breakdown.some((other) => other.parentName === category.category),
+  );
+  const reportBudget = leafBreakdown.reduce((sum, category) => sum + category.budgetAmount, 0);
+  const reportActual = leafBreakdown.reduce((sum, category) => sum + category.spentAmount, 0);
   const reportVariance = reportBudget - reportActual;
   const overallPct = reportBudget > 0 ? Math.min(reportActual / reportBudget, 1) : 0;
   const memberNames = new Map(members.map(member => [member.userId, member.userName || 'Member']));
@@ -559,6 +566,18 @@ export default function BudgetScreen() {
   const activeCategories = allCategories.filter(category =>
     category.isRecurring || (category.activeMonth === month && category.activeYear === year),
   );
+  // The lists below read straight from /budget-categories rather than the
+  // breakdown, so they hold a parent's stored amount — which is cleared to 0.
+  // Showing that would say Food is budgeted at nothing while its subcategories
+  // hold the real figure.
+  const storedBudgets = effectiveBudgets(
+    allCategories.map((category) => ({
+      id: category.id,
+      parentId: category.parentId ?? null,
+      budgetAmount: category.budgetAmount,
+    })),
+  );
+  const budgetFor = (category: BudgetCategory) => storedBudgets.get(category.id) ?? category.budgetAmount;
   const reportedCategoryNames = new Set(breakdown.map(category => category.category));
   const unusedCategories = activeCategories.filter(category => !reportedCategoryNames.has(category.name));
   const tiersToShow = Array.from(new Set([
@@ -571,14 +590,16 @@ export default function BudgetScreen() {
     ...activeCategories.map(category => category.priority),
   ])).sort((a, b) => a - b);
   const tierReport = tiersToShow.map(tier => {
-    const reported = breakdown.filter(category => category.priority === tier);
+    // Leaves only, for the same reason. A parent and its children can sit in
+    // different tiers, and the money is budgeted on the children.
+    const reported = leafBreakdown.filter(category => category.priority === tier);
     const budgetOnly = activeCategories.filter(category =>
       category.priority === tier && !reportedCategoryNames.has(category.name),
     );
     return {
       tier,
       budget: reported.reduce((sum, category) => sum + category.budgetAmount, 0)
-        + budgetOnly.reduce((sum, category) => sum + category.budgetAmount, 0),
+        + budgetOnly.reduce((sum, category) => sum + budgetFor(category), 0),
       actual: reported.reduce((sum, category) => sum + category.spentAmount, 0),
     };
   }).filter(row => row.budget > 0 || row.actual > 0);
@@ -589,7 +610,7 @@ export default function BudgetScreen() {
   const managedCategories = managePriority == null
     ? allCategories
     : allCategories.filter(category => category.priority === managePriority);
-  const summaryBudgetCategories = activeCategories.filter(category => category.budgetAmount > 0);
+  const summaryBudgetCategories = activeCategories.filter(category => budgetFor(category) > 0);
   const openOverallLedger = () => {
     if (summaryBudgetCategories.length === 1) {
       const [category] = summaryBudgetCategories;
@@ -820,7 +841,7 @@ export default function BudgetScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.manageName, { color: colors.foreground }]}>{category.name}</Text>
                     <Text style={[styles.manageAmount, { color: colors.mutedForeground }]}>
-                      KES {formatKES(category.budgetAmount)} · {category.isRecurring
+                      KES {formatKES(budgetFor(category))} · {category.isRecurring
                         ? 'Recurring monthly'
                         : `One-time for ${MONTHS_SHORT[(category.activeMonth ?? month) - 1]} ${category.activeYear ?? year}`}
                     </Text>
@@ -852,7 +873,7 @@ export default function BudgetScreen() {
                 <View style={styles.ledgerBudgetCopy}>
                   <Text style={[styles.ledgerBudgetLabel, { color: colors.mutedForeground }]}>BUDGET LIMIT</Text>
                   <Text style={[styles.ledgerBudgetValue, { color: colors.foreground }]}>
-                    KES {formatKES(ledgerBudgetCategory.budgetAmount)}
+                    KES {formatKES(budgetFor(ledgerBudgetCategory))}
                   </Text>
                   <Text style={[styles.ledgerBudgetHint, { color: colors.mutedForeground }]}>
                     {ledgerBudgetCategory.isRecurring
@@ -1528,7 +1549,7 @@ export default function BudgetScreen() {
                       <View style={styles.catActions}>
                         <View style={styles.catAmounts}>
                           <Text style={[styles.catSpent, { color: colors.foreground }]}>0</Text>
-                          <Text style={[styles.catBudget, { color: colors.mutedForeground }]}>/ {formatKES(cat.budgetAmount)}</Text>
+                          <Text style={[styles.catBudget, { color: colors.mutedForeground }]}>/ {formatKES(budgetFor(cat))}</Text>
                         </View>
                         {canManageCategories && !rowEditing && (
                           <>
