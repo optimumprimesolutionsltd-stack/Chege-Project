@@ -18,6 +18,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1117.0",
     "@swc/helpers": "^0.5.23",
     "@workspace/api-zod": "workspace:*",
+    "@workspace/category-tree": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/jamvi-pricing": "workspace:*",
     "cookie-parser": "^1.4.7",

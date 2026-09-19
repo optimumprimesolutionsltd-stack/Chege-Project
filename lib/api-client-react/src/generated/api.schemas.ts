@@ -321,7 +321,12 @@ export interface ApplyRecurringResult {
 export interface BudgetCategory {
   id: number;
   name: string;
-  /** Monthly budget in KES */
+  /**
+     * The category this one is a subcategory of. A category with subcategories carries no budget of its own: its figure is theirs added up.
+     * @nullable
+     */
+  parentId?: number | null;
+  /** Monthly budget in KES. For a category with subcategories this is the total of those subcategories, not a figure set on it. */
   budgetAmount: number;
   /** 1=survival essentials, 2=health/education, 3=household, 4=connectivity, 5=discretionary */
   priority: number;
