@@ -370,7 +370,8 @@ export const ApplyRecurringExpensesResponse = zod.object({
 export const GetBudgetCategoriesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "budgetAmount": zod.number().describe('Monthly budget in KES'),
+  "parentId": zod.number().nullish().describe('The category this one is a subcategory of. A category with subcategories carries no budget of its own: its figure is theirs added up.'),
+  "budgetAmount": zod.number().describe('Monthly budget in KES. For a category with subcategories this is the total of those subcategories, not a figure set on it.'),
   "priority": zod.number().describe('1=survival essentials, 2=health\/education, 3=household, 4=connectivity, 5=discretionary'),
   "color": zod.string(),
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
@@ -404,7 +405,8 @@ export const CreateBudgetCategoryBody = zod.object({
 export const CreateBudgetCategoryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "budgetAmount": zod.number().describe('Monthly budget in KES'),
+  "parentId": zod.number().nullish().describe('The category this one is a subcategory of. A category with subcategories carries no budget of its own: its figure is theirs added up.'),
+  "budgetAmount": zod.number().describe('Monthly budget in KES. For a category with subcategories this is the total of those subcategories, not a figure set on it.'),
   "priority": zod.number().describe('1=survival essentials, 2=health\/education, 3=household, 4=connectivity, 5=discretionary'),
   "color": zod.string(),
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),
@@ -490,7 +492,8 @@ export const UpdateBudgetCategoryBody = zod.object({
 export const UpdateBudgetCategoryResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "budgetAmount": zod.number().describe('Monthly budget in KES'),
+  "parentId": zod.number().nullish().describe('The category this one is a subcategory of. A category with subcategories carries no budget of its own: its figure is theirs added up.'),
+  "budgetAmount": zod.number().describe('Monthly budget in KES. For a category with subcategories this is the total of those subcategories, not a figure set on it.'),
   "priority": zod.number().describe('1=survival essentials, 2=health\/education, 3=household, 4=connectivity, 5=discretionary'),
   "color": zod.string(),
   "isRecurring": zod.boolean().describe('Whether this budget applies every month'),

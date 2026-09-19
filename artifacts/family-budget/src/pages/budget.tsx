@@ -276,8 +276,9 @@ function CategoryLedgers({
   onSelectLedger: (ledger: BudgetCategory) => void;
 }) {
   if (ledgers.length === 0) return null;
-  const allocated = ledgers.reduce((sum, ledger) => sum + ledger.budgetAmount, 0);
-  const unallocated = categoryBudgetAmount - allocated;
+  // There is nothing left to allocate: a category with subcategories is now
+  // budgeted entirely through them, so its figure is these added up and the
+  // difference is always zero. The line that reported it has gone with it.
   return (
     <div className="rounded-xl border border-border/60 bg-muted/30 p-3" data-testid={`budget-ledgers-${categoryName}`}>
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inside this category</p>
@@ -299,13 +300,6 @@ function CategoryLedgers({
           </li>
         ))}
       </ul>
-      {isBudgeted && unallocated !== 0 ? (
-        <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
-          {unallocated > 0
-            ? <>Unallocated: <span className="tabular-nums font-medium">{formatKes(unallocated)}</span></>
-            : <>These add up to <span className="tabular-nums font-medium">{formatKes(Math.abs(unallocated))}</span> more than the category budget.</>}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -425,11 +419,21 @@ function CategoryDialog({
                 </p>
               ) : null}
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold">{recurringSetup ? "Average monthly amount (KES)" : "Budget amount (KES)"}</label>
-              <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} disabled={saving} />
+            {hasChildren ? (
+              <div className="space-y-1.5 rounded-xl border border-border/60 bg-muted/30 p-3" data-testid="parent-budget-note">
+                <label className="text-sm font-semibold">Budget amount</label>
+                <p className="text-xs text-muted-foreground">
+                  {name || "This category"} is budgeted through its subcategories. Set the amount on each one
+                  and this total follows.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold">{recurringSetup ? "Average monthly amount (KES)" : "Budget amount (KES)"}</label>
+                <Input type="number" placeholder="e.g. 15000" min="0" value={amount} onChange={e => setAmount(e.target.value)} disabled={saving} />
                 <p className="text-xs text-muted-foreground">Enter 0, or clear the amount while editing, to pause this budget. Existing expenses stay recorded.</p>
-            </div>
+              </div>
+            )}
             {parentOptions.length > 0 && !hasChildren && !recurringSetup ? (
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold">Inside another category</label>
@@ -941,8 +945,14 @@ export default function Budget() {
     acc[c.priority].push(c);
     return acc;
   }, {} as Record<number, BudgetCategory[]>);
-  const reportBudget = (breakdown ?? []).reduce((sum, item) => sum + item.budgetAmount, 0);
-  const reportActual = (breakdown ?? []).reduce((sum, item) => sum + item.spentAmount, 0);
+  // Not a sum of every row: a parent's figures are its subcategories added up,
+  // so adding both counted each subcategory twice. Only the rows nothing else
+  // is nested under carry a figure of their own.
+  const leafBreakdown = (breakdown ?? []).filter(
+    (item) => !(breakdown ?? []).some((other) => other.parentName === item.category),
+  );
+  const reportBudget = leafBreakdown.reduce((sum, item) => sum + item.budgetAmount, 0);
+  const reportActual = leafBreakdown.reduce((sum, item) => sum + item.spentAmount, 0);
   const reportVariance = reportBudget - reportActual;
   const memberNames = new Map(members.map(member => [member.userId, member.userName || "Member"]));
   const canManageShared = members.some(

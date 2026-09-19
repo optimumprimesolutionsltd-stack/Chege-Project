@@ -30,6 +30,7 @@ import {
   GetDashboardMonthlyReportPdfQueryParams,
 } from "@workspace/api-zod";
 import { memberLedgerName } from "../lib/contributor-name";
+import { effectiveBudgets, totalBudget as sumBudget } from "@workspace/category-tree";
 import { getActiveGroupId } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
@@ -70,12 +71,18 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const month = parsed.success && parsed.data.month != null ? Math.round(parsed.data.month) : now.getMonth() + 1;
   const year = parsed.success && parsed.data.year != null ? Math.round(parsed.data.year) : now.getFullYear();
 
-  // Sum budget_categories for the live total — never hardcoded
-  const [budgetRow] = await db
-    .select({ total: sql<number>`COALESCE(SUM(${budgetCategoriesTable.budgetAmount}), 0)` })
+  // The live total — never hardcoded, and never a plain SUM of every row.
+  // A parent carries no budget of its own; it is the sum of its subcategories,
+  // so adding both counted Food against its own Groceries.
+  const budgetRows = await db
+    .select({
+      id: budgetCategoriesTable.id,
+      parentId: budgetCategoriesTable.parentId,
+      budgetAmount: budgetCategoriesTable.budgetAmount,
+    })
     .from(budgetCategoriesTable)
     .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND (${budgetCategoriesTable.isRecurring} = true OR (${budgetCategoriesTable.activeMonth} = ${month} AND ${budgetCategoriesTable.activeYear} = ${year}))`);
-  const totalBudget = Number(budgetRow.total);
+  const totalBudget = sumBudget(budgetRows);
 
   const [spentRow] = await db
     .select({ total: sql<number>`COALESCE(SUM(${expensesTable.amount}), 0)` })
@@ -618,18 +625,38 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
   const spentMap = new Map(spentByCategory.map((s) => [s.category, s.total]));
   const disbursementMap = new Map(disbursementsByCategory.map((d) => [d.category, Number(d.total)]));
 
-  const breakdown = categories.map((cat) => {
-    // The storage sentinel is never a budget category, even if a legacy
-    // budget row happens to have the same name.
-    const spentAmount = cat.name === UNCATEGORIZED_CATEGORY
+  // A parent's figure is its subcategories added up, not a number of its own.
+  const budgets = effectiveBudgets(categories);
+
+  // What was charged to each category directly, before any rolling up. The
+  // unbudgeted calculation below needs this: a parent that has absorbed its
+  // children's spending would be counted twice against the month's real total
+  // and hide genuinely unbudgeted spending.
+  const ownSpent = new Map(categories.map((cat) => [
+    cat.id,
+    cat.name === UNCATEGORIZED_CATEGORY
       ? 0
-      : (spentMap.get(cat.name) ?? 0) + (disbursementMap.get(cat.name) ?? 0);
+      : (spentMap.get(cat.name) ?? 0) + (disbursementMap.get(cat.name) ?? 0),
+  ]));
+  const childSpent = new Map<number, number>();
+  for (const cat of categories) {
+    if (cat.parentId === null) continue;
+    childSpent.set(cat.parentId, (childSpent.get(cat.parentId) ?? 0) + (ownSpent.get(cat.id) ?? 0));
+  }
+
+  const breakdown = categories.map((cat) => {
+    // A parent is now measured as a branch: its budget is its children added
+    // up, so its spending has to be too. Comparing a branch budget against
+    // only what was charged to the parent by name would report money left
+    // that the subcategories have already spent.
+    const spentAmount = (ownSpent.get(cat.id) ?? 0) + (childSpent.get(cat.id) ?? 0);
+    const budgetAmount = budgets.get(cat.id) ?? cat.budgetAmount;
     return {
       category: cat.name,
-      budgetAmount: cat.budgetAmount,
+      budgetAmount,
       spentAmount,
-      remaining: cat.budgetAmount - spentAmount,
-      percentUsed: Math.round(cat.budgetAmount > 0 ? (spentAmount / cat.budgetAmount) * 100 * 10 : 0) / 10,
+      remaining: budgetAmount - spentAmount,
+      percentUsed: Math.round(budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 * 10 : 0) / 10,
       priority: cat.priority,
       color: cat.color,
       isRecurring: cat.isRecurring,
@@ -647,7 +674,9 @@ router.get("/dashboard/category-breakdown", async (req, res): Promise<void> => {
   const totalActual =
     Array.from(spentMap.values()).reduce((sum, spent) => sum + spent, 0) +
     Array.from(disbursementMap.values()).reduce((sum, spent) => sum + spent, 0);
-  const budgetedActual = breakdown.reduce((sum, category) => sum + category.spentAmount, 0);
+  // Summed from what each category was charged directly, not from the rows
+  // above: a parent there already includes its children's spending.
+  const budgetedActual = Array.from(ownSpent.values()).reduce((sum, spent) => sum + spent, 0);
   const unbudgetedSpent = Math.max(0, totalActual - budgetedActual);
 
   if (unbudgetedSpent > 0) {
@@ -1627,16 +1656,19 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
 
   const spentMap = new Map(spentByCategory.map((item) => [item.category, item.total]));
   const disbursementMap = new Map(disbursementsByCategory.map((item) => [item.category, Number(item.total)]));
+  const reportBudgets = effectiveBudgets(categories);
   const categoryRows = categories.map((category) => {
     const spentAmount = category.name === UNCATEGORIZED_CATEGORY
       ? 0
       : (spentMap.get(category.name) ?? 0) + (disbursementMap.get(category.name) ?? 0);
+    // Same rule as the Budget tab, so a handed-out PDF and the phone agree.
+    const budgetAmount = reportBudgets.get(category.id) ?? category.budgetAmount;
     return {
       category: category.name,
-      budgetAmount: category.budgetAmount,
+      budgetAmount,
       spentAmount,
-      remaining: category.budgetAmount - spentAmount,
-      percentUsed: Math.round(category.budgetAmount > 0 ? (spentAmount / category.budgetAmount) * 1000 : 0) / 10,
+      remaining: budgetAmount - spentAmount,
+      percentUsed: Math.round(budgetAmount > 0 ? (spentAmount / budgetAmount) * 1000 : 0) / 10,
     };
   });
   const totalActual =
@@ -1667,7 +1699,9 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
   const monthLabel = dayRange
     ? formatDayRangeLabel(dayRange.from, dayRange.to)
     : new Intl.DateTimeFormat("en-KE", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
-  const totalBudget = categoryRows.reduce((sum, category) => sum + category.budgetAmount, 0);
+  // Not a sum of categoryRows: that list holds parents and their children
+  // side by side, and a parent is already the sum of the children beside it.
+  const totalBudget = sumBudget(categories);
   const pdf = await createMonthlyReportPdf({
     groupName: group?.name ?? "Shared group",
     monthLabel,

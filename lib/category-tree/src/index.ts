@@ -66,3 +66,54 @@ export function childrenFor(tree: readonly CategoryGroup[], selected: string): s
   const parent = parentOf(tree, selected) ?? selected.trim();
   return tree.find((group) => group.name === parent)?.children ?? [];
 }
+
+export interface BudgetRow {
+  id: number;
+  parentId: number | null;
+  budgetAmount: number;
+}
+
+/**
+ * The budget that actually counts for each category.
+ *
+ * A parent does not carry a budget of its own: it is the sum of its
+ * subcategories. Giving Food 20,000 and then Groceries 8,000 under it was
+ * asking the same question twice and counting the answer twice — the app's
+ * total budget was the sum of every row, so the pair read as 28,000.
+ *
+ * A category with no subcategories keeps its own figure, which is every
+ * category until somebody nests one.
+ *
+ * Operates on whatever list it is given, so a caller that has already narrowed
+ * to one month gets a parent summed from that month's children rather than
+ * from children that are not active.
+ *
+ * Nesting is one level deep — a subcategory cannot itself have subcategories —
+ * so this does not recurse.
+ */
+export function effectiveBudgets(rows: readonly BudgetRow[]): Map<number, number> {
+  const childrenTotal = new Map<number, number>();
+  for (const row of rows) {
+    if (row.parentId === null) continue;
+    childrenTotal.set(row.parentId, (childrenTotal.get(row.parentId) ?? 0) + row.budgetAmount);
+  }
+  return new Map(rows.map((row) => [row.id, childrenTotal.get(row.id) ?? row.budgetAmount]));
+}
+
+/** True when this category's figure comes from its subcategories, not itself. */
+export function hasChildren(rows: readonly BudgetRow[], id: number): boolean {
+  return rows.some((row) => row.parentId === id);
+}
+
+/**
+ * What the whole budget comes to, counting each category once.
+ *
+ * Summing every row double-counted a parent against its own children. Only
+ * the rows that carry a figure of their own are added: a parent is already
+ * the sum of the children counted here.
+ */
+export function totalBudget(rows: readonly BudgetRow[]): number {
+  return rows
+    .filter((row) => !hasChildren(rows, row.id))
+    .reduce((sum, row) => sum + row.budgetAmount, 0);
+}

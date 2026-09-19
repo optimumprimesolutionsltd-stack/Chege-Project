@@ -48,6 +48,8 @@ import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 type BudgetCategory = {
   id: number;
   name: string;
+  /** Set when this is a subcategory of another category. */
+  parentId?: number | null;
   budgetAmount: number;
   priority: number;
   color: string;
@@ -221,6 +223,10 @@ export default function BudgetScreen() {
     setFormActiveYear(cat.activeYear ?? year);
     setAddOpen(true);
   };
+  // A parent carries no budget of its own — its figure is its subcategories
+  // added up — so the amount field has nothing to set while editing one.
+  const editingParent = editTarget != null && allCategories.some((row) => row.parentId === editTarget.id);
+
   const openManage = (priority: number | null = null) => {
     setManagePriority(priority);
     setManageOpen(true);
@@ -283,8 +289,9 @@ export default function BudgetScreen() {
   // Panel-level edit mode for BY CATEGORY: rename or remove several at once,
   // one Save. Adding a category still uses the + / modal, which also sets its
   // amount and priority.
-  // Parents first, each followed by its own children, with a parent's row
-  // carrying both its own figure and the total including everything under it.
+  // Parents first, each followed by its own children. A parent's row carries
+  // the branch: its budget is its subcategories added up, and its spending
+  // with them, both settled by the server.
   // The breakdown arrives flat and keyed by name, so Groceries used to sit
   // beside Food as though the two were unrelated.
   const orderedBreakdown = useMemo(() => {
@@ -298,21 +305,18 @@ export default function BudgetScreen() {
     const ordered: Array<{
       row: (typeof breakdown)[number];
       isChild: boolean;
-      rollup: { budgetAmount: number; spentAmount: number } | null;
+      hasSubcategories: boolean;
     }> = [];
     for (const row of breakdown) {
       // A child whose parent is not in this month's breakdown would otherwise
       // vanish, so it is listed on its own rather than dropped.
       if (row.parentName && breakdown.some((candidate) => candidate.category === row.parentName)) continue;
       const mine = children.get(row.category) ?? [];
-      const rollup = mine.length > 0
-        ? {
-          budgetAmount: mine.reduce((sum, child) => sum + child.budgetAmount, row.budgetAmount),
-          spentAmount: mine.reduce((sum, child) => sum + child.spentAmount, row.spentAmount),
-        }
-        : null;
-      ordered.push({ row, isChild: Boolean(row.parentName), rollup });
-      for (const child of mine) ordered.push({ row: child, isChild: true, rollup: null });
+      // The figures themselves are the server's: a parent's budget is its
+      // subcategories added up, and its spending with them. Adding the
+      // children again here would count them twice.
+      ordered.push({ row, isChild: Boolean(row.parentName), hasSubcategories: mine.length > 0 });
+      for (const child of mine) ordered.push({ row: child, isChild: true, hasSubcategories: false });
     }
     return ordered;
   }, [breakdown]);
@@ -640,20 +644,35 @@ export default function BudgetScreen() {
                     Enter the average amount you expect to spend each month. Jamvi will use it as this category&apos;s monthly budget.
                   </Text>
                 ) : null}
-                <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                  {recurringSetupActive ? 'AVERAGE MONTHLY AMOUNT (KES)' : 'BUDGET AMOUNT (KES)'}
-                </Text>
-                <TextInput
-                  style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
-                  value={formAmount}
-                  onChangeText={setFormAmount}
-                  placeholder="e.g. 15000"
-                  placeholderTextColor={colors.mutedForeground}
-                  keyboardType="numeric"
-                />
-                <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
-                  Enter 0, or clear the amount while editing, to pause this budget. Existing expenses stay recorded.
-                </Text>
+                {editingParent ? (
+                  <View
+                    testID="parent-budget-note"
+                    style={[styles.parentBudgetNote, { backgroundColor: colors.accent, borderColor: colors.accentForeground + '55' }]}
+                  >
+                    <Text style={[styles.label, { color: colors.mutedForeground, marginTop: 0 }]}>BUDGET AMOUNT</Text>
+                    <Text style={[styles.priorityHint, { color: colors.foreground, marginTop: 4 }]}>
+                      {formName || 'This category'} is budgeted through its subcategories. Set the amount on each
+                      one and this total follows.
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                      {recurringSetupActive ? 'AVERAGE MONTHLY AMOUNT (KES)' : 'BUDGET AMOUNT (KES)'}
+                    </Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                      value={formAmount}
+                      onChangeText={setFormAmount}
+                      placeholder="e.g. 15000"
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType="numeric"
+                    />
+                    <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
+                      Enter 0, or clear the amount while editing, to pause this budget. Existing expenses stay recorded.
+                    </Text>
+                  </>
+                )}
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>PRIORITY TIER</Text>
                 <View style={styles.priorityRow}>
                   {[1, 2, 3, 4, 5].map(p => (
@@ -1363,7 +1382,7 @@ export default function BudgetScreen() {
             </View>
           ) : (
             <>
-              {orderedBreakdown.map(({ row: cat, isChild, rollup }) => {
+              {orderedBreakdown.map(({ row: cat, isChild, hasSubcategories }) => {
                 const pct = cat.budgetAmount > 0 ? Math.min(cat.spentAmount / cat.budgetAmount, 1) : 0;
                 const isOver = cat.spentAmount > cat.budgetAmount && cat.budgetAmount > 0;
                 const icon = getCategoryIcon(cat.category);
@@ -1385,7 +1404,7 @@ export default function BudgetScreen() {
                       // alone left the two reading as the same kind of row at a
                       // glance. A category with no subcategories is neither, and
                       // keeps the plain card it always had.
-                      rollup ? { backgroundColor: colors.accent, borderColor: colors.accentForeground + '55' } : null,
+                      hasSubcategories ? { backgroundColor: colors.accent, borderColor: colors.accentForeground + '55' } : null,
                       // A subcategory sits under its parent rather than beside
                       // it: indented, and drawn as a branch of the row above.
                       isChild && styles.catCardChild,
@@ -1423,12 +1442,14 @@ export default function BudgetScreen() {
                         <Text style={[styles.catRemaining, { color: isOver ? '#f87171' : colors.mutedForeground }]}>
                           {isOver ? `KES ${formatKES(cat.spentAmount - cat.budgetAmount)} over` : `KES ${formatKES(cat.remaining)} left`}
                         </Text>
-                        {/* A parent's own figure is above; this is the same
-                            question asked of the whole branch, which is what
-                            people mean by "what did Food cost me". */}
-                        {rollup ? (
+                        {/* A parent no longer carries a budget of its own, so
+                            the figures on this row already are the branch:
+                            the subcategories added up. Saying it twice was
+                            only ever needed while the parent had a separate
+                            number to distinguish. */}
+                        {hasSubcategories ? (
                           <Text style={[styles.rollupLine, { color: colors.accentForeground }]}>
-                            With subcategories: {formatKES(rollup.spentAmount)} / {formatKES(rollup.budgetAmount)}
+                            From its subcategories
                           </Text>
                         ) : null}
                       </View>
@@ -1613,6 +1634,7 @@ const styles = StyleSheet.create({
   ledgerDateCaption: { fontSize: 10, fontFamily: 'Inter_500Medium' },
   ledgerDateValue: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginTop: 1 },
   rollupLine: { fontSize: 11, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  parentBudgetNote: { borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 14 },
   catCardMuted: { opacity: 0.76 },
   catTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   catIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
