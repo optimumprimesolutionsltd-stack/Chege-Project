@@ -38,11 +38,22 @@ describe("the migration clears what is already there", () => {
 describe("and every path that creates a parent clears it too", () => {
   it("has one helper rather than four copies of the update", () => {
     expect(route).toContain("async function clearParentBudgetAmount(");
-    expect(route).toContain("await runner.update(budgetCategoriesTable)\n    .set({ budgetAmount: 0 })");
+    // Asserted line by line: this file is CRLF on disk, so an assertion that
+    // spells out "\n" between two lines matches nothing once checked out.
+    expect(route).toContain("await runner.update(budgetCategoriesTable)");
+    expect(route).toContain(".set({ budgetAmount: 0 })");
+    // One implementation, four call sites.
+    expect((route.match(/clearParentBudgetAmount\(/g) ?? []).length).toBe(5);
   });
 
   it("clears it when a category is created under a parent", () => {
-    expect(route).toContain("      if (parsed.data.parentId != null) {\n        await clearParentBudgetAmount(tx, groupId, parsed.data.parentId);\n      }\n      return created;");
+    // Pinned by order rather than exact layout: the clear happens inside the
+    // transaction, before the created row is returned.
+    const create = route.slice(route.indexOf("const [created] = await tx.insert(budgetCategoriesTable)"));
+    const clear = create.indexOf("clearParentBudgetAmount(tx, groupId, parsed.data.parentId)");
+    const returned = create.indexOf("return created;");
+    expect(clear).toBeGreaterThan(-1);
+    expect(clear).toBeLessThan(returned);
   });
 
   it("clears it when an existing category is moved under a parent", () => {

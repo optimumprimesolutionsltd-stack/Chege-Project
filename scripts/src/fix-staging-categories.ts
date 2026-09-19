@@ -1,19 +1,23 @@
 /**
- * Renames the legacy category names the staging check refuses, to the name
- * they were always meant to become.
+ * Reports the alias categories the staging integrity check refuses, and says
+ * what can be done about each one.
  *
- * `verify:staging-categories` reports "rent" and "accommodation" and stops.
- * Nothing existed to act on the report, so a single row created by somebody
- * testing turned that PR check permanently red — and a check that is always
- * red is a check nobody reads, which is worse than not having one.
+ * This used to rename "rent" and "accommodation" to Housing. That cannot work:
+ * budget_categories has a unique index on (group_id, lower(btrim(name))), and
+ * the case that actually occurs is a group holding *both* the alias and
+ * Housing — which is the whole reason the check fires. The rename would have
+ * violated the index, rolled back, and changed nothing.
  *
- * Both names are aliases of Housing. That mapping is not invented here: it is
- * the same one onboarding applies (ONBOARDING_CATEGORY_ALIASES), so a category
- * typed as "Rent" during setup already becomes Housing. Only a category
- * created later, by hand, escapes it.
+ * Removing an unused alias is migration 0034, which runs unattended and proves
+ * every reference is absent before deleting a row.
  *
- * Read-only unless --apply is passed. Never touches production: it refuses
- * anything but STAGING_DATABASE_URL, the same way the verifier does.
+ * What is left for a person is the case a migration must not decide: an alias
+ * somebody has actually spent against. Merging that one moves money between
+ * categories and may add two budgets together — a judgement about someone's
+ * budget, not a schema change.
+ *
+ * So this reports and never writes. It refuses anything but
+ * STAGING_DATABASE_URL, the same way the verifier does.
  */
 import pg from "pg";
 
@@ -26,7 +30,10 @@ if (!connectionString) {
   process.exit(2);
 }
 
-const apply = process.argv.includes("--apply");
+if (process.argv.includes("--apply")) {
+  console.error("This script no longer writes. Removing an unused alias is migration 0034; an alias that has been used needs a decision, not a script.");
+  process.exit(2);
+}
 
 const pool = new Pool({
   connectionString,
@@ -35,91 +42,79 @@ const pool = new Pool({
   idleTimeoutMillis: 10_000,
 });
 
-/** The canonical name each legacy alias becomes. */
-const CANONICAL = "Housing";
-const LEGACY = ["rent", "accommodation"];
+/** Alias -> the name the app already treats it as. */
+const ALIAS_OF: Record<string, string> = { rent: "Housing", accommodation: "Housing" };
 
-type Renameable = {
-  label: string;
-  find: string;
-  rename: string;
+type AliasRow = {
+  id: number;
+  group_id: number | null;
+  name: string;
+  canonical_present: boolean;
+  child_count: number;
+  expense_count: number;
+  allocation_count: number;
+  bank_tx_count: number;
 };
 
-const targets: Renameable[] = [
-  {
-    label: "budget_categories.name",
-    find: `SELECT id, group_id, name FROM budget_categories WHERE lower(btrim(name)) = ANY($1)`,
-    rename: `UPDATE budget_categories SET name = $2 WHERE lower(btrim(name)) = ANY($1)`,
-  },
-  {
-    label: "expenses.category",
-    find: `SELECT id, group_id, category AS name FROM expenses WHERE lower(btrim(category)) = ANY($1)`,
-    rename: `UPDATE expenses SET category = $2 WHERE lower(btrim(category)) = ANY($1)`,
-  },
-  {
-    label: "expense_category_allocations.category",
-    find: `SELECT id, group_id, category AS name FROM expense_category_allocations WHERE lower(btrim(category)) = ANY($1)`,
-    rename: `UPDATE expense_category_allocations SET category = $2 WHERE lower(btrim(category)) = ANY($1)`,
-  },
-];
+const FIND_ALIASES = `
+  SELECT alias.id,
+         alias.group_id,
+         alias.name,
+         EXISTS (
+           SELECT 1 FROM budget_categories canonical
+           WHERE canonical.group_id = alias.group_id
+             AND lower(btrim(canonical.name)) = 'housing'
+         ) AS canonical_present,
+         (SELECT count(*)::int FROM budget_categories child WHERE child.parent_id = alias.id) AS child_count,
+         (SELECT count(*)::int FROM expenses e
+           WHERE e.group_id = alias.group_id
+             AND lower(btrim(e.category)) = lower(btrim(alias.name))) AS expense_count,
+         (SELECT count(*)::int FROM expense_category_allocations a
+           WHERE a.group_id = alias.group_id
+             AND lower(btrim(a.category)) = lower(btrim(alias.name))) AS allocation_count,
+         (SELECT count(*)::int FROM joint_account_transactions t
+           WHERE t.group_id = alias.group_id
+             AND lower(btrim(t.expense_category)) = lower(btrim(alias.name))) AS bank_tx_count
+  FROM budget_categories alias
+  WHERE lower(btrim(alias.name)) = ANY($1)
+  ORDER BY alias.group_id, alias.name
+`;
+
+/** What should happen to this row, and why. */
+function verdict(row: AliasRow): string {
+  const uses = row.expense_count + row.allocation_count + row.bank_tx_count;
+  if (!row.canonical_present) {
+    return `leave alone — this group has no ${ALIAS_OF[row.name.trim().toLowerCase()] ?? "canonical"} category, so this one is its housing category, not a duplicate`;
+  }
+  if (row.child_count > 0) {
+    return `needs a decision — ${row.child_count} subcategor${row.child_count === 1 ? "y is" : "ies are"} nested under it`;
+  }
+  if (uses > 0) {
+    return `needs a decision — used ${uses} time${uses === 1 ? "" : "s"} (${row.expense_count} expense, ${row.allocation_count} allocation, ${row.bank_tx_count} bank), so merging it moves money`;
+  }
+  return "migration 0034 removes this — nothing has ever been recorded against it";
+}
 
 async function main() {
   const client = await pool.connect();
-  let total = 0;
-  const found: Array<{ label: string; rows: Array<{ id: number; group_id: number | null; name: string }> }> = [];
-
   try {
-    for (const target of targets) {
-      let rows: Array<{ id: number; group_id: number | null; name: string }> = [];
-      try {
-        const result = await client.query(target.find, [LEGACY]);
-        rows = result.rows;
-      } catch (error) {
-        // A table this staging database does not have is not a failure; the
-        // verifier skips missing relations the same way.
-        console.log(`skipped ${target.label}: ${(error as Error).message}`);
-        continue;
-      }
-      if (rows.length === 0) continue;
-      found.push({ label: target.label, rows });
-      total += rows.length;
-    }
+    const { rows } = await client.query<AliasRow>(FIND_ALIASES, [Object.keys(ALIAS_OF)]);
 
-    if (total === 0) {
-      console.log(`Nothing to rename. No "${LEGACY.join('" or "')}" rows in staging.`);
+    if (rows.length === 0) {
+      console.log(`Nothing to report. No "${Object.keys(ALIAS_OF).join('" or "')}" categories in this database.`);
       return;
     }
 
-    for (const entry of found) {
-      console.log(`\n${entry.label} — ${entry.rows.length} row(s)`);
-      for (const row of entry.rows) {
-        console.log(`  group ${row.group_id ?? "?"} · id ${row.id} · "${row.name}" -> "${CANONICAL}"`);
-      }
+    console.log(`${rows.length} alias categor${rows.length === 1 ? "y" : "ies"}:\n`);
+    for (const row of rows) {
+      console.log(`  group ${row.group_id ?? "?"} · id ${row.id} · "${row.name}"`);
+      console.log(`    ${verdict(row)}\n`);
     }
 
-    if (!apply) {
-      console.log(`\n${total} row(s) would be renamed to "${CANONICAL}". Nothing has been changed.`);
-      console.log("Re-run with --apply to rename them.\n");
-      return;
+    const needsDecision = rows.filter((row) => verdict(row).startsWith("needs a decision"));
+    if (needsDecision.length > 0) {
+      console.log(`${needsDecision.length} need${needsDecision.length === 1 ? "s" : ""} a person to decide. Nothing has been changed.\n`);
     }
-
-    // One transaction: a half-renamed database would leave the check red and
-    // the data inconsistent, which is worse than either state alone.
-    await client.query("BEGIN");
-    try {
-      for (const target of targets) {
-        try {
-          await client.query(target.rename, [LEGACY, CANONICAL]);
-        } catch (error) {
-          console.log(`skipped ${target.label}: ${(error as Error).message}`);
-        }
-      }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    }
-    console.log(`\nRenamed ${total} row(s) to "${CANONICAL}". Re-run verify:staging-categories to confirm.\n`);
   } finally {
     client.release();
     await pool.end();
