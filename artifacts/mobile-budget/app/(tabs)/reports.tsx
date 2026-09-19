@@ -479,6 +479,29 @@ export default function ReportsScreen() {
           refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
         >
+          {/* Every other way in goes through a category or a named thing
+              first. This is the one that answers "what happened". */}
+          <Pressable
+            onPress={() => router.push('/expense-ledger')}
+            accessibilityRole="button"
+            accessibilityLabel="See every expense in one list"
+            testID="open-expense-ledger"
+            style={({ pressed }) => [
+              styles.spendOnCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Feather name="list" size={18} color={colors.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.spendOnTitle, { color: colors.foreground }]}>All expenses</Text>
+              <Text style={[styles.spendOnSub, { color: colors.mutedForeground }]} numberOfLines={2}>
+                Everything that happened between two dates, newest first, whatever the category.
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          </Pressable>
+
           {/* Categories answer "how much on Food". This answers "how much on
               that thing", which is the question people actually ask. */}
           <Pressable

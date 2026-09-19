@@ -51,10 +51,12 @@ import type {
   ErrorResponse,
   Expense,
   ExpenseInput,
+  ExpenseLedger,
   GetContributionsParams,
   GetDashboardActivityParams,
   GetDashboardCategoryBreakdownParams,
   GetDashboardCategoryLedgerParams,
+  GetDashboardExpenseLedgerParams,
   GetDashboardIncomeStreamsParams,
   GetDashboardMonthlyReportPdfParams,
   GetDashboardPeriodTotalsParams,
@@ -1998,6 +2000,91 @@ export function useGetDashboardCategoryLedger<TData = Awaited<ReturnType<typeof 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardCategoryLedgerQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardExpenseLedgerUrl = (params?: GetDashboardExpenseLedgerParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/expense-ledger?${stringifiedParams}` : `/api/dashboard/expense-ledger`
+}
+
+/**
+ * A statement for the whole budget, rather than for one category or one named thing. One row per expense: a shop split across two categories is one thing that happened, and its portions are named on the row. With no date range the answer covers the selected month.
+ * @summary Every expense in one list, newest first
+ */
+export const getDashboardExpenseLedger = async (params?: GetDashboardExpenseLedgerParams, options?: Parameters<typeof customFetch>[1]): Promise<ExpenseLedger> => {
+
+  return customFetch<ExpenseLedger>(getGetDashboardExpenseLedgerUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardExpenseLedgerQueryKey = (params?: GetDashboardExpenseLedgerParams,) => {
+    return [
+    `/api/dashboard/expense-ledger`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDashboardExpenseLedgerQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardExpenseLedger>>, TError = ErrorType<unknown>>(params?: GetDashboardExpenseLedgerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardExpenseLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardExpenseLedgerQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardExpenseLedger>>> = ({ signal }) => getDashboardExpenseLedger(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardExpenseLedger>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardExpenseLedgerQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardExpenseLedger>>>
+export type GetDashboardExpenseLedgerQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Every expense in one list, newest first
+ */
+
+export function useGetDashboardExpenseLedger<TData = Awaited<ReturnType<typeof getDashboardExpenseLedger>>, TError = ErrorType<unknown>>(
+ params?: GetDashboardExpenseLedgerParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardExpenseLedger>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardExpenseLedgerQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -544,6 +544,33 @@ export interface CategoryLedger {
   entries: CategoryLedgerEntry[];
 }
 
+export type ExpenseLedgerEntrySource = typeof ExpenseLedgerEntrySource[keyof typeof ExpenseLedgerEntrySource];
+
+
+export const ExpenseLedgerEntrySource = {
+  expense: 'expense',
+  bank_disbursement: 'bank_disbursement',
+} as const;
+
+export interface ExpenseLedgerEntry {
+  id: string;
+  source: ExpenseLedgerEntrySource;
+  date: string;
+  description: string;
+  amount: number;
+  /** One name, or several when the expense was split across categories */
+  categories: string[];
+  paidFromBank: boolean;
+  payerName: string;
+}
+
+export interface ExpenseLedger {
+  from: string;
+  to: string;
+  total: number;
+  entries: ExpenseLedgerEntry[];
+}
+
 export interface SpendingByItemRow {
   /** The name as it was last typed, standing for every spelling of it */
   description: string;
@@ -1650,6 +1677,29 @@ from?: string;
  * @pattern ^\d{4}-\d{2}-\d{2}$
  */
 to?: string;
+};
+
+export type GetDashboardExpenseLedgerParams = {
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+month?: number;
+year?: number;
+/**
+ * Start of an exact day range (YYYY-MM-DD). Must be given together with `to`, and overrides the month.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * End of the day range (YYYY-MM-DD), inclusive.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
+/**
+ * Narrows the list to descriptions containing this text, ignoring case.
+ */
+q?: string;
 };
 
 export type GetDashboardSpendingByItemParams = {
