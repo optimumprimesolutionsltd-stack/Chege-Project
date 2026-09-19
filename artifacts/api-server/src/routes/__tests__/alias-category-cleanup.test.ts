@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const migration = readFileSync("../../lib/db/migrations/0034_drop_unused_alias_categories.sql", "utf8");
 const journal = readFileSync("../../lib/db/migrations/meta/_journal.json", "utf8");
-const script = readFileSync("../../scripts/src/fix-staging-categories.ts", "utf8");
+const script = readFileSync("../../scripts/src/report-category-aliases.ts", "utf8");
 
 // A group holding both "Rent" and "Housing" splits its housing spend across
 // two categories that mean the same thing. Renaming the alias cannot fix it:

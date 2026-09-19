@@ -23,10 +23,11 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-const connectionString = process.env.STAGING_DATABASE_URL;
+const connectionString =
+  process.env.CATEGORY_CHECK_DATABASE_URL ?? process.env.STAGING_DATABASE_URL;
 
 if (!connectionString) {
-  console.error("STAGING_DATABASE_URL is required; refusing to use DATABASE_URL or run against an unspecified database.");
+  console.error("CATEGORY_CHECK_DATABASE_URL is required; refusing to use DATABASE_URL or run against an unspecified database.");
   process.exit(2);
 }
 
@@ -98,6 +99,15 @@ function verdict(row: AliasRow): string {
 async function main() {
   const client = await pool.connect();
   try {
+    // Print this first. The variable this reads used to be called
+    // STAGING_DATABASE_URL and held a production connection string; anybody
+    // acting on the rows below needs to know which database they are in.
+    const where = await client.query<{ database: string; user: string }>(
+      "SELECT current_database() AS database, current_user AS \"user\"",
+    );
+    console.log(`Reading database "${where.rows[0]?.database}" as "${where.rows[0]?.user}".
+`);
+
     const { rows } = await client.query<AliasRow>(FIND_ALIASES, [Object.keys(ALIAS_OF)]);
 
     if (rows.length === 0) {
