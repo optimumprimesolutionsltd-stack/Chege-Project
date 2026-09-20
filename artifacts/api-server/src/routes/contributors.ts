@@ -105,6 +105,40 @@ export async function loadContributionStatement(
         AND ${jointAccountTxTable.date} >= make_date(${earliest.year}, ${earliest.month}, 1)`),
   ]);
 
+  // What reached the bank without belonging to anybody. A deposit split across
+  // contributors for only part of its value leaves the remainder here, so
+  // partial attribution is not quietly lost along with the unsplit ones.
+  const groupFundingRows = await db.execute(sql`
+    SELECT t.id AS "transactionId",
+           t.date::text AS "date",
+           t.description AS "description",
+           t.amount - COALESCE(SUM(s.amount), 0) AS "amount",
+           b.name AS "bankName"
+    FROM joint_account_transactions t
+    LEFT JOIN joint_account_deposit_splits s ON s.transaction_id = t.id
+    LEFT JOIN bank_accounts b ON b.id = t.account_id
+    WHERE t.group_id = ${groupId}
+      AND t.type = 'deposit'
+      AND t.bank_transfer_id IS NULL
+      AND t.date >= make_date(${earliest.year}, ${earliest.month}, 1)
+    GROUP BY t.id, t.date, t.description, t.amount, b.name
+    HAVING t.amount - COALESCE(SUM(s.amount), 0) > 0
+    ORDER BY t.date, t.id
+  `);
+  const groupFunding = (groupFundingRows.rows as Array<{
+    transactionId: number;
+    date: string;
+    description: string | null;
+    amount: string | number;
+    bankName: string | null;
+  }>).map((row) => ({
+    transactionId: Number(row.transactionId),
+    date: String(row.date).slice(0, 10),
+    description: row.description ?? null,
+    amount: Number(row.amount) || 0,
+    bankName: row.bankName ?? null,
+  }));
+
   const entries: StatementEntry[] = [
     ...recorded
       .filter((row) => row.contributorId != null)
@@ -141,6 +175,8 @@ export async function loadContributionStatement(
     entries,
     totalsByContributor,
     grandTotal: entries.reduce((sum, entry) => sum + entry.amount, 0),
+    groupFunding,
+    groupFundingTotal: groupFunding.reduce((sum, entry) => sum + entry.amount, 0),
   };
 
   return range ? filterStatementToRange(statement, range) : statement;
