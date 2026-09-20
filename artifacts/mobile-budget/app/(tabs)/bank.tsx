@@ -870,6 +870,31 @@ export default function BankScreen() {
 
   const transactions: Tx[] = data?.transactions ?? [];
 
+  // "Withdrawn" counted spending, savings transfers and moves between your own
+  // accounts as one figure. The balance falls the same way for all three, but
+  // only the first is money consumed: a day of transfers read exactly like a
+  // day of spending, and a budget built on that figure is wrong by whatever
+  // was merely moved.
+  const outgoing = useMemo(() => {
+    let spent = 0;
+    let moved = 0;
+    let charges = 0;
+    for (const tx of transactions) {
+      if (tx.type !== 'disbursement') continue;
+      if (tx.bankCharge) {
+        // A fee is genuinely gone, but the app reports it apart from household
+        // spending, so it is named rather than folded into either.
+        charges += tx.amount;
+      } else if (tx.bankTransferId != null || tx.savingsGoalId != null) {
+        // Still yours, in another pot.
+        moved += tx.amount;
+      } else {
+        spent += tx.amount;
+      }
+    }
+    return { spent, moved, charges };
+  }, [transactions]);
+
   // Panel-level edit mode: one Edit on a heading turns the list editable, one
   // Save at the foot applies every staged change.
   const accountEditor = useListEditor({
@@ -1112,12 +1137,29 @@ export default function BankScreen() {
                   <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDeposits)}</Text>
                 </View>
                 <View style={styles.statDivider} />
-                <View style={styles.statItem}>
+                <View style={styles.statItem} testID="bank-stat-spent">
                   <Feather name="arrow-up-circle" size={14} color="#f87171" />
-                  <Text style={styles.statLabel}>Withdrawn</Text>
-                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(data?.totalDisbursements)}</Text>
+                  <Text style={styles.statLabel}>Spent</Text>
+                  <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(outgoing.spent)}</Text>
                 </View>
+                {outgoing.moved > 0 ? (
+                  <>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem} testID="bank-stat-moved">
+                      <Feather name="repeat" size={14} color="#fbbf24" />
+                      <Text style={styles.statLabel}>Moved</Text>
+                      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>KES {formatKES(outgoing.moved)}</Text>
+                    </View>
+                  </>
+                ) : null}
               </View>
+              {/* Named only when there are any: most accounts have none, and a
+                  zero line every month is noise. */}
+              {outgoing.charges > 0 ? (
+                <Text style={styles.chargesNote} testID="bank-stat-charges">
+                  Bank charges: KES {formatKES(outgoing.charges)}
+                </Text>
+              ) : null}
               <View style={styles.openingBalanceRow}>
                 <View>
                   <Text style={styles.openingBalanceLabel}>Opening balance</Text>
@@ -2561,6 +2603,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
+  chargesNote: { color: '#cbd5f5', fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 6, textAlign: 'center' as const },
   openingBalanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
