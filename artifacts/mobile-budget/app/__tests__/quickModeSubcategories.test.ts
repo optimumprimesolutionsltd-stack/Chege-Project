@@ -31,14 +31,21 @@ describe('Quick mode offers what can be posted to', () => {
 // expense at all, so Quick cannot offer only the top level — it would leave a
 // nested category unreachable in that mode. Quick lists what is postable.
 describe('and says where spending actually lands', () => {
-  it('offers the postable categories in Quick, not the headings', () => {
-    expect(form).toContain('const quickChoices = useMemo(');
-    expect(form).toContain('group.children.map((child) => ({ name: child, label: `${group.name} > ${child}` }))');
+  it('offers the postable categories in Quick, laid out under their headings', () => {
+    // They used to sit side by side in one strip labelled "Housing > Rent",
+    // which reads as a flat list of oddly-named categories rather than a shape.
+    expect(form).toContain('testID={`quick-group-${group.name}`}');
+    expect(form).toContain('{group.children.map((child) => (');
   });
 
-  it('names the parent alongside a subcategory, for context', () => {
-    // "Rent" on its own says less than "Housing > Rent".
-    expect(form).toContain('label={label}');
+  it('draws a heading as text, never as a chip', () => {
+    // Offering it as one would only invite the tap the server refuses.
+    expect(form).toContain('<Text style={[styles.quickGroupHeading,');
+    expect(form).not.toContain('const quickChoices = useMemo(');
+  });
+
+  it('still offers a top-level category that has no subcategories', () => {
+    expect(form).toContain('{group.children.length > 0 ? (');
   });
 
   it('explains it in both modes', () => {
