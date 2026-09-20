@@ -1033,7 +1033,13 @@ export default function AddExpenseSheet() {
   // the selected child again gives the allocation back to the parent.
   const chooseSubcategory = useCallback((child: string) => {
     const parent = parentOf(categoryTree, child);
-    if (!parent) return;
+    // A top-level category with no subcategories is chosen outright, not used
+    // to refine anything. Detailed sends every chip through here, so without
+    // this the tap was simply swallowed.
+    if (!parent) {
+      chooseCategory(child);
+      return;
+    }
     const siblings = categoryTree.find((group) => group.name === parent)?.children ?? [];
     const owns = (name: string) => name === parent || siblings.includes(name);
     // Tapping the chosen subcategory used to toggle back to the parent. The
@@ -1041,13 +1047,24 @@ export default function AddExpenseSheet() {
     // a rejection on save. The choice now stands until another one replaces it.
     const replacement = child;
     setCategoryAllocations((previous) => {
-      const next = previous.map((allocation) => (
-        owns(allocation.category) ? { ...allocation, category: replacement } : allocation
-      ));
-      setCategory((current) => (owns(current) ? replacement : current));
+      // Refining means moving the allocation this family already has, so the
+      // expense went to Groceries *instead of* the rest of Food. But when the
+      // family has no allocation yet there is nothing to move, and mapping
+      // over the list left it exactly as it was — which on an empty Detailed
+      // form meant the first tap did nothing, no category was ever selected,
+      // and so the create button could never offer to nest under one.
+      const refining = previous.some((allocation) => owns(allocation.category));
+      const next = refining
+        ? previous.map((allocation) => (
+            owns(allocation.category) ? { ...allocation, category: replacement } : allocation
+          ))
+        : addStandardCategory(previous, replacement);
+      setCategory((current) => (!current || owns(current) ? replacement : current));
       return next;
     });
-  }, [categoryAllocations, categoryTree]);
+    setIsCreatingCategory(false);
+    setShowAdditionalCategoryPicker(false);
+  }, [categoryTree, chooseCategory]);
 
   const updateAllocationAmount = useCallback((allocationCategory: string, value: string) => {
     setCategoryAllocations((previous) => previous.map((allocation) => (
