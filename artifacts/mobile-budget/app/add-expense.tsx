@@ -894,7 +894,22 @@ export default function AddExpenseSheet() {
   // Which heading's subcategory row is open in Detailed. Tapping a heading
   // cannot select it, so the open row needs its own state rather than being
   // inferred from the allocations.
+  //
+  // Only ever one. Opening a row under every selected parent stacked several
+  // lists of subcategories on top of each other, and with Housing and Food
+  // both picked there was nothing to say which one a tap belonged to. An
+  // expense can still be split across as many categories as it needs — the
+  // choosing just happens one branch at a time.
   const [openHeading, setOpenHeading] = useState<string | null>(null);
+
+  // The one branch whose subcategories are on screen: whichever heading was
+  // last opened, falling back to the branch the most recent choice came from
+  // so a restored draft still shows where its category lives.
+  const activeHeading = useMemo(() => {
+    if (openHeading) return openHeading;
+    const last = categoryAllocations[categoryAllocations.length - 1]?.category;
+    return last ? parentOf(categoryTree, last) : null;
+  }, [openHeading, categoryAllocations, categoryTree]);
 
   const selectedParents = useMemo(() => {
     const names = new Set<string>();
@@ -1066,6 +1081,9 @@ export default function AddExpenseSheet() {
     // parent can no longer hold an expense, so that toggle only ever produced
     // a rejection on save. The choice now stands until another one replaces it.
     const replacement = child;
+    // Stay in the branch just used, so the row does not jump to another
+    // heading that happens to be selected too.
+    setOpenHeading(parent);
     setCategoryAllocations((previous) => {
       const next = previous.map((allocation) => (
         owns(allocation.category) ? { ...allocation, category: replacement } : allocation
@@ -1602,7 +1620,7 @@ export default function AddExpenseSheet() {
         {/* Subcategories are a Detailed-mode refinement: Quick mode is meant to
             be one tap on one category, so it never offers them. */}
         {isAdvanced && categoryTree
-          .filter((group) => (selectedParents.has(group.name) || openHeading === group.name) && group.children.length > 0)
+          .filter((group) => group.name === activeHeading && group.children.length > 0)
           .map((group) => (
             <View key={`sub-${group.name}`} testID={`subcategory-row-${group.name}`} style={{ gap: 4 }}>
               <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
