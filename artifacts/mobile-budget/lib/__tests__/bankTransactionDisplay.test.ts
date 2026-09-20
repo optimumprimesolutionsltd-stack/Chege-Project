@@ -21,7 +21,7 @@ describe("mobile bank transaction display", () => {
   it("shows a visible warning before an outgoing transaction makes the balance negative", () => {
     expect(bankScreenSource).toContain('testID="bank-negative-balance-warning"');
     expect(bankScreenSource).toContain("This will take the account below zero.");
-    expect(bankScreenSource).toContain("getProjectedBalanceAfterOutgoing");
+    expect(bankScreenSource).toContain("getProjectedBalanceAfterPosting");
   });
 
   it("keeps a negative bank balance visible on the overview after the withdrawal is saved", () => {

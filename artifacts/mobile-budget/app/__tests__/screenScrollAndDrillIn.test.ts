@@ -29,9 +29,11 @@ describe('the banking sheets fit on the screen', () => {
   // and the account it applies to were cut off with no way to reach them.
   it('caps every sheet and lets its body scroll', () => {
     expect(bank).toContain("maxHeight: '88%'");
-    // All three banking sheets share the style, and each scrolls.
-    expect(bank.match(/styles\.sheet,/g)?.length).toBe(3);
-    expect(bank.match(/<ScrollView showsVerticalScrollIndicator=\{false\} keyboardShouldPersistTaps="handled">/g)?.length).toBe(2);
+    // Every banking sheet shares the style, and each one scrolls. The counts
+    // are spelled out so a new sheet added without a scrolling body fails here
+    // rather than growing past the top of the screen in someone's hand.
+    expect(bank.match(/styles\.sheet,/g)?.length).toBe(4);
+    expect(bank.match(/<ScrollView showsVerticalScrollIndicator=\{false\} keyboardShouldPersistTaps="handled">/g)?.length).toBe(3);
     expect(bank).toContain('keyboardShouldPersistTaps="handled"');
   });
 
