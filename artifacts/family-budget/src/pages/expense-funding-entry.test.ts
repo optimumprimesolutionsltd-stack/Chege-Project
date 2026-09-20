@@ -447,3 +447,31 @@ describe("recurring expense budget setup", () => {
     expect(mobileBudgetSource).toContain('{ monthlyBudget: String(amt), isRecurring: true }');
   });
 });
+
+// Quick decides the funding for you — you are the payer, your main income
+// source pays it in full, never the bank. Until now nothing said that decision
+// was reversible, so somebody who wanted a different source had no way of
+// knowing they could simply save and reopen it.
+describe("Quick says its funding choice can be undone", () => {
+  it("says so on both forms, in the same words", () => {
+    for (const source of [expensesSource, mobileSource]) {
+      expect(source).toContain("you can change the payer or source later by opening this expense.");
+    }
+  });
+
+  it("says it beside the source it chose, not somewhere else", () => {
+    for (const source of [expensesSource, mobileSource]) {
+      const funded = source.indexOf("funded in full from");
+      const note = source.indexOf("you can change the payer or source later");
+      expect(funded).toBeGreaterThan(-1);
+      expect(note).toBeGreaterThan(funded);
+    }
+  });
+
+  it("stays quiet when there is no source to change", () => {
+    // With none, the expense cannot be saved at all and the form says that
+    // instead — promising an edit that cannot happen yet would be noise.
+    expect(mobileSource).toContain("{normalIncomeSource ? (");
+    expect(expensesSource).toContain("{normalSource ? <li>");
+  });
+});
