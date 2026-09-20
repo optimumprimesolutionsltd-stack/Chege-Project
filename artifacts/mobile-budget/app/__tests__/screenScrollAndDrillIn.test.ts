@@ -23,6 +23,30 @@ describe('Bank accounts scrolls as one page', () => {
   });
 });
 
+describe('the five bank actions fit their labels', () => {
+  // Five buttons shared one row with flex: 1, leaving each about fifty points
+  // of content width on a phone — so the labels broke mid-word and the row
+  // read "Depo sit", "With draw", "Charg e".
+  it('lets the row wrap instead of squeezing five buttons onto one line', () => {
+    expect(bank).toContain("flexWrap: 'wrap',");
+    expect(bank).toContain("flexBasis: '30%',");
+    expect(bank).toContain('minWidth: 104,');
+  });
+
+  it('no longer forces every button to an equal fifth', () => {
+    const style = bank.slice(bank.indexOf('  actionBtn: {'), bank.indexOf('  actionBtnDisburse: {'));
+    expect(style).toContain('flexGrow: 1,');
+    expect(style).not.toContain('flex: 1,');
+  });
+
+  it('keeps each label on one line, shrinking it rather than breaking it', () => {
+    for (const label of ['Deposit', 'Withdraw', 'Transfer', 'Bank → Bank', 'Charge']) {
+      expect(bank).toContain(`>${label}</Text>`);
+    }
+    expect((bank.match(/adjustsFontSizeToFit minimumFontScale=\{0\.82\}/g) ?? []).length).toBe(5);
+  });
+});
+
 describe('the banking sheets fit on the screen', () => {
   // The wrapper pins a sheet to the bottom of the screen. With no ceiling, a
   // form taller than the screen grew upwards past the top edge — amount, date

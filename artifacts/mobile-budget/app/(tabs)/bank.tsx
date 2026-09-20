@@ -1319,7 +1319,7 @@ export default function BankScreen() {
                   testID="bank-deposit-action"
                 >
                   <Feather name="arrow-down-left" size={16} color="#0a1a10" />
-                  <Text style={styles.actionBtnText}>Deposit</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={styles.actionBtnText}>Deposit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.actionBtnDisburse, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
@@ -1330,7 +1330,7 @@ export default function BankScreen() {
                   testID="bank-withdraw-action"
                 >
                   <Feather name="arrow-up-right" size={16} color="#f87171" />
-                  <Text style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, styles.actionBtnTextDisburse]}>Withdraw</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
@@ -1341,7 +1341,7 @@ export default function BankScreen() {
                   testID="bank-transfer-action"
                 >
                   <Feather name="repeat" size={16} color="#67e8f9" />
-                  <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Transfer</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Transfer</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: '#164e63' }, (!canManageAccount || accounts.length < 2) && styles.actionBtnDisabled]}
@@ -1350,7 +1350,7 @@ export default function BankScreen() {
                   testID="bank-to-bank-action"
                 >
                   <Feather name="shuffle" size={16} color="#67e8f9" />
-                  <Text style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionBtn, { backgroundColor: '#78350f' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
@@ -1361,7 +1361,7 @@ export default function BankScreen() {
                   testID="bank-charge-action"
                 >
                   <Feather name="file-minus" size={16} color="#fde68a" />
-                  <Text style={[styles.actionBtnText, { color: '#fde68a' }]}>Charge</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#fde68a' }]}>Charge</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -2942,12 +2942,20 @@ const styles = StyleSheet.create({
     color: '#d1fae5',
     fontFamily: 'Inter_600SemiBold',
   },
+  // Five buttons held one row with flex: 1, which on a phone left each about
+  // fifty points of content width — so "Deposit" and "Withdraw" broke across
+  // two lines mid-word. They now wrap onto a second row instead, each keeping
+  // enough width for its whole label.
   actionRow: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    columnGap: 10,
+    rowGap: 10,
   },
   actionBtn: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 104,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2955,6 +2963,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4ade80',
     borderRadius: 14,
     paddingVertical: 12,
+    paddingHorizontal: 8,
   },
   actionBtnDisburse: {
     backgroundColor: 'rgba(248,113,113,0.15)',
@@ -2962,10 +2971,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(248,113,113,0.4)',
   },
   actionBtnText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600' as const,
     fontFamily: 'Inter_600SemiBold',
     color: '#0a1a10',
+    // A label that has to break is better shrunk than hyphenated across two
+    // lines: "Withdraw" reading as "With / draw" is what this replaces.
+    flexShrink: 1,
   },
   actionBtnTextDisburse: {
     color: '#f87171',

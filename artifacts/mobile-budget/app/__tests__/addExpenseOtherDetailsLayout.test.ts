@@ -252,10 +252,30 @@ describe('subcategories belong to Detailed mode', () => {
 
   it('moves the parent allocation onto the subcategory rather than adding a second one', () => {
     const start = source.indexOf('const chooseSubcategory = useCallback');
-    const handler = source.slice(start, source.indexOf('}, [categoryAllocations, categoryTree]);', start));
+    const handler = source.slice(start, source.indexOf('}, [categoryTree, chooseCategory]);', start));
     expect(handler).toContain('const parent = parentOf(categoryTree, child);');
+    // Refining moves the family's allocation: the expense went to Groceries
+    // *instead of* the rest of Food, so a second row would double it.
+    expect(handler).toContain('const refining = previous.some((allocation) => owns(allocation.category));');
     expect(handler).toContain('owns(allocation.category) ? { ...allocation, category: replacement } : allocation');
-    expect(handler).not.toContain('addStandardCategory');
+  });
+
+  it('adds the allocation when the family has none yet', () => {
+    // Detailed sends every chip here, and mapping over an empty list left it
+    // empty — so the first tap on a fresh form did nothing at all: no category
+    // was selected, and the create button could never offer to nest under one.
+    const start = source.indexOf('const chooseSubcategory = useCallback');
+    const handler = source.slice(start, source.indexOf('}, [categoryTree, chooseCategory]);', start));
+    expect(handler).toContain(': addStandardCategory(previous, replacement);');
+    expect(handler).toContain('setCategory((current) => (!current || owns(current) ? replacement : current));');
+  });
+
+  it('chooses a childless top-level category outright instead of swallowing the tap', () => {
+    // parentOf returns nothing for one, and the handler used to return early.
+    const start = source.indexOf('const chooseSubcategory = useCallback');
+    const handler = source.slice(start, source.indexOf('}, [categoryTree, chooseCategory]);', start));
+    expect(handler).toContain('chooseCategory(child);');
+    expect(handler).not.toContain('if (!parent) return;');
   });
 
   it('marks the chosen subcategory itself, there being no parent chip to mark', () => {
