@@ -16,7 +16,11 @@ describe("web bank overdraft warning", () => {
     expect(bankPageSource).toContain('data-testid="bank-negative-balance-warning"');
     expect(bankPageSource).toContain("This will take the account below zero.");
     expect(bankPageSource).toContain("Jamvi will still save the record");
-    expect(bankPageSource).toContain("getProjectedBalanceAfterOutgoing");
+    expect(bankPageSource).toContain("getProjectedBalanceAfterPosting");
+    // The warning is about money leaving. A deposit into an overdrawn account
+    // also projects below zero, and "this will take the account below zero"
+    // would be a lie about a posting that moves it upward.
+    expect(bankPageSource).toContain("{isOutgoingTransaction && projectedBalance !== null && projectedBalance < 0 && (");
   });
 
   it("keeps a negative bank balance visible on the overview after the withdrawal is saved", () => {

@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { canManageBankAccount, resolveBankAccountSelection } from "@/lib/bank-access";
-import { getProjectedBalanceAfterOutgoing } from "@/lib/bank-balance-utils";
+import { getProjectedBalanceAfterPosting } from "@/lib/bank-balance-utils";
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { useListEditor } from "@/hooks/use-list-editor";
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
@@ -64,6 +64,19 @@ type EditableTransaction = {
 function parseBankAmount(value: string): number | null {
   const normalized = value.trim().replace(/,/g, "");
   if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * A balance, which unlike an amount can be negative.
+ *
+ * Jamvi records an overdraft rather than refusing it, so a statement figure
+ * below zero is a real thing somebody has to be able to type in.
+ */
+function parseBalanceFigure(value: string): number | null {
+  const normalized = value.trim().replace(/,/g, "");
+  if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -155,6 +168,13 @@ export default function Bank() {
     formCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [mode, editingTransaction?.id]);
   const [addingAccount, setAddingAccount] = useState(false);
+  // A day's banking is several postings, not one. The form can stay open
+  // between them and keep a tally of what the sitting has recorded.
+  const [sitting, setSitting] = useState<{ count: number; inflow: number; outflow: number } | null>(null);
+  // Reconciling: the statement's closing balance, against Jamvi's.
+  const [reconciling, setReconciling] = useState(false);
+  const [statementBalance, setStatementBalance] = useState("");
+  const [reconcileNarration, setReconcileNarration] = useState("");
 
   const selectedBankAccount = accounts.find((item) => item.id === selectedAccountId) ?? null;
   const isCreatingAccount = addingAccount || !selectedBankAccount;
@@ -232,6 +252,52 @@ export default function Bank() {
     },
     afterSave: invalidate,
   });
+
+  const [showReconcile, setShowReconcile] = useState(false);
+
+  const openReconcile = () => {
+    setStatementBalance("");
+    setReconcileNarration("");
+    setShowReconcile(true);
+  };
+
+  /**
+   * Record the shortfall as a bank charge.
+   *
+   * Only offered when Jamvi holds more than the statement does: money has left
+   * the account that no posting accounts for, and on a Kenyan bank statement
+   * that is nearly always a fee. Nearly always is not always, which is why the
+   * app asks rather than assuming, and why the narration is editable — a
+   * mis-attributed difference is worse than a visible one.
+   */
+  const recordDifferenceAsCharge = async (difference: number) => {
+    if (!selectedAccountId) {
+      toast({
+        variant: "destructive",
+        title: "Choose a bank account",
+        description: "Pick the account you are checking before recording the difference.",
+      });
+      return;
+    }
+    setReconciling(true);
+    try {
+      await createBankCharge.mutateAsync({
+        data: {
+          amount: difference,
+          narration: reconcileNarration.trim() || "Bank charges",
+          date: new Date().toISOString().slice(0, 10),
+          accountId: selectedAccountId,
+        },
+      });
+      setShowReconcile(false);
+      invalidate();
+      toast({ title: "Bank charge recorded", description: "It is kept out of household spending." });
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Could not record the charge." });
+    } finally {
+      setReconciling(false);
+    }
+  };
 
   const openOpeningBalanceEditor = () => {
     setOpeningBalanceDraft(String(account?.openingBalance ?? 0));
@@ -377,24 +443,53 @@ export default function Bank() {
     }
   };
 
-  const resetForm = () => {
+  /**
+   * What changes between one posting and the next. The mode, the date and the
+   * people stay: a sitting is one day on one account, and re-choosing them for
+   * every line is the friction that made recording a whole day unappealing.
+   */
+  const resetForNextEntry = () => {
     setAmount("");
     setDescription("");
-    setDate(new Date().toISOString().split("T")[0]);
-    setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : []);
     setDepositorAmounts({});
-    setIncomeSourceId(null);
-    setDepositSourceKind(null);
-    setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : JOINT_BANK_ID);
     setExpenseCategory("");
     setWithdrawalDestinationKind("category");
-    setTransferDirection("to_savings");
     setTransferGoalId(null);
     setBankTransferDestinationId(null);
     setNewCategoryName("");
     setShowCategoryCreator(false);
+  };
+
+  const resetForm = () => {
+    resetForNextEntry();
+    setDate(new Date().toISOString().split("T")[0]);
+    setDepositorIds(!isSharedWorkspace && user?.id ? [user.id] : []);
+    setIncomeSourceId(null);
+    setDepositSourceKind(null);
+    setWithdrawerId(!isSharedWorkspace ? user?.id ?? null : JOINT_BANK_ID);
+    setTransferDirection("to_savings");
     setEditingTransaction(null);
+    setSitting(null);
     setMode(null);
+  };
+
+  /**
+   * End one posting: either close the form, or clear it for the next and count
+   * what was just recorded. Called from every branch of the submit handler, so
+   * no path can close the form behind your back mid-sitting.
+   */
+  const finishEntry = (keepOpen: boolean, recorded: { amount: number; direction: "in" | "out" }) => {
+    if (!keepOpen) {
+      resetForm();
+      return;
+    }
+    setEditingTransaction(null);
+    resetForNextEntry();
+    setSitting((previous) => ({
+      count: (previous?.count ?? 0) + 1,
+      inflow: (previous?.inflow ?? 0) + (recorded.direction === "in" ? recorded.amount : 0),
+      outflow: (previous?.outflow ?? 0) + (recorded.direction === "out" ? recorded.amount : 0),
+    }));
   };
 
   const openMode = (m: "deposit" | "disbursement" | "transfer" | "bank_transfer" | "bank_charge") => {
@@ -490,8 +585,8 @@ export default function Bank() {
     window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
   }, [account, bankEditId, openedDeepLinkId, user?.id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent, { keepOpen = false }: { keepOpen?: boolean } = {}) => {
+    e?.preventDefault();
     if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer" || mode === "bank_transfer" || mode === "bank_charge") && !description.trim())) {
       toast({
         variant: "destructive",
@@ -593,7 +688,7 @@ export default function Bank() {
             data: { ...data, transferDirection, accountId: editingTransaction.accountId ?? selectedAccountId },
           });
           toast({ title: "Transfer updated" });
-          resetForm();
+          finishEntry(false, { amount: total, direction: transferDirection === "to_savings" ? "out" : "in" });
           invalidate();
           return;
         }
@@ -604,7 +699,7 @@ export default function Bank() {
           await transferFromSavings.mutateAsync({ data });
           toast({ title: "Moved to bank" });
         }
-        resetForm();
+        finishEntry(keepOpen, { amount: total, direction: transferDirection === "to_savings" ? "out" : "in" });
         invalidate();
         return;
       }
@@ -623,7 +718,7 @@ export default function Bank() {
           },
         });
         toast({ title: "Bank transfer recorded", description: "Both account balances were updated." });
-        resetForm();
+        finishEntry(keepOpen, { amount: total, direction: "out" });
         invalidate();
         return;
       }
@@ -714,7 +809,7 @@ export default function Bank() {
         });
         toast({ title: "Disbursement recorded" });
       }
-      resetForm();
+      finishEntry(keepOpen, { amount: total, direction: mode === "deposit" ? "in" : "out" });
       invalidate();
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Could not save transaction." });
@@ -756,17 +851,29 @@ export default function Bank() {
   const outgoingAmount = parseBankAmount(amount);
   const isOutgoingTransaction = mode === "disbursement" || mode === "bank_charge" ||
     mode === "bank_transfer" || (mode === "transfer" && transferDirection === "to_savings");
-  const projectedBalance = isOutgoingTransaction &&
-    account &&
+  // The balance the account will hold once this posting is saved, shown while
+  // the amount is still being typed. Incoming money is projected too: somebody
+  // recording a day works down to the closing balance on their statement, and
+  // a figure that only moves for withdrawals cannot be worked down to.
+  const projectedBalance = account &&
     outgoingAmount !== null &&
     outgoingAmount > 0
-    ? getProjectedBalanceAfterOutgoing(
+    ? getProjectedBalanceAfterPosting(
         account.balance,
         outgoingAmount,
+        isOutgoingTransaction ? "out" : "in",
         editingTransaction
           ? { amount: editingTransaction.amount, type: editingTransaction.type }
           : null,
       )
+    : null;
+
+  // Reconciling compares Jamvi's balance with the statement's. A positive
+  // difference means Jamvi holds more than the bank does: money left the
+  // account with nothing recorded against it.
+  const parsedStatementBalance = parseBalanceFigure(statementBalance);
+  const reconcileDifference = parsedStatementBalance !== null && account
+    ? Math.round((account.balance - parsedStatementBalance) * 100) / 100
     : null;
 
   // Helpers for attribution labels in transaction list
@@ -873,15 +980,28 @@ export default function Bank() {
                     {account?.openingBalanceDate ? ` as of ${formatDate(account.openingBalanceDate)}` : ""}
                   </span>
                   {canManageAccount && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-9 rounded-lg bg-primary-foreground/15 px-3 text-primary-foreground hover:bg-primary-foreground/25"
-                      onClick={openOpeningBalanceEditor}
-                      data-testid="button-edit-opening-balance"
-                    >
-                      Edit starting balance
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-9 rounded-lg bg-primary-foreground/15 px-3 text-primary-foreground hover:bg-primary-foreground/25"
+                        onClick={openOpeningBalanceEditor}
+                        data-testid="button-edit-opening-balance"
+                      >
+                        Edit starting balance
+                      </Button>
+                      {accounts.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-9 rounded-lg bg-primary-foreground/15 px-3 text-primary-foreground hover:bg-primary-foreground/25"
+                          onClick={openReconcile}
+                          data-testid="button-check-against-statement"
+                        >
+                          Check against statement
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               <div className="flex gap-6 pt-2 border-t border-primary-foreground/20">
@@ -898,6 +1018,115 @@ export default function Bank() {
           )}
         </CardContent>
       </Card>
+
+      {showReconcile && (
+        <Card className="border-none shadow-md bg-accent/20" data-testid="bank-reconcile-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xl font-display">Check against your statement</CardTitle>
+            <CardDescription>
+              Type the closing balance your bank shows for {account?.accountName ?? "this account"}. Jamvi will tell you
+              what it cannot account for.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground" htmlFor="bank-statement-balance">
+                Statement closing balance (KES)
+              </label>
+              <Input
+                id="bank-statement-balance"
+                data-testid="input-statement-balance"
+                inputMode="text"
+                placeholder="e.g. 9400"
+                value={statementBalance}
+                onChange={(e) => setStatementBalance(e.target.value)}
+                className="h-12 text-lg bg-card"
+                autoFocus
+              />
+            </div>
+
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 space-y-1">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                <span className="text-sm text-muted-foreground">Jamvi has</span>
+                <span className="text-lg font-semibold text-foreground">{formatKes(account?.balance ?? 0)}</span>
+              </div>
+              {reconcileDifference !== null && (
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                  <span className="text-sm text-muted-foreground">Your statement has</span>
+                  <span className="text-lg font-semibold text-foreground">{formatKes(parsedStatementBalance ?? 0)}</span>
+                </div>
+              )}
+            </div>
+
+            {reconcileDifference === null ? null : reconcileDifference === 0 ? (
+              <p className="text-sm font-semibold text-primary" data-testid="bank-reconcile-matched">
+                They match. Every shilling that left this account is recorded.
+              </p>
+            ) : reconcileDifference > 0 ? (
+              <div className="space-y-3">
+                <p className="text-sm text-foreground" data-testid="bank-reconcile-short">
+                  {formatKes(reconcileDifference)} left the account with nothing recorded against it. On a bank
+                  statement that is usually a fee — but Jamvi will not decide that for you.
+                </p>
+                <Input
+                  data-testid="input-reconcile-narration"
+                  placeholder="What the statement calls it (default: Bank charges)"
+                  value={reconcileNarration}
+                  onChange={(e) => setReconcileNarration(e.target.value)}
+                  className="h-12 bg-card"
+                />
+                <div className="flex flex-wrap justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowReconcile(false)} className="h-12 px-6">
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={reconciling}
+                    onClick={() => recordDifferenceAsCharge(reconcileDifference)}
+                    data-testid="button-record-difference-as-charge"
+                    className="h-12 px-6"
+                  >
+                    {reconciling && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                    Record {formatKes(reconcileDifference)} as a bank charge
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  A charge is kept out of household spending, so this will not touch any budget.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-foreground" data-testid="bank-reconcile-over">
+                  Your statement holds {formatKes(Math.abs(reconcileDifference))} more than Jamvi knows about, so this is
+                  money that came in without being recorded. A charge would be the wrong answer — record the deposit
+                  instead, so it can be attributed to whoever paid it.
+                </p>
+                <div className="flex flex-wrap justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowReconcile(false)} className="h-12 px-6">
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => { setShowReconcile(false); openMode("deposit"); }}
+                    data-testid="button-reconcile-record-deposit"
+                    className="h-12 px-6"
+                  >
+                    Record a deposit
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {reconcileDifference === null && (
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={() => setShowReconcile(false)} className="h-12 px-6">
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {editingOpeningBalance && (
         <Card className="border-none shadow-md bg-accent/20">
@@ -1061,8 +1290,29 @@ export default function Bank() {
                         </span>
                         <span className="text-lg font-semibold text-foreground">{formatKes(account.balance)}</span>
                       </div>
+                      {projectedBalance !== null && (
+                        <div
+                          className="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"
+                          data-testid="bank-projected-balance"
+                        >
+                          <span className="text-sm text-muted-foreground">After this posting</span>
+                          <span
+                            className={`text-lg font-semibold ${
+                              projectedBalance < 0
+                                ? "text-destructive"
+                                : isOutgoingTransaction
+                                  ? "text-foreground"
+                                  : "text-primary"
+                            }`}
+                          >
+                            {formatKes(projectedBalance)}
+                          </span>
+                        </div>
+                      )}
                       <p className="mt-1 text-xs text-muted-foreground">
-                        This is the balance before the transaction is saved.
+                        {projectedBalance !== null
+                          ? "The balance moves as you type, so you can work down to the figure on your statement."
+                          : "This is the balance before the transaction is saved."}
                       </p>
                     </div>
                   )}
@@ -1125,7 +1375,7 @@ export default function Bank() {
                     </p>
                   )}
                 </div>
-                {projectedBalance !== null && projectedBalance < 0 && (
+                {isOutgoingTransaction && projectedBalance !== null && projectedBalance < 0 && (
                   <div
                     className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950 sm:col-span-2 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
                     data-testid="bank-negative-balance-warning"
@@ -1457,8 +1707,41 @@ export default function Bank() {
                 )}
               </div>
 
-              <div className="flex justify-end gap-3 pt-1">
-                <Button type="button" variant="outline" onClick={resetForm} className="h-12 px-6">Cancel</Button>
+              {/* A charge or a transfer has no account card to carry the
+                  projection, so the falling balance is shown here instead. */}
+              {projectedBalance !== null && mode !== "deposit" && mode !== "disbursement" && (
+                <p className="text-xs text-muted-foreground" data-testid="bank-projected-balance-compact">
+                  Balance after this posting: {formatKes(projectedBalance)}
+                </p>
+              )}
+
+              {sitting !== null && (
+                <p className="text-xs text-muted-foreground" data-testid="bank-sitting-tally">
+                  {sitting.count} {sitting.count === 1 ? "posting" : "postings"} recorded in this sitting
+                  {sitting.outflow > 0 ? ` · ${formatKes(sitting.outflow)} out` : ""}
+                  {sitting.inflow > 0 ? ` · ${formatKes(sitting.inflow)} in` : ""}
+                </p>
+              )}
+
+              <div className="flex flex-wrap justify-end gap-3 pt-1">
+                <Button type="button" variant="outline" onClick={resetForm} className="h-12 px-6">
+                  {sitting !== null ? "Done" : "Cancel"}
+                </Button>
+                {/* An edit is one posting by definition, so it gets no second
+                    button. Everything else is likely part of a day's run. */}
+                {!editingTransaction && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isPending}
+                    onClick={() => handleSubmit(undefined, { keepOpen: true })}
+                    data-testid="button-save-and-add-another"
+                    className="h-12 px-6"
+                  >
+                    {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                    Save and add another
+                  </Button>
+                )}
                 <Button type="submit" disabled={isPending} data-testid="button-save-transaction" className="h-12 px-8">
                   {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   {editingTransaction ? "Save changes" : "Save"}
