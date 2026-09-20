@@ -872,6 +872,30 @@ export default function AddExpenseSheet() {
     (row) => row.name.trim().toLocaleLowerCase() === nestingParentName.trim().toLocaleLowerCase(),
   ) as { id: number } | undefined;
 
+  // A category holding subcategories is a heading: its budget is theirs added
+  // up and its spending is theirs too, so money cannot land on it directly.
+  // Everything else can receive an expense — a top-level category with no
+  // subcategories, and every subcategory.
+  const headings = useMemo(
+    () => new Set(categoryTree.filter((group) => group.children.length > 0).map((group) => group.name)),
+    [categoryTree],
+  );
+  // Quick is one tap, so it lists what can actually be posted to rather than
+  // the top level. A subcategory carries its parent for context, because
+  // "Rent" on its own says less than "Housing > Rent".
+  const quickChoices = useMemo(
+    () => categoryTree.flatMap((group) => (
+      group.children.length === 0
+        ? [{ name: group.name, label: group.name }]
+        : group.children.map((child) => ({ name: child, label: `${group.name} > ${child}` }))
+    )),
+    [categoryTree],
+  );
+  // Which heading's subcategory row is open in Detailed. Tapping a heading
+  // cannot select it, so the open row needs its own state rather than being
+  // inferred from the allocations.
+  const [openHeading, setOpenHeading] = useState<string | null>(null);
+
   const selectedParents = useMemo(() => {
     const names = new Set<string>();
     for (const allocation of categoryAllocations) {
@@ -1001,6 +1025,11 @@ export default function AddExpenseSheet() {
 
 
   const chooseCategory = useCallback((name: string) => {
+    // A heading is not a destination. Tapping it opens what is underneath.
+    if (headings.has(name)) {
+      setOpenHeading((current) => (current === name ? null : name));
+      return;
+    }
     if (!isAdvanced && !isEditMode) {
       setCategory(name);
       setCategoryAllocations([{ category: name, amount }]);
@@ -1033,7 +1062,10 @@ export default function AddExpenseSheet() {
     if (!parent) return;
     const siblings = categoryTree.find((group) => group.name === parent)?.children ?? [];
     const owns = (name: string) => name === parent || siblings.includes(name);
-    const replacement = categoryAllocations.some((allocation) => allocation.category === child) ? parent : child;
+    // Tapping the chosen subcategory used to toggle back to the parent. The
+    // parent can no longer hold an expense, so that toggle only ever produced
+    // a rejection on save. The choice now stands until another one replaces it.
+    const replacement = child;
     setCategoryAllocations((previous) => {
       const next = previous.map((allocation) => (
         owns(allocation.category) ? { ...allocation, category: replacement } : allocation
@@ -1486,12 +1518,8 @@ export default function AddExpenseSheet() {
         </View>
         <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
           {isAdvanced
-            ? 'Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.'
-            // Quick only ever offers the top-level categories. Saying nothing
-            // made subcategories look as though they did not exist, so the
-            // rule is stated where somebody meets it rather than left to be
-            // discovered.
-            : 'Choose the one category this expense belongs to. Subcategories live in Detailed.'}
+            ? 'Every expense needs a category. A category holding subcategories is a heading — pick one of its subcategories instead.'
+            : 'Choose where this expense goes. A category with subcategories is shown by them, because spending lands on a subcategory.'}
         </Text>
         <ScrollView
           horizontal
@@ -1517,11 +1545,23 @@ export default function AddExpenseSheet() {
                      : 'No categories are available. Use Detailed to create one, or ask a budget manager to add one.'}
                 </Text>
               )}
-              {categoryTree.map(({ name, children }) => (
+              {/* Quick lists what an expense can actually go on; Detailed
+                  lists the headings and opens their subcategories underneath. */}
+              {!isAdvanced && quickChoices.map(({ name, label }) => (
                 <CategoryChip
                   key={name}
                   name={name}
-                  selected={selectedParents.has(name)}
+                  label={label}
+                  selected={categoryAllocations.some((allocation) => allocation.category === name)}
+                  onSelect={chooseCategory}
+                  colors={colors}
+                />
+              ))}
+              {isAdvanced && categoryTree.map(({ name, children }) => (
+                <CategoryChip
+                  key={name}
+                  name={name}
+                  selected={selectedParents.has(name) || openHeading === name}
                   onSelect={chooseCategory}
                   colors={colors}
                   // Nothing said which categories had subcategories, so the
@@ -1536,11 +1576,11 @@ export default function AddExpenseSheet() {
         {/* Subcategories are a Detailed-mode refinement: Quick mode is meant to
             be one tap on one category, so it never offers them. */}
         {isAdvanced && categoryTree
-          .filter((group) => selectedParents.has(group.name) && group.children.length > 0)
+          .filter((group) => (selectedParents.has(group.name) || openHeading === group.name) && group.children.length > 0)
           .map((group) => (
             <View key={`sub-${group.name}`} testID={`subcategory-row-${group.name}`} style={{ gap: 4 }}>
               <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
-                {`${group.name} subcategory (optional)`}
+                {`Choose a ${group.name} subcategory`}
               </Text>
               <ScrollView
                 horizontal

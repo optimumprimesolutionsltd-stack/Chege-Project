@@ -923,6 +923,17 @@ function ExpenseForm({
   // returns. The select offers the parents; a second select underneath offers
   // the children of whichever parent is chosen. Mirrors the phone's picker.
   const categoryTree = useMemo(() => buildCategoryTree(categories as unknown as CategoryRow[]), [categories]);
+  // A category holding subcategories is a heading: money lands on a
+  // subcategory, never on the heading itself. The single-select form therefore
+  // offers what can be posted to, naming the parent for context.
+  const postableChoices = useMemo(
+    () => categoryTree.flatMap((group) => (
+      group.children.length === 0
+        ? [{ name: group.name, label: group.name }]
+        : group.children.map((child) => ({ name: child, label: `${group.name} > ${child}` }))
+    )),
+    [categoryTree],
+  );
   // A chosen subcategory keeps its parent showing in the first select, so the
   // second select it came from stays on screen instead of emptying itself.
   const selectedParentCategory = parentOf(categoryTree, category) ?? category;
@@ -1524,11 +1535,11 @@ function ExpenseForm({
               className="h-12 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               data-testid="quick-expense-simple-category"
             >
-              {/* Quick mode is one category, so it offers the parents only —
-                  subcategories are a Detailed-mode refinement. */}
+              {/* Quick is one choice, so it offers what an expense can
+                  actually go on. A heading is not a destination. */}
               <option value="">Select a category</option>
-              {categoryTree.map((group) => (
-                <option key={group.name} value={group.name}>{group.name}</option>
+              {postableChoices.map((choice) => (
+                <option key={choice.name} value={choice.name}>{choice.label}</option>
               ))}
             </select>
           </div>
@@ -1608,7 +1619,7 @@ function ExpenseForm({
            <div>
                 <label className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">2. What did this expense cover? <span className="ml-1 text-destructive">*</span></label>
              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                 Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.
+                 Every expense needs a category. A category holding subcategories is a heading — pick one of its subcategories instead.
              </p>
            </div>
              <div className="space-y-2">
@@ -1675,7 +1686,7 @@ function ExpenseForm({
               {subcategoryOptions.length > 0 && !isPrimaryOtherCategory && (
                 <div className="space-y-1" data-testid="subcategory-select-dashboard">
                   <label htmlFor="dashboard-subcategory" className="text-xs font-semibold text-muted-foreground">
-                    {`${selectedParentCategory} subcategory (optional)`}
+                    {`Choose a ${selectedParentCategory} subcategory`}
                   </label>
                   <select
                     id="dashboard-subcategory"

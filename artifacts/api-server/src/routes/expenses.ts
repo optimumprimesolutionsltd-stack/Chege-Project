@@ -9,6 +9,7 @@ import {
   expenseCategoryAllocationsTable,
   jointAccountTxTable,
   bankAccountsTable,
+  budgetCategoriesTable,
 } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -57,6 +58,33 @@ export function isReservedExpenseCategory(category: string) {
 
 function isUncategorizedCategory(category: string) {
   return category.trim() === "" || category === UNCATEGORIZED_CATEGORY;
+}
+
+/**
+ * The categories in this group that hold subcategories.
+ *
+ * A category with subcategories is a heading, not a place money lands: its
+ * budget is its subcategories added up, and its spending is theirs too. Letting
+ * an expense sit directly on it would put money in a figure that is supposed to
+ * be a total of the rows beneath it, so the two would never agree again.
+ *
+ * Keyed by normalized name because expenses reference a category by name.
+ */
+async function parentCategoryNames(groupId: number): Promise<Map<string, string>> {
+  const rows = await db
+    .select({ name: budgetCategoriesTable.name })
+    .from(budgetCategoriesTable)
+    .where(sql`${budgetCategoriesTable.groupId} = ${groupId} AND EXISTS (
+      SELECT 1 FROM budget_categories child
+      WHERE child.parent_id = ${budgetCategoriesTable.id}
+        AND child.group_id = ${groupId}
+    )`);
+  return new Map(rows.map((row) => [normalizeExpenseCategoryName(row.name), row.name]));
+}
+
+/** What to say when somebody aims an expense at a heading. */
+function postingToParentError(name: string): string {
+  return `"${name}" has subcategories, so spending goes on one of them rather than on "${name}" itself. Choose a subcategory.`;
 }
 
 function categoryForStorage(category: string | undefined) {
@@ -115,12 +143,31 @@ async function validateCategoryAllocations(
   if (!allowInternalSentinel && category?.trim() && isReservedExpenseCategory(category)) {
     return { category: storageCategory, error: `"${UNCATEGORIZED_CATEGORY}" is reserved for uncategorized expenses.` };
   }
+  // The heading lookup costs a query, so it runs only once the request is
+  // otherwise valid — a malformed body is rejected without touching the
+  // database, as it was before.
+  const headingAmong = async (names: string[]): Promise<string | null> => {
+    if (allowInternalSentinel) return null;
+    const wanted = names.map(normalizeExpenseCategoryName).filter(Boolean);
+    if (wanted.length === 0) return null;
+    const parents = await parentCategoryNames(groupId);
+    for (const name of wanted) {
+      const heading = parents.get(name);
+      if (heading) return heading;
+    }
+    return null;
+  };
+
   if (raw === undefined) {
     // A blank/omitted primary category explicitly selects uncategorized,
     // including when replacing an expense that previously had allocations.
+    const heading = await headingAmong([storageCategory]);
+    if (heading) return { category: storageCategory, error: postingToParentError(heading) };
     return { category: storageCategory, replaceAllocations: isUncategorizedCategory(storageCategory) };
   }
   if (Array.isArray(raw) && raw.length === 0) {
+    const heading = await headingAmong([storageCategory]);
+    if (heading) return { category: storageCategory, error: postingToParentError(heading) };
     return { category: storageCategory, replaceAllocations: true };
   }
   const parsed = z.array(CategoryAllocationSchema).min(1).safeParse(raw);
@@ -147,6 +194,11 @@ async function validateCategoryAllocations(
     if (seen.has(key)) return { category: storageCategory, error: "Each category can be allocated only once." };
     seen.add(key);
   }
+  // A split expense can aim a portion at a heading just as easily as a whole
+  // one can, so every portion is checked, not just the first.
+  const heading = await headingAmong([resolvedCategory, ...allocations.map((allocation) => allocation.category)]);
+  if (heading) return { category: storageCategory, error: postingToParentError(heading) };
+
   return { category: resolvedCategory, allocations, replaceAllocations: true };
 }
 

@@ -69,7 +69,7 @@ describe('optional expense category layout', () => {
   it('explains categories and offers a clearly named one-off option below them', () => {
     expect(source).toContain("<Text style={[styles.stageLabelText, { color: colors.primary }]}>CATEGORY *</Text>");
     expect(source).not.toContain('CATEGORY (OPTIONAL)');
-    expect(source).toContain('Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.');
+    expect(source).toContain('A category holding subcategories is a heading'); // spending lands on a subcategory
     expect(source).toContain("onPress={() => chooseCategory('Other')}");
     expect(source).toContain('testID="one-off-spending-category"');
     expect(source).toContain('Use this as the last category when part of the expense does not fit any listed category.');
@@ -156,7 +156,7 @@ describe('subcategories belong to Detailed mode', () => {
   it('offers only top-level categories in the main chip row', () => {
     expect(source).toContain('const categoryTree = useMemo(');
     expect(source).toContain('buildCategoryTree(categories as unknown as CategoryRow[])');
-    expect(source).toContain('{categoryTree.map(({ name, children }) => (');
+    expect(source).toContain('{isAdvanced && categoryTree.map(({ name, children }) => ('); // Quick lists postable ones instead
     // The old flat list labelled children "Parent: Child" among the parents.
     expect(source).not.toContain('groupCategoriesForPicker');
   });
@@ -252,10 +252,11 @@ describe('subcategories belong to Detailed mode', () => {
 
   it('renders the subcategory row only under a selected parent, and only in Detailed', () => {
     expect(source).toContain('{isAdvanced && categoryTree');
-    expect(source).toContain('.filter((group) => selectedParents.has(group.name) && group.children.length > 0)');
+    expect(source).toContain('.filter((group) => (selectedParents.has(group.name) || openHeading === group.name) && group.children.length > 0)');
     expect(source).toContain('testID={`subcategory-row-${group.name}`}');
     expect(source).toContain('onSelect={chooseSubcategory}');
-    expect(source).toContain('`${group.name} subcategory (optional)`');
+    // No longer optional: a heading cannot hold the expense itself.
+    expect(source).toContain('`Choose a ${group.name} subcategory`');
   });
 
   it('moves the parent allocation onto the subcategory rather than adding a second one', () => {
@@ -269,6 +270,6 @@ describe('subcategories belong to Detailed mode', () => {
   it('keeps a parent chip selected while one of its children is the saved value', () => {
     expect(source).toContain('const selectedParents = useMemo(');
     expect(source).toContain('names.add(parentOf(categoryTree, chosen) ?? chosen);');
-    expect(source).toContain('selected={selectedParents.has(name)}');
+    expect(source).toContain('selected={selectedParents.has(name) || openHeading === name}');
   });
 });

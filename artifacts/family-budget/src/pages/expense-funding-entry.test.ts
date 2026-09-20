@@ -342,7 +342,7 @@ describe("expense funding amount entry", () => {
     for (const source of [dashboardSource, expensesSource, mobileSource]) {
       expect(source).not.toContain("outside any budget category");
       expect(source).not.toContain("Categories are optional");
-      expect(source).toContain("Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.");
+      expect(source).toContain("Every expense needs a category. A category holding subcategories is a heading — pick one of its subcategories instead.");
     }
     // The phone says the same thing from its rules module rather than the screen.
     for (const source of [dashboardSource, expensesSource, mobileRules]) {
@@ -354,28 +354,36 @@ describe("expense funding amount entry", () => {
     // The phone renders chips rather than options, and its chips also carry a
     // subcategory count, so pin what it maps over rather than the exact
     // destructuring — the shape of the chip is that client's own business.
-    expect(mobileSource).toMatch(/\{categoryTree\.map\(\(\{ name[^)]*\}\) => \(/);
+    expect(mobileSource).toMatch(/\{isAdvanced && categoryTree\.map\(\(\{ name[^)]*\}\) => \(/);
     expect(mobileSource).toContain("<CategoryChip");
+    // No longer "(optional)": a heading cannot hold the expense itself, so
+    // once one is chosen a subcategory has to follow. Each client names the
+    // parent with its own variable, so the shared part is the instruction.
+    for (const source of [dashboardSource, expensesSource]) {
+      expect(source).toContain("Choose a ${selectedParentCategory} subcategory");
+    }
+    expect(mobileSource).toContain("Choose a ${group.name} subcategory");
     for (const source of [dashboardSource, expensesSource, mobileSource]) {
-      expect(source).toContain("subcategory (optional)");
+      expect(source).not.toContain("subcategory (optional)");
     }
   });
 
   // Both web forms have a second, simpler category select for Quick mode that
-  // the detailed one's wiring never touched. It shipped listing subcategories
-  // flat beside their parents — the very thing Quick mode must not show —
-  // because every assertion here only ever looked at the detailed select.
-  it("offers parents only in the Quick-mode selects too", () => {
+  // the detailed one's wiring never touched. It used to offer the parents
+  // only; now that a parent cannot hold an expense at all, offering only
+  // parents would leave a nested category unreachable in Quick, so it offers
+  // what can actually be posted to.
+  it("offers the postable categories in the Quick-mode selects too", () => {
     for (const source of [dashboardSource, expensesSource]) {
-      expect(source).toContain("Quick mode is one category, so it offers the parents only");
+      expect(source).toContain("never on the heading itself");
       // Scoped to the Quick section. The additional-allocation selects further
       // down still list categories flat, on purpose, and must not be caught.
       const quickSection = source.slice(0, source.indexOf("2. What did this expense cover?"));
-      expect(quickSection).toContain("categoryTree.map((group)");
+      expect(quickSection).toContain("postableChoices.map(");
       expect(quickSection).not.toContain("<option key={item.id}");
       expect(quickSection).not.toContain("<option key={category.id}");
-      // Quick mode never offers the subcategory step either.
-      expect(quickSection).not.toContain("subcategory (optional)");
+      // A subcategory is named with its parent, never offered bare.
+      expect(quickSection).toContain("{choice.label}");
     }
   });
 
