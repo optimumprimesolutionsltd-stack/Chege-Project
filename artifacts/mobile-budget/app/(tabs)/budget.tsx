@@ -497,9 +497,17 @@ export default function BudgetScreen() {
 
   const handleSave = async () => {
     const rawAmount = formAmount.trim();
-    const amt = rawAmount === '' && editTarget ? 0 : parseInt(rawAmount, 10);
-    if (!formName.trim() || isNaN(amt) || amt < 0) {
-      Alert.alert('Missing fields', 'Name and a valid amount are required.');
+    // A blank amount means nothing budgeted yet, on a new category as much as
+    // on an existing one. Requiring it only when creating made a heading
+    // impossible to add without inventing a figure that is cleared the moment
+    // a subcategory goes under it.
+    const amt = rawAmount === '' ? 0 : parseInt(rawAmount, 10);
+    if (!formName.trim()) {
+      Alert.alert('Name required', 'Give this category a clear name, such as Housing or Transport.');
+      return;
+    }
+    if (isNaN(amt) || amt < 0) {
+      Alert.alert('Amount not valid', 'Enter a whole number of shillings, or leave it blank to budget it later.');
       return;
     }
     setSaving(true);
@@ -642,6 +650,27 @@ export default function BudgetScreen() {
   const managedCategories = managePriority == null
     ? allCategories
     : allCategories.filter(category => category.priority === managePriority);
+  // Parents first, each followed by its own subcategories. The list arrived in
+  // priority order with children scattered among unrelated headings, so the
+  // one screen for managing the tree was the one place that did not show it.
+  const orderedManagedCategories = useMemo(() => {
+    const childrenOf = new Map<number, BudgetCategory[]>();
+    for (const category of managedCategories) {
+      if (category.parentId == null) continue;
+      const siblings = childrenOf.get(category.parentId) ?? [];
+      siblings.push(category);
+      childrenOf.set(category.parentId, siblings);
+    }
+    const ordered: Array<{ category: BudgetCategory; isChild: boolean }> = [];
+    for (const category of managedCategories) {
+      // A child whose parent is filtered out of this tier still has to appear,
+      // or it becomes unreachable from the only screen that can edit it.
+      if (category.parentId != null && managedCategories.some((row) => row.id === category.parentId)) continue;
+      ordered.push({ category, isChild: category.parentId != null });
+      for (const child of childrenOf.get(category.id) ?? []) ordered.push({ category: child, isChild: true });
+    }
+    return ordered;
+  }, [managedCategories]);
   const summaryBudgetCategories = activeCategories.filter(category => budgetFor(category) > 0);
   const openOverallLedger = () => {
     if (summaryBudgetCategories.length === 1) {
@@ -722,7 +751,7 @@ export default function BudgetScreen() {
                       keyboardType="numeric"
                     />
                     <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
-                      Enter 0, or clear the amount while editing, to pause this budget. Existing expenses stay recorded.
+                      Leave it blank, or enter 0, if you are not budgeting this yet. Existing expenses stay recorded.
                     </Text>
                   </>
                 )}
@@ -919,13 +948,18 @@ export default function BudgetScreen() {
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
-               {managedCategories.length === 0 ? (
+               {orderedManagedCategories.length === 0 ? (
                 <Text style={[styles.manageEmpty, { color: colors.mutedForeground }]}>No budget categories yet.</Text>
-               ) : managedCategories.map(category => (
+               ) : orderedManagedCategories.map(({ category, isChild }) => (
                 <Pressable
                   key={category.id}
                   onPress={() => openEdit(category)}
-                  style={[styles.manageRow, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                  style={[
+                    styles.manageRow,
+                    { borderColor: colors.border, backgroundColor: colors.muted },
+                    isChild && styles.manageRowChild,
+                    isChild && { borderLeftColor: colors.primary + '55' },
+                  ]}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.manageName, { color: colors.foreground }]}>{category.name}</Text>
@@ -1787,6 +1821,7 @@ const styles = StyleSheet.create({
   saveBtn: { padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 16 },
   saveBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Inter_600SemiBold' },
    manageRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 8 },
+  manageRowChild: { marginLeft: 16, borderLeftWidth: 3, borderTopLeftRadius: 4, borderBottomLeftRadius: 4 },
    manageName: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
    manageAmount: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
    manageEmpty: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', paddingVertical: 28 },
