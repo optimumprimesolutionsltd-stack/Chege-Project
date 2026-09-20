@@ -444,6 +444,28 @@ const categorySchema = categoryFields.superRefine((data, ctx) => {
  * Clearing it changes no number anybody sees; it only makes the storage agree
  * with what is already reported.
  */
+/**
+ * A subcategory takes its parent's tier.
+ *
+ * Asking for one was a question with no useful answer: tiers rank what gets
+ * funded first, and a subcategory is part of whatever its parent is, so a
+ * "Tier 5" Groceries inside a "Tier 1" Food only ever produced a contradiction
+ * to explain away. Set from the parent on create and again on a move, so it
+ * cannot drift.
+ */
+async function parentPriority(
+  runner: Pick<typeof db, "select">,
+  groupId: number,
+  parentId: number,
+): Promise<number | null> {
+  const [parent] = await runner
+    .select({ priority: budgetCategoriesTable.priority })
+    .from(budgetCategoriesTable)
+    .where(and(eq(budgetCategoriesTable.id, parentId), eq(budgetCategoriesTable.groupId, groupId)))
+    .limit(1);
+  return parent?.priority ?? null;
+}
+
 async function clearParentBudgetAmount(
   runner: Pick<typeof db, "update">,
   groupId: number,
@@ -527,8 +549,13 @@ router.post("/budget-categories", async (req, res) => {
   }
   try {
     const row = await db.transaction(async (tx) => {
+      // A subcategory is part of whatever its parent is, so it ranks with it.
+      const inherited = parsed.data.parentId != null
+        ? await parentPriority(tx, groupId, parsed.data.parentId)
+        : null;
       const [created] = await tx.insert(budgetCategoriesTable).values({
         ...parsed.data,
+        ...(inherited != null ? { priority: inherited } : {}),
         groupId,
         activeMonth: parsed.data.isRecurring ? null : parsed.data.activeMonth,
         activeYear: parsed.data.isRecurring ? null : parsed.data.activeYear,
@@ -600,8 +627,13 @@ router.put("/budget-categories/:id", async (req, res) => {
       if (parsed.data.parentId != null) {
         await clearParentBudgetAmount(tx, groupId, parsed.data.parentId);
       }
+      // Moving a subcategory under a different heading re-ranks it with the
+      // new one, so a move cannot leave it sorted under its old parent's tier.
+      const movedUnder = merged.data.parentId ?? null;
+      const inherited = movedUnder != null ? await parentPriority(tx, groupId, movedUnder) : null;
       const [updated] = await tx.update(budgetCategoriesTable).set({
         ...merged.data,
+        ...(inherited != null ? { priority: inherited } : {}),
         activeMonth: merged.data.isRecurring ? null : merged.data.activeMonth,
         activeYear: merged.data.isRecurring ? null : merged.data.activeYear,
       }).where(and(eq(budgetCategoriesTable.id, id), eq(budgetCategoriesTable.groupId, groupId))).returning();

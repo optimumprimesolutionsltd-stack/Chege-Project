@@ -451,10 +451,19 @@ function CategoryDialog({
                 </select>
                 <p className="text-xs text-muted-foreground">
                   Use this for the things you buy again and again — groceries under Food, wi-fi or garbage under Utilities.
-                  The bigger category keeps its budget; this one just tracks its own share of it.
+                  Spending and budgets live here; the bigger category becomes a heading that totals everything inside it.
                 </p>
               </div>
             ) : null}
+            {parentId !== "none" ? (
+              <div className="space-y-1.5 rounded-xl border border-border/60 bg-muted/30 p-3" data-testid="inherited-tier-note">
+                <label className="text-sm font-semibold">Priority tier</label>
+                <p className="text-xs text-muted-foreground">
+                  Taken from the category this sits inside. A subcategory is part of whatever its parent is, so ranking
+                  the two separately would only contradict itself.
+                </p>
+              </div>
+            ) : (
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">Priority tier</label>
               <select
@@ -474,6 +483,7 @@ function CategoryDialog({
                 </p>
               </div>
             </div>
+            )}
             <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 p-3.5">
               <div>
                 <p className="text-sm font-semibold">Recurring budget</p>

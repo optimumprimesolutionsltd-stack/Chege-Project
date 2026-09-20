@@ -163,6 +163,8 @@ export default function BudgetScreen() {
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
   const [formPriority, setFormPriority] = useState('1');
+  // null means "its own category"; an id nests it under that heading.
+  const [formParentId, setFormParentId] = useState<number | null>(null);
   const [formIsRecurring, setFormIsRecurring] = useState(true);
   const [formActiveMonth, setFormActiveMonth] = useState(month);
   const [formActiveYear, setFormActiveYear] = useState(year);
@@ -210,6 +212,7 @@ export default function BudgetScreen() {
   const openAdd = (priority = 1) => {
     setEditTarget(null);
     setFormName(''); setFormAmount(''); setFormPriority(priority.toString());
+    setFormParentId(null);
     setFormIsRecurring(true); setFormActiveMonth(month); setFormActiveYear(year);
     setAddOpen(true);
   };
@@ -219,6 +222,7 @@ export default function BudgetScreen() {
     setFormName(cat.name);
     setFormAmount(cat.budgetAmount.toString());
     setFormPriority(cat.priority.toString());
+    setFormParentId(cat.parentId ?? null);
     setFormIsRecurring(cat.isRecurring);
     setFormActiveMonth(cat.activeMonth ?? month);
     setFormActiveYear(cat.activeYear ?? year);
@@ -493,6 +497,9 @@ export default function BudgetScreen() {
           name: formName.trim(),
           budgetAmount: amt,
           priority: parseInt(formPriority, 10) || 1,
+          // Sent on every save, so clearing it moves the category back out to
+          // the top level rather than silently leaving it where it was.
+          parentId: formParentId,
           isRecurring: formIsRecurring,
           activeMonth: formIsRecurring ? null : formActiveMonth,
           activeYear: formIsRecurring ? null : formActiveYear,
@@ -694,6 +701,61 @@ export default function BudgetScreen() {
                     </Text>
                   </>
                 )}
+                {/* A category that already holds subcategories cannot itself
+                    become one — nesting only goes one level deep. */}
+                {!editingParent && !recurringSetupActive ? (
+                  <>
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>INSIDE ANOTHER CATEGORY</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                      <Pressable
+                        onPress={() => setFormParentId(null)}
+                        testID="category-parent-none"
+                        style={[styles.priorityChip, {
+                          backgroundColor: formParentId === null ? colors.primary + '22' : colors.muted,
+                          borderColor: formParentId === null ? colors.primary : colors.border,
+                        }]}
+                      >
+                        <Text style={[styles.priorityChipText, { color: formParentId === null ? colors.primary : colors.mutedForeground }]}>
+                          Its own category
+                        </Text>
+                      </Pressable>
+                      {allCategories
+                        .filter((row) => (row.parentId ?? null) === null && row.id !== editTarget?.id)
+                        .map((row) => (
+                          <Pressable
+                            key={row.id}
+                            onPress={() => setFormParentId(row.id)}
+                            testID={`category-parent-${row.id}`}
+                            style={[styles.priorityChip, {
+                              backgroundColor: formParentId === row.id ? colors.primary + '22' : colors.muted,
+                              borderColor: formParentId === row.id ? colors.primary : colors.border,
+                            }]}
+                          >
+                            <Text style={[styles.priorityChipText, { color: formParentId === row.id ? colors.primary : colors.mutedForeground }]}>
+                              {row.name}
+                            </Text>
+                          </Pressable>
+                        ))}
+                    </ScrollView>
+                    <Text style={[styles.priorityHint, { color: colors.mutedForeground }]}>
+                      Spending and budgets live on the subcategory. The category above it becomes a heading that totals
+                      everything inside it. Change this later to move it somewhere else.
+                    </Text>
+                  </>
+                ) : null}
+                {/* A subcategory ranks with its parent, so it is never asked. */}
+                {formParentId !== null ? (
+                  <View
+                    testID="inherited-tier-note"
+                    style={[styles.parentBudgetNote, { backgroundColor: colors.accent, borderColor: colors.accentForeground + '55' }]}
+                  >
+                    <Text style={[styles.label, { color: colors.mutedForeground, marginTop: 0 }]}>PRIORITY TIER</Text>
+                    <Text style={[styles.priorityHint, { color: colors.foreground, marginTop: 4 }]}>
+                      Taken from the category this sits inside. Ranking the two separately would only contradict itself.
+                    </Text>
+                  </View>
+                ) : (
+                <>
                 <Text style={[styles.label, { color: colors.mutedForeground }]}>PRIORITY TIER</Text>
                 <View style={styles.priorityRow}>
                   {[1, 2, 3, 4, 5].map(p => (
@@ -720,6 +782,8 @@ export default function BudgetScreen() {
                      Tiers help you decide what to fund first when money is limited. Use Tier 1 first and Tier 5 last. {priorityTiers.find(tier => tier.priority === parseInt(formPriority, 10))?.description ?? ''}
                   </Text>
                 </View>
+                </>
+                )}
                 <View style={[styles.recurrenceRow, { borderColor: colors.border, backgroundColor: colors.muted }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.recurrenceTitle, { color: colors.foreground }]}>Recurring budget</Text>
