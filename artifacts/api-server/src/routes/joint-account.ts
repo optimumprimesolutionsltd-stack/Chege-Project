@@ -23,6 +23,7 @@ import {
   requireTransactionEligibility,
 } from "../lib/activeGroup";
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
+import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 
 const router = Router();
@@ -640,6 +641,14 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Add a narration for an Other destination." });
     return;
   }
+  // The same rule the expense route enforces. Spending reaches the category
+  // totals through both doors, so a heading has to be refused at both — and
+  // this is the door M-Pesa parsing will eventually feed.
+  const disbursementHeading = await headingAmong(groupId, [expenseCategory]);
+  if (disbursementHeading) {
+    res.status(400).json({ error: postingToHeadingError(disbursementHeading) });
+    return;
+  }
   // Explicit null or omitted → Joint bank (null). Never fall back to req.user.
   const madeById = parsed.data.madeById ?? null;
 
@@ -1191,6 +1200,13 @@ router.put("/joint-account/:id", async (req, res): Promise<void> => {
     .limit(1);
   if (!category) {
     res.status(400).json({ error: "Choose a valid budget category." });
+    return;
+  }
+  // Editing is a second way onto a heading, and would otherwise undo the check
+  // the create path just gained.
+  const editHeading = await headingAmong(groupId, [expenseCategory]);
+  if (editHeading) {
+    res.status(400).json({ error: postingToHeadingError(editHeading) });
     return;
   }
 
