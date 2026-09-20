@@ -13,14 +13,13 @@ const rows: CategoryRow[] = [
 
 // Quick is meant to be one tap on one category. A subcategory is a refinement,
 // and offering it there turns a two-second entry into a decision.
-describe('Quick mode offers parents only', () => {
-  it('never puts a subcategory among the options', () => {
+describe('Quick mode offers what can be posted to', () => {
+  it('still builds the tree from parents', () => {
     const offered = buildCategoryTree(rows).map((group) => group.name);
     expect(offered).toEqual(['Food', 'Transport']);
-    expect(offered).not.toContain('Groceries');
   });
 
-  it('keeps the subcategory row behind Detailed on the phone', () => {
+  it('keeps the two-stage picker behind Detailed on the phone', () => {
     expect(form).toContain('{isAdvanced && categoryTree');
     // The badge that advertises a subcategory count is Detailed-only too, or
     // Quick would point at a row it cannot open.
@@ -28,16 +27,22 @@ describe('Quick mode offers parents only', () => {
   });
 });
 
-describe('and says so, rather than leaving it to be discovered', () => {
-  it('tells someone in Quick where the subcategories are', () => {
-    expect(form).toContain('Choose the one category this expense belongs to. Subcategories live in Detailed.');
+// Superseded: a category holding subcategories can no longer receive an
+// expense at all, so Quick cannot offer only the top level — it would leave a
+// nested category unreachable in that mode. Quick lists what is postable.
+describe('and says where spending actually lands', () => {
+  it('offers the postable categories in Quick, not the headings', () => {
+    expect(form).toContain('const quickChoices = useMemo(');
+    expect(form).toContain('group.children.map((child) => ({ name: child, label: `${group.name} > ${child}` }))');
   });
 
-  it('says the same thing on the web', () => {
-    expect(web).toContain('Subcategories live in Detailed.');
+  it('names the parent alongside a subcategory, for context', () => {
+    // "Rent" on its own says less than "Housing > Rent".
+    expect(form).toContain('label={label}');
   });
 
-  it('still explains the refinement in Detailed', () => {
-    expect(form).toContain('Pick one, then narrow it with a subcategory if you want to.');
+  it('explains it in both modes', () => {
+    expect(form).toContain('A category holding subcategories is a heading');
+    expect(form).toContain('spending lands on a subcategory');
   });
 });

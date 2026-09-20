@@ -8,7 +8,14 @@ vi.mock("@workspace/db", () => {
     db: {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
-          where: vi.fn(() => ({ limit: vi.fn(async () => []) })),
+          // A real drizzle builder is thenable, so a query that ends at
+          // .where() resolves on its own. Without `then` here, awaiting one
+          // yielded the builder object itself and the route threw a 500.
+          where: vi.fn(() => {
+            const chain: Record<string, unknown> = { limit: vi.fn(async () => []) };
+            chain.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve([]).then(resolve);
+            return chain;
+          }),
         })),
       })),
       transaction: vi.fn(),
@@ -18,6 +25,7 @@ vi.mock("@workspace/db", () => {
       },
     },
     expensesTable: table, usersTable: table, membersTable: table,
+    budgetCategoriesTable: table,
     bankAccountsTable: table,
     groupMembershipsTable: table,
     incomeSourcesTable: table, expenseIncomeSplitsTable: table, jointAccountTxTable: table,

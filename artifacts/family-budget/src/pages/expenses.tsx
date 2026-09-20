@@ -354,6 +354,18 @@ export default function Expenses() {
   // returns: the select offers the parents, and a second select underneath
   // offers the children of whichever parent is chosen. Mirrors the phone.
   const categoryTree = useMemo(() => buildCategoryTree((categories ?? []) as unknown as CategoryRow[]), [categories]);
+  // A category holding subcategories is a heading: money lands on a
+  // subcategory, never on the heading itself. The single-select forms
+  // therefore offer what can be posted to, naming the parent for context.
+  const postableChoices = useMemo(
+    () => categoryTree.flatMap((group) => (
+      group.children.length === 0
+        ? [{ name: group.name, label: group.name }]
+        : group.children.map((child) => ({ name: child, label: `${group.name} > ${child}` }))
+    )),
+    [categoryTree],
+  );
+
   const { data: members } = useGetMembers();
   const { data: group } = useGetGroup();
   const budgetName = group?.isPrivate ? "Personal budget" : group ? workspaceLabel(group) : "Shared group";
@@ -1439,13 +1451,12 @@ export default function Expenses() {
               {/* Quick mode is one category, so it offers the parents only —
                   subcategories are a Detailed-mode refinement. */}
               <option value="">Select a category</option>
-              {categoryTree.map((group) =>
-                <option key={group.name} value={group.name}>{group.name}</option>,
+              {postableChoices.map((choice) =>
+                <option key={choice.name} value={choice.name}>{choice.label}</option>,
               )}
             </select>
             {/* Saying nothing made subcategories look as though they did not
                 exist, so the rule is stated where somebody meets it. */}
-            <p className="text-xs text-muted-foreground">Subcategories live in Detailed.</p>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-semibold text-foreground">Description <span className="text-destructive">*</span></label>
@@ -1643,7 +1654,7 @@ export default function Expenses() {
           <div>
             <label className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm font-bold text-primary">2. What did this expense cover? <span className="ml-1 text-destructive">*</span></label>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-               Every expense needs a category. Pick one, then narrow it with a subcategory if you want to.
+               Every expense needs a category. A category holding subcategories is a heading — pick one of its subcategories instead.
             </p>
           </div>
             <div className="space-y-2">
@@ -1695,7 +1706,7 @@ export default function Expenses() {
              {subcategoryOptions.length > 0 && !isPrimaryOtherCategory && (
                <div className="space-y-1" data-testid={`subcategory-select-${mode}`}>
                  <label htmlFor={`${mode}-subcategory`} className="text-xs font-semibold text-muted-foreground">
-                   {`${selectedParentCategory} subcategory (optional)`}
+                   {`Choose a ${selectedParentCategory} subcategory`}
                  </label>
                  <select
                    id={`${mode}-subcategory`}
