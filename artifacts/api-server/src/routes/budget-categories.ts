@@ -217,8 +217,16 @@ router.post("/budget-categories/recommendations/apply", async (req, res) => {
       .from(budgetCategoriesTable)
       .where(eq(budgetCategoriesTable.groupId, groupId));
     const existingNames = new Set(categories.map((category) => normalizedCategoryName(category.name)));
+    // A chosen subset, when the person picked from the list. Matched against
+    // what is actually missing rather than trusted: a stale list cannot add
+    // something they were never shown, and a name they already have is still
+    // skipped rather than duplicated.
+    const chosen = parsed.data.names?.length
+      ? new Set(parsed.data.names.map(normalizedCategoryName))
+      : null;
     const missingRows = categoryPackRows(groupId, group.kind)
-      .filter((category) => !existingNames.has(normalizedCategoryName(category.name)));
+      .filter((category) => !existingNames.has(normalizedCategoryName(category.name)))
+      .filter((category) => chosen === null || chosen.has(normalizedCategoryName(category.name)));
     if (missingRows.length > 0) {
       await tx.insert(budgetCategoriesTable).values(missingRows).onConflictDoNothing();
     }
@@ -228,7 +236,12 @@ router.post("/budget-categories/recommendations/apply", async (req, res) => {
     // already had keeps its own id, and its ledgers still belong under it.
     const suggestedChildren = categoryPackChildren(group.kind);
     if (suggestedChildren.size > 0) {
-      const parentNames = [...suggestedChildren.keys()];
+      // Only under headings the person kept. Adding ledgers beneath a category
+      // they deliberately left out would put back what they just declined.
+      const parentNames = [...suggestedChildren.keys()]
+        .filter((name) => chosen === null
+          || chosen.has(normalizedCategoryName(name))
+          || existingNames.has(normalizedCategoryName(name)));
       const parents = await tx
         .select({ id: budgetCategoriesTable.id, name: budgetCategoriesTable.name })
         .from(budgetCategoriesTable)

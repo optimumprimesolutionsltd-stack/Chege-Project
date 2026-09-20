@@ -2437,11 +2437,23 @@ components:
 
     BudgetCategoryRecommendationApplyInput:
       type: object
-      description: Applies only missing recommendations; existing categories are never changed.
+      description: >-
+        Applies only missing recommendations; existing categories are never
+        changed. Without `names` it adds every missing one, which is what the
+        button did before anybody could choose.
       properties:
         confirm:
           type: boolean
           default: true
+        names:
+          type: array
+          description: >-
+            The recommended categories to add, by name. Anything not offered as
+            missing is ignored rather than created, so a stale list cannot add
+            something the person never saw. Omit to add all of them.
+          items:
+            type: string
+            minLength: 1
 
     Contribution:
       type: object

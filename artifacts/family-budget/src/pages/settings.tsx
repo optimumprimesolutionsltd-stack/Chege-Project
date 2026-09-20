@@ -247,15 +247,31 @@ export default function Settings() {
     }
   };
 
+  // Everything starts ticked, so the old one-click behaviour survives for
+  // anybody who just wants the lot.
+  const [chosenRecommendations, setChosenRecommendations] = useState<string[] | null>(null);
+  const selectedRecommendations = chosenRecommendations
+    ?? (categoryRecommendations?.missing ?? []).map((item) => item.name);
+  const toggleRecommendation = (name: string) => {
+    setChosenRecommendations(
+      selectedRecommendations.includes(name)
+        ? selectedRecommendations.filter((item) => item !== name)
+        : [...selectedRecommendations, name],
+    );
+  };
+
   const applyMissingRecommendations = async () => {
     try {
-      await applyCategoryRecommendations.mutateAsync({ data: { confirm: true } });
+      await applyCategoryRecommendations.mutateAsync({ data: { confirm: true, names: selectedRecommendations } });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetGroupQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetWorkspacesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
       ]);
+      // Back to "everything ticked" so the next visit starts from whatever is
+      // missing then, not from a stale selection.
+      setChosenRecommendations(null);
       toast({ title: "Recommended categories added", description: "Existing categories were left unchanged." });
     } catch (error) {
       toast({ variant: "destructive", title: "Could not add recommendations", description: error instanceof Error ? error.message : "Please try again." });
@@ -1104,27 +1120,46 @@ export default function Settings() {
                      : hasRecommendationsError
                        ? "Could not load category recommendations. Please try again."
                      : categoryRecommendations?.missing.length
-                       ? `Missing recommendations for this ${groupKindPresentation(categoryRecommendations.kind).label.toLowerCase()} budget:`
+                       ? `Missing for this ${groupKindPresentation(categoryRecommendations.kind).label.toLowerCase()} budget. Tick the ones you want; nothing you already have is touched.`
                        : "All recommended categories for this budget are already present."}
                  </p>
                </div>
                {categoryRecommendations?.missing.length ? (
                  <>
-                   <ul className="flex flex-wrap gap-2" aria-label="Missing recommended categories">
-                     {categoryRecommendations.missing.map((recommendation) => (
-                       <li key={recommendation.name} className="rounded-full border border-border bg-background px-3 py-1 text-sm text-foreground">
-                         {recommendation.name}
-                       </li>
-                     ))}
+                   {/* These were shown as read-only pills above a button that
+                       added the lot. Naming them one per row with a tick is the
+                       difference between being told and being asked. */}
+                   <ul className="space-y-1" aria-label="Missing recommended categories">
+                     {categoryRecommendations.missing.map((recommendation) => {
+                       const picked = selectedRecommendations.includes(recommendation.name);
+                       return (
+                         <li key={recommendation.name}>
+                           <label className="flex items-center gap-2 text-sm text-foreground">
+                             <input
+                               type="checkbox"
+                               checked={picked}
+                               disabled={!canManageShared || applyCategoryRecommendations.isPending}
+                               onChange={() => toggleRecommendation(recommendation.name)}
+                               data-testid={`recommendation-${recommendation.name}`}
+                             />
+                             {recommendation.name}
+                           </label>
+                         </li>
+                       );
+                     })}
                    </ul>
                    {canManageShared ? (
                      <Button
                        type="button"
                        variant="outline"
                        onClick={() => void applyMissingRecommendations()}
-                       disabled={applyCategoryRecommendations.isPending}
+                       disabled={applyCategoryRecommendations.isPending || selectedRecommendations.length === 0}
                      >
-                       {applyCategoryRecommendations.isPending ? "Adding…" : `Add ${categoryRecommendations.missing.length} missing recommendation${categoryRecommendations.missing.length === 1 ? "" : "s"}`}
+                       {applyCategoryRecommendations.isPending
+                         ? "Adding…"
+                         : selectedRecommendations.length === 0
+                           ? "Tick at least one"
+                           : `Add ${selectedRecommendations.length} categor${selectedRecommendations.length === 1 ? "y" : "ies"}`}
                      </Button>
                    ) : null}
                  </>
