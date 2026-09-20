@@ -23,7 +23,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
 import { useListEditor } from '@/hooks/useListEditor';
@@ -161,7 +161,7 @@ export default function BankScreen() {
   const { data: accounts = [], refetch: refetchAccounts } = useGetJointAccounts();
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const accountStorageKey = group?.id && user?.id ? `bank-account:${group.id}:${user.id}` : null;
-  const { data, isLoading, refetch } = useGetJointAccount(
+  const { data, isLoading, isFetching, refetch } = useGetJointAccount(
     selectedAccountId ? { accountId: selectedAccountId } : undefined,
   );
 
@@ -214,6 +214,11 @@ export default function BankScreen() {
   const [reconcileVisible, setReconcileVisible] = useState(false);
   const [statementBalance, setStatementBalance] = useState('');
   const [reconcileNarration, setReconcileNarration] = useState('');
+  // The day being reconciled is not always today. A charge stamped with the
+  // wrong date leaves that day still not adding up, which is the one thing
+  // this screen exists to fix.
+  const [reconcileDate, setReconcileDate] = useState(todayIso());
+  const [showReconcileDatePicker, setShowReconcileDatePicker] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [accountNameDraft, setAccountNameDraft] = useState('');
@@ -414,6 +419,10 @@ export default function BankScreen() {
   const openReconcile = () => {
     setStatementBalance('');
     setReconcileNarration('');
+    // Default to the day the account was last active rather than today: you
+    // reconcile a statement after the fact, often the next morning.
+    setReconcileDate(data?.transactions?.[0]?.date?.slice(0, 10) ?? todayIso());
+    setShowReconcileDatePicker(false);
     setReconcileVisible(true);
   };
 
@@ -437,7 +446,7 @@ export default function BankScreen() {
         data: {
           amount: difference,
           narration: reconcileNarration.trim() || 'Bank charges',
-          date: todayIso(),
+          date: reconcileDate,
           accountId: selectedAccountId,
         },
       });
@@ -1042,7 +1051,13 @@ export default function BankScreen() {
   // the amount is still being typed. Incoming money is projected too: somebody
   // recording a day works down to the closing balance on their statement, and
   // a figure that only moves for withdrawals cannot be worked down to.
+  // Suppressed while the balance is being refetched. After each save in a
+  // sitting the account is invalidated, and for that moment data.balance is
+  // the figure from *before* the posting that just landed — so projecting
+  // from it would show the next line falling from the wrong number, which is
+  // precisely the figure somebody recording a day is watching.
   const projectedBalance = data &&
+    !isFetching &&
     parsedOutgoingAmount !== null &&
     parsedOutgoingAmount > 0
     ? getProjectedBalanceAfterPosting(
@@ -1950,6 +1965,26 @@ export default function BankScreen() {
                       ))}
                     </View>
                   )}
+                  {/* With no goals the picker opened an empty box and the
+                      transfer could not be completed at all — no message, no
+                      way out. A transfer needs a goal because the money has to
+                      land somewhere nameable; the way forward is to make one. */}
+                  {savingsGoals.length === 0 && (
+                    <View style={{ marginTop: 8, gap: 8 }} testID="bank-transfer-no-goals">
+                      <Text style={{ color: colors.mutedForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+                        You have no savings goals yet. A transfer needs one, so the money lands somewhere you can name
+                        rather than vanishing into "savings".
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.inlineAccountButton, { borderColor: colors.primary, backgroundColor: `${colors.primary}18` }]}
+                        onPress={() => { setModalVisible(false); router.push('/(tabs)/goals'); }}
+                        testID="bank-create-goal-from-transfer"
+                      >
+                        <Feather name="plus-circle" size={16} color={colors.primary} />
+                        <Text style={[styles.inlineAccountButtonText, { color: colors.primary }]}>Create a savings goal</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>Narration</Text>
                   <TextInput
                     style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -2672,6 +2707,35 @@ export default function BankScreen() {
                     KES {formatKES(reconcileDifference)} left the account with nothing recorded against it. On a bank
                     statement that is usually a fee — but Jamvi will not decide that for you.
                   </Text>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Date of the charge</Text>
+                  <Pressable
+                    onPress={() => setShowReconcileDatePicker(true)}
+                    style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                    testID="bank-reconcile-date"
+                  >
+                    <Feather name="calendar" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+                    <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                      {new Date(reconcileDate + 'T00:00:00').toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                    <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+                  </Pressable>
+                  {showReconcileDatePicker && (
+                    <DateTimePicker
+                      value={new Date(reconcileDate + 'T00:00:00')}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                      maximumDate={new Date()}
+                      onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                        setShowReconcileDatePicker(Platform.OS === 'ios');
+                        if (selected) {
+                          const y = selected.getFullYear();
+                          const m = String(selected.getMonth() + 1).padStart(2, '0');
+                          const d = String(selected.getDate()).padStart(2, '0');
+                          setReconcileDate(`${y}-${m}-${d}`);
+                        }
+                      }}
+                    />
+                  )}
                   <TextInput
                     style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
                     placeholder="What the statement calls it (default: Bank charges)"

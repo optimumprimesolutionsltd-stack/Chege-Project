@@ -133,3 +133,34 @@ describe('checking the account against the statement', () => {
     expect(bank).toContain("narration: reconcileNarration.trim() || 'Bank charges',");
   });
 });
+
+// Three things found by walking the flow before anybody used it on a phone.
+describe('the sitting holds up in use', () => {
+  it('does not project from a balance that is still being refetched', () => {
+    // Each save invalidates the account. For that moment data.balance is the
+    // figure from before the posting that just landed, so the next line would
+    // appear to fall from the wrong number — the very figure somebody
+    // recording a day is watching.
+    expect(bank).toContain('const { data, isLoading, isFetching, refetch } = useGetJointAccount(');
+    expect(bank).toContain('    !isFetching &&');
+  });
+
+  it('lets the charge be dated to the day being reconciled', () => {
+    // You reconcile a statement after the fact. A charge stamped today leaves
+    // the day it belongs to still not adding up.
+    expect(bank).toContain('date: reconcileDate,');
+    expect(bank).toContain('testID="bank-reconcile-date"');
+  });
+
+  it('defaults that date to the last activity on the account, not to today', () => {
+    expect(bank).toContain("setReconcileDate(data?.transactions?.[0]?.date?.slice(0, 10) ?? todayIso());");
+  });
+
+  it('offers a way out when a transfer has no goal to land in', () => {
+    // The picker opened an empty box: no goals, no message, no way to make
+    // one, and a transfer that could not be completed at all.
+    expect(bank).toContain('testID="bank-transfer-no-goals"');
+    expect(bank).toContain('testID="bank-create-goal-from-transfer"');
+    expect(bank).toContain("router.push('/(tabs)/goals')");
+  });
+});
