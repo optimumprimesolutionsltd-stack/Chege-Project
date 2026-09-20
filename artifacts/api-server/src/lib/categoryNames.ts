@@ -1,7 +1,21 @@
-const EXPENSE_CATEGORY_ALIASES: Record<string, string> = {
-  rent: "Housing",
-  accommodation: "Housing",
-};
+/**
+ * Deliberately empty.
+ *
+ * It used to fold "rent" and "accommodation" into Housing, from an era when
+ * categories were a flat list and the two names could only ever be duplicates
+ * of each other. Subcategories changed that: Rent under Housing is a sensible
+ * hierarchy, exactly like Groceries under Food, and the alias made it
+ * impossible to build — creating "Rent" became "Housing", collided with the
+ * Housing already there, and was refused.
+ *
+ * Folding also meant an expense tagged "Rent" was stored as "Housing", so the
+ * subcategory could never have collected anything even if it existed.
+ *
+ * Kept as a map rather than deleted outright because the shape is the useful
+ * part: if a true synonym ever needs folding, it goes here. A refinement of a
+ * broader category never does.
+ */
+const EXPENSE_CATEGORY_ALIASES: Record<string, string> = {};
 
 export function normalizeExpenseCategoryName(name: string): string {
   return name.trim().toLocaleLowerCase("en-US");

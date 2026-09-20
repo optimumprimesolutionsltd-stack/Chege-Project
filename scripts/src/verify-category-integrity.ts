@@ -228,12 +228,19 @@ async function main(): Promise<void> {
       (total: number, row: { duplicate_count: number }) => total + Number(row.duplicate_count),
       0,
     );
-    const passed = legacyTotal === 0 && duplicateTotal === 0 && foreignKeyTotal === 0;
+    // `legacyTotal` is reported but no longer fails the check. "Rent" and
+    // "Accommodation" were duplicates of Housing only while categories were a
+    // flat list; as subcategories of Housing they are a sensible hierarchy, and
+    // failing on the mere presence of the word would refuse a legitimate
+    // budget. A genuine duplicate is still caught — by duplicateTotal, which
+    // looks for two categories with the same normalized name in one group.
+    const passed = duplicateTotal === 0 && foreignKeyTotal === 0;
 
     console.log(JSON.stringify({
       database: database.rows[0]?.database,
       databaseUser: database.rows[0]?.user,
       readOnly: true,
+      // Informational only; see the note on `passed`.
       legacyRows,
       legacyTotal,
       normalizedCategoryDuplicates: duplicateCategories.rows,
@@ -252,7 +259,7 @@ async function main(): Promise<void> {
       // is what let this run against production unnoticed.
       console.error(
         `Category integrity check FAILED against database "${database.rows[0]?.database ?? "unknown"}" `
-        + `as user "${database.rows[0]?.user ?? "unknown"}": legacy aliases, normalized duplicates, `
+        + `as user "${database.rows[0]?.user ?? "unknown"}": normalized duplicates `
         + "or foreign-key violations were found. Confirm which database that is before acting on it.",
       );
       process.exitCode = 1;
