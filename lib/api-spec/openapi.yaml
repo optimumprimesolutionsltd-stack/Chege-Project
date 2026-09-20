@@ -2515,6 +2515,13 @@ components:
     DashboardSummary:
       type: object
       properties:
+        bankChargesTotal:
+          type: number
+          description: >-
+            Bank fees in this period. Outside totalSpent: a charge is money
+            gone, but it is not household spending and belongs to no category.
+        bankChargesCount:
+          type: number
         month:
           type: number
         year:

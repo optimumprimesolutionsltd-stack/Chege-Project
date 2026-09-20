@@ -630,6 +630,8 @@ export const GetDashboardSummaryQueryParams = zod.object({
 })
 
 export const GetDashboardSummaryResponse = zod.object({
+  "bankChargesTotal": zod.number().optional().describe('Bank fees in this period. Outside totalSpent: a charge is money gone, but it is not household spending and belongs to no category.'),
+  "bankChargesCount": zod.number().optional(),
   "month": zod.number(),
   "year": zod.number(),
   "totalBudget": zod.number(),
