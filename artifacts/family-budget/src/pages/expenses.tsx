@@ -1470,6 +1470,10 @@ export default function Expenses() {
               <li>{form.date === today ? "today’s expense" : `an expense dated ${formatDate(form.date)}`}, paid by you, not from a bank account, and not recurring;</li>
               <li>the full whole-KES amount in {form.category ? `"${form.category}"` : "the category you select"};</li>
               <li>{normalSource ? `funded in full from ${normalSource.name}${normalSource.isMain ? " (your main income source)" : ""}.` : "funded from your saved income source once you select Detailed."}</li>
+              {/* The decision Quick makes is reversible, and saying so is the
+                  difference between switching to Detailed now and simply
+                  saving. */}
+              {normalSource ? <li>you can change the payer or source later by opening this expense.</li> : null}
             </ul>
           </div>
 

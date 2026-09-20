@@ -2043,6 +2043,15 @@ export default function AddExpenseSheet() {
                     ? `• funded in full from ${normalIncomeSource.name}${normalIncomeSource.isMain ? ' (your main income source)' : ''}.`
                     : '• funded from your saved income source once you select Detailed.'}
                 </Text>
+                {/* Quick decides the funding for you, and until now nothing
+                    said the decision was reversible. Somebody who wanted a
+                    different source had no way of knowing they could simply
+                    save and reopen. */}
+                {normalIncomeSource ? (
+                  <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                    {`• you can change the payer or source later by opening this expense.`}
+                  </Text>
+                ) : null}
                 {!sourcesLoading && !normalIncomeSource && (
                   <>
                     <Text style={[styles.normalBlockerText, { color: colors.destructive }]}>Add an income source before recording this expense.</Text>
