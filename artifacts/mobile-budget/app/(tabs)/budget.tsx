@@ -99,6 +99,7 @@ export default function BudgetScreen() {
   const params = useLocalSearchParams<{
     recurringSetup?: string | string[];
     category?: string | string[];
+    setupCategories?: string | string[];
   }>();
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -177,6 +178,9 @@ export default function BudgetScreen() {
   const [savingIncomeSourceId, setSavingIncomeSourceId] = useState<number | null>(null);
   const [recurringSetupActive, setRecurringSetupActive] = useState(false);
   const [recurringSetupHandled, setRecurringSetupHandled] = useState(false);
+  // Set when the Budget tab was opened from a half-finished expense, so the
+  // save at the end can hand the person back rather than stranding them here.
+  const [returnToExpense, setReturnToExpense] = useState(false);
   const [tierEditorOpen, setTierEditorOpen] = useState(false);
   const [tierDrafts, setTierDrafts] = useState<PriorityTier[]>([]);
   const [savingTiers, setSavingTiers] = useState(false);
@@ -245,9 +249,20 @@ export default function BudgetScreen() {
     }
   };
 
+  // Sent here from Quick mode with nothing to spend on: open the create form
+  // straight away, so the trip is one tap out and one tap back.
+  React.useEffect(() => {
+    const wanted = Array.isArray(params.setupCategories) ? params.setupCategories[0] : params.setupCategories;
+    if (wanted !== '1' || recurringSetupHandled || categoriesLoading) return;
+    setRecurringSetupHandled(true);
+    setReturnToExpense(true);
+    openAdd(1);
+  }, [categoriesLoading, params.setupCategories, recurringSetupHandled]);
+
   React.useEffect(() => {
     const setup = Array.isArray(params.recurringSetup) ? params.recurringSetup[0] : params.recurringSetup;
     if (setup !== '1' || recurringSetupHandled || categoriesLoading) return;
+    setReturnToExpense(true);
     const requestedCategory = (Array.isArray(params.category) ? params.category[0] : params.category)?.trim() ?? '';
     const existing = allCategories.find(
       item => item.name.trim().toLocaleLowerCase() === requestedCategory.toLocaleLowerCase(),
@@ -506,7 +521,10 @@ export default function BudgetScreen() {
         }),
       });
       await refreshAll();
-      if (recurringSetupActive) {
+      // Name the category on the way back so the expense form can select it.
+      // Without this the person returns to their draft and still has to find
+      // the thing they just created, which is most of the trip repeated.
+      if (recurringSetupActive || returnToExpense) {
         const rawHandoff = await AsyncStorage.getItem(RECURRING_BUDGET_HANDOFF_KEY);
         const handoff = rawHandoff ? JSON.parse(rawHandoff) as Record<string, unknown> : {};
         await AsyncStorage.setItem(
@@ -519,6 +537,13 @@ export default function BudgetScreen() {
         );
       }
       closeModal();
+      // Back to the expense that sent them, with the draft restored by the
+      // focus effect there. Leaving somebody on this screen after a detour
+      // they did not choose is how a half-typed expense gets abandoned.
+      if (returnToExpense) {
+        setReturnToExpense(false);
+        router.push('/add-expense');
+      }
     } catch {
       Alert.alert('Error', 'Could not save category.');
     } finally {

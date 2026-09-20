@@ -1539,11 +1539,37 @@ export default function AddExpenseSheet() {
           ) : (
             <>
               {categoryTree.length === 0 && (
-                <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>
-                   {isAdvanced
-                     ? (canManageCategories ? 'No categories yet. Create one below before you can save this expense.' : 'No categories are available. Ask a budget manager to add one.')
-                     : 'No categories are available. Use Detailed to create one, or ask a budget manager to add one.'}
-                </Text>
+                isAdvanced || !canManageCategories ? (
+                  <Text style={[styles.categoryStatusText, { color: colors.mutedForeground }]}>
+                     {isAdvanced
+                       ? (canManageCategories ? 'No categories yet. Create one below before you can save this expense.' : 'No categories are available. Ask a budget manager to add one.')
+                       : 'No categories are available. Ask a budget manager to add one.'}
+                  </Text>
+                ) : (
+                  // Quick cannot create a category — that is the whole point of
+                  // it being the fast path. But a budget with none is a dead
+                  // end: nothing to spend on, and no way out. So it offers the
+                  // door rather than a second form, keeping the draft.
+                  <Pressable
+                    onPress={async () => {
+                      const expenseDraft: ExpenseBudgetDraft = {
+                        amount, category, categoryAllocations, description, notes, payerIds, payerAmounts,
+                        payerIncomeSourceIds, isRecurring, recurringMonthlyBudget, paidFromBank,
+                        selectedBankAccountId, selectedSources, splitAmounts, allowMixedFunding, date,
+                      };
+                      await AsyncStorage.setItem(RECURRING_BUDGET_HANDOFF_KEY, JSON.stringify({ expenseDraft }));
+                      router.push({ pathname: '/(tabs)/budget', params: { setupCategories: '1' } });
+                    }}
+                    testID="quick-setup-categories"
+                    accessibilityRole="button"
+                    accessibilityLabel="Set up your categories"
+                    style={styles.categoryStatus}
+                  >
+                    <Text style={[styles.categoryStatusText, { color: colors.primary }]}>
+                      No categories yet. Set up your categories →
+                    </Text>
+                  </Pressable>
+                )
               )}
               {/* Quick lists what an expense can actually go on; Detailed
                   lists the headings and opens their subcategories underneath. */}
