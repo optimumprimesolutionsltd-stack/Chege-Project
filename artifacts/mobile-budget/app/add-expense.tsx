@@ -880,35 +880,7 @@ export default function AddExpenseSheet() {
     () => new Set(categoryTree.filter((group) => group.children.length > 0).map((group) => group.name)),
     [categoryTree],
   );
-  // Which heading's subcategory row is open in Detailed. Tapping a heading
-  // cannot select it, so the open row needs its own state rather than being
-  // inferred from the allocations.
-  //
-  // Only ever one. Opening a row under every selected parent stacked several
-  // lists of subcategories on top of each other, and with Housing and Food
-  // both picked there was nothing to say which one a tap belonged to. An
-  // expense can still be split across as many categories as it needs — the
-  // choosing just happens one branch at a time.
-  const [openHeading, setOpenHeading] = useState<string | null>(null);
 
-  // The one branch whose subcategories are on screen: whichever heading was
-  // last opened, falling back to the branch the most recent choice came from
-  // so a restored draft still shows where its category lives.
-  const activeHeading = useMemo(() => {
-    if (openHeading) return openHeading;
-    const last = categoryAllocations[categoryAllocations.length - 1]?.category;
-    return last ? parentOf(categoryTree, last) : null;
-  }, [openHeading, categoryAllocations, categoryTree]);
-
-  const selectedParents = useMemo(() => {
-    const names = new Set<string>();
-    for (const allocation of categoryAllocations) {
-      const chosen = allocation.category.trim();
-      if (!chosen) continue;
-      names.add(parentOf(categoryTree, chosen) ?? chosen);
-    }
-    return names;
-  }, [categoryAllocations, categoryTree]);
 
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();
@@ -1029,11 +1001,9 @@ export default function AddExpenseSheet() {
 
 
   const chooseCategory = useCallback((name: string) => {
-    // A heading is not a destination. Tapping it opens what is underneath.
-    if (headings.has(name)) {
-      setOpenHeading((current) => (current === name ? null : name));
-      return;
-    }
+    // A heading is not a destination, and is no longer drawn as something
+    // tappable — this only guards against a stale caller.
+    if (headings.has(name)) return;
     if (!isAdvanced && !isEditMode) {
       setCategory(name);
       setCategoryAllocations([{ category: name, amount }]);
@@ -1070,9 +1040,6 @@ export default function AddExpenseSheet() {
     // parent can no longer hold an expense, so that toggle only ever produced
     // a rejection on save. The choice now stands until another one replaces it.
     const replacement = child;
-    // Stay in the branch just used, so the row does not jump to another
-    // heading that happens to be selected too.
-    setOpenHeading(parent);
     setCategoryAllocations((previous) => {
       const next = previous.map((allocation) => (
         owns(allocation.category) ? { ...allocation, category: replacement } : allocation
@@ -1578,34 +1545,22 @@ export default function AddExpenseSheet() {
                   </Pressable>
                 )
               )}
-              {/* Quick lists what an expense can actually go on; Detailed
-                  lists the headings and opens their subcategories underneath. */}
-              {isAdvanced && categoryTree.map(({ name, children }) => (
-                <CategoryChip
-                  key={name}
-                  name={name}
-                  selected={selectedParents.has(name) || openHeading === name}
-                  onSelect={chooseCategory}
-                  colors={colors}
-                  // Nothing said which categories had subcategories, so the
-                  // second row looked like it did not exist until you happened
-                  // to tap the right chip. Only Detailed can open that row.
-                  subcategoryCount={isAdvanced ? children.length : 0}
-                />
-              ))}
             </>
           )}
         </ScrollView>
-        {/* Quick lists the postable categories under the heading each belongs
-            to. They used to sit side by side in one strip, labelled
-            "Housing > Rent", which reads as a flat list of oddly-named
-            categories rather than a shape. The heading is text, not a chip:
-            it cannot be chosen, so offering it as one would only invite the
-            tap the server refuses. */}
-        {!isAdvanced && !categoriesQuery.isLoading && !categoriesQuery.isError && categoryTree.length > 0 ? (
+        {/* Both modes list the postable categories under the heading each
+            belongs to. Detailed used to hide them behind heading chips, so a
+            branch holding part of the expense and the branch you were looking
+            inside were filled identically — two chips lit, no way to tell what
+            either meant. With every subcategory on screen there is no "inside"
+            to be lost in.
+
+            The heading is text, not a chip: it cannot be chosen, so offering it
+            as one would only invite the tap the server refuses. */}
+        {!categoriesQuery.isLoading && !categoriesQuery.isError && categoryTree.length > 0 ? (
           <View style={styles.quickGroups}>
             {categoryTree.map((group) => (
-              <View key={`quick-${group.name}`} testID={`quick-group-${group.name}`} style={styles.quickGroup}>
+              <View key={`group-${group.name}`} testID={`category-group-${group.name}`} style={styles.quickGroup}>
                 {group.children.length > 0 ? (
                   <>
                     <Text style={[styles.quickGroupHeading, { color: colors.mutedForeground }]}>{group.name}</Text>
@@ -1620,7 +1575,10 @@ export default function AddExpenseSheet() {
                           key={child}
                           name={child}
                           selected={categoryAllocations.some((allocation) => allocation.category === child)}
-                          onSelect={chooseCategory}
+                          // Quick replaces the whole choice; Detailed moves the
+                          // allocation within this branch, which is what lets an
+                          // expense be split across several categories.
+                          onSelect={isAdvanced ? chooseSubcategory : chooseCategory}
                           colors={colors}
                         />
                       ))}
@@ -1638,33 +1596,32 @@ export default function AddExpenseSheet() {
             ))}
           </View>
         ) : null}
-        {/* Subcategories are a Detailed-mode refinement: Quick mode is meant to
-            be one tap on one category, so it never offers them. */}
-        {isAdvanced && categoryTree
-          .filter((group) => group.name === activeHeading && group.children.length > 0)
-          .map((group) => (
-            <View key={`sub-${group.name}`} testID={`subcategory-row-${group.name}`} style={{ gap: 4 }}>
-              <Text style={[styles.hintText, { color: colors.mutedForeground, marginTop: 0 }]}>
-                {`Choose a ${group.name} subcategory`}
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.categoryScroll}
-                contentContainerStyle={styles.categoryScrollContent}
-              >
-                {group.children.map((child) => (
-                  <CategoryChip
-                    key={child}
-                    name={child}
-                    selected={categoryAllocations.some((allocation) => allocation.category === child)}
-                    onSelect={chooseSubcategory}
-                    colors={colors}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          ))}
+        {/* Quick still does not create anything itself — that is what keeps it
+            one tap. But the door out was only offered when the budget was
+            completely empty, so anybody with categories and a missing one had
+            no route at all. It keeps the draft and comes back. */}
+        {!isAdvanced && canManageCategories && categoryTree.length > 0 ? (
+          <Pressable
+            onPress={async () => {
+              const expenseDraft: ExpenseBudgetDraft = {
+                amount, category, categoryAllocations, description, notes, payerIds, payerAmounts,
+                payerIncomeSourceIds, isRecurring, recurringMonthlyBudget, paidFromBank,
+                selectedBankAccountId, selectedSources, splitAmounts, allowMixedFunding, date,
+              };
+              await AsyncStorage.setItem(RECURRING_BUDGET_HANDOFF_KEY, JSON.stringify({ expenseDraft }));
+              router.push({ pathname: '/(tabs)/budget', params: { setupCategories: '1' } });
+            }}
+            testID="quick-add-category"
+            accessibilityRole="button"
+            accessibilityLabel="Add a category or subcategory"
+            style={styles.quickAddCategory}
+          >
+            <Feather name="plus-circle" size={15} color={colors.primary} />
+            <Text style={[styles.categoryStatusText, { color: colors.primary }]}>
+              Add a category or subcategory
+            </Text>
+          </Pressable>
+        ) : null}
         {/* The way into the create form. It had one once; a sync commit took
             it away, leaving the form reachable by nothing at all — which is
             why no category could be created here, and so why no subcategory
@@ -2886,6 +2843,7 @@ const styles = StyleSheet.create({
   },
   categoryScroll: { marginHorizontal: -20 },
   quickGroups: { gap: 10, marginTop: 4 },
+  quickAddCategory: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
   quickGroup: { gap: 4 },
   quickGroupHeading: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
   categoryScrollContent: { paddingHorizontal: 20, paddingVertical: 10, gap: 16 },

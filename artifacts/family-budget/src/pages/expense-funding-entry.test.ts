@@ -354,7 +354,9 @@ describe("expense funding amount entry", () => {
     // The phone renders chips rather than options, and its chips also carry a
     // subcategory count, so pin what it maps over rather than the exact
     // destructuring — the shape of the chip is that client's own business.
-    expect(mobileSource).toMatch(/\{isAdvanced && categoryTree\.map\(\(\{ name[^)]*\}\) => \(/);
+    // The phone no longer draws heading chips at all: both modes list the
+    // subcategories under their heading. See groupedCategoryPicker.test.ts.
+    expect(mobileSource).toContain('testID={`category-group-${group.name}`}');
     expect(mobileSource).toContain("<CategoryChip");
     // No longer "(optional)": a heading cannot hold the expense itself, so
     // once one is chosen a subcategory has to follow. Each client names the
@@ -362,7 +364,9 @@ describe("expense funding amount entry", () => {
     for (const source of [dashboardSource, expensesSource]) {
       expect(source).toContain("Choose a ${selectedParentCategory} subcategory");
     }
-    expect(mobileSource).toContain("Choose a ${group.name} subcategory");
+    // The phone has no separate subcategory step to caption any more — every
+    // subcategory sits under its heading, always visible.
+    expect(mobileSource).not.toContain("Choose a ${group.name} subcategory");
     for (const source of [dashboardSource, expensesSource, mobileSource]) {
       expect(source).not.toContain("subcategory (optional)");
     }
