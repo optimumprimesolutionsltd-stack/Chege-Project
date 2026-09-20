@@ -19,11 +19,11 @@ describe('Quick mode offers what can be posted to', () => {
     expect(offered).toEqual(['Food', 'Transport']);
   });
 
-  it('keeps the two-stage picker behind Detailed on the phone', () => {
-    expect(form).toContain('{isAdvanced && categoryTree');
-    // The badge that advertises a subcategory count is Detailed-only too, or
-    // Quick would point at a row it cannot open.
-    expect(form).toContain('subcategoryCount={isAdvanced ? children.length : 0}');
+  it('shares one grouped picker between the modes', () => {
+    expect(form).toContain('testID={`category-group-${group.name}`}');
+    // The badge that advertised a hidden subcategory count is gone with the
+    // hidden row: nothing is behind a chip to point at any more.
+    expect(form).not.toContain('subcategoryCount={isAdvanced ? children.length : 0}');
   });
 });
 
@@ -34,7 +34,7 @@ describe('and says where spending actually lands', () => {
   it('offers the postable categories in Quick, laid out under their headings', () => {
     // They used to sit side by side in one strip labelled "Housing > Rent",
     // which reads as a flat list of oddly-named categories rather than a shape.
-    expect(form).toContain('testID={`quick-group-${group.name}`}');
+    expect(form).toContain('testID={`category-group-${group.name}`}');
     expect(form).toContain('{group.children.map((child) => (');
   });
 

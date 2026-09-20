@@ -153,24 +153,19 @@ describe('optional expense category layout', () => {
   });
 });
 describe('subcategories belong to Detailed mode', () => {
-  it('offers only top-level categories in the main chip row', () => {
+  it('builds the tree once and lists it grouped', () => {
     expect(source).toContain('const categoryTree = useMemo(');
     expect(source).toContain('buildCategoryTree(categories as unknown as CategoryRow[])');
-    expect(source).toContain('{isAdvanced && categoryTree.map(({ name, children }) => ('); // Quick lists postable ones instead
+    // Both modes share one grouped list now — see groupedCategoryPicker.test.ts.
+    expect(source).toContain('testID={`category-group-${group.name}`}');
     // The old flat list labelled children "Parent: Child" among the parents.
     expect(source).not.toContain('groupCategoriesForPicker');
   });
 
-  // Nothing marked which chips had subcategories, so the second row looked
-  // like it did not exist until you happened to tap the right one — reported
-  // as "I cannot see sub categories in detailed mode".
-  it('marks which parent chips open a subcategory row, in Detailed only', () => {
-    expect(source).toContain('subcategoryCount={isAdvanced ? children.length : 0}');
-    expect(source).toContain('{subcategoryCount > 0 && (');
-    expect(source).toContain('subcategoryBadge');
-    expect(source).toContain("name=\"chevron-down\" size={11}");
-    // Quick mode passes 0, so the badge never shows there.
-    expect(source).toContain('subcategoryCount = 0,');
+  // Superseded: nothing is hidden behind a chip any more, so there is no cue
+  // to give. Every subcategory is on screen under its heading.
+  it('needs no cue for a hidden row, because there is no hidden row', () => {
+    expect(source).not.toContain('subcategoryCount={isAdvanced ? children.length : 0}');
   });
 
   // The form opened at an 0.85 detent while being taller than that, so its
@@ -250,14 +245,9 @@ describe('subcategories belong to Detailed mode', () => {
     expect(source).toContain('Deliberately not autoFocus');
   });
 
-  it('renders the subcategory row only under a selected parent, and only in Detailed', () => {
-    expect(source).toContain('{isAdvanced && categoryTree');
-    // One branch at a time now — see oneOpenHeading.test.ts for why.
-    expect(source).toContain('.filter((group) => group.name === activeHeading && group.children.length > 0)');
-    expect(source).toContain('testID={`subcategory-row-${group.name}`}');
-    expect(source).toContain('onSelect={chooseSubcategory}');
-    // No longer optional: a heading cannot hold the expense itself.
-    expect(source).toContain('`Choose a ${group.name} subcategory`');
+  it('shows every subcategory under its heading rather than in a separate row', () => {
+    expect(source).toContain('onSelect={isAdvanced ? chooseSubcategory : chooseCategory}');
+    expect(source).not.toContain('testID={`subcategory-row-${group.name}`}');
   });
 
   it('moves the parent allocation onto the subcategory rather than adding a second one', () => {
@@ -268,9 +258,7 @@ describe('subcategories belong to Detailed mode', () => {
     expect(handler).not.toContain('addStandardCategory');
   });
 
-  it('keeps a parent chip selected while one of its children is the saved value', () => {
-    expect(source).toContain('const selectedParents = useMemo(');
-    expect(source).toContain('names.add(parentOf(categoryTree, chosen) ?? chosen);');
-    expect(source).toContain('selected={selectedParents.has(name) || openHeading === name}');
+  it('marks the chosen subcategory itself, there being no parent chip to mark', () => {
+    expect(source).toContain('selected={categoryAllocations.some((allocation) => allocation.category === child)}');
   });
 });
