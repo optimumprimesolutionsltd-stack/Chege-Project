@@ -442,9 +442,11 @@ export const GetBudgetCategoryRecommendationsResponse = zod.object({
  */
 export const applyBudgetCategoryRecommendationsBodyConfirmDefault = true;
 
+
 export const ApplyBudgetCategoryRecommendationsBody = zod.object({
-  "confirm": zod.boolean().default(applyBudgetCategoryRecommendationsBodyConfirmDefault)
-}).describe('Applies only missing recommendations; existing categories are never changed.')
+  "confirm": zod.boolean().default(applyBudgetCategoryRecommendationsBodyConfirmDefault),
+  "names": zod.array(zod.string().min(1)).optional().describe('The recommended categories to add, by name. Anything not offered as missing is ignored rather than created, so a stale list cannot add something the person never saw. Omit to add all of them.')
+}).describe('Applies only missing recommendations; existing categories are never changed. Without `names` it adds every missing one, which is what the button did before anybody could choose.')
 
 export const ApplyBudgetCategoryRecommendationsResponse = zod.object({
   "kind": zod.enum(['personal', 'family', 'chama', 'church', 'club', 'team', 'student_group', 'other']),

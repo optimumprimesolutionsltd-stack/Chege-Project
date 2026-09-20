@@ -7,8 +7,13 @@
  */
 
 /**
- * Applies only missing recommendations; existing categories are never changed.
+ * Applies only missing recommendations; existing categories are never changed. Without `names` it adds every missing one, which is what the button did before anybody could choose.
  */
 export interface BudgetCategoryRecommendationApplyInput {
   confirm?: boolean;
+  /**
+     * The recommended categories to add, by name. Anything not offered as missing is ignored rather than created, so a stale list cannot add something the person never saw. Omit to add all of them.
+     * @items.minLength 1
+     */
+  names?: string[];
 }

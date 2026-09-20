@@ -582,14 +582,29 @@ export default function SettingsScreen() {
       setSavingBudgetPlan(false);
     }
   };
+  // Which of the missing recommendations to add. Everything starts ticked, so
+  // the old one-tap behaviour survives for anybody who just wants the lot.
+  const [chosenRecommendations, setChosenRecommendations] = useState<string[] | null>(null);
+  const missingRecommendations = recommendations.data?.missing ?? [];
+  const selectedRecommendations = chosenRecommendations
+    ?? missingRecommendations.map((item) => item.name);
+  const toggleRecommendation = (name: string) => {
+    setChosenRecommendations(
+      selectedRecommendations.includes(name)
+        ? selectedRecommendations.filter((item) => item !== name)
+        : [...selectedRecommendations, name],
+    );
+  };
+
   const handleApplyRecommendations = async () => {
     try {
-      await applyRecommendations.mutateAsync({ data: { confirm: true } });
+      await applyRecommendations.mutateAsync({ data: { confirm: true, names: selectedRecommendations } });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getGetBudgetCategoryRecommendationsQueryKey() }),
       ]);
-      Alert.alert('Recommended categories added', 'Only categories that were missing were added.');
+      setChosenRecommendations(null);
+      Alert.alert('Categories added', 'Only the ones you ticked were added.');
     } catch (error) {
       Alert.alert('Could not add recommended categories', error instanceof Error ? error.message : 'Please try again.');
     }
@@ -1280,14 +1295,48 @@ export default function SettingsScreen() {
                 </Pressable>
               ) : recommendations.data?.missing.length ? (
                 <View style={styles.recommendationBlock}>
+                  {/* A comma-joined sentence listed these but offered one
+                      button that added the lot. Naming them one per row, each
+                      with a tick, is the difference between being told and
+                      being asked. */}
                   <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                    Recommended to add: {recommendations.data.missing.map((item) => item.name).join(', ')}
+                    Tick the ones you want. Nothing you already have is touched.
                   </Text>
+                  {missingRecommendations.map((item) => {
+                    const picked = selectedRecommendations.includes(item.name);
+                    return (
+                      <Pressable
+                        key={item.name}
+                        onPress={() => toggleRecommendation(item.name)}
+                        disabled={!canManageShared || applyRecommendations.isPending}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: picked }}
+                        testID={`recommendation-${item.name}`}
+                        style={styles.recommendationRow}
+                      >
+                        <Feather
+                          name={picked ? 'check-square' : 'square'}
+                          size={18}
+                          color={picked ? colors.primary : colors.mutedForeground}
+                        />
+                        <Text style={[styles.rowSub, { color: colors.foreground, flex: 1, minWidth: 0 }]}>{item.name}</Text>
+                      </Pressable>
+                    );
+                  })}
                   {canManageShared ? (
                     <Pressable testID="apply-category-recommendations" onPress={() => void handleApplyRecommendations()}
-                      disabled={applyRecommendations.isPending}
-                      style={[styles.identitySaveButton, { backgroundColor: colors.primary, opacity: applyRecommendations.isPending ? 0.55 : 1 }]}>
-                      <Text style={styles.saveGroupText}>{applyRecommendations.isPending ? 'Adding…' : 'Add missing categories'}</Text>
+                      disabled={applyRecommendations.isPending || selectedRecommendations.length === 0}
+                      style={[styles.identitySaveButton, {
+                        backgroundColor: colors.primary,
+                        opacity: applyRecommendations.isPending || selectedRecommendations.length === 0 ? 0.55 : 1,
+                      }]}>
+                      <Text style={styles.saveGroupText}>
+                        {applyRecommendations.isPending
+                          ? 'Adding…'
+                          : selectedRecommendations.length === 0
+                            ? 'Tick at least one'
+                            : `Add ${selectedRecommendations.length} categor${selectedRecommendations.length === 1 ? 'y' : 'ies'}`}
+                      </Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -1999,6 +2048,7 @@ const styles = StyleSheet.create({
   kindChoice: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9 },
   kindChoiceLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   recommendationBlock: { gap: 8 },
+  recommendationRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   createGroupButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 13, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
   createGroupButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   modalBackdrop: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.5)' },
