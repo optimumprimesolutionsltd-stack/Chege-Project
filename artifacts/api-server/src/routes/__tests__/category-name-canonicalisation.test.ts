@@ -12,9 +12,11 @@ const onboarding = readFileSync("../mobile-budget/lib/onboarding.ts", "utf8");
 // money showed up elsewhere, and the group ended up holding two categories for
 // one thing — which is exactly what production looked like.
 describe("a category is created under the name its expenses will use", () => {
-  it("folds an alias into the name expenses already use", () => {
-    expect(canonicalExpenseCategoryName("Rent")).toBe("Housing");
-    expect(canonicalExpenseCategoryName("  accommodation ")).toBe("Housing");
+  it("folds nothing, so a refinement can be created under its parent", () => {
+    // The fold shipped in #226 and was wrong within hours: it made "Rent under
+    // Housing" impossible, because the name became "Housing" and collided.
+    expect(canonicalExpenseCategoryName("Rent")).toBe("Rent");
+    expect(canonicalExpenseCategoryName("  accommodation ")).toBe("accommodation");
   });
 
   it("leaves an ordinary name alone", () => {
@@ -22,7 +24,7 @@ describe("a category is created under the name its expenses will use", () => {
     expect(canonicalExpenseCategoryName("Shopping")).toBe("Shopping");
   });
 
-  it("applies it when creating", () => {
+  it("still applies the (now empty) fold when creating", () => {
     expect(route).toContain("const canonicalName = canonicalExpenseCategoryName(requestedName);");
     expect(route).toContain("parsed.data.name = canonicalName;");
   });
@@ -48,22 +50,14 @@ describe("a subcategory is not an alias", () => {
     expect(canonicalExpenseCategoryName("Groceries")).toBe("Groceries");
   });
 
-  it("keeps this map to true synonyms only", () => {
-    // Scoped to the map itself — the comment above it names "groceries" while
-    // explaining precisely why it is not in here.
-    const map = names.slice(
-      names.indexOf("EXPENSE_CATEGORY_ALIASES"),
-      names.indexOf("};", names.indexOf("EXPENSE_CATEGORY_ALIASES")),
-    );
-    expect(map).not.toContain("groceries");
-    expect(map).toContain("rent:");
-    expect(map).toContain("accommodation:");
+  it("keeps the map empty, because every candidate turned out to be a refinement", () => {
+    expect(names).toContain("const EXPENSE_CATEGORY_ALIASES: Record<string, string> = {};");
   });
 
-  it("says why it differs from onboarding, which does fold it", () => {
-    // Without the note, the two maps look like one of them is simply stale.
-    expect(onboarding).toContain("groceries: \"Food\"");
-    expect(names).toContain("ONBOARDING_CATEGORY_ALIASES");
-    expect(names).toContain("never a refinement of a broader category");
+  it("says why it is empty rather than looking merely unfinished", () => {
+    expect(names).toContain("Deliberately empty.");
+    expect(names).toContain("never does.");
+    // The reason has to survive, or somebody refills the map next year.
+    expect(names).toContain("Rent under Housing is a sensible");
   });
 });
