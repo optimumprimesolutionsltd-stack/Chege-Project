@@ -40,6 +40,10 @@ type ContributionStatement = {
   entries: StatementEntry[];
   totalsByContributor: Record<number, number>;
   grandTotal: number;
+  /** Deposits that reached the bank belonging to nobody. Deliberately outside
+   *  grandTotal: crediting them to a member would overstate what they gave. */
+  groupFunding?: Array<{ transactionId: number; date: string; description: string | null; amount: number }>;
+  groupFundingTotal?: number;
 };
 
 const RANGES = [3, 6, 12] as const;
@@ -161,6 +165,12 @@ function buildStatementText(groupName: string, statement: ContributionStatement,
     '',
     `Total in this period: ${kes(statement.grandTotal)}   (${statement.entries.length} ${statement.entries.length === 1 ? 'entry' : 'entries'})`,
   ];
+
+  // Named rather than omitted. Leaving it out is what made the bank balance
+  // and the contributions disagree with nothing to explain the gap.
+  if (statement.groupFundingTotal) {
+    lines.push(`Held for the group (nobody's contribution): ${kes(statement.groupFundingTotal)}`);
+  }
 
   const perMember = statement.contributors
     .map((row) => ({ name: row.name, total: statement.totalsByContributor[row.id] ?? 0 }))
@@ -480,6 +490,15 @@ export function ContributionExport() {
             <Text style={[styles.stmtSub, { color: colors.mutedForeground }]}>
               {viewData.entries.length} {viewData.entries.length === 1 ? 'entry' : 'entries'} · KES {kes(viewData.grandTotal)} in total
             </Text>
+            {/* Shown beside the contributions rather than folded into them.
+                A deposit nobody claimed is real money in the bank and no
+                member's contribution; omitting it is what left the two
+                figures unable to reconcile. */}
+            {viewData.groupFundingTotal ? (
+              <Text testID="statement-group-funding" style={[styles.stmtSub, { color: colors.mutedForeground }]}>
+                Held for the group: KES {kes(viewData.groupFundingTotal)} — nobody&apos;s contribution
+              </Text>
+            ) : null}
 
             {viewData.entries.length === 0 ? (
               <Text style={[styles.note, { color: colors.mutedForeground, marginTop: 6 }]}>Nothing recorded in this range.</Text>

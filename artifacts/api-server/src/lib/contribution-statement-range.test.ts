@@ -16,6 +16,13 @@ function statement(): ContributionStatement {
     ],
     totalsByContributor: { 1: 7500, 2: 1500 },
     grandTotal: 9000,
+    // Money that reached the bank belonging to nobody. Dated inside and
+    // outside the ranges the tests narrow to, so the filtering is exercised.
+    groupFunding: [
+      { transactionId: 91, date: "2026-07-05", description: "Harambee", amount: 1500, bankName: "Equity" },
+      { transactionId: 92, date: "2026-09-20", description: "Fundraiser", amount: 2500, bankName: null },
+    ],
+    groupFundingTotal: 4000,
   };
 }
 
@@ -93,5 +100,33 @@ describe("prorateExpected", () => {
 
   it("prorates a single day as one day's share of its month", () => {
     expect(prorateExpected(3000, "2026-09-15", "2026-09-15")).toBe(100); // 3000/30 = 100
+  });
+});
+
+// A deposit with no contributor is Shared group funding, not anyone's
+// contribution. Leaving it out of the ledger is right; leaving it out silently
+// is what made a report read nil in one place and show figures in another.
+describe("group funding in a narrowed statement", () => {
+  it("keeps only what falls inside the range", () => {
+    const narrowed = filterStatementToRange(statement(), { from: "2026-09-01", to: "2026-09-30" });
+    expect(narrowed.groupFunding.map((entry) => entry.transactionId)).toEqual([92]);
+    expect(narrowed.groupFundingTotal).toBe(2500);
+  });
+
+  it("never counts it as somebody's contribution", () => {
+    const narrowed = filterStatementToRange(statement(), { from: "2026-09-01", to: "2026-09-30" });
+    const contributed = Object.values(narrowed.totalsByContributor).reduce((sum, value) => sum + value, 0);
+    // The grand total is exactly what the contributors gave, and the group
+    // funding sits outside it — crediting it to anybody would overstate what
+    // they contributed, which is the reason it was excluded in the first place.
+    expect(narrowed.grandTotal).toBe(contributed);
+    expect(narrowed.groupFundingTotal).toBeGreaterThan(0);
+    expect(narrowed.grandTotal).not.toBe(contributed + narrowed.groupFundingTotal);
+  });
+
+  it("reports nothing when the range holds none", () => {
+    const narrowed = filterStatementToRange(statement(), { from: "2026-08-01", to: "2026-08-31" });
+    expect(narrowed.groupFunding).toEqual([]);
+    expect(narrowed.groupFundingTotal).toBe(0);
   });
 });

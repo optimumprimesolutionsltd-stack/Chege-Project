@@ -20,6 +20,28 @@ export interface StatementEntry {
   bankName: string | null;
 }
 
+/**
+ * Money that reached the group's bank without belonging to anybody.
+ *
+ * A deposit with no contributor split is Shared group funding, not anyone's
+ * contribution, and the ledger deliberately leaves it out — crediting it to a
+ * member would overstate what they gave. But leaving it out silently is what
+ * made a report read nil in one place and show figures in another, with
+ * nothing to connect them. It is reported here so the two reconcile on the
+ * page without becoming anybody's contribution.
+ *
+ * A deposit split across contributors for only part of its value leaves the
+ * remainder here, so partial attribution is not quietly lost either.
+ */
+export interface GroupFundingEntry {
+  transactionId: number;
+  date: string;
+  description: string | null;
+  /** The part of the deposit no contributor claimed. */
+  amount: number;
+  bankName: string | null;
+}
+
 export interface ContributionStatement {
   periodLabel: string;
   contributors: Array<{ id: number; name: string; userId: string | null; monthlyTarget: number | null }>;
@@ -27,6 +49,9 @@ export interface ContributionStatement {
   entries: StatementEntry[];
   totalsByContributor: Record<number, number>;
   grandTotal: number;
+  /** Not part of grandTotal: it is nobody's contribution. */
+  groupFunding: GroupFundingEntry[];
+  groupFundingTotal: number;
 }
 
 const MONTH_ABBR = [
@@ -59,12 +84,17 @@ export function filterStatementToRange(
   for (const entry of entries) {
     totalsByContributor[entry.contributorId] = (totalsByContributor[entry.contributorId] ?? 0) + entry.amount;
   }
+  // Narrowed by the same window, or a range would show group funding from
+  // outside the period it claims to cover.
+  const groupFunding = statement.groupFunding.filter((entry) => entry.date >= from && entry.date <= to);
   return {
     periodLabel: `${formatStatementDate(from)} – ${formatStatementDate(to)}`,
     contributors: statement.contributors,
     entries,
     totalsByContributor,
     grandTotal: entries.reduce((sum, entry) => sum + entry.amount, 0),
+    groupFunding,
+    groupFundingTotal: groupFunding.reduce((sum, entry) => sum + entry.amount, 0),
   };
 }
 
