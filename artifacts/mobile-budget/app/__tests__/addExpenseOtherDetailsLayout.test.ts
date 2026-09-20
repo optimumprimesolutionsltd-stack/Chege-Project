@@ -252,7 +252,8 @@ describe('subcategories belong to Detailed mode', () => {
 
   it('renders the subcategory row only under a selected parent, and only in Detailed', () => {
     expect(source).toContain('{isAdvanced && categoryTree');
-    expect(source).toContain('.filter((group) => (selectedParents.has(group.name) || openHeading === group.name) && group.children.length > 0)');
+    // One branch at a time now — see oneOpenHeading.test.ts for why.
+    expect(source).toContain('.filter((group) => group.name === activeHeading && group.children.length > 0)');
     expect(source).toContain('testID={`subcategory-row-${group.name}`}');
     expect(source).toContain('onSelect={chooseSubcategory}');
     // No longer optional: a heading cannot hold the expense itself.
