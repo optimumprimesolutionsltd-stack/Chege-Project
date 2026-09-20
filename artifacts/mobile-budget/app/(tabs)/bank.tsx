@@ -63,6 +63,7 @@ import { handleLapsedError } from '@/lib/lapsedError';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
 import { getProjectedBalanceAfterPosting } from '@/lib/bankBalance';
+import { evaluateAmountExpression, isAmountExpression } from '@/lib/amountExpression';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
 
@@ -138,6 +139,15 @@ function parseBalanceFigure(value: string): number | null {
   if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * What the person meant by what they typed: a number, or the arithmetic that
+ * works one out. A day's spending arrives as several receipts that make one
+ * posting, and leaving for a calculator loses the sitting.
+ */
+function readAmount(value: string): number | null {
+  return parseBankAmount(value) ?? evaluateAmountExpression(value);
 }
 
 function toCents(value: number): number {
@@ -716,7 +726,7 @@ export default function BankScreen() {
   const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
 
   const handleSubmit = async ({ keepOpen = false }: { keepOpen?: boolean } = {}) => {
-    const parsed = parseBankAmount(amount);
+    const parsed = readAmount(amount);
     if (parsed === null || parsed <= 0) {
       Alert.alert('Invalid amount', 'Enter an amount greater than zero with up to two decimal places.');
       return;
@@ -1042,7 +1052,7 @@ export default function BankScreen() {
   const isTransfer = txType === 'transfer';
   const isBankCharge = txType === 'bank_charge';
   const isBankTransfer = txType === 'bank_transfer';
-  const parsedOutgoingAmount = parseBankAmount(amount);
+  const parsedOutgoingAmount = readAmount(amount);
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
@@ -1784,6 +1794,40 @@ export default function BankScreen() {
                 returnKeyType="next"
                 testID="bank-amount-input"
               />
+              {/* The keypad a decimal-pad gives you has no operators, and
+                  switching the field to a full keyboard would make every
+                  plain amount harder to type for the sake of the occasional
+                  sum. These put the operators one tap away instead. */}
+              <View style={styles.calcRow}>
+                {(['+', '−', '×', '÷', '(', ')'] as const).map((key) => (
+                  <Pressable
+                    key={key}
+                    onPress={() => setAmount((previous) => previous + key)}
+                    style={[styles.calcKey, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Insert ${key}`}
+                    testID={`bank-amount-key-${key}`}
+                  >
+                    <Text style={[styles.calcKeyText, { color: colors.foreground }]}>{key}</Text>
+                  </Pressable>
+                ))}
+                <Pressable
+                  onPress={() => setAmount((previous) => previous.slice(0, -1))}
+                  style={[styles.calcKey, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete the last character"
+                  testID="bank-amount-key-delete"
+                >
+                  <Feather name="delete" size={15} color={colors.foreground} />
+                </Pressable>
+              </View>
+              {/* Only when there is working to show: no point printing
+                  "= 5,000" under a field that already says 5000. */}
+              {isAmountExpression(amount) && parsedOutgoingAmount !== null ? (
+                <Text style={[styles.calcResult, { color: colors.primary }]} testID="bank-amount-resolved">
+                  = KES {formatKES(parsedOutgoingAmount)}
+                </Text>
+              ) : null}
                {/* Date stays beside the amount so every bank entry starts with its transaction date. */}
                <Text style={[styles.label, { color: colors.mutedForeground }]}>
                  {isDeposit ? 'Deposit date' : 'Date'}
@@ -3291,6 +3335,32 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
+  },
+  calcRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  calcKey: {
+    minWidth: 44,
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  calcKeyText: {
+    fontSize: 17,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  calcResult: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    marginTop: 2,
+    marginBottom: 6,
   },
   saveAndAddBtn: {
     borderRadius: 14,
