@@ -200,6 +200,23 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   });
 
   const totalSpent = Number(spentRow.total) + Number(categorisedDisbursementsRow.total);
+  // What the bank took in fees. Deliberately outside totalSpent: a charge is
+  // money genuinely gone, but it is not household spending and belongs to no
+  // category, so adding it would inflate every budget comparison by whatever
+  // the bank happened to levy. Reported so it stops being invisible outside
+  // the banking screen — until now the only way to see it was to go looking.
+  const [bankChargesRow] = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId}
+      AND ${jointAccountTxTable.type} = 'disbursement'
+      AND ${jointAccountTxTable.bankCharge} = true
+      AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
+      AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
+
   res.json({
     month, year,
     totalBudget,
@@ -207,6 +224,8 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     remaining: totalBudget - totalSpent,
     expenseCount: Number(countRow.count),
     memberContributions,
+    bankChargesTotal: Number(bankChargesRow?.total ?? 0),
+    bankChargesCount: Number(bankChargesRow?.count ?? 0),
   });
 });
 

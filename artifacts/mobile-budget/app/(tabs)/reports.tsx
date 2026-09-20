@@ -278,6 +278,12 @@ export default function ReportsScreen() {
 
   const totalBudget  = summary?.totalBudget  ?? 0;
   const totalSpent   = summary?.totalSpent   ?? 0;
+  // What the bank took in fees. Outside totalSpent on purpose — a charge is
+  // money gone, but it is not household spending and belongs to no category.
+  // Until now it could only be seen by going to the banking screen and looking
+  // for it, so a month's fees were effectively invisible.
+  const bankCharges  = summary?.bankChargesTotal ?? 0;
+  const bankChargeCount = summary?.bankChargesCount ?? 0;
   const memberContribs = useMemo(() => {
     const raw = ((summary as any)?.memberContributions ?? []) as {
       userId: string; name: string;
@@ -564,6 +570,16 @@ export default function ReportsScreen() {
                 {overBudgetCount > 0 ? ` ${overBudgetCategoryNames.slice(0, 3).join(', ')}${overBudgetCount > 3 ? ' and other categories' : ''} need${overBudgetCount === 1 ? 's' : ''} attention.` : ''}
               </Text>
             )}
+            {!progressLoading && !progressError && bankCharges > 0 ? (
+              <Text
+                testID="report-bank-charges"
+                style={[styles.progressMessage, { color: colors.mutedForeground, marginTop: 6 }]}
+              >
+                The bank also took {formatKES(bankCharges)} in charges
+                {bankChargeCount > 0 ? ` across ${bankChargeCount} ${bankChargeCount === 1 ? 'fee' : 'fees'}` : ''}
+                . That is not counted as spending, because it belongs to no category.
+              </Text>
+            ) : null}
             {!progressLoading && !progressError && (
               <View style={styles.progressStats}>
                 <Pressable
