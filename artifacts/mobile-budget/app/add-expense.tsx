@@ -880,17 +880,6 @@ export default function AddExpenseSheet() {
     () => new Set(categoryTree.filter((group) => group.children.length > 0).map((group) => group.name)),
     [categoryTree],
   );
-  // Quick is one tap, so it lists what can actually be posted to rather than
-  // the top level. A subcategory carries its parent for context, because
-  // "Rent" on its own says less than "Housing > Rent".
-  const quickChoices = useMemo(
-    () => categoryTree.flatMap((group) => (
-      group.children.length === 0
-        ? [{ name: group.name, label: group.name }]
-        : group.children.map((child) => ({ name: child, label: `${group.name} > ${child}` }))
-    )),
-    [categoryTree],
-  );
   // Which heading's subcategory row is open in Detailed. Tapping a heading
   // cannot select it, so the open row needs its own state rather than being
   // inferred from the allocations.
@@ -1591,16 +1580,6 @@ export default function AddExpenseSheet() {
               )}
               {/* Quick lists what an expense can actually go on; Detailed
                   lists the headings and opens their subcategories underneath. */}
-              {!isAdvanced && quickChoices.map(({ name, label }) => (
-                <CategoryChip
-                  key={name}
-                  name={name}
-                  label={label}
-                  selected={categoryAllocations.some((allocation) => allocation.category === name)}
-                  onSelect={chooseCategory}
-                  colors={colors}
-                />
-              ))}
               {isAdvanced && categoryTree.map(({ name, children }) => (
                 <CategoryChip
                   key={name}
@@ -1617,6 +1596,48 @@ export default function AddExpenseSheet() {
             </>
           )}
         </ScrollView>
+        {/* Quick lists the postable categories under the heading each belongs
+            to. They used to sit side by side in one strip, labelled
+            "Housing > Rent", which reads as a flat list of oddly-named
+            categories rather than a shape. The heading is text, not a chip:
+            it cannot be chosen, so offering it as one would only invite the
+            tap the server refuses. */}
+        {!isAdvanced && !categoriesQuery.isLoading && !categoriesQuery.isError && categoryTree.length > 0 ? (
+          <View style={styles.quickGroups}>
+            {categoryTree.map((group) => (
+              <View key={`quick-${group.name}`} testID={`quick-group-${group.name}`} style={styles.quickGroup}>
+                {group.children.length > 0 ? (
+                  <>
+                    <Text style={[styles.quickGroupHeading, { color: colors.mutedForeground }]}>{group.name}</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.categoryScroll}
+                      contentContainerStyle={styles.categoryScrollContent}
+                    >
+                      {group.children.map((child) => (
+                        <CategoryChip
+                          key={child}
+                          name={child}
+                          selected={categoryAllocations.some((allocation) => allocation.category === child)}
+                          onSelect={chooseCategory}
+                          colors={colors}
+                        />
+                      ))}
+                    </ScrollView>
+                  </>
+                ) : (
+                  <CategoryChip
+                    name={group.name}
+                    selected={categoryAllocations.some((allocation) => allocation.category === group.name)}
+                    onSelect={chooseCategory}
+                    colors={colors}
+                  />
+                )}
+              </View>
+            ))}
+          </View>
+        ) : null}
         {/* Subcategories are a Detailed-mode refinement: Quick mode is meant to
             be one tap on one category, so it never offers them. */}
         {isAdvanced && categoryTree
@@ -2864,6 +2885,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.9,
   },
   categoryScroll: { marginHorizontal: -20 },
+  quickGroups: { gap: 10, marginTop: 4 },
+  quickGroup: { gap: 4 },
+  quickGroupHeading: { fontSize: 11, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.4 },
   categoryScrollContent: { paddingHorizontal: 20, paddingVertical: 10, gap: 16 },
   oneOffCategoryOption: {
     marginTop: 10,
