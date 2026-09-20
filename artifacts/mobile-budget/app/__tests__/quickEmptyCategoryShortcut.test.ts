@@ -54,4 +54,11 @@ describe('and hands the person back afterwards', () => {
   it('only returns once, so a later save stays put', () => {
     expect(budget).toContain('setReturnToExpense(false);');
   });
+
+  it('names the new category so the form can select it on arrival', () => {
+    // Otherwise the person lands back on their draft and still has to find the
+    // thing they just created, which is most of the trip repeated.
+    expect(budget).toContain('if (recurringSetupActive || returnToExpense) {');
+    expect(budget).toContain('{ ...handoff, categoryName: formName.trim() }');
+  });
 });

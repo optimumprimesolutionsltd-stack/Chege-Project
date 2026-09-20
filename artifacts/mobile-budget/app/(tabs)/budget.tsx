@@ -521,7 +521,10 @@ export default function BudgetScreen() {
         }),
       });
       await refreshAll();
-      if (recurringSetupActive) {
+      // Name the category on the way back so the expense form can select it.
+      // Without this the person returns to their draft and still has to find
+      // the thing they just created, which is most of the trip repeated.
+      if (recurringSetupActive || returnToExpense) {
         const rawHandoff = await AsyncStorage.getItem(RECURRING_BUDGET_HANDOFF_KEY);
         const handoff = rawHandoff ? JSON.parse(rawHandoff) as Record<string, unknown> : {};
         await AsyncStorage.setItem(
