@@ -56,8 +56,13 @@ describe("obligations follow the period, money follows the date", () => {
     // Filtering on the date would fetch a September deposit belonging to April
     // and then bucket it outside the window, and would miss an older one that
     // belongs inside it.
+    // Asserted without spelling out a line break: this file is CRLF on disk,
+    // so "\n" in an assertion matches nothing once checked out. That has
+    // caught me repeatedly today.
     const window = contributors.slice(contributors.indexOf("loadContributionGrid"));
-    expect(window).toContain("AND make_date(\n              COALESCE(${jointAccountTxTable.appliesToYear}");
+    expect(window).toContain("AND make_date(");
+    expect(window).toContain("COALESCE(${jointAccountTxTable.appliesToYear}, EXTRACT(YEAR FROM ${jointAccountTxTable.date}))::int,");
+    expect(window).toContain("COALESCE(${jointAccountTxTable.appliesToMonth}, EXTRACT(MONTH FROM ${jointAccountTxTable.date}))::int,");
   });
 
   it("keeps the comment out of the SQL it explains", () => {
