@@ -1210,6 +1210,13 @@ export interface DepositContributorSplit {
 }
 
 export interface JointAccountTransaction {
+  /**
+     * The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.
+     * @nullable
+     */
+  appliesToMonth?: number | null;
+  /** @nullable */
+  appliesToYear?: number | null;
   id: number;
   /** @nullable */
   accountId?: number | null;
@@ -1328,6 +1335,19 @@ export interface DepositInput {
   amount: number;
   description: string;
   date: string;
+  /**
+     * The month this deposit was for, when that differs from the month it arrived — April's dues paid in September, or June's paid in April. Omit for the month it arrived in. Must be given with appliesToYear.
+     * @minimum 1
+     * @maximum 12
+     * @nullable
+     */
+  appliesToMonth?: number | null;
+  /**
+     * @minimum 2000
+     * @maximum 2200
+     * @nullable
+     */
+  appliesToYear?: number | null;
   /**
      * ID of the household member who made this deposit. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null.
      * @nullable

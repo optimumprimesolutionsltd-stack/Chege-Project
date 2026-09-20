@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
 import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColors } from '@/hooks/useColors';
@@ -92,6 +95,9 @@ type Tx = {
   madeByName?: string | null;
   incomeSourceId?: number | null;
   expenseCategory?: string | null;
+  /** The month a deposit was for, when that is not the month it arrived. */
+  appliesToMonth?: number | null;
+  appliesToYear?: number | null;
   bankCharge?: boolean;
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
@@ -159,6 +165,22 @@ export default function BankScreen() {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [expenseCategory, setExpenseCategory] = useState('');
+  // The month a deposit was *for*, when that is not the month it arrived.
+  // Null is "the month it arrived in", which is almost every deposit.
+  const [appliesTo, setAppliesTo] = useState<{ month: number; year: number } | null>(null);
+  const [appliesToOpen, setAppliesToOpen] = useState(false);
+  // The months worth offering: the last twelve, newest first, plus the next
+  // three so a prepayment is the same mechanism pointed forward. Paying June's
+  // dues in April is as real as paying April's in September.
+  const recentPeriods = useMemo(() => {
+    const now = new Date();
+    const periods: Array<{ month: number; year: number }> = [];
+    for (let offset = 3; offset >= -11; offset -= 1) {
+      const when = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      periods.push({ month: when.getMonth() + 1, year: when.getFullYear() });
+    }
+    return periods;
+  }, []);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
@@ -481,6 +503,9 @@ export default function BankScreen() {
       : tx.description);
     setDate(tx.date);
     setExpenseCategory(tx.expenseCategory ?? '');
+    setAppliesTo(tx.appliesToMonth && tx.appliesToYear
+      ? { month: tx.appliesToMonth, year: tx.appliesToYear }
+      : null);
     setShowCategoryPicker(false);
     // This editor works in member ids, so portions credited to a contributor
     // recorded by name are skipped rather than turned into somebody else's.
@@ -726,6 +751,7 @@ export default function BankScreen() {
             ...(txType === 'deposit' ? { contributorSplits } : {}),
             ...(txType === 'deposit' && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+            ...(txType === 'deposit' && appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
             ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
             ...(txType === 'bank_charge' ? { bankCharge: true } : {}),
             accountId: selectedAccountId ?? undefined,
@@ -769,6 +795,7 @@ export default function BankScreen() {
                 amount: parseBankAmount(depositorAmounts[userId] || '') ?? 0,
               })),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              ...(appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
               accountId: selectedAccountId ?? undefined,
             },
           });
@@ -782,6 +809,7 @@ export default function BankScreen() {
               madeById: null,
               ...(incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              ...(appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
               accountId: selectedAccountId ?? undefined,
             },
           });
@@ -796,6 +824,7 @@ export default function BankScreen() {
               madeById: singleId,
               ...(incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
+              ...(appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
               accountId: selectedAccountId ?? undefined,
             },
           });
@@ -1594,6 +1623,68 @@ export default function BankScreen() {
                    }}
                  />
                )}
+               {/* The second date: the month this money was *for*. A deposit
+                   carries only the day it arrived, so April's dues paid in
+                   September counted as September — April stayed in arrears and
+                   September showed a surplus. The day above still drives the
+                   balance; only the obligation follows this.
+
+                   A month, not a day: a contribution period is monthly, and
+                   offering a calendar would invite "12 April" and then ignore
+                   the 12. */}
+               {txType === 'deposit' ? (
+                 <>
+                   <Pressable
+                     onPress={() => setAppliesToOpen((open) => !open)}
+                     style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                     testID="bank-applies-to"
+                     accessibilityRole="button"
+                     accessibilityState={{ expanded: appliesToOpen }}
+                   >
+                     <Feather name="clock" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+                     <Text style={{ color: colors.foreground, fontSize: 16, fontFamily: 'Inter_400Regular', flex: 1 }}>
+                       {appliesTo
+                         ? `For ${MONTH_NAMES[appliesTo.month - 1]} ${appliesTo.year}`
+                         : 'For the month it arrived'}
+                     </Text>
+                     <Feather name={appliesToOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                   </Pressable>
+                   {appliesToOpen ? (
+                     <View style={styles.appliesToGrid}>
+                       <Pressable
+                         onPress={() => { setAppliesTo(null); setAppliesToOpen(false); }}
+                         testID="bank-applies-to-arrival"
+                         style={[styles.appliesToChip, {
+                           borderColor: appliesTo === null ? colors.primary : colors.border,
+                           backgroundColor: appliesTo === null ? colors.primary + '22' : colors.muted,
+                         }]}
+                       >
+                         <Text style={{ color: appliesTo === null ? colors.primary : colors.mutedForeground, fontSize: 13 }}>
+                           The month it arrived
+                         </Text>
+                       </Pressable>
+                       {recentPeriods.map((period) => {
+                         const picked = appliesTo?.month === period.month && appliesTo?.year === period.year;
+                         return (
+                           <Pressable
+                             key={`${period.year}-${period.month}`}
+                             onPress={() => { setAppliesTo(period); setAppliesToOpen(false); }}
+                             testID={`bank-applies-to-${period.year}-${period.month}`}
+                             style={[styles.appliesToChip, {
+                               borderColor: picked ? colors.primary : colors.border,
+                               backgroundColor: picked ? colors.primary + '22' : colors.muted,
+                             }]}
+                           >
+                             <Text style={{ color: picked ? colors.primary : colors.mutedForeground, fontSize: 13 }}>
+                               {MONTH_NAMES[period.month - 1]} {period.year}
+                             </Text>
+                           </Pressable>
+                         );
+                       })}
+                     </View>
+                   ) : null}
+                 </>
+               ) : null}
               {projectedBalance !== null && projectedBalance < 0 && (
                 <View
                   style={styles.negativeBalanceWarning}
@@ -2807,6 +2898,8 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
   },
+  appliesToGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, marginTop: 4 },
+  appliesToChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   memberRow: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,

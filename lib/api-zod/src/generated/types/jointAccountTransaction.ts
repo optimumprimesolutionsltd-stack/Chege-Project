@@ -8,6 +8,13 @@
 import type { DepositContributorSplit } from './depositContributorSplit';
 
 export interface JointAccountTransaction {
+  /**
+     * The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.
+     * @nullable
+     */
+  appliesToMonth?: number | null;
+  /** @nullable */
+  appliesToYear?: number | null;
   id: number;
   /** @nullable */
   accountId?: number | null;
