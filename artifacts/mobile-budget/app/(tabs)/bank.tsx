@@ -62,7 +62,7 @@ import { useAuth } from '@/lib/auth';
 import { handleLapsedError } from '@/lib/lapsedError';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
-import { getProjectedBalanceAfterOutgoing } from '@/lib/bankBalance';
+import { getProjectedBalanceAfterPosting } from '@/lib/bankBalance';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
 
@@ -127,6 +127,19 @@ function parseBankAmount(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * A balance, which unlike an amount can be negative.
+ *
+ * Jamvi records an overdraft rather than refusing it, so a statement figure
+ * below zero is a real thing somebody has to be able to type in.
+ */
+function parseBalanceFigure(value: string): number | null {
+  const normalized = value.trim().replace(/,/g, '');
+  if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function toCents(value: number): number {
   return Math.round(value * 100);
 }
@@ -187,12 +200,21 @@ export default function BankScreen() {
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // A day's banking is several postings, not one. Recording them used to mean
+  // reopening the sheet each time and losing the thread of where the balance
+  // had got to, so the sheet can stay open and keep a tally of the sitting.
+  const [sitting, setSitting] = useState<{ count: number; inflow: number; outflow: number } | null>(null);
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [openingBalanceModalVisible, setOpeningBalanceModalVisible] = useState(false);
   const [openingBalanceDraft, setOpeningBalanceDraft] = useState('');
   const [openingBalanceDate, setOpeningBalanceDate] = useState(todayIso());
   const [showOpeningBalanceDatePicker, setShowOpeningBalanceDatePicker] = useState(false);
   const [savingOpeningBalance, setSavingOpeningBalance] = useState(false);
+  // Reconciling: the statement's closing balance, against Jamvi's.
+  const [reconcileVisible, setReconcileVisible] = useState(false);
+  const [statementBalance, setStatementBalance] = useState('');
+  const [reconcileNarration, setReconcileNarration] = useState('');
+  const [reconciling, setReconciling] = useState(false);
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [accountNameDraft, setAccountNameDraft] = useState('');
   const [accountNumberDraft, setAccountNumberDraft] = useState('');
@@ -349,6 +371,85 @@ export default function BankScreen() {
     setModalVisible(false);
     setNewCategoryName('');
     setEditingTransactionId(null);
+    setSitting(null);
+  };
+
+  // What changes between one posting and the next. The type, the date, the
+  // account and the people stay: a sitting is one day on one account, and
+  // re-choosing them for every line is the friction that made recording a
+  // whole day unappealing in the first place.
+  const resetForNextEntry = () => {
+    setAmount('');
+    setDescription('');
+    setExpenseCategory('');
+    setShowCategoryPicker(false);
+    setNewCategoryName('');
+    setWithdrawDest(null);
+    setWithdrawSourceName(null);
+    setWithdrawGoalId(null);
+    setShowGoalPicker(false);
+    setDepositorAmounts({});
+  };
+
+  /**
+   * End one posting: either close the sheet, or clear it for the next and
+   * count what was just recorded. Called from every branch of the submit
+   * handler, so no path can leave the sheet in a half-saved state.
+   */
+  const finishEntry = (keepOpen: boolean, recorded: { amount: number; direction: 'in' | 'out' }) => {
+    setEditingTransactionId(null);
+    if (!keepOpen) {
+      setModalVisible(false);
+      setSitting(null);
+      return;
+    }
+    resetForNextEntry();
+    setSitting((previous) => ({
+      count: (previous?.count ?? 0) + 1,
+      inflow: (previous?.inflow ?? 0) + (recorded.direction === 'in' ? recorded.amount : 0),
+      outflow: (previous?.outflow ?? 0) + (recorded.direction === 'out' ? recorded.amount : 0),
+    }));
+  };
+
+  const openReconcile = () => {
+    setStatementBalance('');
+    setReconcileNarration('');
+    setReconcileVisible(true);
+  };
+
+  /**
+   * Record the shortfall as a bank charge.
+   *
+   * Only offered when Jamvi holds more than the statement does: money has left
+   * the account that no posting accounts for, and on a Kenyan bank statement
+   * that is nearly always a fee. Nearly always is not always, which is why the
+   * app asks rather than assuming, and why the narration is editable — a
+   * mis-attributed difference is worse than a visible one.
+   */
+  const recordDifferenceAsCharge = async (difference: number) => {
+    if (!selectedAccountId) {
+      Alert.alert('Choose a bank account', 'Pick the account you are checking before recording the difference.');
+      return;
+    }
+    setReconciling(true);
+    try {
+      await createBankCharge({
+        data: {
+          amount: difference,
+          narration: reconcileNarration.trim() || 'Bank charges',
+          date: todayIso(),
+          accountId: selectedAccountId,
+        },
+      });
+      setReconcileVisible(false);
+      await invalidateBalance();
+    } catch (err: unknown) {
+      if (!handleLapsedError(err)) {
+        Alert.alert('Could not record the charge', err instanceof Error ? err.message : 'Nothing was recorded.');
+      }
+    } finally {
+      setReconciling(false);
+    }
   };
 
   // Invalidate everywhere that displays the joint-account balance so all
@@ -605,7 +706,7 @@ export default function BankScreen() {
   const knownMemberIds = new Set(members.map(m => m.userId));
   const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
 
-  const handleSubmit = async () => {
+  const handleSubmit = async ({ keepOpen = false }: { keepOpen?: boolean } = {}) => {
     const parsed = parseBankAmount(amount);
     if (parsed === null || parsed <= 0) {
       Alert.alert('Invalid amount', 'Enter an amount greater than zero with up to two decimal places.');
@@ -665,7 +766,7 @@ export default function BankScreen() {
         } else {
           await transferSavingsToBank({ data: transfer });
         }
-        setModalVisible(false);
+        finishEntry(keepOpen, { amount: parsed, direction: transferDirection === 'to_savings' ? 'out' : 'in' });
         await invalidateBalance();
       } catch (err: unknown) {
         Alert.alert('Could not create transfer', err instanceof Error ? err.message : 'Nothing was transferred.');
@@ -686,9 +787,11 @@ export default function BankScreen() {
       setSubmitting(true);
       try {
         await transferBankToBank({ data: { sourceAccountId: selectedAccountId, destinationAccountId: bankTransferDestinationId, amount: parsed, narration: description.trim(), date } });
-        setModalVisible(false);
+        finishEntry(keepOpen, { amount: parsed, direction: 'out' });
         await invalidateAccounts();
-        Alert.alert('Bank transfer recorded', 'Both account balances were updated.');
+        // The confirmation is worth an interruption once, but not after every
+        // line of a sitting — the running tally already says it landed.
+        if (!keepOpen) Alert.alert('Bank transfer recorded', 'Both account balances were updated.');
       } catch (err: unknown) {
         Alert.alert('Could not create transfer', err instanceof Error ? err.message : 'Nothing was transferred.');
       } finally {
@@ -852,8 +955,7 @@ export default function BankScreen() {
           },
         });
       }
-      setModalVisible(false);
-      setEditingTransactionId(null);
+      finishEntry(keepOpen, { amount: parsed, direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
     } catch (err: unknown) {
       const message =
@@ -918,6 +1020,14 @@ export default function BankScreen() {
   // delete it on its own — the same rule the per-row Delete already enforces.
   const canRemoveTx = (tx: Tx) => canManageAccount || canEditTransaction(tx);
 
+  // Reconciling compares Jamvi's balance with the statement's. A positive
+  // difference means Jamvi holds more than the bank does: money left the
+  // account with nothing recorded against it.
+  const parsedStatementBalance = parseBalanceFigure(statementBalance);
+  const reconcileDifference = parsedStatementBalance !== null && data
+    ? Math.round((data.balance - parsedStatementBalance) * 100) / 100
+    : null;
+
   const isDeposit = txType === 'deposit';
   const isWithdrawal = txType === 'disbursement';
   const isTransfer = txType === 'transfer';
@@ -928,13 +1038,17 @@ export default function BankScreen() {
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
   const isOutgoingTransaction = isWithdrawal || isBankCharge || isBankTransfer || (isTransfer && transferDirection === 'to_savings');
-  const projectedBalance = isOutgoingTransaction &&
-    data &&
+  // The balance the account will hold once this posting is saved, shown while
+  // the amount is still being typed. Incoming money is projected too: somebody
+  // recording a day works down to the closing balance on their statement, and
+  // a figure that only moves for withdrawals cannot be worked down to.
+  const projectedBalance = data &&
     parsedOutgoingAmount !== null &&
     parsedOutgoingAmount > 0
-    ? getProjectedBalanceAfterOutgoing(
+    ? getProjectedBalanceAfterPosting(
         data.balance,
         parsedOutgoingAmount,
+        isOutgoingTransaction ? 'out' : 'in',
         editingTransaction
           ? { amount: editingTransaction.amount, type: editingTransaction.type }
           : null,
@@ -1171,15 +1285,28 @@ export default function BankScreen() {
                   )}
                 </View>
                 {canManageAccount && (
-                  <TouchableOpacity
-                    style={styles.editOpeningBalanceBtn}
-                    onPress={openOpeningBalanceEditor}
-                    activeOpacity={0.8}
-                    testID="bank-edit-opening-balance"
-                  >
-                    <Feather name="edit-2" size={14} color="#d1fae5" />
-                    <Text style={styles.editOpeningBalanceText}>Edit starting balance</Text>
-                  </TouchableOpacity>
+                  <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                    <TouchableOpacity
+                      style={styles.editOpeningBalanceBtn}
+                      onPress={openOpeningBalanceEditor}
+                      activeOpacity={0.8}
+                      testID="bank-edit-opening-balance"
+                    >
+                      <Feather name="edit-2" size={14} color="#d1fae5" />
+                      <Text style={styles.editOpeningBalanceText}>Edit starting balance</Text>
+                    </TouchableOpacity>
+                    {hasBankAccounts && (
+                      <TouchableOpacity
+                        style={styles.editOpeningBalanceBtn}
+                        onPress={openReconcile}
+                        activeOpacity={0.8}
+                        testID="bank-reconcile-action"
+                      >
+                        <Feather name="check-square" size={14} color="#d1fae5" />
+                        <Text style={styles.editOpeningBalanceText}>Check against statement</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 )}
               </View>
 
@@ -1598,8 +1725,25 @@ export default function BankScreen() {
                           KES {formatKES(data.balance)}
                         </Text>
                       </View>
+                      {projectedBalance !== null ? (
+                        <View style={styles.transactionBalanceRow} testID="bank-projected-balance">
+                          <Text style={[styles.transactionBalanceLabel, { color: colors.mutedForeground }]}>
+                            After this posting
+                          </Text>
+                          <Text
+                            style={[
+                              styles.transactionBalanceValue,
+                              { color: projectedBalance < 0 ? '#f87171' : isOutgoingTransaction ? colors.foreground : '#4ade80' },
+                            ]}
+                          >
+                            KES {formatKES(projectedBalance)}
+                          </Text>
+                        </View>
+                      ) : null}
                       <Text style={[styles.transactionBalanceHelp, { color: colors.mutedForeground }]}>
-                        This is the balance before the transaction is saved.
+                        {projectedBalance !== null
+                          ? 'The balance moves as you type, so you can work down to the figure on your statement.'
+                          : 'This is the balance before the transaction is saved.'}
                       </Text>
                     </View>
                   )}
@@ -1727,7 +1871,7 @@ export default function BankScreen() {
                    ) : null}
                  </>
                ) : null}
-              {projectedBalance !== null && projectedBalance < 0 && (
+              {isOutgoingTransaction && projectedBalance !== null && projectedBalance < 0 && (
                 <View
                   style={styles.negativeBalanceWarning}
                   accessibilityRole="alert"
@@ -2406,6 +2550,28 @@ export default function BankScreen() {
                 </>
               )}
 
+              {/* A charge or a transfer has no account card to carry the
+                  projection, so the falling balance is shown here instead. */}
+              {projectedBalance !== null && !(isDeposit || isWithdrawal) ? (
+                <Text
+                  style={[styles.sittingNote, { color: colors.mutedForeground }]}
+                  testID="bank-projected-balance-compact"
+                >
+                  Balance after this posting: KES {formatKES(projectedBalance)}
+                </Text>
+              ) : null}
+
+              {sitting !== null ? (
+                <Text
+                  style={[styles.sittingNote, { color: colors.mutedForeground }]}
+                  testID="bank-sitting-tally"
+                >
+                  {sitting.count} {sitting.count === 1 ? 'posting' : 'postings'} recorded in this sitting
+                  {sitting.outflow > 0 ? ` · KES ${formatKES(sitting.outflow)} out` : ''}
+                  {sitting.inflow > 0 ? ` · KES ${formatKES(sitting.inflow)} in` : ''}
+                </Text>
+              ) : null}
+
               {/* Submit */}
               <TouchableOpacity
                 style={[
@@ -2413,7 +2579,7 @@ export default function BankScreen() {
                   isDeposit ? styles.submitDeposit : styles.submitDisburse,
                   submitting && { opacity: 0.6 },
                 ]}
-                onPress={handleSubmit}
+                onPress={() => handleSubmit()}
                 disabled={submitting}
                 activeOpacity={0.85}
                 testID="bank-submit-btn"
@@ -2426,6 +2592,132 @@ export default function BankScreen() {
                   </Text>
                 )}
               </TouchableOpacity>
+
+              {/* An edit is one posting by definition, so it gets no second
+                  button. Everything else is likely part of a day's run. */}
+              {editingTransactionId === null ? (
+                <TouchableOpacity
+                  style={[styles.saveAndAddBtn, { borderColor: colors.border }, submitting && { opacity: 0.6 }]}
+                  onPress={() => handleSubmit({ keepOpen: true })}
+                  disabled={submitting}
+                  activeOpacity={0.85}
+                  testID="bank-submit-and-add-another"
+                >
+                  <Feather name="plus" size={15} color={colors.foreground} />
+                  <Text style={[styles.saveAndAddText, { color: colors.foreground }]}>Save and add another</Text>
+                </TouchableOpacity>
+              ) : null}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Check against the statement */}
+      <Modal
+        visible={reconcileVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !reconciling && setReconcileVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => !reconciling && setReconcileVisible(false)}>
+          <View style={styles.modalOverlay} />
+        </TouchableWithoutFeedback>
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          pointerEvents="box-none"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 20 }]}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Check against your statement</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground, marginTop: 0 }]}>
+                Type the closing balance your bank shows for {selectedAccount?.name ?? 'this account'}. Jamvi will
+                tell you what it cannot account for.
+              </Text>
+              <TextInput
+                style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                placeholder="e.g. 9400"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
+                value={statementBalance}
+                onChangeText={setStatementBalance}
+                autoFocus
+                testID="bank-statement-balance-input"
+              />
+
+              <View style={[styles.transactionBalanceCard, { borderColor: colors.border, backgroundColor: colors.muted }]}>
+                <View style={styles.transactionBalanceRow}>
+                  <Text style={[styles.transactionBalanceLabel, { color: colors.mutedForeground }]}>Jamvi has</Text>
+                  <Text style={[styles.transactionBalanceValue, { color: colors.foreground }]}>
+                    KES {formatKES(data?.balance)}
+                  </Text>
+                </View>
+                {reconcileDifference !== null ? (
+                  <View style={styles.transactionBalanceRow}>
+                    <Text style={[styles.transactionBalanceLabel, { color: colors.mutedForeground }]}>Your statement has</Text>
+                    <Text style={[styles.transactionBalanceValue, { color: colors.foreground }]}>
+                      KES {formatKES(parsedStatementBalance)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {reconcileDifference === null ? null : reconcileDifference === 0 ? (
+                <Text style={[styles.reconcileMessage, { color: '#4ade80' }]} testID="bank-reconcile-matched">
+                  They match. Every shilling that left this account is recorded.
+                </Text>
+              ) : reconcileDifference > 0 ? (
+                <>
+                  <Text style={[styles.reconcileMessage, { color: colors.foreground }]} testID="bank-reconcile-short">
+                    KES {formatKES(reconcileDifference)} left the account with nothing recorded against it. On a bank
+                    statement that is usually a fee — but Jamvi will not decide that for you.
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
+                    placeholder="What the statement calls it (default: Bank charges)"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={reconcileNarration}
+                    onChangeText={setReconcileNarration}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                    testID="bank-reconcile-narration"
+                  />
+                  <TouchableOpacity
+                    style={[styles.submitBtn, styles.submitDisburse, reconciling && { opacity: 0.6 }]}
+                    onPress={() => recordDifferenceAsCharge(reconcileDifference)}
+                    disabled={reconciling}
+                    activeOpacity={0.85}
+                    testID="bank-reconcile-record-charge"
+                  >
+                    {reconciling ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={[styles.submitText, { color: '#fff' }]}>
+                        Record KES {formatKES(reconcileDifference)} as a bank charge
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  <Text style={[styles.reconcileHelp, { color: colors.mutedForeground }]}>
+                    A charge is kept out of household spending, so this will not touch any budget.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.reconcileMessage, { color: colors.foreground }]} testID="bank-reconcile-over">
+                    Your statement holds KES {formatKES(Math.abs(reconcileDifference))} more than Jamvi knows about, so
+                    this is money that came in without being recorded. A charge would be the wrong answer — record the
+                    deposit instead, so it can be attributed to whoever paid it.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.submitBtn, styles.submitDeposit]}
+                    onPress={() => { setReconcileVisible(false); openModal('deposit'); }}
+                    activeOpacity={0.85}
+                    testID="bank-reconcile-record-deposit"
+                  >
+                    <Text style={styles.submitText}>Record a deposit</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -2923,6 +3215,39 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
+  },
+  saveAndAddBtn: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 13,
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  saveAndAddText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  sittingNote: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  reconcileMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 14,
+    marginBottom: 10,
+  },
+  reconcileHelp: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 10,
+    textAlign: 'center',
   },
   submitDeposit: {
     backgroundColor: '#4ade80',
