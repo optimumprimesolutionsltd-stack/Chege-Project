@@ -468,15 +468,27 @@ export async function loadContributionGrid(groupId: number, monthsBack: number):
       .select({
         contributorId: jointAccountDepositSplitsTable.contributorId,
         amount: jointAccountDepositSplitsTable.amount,
-        month: sql<number>`EXTRACT(MONTH FROM ${jointAccountTxTable.date})`,
-        year: sql<number>`EXTRACT(YEAR FROM ${jointAccountTxTable.date})`,
+        // The period this covers, which is the month it arrived unless somebody
+        // said otherwise. April's dues paid in September belong to April here,
+        // while the bank balance still moves in September — obligations follow
+        // the applied period, money follows its real date.
+        month: sql<number>`COALESCE(${jointAccountTxTable.appliesToMonth}, EXTRACT(MONTH FROM ${jointAccountTxTable.date}))`,
+        year: sql<number>`COALESCE(${jointAccountTxTable.appliesToYear}, EXTRACT(YEAR FROM ${jointAccountTxTable.date}))`,
       })
       .from(jointAccountDepositSplitsTable)
       .innerJoin(jointAccountTxTable, eq(jointAccountTxTable.id, jointAccountDepositSplitsTable.transactionId))
+      // Filtered on the period it covers, not the day it arrived — the same
+      // expression the rows are bucketed by. Filtering on the date would fetch a
+      // September deposit belonging to April and bucket it outside the window,
+      // and would miss an older one that belongs inside it.
       .where(sql`${jointAccountDepositSplitsTable.groupId} = ${groupId}
         AND ${jointAccountTxTable.type} = 'deposit'
         AND ${jointAccountTxTable.bankTransferId} IS NULL
-        AND ${jointAccountTxTable.date} >= make_date(${earliest.year}, ${earliest.month}, 1)`),
+        AND make_date(
+              COALESCE(${jointAccountTxTable.appliesToYear}, EXTRACT(YEAR FROM ${jointAccountTxTable.date}))::int,
+              COALESCE(${jointAccountTxTable.appliesToMonth}, EXTRACT(MONTH FROM ${jointAccountTxTable.date}))::int,
+              1
+            ) >= make_date(${earliest.year}, ${earliest.month}, 1)`),
   ]);
 
   const entries: GridEntry[] = [

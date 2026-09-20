@@ -313,6 +313,13 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   incomeSourceId: integer("income_source_id"), // which income source funded this deposit
   expenseCategory: text("expense_category"), // optional: which expense category this disbursement covers
   bankCharge: boolean("bank_charge").notNull().default(false), // true for a bank fee/charge, excluded from household spending reports
+  /** The month this deposit was *for*, when that differs from the day it
+   *  arrived — April's dues paid in September, or June's paid in April. Null
+   *  means the month it arrived in, which is every deposit unless somebody
+   *  says otherwise. The date above stays authoritative for the bank balance:
+   *  money moves when it moves, and only obligations follow this. */
+  appliesToMonth: integer("applies_to_month"),
+  appliesToYear: integer("applies_to_year"),
   savingsGoalId: integer("savings_goal_id"), // set only for a linked bank <-> savings transfer
   accountId: integer("account_id").references(() => bankAccountsTable.id, { onDelete: "restrict" }),
   transferDirection: text("transfer_direction"), // 'to_savings' | 'from_savings' for linked transfers

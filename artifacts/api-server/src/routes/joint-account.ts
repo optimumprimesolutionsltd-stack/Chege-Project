@@ -76,6 +76,10 @@ const DepositInput = z.object({
   madeById: z.string().nullable().optional(),
   incomeSourceId: z.number().int().positive().optional(),
   sourceKind: z.enum(["income_source", "other"]).optional(),
+  // The month this deposit was for, when that is not the month it arrived.
+  // Checked as a pair in the route so the message can say what is missing.
+  appliesToMonth: z.number().int().min(1).max(12).nullable().optional(),
+  appliesToYear: z.number().int().min(2000).max(2200).nullable().optional(),
   // A portion belongs to either an account holder or a contributor recorded
   // by name. Exactly one of the two, checked in the route so the message can
   // say which is wrong rather than dumping a schema error.
@@ -491,6 +495,14 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Add a narration for an Other source." });
     return;
   }
+  // The month this was for, when that is not the month it arrived. Both or
+  // neither: a month without a year names no period at all.
+  const appliesToMonth = parsed.data.appliesToMonth ?? null;
+  const appliesToYear = parsed.data.appliesToYear ?? null;
+  if ((appliesToMonth === null) !== (appliesToYear === null)) {
+    res.status(400).json({ error: "Give both a month and a year for the period this covers, or neither." });
+    return;
+  }
   if (contributorSplits && parsed.data.madeById !== undefined) {
     res.status(400).json({ error: "Provide either madeById or contributorSplits, not both." });
     return;
@@ -545,6 +557,10 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
         groupId,
         accountId,
         type: "deposit", amount, description, date,
+        // The date stays authoritative for the balance: money moves when it
+        // moves. Only the obligation follows the period below.
+        appliesToMonth,
+        appliesToYear,
         madeById: contributorSplits ? null : madeById,
         incomeSourceId: contributorSplits ? null : incomeSourceId ?? null,
       })

@@ -985,6 +985,8 @@ export const GetJointAccountResponse = zod.object({
   "totalDeposits": zod.number(),
   "totalDisbursements": zod.number(),
   "transactions": zod.array(zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -1048,6 +1050,11 @@ export const UpdateJointAccountOpeningBalanceResponse = zod.object({
 export const createDepositBodyAmountMin = 0.01;
 export const createDepositBodyAmountMultipleOf = 0.01;
 
+export const createDepositBodyAppliesToMonthMax = 12;
+
+export const createDepositBodyAppliesToYearMin = 2000;
+export const createDepositBodyAppliesToYearMax = 2200;
+
 
 
 export const createDepositBodyContributorSplitsItemAmountMin = 0.01;
@@ -1061,6 +1068,8 @@ export const CreateDepositBody = zod.object({
   "amount": zod.number().min(createDepositBodyAmountMin).multipleOf(createDepositBodyAmountMultipleOf).describe('Positive KES amount with up to two decimal places'),
   "description": zod.string(),
   "date": zod.coerce.date(),
+  "appliesToMonth": zod.number().min(1).max(createDepositBodyAppliesToMonthMax).nullish().describe('The month this deposit was for, when that differs from the month it arrived — April\'s dues paid in September, or June\'s paid in April. Omit for the month it arrived in. Must be given with appliesToYear.'),
+  "appliesToYear": zod.number().min(createDepositBodyAppliesToYearMin).max(createDepositBodyAppliesToYearMax).nullish(),
   "madeById": zod.string().nullish().describe('ID of the household member who made this deposit. Omit or pass null to attribute to the Joint bank (shared). Must be a valid household member ID when non-null.\n'),
   "incomeSourceId": zod.number().min(1).optional().describe('Optional income-source preset that funded this deposit. Used only with a single named depositor.\n'),
   "sourceKind": zod.enum(['income_source', 'other']).optional().describe('Choose other only when the required description is a narration.'),
@@ -1081,6 +1090,8 @@ export const createDepositResponseContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 export const CreateDepositResponse = zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -1137,6 +1148,8 @@ export const createDisbursementResponseContributorSplitsItemAmountMultipleOf = 0
 
 
 export const CreateDisbursementResponse = zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -1192,6 +1205,8 @@ export const createBankChargeResponseContributorSplitsItemAmountMultipleOf = 0.0
 
 
 export const CreateBankChargeResponse = zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -1249,6 +1264,8 @@ export const transferBankToSavingsResponseContributorSplitsItemAmountMultipleOf 
 
 
 export const TransferBankToSavingsResponse = zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -1306,6 +1323,8 @@ export const transferSavingsToBankResponseContributorSplitsItemAmountMultipleOf 
 
 
 export const TransferSavingsToBankResponse = zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -1370,6 +1389,8 @@ export const transferBankToBankResponseIncomingContributorSplitsItemAmountMultip
 export const TransferBankToBankResponse = zod.object({
   "transferId": zod.string(),
   "outgoing": zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -1398,6 +1419,8 @@ export const TransferBankToBankResponse = zod.object({
   "createdAt": zod.string()
 }),
   "incoming": zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),
@@ -1479,6 +1502,8 @@ export const updateJointAccountTransactionResponseContributorSplitsItemAmountMul
 
 
 export const UpdateJointAccountTransactionResponse = zod.object({
+  "appliesToMonth": zod.number().nullish().describe('The month a deposit was for, when that differs from the month it arrived. Null means the month it arrived in.'),
+  "appliesToYear": zod.number().nullish(),
   "id": zod.number(),
   "accountId": zod.number().nullish(),
   "type": zod.string().describe('deposit or disbursement'),

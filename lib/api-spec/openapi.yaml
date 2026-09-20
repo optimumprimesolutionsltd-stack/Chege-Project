@@ -3374,6 +3374,13 @@ components:
     JointAccountTransaction:
       type: object
       properties:
+        appliesToMonth:
+          type: ["number", "null"]
+          description: >-
+            The month a deposit was for, when that differs from the month it
+            arrived. Null means the month it arrived in.
+        appliesToYear:
+          type: ["number", "null"]
         id:
           type: number
         accountId:
@@ -3528,6 +3535,18 @@ components:
         date:
           type: string
           format: date
+        appliesToMonth:
+          type: ["number", "null"]
+          minimum: 1
+          maximum: 12
+          description: >-
+            The month this deposit was for, when that differs from the month it
+            arrived — April's dues paid in September, or June's paid in April.
+            Omit for the month it arrived in. Must be given with appliesToYear.
+        appliesToYear:
+          type: ["number", "null"]
+          minimum: 2000
+          maximum: 2200
         madeById:
           type: ["string", "null"]
           description: >
