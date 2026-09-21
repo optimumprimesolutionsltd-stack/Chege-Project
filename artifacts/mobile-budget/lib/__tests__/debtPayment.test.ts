@@ -38,9 +38,12 @@ describe('paying a debt from the bank', () => {
     expect(bank).toContain('This clears it.');
   });
 
-  it('rounds to whole shillings, as the column holds', () => {
-    // A debt quoted to the cent is not how anybody is told what they owe.
-    expect(bank).toContain('const paid = Math.round(amount);');
+  it('keeps the cents, as the column now holds', () => {
+    // It used to round to whole shillings, so paying 1,250.75 off a loan moved
+    // the balance by 1,251 and the debt drifted every time it was touched.
+    // 0041 widened the column; toMoney rounds to the cent rather than past it.
+    expect(bank).toContain('const paid = toMoney(amount);');
+    expect(bank).not.toContain('const paid = Math.round(amount);');
   });
 });
 
@@ -77,7 +80,7 @@ describe("making a creditor where it is paid", () => {
   });
 
   it("sends the balance and the rate with the category", () => {
-    expect(bank).toContain("debtBalance: Math.round(owed ?? 0),");
+    expect(bank).toContain("debtBalance: toMoney(owed ?? 0),");
     // Basis points, so the rate is an exact integer rather than a float that
     // drifts on repeated writes.
     expect(bank).toContain("debtInterestRateBps: ratePercent ? Math.round(Number(ratePercent) * 100) : null,");

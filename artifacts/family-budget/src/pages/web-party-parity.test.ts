@@ -78,7 +78,7 @@ describe("somebody paying you back", () => {
   it("can record who owes you, which exists nowhere else", () => {
     expect(bank).toContain('data-testid="add-debtor-form"');
     expect(bank).toContain("void createParty({ owing: true })");
-    expect(bank).toContain('...(owing ? { owedToUs: Math.round(owed) } : { owedByUs: Math.round(owed) }),');
+    expect(bank).toContain('...(owing ? { owedToUs: toMoney(owed) } : { owedByUs: toMoney(owed) }),');
   });
 });
 

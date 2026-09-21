@@ -244,8 +244,8 @@ const newContributor = z.object({
   // An institution is a party money passes to, never a contributor. KCB will
   // not be giving to the chama.
   kind: z.enum(["person", "institution"]).optional(),
-  owedToUs: z.number().int().min(0).nullable().optional(),
-  owedByUs: z.number().int().min(0).nullable().optional(),
+  owedToUs: z.number().finite().min(0).multipleOf(0.01).nullable().optional(),
+  owedByUs: z.number().finite().min(0).multipleOf(0.01).nullable().optional(),
 });
 
 /** Add somebody by name. No account, no invitation, no email - the treasurer
@@ -324,8 +324,8 @@ const contributorUpdate = z.object({
   name: z.string().max(CONTRIBUTOR_NAME_MAX * 2).optional(),
   kind: z.enum(["person", "institution"]).optional(),
   // Explicit null clears the tracking; zero is a cleared debt and stays.
-  owedToUs: z.number().int().min(0).nullable().optional(),
-  owedByUs: z.number().int().min(0).nullable().optional(),
+  owedToUs: z.number().finite().min(0).multipleOf(0.01).nullable().optional(),
+  owedByUs: z.number().finite().min(0).multipleOf(0.01).nullable().optional(),
   // Explicit null is meaningful: it says this person is not expected to give a
   // set amount, which is different from not saying.
   monthlyTarget: z.number().int().min(0).nullable().optional(),

@@ -65,7 +65,7 @@ import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
 import { getProjectedBalanceAfterPosting } from '@/lib/bankBalance';
 import { evaluateAmountExpression, isAmountExpression } from '@/lib/amountExpression';
-import { parseBankAmount, parseBalanceFigure, readAmount } from '@/lib/bankAmount';
+import { parseBankAmount, parseBalanceFigure, readAmount, toMoney } from '@/lib/bankAmount';
 import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
@@ -868,7 +868,7 @@ export default function BankScreen() {
 
     // Whole shillings: the column is an integer, and a debt quoted to the
     // cent is not how anybody is told what they owe.
-    const paid = Math.round(amount);
+    const paid = toMoney(amount);
     const remaining = Math.max(0, owed - paid);
     Alert.alert(
       `Take this off ${debt.name}?`,
@@ -910,7 +910,7 @@ export default function BankScreen() {
       .find((row) => row.name.trim().toLocaleLowerCase() === name && typeof row.debtBalance === 'number');
     const owed = debt?.debtBalance;
     if (!debt || typeof owed !== 'number' || amount <= 0) return;
-    const borrowed = Math.round(amount);
+    const borrowed = toMoney(amount);
     Alert.alert(
       `Add this to ${debt.name}?`,
       owed === 0
@@ -943,7 +943,7 @@ export default function BankScreen() {
     // Somebody recorded as owing you, or not recorded on this side at all,
     // starts from nothing owed to them rather than from nowhere.
     const owed = typeof party.owedByUs === 'number' ? party.owedByUs : 0;
-    const borrowed = Math.round(amount);
+    const borrowed = toMoney(amount);
     Alert.alert(
       `Add this to what you owe ${party.name}?`,
       owed === 0
@@ -981,7 +981,7 @@ export default function BankScreen() {
   const offerPartySettlement = (party: { id: number; name: string; owedByUs?: number | null }, amount: number) => {
     const owed = party.owedByUs;
     if (typeof owed !== 'number' || owed <= 0 || amount <= 0) return;
-    const paid = Math.round(amount);
+    const paid = toMoney(amount);
     const remaining = Math.max(0, owed - paid);
     Alert.alert(
       `Take this off what you owe ${party.name}?`,
@@ -1040,7 +1040,7 @@ export default function BankScreen() {
           // somebody you owe and somebody who owes you.
           // Which way it stands between you is the only difference. A lender
           // is somebody you owe, so it is the same column as paying one.
-          ...(owing ? { owedToUs: Math.round(owed) } : { owedByUs: Math.round(owed) }),
+          ...(owing ? { owedToUs: toMoney(owed) } : { owedByUs: toMoney(owed) }),
         }),
       });
       // Awaited: the picker and the settlement prompt both read this list, and
@@ -1074,7 +1074,7 @@ export default function BankScreen() {
   const offerRepaymentSettlement = (party: { id: number; name: string; owedToUs?: number | null }, amount: number) => {
     const owed = party.owedToUs;
     if (typeof owed !== 'number' || owed <= 0 || amount <= 0) return;
-    const paid = Math.round(amount);
+    const paid = toMoney(amount);
     const remaining = Math.max(0, owed - paid);
     Alert.alert(
       `Take this off what ${party.name} owes you?`,
@@ -1165,7 +1165,7 @@ export default function BankScreen() {
           // that drifts on repeated writes.
           ...(newCategoryIsDebt
             ? {
-                debtBalance: Math.round(owed ?? 0),
+                debtBalance: toMoney(owed ?? 0),
                 debtInterestRateBps: ratePercent ? Math.round(Number(ratePercent) * 100) : null,
               }
             : {}),

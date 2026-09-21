@@ -92,6 +92,15 @@ function readAmount(value: string): number | null {
   return parseBankAmount(value) ?? evaluateAmountExpression(value);
 }
 
+/**
+ * A figure fit to be stored as money. Balances take two decimals now, and
+ * arithmetic on them does not: 0.1 + 0.2 is 0.30000000000000004, which the
+ * API refuses and nobody can read.
+ */
+function toMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function toCents(value: number): number {
   return Math.round(value * 100);
 }
@@ -997,7 +1006,7 @@ export default function Bank() {
           name,
           kind: newPartyIsInstitution ? "institution" : "person",
           // Which way it stands between you is the only difference.
-          ...(owing ? { owedToUs: Math.round(owed) } : { owedByUs: Math.round(owed) }),
+          ...(owing ? { owedToUs: toMoney(owed) } : { owedByUs: toMoney(owed) }),
         }),
       });
       const created = (await response.json().catch(() => ({}))) as { id?: number; error?: string };
@@ -1027,7 +1036,7 @@ export default function Bank() {
   const offerBalanceChange = (party: Party, amount: number, direction: "owedByUs" | "owedToUs") => {
     const owed = direction === "owedByUs" ? party.owedByUs : party.owedToUs;
     if (typeof owed !== "number" || owed <= 0 || amount <= 0) return;
-    const paid = Math.round(amount);
+    const paid = toMoney(amount);
     const remaining = Math.max(0, owed - paid);
     const question = direction === "owedByUs"
       ? `Take ${formatKes(paid)} off what you owe ${party.name}? That leaves ${formatKes(remaining)}.`
@@ -1061,7 +1070,7 @@ export default function Bank() {
       .find((row) => row.name.trim().toLocaleLowerCase() === name && typeof row.debtBalance === "number");
     const owed = debt?.debtBalance;
     if (!debt || typeof owed !== "number" || amount <= 0) return;
-    const borrowed = Math.round(amount);
+    const borrowed = toMoney(amount);
     if (!window.confirm(`Add ${formatKes(borrowed)} to ${debt.name}? That makes it ${formatKes(owed + borrowed)}.`)) return;
     void (async () => {
       try {
@@ -1083,7 +1092,7 @@ export default function Bank() {
   const offerBorrowedFromParty = (party: Party, amount: number) => {
     if (amount <= 0) return;
     const owed = typeof party.owedByUs === "number" ? party.owedByUs : 0;
-    const borrowed = Math.round(amount);
+    const borrowed = toMoney(amount);
     if (!window.confirm(`Add ${formatKes(borrowed)} to what you owe ${party.name}? That makes it ${formatKes(owed + borrowed)}.`)) return;
     void (async () => {
       try {

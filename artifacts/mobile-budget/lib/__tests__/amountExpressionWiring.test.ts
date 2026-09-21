@@ -14,7 +14,7 @@ describe('the amount fields do arithmetic', () => {
     // difference nobody could explain afterwards.
     expect(amounts).toContain('export function readAmount(value: string): number | null {');
     expect(amounts).toContain('return parseBankAmount(value) ?? evaluateAmountExpression(value);');
-    expect(bank).toContain("import { parseBankAmount, parseBalanceFigure, readAmount } from '@/lib/bankAmount';");
+    expect(bank).toContain("import { parseBankAmount, parseBalanceFigure, readAmount, toMoney } from '@/lib/bankAmount';");
     expect(bank).toContain("const parsed = amount.trim() === '' && editingTransactionId !== null ? 0 : readAmount(amount);");
   });
 

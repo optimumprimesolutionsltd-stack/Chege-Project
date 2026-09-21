@@ -125,7 +125,7 @@ describe("recording that somebody owes you", () => {
   it("writes the balance the other way round", () => {
     // One creator, two directions: which way it stands between you is the only
     // difference between somebody you owe and somebody who owes you.
-    expect(bank).toContain("...(owing ? { owedToUs: Math.round(owed) } : { owedByUs: Math.round(owed) }),");
+    expect(bank).toContain("...(owing ? { owedToUs: toMoney(owed) } : { owedByUs: toMoney(owed) }),");
     expect(bank).toContain("onPress={() => handleCreateParty({ owing: true })}");
   });
 
