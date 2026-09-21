@@ -11,10 +11,18 @@ import { formatMonthKey, summariseDebts, type DebtWithPayment } from '@/lib/debt
 type CategoryRow = DebtWithPayment & { budgetAmount?: number | null };
 
 /**
- * Asked once. A prompt that cannot be sent away becomes furniture, and
- * furniture is what somebody who owes nothing would be given for ever.
+ * Put away, not answered for ever.
+ *
+ * A prompt that cannot be sent away becomes furniture. But one sent away for
+ * good by a mis-tap is worse: the Debt tab is not there to be found, so
+ * nothing on any screen would ever mention debt again, and there would be no
+ * setting to undo it either. So it snoozes, the way the home tip does, and it
+ * offers an undo on the spot for the tap somebody notices immediately.
  */
-const PROMPT_DISMISSED_KEY = 'home_debt_prompt_dismissed';
+const SNOOZE_KEY = 'jamvi:debt-prompt-snooze-until';
+const SNOOZE_DAYS = 90;
+/** What the first version of this wrote. Read so nobody stays stuck on it. */
+const LEGACY_DISMISSED_KEY = 'home_debt_prompt_dismissed';
 
 function kes(value: number): string {
   return value.toLocaleString('en-KE', { maximumFractionDigits: 0 });
@@ -41,18 +49,47 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
     staleTime: 30_000,
   });
 
-  // null until read: showing the invitation and snatching it back a frame
+  // undefined until read: showing the invitation and snatching it back a frame
   // later is worse than showing it slightly late.
-  const [promptDismissed, setPromptDismissed] = useState<boolean | null>(null);
+  const [snoozedUntil, setSnoozedUntil] = useState<number | undefined>(undefined);
+  // Hidden by a tap just now, rather than by something stored. Held apart so
+  // the undo can be offered without the storage write having to be waited on.
+  const [justHidden, setJustHidden] = useState(false);
+
   useEffect(() => {
-    AsyncStorage.getItem(PROMPT_DISMISSED_KEY)
-      .then((value) => setPromptDismissed(value === 'true'))
-      .catch(() => setPromptDismissed(false));
+    let active = true;
+    Promise.all([AsyncStorage.getItem(SNOOZE_KEY), AsyncStorage.getItem(LEGACY_DISMISSED_KEY)])
+      .then(([raw, legacy]) => {
+        if (!active) return;
+        const until = raw ? Number(raw) : 0;
+        if (Number.isFinite(until) && until > 0) {
+          setSnoozedUntil(until);
+          return;
+        }
+        // The version that shipped first put it away for good. Treat that as a
+        // snooze starting now, so those phones get it back rather than never.
+        setSnoozedUntil(legacy === 'true' ? Date.now() + SNOOZE_DAYS * 86_400_000 : 0);
+      })
+      .catch(() => {
+        // Storage that will not answer must not hide the prompt for ever.
+        if (active) setSnoozedUntil(0);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const dismissPrompt = useCallback(() => {
-    setPromptDismissed(true);
-    AsyncStorage.setItem(PROMPT_DISMISSED_KEY, 'true').catch(() => {});
+  const snoozePrompt = useCallback(() => {
+    setJustHidden(true);
+    const until = Date.now() + SNOOZE_DAYS * 86_400_000;
+    setSnoozedUntil(until);
+    AsyncStorage.setItem(SNOOZE_KEY, String(until)).catch(() => {});
+  }, []);
+
+  const undoSnooze = useCallback(() => {
+    setJustHidden(false);
+    setSnoozedUntil(0);
+    AsyncStorage.multiRemove([SNOOZE_KEY, LEGACY_DISMISSED_KEY]).catch(() => {});
   }, []);
 
   const debts: DebtWithPayment[] = categories
@@ -69,9 +106,30 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
   if (isLoading) return null;
 
   if (debts.length === 0) {
+    // Put away a moment ago. Offer it back rather than simply vanishing: this
+    // is the only place debt is mentioned, so a mis-tap here is expensive.
+    if (justHidden) {
+      return (
+        <Pressable
+          testID="home-track-debt-undo"
+          accessibilityRole="button"
+          accessibilityLabel="Bring the debt prompt back"
+          onPress={undoSnooze}
+          style={({ pressed }) => [styles.undoRow, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Text style={[styles.undoText, { color: colors.mutedForeground }]}>Debt prompt hidden.</Text>
+          <Text style={[styles.undoAction, { color: colors.primary }]}>Undo</Text>
+        </Pressable>
+      );
+    }
+
     // Not on an empty budget. Somebody who has added nothing at all is already
     // being told to make a budget, and two next steps at once is neither.
-    const worthAsking = canTrackDebt && categories.length > 0 && promptDismissed === false;
+    const worthAsking =
+      canTrackDebt &&
+      categories.length > 0 &&
+      snoozedUntil !== undefined &&
+      Date.now() >= snoozedUntil;
     if (!worthAsking) return null;
 
     return (
@@ -107,7 +165,7 @@ export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boole
             testID="home-track-debt-dismiss"
             accessibilityRole="button"
             accessibilityLabel="I have no debt to track"
-            onPress={dismissPrompt}
+            onPress={snoozePrompt}
             style={({ pressed }) => [styles.promptDismiss, { opacity: pressed ? 0.6 : 1 }]}
           >
             <Text style={[styles.promptDismissText, { color: colors.mutedForeground }]}>No debt</Text>
@@ -191,4 +249,7 @@ const styles = StyleSheet.create({
   promptButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   promptDismiss: { paddingVertical: 10, paddingHorizontal: 8 },
   promptDismissText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  undoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingVertical: 6 },
+  undoText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  undoAction: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
 });

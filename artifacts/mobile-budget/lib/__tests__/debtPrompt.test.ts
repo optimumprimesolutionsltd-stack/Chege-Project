@@ -26,18 +26,33 @@ describe('offering to track a first debt', () => {
   });
 });
 
-describe('it does not become furniture', () => {
-  it('can be sent away for good', () => {
+describe('it can be put away, and got back', () => {
+  it('snoozes rather than answering for ever', () => {
+    // Sent away for good, a mis-tap would silence the only mention of debt
+    // anywhere in the app, with no setting to undo it.
     expect(card).toContain('testID="home-track-debt-dismiss"');
-    expect(card).toContain("const PROMPT_DISMISSED_KEY = 'home_debt_prompt_dismissed';");
-    expect(card).toContain("AsyncStorage.setItem(PROMPT_DISMISSED_KEY, 'true')");
+    expect(card).toContain("const SNOOZE_KEY = 'jamvi:debt-prompt-snooze-until';");
+    expect(card).toContain('const SNOOZE_DAYS = 90;');
+    expect(card).toContain('AsyncStorage.setItem(SNOOZE_KEY, String(until))');
   });
 
-  it('waits to know whether it was dismissed before showing', () => {
-    // Undismissed and unread are different. Treating unread as undismissed
-    // flashes the card up and takes it away again on every cold start.
-    expect(card).toContain('useState<boolean | null>(null)');
-    expect(card).toContain('promptDismissed === false');
+  it('offers the tap straight back', () => {
+    // The mis-tap somebody notices at once should not cost them 90 days.
+    expect(card).toContain('testID="home-track-debt-undo"');
+    expect(card).toContain('AsyncStorage.multiRemove([SNOOZE_KEY, LEGACY_DISMISSED_KEY])');
+  });
+
+  it('frees the phones the first version put away for good', () => {
+    expect(card).toContain("const LEGACY_DISMISSED_KEY = 'home_debt_prompt_dismissed';");
+    expect(card).toContain("legacy === 'true' ? Date.now() + SNOOZE_DAYS * 86_400_000 : 0");
+  });
+
+  it('waits to know whether it is snoozed before showing', () => {
+    // Unsnoozed and unread are different. Treating unread as unsnoozed flashes
+    // the card up and takes it away again on every cold start.
+    expect(card).toContain('useState<number | undefined>(undefined)');
+    expect(card).toContain('snoozedUntil !== undefined');
+    expect(card).toContain('Date.now() >= snoozedUntil');
   });
 
   it('stays quiet on a budget with nothing in it', () => {
@@ -51,7 +66,7 @@ describe('it does not become furniture', () => {
   });
 
   it('survives storage that refuses to answer', () => {
-    // A read that throws must not leave the card stuck at null for ever.
-    expect(card).toContain('.catch(() => setPromptDismissed(false));');
+    // A read that throws must not hide the prompt for ever.
+    expect(card).toContain('if (active) setSnoozedUntil(0);');
   });
 });
