@@ -749,7 +749,44 @@ export default function BankScreen() {
       );
       return;
     }
-    if (txType === 'disbursement' && !expenseCategory.trim()) {
+    // "Where is this money going? → Savings" built an ordinary disbursement
+    // whose description happened to mention the goal. The goal was never
+    // credited, and the posting counted as spending against a category it had
+    // to borrow. It is the same movement the Transfer action makes, so it now
+    // makes it — money into savings is moved, not spent.
+    if (txType === 'disbursement' && withdrawDest === 'savings') {
+      if (!selectedGoal) {
+        Alert.alert('Select a goal', 'Please choose which savings goal this is for.');
+        return;
+      }
+      if (!Number.isInteger(parsed)) {
+        Alert.alert('Use whole KES for savings', 'Savings-goal transfers currently use whole shillings.');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await transferBankToSavings({
+          data: {
+            amount: parsed,
+            goalId: selectedGoal.id,
+            narration: description.trim() || `Savings – ${selectedGoal.name}`,
+            date,
+            madeById: isSharedWorkspace ? null : user?.id,
+            accountId: selectedAccountId ?? undefined,
+          },
+        });
+        finishEntry(keepOpen, { amount: parsed, direction: 'out' });
+        await invalidateBalance();
+      } catch (err: unknown) {
+        if (!handleLapsedError(err)) {
+          Alert.alert('Could not move this to savings', err instanceof Error ? err.message : 'Nothing was moved.');
+        }
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+    if (txType === 'disbursement' && withdrawDest !== 'savings' && !expenseCategory.trim()) {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
       return;
     }
@@ -2417,8 +2454,13 @@ export default function BankScreen() {
                       );
                     })}
 
-                    {/* Savings chip */}
+                    {/* Savings chip. Offered only on a new withdrawal: a
+                        savings transfer is a different kind of record, and
+                        turning a saved withdrawal into one would mean deleting
+                        and rewriting it behind the person's back. An existing
+                        savings transfer opens in the Transfer sheet already. */}
                     {(() => {
+                      if (editingTransactionId !== null) return null;
                       const selected = withdrawDest === 'savings';
                       return (
                         <TouchableOpacity
@@ -2538,7 +2580,7 @@ export default function BankScreen() {
               )}
 
               {/* Expense category (disbursements only) */}
-              {isWithdrawal && (
+              {isWithdrawal && withdrawDest !== 'savings' && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>

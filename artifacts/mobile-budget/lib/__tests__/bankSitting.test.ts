@@ -24,7 +24,9 @@ describe('a sitting records a whole day', () => {
     expect(bank).toContain("const finishEntry = (keepOpen: boolean, recorded: { amount: number; direction: 'in' | 'out' }) => {");
     const handler = bank.slice(bank.indexOf('const handleSubmit = async ('), bank.indexOf('const transactions: Tx[] ='));
     expect(handler).not.toContain('setModalVisible(false)');
-    expect((handler.match(/finishEntry\(keepOpen/g) ?? []).length).toBe(3);
+    // Savings transfer, bank-to-bank, the savings destination of a withdrawal,
+    // and the shared deposit/withdrawal/charge path.
+    expect((handler.match(/finishEntry\(keepOpen/g) ?? []).length).toBe(4);
   });
 
   it('keeps what a sitting has in common and clears what it does not', () => {

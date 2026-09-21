@@ -1,0 +1,52 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+
+// "Where is this money going? → Savings" built an ordinary disbursement whose
+// description happened to mention the goal. The goal was never credited, the
+// posting counted as spending, and it had to borrow a category to do it — so
+// money set aside read exactly like money consumed.
+describe('a withdrawal into savings is a transfer', () => {
+  it('credits the goal instead of only naming it', () => {
+    const handler = bank.slice(bank.indexOf('const handleSubmit = async ('), bank.indexOf('const transactions: Tx[] ='));
+    expect(handler).toContain("if (txType === 'disbursement' && withdrawDest === 'savings') {");
+    expect(handler).toContain('await transferBankToSavings({');
+  });
+
+  it('classifies it as moved, which follows from the goal being set', () => {
+    // The stats row splits on savingsGoalId, so crediting the goal is what
+    // moves it out of Spent.
+    expect(bank).toContain('tx.bankTransferId != null || tx.savingsGoalId != null');
+  });
+
+  it('stops demanding a spending category for it', () => {
+    // Money set aside belongs to no category, and the old flow made it borrow
+    // one — which is what put it in a budget it had nothing to do with.
+    expect(bank).toContain("if (txType === 'disbursement' && withdrawDest !== 'savings' && !expenseCategory.trim()) {");
+    expect(bank).toContain("{isWithdrawal && withdrawDest !== 'savings' && (");
+  });
+
+  it('keeps the whole-shilling rule savings transfers already have', () => {
+    const handler = bank.slice(bank.indexOf("if (txType === 'disbursement' && withdrawDest === 'savings') {"));
+    expect(handler.slice(0, 600)).toContain('if (!Number.isInteger(parsed)) {');
+  });
+
+  it('still insists on a goal', () => {
+    const handler = bank.slice(bank.indexOf("if (txType === 'disbursement' && withdrawDest === 'savings') {"));
+    expect(handler.slice(0, 400)).toContain('if (!selectedGoal) {');
+  });
+
+  it('offers the savings destination only on a new withdrawal', () => {
+    // Turning a saved withdrawal into a transfer would mean deleting and
+    // rewriting it behind the person's back. An existing savings transfer
+    // already opens in the Transfer sheet.
+    expect(bank).toContain('if (editingTransactionId !== null) return null;');
+    expect(bank).toContain("const type: TxType = tx.savingsGoalId");
+  });
+
+  it('takes part in a sitting like every other posting', () => {
+    const handler = bank.slice(bank.indexOf('const handleSubmit = async ('), bank.indexOf('const transactions: Tx[] ='));
+    expect(handler).toContain("finishEntry(keepOpen, { amount: parsed, direction: 'out' });");
+  });
+});
