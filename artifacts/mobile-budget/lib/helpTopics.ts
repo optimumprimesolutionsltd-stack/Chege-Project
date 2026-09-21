@@ -362,6 +362,18 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['borrow', 'loan', 'fuliza', 'sacco', 'lent me', 'disbursed', 'advance'],
       },
       {
+        question: 'Record money you lent to somebody',
+        steps: [
+          'Banking tab, then Withdraw.',
+          'Under where the money is going, choose Lending it out, and pick them — or add them there.',
+          'No category is asked for: lending is not spending. You expect it back, so it counts against no budget.',
+          'It still leaves the account, and still shows in the ledger.',
+          'Once it saves, Jamvi offers to add it to what they owe you.',
+        ],
+        route: '/(tabs)/bank',
+        keywords: ['lend', 'lent', 'loan out', 'gave', 'advance', 'helped'],
+      },
+      {
         question: 'Take money back from somebody who owed you',
         steps: [
           'Banking tab, then Deposit.',

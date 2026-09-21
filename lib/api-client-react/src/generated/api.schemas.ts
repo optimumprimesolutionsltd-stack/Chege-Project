@@ -1407,8 +1407,10 @@ export interface DisbursementInput {
      * @nullable
      */
   madeById?: string | null;
+  /** Money lent, leaving the account. Not spending — you expect it back and it is now owed to you — so it carries no category, which is what keeps it out of every spending total. */
+  isLending?: boolean;
   /** Required budget category this disbursement is paying for */
-  expenseCategory: string;
+  expenseCategory?: string;
   /** Choose other only when the required description is a narration. */
   destinationKind?: DisbursementInputDestinationKind;
   /** @minimum 1 */

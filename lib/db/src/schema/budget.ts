@@ -391,6 +391,20 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
    * can never leave a balance quietly wrong.
    */
   isBorrowing: boolean("is_borrowing").notNull().default(false),
+  /**
+   * Money lent, leaving the account.
+   *
+   * The mirror of the column above. Money lent leaves like any withdrawal,
+   * but you have not spent it — you expect it back, and it is owed to you.
+   * Counted as spending, a month spent helping a relative reads as a month of
+   * overspending.
+   *
+   * Nothing had to learn to exclude it: every spending total already filters
+   * on a category being present, and a lending posting has none, because it
+   * is not a cost. This column says what the row is, so the ledger can name
+   * it and a payment with a missing category is not mistaken for a loan.
+   */
+  isLending: boolean("is_lending").notNull().default(false),
   /** The month this deposit was *for*, when that differs from the day it
    *  arrived — April's dues paid in September, or June's paid in April. Null
    *  means the month it arrived in, which is every deposit unless somebody

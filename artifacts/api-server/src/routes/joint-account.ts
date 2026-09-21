@@ -131,9 +131,26 @@ const DisbursementInput = z.object({
   description: z.string().trim().max(200).optional().default(""),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
-  expenseCategory: z.string().trim().min(1).max(80),
+  /**
+   * Required, except when the money was lent. Lending carries no category
+   * because it is not a cost, and every spending total filters on a category
+   * being present — which is exactly what keeps a loan out of them.
+   */
+  expenseCategory: z.string().trim().min(1).max(80).optional(),
+  /**
+   * Money lent, leaving the account. Not spending: you expect it back, and it
+   * is now owed to you. The mirror of isBorrowing on the way in.
+   */
+  isLending: z.boolean().optional(),
   destinationKind: z.enum(["category", "other"]).optional(),
   accountId: z.number().int().positive().optional(),
+}).superRefine((value, ctx) => {
+  // A missing category is only ever allowed because the row is a loan. Left
+  // to the schema alone, any withdrawal could quietly lose its category and
+  // drop out of spending.
+  if (!value.isLending && !value.expenseCategory) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["expenseCategory"], message: "Choose a valid budget category." });
+  }
 });
 
 const UpdateJointAccountInput = z.object({
@@ -726,9 +743,16 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   if (!requireMemberSelfAttribution(req, res, [parsed.data.madeById])) return;
 
   const { amount, description, date, destinationKind } = parsed.data;
+  const isLending = parsed.data.isLending ?? false;
   const disbursementClash = await alreadyRecorded(groupId, parsed.data.mpesaReceipt);
   if (disbursementClash) { res.status(409).json(disbursementClash); return; }
-  const expenseCategory = canonicalExpenseCategoryName(parsed.data.expenseCategory);
+  // Lending carries no category, so there is nothing to canonicalise, look up
+  // or refuse for being a heading.
+  const expenseCategory = isLending ? null : canonicalExpenseCategoryName(parsed.data.expenseCategory ?? "");
+  if (isLending && !description.trim()) {
+    res.status(400).json({ error: "Say who the money was lent to." });
+    return;
+  }
   if (destinationKind === "other" && !description.trim()) {
     res.status(400).json({ error: "Add a narration for an Other destination." });
     return;
@@ -736,7 +760,7 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
   // The same rule the expense route enforces. Spending reaches the category
   // totals through both doors, so a heading has to be refused at both — and
   // this is the door M-Pesa parsing will eventually feed.
-  const disbursementHeading = await headingAmong(groupId, [expenseCategory]);
+  const disbursementHeading = expenseCategory === null ? null : await headingAmong(groupId, [expenseCategory]);
   if (disbursementHeading) {
     res.status(400).json({ error: postingToHeadingError(disbursementHeading) });
     return;
@@ -749,14 +773,16 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
     if (err) { res.status(400).json({ error: err }); return; }
   }
 
-  const [category] = await db
-    .select({ id: budgetCategoriesTable.id })
-    .from(budgetCategoriesTable)
-    .where(and(eq(budgetCategoriesTable.name, expenseCategory), eq(budgetCategoriesTable.groupId, groupId)))
-    .limit(1);
-  if (!category) {
-    res.status(400).json({ error: "Choose a valid budget category." });
-    return;
+  if (expenseCategory !== null) {
+    const [category] = await db
+      .select({ id: budgetCategoriesTable.id })
+      .from(budgetCategoriesTable)
+      .where(and(eq(budgetCategoriesTable.name, expenseCategory), eq(budgetCategoriesTable.groupId, groupId)))
+      .limit(1);
+    if (!category) {
+      res.status(400).json({ error: "Choose a valid budget category." });
+      return;
+    }
   }
   const accountId = await requireAccountId(parsed.data.accountId, groupId, res);
   if (accountId === null) return;
@@ -771,10 +797,11 @@ router.post("/joint-account/disbursement", async (req, res): Promise<void> => {
       mpesaReceipt: parsed.data.mpesaReceipt ?? null,
       // Description is a supporting note. When omitted, retain a meaningful
       // non-null value while reports remain anchored on expenseCategory.
-      description: description || expenseCategory,
+      description: description || expenseCategory || "Lent out",
       date,
       madeById,
       expenseCategory,
+      isLending,
     })
     .returning();
 

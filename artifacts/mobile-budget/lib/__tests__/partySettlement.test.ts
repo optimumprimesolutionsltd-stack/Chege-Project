@@ -53,7 +53,8 @@ describe('paying somebody you owe', () => {
   });
 
   it('shows what stands between you while choosing', () => {
-    expect(bank).toContain('owe KES {formatKES(party.owedByUs ?? 0)}');
+    // The row now says which way it stands, lending listing the other figure.
+    expect(bank).toContain('`owe KES ${formatKES(party.owedByUs ?? 0)}`');
   });
 
   it('insists on knowing who was paid', () => {
@@ -137,6 +138,6 @@ describe("recording that somebody owes you", () => {
   it("does not read the press event as options", () => {
     // onPress hands the handler a synthetic event, which would arrive as
     // { owing } and quietly write the balance the wrong way round.
-    expect(bank).toContain("onPress={() => handleCreateParty()}");
+    expect(bank).toContain("onPress={() => handleCreateParty(withdrawDest === 'lend' ? { owing: true, forLending: true } : {})}");
   });
 });
