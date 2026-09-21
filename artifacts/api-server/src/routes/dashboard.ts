@@ -101,6 +101,20 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     .from(jointAccountTxTable)
     .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.bankTransferId} IS NULL AND ${jointAccountTxTable.expenseCategory} IS NOT NULL AND ${jointAccountTxTable.expenseId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
 
+  // Money that moved without being earned or spent: borrowed, paid back to
+  // you, or lent out. Every figure above leaves all three out, correctly — and
+  // until now nothing put them back anywhere, so a month could show income of
+  // 40,000 against spending of 95,000 while the balance rose, with nothing on
+  // the page accounting for the difference.
+  const [movementRow] = await db
+    .select({
+      borrowed: sql<number>`COALESCE(SUM(CASE WHEN ${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.isBorrowing} THEN ${jointAccountTxTable.amount} ELSE 0 END), 0)`,
+      repaidToUs: sql<number>`COALESCE(SUM(CASE WHEN ${jointAccountTxTable.type} = 'deposit' AND ${jointAccountTxTable.settlesContributorId} IS NOT NULL THEN ${jointAccountTxTable.amount} ELSE 0 END), 0)`,
+      lent: sql<number>`COALESCE(SUM(CASE WHEN ${jointAccountTxTable.type} = 'disbursement' AND ${jointAccountTxTable.isLending} THEN ${jointAccountTxTable.amount} ELSE 0 END), 0)`,
+    })
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.bankTransferId} IS NULL AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month} AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
+
   // Contributions = expenses paid + bank deposits + savings goal contributions
   //
   // Expense contribution logic (split-aware):
@@ -210,6 +224,9 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     remaining: totalBudget - totalSpent,
     expenseCount: Number(countRow.count),
     memberContributions,
+    borrowedTotal: Number(movementRow?.borrowed ?? 0),
+    repaidToUsTotal: Number(movementRow?.repaidToUs ?? 0),
+    lentTotal: Number(movementRow?.lent ?? 0),
   });
 });
 
@@ -1440,7 +1457,31 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
             AND bank_tx.expense_category IS NOT NULL
           THEN bank_tx.amount
           ELSE 0
-        END), 0) AS standalone_disbursement_total
+        END), 0) AS standalone_disbursement_total,
+        -- Money that moved without being earned, spent, or either. Left out of
+        -- every other figure here on purpose, and reported on its own so the
+        -- balance stops changing for reasons the report never mentions.
+        COALESCE(SUM(CASE
+          WHEN bank_tx.type = 'deposit'
+            AND bank_tx.bank_transfer_id IS NULL
+            AND bank_tx.is_borrowing
+          THEN bank_tx.amount
+          ELSE 0
+        END), 0) AS borrowed_total,
+        COALESCE(SUM(CASE
+          WHEN bank_tx.type = 'deposit'
+            AND bank_tx.bank_transfer_id IS NULL
+            AND bank_tx.settles_contributor_id IS NOT NULL
+          THEN bank_tx.amount
+          ELSE 0
+        END), 0) AS repaid_to_us_total,
+        COALESCE(SUM(CASE
+          WHEN bank_tx.type = 'disbursement'
+            AND bank_tx.bank_transfer_id IS NULL
+            AND bank_tx.is_lending
+          THEN bank_tx.amount
+          ELSE 0
+        END), 0) AS lent_total
       FROM joint_account_transactions bank_tx
       WHERE bank_tx.group_id = ${groupId}
         AND bank_tx.date >= ${start.raw}::date
@@ -1465,6 +1506,9 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
       bank_totals.bank_deposit_count AS "bankDepositCount",
       bank_totals.bank_disbursement_total AS "bankDisbursementTotal",
       bank_totals.bank_disbursement_count AS "bankDisbursementCount",
+      bank_totals.borrowed_total AS "borrowedTotal",
+      bank_totals.repaid_to_us_total AS "repaidToUsTotal",
+      bank_totals.lent_total AS "lentTotal",
       savings_totals.savings_total AS "savingsTotal",
       savings_totals.savings_count AS "savingsCount",
       expense_totals.expense_total + bank_totals.standalone_disbursement_total AS "spendingTotal",
@@ -1496,6 +1540,12 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
     bankDepositCount: numberValue("bankDepositCount"),
     bankDisbursementCount: numberValue("bankDisbursementCount"),
     savingsCount: numberValue("savingsCount"),
+    // None of these is income or spending, and all three move the balance.
+    // Without them a report can say you earned 40,000 and spent 95,000 while
+    // the bank balance went up, with nothing on the page explaining it.
+    borrowedTotal: numberValue("borrowedTotal"),
+    repaidToUsTotal: numberValue("repaidToUsTotal"),
+    lentTotal: numberValue("lentTotal"),
   };
 
   GetDashboardPeriodTotalsResponse.parse({

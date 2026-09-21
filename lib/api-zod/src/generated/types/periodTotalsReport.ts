@@ -27,4 +27,10 @@ export interface PeriodTotalsReport {
   bankDepositCount: number;
   bankDisbursementCount: number;
   savingsCount: number;
+  /** Money borrowed in the period. Not income — you will pay it back — so it is in none of the figures above, and reported here so the balance does not move for reasons the page never mentions. */
+  borrowedTotal: number;
+  /** Money paid back to you in the period. Not income either: you had it once already, when you lent it. */
+  repaidToUsTotal: number;
+  /** Money lent out in the period. Not spending — you expect it back — so it is in none of the spending figures above. */
+  lentTotal: number;
 }

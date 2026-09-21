@@ -308,6 +308,11 @@ describe("GET /dashboard/period-totals", () => {
       bankDepositCount: 2,
       bankDisbursementCount: 2,
       savingsCount: 1,
+      // Neither earned nor spent, and reported on their own so the balance
+      // does not move for reasons the page never mentions.
+      borrowedTotal: 0,
+      repaidToUsTotal: 0,
+      lentTotal: 0,
     });
 
     const statement = sqlMock.mock.results.at(-1)?.value as { strings: TemplateStringsArray; values: unknown[] };

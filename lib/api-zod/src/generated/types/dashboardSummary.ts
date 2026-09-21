@@ -10,6 +10,12 @@ export interface DashboardSummary {
   month: number;
   year: number;
   totalBudget: number;
+  /** Money borrowed this month. Not income — you will pay it back — so it is in none of the other figures, and reported so the balance does not move for reasons the page never mentions. */
+  borrowedTotal?: number;
+  /** Money paid back to you this month. Not income either: you had it once already, when you lent it. */
+  repaidToUsTotal?: number;
+  /** Money lent out this month. Not spending — you expect it back. */
+  lentTotal?: number;
   totalSpent: number;
   remaining: number;
   chegeContributed: number;
