@@ -10,6 +10,12 @@ import type { DepositInputSourceKind } from './depositInputSourceKind';
 
 export interface DepositInput {
   /**
+     * The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.
+     * @minLength 6
+     * @maxLength 20
+     */
+  mpesaReceipt?: string;
+  /**
      * The party this repays, when it repays one. Money lent coming back is not income, so every figure counting money in leaves these out. The transaction stays in the ledger.
      * @minimum 1
      */

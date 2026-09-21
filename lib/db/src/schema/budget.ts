@@ -348,6 +348,18 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   // that is what makes the decision reversible.
   bankCharge: boolean("bank_charge").notNull().default(false),
   /**
+   * The M-Pesa receipt code this posting came from, when it came from one.
+   *
+   * A parsed message can be pasted twice — the same SMS forwarded, a list
+   * re-imported, a tap repeated on a slow connection — and without something
+   * to recognise it by, each paste is a fresh posting and the balance drifts
+   * by whatever was counted again. The code is unique per transaction and
+   * printed on every message, so it is the thing to recognise.
+   *
+   * Null for everything entered by hand, which is most of it.
+   */
+  mpesaReceipt: text("mpesa_receipt"),
+  /**
    * The party whose balance this movement settles, if it settles one.
    *
    * A repayment arriving from somebody who owed you is money you already had
