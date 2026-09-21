@@ -1327,6 +1327,11 @@ export const DepositInputSourceKind = {
 
 export interface DepositInput {
   /**
+     * The party this repays, when it repays one. Money lent coming back is not income, so every figure counting money in leaves these out. The transaction stays in the ledger.
+     * @minimum 1
+     */
+  settlesContributorId?: number;
+  /**
      * KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
      * @minimum 0
      */

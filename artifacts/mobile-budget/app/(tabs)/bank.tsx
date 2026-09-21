@@ -278,6 +278,10 @@ export default function BankScreen() {
   const [newPartyOwed, setNewPartyOwed] = useState('');
   const [newPartyIsInstitution, setNewPartyIsInstitution] = useState(false);
   const [addingParty, setAddingParty] = useState(false);
+  // Somebody paying you back. The money reaches the account like any deposit,
+  // but you had it once already — when you lent it — so it is not income.
+  const [repayingPartyId, setRepayingPartyId] = useState<number | null>(null);
+  const [showRepayPicker, setShowRepayPicker] = useState(false);
   const [withdrawSourceName, setWithdrawSourceName] = useState<string | null>(null);
   const [withdrawGoalId, setWithdrawGoalId] = useState<number | null>(null);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
@@ -395,6 +399,11 @@ export default function BankScreen() {
     [parties],
   );
   const selectedParty = owedParties.find((party) => party.id === withdrawPartyId) ?? null;
+  const owingParties = useMemo(
+    () => parties.filter((party) => typeof party.owedToUs === 'number'),
+    [parties],
+  );
+  const repayingParty = owingParties.find((party) => party.id === repayingPartyId) ?? null;
 
   // The savings goal matching the current withdrawGoalId selection
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
@@ -425,6 +434,8 @@ export default function BankScreen() {
     setShowGoalPicker(false);
     setWithdrawPartyId(null);
     setShowPartyPicker(false);
+    setRepayingPartyId(null);
+    setShowRepayPicker(false);
     setTransferDirection('to_savings');
     setBankTransferDestinationId(accounts.find((candidate) => candidate.id !== selectedAccountId)?.id ?? null);
     setModalVisible(true);
@@ -460,6 +471,8 @@ export default function BankScreen() {
     setShowGoalPicker(false);
     setWithdrawPartyId(null);
     setShowPartyPicker(false);
+    setRepayingPartyId(null);
+    setShowRepayPicker(false);
     setDepositorAmounts({});
   };
 
@@ -929,6 +942,43 @@ export default function BankScreen() {
     }
   };
 
+  /**
+   * Offer to take a repayment off what somebody owes you. Asked rather than
+   * applied, for the reason every other balance prompt asks: the posting can
+   * be edited or deleted afterwards, and a balance moved by itself would have
+   * to be moved back on every one of those paths.
+   */
+  const offerRepaymentSettlement = (party: { id: number; name: string; owedToUs?: number | null }, amount: number) => {
+    const owed = party.owedToUs;
+    if (typeof owed !== 'number' || owed <= 0 || amount <= 0) return;
+    const paid = Math.round(amount);
+    const remaining = Math.max(0, owed - paid);
+    Alert.alert(
+      `Take this off what ${party.name} owes you?`,
+      paid >= owed
+        ? `${party.name} owed KES ${formatKES(owed)}. This clears it.`
+        : `${party.name} owed KES ${formatKES(owed)}. Taking KES ${formatKES(paid)} off leaves KES ${formatKES(remaining)}.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: remaining === 0 ? 'Clear it' : 'Reduce',
+          onPress: async () => {
+            try {
+              await customFetch(`/api/contributors/${party.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ owedToUs: remaining }),
+              });
+              await queryClient.invalidateQueries({ queryKey: ['parties'] });
+            } catch (error: unknown) {
+              Alert.alert('Could not update the balance', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const selectJointBank = () => {
     if (!canManageShared) {
       Alert.alert('Admin access required', 'Ask a group owner or admin to use Joint bank for this shared transaction.');
@@ -1265,6 +1315,7 @@ export default function BankScreen() {
               amount: parsed,
               description: description.trim(),
               date,
+              ...(repayingParty ? { settlesContributorId: repayingParty.id } : {}),
               madeById: null,
               ...(incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
@@ -1280,6 +1331,7 @@ export default function BankScreen() {
               amount: parsed,
               description: description.trim(),
               date,
+              ...(repayingParty ? { settlesContributorId: repayingParty.id } : {}),
               madeById: singleId,
               ...(incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
@@ -1307,9 +1359,12 @@ export default function BankScreen() {
       const wasNewWithdrawal = txType === 'disbursement' && editingTransactionId === null;
       const paidCategory = expenseCategory.trim();
       const paidParty = withdrawDest === 'party' ? selectedParty : null;
+      const repaidBy = txType === 'deposit' && editingTransactionId === null ? repayingParty : null;
       finishEntry(keepOpen, { amount: parsed, direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
-      if (wasNewWithdrawal && paidParty) {
+      if (repaidBy) {
+        offerRepaymentSettlement(repaidBy, parsed);
+      } else if (wasNewWithdrawal && paidParty) {
         // Who was paid outranks what it was spent on: a category that happens
         // to be a tracked debt as well would otherwise ask twice about one
         // payment.
@@ -2445,8 +2500,61 @@ export default function BankScreen() {
                 </>
               )}
 
+              {/* Somebody paying back what they owe. Kept above who deposited
+                  it, because the answer changes what the money means: a
+                  repayment is not income, so no income source is asked for. */}
+              {isDeposit && owingParties.length > 0 ? (
+                <>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Is this somebody paying you back?</Text>
+                  <TouchableOpacity
+                    style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                    onPress={() => setShowRepayPicker((open) => !open)}
+                    testID="bank-repayment-picker"
+                  >
+                    <Text style={{ flex: 1, color: repayingParty ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                      {repayingParty ? `${repayingParty.name} repaying you` : 'No — this is ordinary money in'}
+                    </Text>
+                    <Feather name={showRepayPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                  {showRepayPicker && (
+                    <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
+                      <TouchableOpacity
+                        style={styles.categoryOption}
+                        onPress={() => { setRepayingPartyId(null); setShowRepayPicker(false); }}
+                        testID="bank-repayment-none"
+                      >
+                        <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
+                          No — this is ordinary money in
+                        </Text>
+                      </TouchableOpacity>
+                      {owingParties.map((party) => (
+                        <TouchableOpacity
+                          key={`owing-party-${party.id}`}
+                          style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
+                          onPress={() => { setRepayingPartyId(party.id); setShowRepayPicker(false); }}
+                          testID={`bank-repayment-party-${party.id}`}
+                        >
+                          <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>
+                            {party.name}
+                          </Text>
+                          <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                            owes you KES {formatKES(party.owedToUs ?? 0)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  {repayingParty ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+                      This will not count as income — you had the money once already, when you lent it. It still shows
+                      in the account and the ledger.
+                    </Text>
+                  ) : null}
+                </>
+              ) : null}
+
               {/* ── Deposited by (deposits only) ── */}
-              {isDeposit && members.length > 0 && (
+              {isDeposit && !repayingParty && members.length > 0 && (
                 <>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     {isSharedWorkspace ? 'Who is depositing?' : 'Deposited by'}{' '}

@@ -132,6 +132,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
       WHERE t.group_id = ${groupId}
         AND t.type = 'deposit'
         AND t.bank_transfer_id IS NULL
+        AND t.settles_contributor_id IS NULL
         AND EXTRACT(MONTH FROM t.date) = ${month}
         AND EXTRACT(YEAR FROM t.date) = ${year}
       GROUP BY COALESCE(s.user_id, t.made_by_id)
@@ -446,6 +447,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
           ${jointAccountDepositSplitsTable.groupId} = ${groupId}
           AND ${jointAccountTxTable.type} = 'deposit'
           AND ${jointAccountTxTable.bankTransferId} IS NULL
+          AND ${jointAccountTxTable.settlesContributorId} IS NULL
           AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
           AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}
         `),
@@ -463,6 +465,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
           ${jointAccountTxTable.groupId} = ${groupId}
           AND ${jointAccountTxTable.type} = 'deposit'
           AND ${jointAccountTxTable.bankTransferId} IS NULL
+          AND ${jointAccountTxTable.settlesContributorId} IS NULL
           AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
           AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}
           AND NOT EXISTS (
@@ -1145,6 +1148,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       WHERE split.group_id = ${groupId}
         AND deposit.type = 'deposit'
           AND deposit.bank_transfer_id IS NULL
+        AND deposit.settles_contributor_id IS NULL
         AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
         AND EXTRACT(MONTH FROM deposit.date) = ${month}
         AND EXTRACT(YEAR FROM deposit.date) = ${year}
@@ -1158,6 +1162,7 @@ router.get("/dashboard/income-streams", async (req, res): Promise<void> => {
       WHERE deposit.group_id = ${groupId}
         AND deposit.type = 'deposit'
         AND deposit.bank_transfer_id IS NULL
+        AND deposit.settles_contributor_id IS NULL
         AND deposit.transfer_direction IS DISTINCT FROM 'from_savings'
         AND EXTRACT(MONTH FROM deposit.date) = ${month}
         AND EXTRACT(YEAR FROM deposit.date) = ${year}
@@ -1400,6 +1405,7 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
         COALESCE(SUM(CASE
           WHEN bank_tx.type = 'deposit'
             AND bank_tx.bank_transfer_id IS NULL
+            AND bank_tx.settles_contributor_id IS NULL
             AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
           THEN bank_tx.amount
           ELSE 0
@@ -1407,6 +1413,7 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
         COUNT(*) FILTER (
           WHERE bank_tx.type = 'deposit'
             AND bank_tx.bank_transfer_id IS NULL
+            AND bank_tx.settles_contributor_id IS NULL
             AND bank_tx.transfer_direction IS DISTINCT FROM 'from_savings'
         ) AS bank_deposit_count,
         COALESCE(SUM(CASE

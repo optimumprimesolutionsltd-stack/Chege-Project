@@ -78,7 +78,7 @@ describe('Normal mode states what it decided for you', () => {
  *
  * Here it was the web that was thinner: its modes were called "Simple" and
  * "Advanced", which describe how hard they are rather than what they do,
- * while the phone called them "Same amount" and "Per person". But the web
+ * while the phone called them "Same amount" and "Per member". But the web
  * carried a line the phone did not - that the list arrives fully ticked - and
  * that is the one thing a treasurer has to act on.
  *
@@ -92,14 +92,14 @@ describe('the contributions forms', () => {
   it('names the modes for what they do, on both', () => {
     for (const source of [webContrib, mobileContrib]) {
       expect(source).toContain('Same amount');
-      expect(source).toContain('Per person');
+      expect(source).toContain('Per member');
     }
     // "Simple"/"Advanced" said nothing about what either mode did.
     expect(webContrib).not.toContain('"Simple" : "Advanced"');
   });
 
   it('keeps the phone’s explanation of what switching does', () => {
-    const clause = 'Switching to Per person fills every row with it.';
+    const clause = 'Switching to Per member fills every row with it.';
     expect(mobileContrib).toContain(clause);
     expect(webContrib).toContain(clause);
   });

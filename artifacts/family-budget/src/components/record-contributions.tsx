@@ -21,11 +21,11 @@ type BankAccount = { id: number; name: string };
  *
  * At a meeting almost everybody has paid the usual amount, so this starts from
  * that and lets the treasurer untick the two who have not - rather than typing
- * forty identical figures. It is one deposit with a portion per person, so the
- * group balance moves and every person is credited in the same action.
+ * forty identical figures. It is one deposit with a portion per member, so the
+ * group balance moves and every member is credited in the same action.
  *
  * Simple and Advanced work as they do everywhere else: Simple is one amount
- * for everyone, Advanced lets each person differ.
+ * for everyone, Advanced lets each member differ.
  */
 export function RecordContributions({ onRecorded }: { onRecorded?: () => void }) {
   const { toast } = useToast();
@@ -100,7 +100,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
   // But only for names not seen before: a background refetch of the list
   // (window focus, staleness, or the refetch right after adding a name) hands
   // back a new array, and blindly re-ticking everyone would silently undo a
-  // deselection the treasurer just made — worst in Per person mode, where they
+  // deselection the treasurer just made — worst in Per member mode, where they
   // linger typing amounts.
   const seenContributorIds = useRef<Set<number>>(new Set());
   useEffect(() => {
@@ -127,7 +127,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
     });
   };
 
-  // Advanced starts where Simple does: every ticked person's expected amount
+  // Advanced starts where Simple does: every ticked member’s expected amount
   // already in their row, so the treasurer edits the exceptions instead of
   // typing every figure. Only fills blanks - never overwrites what was typed,
   // never touches an unticked row.
@@ -226,12 +226,12 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
     }
 
     if (chosen.length === 0) {
-      toast({ variant: "destructive", title: "Nobody ticked", description: "Tick at least one person who paid." });
+      toast({ variant: "destructive", title: "Nobody ticked", description: "Tick at least one member who paid." });
       return;
     }
 
     if (mode === "simple" && !(Number(each) > 0)) {
-      toast({ variant: "destructive", title: "Enter the amount", description: "Type what each person paid in the Each (KES) box." });
+      toast({ variant: "destructive", title: "Enter the amount", description: "Type what each member paid in the Each (KES) box." });
       return;
     }
 
@@ -310,8 +310,8 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
             </p>
             <p className="mt-1 text-xs text-muted-foreground" data-testid="contribution-mode-hint">
               {mode === "simple"
-                ? "Same amount: everyone paid the same — type it once below. Switching to Per person fills every row with it."
-                : "Per person: each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing."}
+                ? "Same amount: everyone paid the same — type it once below. Switching to Per member fills every row with it."
+                : "Per member: each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing."}
             </p>
           </div>
           <div className="flex shrink-0 gap-1" role="group" aria-label="Entry mode">
@@ -323,7 +323,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
                 onClick={() => setMode(option)}
                 data-testid={`contribution-mode-${option}`}
               >
-                {option === "simple" ? "Same amount" : "Per person"}
+                {option === "simple" ? "Same amount" : "Per member"}
               </Button>
             ))}
           </div>
