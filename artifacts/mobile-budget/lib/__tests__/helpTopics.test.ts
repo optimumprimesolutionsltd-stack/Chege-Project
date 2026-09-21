@@ -105,3 +105,32 @@ describe('reaching it', () => {
     expect(screen).toContain('router.push(topic.route as never)');
   });
 });
+
+// The guide shipped into Settings alone, which is where you go when you know
+// what you want — not when you are lost. Nobody would find it.
+describe("being found", () => {
+  const bank = readFileSync("app/(tabs)/bank.tsx", "utf8");
+  const budget = readFileSync("app/(tabs)/budget.tsx", "utf8");
+  const button = readFileSync("components/HelpButton.tsx", "utf8");
+
+  it("sits on the screens themselves, not only in Settings", () => {
+    expect(bank).toContain('<HelpButton about="bank" />');
+    expect(budget).toContain('<HelpButton about="category" />');
+  });
+
+  it("carries the screen with it", () => {
+    expect(button).toContain("router.push({ pathname: '/help', params: { about } })");
+  });
+
+  it("opens already filtered to what you were looking at", () => {
+    // Somebody stuck is stuck on something particular; making them search for
+    // its name first is the same as not helping.
+    expect(screen).toContain("const { about } = useLocalSearchParams<{ about?: string }>();");
+    expect(screen).toContain("useState(typeof about === 'string' ? about : '')");
+  });
+
+  it("still opens on everything when reached from Settings", () => {
+    // No parameter, no filter.
+    expect(screen).toContain("searchHelp(query)");
+  });
+});

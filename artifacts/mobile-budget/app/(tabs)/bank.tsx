@@ -60,6 +60,7 @@ import {
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { handleLapsedError } from '@/lib/lapsedError';
+import { HelpButton } from '@/components/HelpButton';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { canManageBankAccount, resolveBankAccountSelection } from '@/lib/bankAccess';
 import { getProjectedBalanceAfterPosting } from '@/lib/bankBalance';
@@ -1538,6 +1539,8 @@ export default function BankScreen() {
           <WorkspaceIdentityRow group={group} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <Text style={styles.headerTitle}>Bank accounts</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <HelpButton about="bank" />
             {canManageAccount && !accountEditor.editing && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                 {hasBankAccounts && (
@@ -1550,6 +1553,7 @@ export default function BankScreen() {
                 </TouchableOpacity>
               </View>
             )}
+            </View>
           </View>
           {accountEditor.editing ? (
             <View style={{ marginTop: 10, gap: 8 }}>
