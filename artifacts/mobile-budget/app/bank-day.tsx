@@ -35,7 +35,7 @@ import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
 import { useAuth } from '@/lib/auth';
 import { handleLapsedError } from '@/lib/lapsedError';
-import { readAmount } from '@/lib/bankAmount';
+import { readAmount, toMoney } from '@/lib/bankAmount';
 import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import {
   customFetch,
@@ -288,7 +288,7 @@ export default function BankDayScreen() {
     const changes: Change[] = [];
 
     for (const row of saved) {
-      const amount = Math.round(readAmount(row.amount) ?? 0);
+      const amount = toMoney(readAmount(row.amount) ?? 0);
       if (amount <= 0) continue;
       const party = row.partyId === null ? null : parties.find((candidate) => candidate.id === row.partyId) ?? null;
 

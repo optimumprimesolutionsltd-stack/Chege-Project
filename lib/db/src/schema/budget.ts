@@ -72,7 +72,7 @@ export const budgetCategoriesTable = pgTable("budget_categories", {
   // ledger: the balance is edited directly as it is paid down, the same way a
   // budget amount is. The rate is basis points (1/100 of a percent) so it is
   // an exact integer rather than a float that drifts on repeated writes.
-  debtBalance: integer("debt_balance"),
+  debtBalance: numeric("debt_balance", { precision: 14, scale: 2, mode: "number" }),
   debtInterestRateBps: integer("debt_interest_rate_bps"),
 }, (table) => [
   check(
@@ -214,8 +214,8 @@ export const groupContributorsTable = pgTable("group_contributors", {
    * both. Bare balances rather than a ledger, matching how a category's debt
    * is already held: the figure is edited as it is paid down.
    */
-  owedToUs: integer("owed_to_us"),
-  owedByUs: integer("owed_by_us"),
+  owedToUs: numeric("owed_to_us", { precision: 14, scale: 2, mode: "number" }),
+  owedByUs: numeric("owed_by_us", { precision: 14, scale: 2, mode: "number" }),
 }, (table) => [
   check(
     "group_contributors_kind_check",

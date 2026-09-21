@@ -59,7 +59,7 @@ describe('the balance moves as the day is written', () => {
   });
 
   it('does arithmetic in every amount, as the sheet does', () => {
-    expect(day).toContain("import { readAmount } from '@/lib/bankAmount';");
+    expect(day).toContain("import { readAmount, toMoney } from '@/lib/bankAmount';");
   });
 });
 

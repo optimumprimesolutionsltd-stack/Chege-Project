@@ -420,7 +420,7 @@ const categoryFields = z.object({
   parentId: z.number().int().positive().nullable().optional(),
   // Present (non-null) marks this category as a tracked debt. Basis points
   // (1/100 of a percent) so the rate is an exact integer.
-  debtBalance: z.number().int().min(0).nullable().optional(),
+  debtBalance: z.number().finite().min(0).multipleOf(0.01).nullable().optional(),
   debtInterestRateBps: z.number().int().min(0).max(10000).nullable().optional(),
 });
 

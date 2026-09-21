@@ -19,8 +19,10 @@ describe("a contributor becomes a party", () => {
   it("holds the two directions apart rather than netting them", () => {
     // A chama member can owe the kitty and be owed by it at once, and a single
     // signed figure would hide both.
-    expect(schema).toContain('owedToUs: integer("owed_to_us")');
-    expect(schema).toContain('owedByUs: integer("owed_by_us")');
+    // numeric(14,2) since 0041 — what is owed takes cents, the way bank
+    // postings always have. Two columns still, never one signed figure.
+    expect(schema).toContain('owedToUs: numeric("owed_to_us", { precision: 14, scale: 2, mode: "number" })');
+    expect(schema).toContain('owedByUs: numeric("owed_by_us", { precision: 14, scale: 2, mode: "number" })');
   });
 
   it("refuses a negative balance in either direction", () => {
@@ -62,7 +64,7 @@ describe("the API carries the balances", () => {
   it("tells not-tracked from cleared", () => {
     // Explicit null stops tracking; zero is a debt that has been paid off and
     // is worth being able to say.
-    expect(route).toContain("owedToUs: z.number().int().min(0).nullable().optional(),");
+    expect(route).toContain("owedToUs: z.number().finite().min(0).multipleOf(0.01).nullable().optional(),");
     expect(route).toContain("if (parsed.data.owedToUs !== undefined) changes.owedToUs = parsed.data.owedToUs;");
   });
 

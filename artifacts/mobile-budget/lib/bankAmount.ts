@@ -38,3 +38,14 @@ export function parseBalanceFigure(value: string): number | null {
 export function readAmount(value: string): number | null {
   return parseBankAmount(value) ?? evaluateAmountExpression(value);
 }
+
+/**
+ * A figure fit to be stored as money.
+ *
+ * Balances take two decimals now, and arithmetic on them does not: 0.1 + 0.2
+ * is 0.30000000000000004, which the API refuses and no one can read. Rounding
+ * to the cent is not a loss of precision here, it is the precision.
+ */
+export function toMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
