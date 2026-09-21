@@ -104,7 +104,7 @@ describe("checking the account against the statement", () => {
   });
 
   it("offers only categories that can hold spending", () => {
-    expect(bank).toContain("const reconcileTree = useMemo(");
+    expect(bank).toContain("const categoryTree = useMemo(");
     expect(bank).toContain("group.children.length > 0 ? (");
     expect(bank).toContain('data-testid="select-reconcile-category"');
   });
