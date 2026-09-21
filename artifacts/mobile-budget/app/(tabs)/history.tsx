@@ -54,6 +54,7 @@ import { formatDisplayDate as formatDate } from '@/lib/displayFormat';
 import { getCategoryIcon } from '@/lib/categoryIcons';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
+import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 
 const MONTH_PREF_KEY = 'expenses_month_pref';
 
@@ -496,7 +497,7 @@ export default function HistoryScreen() {
         return {
           userId: null,
           fromBank: true,
-          label: 'Joint bank',
+          label: GROUP_ATTRIBUTION,
           amount: isSplit ? (parseFloat(editSplitAmounts[name] || '0') || 0) : parsed,
         };
       }
@@ -512,7 +513,7 @@ export default function HistoryScreen() {
     const incomeSplits = personalIncomeSplits.length > 0
         ? personalIncomeSplits
         : editPaidFromBank
-          ? [{ userId: null, label: 'Joint bank', amount: parsed, fromBank: true }]
+          ? [{ userId: null, label: GROUP_ATTRIBUTION, amount: parsed, fromBank: true }]
         : payerChanged && editForm.paidById
           ? [{ userId: editForm.paidById, label: 'Personal funds', amount: parsed, fromBank: false }]
           : [];
@@ -899,7 +900,7 @@ export default function HistoryScreen() {
               <View style={styles.contributionListHeader}>
                 <View style={[styles.contributionIntro, { backgroundColor: colors.primary + '10', borderColor: colors.primary + '33' }]}>
                   <Feather name="info" size={16} color={colors.primary} />
-                  <Text style={[styles.contributionIntroText, { color: colors.mutedForeground }]}>Personal expense portions, bank deposits, and savings contributions are counted once. Joint bank funding stays with the group.</Text>
+                  <Text style={[styles.contributionIntroText, { color: colors.mutedForeground }]}>Personal expense portions, bank deposits, and savings contributions are counted once. The group funding stays with the group.</Text>
                 </View>
                 <View style={[styles.householdTotal, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Text style={[styles.householdTotalLabel, { color: colors.mutedForeground }]}>Group contribution total</Text>
@@ -917,7 +918,7 @@ export default function HistoryScreen() {
                 {sharedHouseholdRows.length > 0 && (
                   <View style={[styles.sharedFunding, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                     <Text style={[styles.sharedFundingTitle, { color: colors.foreground }]}>Shared group funding</Text>
-                    <Text style={[styles.sharedFundingText, { color: colors.mutedForeground }]}>Joint bank portions are Shared group funds and are not included in member contribution totals.</Text>
+                    <Text style={[styles.sharedFundingText, { color: colors.mutedForeground }]}>The group portions are Shared group funds and are not included in member contribution totals.</Text>
                     {sharedHouseholdRows.map((item) => <View key={item.id} style={styles.sharedFundingRow}><Text style={[styles.sharedFundingText, { color: colors.foreground }]} numberOfLines={1}>{item.description}</Text><Text style={[styles.sharedFundingAmount, { color: colors.foreground }]}>KES {formatKES(item.amount)}</Text></View>)}
                   </View>
                 )}
@@ -1100,7 +1101,7 @@ export default function HistoryScreen() {
                   >
                     <Feather name="credit-card" size={12} color={editPaidFromBank ? '#38bdf8' : colors.mutedForeground} />
                     <Text style={[styles.memberPillText, { color: editPaidFromBank ? '#38bdf8' : colors.foreground }]}>
-                      Joint bank
+                      The group
                     </Text>
                   </Pressable>
                   {members.map(m => {
@@ -1139,7 +1140,7 @@ export default function HistoryScreen() {
                     <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: colors.mutedForeground }}>(optional)</Text>
                   </View>
 
-                  {/* Joint bank can fund a portion alongside personal sources. */}
+                  {/* The group can fund a portion alongside personal sources. */}
                   <Pressable
                     onPress={() => {
                       setEditPaidFromBank((current) => {
@@ -1157,7 +1158,7 @@ export default function HistoryScreen() {
                     }]}
                   >
                     <Feather name="credit-card" size={12} color={editPaidFromBank ? '#38bdf8' : colors.mutedForeground} />
-                    <Text style={[styles.sourceChipText, { color: editPaidFromBank ? '#38bdf8' : colors.foreground }]}>Joint bank</Text>
+                    <Text style={[styles.sourceChipText, { color: editPaidFromBank ? '#38bdf8' : colors.foreground }]}>The group</Text>
                     {editPaidFromBank && <Feather name="check" size={10} color="#38bdf8" />}
                   </Pressable>
 
@@ -1241,7 +1242,7 @@ export default function HistoryScreen() {
                               color={color}
                             />
                             <Text style={[styles.splitAmountLabel, { color: colors.foreground }]} numberOfLines={1}>
-                              {name === JOINT_BANK_SOURCE ? 'Joint bank' : name === 'Other' ? (editOtherLabel || 'Other') : name}
+                              {name === JOINT_BANK_SOURCE ? GROUP_ATTRIBUTION : name === 'Other' ? (editOtherLabel || 'Other') : name}
                             </Text>
                             <View style={styles.splitAmountInputBox}>
                               <Text style={[styles.splitCurrency, { color: colors.mutedForeground }]}>KES</Text>
@@ -1444,7 +1445,7 @@ function ExpenseRow({
       <View style={styles.rowInfo}>
         <Text selectable={false} style={[styles.rowDesc, { color: colors.foreground }]} numberOfLines={1}>{expense.description}</Text>
         <Text selectable={false} style={[styles.rowMeta, { color: colors.mutedForeground }]}>
-          {expense.paidByName ?? 'Joint bank'} · {expense.category} · {formatDate(expense.date)}
+          {expense.paidByName ?? GROUP_ATTRIBUTION} · {expense.category} · {formatDate(expense.date)}
         </Text>
         {expense.notes ? <Text selectable={false} style={[styles.rowNotes, { color: colors.mutedForeground }]}>{expense.notes}</Text> : null}
       </View>

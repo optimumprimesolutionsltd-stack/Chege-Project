@@ -2432,7 +2432,7 @@ export default function AddExpenseSheet() {
               </Text>
             )}
 
-            {/* Per-source split rows — Joint bank can be mixed with people. */}
+            {/* Per-source split rows — The group can be mixed with people. */}
             {payerIds.length + (paidFromBank ? 1 : 0) > 1 && (() => {
               const total = parseFloat(amount.replace(/,/g, '')) || 0;
               const splitTotal = payerIds.reduce((s, id) => s + (parseFloat(payerAmounts[id] || '0') || 0), 0)

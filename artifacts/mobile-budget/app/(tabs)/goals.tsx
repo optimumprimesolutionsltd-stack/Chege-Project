@@ -750,7 +750,7 @@ export default function GoalsScreen() {
   const [cascadeResult, setCascadeResult] = useState<Array<{ goalId: number; goalName: string; allocated: number; newTotal: number; completed: boolean }> | null>(null);
   const [submittingCascade, setSubmittingCascade] = useState(false);
 
-  // Cascade payer: [] = Joint bank (null userId), [id] = single member, [id1, id2...] = split
+  // Cascade payer: [] = The group (null userId), [id] = single member, [id1, id2...] = split
   const [cascadePayerIds, setCascadePayerIds] = useState<string[]>([]);
   const [cascadePayerAmounts, setCascadePayerAmounts] = useState<Record<string, string>>({});
 
@@ -891,7 +891,7 @@ export default function GoalsScreen() {
     setContributeVisible(false);
   };
 
-  // contribPayerIds: [] = Joint bank (userId: null), [id] = single member, [id1, id2...] = multi-split
+  // contribPayerIds: [] = The group (userId: null), [id] = single member, [id1, id2...] = multi-split
   const [contribPayerIds, setContribPayerIds] = useState<string[]>([]);
   const [contribPayerAmounts, setContribPayerAmounts] = useState<Record<string, string>>({});
 
@@ -910,7 +910,7 @@ export default function GoalsScreen() {
 
   const selectContribJoint = () => {
     if (!canManageShared) {
-      Alert.alert('Admin access required', 'Ask a group owner or admin to record a contribution from Joint bank.');
+      Alert.alert('Admin access required', 'Ask a group owner or admin to record a contribution from the group.');
       return;
     }
     setContribPayerIds([]);
@@ -1419,7 +1419,7 @@ export default function GoalsScreen() {
                           {canManageShared && <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>}
                         </Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                          {/* Joint bank chip — default, selected when no named members */}
+                          {/* Group chip — default, selected when no named members */}
                           {canManageShared && <Pressable
                             testID="goals-contrib-joint-chip"
                             onPress={selectContribJoint}
@@ -1441,7 +1441,7 @@ export default function GoalsScreen() {
                                 color: validContribPayerIds.length === 0 ? '#4ade80' : colors.foreground,
                               }}
                             >
-                              Joint bank
+                              The group
                             </Text>
                           </Pressable>}
 
@@ -1667,7 +1667,7 @@ export default function GoalsScreen() {
                               <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>
                             </Text>
                             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                              {/* Joint bank chip — default */}
+                              {/* Group chip — default */}
                               <Pressable
                                 testID="goals-cascade-joint-chip"
                                 onPress={() => { setCascadePayerIds([]); setCascadePayerAmounts({}); }}
@@ -1689,7 +1689,7 @@ export default function GoalsScreen() {
                                     color: validCascadePayerIds.length === 0 ? '#4ade80' : colors.foreground,
                                   }}
                                 >
-                                  Joint bank
+                                  The group
                                 </Text>
                               </Pressable>
                               {members.map((m) => {

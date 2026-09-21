@@ -9,7 +9,7 @@ import type { ContributionGrid } from "@/components/contributions-grid";
  *
  * "Behind" is any shortfall against the monthly amount for the latest month in
  * the sheet, after an earlier surplus has been carried forward. Name-only
- * contributors are included; the whole point is the people who will not get an
+ * contributors are included; the whole point is the members who will not get an
  * app reminder. Renders nothing when everyone is settled.
  */
 export function ContributionArrearsBanner() {

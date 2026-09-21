@@ -177,7 +177,7 @@ export function EditListButton({ editor, canManage }: { editor: Editor; canManag
   // Same pill as every other panel heading — the contributions cards had the
   // same invisible pencil, and this is the control people could not find on
   // Expected vs actual.
-  return <EditPill onPress={editor.open} accessibilityLabel="Add or remove people" testID="contributor-edit" />;
+  return <EditPill onPress={editor.open} accessibilityLabel="Add or remove members" testID="contributor-edit" />;
 }
 
 export function RemoveRowButton({ editor, id }: { editor: Editor; id: number }) {

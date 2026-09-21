@@ -116,7 +116,7 @@ describe("GET /dashboard/category-ledger", () => {
           source: "bank_disbursement",
           category: "Household supplies",
           amount: 800,
-          payerName: "Joint bank",
+          payerName: "The group",
         }),
       ],
     });

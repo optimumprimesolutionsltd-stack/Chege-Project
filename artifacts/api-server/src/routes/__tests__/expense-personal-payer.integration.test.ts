@@ -98,7 +98,7 @@ describe.skipIf(!hasDb)("personal expense payer (integration)", () => {
       date: "2026-08-20",
       incomeSplits: [{
         userId: null,
-        label: "Joint bank",
+        label: "The group",
         amount: 1_200,
         fromBank: true,
       }],
@@ -112,7 +112,7 @@ describe.skipIf(!hasDb)("personal expense payer (integration)", () => {
     expect(splits).toHaveLength(1);
     expect(splits[0]).toMatchObject({
       userId: null,
-      label: "Joint bank",
+      label: "The group",
       amount: 1_200,
       fromBank: true,
     });

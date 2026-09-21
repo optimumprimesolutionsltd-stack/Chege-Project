@@ -227,7 +227,7 @@ export function ContributionPlan() {
           </div>
         ) : contributors.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-            No contributors yet. Add people on "Record this month", then set what each is expected to give here.
+            No contributors yet. Add members on "Record this month", then set what each is expected to give here.
           </p>
         ) : (
           <ul className="divide-y divide-border/60 rounded-xl border border-border/60">

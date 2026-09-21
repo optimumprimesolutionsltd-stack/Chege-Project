@@ -19,7 +19,7 @@ import { Link } from "wouter";
 import { ContributionHistory } from "@/components/contribution-history";
 
 function fundingEntryLabel(recordType: "expense" | "deposit" | "savings") {
-  if (recordType === "deposit") return "Joint bank deposit";
+  if (recordType === "deposit") return "The group deposit";
   if (recordType === "savings") return "Savings addition";
   return "Personal expense";
 }
@@ -501,7 +501,7 @@ export default function IncomeStreamsReport() {
               </div>
 
               <p className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-                Funding counts personal expense portions, qualifying bank deposits, and savings additions once. Linked Joint bank withdrawals are shown as bank activity but are not added to spending twice.
+                Funding counts personal expense portions, qualifying bank deposits, and savings additions once. Linked The group withdrawals are shown as bank activity but are not added to spending twice.
               </p>
               {periodTotals.data.expenseCount + periodTotals.data.bankDepositCount + periodTotals.data.bankDisbursementCount + periodTotals.data.savingsCount === 0 && (
                 <p className="rounded-xl border border-dashed px-3 py-3 text-sm text-muted-foreground">No activity was recorded for this period.</p>

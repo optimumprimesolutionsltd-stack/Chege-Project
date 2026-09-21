@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { ACTIVITY_TYPE } from '@/lib/activityTypes';
 import { getExpenseActivityEditHref } from '@/lib/expenseEditLink';
 import { formatDisplayDate } from '@/lib/displayFormat';
+import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 
 export interface ActivityItem {
   id: string;
@@ -84,7 +85,7 @@ export default function ActivityCard({ item, colors }: Props) {
           {item.description}
         </Text>
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-          {item.userName ?? (isExpense ? 'Joint bank' : 'Unknown')} · {formatDisplayDate(item.date)}
+          {item.userName ?? (isExpense ? GROUP_ATTRIBUTION : 'Unknown')} · {formatDisplayDate(item.date)}
           {expenseEditHref ? ' · Edit expense' : ''}
         </Text>
       </View>

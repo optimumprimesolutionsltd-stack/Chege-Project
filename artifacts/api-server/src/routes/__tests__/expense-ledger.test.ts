@@ -134,7 +134,7 @@ describe("GET /dashboard/expense-ledger", () => {
       id: "bank-disbursement-3",
       source: "bank_disbursement",
       paidFromBank: true,
-      payerName: "Joint bank",
+      payerName: "The group",
     });
   });
 
@@ -157,7 +157,7 @@ describe("GET /dashboard/expense-ledger", () => {
     const response = await request(buildApp())
       .get("/dashboard/expense-ledger?from=2026-09-01&to=2026-09-30");
 
-    expect(response.body.entries[0].payerName).toBe("Joint bank");
+    expect(response.body.entries[0].payerName).toBe("The group");
   });
 
   it("says so plainly when nobody was recorded", async () => {

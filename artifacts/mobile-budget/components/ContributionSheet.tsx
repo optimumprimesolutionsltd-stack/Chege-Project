@@ -157,7 +157,7 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
               style={[styles.emptyAction, { backgroundColor: colors.primary }]}
             >
               <Feather name="user-plus" size={16} color={colors.primaryForeground} />
-              <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Add people</Text>
+              <Text style={[styles.emptyActionText, { color: colors.primaryForeground }]}>Add members</Text>
             </Pressable>
           ) : null}
         </View>
@@ -179,7 +179,7 @@ export function ContributionSheet({ canManage = false }: { canManage?: boolean }
           <Text style={[styles.arrearsText, { color: colors.foreground }]}>
             {needsFullName.length === 1
               ? `${needsFullName[0]} is recorded under one name. Tap the pencil and add a surname so the row cannot be confused with another member's.`
-              : `${needsFullName.length} people are recorded under one name only. Tap the pencil and add surnames so their rows cannot be confused with each other.`}
+              : `${needsFullName.length} members are recorded under one name only. Tap the pencil and add surnames so their rows cannot be confused with each other.`}
           </Text>
         </View>
       ) : null}

@@ -25,8 +25,9 @@ import { evaluateAmountExpression, isAmountExpression } from "@/lib/amount-expre
 import { workspaceLabel } from "@/lib/workspace-identity";
 import { useListEditor } from "@/hooks/use-list-editor";
 import { EditableName, ListEditButton, ListEditorFooter, RemoveRowButton } from "@/components/list-editor";
+import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 
-// "Joint bank" is represented as null — never implicitly attributed to the signed-in user.
+// GROUP_ATTRIBUTION is represented as null — never implicitly attributed to the signed-in user.
 const JOINT_BANK_ID = null as null;
 
 function getBankEditDeepLink() {
@@ -141,15 +142,15 @@ export default function Bank() {
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
-  // Deposit attribution — null = Joint bank, string[] = named member IDs
-  // Default: Joint bank (empty array = no named depositors selected)
+  // Deposit attribution — null = The group, string[] = named member IDs
+  // Default: The group (empty array = no named depositors selected)
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
   const [depositorAmounts, setDepositorAmounts] = useState<Record<string, string>>({});
   const [incomeSourceId, setIncomeSourceId] = useState<number | null>(null);
   const [depositSourceKind, setDepositSourceKind] = useState<"income_source" | "other" | null>(null);
 
-  // Withdrawal attribution — null = Joint bank, string = named member ID
-  // Default: Joint bank
+  // Withdrawal attribution — null = The group, string = named member ID
+  // Default: The group
   const [withdrawerId, setWithdrawerId] = useState<string | null>(JOINT_BANK_ID);
   const [expenseCategory, setExpenseCategory] = useState("");
   const [withdrawalDestinationKind, setWithdrawalDestinationKind] = useState<"category" | "other" | "party">("category");
@@ -828,7 +829,7 @@ export default function Bank() {
             },
           });
         } else {
-          // Single named depositor or Joint bank (null)
+          // Single named depositor or The group (null)
           const madeById = !isSharedWorkspace ? user?.id : depositorIds.length === 1 ? depositorIds[0] : null;
           await createDeposit.mutateAsync({
             data: {
@@ -1822,7 +1823,7 @@ export default function Bank() {
                   <>
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">
-                        {isSharedWorkspace ? "Who is depositing?" : "Deposited by"}
+                        {isSharedWorkspace ? "Whose money is this?" : "Deposited by"}
                         {canManageShared && <span className="font-normal text-muted-foreground text-xs ml-1">(select multiple to split)</span>}
                       </label>
                       {!isSharedWorkspace ? (
@@ -1831,7 +1832,7 @@ export default function Bank() {
                         </p>
                       ) : <div className="grid grid-cols-2 gap-2" data-testid="deposit-attribution">
                         {/* Named member chips — a deposit always belongs to a
-                            person, so there is no "Joint bank" option here. */}
+                            person, so there is no GROUP_ATTRIBUTION option here. */}
                         {(canManageShared ? (members ?? []) : (members ?? []).filter((m) => m.userId === user?.id)).map(m => {
                           const name = m.userName?.split(' ')[0] ?? 'Member';
                           const selected = depositorIds.includes(m.userId);
@@ -1900,7 +1901,7 @@ export default function Bank() {
                       })()}
                     </div>
 
-                    {/* Income source — saved sources for one named depositor, or Other for Joint bank */}
+                    {/* Income source — saved sources for one named depositor, or Other for The group */}
                     {(singleDepositorId || depositorIds.length === 0) && (
                       <div className="space-y-2 sm:col-span-2">
                         <label className="text-sm font-semibold text-foreground">
@@ -1932,7 +1933,7 @@ export default function Bank() {
                         <p className="text-xs text-muted-foreground">
                           {singleDepositorId
                             ? "Select a saved stream or choose Other and add a narration."
-                            : "This deposit is attributed to the Joint bank. Choose Other to explain a non-salary source."}
+                            : "This deposit is attributed to the The group. Choose Other to explain a non-salary source."}
                         </p>
                       </div>
                     )}
@@ -1945,7 +1946,7 @@ export default function Bank() {
                     {isSharedWorkspace && <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">Who is withdrawing?</label>
                       <div className="grid grid-cols-3 gap-2" data-testid="withdrawal-attribution">
-                        {/* Joint bank — default selection */}
+                        {/* The group — default selection */}
                         <button
                           key="joint-bank"
                           type="button"
@@ -1957,7 +1958,7 @@ export default function Bank() {
                               : "bg-card border-input text-foreground hover:bg-muted/40"
                           }`}
                         >
-                          Joint bank
+                          The group
                         </button>
 
                         {/* Named member chips — one at a time */}

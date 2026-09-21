@@ -1,3 +1,4 @@
+import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 export type PreservedExpenseSplit = {
   userId?: string | null;
   label?: string;
@@ -54,7 +55,7 @@ export function buildSinglePayerFundingReplacement({
   sources: Array<{ incomeSourceId: number; label: string; amount: number }>;
 }): PreservedExpenseSplit[] {
   if (paidFromBank) {
-    return [{ userId: null, label: 'Joint bank', amount, fromBank: true }];
+    return [{ userId: null, label: GROUP_ATTRIBUTION, amount, fromBank: true }];
   }
   return sources.map((source) => ({
     userId,

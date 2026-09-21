@@ -312,11 +312,11 @@ export default function Activity() {
           {sharedHouseholdActivity.length > 0 && (
             <Card className="border-amber-500/30 bg-amber-500/5"><CardContent className="pt-5">
               <p className="font-semibold">Shared group funding</p>
-              <p className="mt-1 text-sm text-muted-foreground">These Joint bank portions are Shared group funds, not member contributions, so they are excluded from the totals above.</p>
+              <p className="mt-1 text-sm text-muted-foreground">These The group portions are Shared group funds, not member contributions, so they are excluded from the totals above.</p>
               <div className="mt-3 divide-y divide-border/60">
                 {sharedHouseholdActivity.map((item) => (
                   <div key={item.id} className="flex items-start justify-between gap-3 py-2 text-sm">
-                    <div className="min-w-0"><p className="break-words font-medium">{item.description}</p><p className="text-xs text-muted-foreground">{formatDate(item.date)} · Joint bank</p></div>
+                    <div className="min-w-0"><p className="break-words font-medium">{item.description}</p><p className="text-xs text-muted-foreground">{formatDate(item.date)} · The group</p></div>
                     <p className="shrink-0 font-semibold">{formatKes(item.amount)}</p>
                   </div>
                 ))}

@@ -335,7 +335,7 @@ describe("expense funding request contract", () => {
       incomeSplits: [{
         userId: null,
         fromBank: true,
-        label: "Joint bank",
+        label: "The group",
         amount: 1000,
         incomeSourceId: 7,
       }],

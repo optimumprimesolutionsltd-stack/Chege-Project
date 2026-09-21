@@ -19,6 +19,7 @@ import {
   requireMemberSelfAttribution,
   requireTransactionEligibility,
 } from "../lib/activeGroup";
+import { GROUP_ATTRIBUTION } from "../lib/attribution";
 
 const router = Router();
 
@@ -448,7 +449,7 @@ router.get("/savings-goals/:id/contributions", async (req, res): Promise<void> =
   res.json(rows.map((c) => ({
     ...c,
     // null createdByUserId = Joint bank; non-null but no user found = still use name or fallback
-    contributorName: c.createdByUserId === null ? "Joint bank" : (c.contributorName ?? "Unknown"),
+    contributorName: c.createdByUserId === null ? GROUP_ATTRIBUTION : (c.contributorName ?? "Unknown"),
     createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
   })));
 });

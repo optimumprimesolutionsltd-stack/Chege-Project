@@ -29,6 +29,7 @@ import {
 } from "../lib/activeGroup";
 import { canonicalExpenseCategoryName, normalizeExpenseCategoryName } from "../lib/categoryNames";
 import { headingAmong, postingToHeadingError } from "../lib/category-headings";
+import { GROUP_ATTRIBUTION } from "../lib/attribution";
 
 const router = Router();
 
@@ -235,7 +236,7 @@ async function validateFundingSplits(raw: unknown, amount: number, groupId: numb
 }
 
 function splitLabel(split: FundingSplit) {
-  if (split.fromBank) return "Joint bank";
+  if (split.fromBank) return GROUP_ATTRIBUTION;
   return split.label ?? "Household member";
 }
 

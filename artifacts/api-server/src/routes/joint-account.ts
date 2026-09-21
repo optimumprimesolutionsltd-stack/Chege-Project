@@ -25,6 +25,7 @@ import {
 import { canonicalExpenseCategoryName } from "../lib/categoryNames";
 import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
+import { GROUP_ATTRIBUTION } from "../lib/attribution";
 
 const router = Router();
 /**
@@ -327,7 +328,7 @@ async function enrichTx(
       : (user?.firstName ?? null);
   return {
     ...tx,
-    // null madeById = Joint bank (shared household); name resolves to null so UI can show "Joint bank"
+    // null madeById = Joint bank (shared household); name resolves to null so UI can show GROUP_ATTRIBUTION
     madeByName,
     expenseCategory: tx.expenseCategory ?? null,
     savingsGoalId: tx.savingsGoalId ?? null,
