@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { getProjectedBalanceAfterPosting } from '../bankBalance';
 
 const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+const amounts = readFileSync('lib/bankAmount.ts', 'utf8');
 
 // A day's banking is several postings, not one. Recording them meant reopening
 // the sheet for each line, re-choosing the type, the date and the account every
@@ -124,7 +125,7 @@ describe('checking the account against the statement', () => {
     // — which rejects a minus sign, correctly, for an amount — is the wrong
     // one to read a balance with.
     expect(bank).toContain('const parsedStatementBalance = parseBalanceFigure(statementBalance);');
-    expect(bank).toContain(String.raw`if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;`);
+    expect(amounts).toContain(String.raw`if (!/^-?\d+(?:\.\d{1,2})?$/.test(normalized)) return null;`);
   });
 
   it('says which budget it will touch', () => {
