@@ -3,13 +3,18 @@ import { describe, expect, it } from 'vitest';
 
 const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
 const expense = readFileSync('app/add-expense.tsx', 'utf8');
+const amounts = readFileSync('lib/bankAmount.ts', 'utf8');
 
 // Working out a day's receipts meant leaving for a calculator and coming back
 // with a number, losing the sitting on the way.
 describe('the amount fields do arithmetic', () => {
   it('reads an expression where the bank reads an amount', () => {
-    expect(bank).toContain('function readAmount(value: string): number | null {');
-    expect(bank).toContain('return parseBankAmount(value) ?? evaluateAmountExpression(value);');
+    // The helpers moved to lib/bankAmount.ts when the day screen needed them
+    // too: an amount accepted on one screen and refused on the other is a
+    // difference nobody could explain afterwards.
+    expect(amounts).toContain('export function readAmount(value: string): number | null {');
+    expect(amounts).toContain('return parseBankAmount(value) ?? evaluateAmountExpression(value);');
+    expect(bank).toContain("import { parseBankAmount, parseBalanceFigure, readAmount } from '@/lib/bankAmount';");
     expect(bank).toContain("const parsed = amount.trim() === '' && editingTransactionId !== null ? 0 : readAmount(amount);");
   });
 

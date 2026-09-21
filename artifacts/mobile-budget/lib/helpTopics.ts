@@ -66,6 +66,19 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['charge', 'fee', 'cost', 'excise', 'together', 'both'],
       },
       {
+        question: 'Record a whole day from a statement',
+        steps: [
+          'Banking tab, then Enter a whole day.',
+          'One date and one account for all of it. Add a line for each thing that happened.',
+          'A line can be spending, paying somebody you owe, money in, somebody paying you back, or a loan.',
+          'The balance moves as you type, so you can work down to the figure the bank shows.',
+          'Save once. Each line becomes an ordinary posting — there is no batch afterwards.',
+          'Balances owed are offered together at the end, rather than after every line.',
+        ],
+        route: '/bank-day',
+        keywords: ['batch', 'several', 'many', 'day', 'statement', 'list', 'bulk', 'at once'],
+      },
+      {
         question: 'Record a whole day of banking in one go',
         steps: [
           'Banking tab, then Withdraw.',
