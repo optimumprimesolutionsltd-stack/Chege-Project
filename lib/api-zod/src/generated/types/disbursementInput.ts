@@ -9,8 +9,8 @@ import type { DisbursementInputDestinationKind } from './disbursementInputDestin
 
 export interface DisbursementInput {
   /**
-     * Positive KES amount with up to two decimal places
-     * @minimum 0.01
+     * KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
+     * @minimum 0
      */
   amount: number;
   description?: string;

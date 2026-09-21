@@ -11,7 +11,7 @@ export interface BankToBankTransferInput {
   sourceAccountId: number;
   /** @minimum 1 */
   destinationAccountId: number;
-  /** @minimum 0.01 */
+  /** @minimum 0 */
   amount: number;
   /**
      * @minLength 1

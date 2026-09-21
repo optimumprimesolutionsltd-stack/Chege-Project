@@ -2263,7 +2263,7 @@ components:
           description: Optional readable source label retained for history.
         amount:
           type: number
-          minimum: 1
+          minimum: 0
           multipleOf: 1
         incomeSourceId:
           type: number
@@ -2287,7 +2287,7 @@ components:
           description: Cannot be "Uncategorized", which is reserved internally for uncategorized expenses.
         amount:
           type: number
-          minimum: 1
+          minimum: 0
           multipleOf: 1
       required: [category, amount]
 
@@ -3534,9 +3534,9 @@ components:
       properties:
         amount:
           type: number
-          minimum: 0.01
+          minimum: 0
           multipleOf: 0.01
-          description: Positive KES amount with up to two decimal places
+          description: KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
         description:
           type: string
         date:
@@ -3600,7 +3600,7 @@ components:
           description: Contributor who supplied this portion, when they have no account.
         amount:
           type: number
-          minimum: 0.01
+          minimum: 0
           multipleOf: 0.01
         incomeSourceId:
           type: number
@@ -3612,9 +3612,9 @@ components:
       properties:
         amount:
           type: number
-          minimum: 0.01
+          minimum: 0
           multipleOf: 0.01
-          description: Positive KES amount with up to two decimal places
+          description: KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
         description:
           type: string
         date:
@@ -3646,7 +3646,7 @@ components:
       properties:
         amount:
           type: number
-          minimum: 0.01
+          minimum: 0
           multipleOf: 0.01
         narration:
           type: string
@@ -3669,7 +3669,7 @@ components:
       properties:
         amount:
           type: number
-          minimum: 0.01
+          minimum: 0
           multipleOf: 0.01
         description:
           type: string
@@ -3724,7 +3724,7 @@ components:
       properties:
         amount:
           type: number
-          minimum: 1
+          minimum: 0
           multipleOf: 1
           description: Savings goals currently use whole KES amounts
         goalId:
@@ -3759,7 +3759,7 @@ components:
           minimum: 1
         amount:
           type: number
-          minimum: 0.01
+          minimum: 0
           multipleOf: 0.01
         narration:
           type: string
@@ -3835,9 +3835,9 @@ components:
             ID when non-null.
         amount:
           type: number
-          minimum: 1
+          minimum: 0
           multipleOf: 1
-          description: Amount attributed to this contributor (whole KES only; positive integer)
+          description: Amount attributed to this contributor (whole KES only; zero or more)
       required:
         - userId
         - amount

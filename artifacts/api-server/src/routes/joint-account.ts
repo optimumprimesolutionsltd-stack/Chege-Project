@@ -27,7 +27,15 @@ import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 
 const router = Router();
-const PositiveBankAmount = z.number().finite().positive().multipleOf(0.01);
+/**
+ * Amounts may be zero.
+ *
+ * Editing a posting down to nothing has to be possible without deleting the
+ * row: a line on a statement that turned out to be reversed is still a line
+ * that happened, and deleting it loses the reconciliation along with it. The
+ * opening balance has accepted zero all along, and every other amount now
+ * reads the same way.
+ */
 const NonNegativeBankAmount = z.number().finite().nonnegative().multipleOf(0.01);
 
 function currentBusinessDate(): string {
@@ -70,7 +78,7 @@ async function validateIncomeSourceOwner(
 }
 
 const DepositInput = z.object({
-  amount: PositiveBankAmount,
+  amount: NonNegativeBankAmount,
   description: z.string().min(1),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -86,14 +94,14 @@ const DepositInput = z.object({
   contributorSplits: z.array(z.object({
     userId: z.string().min(1).optional(),
     contributorId: z.number().int().positive().optional(),
-    amount: PositiveBankAmount,
+    amount: NonNegativeBankAmount,
     incomeSourceId: z.number().int().positive().optional(),
   })).min(1).optional(),
   accountId: z.number().int().positive().optional(),
 });
 
 const DisbursementInput = z.object({
-  amount: PositiveBankAmount,
+  amount: NonNegativeBankAmount,
   description: z.string().trim().max(200).optional().default(""),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -103,14 +111,14 @@ const DisbursementInput = z.object({
 });
 
 const BankChargeInput = z.object({
-  amount: PositiveBankAmount,
+  amount: NonNegativeBankAmount,
   narration: z.string().trim().min(1).max(200),
   date: z.string().min(1),
   accountId: z.number().int().positive().optional(),
 });
 
 const UpdateJointAccountInput = z.object({
-  amount: PositiveBankAmount,
+  amount: NonNegativeBankAmount,
   description: z.string().trim().max(200).optional(),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -120,7 +128,7 @@ const UpdateJointAccountInput = z.object({
   destinationKind: z.enum(["category", "other"]).optional(),
   contributorSplits: z.array(z.object({
     userId: z.string().min(1),
-    amount: PositiveBankAmount,
+    amount: NonNegativeBankAmount,
     incomeSourceId: z.number().int().positive().nullable().optional(),
   })).optional(),
   transferDirection: z.enum(["to_savings", "from_savings"]).optional(),
@@ -145,7 +153,7 @@ const OpeningBalanceInput = z.object({
   accountId: z.number().int().positive().optional(),
 });
 const SavingsTransferInput = z.object({
-  amount: z.number().int().positive(),
+  amount: z.number().int().nonnegative(),
   goalId: z.number().int().positive(),
   narration: z.string().trim().min(1).max(200),
   date: z.string().min(1),
@@ -155,7 +163,7 @@ const SavingsTransferInput = z.object({
 const BankToBankTransferInput = z.object({
   sourceAccountId: z.number().int().positive(),
   destinationAccountId: z.number().int().positive(),
-  amount: PositiveBankAmount,
+  amount: NonNegativeBankAmount,
   narration: z.string().trim().min(1).max(200),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });

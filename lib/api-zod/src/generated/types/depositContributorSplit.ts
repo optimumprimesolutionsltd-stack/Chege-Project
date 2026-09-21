@@ -17,7 +17,7 @@ export interface DepositContributorSplit {
      * @minimum 1
      */
   contributorId?: number;
-  /** @minimum 0.01 */
+  /** @minimum 0 */
   amount: number;
   /** @minimum 1 */
   incomeSourceId?: number;

@@ -10,7 +10,7 @@ describe('the amount fields do arithmetic', () => {
   it('reads an expression where the bank reads an amount', () => {
     expect(bank).toContain('function readAmount(value: string): number | null {');
     expect(bank).toContain('return parseBankAmount(value) ?? evaluateAmountExpression(value);');
-    expect(bank).toContain('const parsed = readAmount(amount);');
+    expect(bank).toContain("const parsed = amount.trim() === '' && editingTransactionId !== null ? 0 : readAmount(amount);");
   });
 
   it('projects the balance from the worked-out figure, not the typed text', () => {

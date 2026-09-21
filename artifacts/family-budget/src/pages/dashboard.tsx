@@ -566,11 +566,11 @@ function IncomeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = Number(amount);
-    if (!amt || amt <= 0) {
+    if (!amount.trim() || !Number.isFinite(amt) || amt < 0) {
       toast({
         variant: "destructive",
         title: "Enter a valid amount",
-        description: "Add a deposit amount greater than zero before recording it.",
+        description: "Add a deposit amount of zero or more before recording it.",
       });
       return;
     }
@@ -1234,11 +1234,11 @@ function ExpenseForm({
     const amt = Number(amount);
     const bankAmount = Number(bankPortion);
     const directAmount = Number(directPortion);
-    if (!amt || amt <= 0) {
+    if (!amount.trim() || !Number.isFinite(amt) || amt < 0) {
       toast({
         variant: "destructive",
         title: "Enter a valid amount",
-        description: "Add an expense amount greater than zero before logging it.",
+        description: "Add an expense amount of zero or more before logging it.",
       });
       return;
     }

@@ -726,9 +726,14 @@ export default function BankScreen() {
   const validDepositorIds = depositorIds.filter(id => knownMemberIds.has(id));
 
   const handleSubmit = async ({ keepOpen = false }: { keepOpen?: boolean } = {}) => {
-    const parsed = readAmount(amount);
-    if (parsed === null || parsed <= 0) {
-      Alert.alert('Invalid amount', 'Enter an amount greater than zero with up to two decimal places.');
+    // Clearing the amount on an existing posting means zero, not "unfinished".
+    // A line that turned out to be reversed is still a line that happened, and
+    // deleting the row loses the reconciliation with it. On a new posting an
+    // empty field is still an empty field: saving one silently as zero would
+    // be a way to create rows by accident.
+    const parsed = amount.trim() === '' && editingTransactionId !== null ? 0 : readAmount(amount);
+    if (parsed === null || parsed < 0) {
+      Alert.alert('Invalid amount', 'Enter zero or more, with up to two decimal places.');
       return;
     }
     if (txType === 'transfer' && !Number.isInteger(parsed)) {
@@ -891,10 +896,10 @@ export default function BankScreen() {
           const splitAmounts = validDepositorIds.map(
             id => parseBankAmount(depositorAmounts[id] || ''),
           );
-          if (splitAmounts.some(portion => portion === null || portion <= 0)) {
+          if (splitAmounts.some(portion => portion === null || portion < 0)) {
             Alert.alert(
               'Enter every amount',
-              'Each depositor portion must be positive with up to two decimal places.',
+              'Each depositor portion must be zero or more, with up to two decimal places.',
             );
             setSubmitting(false);
             return;

@@ -612,12 +612,17 @@ export default function Bank() {
       return;
     }
 
-    const total = parseBankAmount(amount);
-    if (total === null || total <= 0) {
+    // Clearing the amount on an existing posting means zero, not
+    // "unfinished". A line that turned out to be reversed is still a line
+    // that happened, and deleting the row loses the reconciliation with it.
+    // On a new posting an empty field stays an empty field: saving one
+    // silently as zero would be a way to create rows by accident.
+    const total = amount.trim() === "" && editingTransaction ? 0 : parseBankAmount(amount);
+    if (total === null || total < 0) {
       toast({
         variant: "destructive",
         title: "Enter a valid KES amount",
-        description: "Use a positive amount with up to two decimal places.",
+        description: "Use zero or more, with up to two decimal places.",
       });
       return;
     }
@@ -651,11 +656,11 @@ export default function Bank() {
 
     if (mode === "deposit" && isMultiDepositor) {
       const splitAmounts = depositorIds.map((id) => parseBankAmount(depositorAmounts[id] || ""));
-      if (splitAmounts.some((portion) => portion === null || portion <= 0)) {
+      if (splitAmounts.some((portion) => portion === null || portion < 0)) {
         toast({
           variant: "destructive",
           title: "Enter every depositor's amount",
-          description: "Each portion must be positive with up to two decimal places.",
+          description: "Each portion must be zero or more, with up to two decimal places.",
         });
         return;
       }
@@ -1347,7 +1352,7 @@ export default function Bank() {
                     value={amount}
                     onChange={e => setAmount(e.target.value)}
                     required
-                    min="1"
+                    min="0"
                     step="0.01"
                     className="h-12 text-lg bg-card"
                   />
@@ -1589,7 +1594,7 @@ export default function Bank() {
                                   <input
                                     type="number"
                                     placeholder="0"
-                                     min="1"
+                                     min="0"
                                     step="0.01"
                                     data-testid={`input-depositor-amount-${did}`}
                                     value={depositorAmounts[did] ?? ""}

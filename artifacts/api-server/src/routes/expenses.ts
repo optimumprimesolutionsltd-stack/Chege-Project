@@ -35,7 +35,9 @@ const router = Router();
 const FundingSplitSchema = z.object({
   userId: z.string().nullable().optional(),
   label: z.string().trim().min(1).optional(),
-  amount: z.number().int().positive(),
+  // Zero is allowed: an expense edited down to nothing still has to balance
+  // against its funding, and deleting the row is not the same thing.
+  amount: z.number().int().nonnegative(),
   incomeSourceId: z.number().int().positive().optional(),
   fromBank: z.boolean(),
   accountId: z.number().int().positive().optional(),
@@ -45,7 +47,7 @@ type FundingSplit = z.infer<typeof FundingSplitSchema>;
 
 const CategoryAllocationSchema = z.object({
   category: z.string().trim().min(1),
-  amount: z.number().int().positive(),
+  amount: z.number().int().nonnegative(),
 });
 type CategoryAllocation = z.infer<typeof CategoryAllocationSchema>;
 
@@ -133,7 +135,7 @@ async function validateCategoryAllocations(
     return { category: storageCategory, replaceAllocations: true };
   }
   const parsed = z.array(CategoryAllocationSchema).min(1).safeParse(raw);
-  if (!parsed.success) return { category: storageCategory, error: "Each category allocation needs a category and a positive whole-KES amount." };
+  if (!parsed.success) return { category: storageCategory, error: "Each category allocation needs a category and a whole-KES amount of zero or more." };
   const allocations = parsed.data.map((allocation) => ({
     ...allocation,
     category: canonicalExpenseCategoryName(allocation.category),
@@ -201,7 +203,7 @@ async function validateFundingSplits(raw: unknown, amount: number, groupId: numb
 > {
   if (raw === undefined) return {};
   const parsed = z.array(FundingSplitSchema).min(1).safeParse(raw);
-  if (!parsed.success) return { error: "Each funding portion needs a positive whole-KES amount." };
+  if (!parsed.success) return { error: "Each funding portion needs a whole-KES amount of zero or more." };
   const splits = parsed.data;
   const total = splits.reduce((sum, split) => sum + split.amount, 0);
   if (total !== amount) return { error: `Funding portions (${total}) must equal the expense total (${amount}).` };
