@@ -903,7 +903,7 @@ export default function BankScreen() {
     );
   };
 
-  const handleCreateParty = async () => {
+  const handleCreateParty = async ({ owing = false }: { owing?: boolean } = {}) => {
     const name = newPartyName.trim();
     if (!name) {
       Alert.alert('Who is it?', 'Give the person or institution a name, such as Mwangi or KCB.');
@@ -922,17 +922,21 @@ export default function BankScreen() {
         body: JSON.stringify({
           name,
           kind: newPartyIsInstitution ? 'institution' : 'person',
-          owedByUs: Math.round(owed),
+          // Which way it stands between you is the only difference between
+          // somebody you owe and somebody who owes you.
+          ...(owing ? { owedToUs: Math.round(owed) } : { owedByUs: Math.round(owed) }),
         }),
       });
       // Awaited: the picker and the settlement prompt both read this list, and
       // a party created moments ago has to be in it by the time they do.
       await queryClient.invalidateQueries({ queryKey: ['parties'] });
-      setWithdrawPartyId(party.id);
+      if (owing) setRepayingPartyId(party.id);
+      else setWithdrawPartyId(party.id);
       setNewPartyName('');
       setNewPartyOwed('');
       setNewPartyIsInstitution(false);
       setShowPartyPicker(false);
+      setShowRepayPicker(false);
     } catch (error: unknown) {
       if (!handleLapsedError(error)) {
         Alert.alert('Could not add them', error instanceof Error ? error.message : 'Please try again.');
@@ -2503,7 +2507,7 @@ export default function BankScreen() {
               {/* Somebody paying back what they owe. Kept above who deposited
                   it, because the answer changes what the money means: a
                   repayment is not income, so no income source is asked for. */}
-              {isDeposit && owingParties.length > 0 ? (
+              {isDeposit ? (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>Is this somebody paying you back?</Text>
                   <TouchableOpacity
@@ -2542,6 +2546,66 @@ export default function BankScreen() {
                           </Text>
                         </TouchableOpacity>
                       ))}
+                      {/* Saying somebody owes you has to be possible here,
+                          because here is the only place it is offered. */}
+                      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }} testID="bank-add-debtor-form">
+                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                          {owingParties.length === 0 ? 'NOBODY OWES YOU YET — ADD THEM' : "CAN'T FIND THEM? ADD SOMEBODY"}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TextInput
+                            value={newPartyName}
+                            onChangeText={setNewPartyName}
+                            editable={!addingParty}
+                            placeholder="e.g. Kamau"
+                            placeholderTextColor={colors.mutedForeground}
+                            style={{
+                              flex: 1, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                              borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                              fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                            }}
+                            testID="bank-new-debtor-name"
+                          />
+                          <TextInput
+                            value={newPartyOwed}
+                            onChangeText={setNewPartyOwed}
+                            editable={!addingParty}
+                            placeholder="Owes you"
+                            placeholderTextColor={colors.mutedForeground}
+                            keyboardType="decimal-pad"
+                            style={{
+                              width: 100, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                              borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                              fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                            }}
+                            testID="bank-new-debtor-owed"
+                          />
+                          <TouchableOpacity
+                            disabled={addingParty}
+                            onPress={() => handleCreateParty({ owing: true })}
+                            style={{ minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingParty ? 0.55 : 1 }}
+                            testID="bank-add-debtor"
+                          >
+                            {addingParty ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
+                          </TouchableOpacity>
+                        </View>
+                        <Pressable
+                          onPress={() => setNewPartyIsInstitution((on) => !on)}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: newPartyIsInstitution }}
+                          testID="bank-new-debtor-institution"
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                        >
+                          <Feather
+                            name={newPartyIsInstitution ? 'check-square' : 'square'}
+                            size={15}
+                            color={newPartyIsInstitution ? colors.primary : colors.mutedForeground}
+                          />
+                          <Text style={{ color: colors.dropdownForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+                            A business, not a person
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
                   )}
                   {repayingParty ? (
@@ -3026,7 +3090,7 @@ export default function BankScreen() {
                               />
                               <TouchableOpacity
                                 disabled={addingParty}
-                                onPress={handleCreateParty}
+                                onPress={() => handleCreateParty()}
                                 style={{ minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingParty ? 0.55 : 1 }}
                                 testID="bank-add-party"
                               >

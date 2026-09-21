@@ -303,6 +303,17 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['mwangi', 'kcb', 'creditor', 'repay', 'loan', 'party', 'institution'],
       },
       {
+        question: 'Take money back from somebody who owed you',
+        steps: [
+          'Banking tab, then Deposit.',
+          'Answer yes to "Is this somebody paying you back?", and pick them.',
+          'Nobody listed yet? Add them there — a name and what they owe you.',
+          'This never counts as income: you had the money once already, when you lent it. It still shows in the account.',
+        ],
+        route: '/(tabs)/bank',
+        keywords: ['kamau', 'debtor', 'owes me', 'repaid', 'paid me back', 'lent'],
+      },
+      {
         question: 'Stop tracking a debt',
         steps: [
           'Debt tab, then Stop tracking on that debt.',
