@@ -262,6 +262,16 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: 'Debt',
     topics: [
       {
+        question: 'Find debt when there is no Debt tab',
+        steps: [
+          'The Debt tab appears only once a debt is tracked, so an empty one is never in the way.',
+          'Settings, then Debt. That row is always there, tracked or not.',
+          'Opening it also brings back the prompt on Home, if that was put away.',
+        ],
+        route: '/(tabs)/settings',
+        keywords: ['missing', 'where', 'hidden', 'gone', 'cannot find', 'no debt tab'],
+      },
+      {
         question: 'Start tracking a debt',
         steps: [
           'Debt tab, then Track a debt.',

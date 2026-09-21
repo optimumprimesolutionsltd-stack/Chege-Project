@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 const card = readFileSync('components/DebtSummaryCard.tsx', 'utf8');
 const home = readFileSync('app/(tabs)/index.tsx', 'utf8');
+const settings = readFileSync('app/(tabs)/settings.tsx', 'utf8');
+const help = readFileSync('lib/helpTopics.ts', 'utf8');
 
 // The Debt tab appears only once a debt is tracked, and the only places to
 // track one were that tab and a tick-box inside the withdraw category
@@ -68,5 +70,25 @@ describe('it can be put away, and got back', () => {
   it('survives storage that refuses to answer', () => {
     // A read that throws must not hide the prompt for ever.
     expect(card).toContain('if (active) setSnoozedUntil(0);');
+  });
+});
+
+// Snoozed for 90 days, with the Debt tab not there either, debt would be
+// unmentioned anywhere in the app for a season. Somebody who took a loan in
+// the meantime needs a way back that does not depend on being asked.
+describe('debt is never entirely out of reach', () => {
+  it('keeps a row in Settings that does not come and go', () => {
+    expect(settings).toContain('testID="open-debt"');
+    expect(settings).toContain("router.push('/(tabs)/debt');");
+  });
+
+  it('brings the prompt back when that row is used', () => {
+    // Somebody who said "No debt" and then borrowed should be asked again.
+    expect(settings).toContain("AsyncStorage.multiRemove(['jamvi:debt-prompt-snooze-until', 'home_debt_prompt_dismissed'])");
+  });
+
+  it('says so in the guide, under what somebody would search for', () => {
+    expect(help).toContain('Find debt when there is no Debt tab');
+    expect(help).toContain("'no debt tab'");
   });
 });
