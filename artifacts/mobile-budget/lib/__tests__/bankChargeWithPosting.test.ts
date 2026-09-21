@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+const day = readFileSync('app/bank-day.tsx', 'utf8');
 
 // Paying a loan through the bank costs the payment and the bank's fee, and
 // they arrive together. Recording them meant two full trips through the sheet,
@@ -75,9 +76,25 @@ describe('the figures include it', () => {
     expect(bank).toContain("amount: parsed + (txType === 'disbursement' ? chargeToPost : 0)");
   });
 
-  it('clears between postings in a sitting', () => {
+  it('clears the amount between postings in a sitting', () => {
     // The next line is rarely charged the same fee, and one carried over
     // would be money out that never happened.
     expect((bank.match(/setChargeAmount\(''\);/g) ?? []).length).toBe(2);
+  });
+
+  it('keeps the category, because it is the same expense every time', () => {
+    // Picking it afresh per posting is how a month's fees end up spread over
+    // four categories and never total.
+    expect(bank).not.toContain("setChargeCategory('');");
+    expect(bank).toContain("const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';");
+    expect(bank).toContain('AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name)');
+  });
+
+  it('remembers it on the day screen under the same key', () => {
+    // Two screens disagreeing about where a fee goes is the same scattering
+    // by another route.
+    expect(day).toContain("const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';");
+    expect(day).toContain('const addRow = () => {');
+    expect(day).toContain('const row = { ...blankRow(), chargeCategory };');
   });
 });

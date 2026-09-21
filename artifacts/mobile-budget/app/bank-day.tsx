@@ -16,7 +16,7 @@
  * been typed one at a time. There is no batch to find, undo, or explain.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import {
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { PageScrollView } from '@/components/PageScrollReset';
@@ -90,6 +91,9 @@ type DayRow = {
   error: string | null;
 };
 
+/** Shared with the posting sheet: a bank charge is the same expense every time. */
+const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
+
 function formatKES(n?: number | null): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '0';
   return n.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -141,6 +145,27 @@ export default function BankDayScreen() {
   const [rows, setRows] = useState<DayRow[]>([blankRow()]);
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // The category every fee on this day goes to, remembered across sittings so
+  // the month's charges total instead of scattering.
+  const [chargeCategory, setChargeCategory] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(CHARGE_CATEGORY_KEY)
+      .then((stored) => {
+        if (active && stored) setChargeCategory(stored);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const rememberChargeCategory = (key: string, name: string) => {
+    setChargeCategory(name);
+    patchRow(key, { chargeCategory: name });
+    AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name).catch(() => {});
+  };
 
   const { data: account } = useGetJointAccount(
     selectedAccountId ? { accountId: selectedAccountId } : undefined,
@@ -192,7 +217,7 @@ export default function BankDayScreen() {
   };
 
   const addRow = () => {
-    const row = blankRow();
+    const row = { ...blankRow(), chargeCategory };
     setRows((current) => [...current, row]);
     setOpenRow(row.key);
   };
@@ -675,7 +700,7 @@ export default function BankDayScreen() {
                     testID={`bank-day-charge-category-${index}`}
                     value={row.chargeCategory}
                     tree={categoryTree}
-                    onPick={(name) => patchRow(row.key, { chargeCategory: name })}
+                    onPick={(name) => rememberChargeCategory(row.key, name)}
                     placeholder="Charge category"
                   />
                 ) : null}
