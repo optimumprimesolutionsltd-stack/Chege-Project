@@ -65,3 +65,63 @@ describe('the phone can manage a debt', () => {
     expect(card).toContain('debtBalance: null, debtInterestRateBps: null');
   });
 });
+
+// Adding a creditor from the withdraw sheet produced an ordinary category, so
+// saying what was owed still meant a trip to the Debt tab — which costs the
+// payment being entered, the same fault as the account and the goal.
+describe("making a creditor where it is paid", () => {
+  it("offers to track the new category as money owed", () => {
+    expect(bank).toContain('testID="bank-new-category-is-debt"');
+    expect(bank).toContain("This is money I owe");
+    expect(bank).toContain('testID="bank-new-category-owed"');
+  });
+
+  it("sends the balance and the rate with the category", () => {
+    expect(bank).toContain("debtBalance: Math.round(owed ?? 0),");
+    // Basis points, so the rate is an exact integer rather than a float that
+    // drifts on repeated writes.
+    expect(bank).toContain("debtInterestRateBps: ratePercent ? Math.round(Number(ratePercent) * 100) : null,");
+  });
+
+  it("takes the rate as a percentage and refuses nonsense", () => {
+    expect(bank).toContain("Give the yearly rate as a percentage, such as 14 or 7.5.");
+  });
+
+  it("leaves an ordinary category alone", () => {
+    // The debt columns are sent only when the box is ticked; everything else
+    // added here is still a plain category.
+    expect(bank).toContain("...(newCategoryIsDebt");
+  });
+
+  it("clears the debt fields after adding, like the rest of the form", () => {
+    expect(bank).toContain("setNewCategoryIsDebt(false);");
+    expect(bank).toContain("setNewCategoryOwed('');");
+  });
+
+  it("waits for the category list before the withdrawal can be saved against it", () => {
+    // The reduce prompt reads that list after the withdrawal saves. Fired and
+    // forgotten, a debt created seconds earlier might not be in it yet, and
+    // the offer would simply not appear.
+    expect(bank).toContain("await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });");
+  });
+});
+
+// A debt read as an ordinary category in the picker, so the reduce prompt
+// afterwards arrived from nowhere.
+describe("the picker says which categories are debts", () => {
+  it("shows what is owed beside the name", () => {
+    expect(bank).toContain('testID={`withdraw-owed-${child}`}');
+    expect(bank).toContain('testID={`withdraw-owed-${group.name}`}');
+    expect(bank).toContain("owe KES {formatKES(owedOn(child))}");
+  });
+
+  it("says nothing for a category that is not a debt, or one already cleared", () => {
+    expect(bank).toContain("typeof row.debtBalance === 'number' && row.debtBalance > 0");
+    expect(bank).toContain("owedOn(child) !== null ? (");
+  });
+
+  it("builds the lookup once per category list, not per row", () => {
+    expect(bank).toContain("const owedByCategory = useMemo(() => {");
+    expect(bank).toContain("}, [categories]);");
+  });
+});
