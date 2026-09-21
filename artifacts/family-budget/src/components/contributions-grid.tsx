@@ -97,7 +97,7 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
                 Who has paid
                 {open ? (
                   <span onClick={(event) => event.stopPropagation()}>
-                    <EditListButton editor={editor} canManage={canManage} label="Add or remove people" />
+                    <EditListButton editor={editor} canManage={canManage} label="Add or remove members" />
                   </span>
                 ) : null}
               </span>
@@ -158,7 +158,7 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
           <>
             <div className="flex flex-col items-center gap-3 py-6">
               <p className="text-center text-sm text-muted-foreground">
-                No contributors yet. Add the people who contribute — they do not need the app, and each needs both names.
+                No contributors yet. Add the members who contribute — they do not need the app, and each needs both names.
               </p>
               {/* The footer is hidden until the editor is open, so without this
                   the only way in was the small header control, which the copy
@@ -166,7 +166,7 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
               {canManage && !editor.editing ? (
                 <Button size="sm" onClick={editor.open} data-testid="contributions-add-first-people">
                   <UserPlus className="mr-1 h-4 w-4" aria-hidden="true" />
-                  Add people
+                  Add members
                 </Button>
               ) : null}
             </div>
@@ -201,8 +201,8 @@ export function ContributionsGrid({ canManage = false }: { canManage?: boolean }
                 <span>
                   {needsFullName.length === 1
                     ? `${needsFullName[0]} is recorded under one name.`
-                    : `${needsFullName.length} people are recorded under one name only.`}{" "}
-                  Use <span className="font-semibold">Add or remove people</span> to add a surname, so a row cannot be
+                    : `${needsFullName.length} members are recorded under one name only.`}{" "}
+                  Use <span className="font-semibold">Add or remove members</span> to add a surname, so a row cannot be
                   confused with another member's.
                 </span>
               </p>

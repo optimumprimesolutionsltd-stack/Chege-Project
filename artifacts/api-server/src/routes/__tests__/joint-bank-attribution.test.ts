@@ -14,7 +14,7 @@
  *   9. Cascade contribute with no contributorSplits → records null (Joint bank).
  *  10. Cascade contribute with contributorSplits → validates IDs and records splits.
  *  11. Cascade contribute with splits that don't sum to amount → 400 error.
- *  12. Contribution history: null createdByUserId → contributorName = "Joint bank".
+ *  12. Contribution history: null createdByUserId → contributorName = "The group".
  *  13. Contribution history: named createdByUserId → contributorName = member name.
  */
 
@@ -710,7 +710,7 @@ describe("GET /savings-goals/:id/contributions — contributorName", () => {
     });
   }
 
-  it("returns 'Joint bank' for null createdByUserId", async () => {
+  it("returns 'The group' for null createdByUserId", async () => {
     wireGoalExistsSelect([
       { id: 10, amount: 500, createdByUserId: null, contributorName: null },
     ]);
@@ -718,7 +718,7 @@ describe("GET /savings-goals/:id/contributions — contributorName", () => {
     const res = await request(savingsApp).get("/savings-goals/1/contributions");
 
     expect(res.status).toBe(200);
-    expect(res.body[0].contributorName).toBe("Joint bank");
+    expect(res.body[0].contributorName).toBe("The group");
     expect(res.body[0].createdByUserId).toBeNull();
   });
 
@@ -745,7 +745,7 @@ describe("GET /savings-goals/:id/contributions — contributorName", () => {
     expect(res.status).toBe(200);
     for (const row of res.body) {
       expect(row.contributorName).not.toBe("Unknown");
-      expect(row.contributorName).toBe("Joint bank");
+      expect(row.contributorName).toBe("The group");
     }
   });
 });

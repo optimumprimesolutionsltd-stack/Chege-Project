@@ -249,7 +249,7 @@ export default function BankScreen() {
   const [savingAccount, setSavingAccount] = useState(false);
 
   // ── Deposit payer state ────────────────────────────────────────────────────
-  // depositorIds: [] = Joint bank (null madeById)
+  // depositorIds: [] = The group (null madeById)
   //               [id] = single named member
   //               [id1, id2, …] = multi-split named members
   const [depositorIds, setDepositorIds] = useState<string[]>([]);
@@ -258,7 +258,7 @@ export default function BankScreen() {
   const [depositSourceKind, setDepositSourceKind] = useState<'income_source' | 'other' | null>(null);
 
   // ── Withdrawal payer state ─────────────────────────────────────────────────
-  // withdrawerId: null = Joint bank; string = named member
+  // withdrawerId: null = The group; string = named member
   const [withdrawerId, setWithdrawerId] = useState<string | null>(null);
 
   // ── Withdrawal destination state ───────────────────────────────────────────
@@ -354,7 +354,7 @@ export default function BankScreen() {
   // named person, and the group's when the money is coming from the joint
   // bank (depositorIds is empty for that — see the note above). The endpoint
   // has always answered both; the client simply never asked in the second
-  // case, so choosing Joint bank left "Other" as the only thing on offer.
+  // case, so choosing The group left "Other" as the only thing on offer.
   const { data: depositSources = [] } = useQuery<MemberIncomeSource[]>({
     queryKey: ['income-sources', singleDepositorId ?? '__group__'],
     queryFn: () => customFetch<MemberIncomeSource[]>(
@@ -762,8 +762,8 @@ export default function BankScreen() {
   };
 
   // ── Toggle depositor member chip ───────────────────────────────────────────
-  // Selecting a member deselects Joint bank (and vice versa).
-  // Selecting all-off means Joint bank again.
+  // Selecting a member deselects The group (and vice versa).
+  // Selecting all-off means The group again.
   const toggleDepositor = (memberId: string) => {
     if (!canManageShared) {
       Alert.alert('Admin access required', 'Ask a group owner or admin to choose another person for this shared transaction.');
@@ -774,7 +774,7 @@ export default function BankScreen() {
         // Deselect this member
         return prev.filter(id => id !== memberId);
       } else {
-        // Add member (removes Joint bank implicitly since joint = empty array)
+        // Add member (removes The group implicitly since joint = empty array)
         return [...prev, memberId];
       }
     });
@@ -782,7 +782,7 @@ export default function BankScreen() {
     setDepositSourceKind(null);
   };
 
-  // Selecting Joint bank chip explicitly clears all named members
+  // Selecting Group chip explicitly clears all named members
   const handleCreateGoal = async () => {
     const name = newGoalName.trim();
     if (!name) {
@@ -985,7 +985,7 @@ export default function BankScreen() {
 
   const selectJointBank = () => {
     if (!canManageShared) {
-      Alert.alert('Admin access required', 'Ask a group owner or admin to use Joint bank for this shared transaction.');
+      Alert.alert('Admin access required', "Ask a group owner or admin to record this as the group's rather than a member's.");
       return;
     }
     setDepositorIds([]);
@@ -1313,7 +1313,7 @@ export default function BankScreen() {
             },
           });
         } else if (isJoint) {
-          // Joint bank: send madeById: null explicitly
+          // The group: send madeById: null explicitly
           await createDeposit({
             data: {
               amount: parsed,
@@ -1345,7 +1345,7 @@ export default function BankScreen() {
           });
         }
       } else {
-        // Disbursement — include madeById: null for Joint bank or the selected member
+        // Disbursement — include madeById: null for The group or the selected member
         await createDisbursement({
           data: {
             amount: parsed,
@@ -2621,7 +2621,7 @@ export default function BankScreen() {
               {isDeposit && !repayingParty && members.length > 0 && (
                 <>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                    {isSharedWorkspace ? 'Who is depositing?' : 'Deposited by'}{' '}
+                    {isSharedWorkspace ? 'Whose money is this?' : 'Deposited by'}{' '}
                     {canManageShared && <Text style={{ fontWeight: '400', fontSize: 11 }}>(tap multiple to split)</Text>}
                   </Text>
                   {!isSharedWorkspace ? (
@@ -2632,7 +2632,7 @@ export default function BankScreen() {
                       </Text>
                     </View>
                   ) : <View style={styles.memberRow}>
-                    {/* Joint bank chip — selected when no named members chosen */}
+                    {/* Group chip — selected when no named members chosen */}
                     {canManageShared && <TouchableOpacity
                       testID="bank-deposit-joint-chip"
                       style={[
@@ -2656,7 +2656,7 @@ export default function BankScreen() {
                           { color: depositorIds.length === 0 ? '#4ade80' : colors.foreground },
                         ]}
                       >
-                        Joint bank
+                        The group
                       </Text>
                     </TouchableOpacity>}
 
@@ -2758,7 +2758,7 @@ export default function BankScreen() {
                 </>
               )}
 
-              {/* Saved income sources are for one named depositor; Joint bank can choose Other. */}
+              {/* Saved income sources are for one named depositor; the group can choose Other. */}
               {isDeposit && (singleDepositorId || depositorIds.length === 0) && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
@@ -2826,7 +2826,7 @@ export default function BankScreen() {
                     Who is withdrawing?
                   </Text>
                   <View style={styles.memberRow}>
-                    {/* Joint bank chip */}
+                    {/* Group chip */}
                     <TouchableOpacity
                       testID="bank-withdraw-joint-chip"
                       style={[
@@ -2850,7 +2850,7 @@ export default function BankScreen() {
                           { color: withdrawerId === null ? '#f87171' : colors.foreground },
                         ]}
                       >
-                        Joint bank
+                        The group
                       </Text>
                     </TouchableOpacity>
 

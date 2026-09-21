@@ -34,6 +34,7 @@ import { effectiveBudgets, totalBudget as sumBudget } from "@workspace/category-
 import { getActiveGroupId } from "../lib/activeGroup";
 import { buildContributionHistory, historyMonths } from "../lib/contribution-history";
 import { createMonthlyReportPdf } from "../lib/monthly-report-pdf";
+import { GROUP_ATTRIBUTION } from "../lib/attribution";
 
 const router = Router();
 const UNCATEGORIZED_CATEGORY = "Uncategorized";
@@ -483,7 +484,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
         type: split.fromBank ? "household" : "contribution",
         amount: Number(split.amount),
         description: `Expense paid: ${split.description}`,
-        userName: split.fromBank ? "Joint bank" : (split.userName ?? split.label),
+        userName: split.fromBank ? GROUP_ATTRIBUTION : (split.userName ?? split.label),
         category: displayExpenseCategory(split.category),
         date: String(split.date),
       })),
@@ -513,7 +514,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
         type: deposit.madeById === null ? "household" : "contribution",
         amount: Number(deposit.amount),
         description: `Bank deposit: ${deposit.description}`,
-        userName: deposit.madeById === null ? "Joint bank" : (deposit.userName ?? "Unknown"),
+        userName: deposit.madeById === null ? GROUP_ATTRIBUTION : (deposit.userName ?? "Unknown"),
         category: null,
         date: String(deposit.date),
       })),
@@ -522,7 +523,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
         type: saving.createdByUserId === null ? "household" : "contribution",
         amount: Number(saving.amount),
         description: `${saving.goalName ?? "Savings"} contribution`,
-        userName: saving.createdByUserId === null ? "Joint bank" : (saving.contributorName ?? "Unknown"),
+        userName: saving.createdByUserId === null ? GROUP_ATTRIBUTION : (saving.contributorName ?? "Unknown"),
         category: null,
         date: saving.createdAt instanceof Date ? saving.createdAt.toISOString() : String(saving.createdAt),
       })),
@@ -536,7 +537,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       type: "expense",
       amount: e.amount,
       description: e.description,
-      userName: e.paidById === null ? "Joint bank" : (e.paidByName ?? "Unknown"),
+      userName: e.paidById === null ? GROUP_ATTRIBUTION : (e.paidByName ?? "Unknown"),
       category: displayExpenseCategory(e.category),
       categoryAllocations: displayExpenseAllocations(e.category, e.amount, allocationsByExpense.get(e.id)),
       // The feed's visible date must match the month used to include the expense.
@@ -553,7 +554,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       amount: d.amount,
       description: `Bank deposit: ${d.description}`,
       // null madeById = Joint bank (shared deposit with no individual attribution)
-      userName: d.madeById === null ? "Joint bank" : (d.madeByName ?? "Unknown"),
+      userName: d.madeById === null ? GROUP_ATTRIBUTION : (d.madeByName ?? "Unknown"),
       category: null,
       // Deposits are reported in the month of their banking transaction, not entry time.
       date: String(d.date),
@@ -563,7 +564,7 @@ router.get("/dashboard/activity", async (req, res): Promise<void> => {
       type: "savings",
       amount: s.amount,
       description: `${s.goalName ?? "Savings"} contribution`,
-      userName: s.createdByUserId === null ? "Joint bank" : (s.contributorName ?? "Unknown"),
+      userName: s.createdByUserId === null ? GROUP_ATTRIBUTION : (s.contributorName ?? "Unknown"),
       category: null,
       date: s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
     })),
@@ -799,7 +800,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
         category: displayExpenseCategory(portion.category),
         description: expense.description,
         amount: portion.amount,
-        payerName: expense.payerName ?? (expense.paidFromBank ? "Joint bank" : "Payer not recorded"),
+        payerName: expense.payerName ?? (expense.paidFromBank ? GROUP_ATTRIBUTION : "Payer not recorded"),
         date: String(expense.date),
       }));
     }),
@@ -811,7 +812,7 @@ router.get("/dashboard/category-ledger", async (req, res): Promise<void> => {
         category: disbursement.category ?? "Uncategorized",
         description: disbursement.description,
         amount: disbursement.amount,
-        payerName: disbursement.payerName ?? "Joint bank",
+        payerName: disbursement.payerName ?? GROUP_ATTRIBUTION,
         date: String(disbursement.date),
       })),
   ].sort((a, b) => b.date.localeCompare(a.date));
@@ -926,7 +927,7 @@ router.get("/dashboard/expense-ledger", async (req, res): Promise<void> => {
         description: expense.description,
         amount: expense.amount,
         paidFromBank: expense.paidFromBank,
-        payerName: expense.payerName ?? (expense.paidFromBank ? "Joint bank" : "Payer not recorded"),
+        payerName: expense.payerName ?? (expense.paidFromBank ? GROUP_ATTRIBUTION : "Payer not recorded"),
         date: String(expense.date),
       };
     }),
@@ -937,7 +938,7 @@ router.get("/dashboard/expense-ledger", async (req, res): Promise<void> => {
       description: disbursement.description,
       amount: disbursement.amount,
       paidFromBank: true,
-      payerName: disbursement.payerName ?? "Joint bank",
+      payerName: disbursement.payerName ?? GROUP_ATTRIBUTION,
       date: String(disbursement.date),
     })),
   ].sort((a, b) => (a.date === b.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date)));
@@ -1079,7 +1080,7 @@ router.get("/dashboard/spending-by-item", async (req, res): Promise<void> => {
     // The same rule the rest of the ledgers name people by, rather than a
     // bare first name that reads as somebody else in a group of cousins.
     payerName: memberLedgerName(row.preferredName, row.firstName, row.lastName)
-      ?? (row.paidFromBank ? "Joint bank" : "Payer not recorded"),
+      ?? (row.paidFromBank ? GROUP_ATTRIBUTION : "Payer not recorded"),
   })));
 
   res.json({

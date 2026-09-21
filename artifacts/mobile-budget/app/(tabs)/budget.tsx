@@ -1196,7 +1196,7 @@ export default function BudgetScreen() {
                           {new Date(`${entry.date.slice(0, 10)}T12:00:00`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
                           {' · '}{entry.payerName}
                           {!ledgerCategory?.isBudgeted ? ` · ${entry.category}` : ''}
-                          {entry.source === 'bank_disbursement' ? ' · Joint bank disbursement' : ''}
+                          {entry.source === 'bank_disbursement' ? ' · Group disbursement' : ''}
                         </Text>
                         {editHref ? <Text style={[styles.ledgerMeta, { color: colors.primary, marginTop: 3 }]}>Tap to edit expense</Text> : null}
                       </View>

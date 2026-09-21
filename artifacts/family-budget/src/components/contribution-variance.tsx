@@ -101,7 +101,7 @@ export function ContributionVariance({ canManage = false }: { canManage?: boolea
                 Expected vs actual
                 {open ? (
                   <span onClick={(event) => event.stopPropagation()}>
-                    <EditListButton editor={editor} canManage={canManage} label="Add or remove people" />
+                    <EditListButton editor={editor} canManage={canManage} label="Add or remove members" />
                   </span>
                 ) : null}
               </span>

@@ -443,7 +443,7 @@ export default function SavingsGoals() {
   const [cascadeAmount, setCascadeAmount] = useState("");
   const [cascadeOrder, setCascadeOrder] = useState<number[]>([]);
   const [cascadeResult, setCascadeResult] = useState<CascadeContributeAllocation[] | null>(null);
-  // Cascade attribution — empty = Joint bank, one or more IDs = named contributors
+  // Cascade attribution — empty = The group, one or more IDs = named contributors
   const [cascadeAttributionIds, setCascadeAttributionIds] = useState<string[]>([]);
   const [cascadeAttributionAmounts, setCascadeAttributionAmounts] = useState<Record<string, string>>({});
 
@@ -471,7 +471,7 @@ export default function SavingsGoals() {
     setCascadeOrder(activeGoals.map((g) => g.id));
     setCascadeAmount("");
     setCascadeResult(null);
-    // Reset attribution to Joint bank
+    // Reset attribution to The group
     setCascadeAttributionIds([]);
     setCascadeAttributionAmounts({});
     setShowCascade(true);
@@ -713,7 +713,7 @@ export default function SavingsGoals() {
 
     const resetContribute = () => {
       setContributeId(null); setContributeAmount("");
-      // Reset to Joint bank (empty = no named payers selected)
+      // Reset to The group (empty = no named payers selected)
       setContributePayers([]); setContributePayerAmounts({}); setContributeFromBank(true);
     };
 
@@ -887,21 +887,21 @@ export default function SavingsGoals() {
               })}
             </div>
 
-            {/* Attribution — Joint bank (default) or one or more named members */}
+            {/* Attribution — The group (default) or one or more named members */}
             {(members ?? []).length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Contributed by
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {/* Joint bank — default */}
+                  {/* The group — default */}
                   <button
                     type="button"
                     data-testid="chip-joint-bank-cascade"
                     onClick={() => { setCascadeAttributionIds([]); setCascadeAttributionAmounts({}); }}
                     className={`px-3 h-8 rounded-lg text-sm border transition-colors ${cascadeAttributionIds.length === 0 ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
                   >
-                    Joint bank
+                    The group
                   </button>
                   {/* Named members — select multiple to split */}
                   {(members ?? []).map(m => {
@@ -1230,21 +1230,21 @@ export default function SavingsGoals() {
                             Cancel
                           </Button>
                         </div>
-                        {/* Who is contributing — Joint bank (default) or named member(s) */}
+                        {/* Who is contributing — The group (default) or named member(s) */}
                         {canManageShared && (members ?? []).length > 0 && (
                           <div className="space-y-2">
                             <p className="text-xs text-muted-foreground font-medium">
                               Who is contributing? <span className="font-normal">(select multiple to split)</span>
                             </p>
                             <div className="flex flex-wrap gap-2">
-                              {/* Joint bank can be combined with individual contributors. */}
+                              {/* The group can be combined with individual contributors. */}
                               <button
                                 type="button"
                                 data-testid={`chip-joint-bank-contribute-${goal.id}`}
                                 onClick={() => setContributeFromBank((value) => !value)}
                                 className={`px-3 h-8 rounded-lg text-sm border transition-colors ${contributeFromBank ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-card border-input text-foreground hover:bg-muted/50"}`}
                               >
-                                Joint bank
+                                The group
                               </button>
 
                               {/* Named member chips */}
@@ -1276,7 +1276,7 @@ export default function SavingsGoals() {
                                 <div className="space-y-1.5">
                                   {contributeFromBank && (
                                     <div className="flex items-center gap-3">
-                                      <span className="text-sm font-semibold w-20 shrink-0">Joint bank</span>
+                                      <span className="text-sm font-semibold w-20 shrink-0">The group</span>
                                       <input type="number" placeholder="0" min="1" step="1"
                                         value={contributePayerAmounts.__joint_bank__ ?? ""}
                                         onChange={e => setContributePayerAmounts(prev => ({ ...prev, __joint_bank__: e.target.value }))}

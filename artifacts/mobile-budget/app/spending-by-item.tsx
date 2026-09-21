@@ -20,6 +20,7 @@ import {
 import { isoDay, longDay, orderedRange } from '@/lib/dayRange';
 import { useColors } from '@/hooks/useColors';
 import { getExpenseEditHref } from '@/lib/expenseEditLink';
+import { GROUP_ATTRIBUTION } from "@/lib/attribution";
 
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
@@ -290,7 +291,7 @@ export default function SpendingByItemScreen() {
                         >
                           <Text style={[styles.entryDate, { color: colors.mutedForeground }]}>{longDay(entry.date)}</Text>
                           <Text style={[styles.entryWho, { color: colors.mutedForeground }]} numberOfLines={1}>
-                            {entry.paidFromBank ? 'Joint bank' : entry.payerName}
+                            {entry.paidFromBank ? GROUP_ATTRIBUTION : entry.payerName}
                           </Text>
                           <Text style={[styles.entryAmount, { color: colors.foreground }]}>{formatKES(entry.amount)}</Text>
                         </Pressable>

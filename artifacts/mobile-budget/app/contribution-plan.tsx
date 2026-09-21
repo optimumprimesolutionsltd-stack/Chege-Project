@@ -226,7 +226,7 @@ export default function ContributionPlanScreen() {
           <ActivityIndicator color={colors.primary} />
         ) : contributors.length === 0 ? (
           <Text style={[styles.empty, { color: colors.mutedForeground, borderColor: colors.border }]}>
-            No contributors yet. Add people on "Record this month", then set what each is expected to give here.
+            No contributors yet. Add members on "Record this month", then set what each is expected to give here.
           </Text>
         ) : (
           <View style={[styles.list, { borderColor: colors.border }]}>

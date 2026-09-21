@@ -1220,7 +1220,7 @@ export default function Budget() {
                         {formatDate(entry.date)}
                         {" · "}{entry.payerName}
                         {ledgerCategory?.isBudgeted ? null : <>{" · "}{entry.category}</>}
-                        {entry.source === "bank_disbursement" ? " · Joint bank disbursement" : null}
+                        {entry.source === "bank_disbursement" ? " · The group disbursement" : null}
                       </p>
                     </div>
                     <p className="shrink-0 font-semibold">{formatKes(entry.amount)}</p>

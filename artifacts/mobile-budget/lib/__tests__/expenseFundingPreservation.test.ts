@@ -38,7 +38,7 @@ describe('expense funding preservation', () => {
       paidFromBank: true,
       sources: [],
     })).toEqual([
-      { userId: null, label: 'Joint bank', amount: 1200, fromBank: true },
+      { userId: null, label: 'The group', amount: 1200, fromBank: true },
     ]);
   });
 

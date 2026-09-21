@@ -62,8 +62,10 @@ describe('a total that can be checked rather than believed', () => {
     expect(screen).toContain('getExpenseEditHref({ id: entry.id, date: entry.date })');
   });
 
-  it('names the joint bank rather than leaving the payer blank', () => {
-    expect(screen).toContain("entry.paidFromBank ? 'Joint bank' : entry.payerName");
+  it('names the group rather than leaving the payer blank', () => {
+    // The wording lives in one constant now, so it can be changed in one
+    // place rather than in the hundred-odd spots it used to be written out.
+    expect(screen).toContain('entry.paidFromBank ? GROUP_ATTRIBUTION : entry.payerName');
   });
 });
 

@@ -244,7 +244,7 @@ describe("the expenses behind one thing's total", () => {
 
     const response = await request(buildApp()).get("/dashboard/spending-by-item?item=Netflix");
 
-    expect(response.body.entries[0].payerName).toBe("Joint bank");
+    expect(response.body.entries[0].payerName).toBe("The group");
   });
 
   it("says so plainly when nobody was recorded", async () => {

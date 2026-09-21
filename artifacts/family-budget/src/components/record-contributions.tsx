@@ -271,7 +271,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
 
       toast({
         title: "Recorded",
-        description: `${splits.length} ${splits.length === 1 ? "person" : "people"} · ${formatKes(total)}`,
+        description: `${splits.length} ${splits.length === 1 ? "member" : "members"} · ${formatKes(total)}`,
       });
       await queryClient.invalidateQueries();
       // Clear the ticks and amounts so the same batch cannot be recorded twice
@@ -401,7 +401,7 @@ export function RecordContributions({ onRecorded }: { onRecorded?: () => void })
           </div>
         ) : contributors.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-            Nobody to record yet. Add the people who contribute, below — they do not need the app.
+            Nobody to record yet. Add the members who contribute, below — they do not need the app.
           </p>
         ) : contributors.length === 1 ? (
           <div className="space-y-2">
