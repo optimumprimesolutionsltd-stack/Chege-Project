@@ -349,8 +349,19 @@ export default function BankScreen() {
     return () => { active = false; };
   }, [accountStorageKey, accounts]);
 
+  /**
+   * Whether the account list is open.
+   *
+   * Once an account is chosen, the rest are noise: the eye keeps going back
+   * to a list of accounts this posting has nothing to do with, and on a phone
+   * they push the amount and the balance off the screen. So the chosen one
+   * stays, with a way back to the others.
+   */
+  const [changingAccount, setChangingAccount] = useState(false);
+
   const selectAccount = (accountId: number) => {
     setSelectedAccountId(accountId);
+    setChangingAccount(false);
     if (accountStorageKey) AsyncStorage.setItem(accountStorageKey, String(accountId)).catch(() => {});
   };
   const canEditTransaction = (tx: Tx) =>
@@ -2208,7 +2219,10 @@ export default function BankScreen() {
                           </Text>
                         )}
                       </View>
-                    ) : accounts.map((accountOption) => (
+                    ) : (selectedAccountId && !changingAccount
+                          ? accounts.filter((accountOption) => accountOption.id === selectedAccountId)
+                          : accounts
+                        ).map((accountOption) => (
                       <TouchableOpacity key={accountOption.id} onPress={() => selectAccount(accountOption.id)} style={{ borderWidth: 1, borderColor: selectedAccountId === accountOption.id ? colors.primary : colors.border, backgroundColor: selectedAccountId === accountOption.id ? `${colors.primary}18` : colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 }} accessibilityRole="radio" accessibilityState={{ selected: selectedAccountId === accountOption.id }}>
                         <Text style={{ color: colors.foreground, fontWeight: selectedAccountId === accountOption.id ? '700' : '500' }}>{accountOption.name}{accountOption.accountNumber ? ` · ${accountOption.accountNumber}` : ''}</Text>
                       </TouchableOpacity>
@@ -2217,6 +2231,21 @@ export default function BankScreen() {
                         only when there were none at all, so the moment you
                         opened an account the app stopped letting you say so
                         from the one place you notice it is missing. */}
+                    {/* A way back to the others, shown only when there are
+                        others and the list is closed. */}
+                    {selectedAccountId && !changingAccount && accounts.length > 1 ? (
+                      <TouchableOpacity
+                        onPress={() => setChangingAccount(true)}
+                        testID="bank-change-account"
+                        accessibilityRole="button"
+                        accessibilityLabel="Use a different account"
+                        style={{ alignSelf: 'flex-start', paddingVertical: 6 }}
+                      >
+                        <Text style={{ color: colors.primary, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>
+                          Use a different account
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
                     {accounts.length > 0 && canManageAccount ? (
                       <TouchableOpacity
                         style={[styles.inlineAccountButton, { borderColor: colors.border, backgroundColor: 'transparent' }]}
@@ -2231,7 +2260,9 @@ export default function BankScreen() {
                       </TouchableOpacity>
                     ) : null}
                   </View>
-                  <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>This account will receive the deposit or be reduced by the withdrawal.</Text>
+                  {!selectedAccountId || changingAccount ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 6 }}>This account will receive the deposit or be reduced by the withdrawal.</Text>
+                  ) : null}
                   {selectedAccountId && data && (
                     <View style={[styles.transactionBalanceCard, { borderColor: colors.primary, backgroundColor: `${colors.primary}12` }]} testID="bank-transaction-account-balance">
                       <View style={styles.transactionBalanceRow}>
