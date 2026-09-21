@@ -1837,6 +1837,20 @@ export default function SettingsScreen() {
               <Text style={[styles.rowValue, { color: colors.mutedForeground }]} numberOfLines={1}>{user.email}</Text>
             </View>
           ) : null}
+          <Pressable testID="open-help" onPress={() => router.push('/help')} style={styles.row}>
+            <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
+                <Feather name="help-circle" size={16} color={colors.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>How do I…</Text>
+            </View>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 12 }}>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground, flexShrink: 1 }]} numberOfLines={1}>
+                Where to go to do what
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </View>
+          </Pressable>
           <Pressable testID="open-subscription" onPress={() => router.push('/subscription')} style={styles.row}>
             <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
               <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
