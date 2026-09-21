@@ -210,6 +210,12 @@ export default function BankScreen() {
   // It used to have no say: everything landed at the top level, which is how a
   // budget acquires a flat list of strays beside the groups it was given.
   const [newCategoryParentId, setNewCategoryParentId] = useState<number | null>(null);
+  // A creditor made where it is paid. Adding one here used to produce an
+  // ordinary category, so you still had to go to the Debt tab to say what was
+  // owed — and the payment you were entering had already lost its category.
+  const [newCategoryIsDebt, setNewCategoryIsDebt] = useState(false);
+  const [newCategoryOwed, setNewCategoryOwed] = useState('');
+  const [newCategoryRate, setNewCategoryRate] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
   const [date, setDate] = useState(todayIso());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -833,6 +839,19 @@ export default function BankScreen() {
       return;
     }
 
+    // A creditor with nothing owed is a category, not a debt. Saying so is
+    // better than tracking a debt of zero and calling it cleared.
+    const owed = newCategoryIsDebt ? readAmount(newCategoryOwed || '0') : null;
+    if (newCategoryIsDebt && (owed === null || owed < 0)) {
+      Alert.alert('What is owed?', 'Enter the balance as zero or more, with up to two decimal places.');
+      return;
+    }
+    const ratePercent = newCategoryRate.trim();
+    if (newCategoryIsDebt && ratePercent && !/^\d+(\.\d{1,2})?$/.test(ratePercent)) {
+      Alert.alert('Rate not valid', 'Give the yearly rate as a percentage, such as 14 or 7.5. Leave it blank if you do not know it.');
+      return;
+    }
+
     setAddingCategory(true);
     try {
       const parent = newCategoryParentId === null
@@ -852,13 +871,26 @@ export default function BankScreen() {
           priority: parent?.priority ?? 3,
           color: parent?.color ?? '#6B7280',
           ...(parent ? { parentId: parent.id } : {}),
+          // Basis points, so the rate is an exact integer rather than a float
+          // that drifts on repeated writes.
+          ...(newCategoryIsDebt
+            ? {
+                debtBalance: Math.round(owed ?? 0),
+                debtInterestRateBps: ratePercent ? Math.round(Number(ratePercent) * 100) : null,
+              }
+            : {}),
         }),
       });
       setExpenseCategory(category.name);
       setNewCategoryName('');
       setNewCategoryParentId(null);
+      setNewCategoryIsDebt(false);
+      setNewCategoryOwed('');
+      setNewCategoryRate('');
       setShowCategoryPicker(false);
-      queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      // Awaited: the reduce prompt reads this list after the withdrawal saves,
+      // and a debt created moments before has to be in it by then.
+      await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
     } catch {
       Alert.alert('Could not add category', 'Please try again.');
     } finally {
@@ -1221,6 +1253,20 @@ export default function BankScreen() {
     () => buildCategoryTree(categories as unknown as CategoryRow[]),
     [categories],
   );
+
+  // What is owed on each category that is a tracked debt, by name, so the
+  // picker can say so. Without it a debt reads as an ordinary category and the
+  // reduce prompt afterwards arrives from nowhere.
+  const owedByCategory = useMemo(() => {
+    const owed = new Map<string, number>();
+    for (const row of categories as unknown as Array<{ name: string; debtBalance?: number | null }>) {
+      if (typeof row.debtBalance === 'number' && row.debtBalance > 0) {
+        owed.set(row.name.trim().toLocaleLowerCase(), row.debtBalance);
+      }
+    }
+    return owed;
+  }, [categories]);
+  const owedOn = (name: string) => owedByCategory.get(name.trim().toLocaleLowerCase()) ?? null;
 
   // Reconciling compares Jamvi's balance with the statement's. A positive
   // difference means Jamvi holds more than the bank does: money left the
@@ -2781,19 +2827,29 @@ export default function BankScreen() {
                               {group.children.map((child) => (
                                 <TouchableOpacity
                                   key={`withdraw-child-${child}`}
-                                  style={styles.categoryOption}
+                                  style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
                                   onPress={() => { setExpenseCategory(child); setShowCategoryPicker(false); }}
                                 >
-                                  <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{child}</Text>
+                                  <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>{child}</Text>
+                                  {owedOn(child) !== null ? (
+                                    <Text testID={`withdraw-owed-${child}`} style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                                      owe KES {formatKES(owedOn(child))}
+                                    </Text>
+                                  ) : null}
                                 </TouchableOpacity>
                               ))}
                             </>
                           ) : (
                             <TouchableOpacity
-                              style={styles.categoryOption}
+                              style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
                               onPress={() => { setExpenseCategory(group.name); setShowCategoryPicker(false); }}
                             >
-                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{group.name}</Text>
+                              <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>{group.name}</Text>
+                              {owedOn(group.name) !== null ? (
+                                <Text testID={`withdraw-owed-${group.name}`} style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                                  owe KES {formatKES(owedOn(group.name))}
+                                </Text>
+                              ) : null}
                             </TouchableOpacity>
                           )}
                         </View>
@@ -2867,6 +2923,65 @@ export default function BankScreen() {
                             {addingCategory ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
                           </TouchableOpacity>
                         </View>
+                        {/* A creditor made where it is paid. Without this the
+                            new category was an ordinary one, and saying what
+                            was owed meant a trip to the Debt tab — which costs
+                            the payment being entered. */}
+                        <Pressable
+                          onPress={() => setNewCategoryIsDebt((on) => !on)}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: newCategoryIsDebt }}
+                          accessibilityLabel="Track this as money you owe"
+                          testID="bank-new-category-is-debt"
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
+                        >
+                          <Feather
+                            name={newCategoryIsDebt ? 'check-square' : 'square'}
+                            size={15}
+                            color={newCategoryIsDebt ? colors.primary : colors.mutedForeground}
+                          />
+                          <Text style={{ color: colors.dropdownForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+                            This is money I owe
+                          </Text>
+                        </Pressable>
+                        {newCategoryIsDebt ? (
+                          <>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <TextInput
+                                value={newCategoryOwed}
+                                onChangeText={setNewCategoryOwed}
+                                editable={!addingCategory}
+                                placeholder="Owed now (KES)"
+                                placeholderTextColor={colors.mutedForeground}
+                                keyboardType="decimal-pad"
+                                style={{
+                                  flex: 1, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                                  borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                                  fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                                }}
+                                testID="bank-new-category-owed"
+                              />
+                              <TextInput
+                                value={newCategoryRate}
+                                onChangeText={setNewCategoryRate}
+                                editable={!addingCategory}
+                                placeholder="Rate %/yr"
+                                placeholderTextColor={colors.mutedForeground}
+                                keyboardType="decimal-pad"
+                                style={{
+                                  width: 96, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                                  borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                                  fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                                }}
+                                testID="bank-new-category-rate"
+                              />
+                            </View>
+                            <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+                              It joins the Debt tab. Once this withdrawal saves, Jamvi offers to take it off the balance.
+                              The rate is optional and only shapes the payoff plan.
+                            </Text>
+                          </>
+                        ) : null}
                       </View>
                     </View>
                   )}

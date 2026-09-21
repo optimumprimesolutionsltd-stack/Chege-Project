@@ -266,6 +266,7 @@ export const HELP_SECTIONS: HelpSection[] = [
           'Debt tab, then Track a debt.',
           'Name it, say what is owed, and give the yearly rate if you know it.',
           'Using the name of a category you already have marks that category as the debt, rather than making a second one.',
+          'Or make it while paying: in Withdraw, add the category and tick This is money I owe.',
         ],
         route: '/(tabs)/debt',
         keywords: ['debt', 'loan', 'creditor', 'owed', 'borrow', 'fuliza', 'sacco'],
