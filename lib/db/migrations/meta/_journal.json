@@ -281,6 +281,13 @@
       "when": 1790011112121,
       "tag": "0039_mpesa_receipt",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790017134357,
+      "tag": "0040_borrowing_is_not_income",
+      "breakpoints": true
     }
   ]
 }

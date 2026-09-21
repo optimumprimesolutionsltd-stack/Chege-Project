@@ -3505,6 +3505,14 @@ components:
             The party this repays, when it repays one. Money lent coming back
             is not income, so every figure counting money in leaves these out.
             The transaction stays in the ledger.
+        isBorrowing:
+          type: boolean
+          description: >-
+            Money borrowed, arriving in the account. A loan paid out to you is
+            not earnings either, so it is left out of every figure counting
+            money in. Set alongside settlesContributorId when the lender is a
+            recorded party, and on its own when the loan is tracked as a debt
+            category instead.
         amount:
           type: number
           minimum: 0

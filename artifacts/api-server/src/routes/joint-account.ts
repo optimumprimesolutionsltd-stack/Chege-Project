@@ -96,6 +96,14 @@ const DepositInput = z.object({
    * the account.
    */
   settlesContributorId: z.number().int().positive().optional(),
+  /**
+   * Money borrowed, arriving in the account. The mirror of the field above:
+   * a loan paid out to you is not earnings either, so it is left out of every
+   * figure that counts money in. Set alongside settlesContributorId when the
+   * lender is a recorded party, and on its own when the loan is tracked as a
+   * debt category instead.
+   */
+  isBorrowing: z.boolean().optional(),
   description: z.string().min(1),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -533,6 +541,7 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
   }
 
   const { amount, description, date, incomeSourceId, sourceKind, contributorSplits, settlesContributorId } = parsed.data;
+  const isBorrowing = parsed.data.isBorrowing ?? false;
   const receiptClash = await alreadyRecorded(groupId, parsed.data.mpesaReceipt);
   if (receiptClash) { res.status(409).json(receiptClash); return; }
   // Scoped to this group: an id from another group must not be reachable by
@@ -621,10 +630,13 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
         appliesToMonth,
         appliesToYear,
         madeById: contributorSplits ? null : madeById,
-        // A repayment has no income source by definition: the money is not
-        // being earned, it is coming back.
-        incomeSourceId: settlesContributorId ? null : contributorSplits ? null : incomeSourceId ?? null,
+        // Neither a repayment nor a loan has an income source, by definition:
+        // the money is not being earned. One is coming back, the other will
+        // have to go back.
+        incomeSourceId:
+          settlesContributorId || isBorrowing ? null : contributorSplits ? null : incomeSourceId ?? null,
         settlesContributorId: settlesContributorId ?? null,
+        isBorrowing,
       })
       .returning();
     if (contributorSplits) {

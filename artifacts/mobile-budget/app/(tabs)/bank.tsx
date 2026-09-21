@@ -283,6 +283,20 @@ export default function BankScreen() {
   // but you had it once already — when you lent it — so it is not income.
   const [repayingPartyId, setRepayingPartyId] = useState<number | null>(null);
   const [showRepayPicker, setShowRepayPicker] = useState(false);
+  /**
+   * Money borrowed, arriving in the account.
+   *
+   * The other half of the question above. A loan paid out to you is not
+   * earnings — you will pay it back — so counting it as income makes the
+   * month look better than it was every time somebody borrows.
+   *
+   * null means this is not borrowing. A target says what it was borrowed
+   * against, so the balance can be offered afterwards; 'none' is borrowing
+   * with nothing named, which is still not income.
+   */
+  const [borrowTarget, setBorrowTarget] = useState<
+    { kind: 'none' } | { kind: 'debt'; name: string } | { kind: 'party'; id: number } | null
+  >(null);
   const [withdrawSourceName, setWithdrawSourceName] = useState<string | null>(null);
   const [withdrawGoalId, setWithdrawGoalId] = useState<number | null>(null);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
@@ -405,6 +419,16 @@ export default function BankScreen() {
     [parties],
   );
   const repayingParty = owingParties.find((party) => party.id === repayingPartyId) ?? null;
+  const borrowedFromParty =
+    borrowTarget?.kind === 'party' ? parties.find((party) => party.id === borrowTarget.id) ?? null : null;
+  // Only tracked debts: a category with no balance has nothing to add to.
+  const trackedDebts = useMemo(
+    () =>
+      (categories as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
+        .filter((row) => typeof row.debtBalance === 'number'),
+    [categories],
+  );
+  const isBorrowing = borrowTarget !== null;
 
   // The savings goal matching the current withdrawGoalId selection
   const selectedGoal = savingsGoals.find(g => g.id === withdrawGoalId) ?? null;
@@ -436,6 +460,7 @@ export default function BankScreen() {
     setWithdrawPartyId(null);
     setShowPartyPicker(false);
     setRepayingPartyId(null);
+    setBorrowTarget(null);
     setShowRepayPicker(false);
     setTransferDirection('to_savings');
     setBankTransferDestinationId(accounts.find((candidate) => candidate.id !== selectedAccountId)?.id ?? null);
@@ -473,6 +498,7 @@ export default function BankScreen() {
     setWithdrawPartyId(null);
     setShowPartyPicker(false);
     setRepayingPartyId(null);
+    setBorrowTarget(null);
     setShowRepayPicker(false);
     setDepositorAmounts({});
   };
@@ -858,6 +884,80 @@ export default function BankScreen() {
               await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
             } catch (error: unknown) {
               Alert.alert('Could not update the debt', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  /**
+   * Offer to add what was borrowed to a tracked debt.
+   *
+   * The mirror of offerDebtReduction, and asked rather than applied for the
+   * same reason: the balance is a stored number and the deposit can be edited
+   * or deleted afterwards. A brand-new loan starts at nothing outstanding, so
+   * unlike the reduction this one is offered on a balance of zero too.
+   */
+  const offerDebtIncrease = (categoryName: string, amount: number) => {
+    const name = categoryName.trim().toLocaleLowerCase();
+    const debt = (categories as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
+      .find((row) => row.name.trim().toLocaleLowerCase() === name && typeof row.debtBalance === 'number');
+    const owed = debt?.debtBalance;
+    if (!debt || typeof owed !== 'number' || amount <= 0) return;
+    const borrowed = Math.round(amount);
+    Alert.alert(
+      `Add this to ${debt.name}?`,
+      owed === 0
+        ? `Nothing was outstanding. This would make it KES ${formatKES(borrowed)}.`
+        : `You owe KES ${formatKES(owed)}. Adding KES ${formatKES(borrowed)} makes it KES ${formatKES(owed + borrowed)}.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Add it',
+          onPress: async () => {
+            try {
+              await customFetch(`/api/budget-categories/${debt.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ debtBalance: owed + borrowed }),
+              });
+              await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+            } catch (error: unknown) {
+              Alert.alert('Could not update the debt', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  /** Offer to add what was borrowed to what you owe a party. */
+  const offerPartyBorrowing = (party: { id: number; name: string; owedByUs?: number | null }, amount: number) => {
+    if (amount <= 0) return;
+    // Somebody recorded as owing you, or not recorded on this side at all,
+    // starts from nothing owed to them rather than from nowhere.
+    const owed = typeof party.owedByUs === 'number' ? party.owedByUs : 0;
+    const borrowed = Math.round(amount);
+    Alert.alert(
+      `Add this to what you owe ${party.name}?`,
+      owed === 0
+        ? `You owed them nothing. This would make it KES ${formatKES(borrowed)}.`
+        : `You owe KES ${formatKES(owed)}. Adding KES ${formatKES(borrowed)} makes it KES ${formatKES(owed + borrowed)}.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Add it',
+          onPress: async () => {
+            try {
+              await customFetch(`/api/contributors/${party.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ owedByUs: owed + borrowed }),
+              });
+              await queryClient.invalidateQueries({ queryKey: ['parties'] });
+            } catch (error: unknown) {
+              Alert.alert('Could not update the balance', error instanceof Error ? error.message : 'Please try again.');
             }
           },
         },
@@ -1321,6 +1421,7 @@ export default function BankScreen() {
               description: description.trim(),
               date,
               ...(repayingParty ? { settlesContributorId: repayingParty.id } : {}),
+              ...(isBorrowing ? { isBorrowing: true } : {}),
               madeById: null,
               ...(incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
@@ -1337,6 +1438,7 @@ export default function BankScreen() {
               description: description.trim(),
               date,
               ...(repayingParty ? { settlesContributorId: repayingParty.id } : {}),
+              ...(isBorrowing ? { isBorrowing: true } : {}),
               madeById: singleId,
               ...(incomeSourceId ? { incomeSourceId } : {}),
               ...(depositSourceKind ? { sourceKind: depositSourceKind } : {}),
@@ -1365,10 +1467,16 @@ export default function BankScreen() {
       const paidCategory = expenseCategory.trim();
       const paidParty = withdrawDest === 'party' ? selectedParty : null;
       const repaidBy = txType === 'deposit' && editingTransactionId === null ? repayingParty : null;
+      const borrowedAgainst = txType === 'deposit' && editingTransactionId === null ? borrowTarget : null;
+      const borrowedFrom = borrowedFromParty;
       finishEntry(keepOpen, { amount: parsed, direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
       if (repaidBy) {
         offerRepaymentSettlement(repaidBy, parsed);
+      } else if (borrowedAgainst?.kind === 'debt') {
+        offerDebtIncrease(borrowedAgainst.name, parsed);
+      } else if (borrowedAgainst?.kind === 'party' && borrowedFrom) {
+        offerPartyBorrowing(borrowedFrom, parsed);
       } else if (wasNewWithdrawal && paidParty) {
         // Who was paid outranks what it was spent on: a category that happens
         // to be a tracked debt as well would otherwise ask twice about one
@@ -2513,14 +2621,22 @@ export default function BankScreen() {
                   repayment is not income, so no income source is asked for. */}
               {isDeposit ? (
                 <>
-                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Is this somebody paying you back?</Text>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>What kind of money is this?</Text>
                   <TouchableOpacity
                     style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
                     onPress={() => setShowRepayPicker((open) => !open)}
                     testID="bank-repayment-picker"
                   >
-                    <Text style={{ flex: 1, color: repayingParty ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
-                      {repayingParty ? `${repayingParty.name} repaying you` : 'No — this is ordinary money in'}
+                    <Text style={{ flex: 1, color: repayingParty || isBorrowing ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                      {repayingParty
+                        ? `${repayingParty.name} repaying you`
+                        : borrowTarget?.kind === 'debt'
+                          ? `Borrowed — ${borrowTarget.name}`
+                          : borrowTarget?.kind === 'party'
+                            ? `Borrowed from ${borrowedFromParty?.name ?? 'somebody'}`
+                            : isBorrowing
+                              ? 'Borrowed money'
+                              : 'Ordinary money in'}
                     </Text>
                     <Feather name={showRepayPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
                   </TouchableOpacity>
@@ -2528,18 +2644,18 @@ export default function BankScreen() {
                     <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
                       <TouchableOpacity
                         style={styles.categoryOption}
-                        onPress={() => { setRepayingPartyId(null); setShowRepayPicker(false); }}
+                        onPress={() => { setRepayingPartyId(null); setBorrowTarget(null); setShowRepayPicker(false); }}
                         testID="bank-repayment-none"
                       >
                         <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
-                          No — this is ordinary money in
+                          Ordinary money in
                         </Text>
                       </TouchableOpacity>
                       {owingParties.map((party) => (
                         <TouchableOpacity
                           key={`owing-party-${party.id}`}
                           style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
-                          onPress={() => { setRepayingPartyId(party.id); setShowRepayPicker(false); }}
+                          onPress={() => { setRepayingPartyId(party.id); setBorrowTarget(null); setShowRepayPicker(false); }}
                           testID={`bank-repayment-party-${party.id}`}
                         >
                           <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>
@@ -2550,6 +2666,51 @@ export default function BankScreen() {
                           </Text>
                         </TouchableOpacity>
                       ))}
+                      {/* Borrowed money: the same deposit, the opposite
+                          meaning. Naming what it was borrowed against is
+                          optional — it is not income either way — but naming
+                          it means the balance can be offered afterwards. */}
+                      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 8, marginTop: 4 }}>
+                        <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12, paddingHorizontal: 10, paddingBottom: 4 }}>
+                          BORROWED — NOT INCOME
+                        </Text>
+                        {trackedDebts.map((debt) => (
+                          <TouchableOpacity
+                            key={`borrow-debt-${debt.id}`}
+                            style={[styles.categoryOption, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }]}
+                            onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'debt', name: debt.name }); setShowRepayPicker(false); }}
+                            testID={`bank-borrow-debt-${debt.id}`}
+                          >
+                            <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular', flexShrink: 1 }}>
+                              Borrowed — {debt.name}
+                            </Text>
+                            <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_400Regular', fontSize: 12 }}>
+                              owe KES {formatKES(debt.debtBalance ?? 0)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                        {parties.map((party) => (
+                          <TouchableOpacity
+                            key={`borrow-party-${party.id}`}
+                            style={styles.categoryOption}
+                            onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'party', id: party.id }); setShowRepayPicker(false); }}
+                            testID={`bank-borrow-party-${party.id}`}
+                          >
+                            <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
+                              Borrowed from {party.name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity
+                          style={styles.categoryOption}
+                          onPress={() => { setRepayingPartyId(null); setBorrowTarget({ kind: 'none' }); setShowRepayPicker(false); }}
+                          testID="bank-borrow-unspecified"
+                        >
+                          <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>
+                            Borrowed — from somewhere else
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                       {/* Saying somebody owes you has to be possible here,
                           because here is the only place it is offered. */}
                       <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }} testID="bank-add-debtor-form">
@@ -2617,12 +2778,18 @@ export default function BankScreen() {
                       This will not count as income — you had the money once already, when you lent it. It still shows
                       in the account and the ledger.
                     </Text>
+                  ) : isBorrowing ? (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }} testID="bank-borrowing-note">
+                      This will not count as income — a loan is not earnings, and you will pay it back. It still shows
+                      in the account and the ledger.
+                      {borrowTarget?.kind === 'none' ? '' : ' Once it saves, Jamvi offers to add it to what you owe.'}
+                    </Text>
                   ) : null}
                 </>
               ) : null}
 
               {/* ── Deposited by (deposits only) ── */}
-              {isDeposit && !repayingParty && members.length > 0 && (
+              {isDeposit && !repayingParty && !isBorrowing && members.length > 0 && (
                 <>
                     <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     {isSharedWorkspace ? 'Whose money is this?' : 'Deposited by'}{' '}

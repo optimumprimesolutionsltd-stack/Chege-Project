@@ -1337,6 +1337,8 @@ export interface DepositInput {
      * @minimum 1
      */
   settlesContributorId?: number;
+  /** Money borrowed, arriving in the account. A loan paid out to you is not earnings either, so it is left out of every figure counting money in. Set alongside settlesContributorId when the lender is a recorded party, and on its own when the loan is tracked as a debt category instead. */
+  isBorrowing?: boolean;
   /**
      * KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
      * @minimum 0
