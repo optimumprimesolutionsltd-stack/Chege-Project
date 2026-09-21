@@ -61,16 +61,18 @@ describe("paying somebody you owe", () => {
 describe("somebody paying you back", () => {
   it("asks, and defaults to no", () => {
     expect(bank).toContain('data-testid="repayment-picker"');
-    expect(bank).toContain("No — this is ordinary money in");
+    // The question now has three answers, not two. See web-borrowing.test.ts.
+    expect(bank).toContain("What kind of money is this?");
+    expect(bank).toContain('<option value="none">Ordinary money in</option>');
   });
 
   it("sends it as a settlement, never as income", () => {
     expect(bank).toContain('...(mode === "deposit" && repayingParty ? { settlesContributorId: repayingParty.id } : {}),');
-    expect(bank).toContain('...(mode === "deposit" && !repayingParty && contributorSplits.length === 0 ? { incomeSourceId } : {}),');
+    expect(bank).toContain('...(mode === "deposit" && !repayingParty && !isBorrowing && contributorSplits.length === 0 ? { incomeSourceId } : {}),');
   });
 
   it("puts the depositor question aside, a repayment being no contribution", () => {
-    expect(bank).toContain('{mode === "deposit" && !repayingParty && (');
+    expect(bank).toContain('{mode === "deposit" && !repayingParty && !isBorrowing && (');
   });
 
   it("can record who owes you, which exists nowhere else", () => {

@@ -1081,6 +1081,7 @@ export const createDepositBodyContributorSplitsItemAmountMultipleOf = 0.01;
 export const CreateDepositBody = zod.object({
   "mpesaReceipt": zod.string().min(createDepositBodyMpesaReceiptMin).max(createDepositBodyMpesaReceiptMax).optional().describe('The M-Pesa receipt code this posting came from. Unique per budget: recording the same code twice is refused with 409, so a message pasted again cannot be counted again.'),
   "settlesContributorId": zod.number().min(1).optional().describe('The party this repays, when it repays one. Money lent coming back is not income, so every figure counting money in leaves these out. The transaction stays in the ledger.'),
+  "isBorrowing": zod.boolean().optional().describe('Money borrowed, arriving in the account. A loan paid out to you is not earnings either, so it is left out of every figure counting money in. Set alongside settlesContributorId when the lender is a recorded party, and on its own when the loan is tracked as a debt category instead.'),
   "amount": zod.number().min(createDepositBodyAmountMin).multipleOf(createDepositBodyAmountMultipleOf).describe('KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.'),
   "description": zod.string(),
   "date": zod.coerce.date(),

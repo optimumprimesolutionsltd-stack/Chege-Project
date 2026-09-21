@@ -1,0 +1,104 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+const bank = readFileSync('app/(tabs)/bank.tsx', 'utf8');
+
+// A deposit could be exactly two things: ordinary money in, or somebody paying
+// you back. Borrowed money is neither, so it landed in the first — inflating
+// income with money that has to be repaid, and recording no debt at all.
+describe('a deposit can be money you borrowed', () => {
+  it('is a third answer to the same question', () => {
+    expect(bank).toContain('What kind of money is this?');
+    expect(bank).toContain('testID="bank-borrow-unspecified"');
+  });
+
+  it('can name a tracked debt, or a party, or neither', () => {
+    expect(bank).toContain('testID={`bank-borrow-debt-${debt.id}`}');
+    expect(bank).toContain('testID={`bank-borrow-party-${party.id}`}');
+    expect(bank).toContain("{ kind: 'none' }");
+  });
+
+  it('offers to borrow from anybody, not only somebody already owed', () => {
+    // owedParties is the withdraw side's list. You can borrow from somebody
+    // who currently owes you, and from somebody with no balance either way.
+    const section = bank.slice(bank.indexOf('BORROWED — NOT INCOME'), bank.indexOf('testID="bank-borrow-unspecified"'));
+    expect(section).toContain('{parties.map((party) => (');
+    expect(section).not.toContain('owedParties.map');
+  });
+
+  it('lists only categories that are tracked debts', () => {
+    expect(bank).toContain("typeof row.debtBalance === 'number'");
+    expect(bank).toContain('const trackedDebts = useMemo(');
+  });
+});
+
+describe('borrowed money is not income', () => {
+  it('says so on the transaction', () => {
+    expect((bank.match(/\.\.\.\(isBorrowing \? \{ isBorrowing: true \} : \{\}\),/g) ?? []).length).toBe(2);
+  });
+
+  it('is sent only when true', () => {
+    // An edited posting omits the field rather than sending false, so saving
+    // an edit cannot quietly turn a loan back into income.
+    expect(bank).not.toContain('isBorrowing: isBorrowing');
+    expect(bank).not.toContain('isBorrowing: borrowTarget !== null');
+  });
+
+  it('asks nobody whose contribution it was', () => {
+    // Borrowed money is no more a contribution than a repayment is.
+    expect(bank).toContain('{isDeposit && !repayingParty && !isBorrowing && members.length > 0 && (');
+  });
+
+  it('tells the person, where they are deciding it', () => {
+    expect(bank).toContain('testID="bank-borrowing-note"');
+    expect(bank).toContain('a loan is not earnings, and you will pay it back');
+  });
+});
+
+describe('it cannot be both at once', () => {
+  it('clears borrowing when a repayment is chosen', () => {
+    expect(bank).toContain('setRepayingPartyId(party.id); setBorrowTarget(null);');
+  });
+
+  it('clears the repayment when borrowing is chosen', () => {
+    const section = bank.slice(bank.indexOf('BORROWED — NOT INCOME'));
+    expect((section.match(/setRepayingPartyId\(null\); setBorrowTarget\(\{/g) ?? []).length).toBe(3);
+  });
+
+  it('clears between postings in a sitting', () => {
+    // Otherwise the next line in the same sitting is a loan too.
+    // Four: both reset paths, and the two options that clear it by choice.
+    expect((bank.match(/setBorrowTarget\(null\);/g) ?? []).length).toBe(4);
+  });
+});
+
+describe('adding it to what you owe', () => {
+  it('offers rather than applies, like every other balance change', () => {
+    expect(bank).toContain('const offerDebtIncrease = (categoryName: string, amount: number) => {');
+    expect(bank).toContain('const offerPartyBorrowing = (party:');
+    // Five offers: repayment, debt reduction, party settlement, and the two
+    // that add what was borrowed.
+    expect((bank.match(/\{ text: 'Not now', style: 'cancel' \},/g) ?? []).length).toBe(5);
+  });
+
+  it('works on a debt that starts at nothing outstanding', () => {
+    // A brand-new loan is the whole point, and offerDebtReduction's owed > 0
+    // guard would have thrown it away.
+    expect(bank).toContain("Nothing was outstanding. This would make it KES ${formatKES(borrowed)}.");
+    expect(bank).toContain('You owed them nothing.');
+  });
+
+  it('adds rather than subtracts', () => {
+    expect((bank.match(/owed \+ borrowed/g) ?? []).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('only on a new deposit, never on an edit', () => {
+    // Offering after an edit would add the loan to the balance a second time.
+    expect(bank).toContain("const borrowedAgainst = txType === 'deposit' && editingTransactionId === null ? borrowTarget : null;");
+  });
+
+  it('asks once, not twice', () => {
+    expect(bank).toContain("} else if (borrowedAgainst?.kind === 'debt') {");
+    expect(bank).toContain("} else if (borrowedAgainst?.kind === 'party' && borrowedFrom) {");
+  });
+});

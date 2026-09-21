@@ -372,6 +372,25 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
    * it really did reach the account.
    */
   settlesContributorId: integer("settles_contributor_id").references(() => groupContributorsTable.id, { onDelete: "set null" }),
+  /**
+   * Money borrowed, arriving in the account.
+   *
+   * The other half of the same idea as the column above, and the opposite
+   * direction. A loan paid out to you reaches the account like any deposit,
+   * but it is not earnings — you will pay it back — so counting it as income
+   * makes the month look better than it was, every time somebody borrows.
+   *
+   * It cannot be inferred. Borrowing from a party sets the column above too,
+   * and could be told apart that way; borrowing against a tracked debt
+   * category sets nothing, and would be counted. So it is recorded plainly,
+   * and every figure that counts money in leaves these rows out as well.
+   *
+   * What it went on to change — a party's balance, or a debt category's — is
+   * not stored here. Those are offered after saving and written separately,
+   * exactly as a payment is on the way out, so an edited or deleted posting
+   * can never leave a balance quietly wrong.
+   */
+  isBorrowing: boolean("is_borrowing").notNull().default(false),
   /** The month this deposit was *for*, when that differs from the day it
    *  arrived — April's dues paid in September, or June's paid in April. Null
    *  means the month it arrived in, which is every deposit unless somebody

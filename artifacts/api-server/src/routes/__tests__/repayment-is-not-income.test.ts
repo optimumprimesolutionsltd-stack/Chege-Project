@@ -42,7 +42,9 @@ describe("a repayment is recorded as a settlement", () => {
   });
 
   it("never gives a repayment an income source", () => {
-    expect(bank).toContain("incomeSourceId: settlesContributorId ? null : contributorSplits ? null : incomeSourceId ?? null,");
+    // Borrowed money shares the branch now, for the same reason: neither is
+    // being earned. See borrowing-is-not-income.test.ts.
+    expect(bank).toContain("settlesContributorId || isBorrowing ? null : contributorSplits ? null : incomeSourceId ?? null,");
   });
 });
 

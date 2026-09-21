@@ -805,7 +805,8 @@ export default function Bank() {
               : (!isSharedWorkspace ? user?.id : withdrawerId),
             ...(mode === "deposit" ? { contributorSplits } : {}),
             ...(mode === "deposit" && repayingParty ? { settlesContributorId: repayingParty.id } : {}),
-            ...(mode === "deposit" && !repayingParty && contributorSplits.length === 0 ? { incomeSourceId } : {}),
+            ...(mode === "deposit" && isBorrowing ? { isBorrowing: true } : {}),
+            ...(mode === "deposit" && !repayingParty && !isBorrowing && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(mode === "deposit" && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(mode === "disbursement" ? { expenseCategory, destinationKind: sentDestinationKind } : {}),
             accountId: editingTransaction.accountId ?? selectedAccountId ?? undefined,
@@ -863,8 +864,12 @@ export default function Bank() {
       const wasNew = !editingTransaction;
       const paidParty = mode === "disbursement" && withdrawalDestinationKind === "party" ? selectedParty : null;
       const repaidBy = mode === "deposit" ? repayingParty : null;
+      const borrowedAgainst = mode === "deposit" ? borrowTarget : null;
+      const borrowedFrom = borrowedFromParty;
       finishEntry(keepOpen, { amount: total, direction: mode === "deposit" ? "in" : "out" });
       if (wasNew && repaidBy) offerBalanceChange(repaidBy, total, "owedToUs");
+      else if (wasNew && borrowedAgainst?.kind === "debt") offerDebtIncrease(borrowedAgainst.name, total);
+      else if (wasNew && borrowedAgainst?.kind === "party" && borrowedFrom) offerBorrowedFromParty(borrowedFrom, total);
       else if (wasNew && paidParty) offerBalanceChange(paidParty, total, "owedByUs");
       invalidate();
     } catch {
@@ -944,7 +949,27 @@ export default function Bank() {
   const owedParties = useMemo(() => parties.filter((party) => typeof party.owedByUs === "number"), [parties]);
   const owingParties = useMemo(() => parties.filter((party) => typeof party.owedToUs === "number"), [parties]);
   const selectedParty = owedParties.find((party) => String(party.id) === withdrawPartyId) ?? null;
-  const repayingParty = owingParties.find((party) => String(party.id) === repayingPartyId) ?? null;
+  const repayingParty = repayingPartyId.startsWith("borrow:")
+    ? null
+    : owingParties.find((party) => String(party.id) === repayingPartyId) ?? null;
+  /**
+   * Money borrowed, arriving in the account. The same select, the opposite
+   * meaning: a loan paid out to you is not earnings either, so it is left out
+   * of every figure that counts money in. What it was borrowed against is
+   * optional — naming it only means the balance can be offered afterwards.
+   */
+  const borrowTarget: { kind: "none" } | { kind: "debt"; name: string } | { kind: "party"; id: number } | null =
+    repayingPartyId === "borrow:none"
+      ? { kind: "none" }
+      : repayingPartyId.startsWith("borrow:debt:")
+        ? { kind: "debt", name: repayingPartyId.slice("borrow:debt:".length) }
+        : repayingPartyId.startsWith("borrow:party:")
+          ? { kind: "party", id: Number(repayingPartyId.slice("borrow:party:".length)) }
+          : null;
+  const isBorrowing = borrowTarget !== null;
+  const borrowedFromParty = borrowTarget?.kind === "party" ? parties.find((party) => party.id === borrowTarget.id) ?? null : null;
+  const trackedDebts = ((categories ?? []) as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
+    .filter((row) => typeof row.debtBalance === "number");
 
   // The API knows two destinations. Paying a party is still a categorised
   // withdrawal — the money left and belongs to a category; who received it is
@@ -1012,6 +1037,58 @@ export default function Bank() {
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ [direction]: remaining }),
+        });
+        if (!response.ok) throw new Error("Could not update the balance.");
+        await queryClient.invalidateQueries({ queryKey: ["parties"] });
+      } catch (error) {
+        toast({ variant: "destructive", title: "Could not update the balance", description: error instanceof Error ? error.message : "Please try again." });
+      }
+    })();
+  };
+
+  /**
+   * Offer to add what was borrowed to a tracked debt. The mirror of
+   * offerBalanceChange, and asked for the same reason: the balance is a stored
+   * number and the deposit can be edited or deleted afterwards. A brand-new
+   * loan starts at nothing outstanding, so zero is allowed here.
+   */
+  const offerDebtIncrease = (categoryName: string, amount: number) => {
+    const name = categoryName.trim().toLocaleLowerCase();
+    const debt = ((categories ?? []) as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
+      .find((row) => row.name.trim().toLocaleLowerCase() === name && typeof row.debtBalance === "number");
+    const owed = debt?.debtBalance;
+    if (!debt || typeof owed !== "number" || amount <= 0) return;
+    const borrowed = Math.round(amount);
+    if (!window.confirm(`Add ${formatKes(borrowed)} to ${debt.name}? That makes it ${formatKes(owed + borrowed)}.`)) return;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/budget-categories/${debt.id}`, {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ debtBalance: owed + borrowed }),
+        });
+        if (!response.ok) throw new Error("Could not update the debt.");
+        await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+      } catch (error) {
+        toast({ variant: "destructive", title: "Could not update the debt", description: error instanceof Error ? error.message : "Please try again." });
+      }
+    })();
+  };
+
+  /** Offer to add what was borrowed to what you owe a party. */
+  const offerBorrowedFromParty = (party: Party, amount: number) => {
+    if (amount <= 0) return;
+    const owed = typeof party.owedByUs === "number" ? party.owedByUs : 0;
+    const borrowed = Math.round(amount);
+    if (!window.confirm(`Add ${formatKes(borrowed)} to what you owe ${party.name}? That makes it ${formatKes(owed + borrowed)}.`)) return;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/contributors/${party.id}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ owedByUs: owed + borrowed }),
         });
         if (!response.ok) throw new Error("Could not update the balance.");
         await queryClient.invalidateQueries({ queryKey: ["parties"] });
@@ -1776,19 +1853,39 @@ export default function Bank() {
                     means: a repayment is not income. */}
                 {mode === "deposit" ? (
                   <div className="space-y-2 sm:col-span-2" data-testid="repayment-picker">
-                    <label className="text-sm font-semibold text-foreground">Is this somebody paying you back?</label>
+                    <label className="text-sm font-semibold text-foreground">What kind of money is this?</label>
                     <select
                       className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
                       value={repayingPartyId}
                       onChange={(e) => setRepayingPartyId(e.target.value)}
                       data-testid="select-repayment"
                     >
-                      <option value="none">No — this is ordinary money in</option>
-                      {owingParties.map((party) => (
-                        <option key={party.id} value={String(party.id)}>
-                          {party.name} — owes you {formatKes(party.owedToUs ?? 0)}
-                        </option>
-                      ))}
+                      <option value="none">Ordinary money in</option>
+                      {owingParties.length > 0 ? (
+                        <optgroup label="Somebody paying you back">
+                          {owingParties.map((party) => (
+                            <option key={party.id} value={String(party.id)}>
+                              {party.name} — owes you {formatKes(party.owedToUs ?? 0)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                      {/* Borrowed money: the same deposit, the opposite
+                          meaning. Naming what it was borrowed against is
+                          optional — it is not income either way. */}
+                      <optgroup label="Borrowed — not income">
+                        {trackedDebts.map((debt) => (
+                          <option key={`borrow-debt-${debt.id}`} value={`borrow:debt:${debt.name}`}>
+                            Borrowed — {debt.name}
+                          </option>
+                        ))}
+                        {parties.map((party) => (
+                          <option key={`borrow-party-${party.id}`} value={`borrow:party:${party.id}`}>
+                            Borrowed from {party.name}
+                          </option>
+                        ))}
+                        <option value="borrow:none">Borrowed — from somewhere else</option>
+                      </optgroup>
                     </select>
                     <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 sm:flex-row" data-testid="add-debtor-form">
                       <Input
@@ -1814,12 +1911,18 @@ export default function Bank() {
                         This will not count as income — you had the money once already, when you lent it. It still
                         shows in the account and the ledger.
                       </p>
+                    ) : isBorrowing ? (
+                      <p className="text-xs text-muted-foreground" data-testid="borrowing-note">
+                        This will not count as income — a loan is not earnings, and you will pay it back. It still
+                        shows in the account and the ledger.
+                        {borrowTarget?.kind === "none" ? "" : " Once it saves, Jamvi offers to add it to what you owe."}
+                      </p>
                     ) : null}
                   </div>
                 ) : null}
 
                 {/* ── DEPOSIT: who is depositing ── */}
-                {mode === "deposit" && !repayingParty && (
+                {mode === "deposit" && !repayingParty && !isBorrowing && (
                   <>
                     <div className="space-y-2 sm:col-span-2">
                       <label className="text-sm font-semibold text-foreground">

@@ -304,6 +304,18 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['mwangi', 'kcb', 'creditor', 'repay', 'loan', 'party', 'institution'],
       },
       {
+        question: 'Record money you borrowed',
+        steps: [
+          'Banking tab, then Deposit.',
+          'Under "What kind of money is this?", choose one of the Borrowed answers.',
+          'Pick the loan it is against, or who lent it to you, if either is recorded.',
+          'This never counts as income: a loan is not earnings, and you will pay it back. It still shows in the account.',
+          'Once it saves, Jamvi offers to add it to what you owe.',
+        ],
+        route: '/(tabs)/bank',
+        keywords: ['borrow', 'loan', 'fuliza', 'sacco', 'lent me', 'disbursed', 'advance'],
+      },
+      {
         question: 'Take money back from somebody who owed you',
         steps: [
           'Banking tab, then Deposit.',
