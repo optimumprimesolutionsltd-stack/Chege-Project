@@ -21,7 +21,7 @@ import {
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { searchHelp, type HelpTopic } from '@/lib/helpTopics';
@@ -76,7 +76,12 @@ function TopicRow({ topic, index }: { topic: HelpTopic; index: number }) {
 export default function HelpScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [query, setQuery] = useState('');
+  // Opened from a screen's own question mark, the guide arrives already
+  // filtered to that screen. Somebody who is stuck is stuck on something
+  // particular, and making them search for its name first is the same as not
+  // helping.
+  const { about } = useLocalSearchParams<{ about?: string }>();
+  const [query, setQuery] = useState(typeof about === 'string' ? about : '');
   const sections = useMemo(() => searchHelp(query), [query]);
   const found = sections.reduce((count, section) => count + section.topics.length, 0);
 

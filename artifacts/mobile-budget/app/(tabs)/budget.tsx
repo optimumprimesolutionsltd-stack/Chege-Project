@@ -45,6 +45,7 @@ import { getCategoryIcon } from '@/lib/categoryIcons';
 import { WorkspaceIdentityRow } from '@/components/WorkspaceIdentityRow';
 import { getLedgerExpenseEditHref } from '@/lib/expenseEditLink';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
+import { HelpButton } from '@/components/HelpButton';
 
 type BudgetCategory = {
   id: number;
@@ -1229,6 +1230,7 @@ export default function BudgetScreen() {
           <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Budget</Text>
             <View style={styles.headerRight}>
+              <HelpButton about="category" />
               <View style={styles.monthNav}>
                 <Pressable onPress={prevMonth} style={styles.navBtn} hitSlop={8}>
                   <Feather name="chevron-left" size={20} color="rgba(247,250,246,0.7)" />
