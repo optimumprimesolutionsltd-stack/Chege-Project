@@ -70,6 +70,15 @@ import { buildCategoryTree, type CategoryRow } from '@workspace/category-tree';
 import { workspaceBudgetName } from '@/lib/workspaceIdentity';
 import { formatDisplayDate } from '@/lib/displayFormat';
 
+/**
+ * Where the last bank-charge category is kept.
+ *
+ * A bank charge is the same expense every time, so asking for its category on
+ * every posting is both a nuisance and a way to end up with the month's fees
+ * spread over four categories.
+ */
+const CHARGE_CATEGORY_KEY = 'jamvi:last-charge-category';
+
 function formatKES(n?: number | null): string {
   if (n === undefined || n === null) return '—';
   return n.toLocaleString('en-KE', { maximumFractionDigits: 0 });
@@ -343,6 +352,24 @@ export default function BankScreen() {
    */
   const [changingAccount, setChangingAccount] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(CHARGE_CATEGORY_KEY)
+      .then((stored) => {
+        if (active && stored) setChargeCategory(stored);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /** Picked once, then used for every fee after it. */
+  const rememberChargeCategory = (name: string) => {
+    setChargeCategory(name);
+    AsyncStorage.setItem(CHARGE_CATEGORY_KEY, name).catch(() => {});
+  };
+
   const selectAccount = (accountId: number) => {
     setSelectedAccountId(accountId);
     setChangingAccount(false);
@@ -460,7 +487,9 @@ export default function BankScreen() {
     // Cleared between postings: the next line in a sitting is rarely charged
     // the same fee, and a charge carried over would be invented money out.
     setChargeAmount('');
-    setChargeCategory('');
+    // The category stays put. It is the same expense every time, and picking
+    // it afresh per posting is how a month's charges end up scattered across
+    // categories and never total.
     setShowChargeCategoryPicker(false);
     setTransferDirection('to_savings');
     setBankTransferDestinationId(accounts.find((candidate) => candidate.id !== selectedAccountId)?.id ?? null);
@@ -503,7 +532,9 @@ export default function BankScreen() {
     // Cleared between postings: the next line in a sitting is rarely charged
     // the same fee, and a charge carried over would be invented money out.
     setChargeAmount('');
-    setChargeCategory('');
+    // The category stays put. It is the same expense every time, and picking
+    // it afresh per posting is how a month's charges end up scattered across
+    // categories and never total.
     setShowChargeCategoryPicker(false);
     setDepositorAmounts({});
   };
@@ -2752,7 +2783,7 @@ export default function BankScreen() {
                                     <TouchableOpacity
                                       key={`charge-child-${child}`}
                                       style={styles.categoryOption}
-                                      onPress={() => { setChargeCategory(child); setShowChargeCategoryPicker(false); }}
+                                      onPress={() => { rememberChargeCategory(child); setShowChargeCategoryPicker(false); }}
                                     >
                                       <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{child}</Text>
                                     </TouchableOpacity>
@@ -2761,7 +2792,7 @@ export default function BankScreen() {
                               ) : (
                                 <TouchableOpacity
                                   style={styles.categoryOption}
-                                  onPress={() => { setChargeCategory(group.name); setShowChargeCategoryPicker(false); }}
+                                  onPress={() => { rememberChargeCategory(group.name); setShowChargeCategoryPicker(false); }}
                                 >
                                   <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{group.name}</Text>
                                 </TouchableOpacity>
