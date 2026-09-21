@@ -210,6 +210,9 @@ router.get("/contributors", async (req, res): Promise<void> => {
       userId: groupContributorsTable.userId,
       monthlyTarget: groupContributorsTable.monthlyTarget,
       archivedAt: groupContributorsTable.archivedAt,
+      kind: groupContributorsTable.kind,
+      owedToUs: groupContributorsTable.owedToUs,
+      owedByUs: groupContributorsTable.owedByUs,
     })
     .from(groupContributorsTable)
     .where(and(
@@ -223,12 +226,22 @@ router.get("/contributors", async (req, res): Promise<void> => {
     name: contributor.name,
     hasAccount: contributor.userId !== null,
     monthlyTarget: contributor.monthlyTarget,
+    kind: contributor.kind,
+    // Null rather than zero when untracked: zero is a debt that has been
+    // cleared, which is worth being able to say.
+    owedToUs: contributor.owedToUs,
+    owedByUs: contributor.owedByUs,
   })));
 });
 
 const newContributor = z.object({
   name: z.string().max(CONTRIBUTOR_NAME_MAX * 2),
   monthlyTarget: z.number().int().min(0).nullable().optional(),
+  // An institution is a party money passes to, never a contributor. KCB will
+  // not be giving to the chama.
+  kind: z.enum(["person", "institution"]).optional(),
+  owedToUs: z.number().int().min(0).nullable().optional(),
+  owedByUs: z.number().int().min(0).nullable().optional(),
 });
 
 /** Add somebody by name. No account, no invitation, no email - the treasurer
@@ -257,18 +270,38 @@ router.post("/contributors", async (req, res): Promise<void> => {
   // What the group expects, unless this person is told to be different. A
   // treasurer setting the figure once is the common case; setting it forty
   // times is not.
-  const monthlyTarget = parsed.data.monthlyTarget !== undefined
-    ? parsed.data.monthlyTarget
-    : await groupDefaultTarget(groupId);
+  const kind = parsed.data.kind ?? "person";
+  // An institution is never expected to give: a default target on KCB would
+  // put it in the arrears column of a chama it has nothing to do with.
+  const monthlyTarget = kind === "institution"
+    ? (parsed.data.monthlyTarget ?? null)
+    : parsed.data.monthlyTarget !== undefined
+      ? parsed.data.monthlyTarget
+      : await groupDefaultTarget(groupId);
 
   // Names are deliberately not unique: two people really can both be called
   // John, and refusing the second is worse than showing both.
   const [created] = await db
     .insert(groupContributorsTable)
-    .values({ groupId, name, monthlyTarget })
+    .values({
+      groupId,
+      name,
+      monthlyTarget,
+      kind,
+      owedToUs: parsed.data.owedToUs ?? null,
+      owedByUs: parsed.data.owedByUs ?? null,
+    })
     .returning();
 
-  res.status(201).json({ id: created.id, name: created.name, hasAccount: false, monthlyTarget: created.monthlyTarget });
+  res.status(201).json({
+    id: created.id,
+    name: created.name,
+    hasAccount: false,
+    monthlyTarget: created.monthlyTarget,
+    kind: created.kind,
+    owedToUs: created.owedToUs,
+    owedByUs: created.owedByUs,
+  });
 });
 
 /** What this group expects from a member each month, or null where giving is
@@ -285,6 +318,10 @@ async function groupDefaultTarget(groupId: number): Promise<number | null> {
 
 const contributorUpdate = z.object({
   name: z.string().max(CONTRIBUTOR_NAME_MAX * 2).optional(),
+  kind: z.enum(["person", "institution"]).optional(),
+  // Explicit null clears the tracking; zero is a cleared debt and stays.
+  owedToUs: z.number().int().min(0).nullable().optional(),
+  owedByUs: z.number().int().min(0).nullable().optional(),
   // Explicit null is meaningful: it says this person is not expected to give a
   // set amount, which is different from not saying.
   monthlyTarget: z.number().int().min(0).nullable().optional(),
@@ -347,6 +384,12 @@ router.patch("/contributors/:id", async (req, res): Promise<void> => {
   // contributed, and removing them would make last year's totals disagree with
   // last year's rows.
   if (parsed.data.archived !== undefined) changes.archivedAt = parsed.data.archived ? new Date() : null;
+  if (parsed.data.kind !== undefined) changes.kind = parsed.data.kind;
+  // Set to null to stop tracking, to a number to say what stands between you.
+  // Kept apart rather than netted: somebody can owe the kitty and be owed by
+  // it at once, and a single figure would hide both.
+  if (parsed.data.owedToUs !== undefined) changes.owedToUs = parsed.data.owedToUs;
+  if (parsed.data.owedByUs !== undefined) changes.owedByUs = parsed.data.owedByUs;
 
   if (Object.keys(changes).length === 0 && !datedChange) {
     res.status(400).json({ error: "Nothing to change." });

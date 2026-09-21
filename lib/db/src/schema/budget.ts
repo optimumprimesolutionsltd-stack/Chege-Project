@@ -198,7 +198,37 @@ export const groupContributorsTable = pgTable("group_contributors", {
    *  what they contributed, and removing them would make last year's totals
    *  disagree with last year's rows. */
   archivedAt: timestamp("archived_at", { withTimezone: true }),
+  /**
+   * A row here is somebody money passes between you and — a person or an
+   * institution. KCB is not a contributor and never will be, but it is a
+   * party you owe, and the table already models exactly that: a name, and a
+   * login only if they happen to have one.
+   */
+  kind: text("kind").notNull().default("person"),
+  /**
+   * What stands between you, in KES. Null means not tracked, which is not the
+   * same as zero — zero is a debt that has been cleared and is worth saying.
+   *
+   * Two columns rather than one signed number because a chama member can owe
+   * the kitty and be owed by it at the same time, and netting them off hides
+   * both. Bare balances rather than a ledger, matching how a category's debt
+   * is already held: the figure is edited as it is paid down.
+   */
+  owedToUs: integer("owed_to_us"),
+  owedByUs: integer("owed_by_us"),
 }, (table) => [
+  check(
+    "group_contributors_kind_check",
+    sql`${table.kind} IN ('person', 'institution')`,
+  ),
+  check(
+    "group_contributors_owed_to_us_check",
+    sql`${table.owedToUs} IS NULL OR ${table.owedToUs} >= 0`,
+  ),
+  check(
+    "group_contributors_owed_by_us_check",
+    sql`${table.owedByUs} IS NULL OR ${table.owedByUs} >= 0`,
+  ),
   check(
     "group_contributors_name_valid_check",
     sql`btrim(${table.name}) <> '' AND char_length(${table.name}) <= 120`,
