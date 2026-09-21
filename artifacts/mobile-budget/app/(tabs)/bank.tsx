@@ -282,6 +282,18 @@ export default function BankScreen() {
   // Somebody paying you back. The money reaches the account like any deposit,
   // but you had it once already — when you lent it — so it is not income.
   const [repayingPartyId, setRepayingPartyId] = useState<number | null>(null);
+  /**
+   * The bank's fee on this withdrawal, recorded with it.
+   *
+   * It is a second posting, never part of the first. Folded into the amount,
+   * a repayment of 5,000 with a 50 charge would offer to take 5,050 off the
+   * loan when only 5,000 reached it, and the balance would drift by the fee
+   * every single time. Kept apart, the offer uses the principal and the fee
+   * is spending in its own category, which is what it is.
+   */
+  const [chargeAmount, setChargeAmount] = useState('');
+  const [chargeCategory, setChargeCategory] = useState('');
+  const [showChargeCategoryPicker, setShowChargeCategoryPicker] = useState(false);
   const [showRepayPicker, setShowRepayPicker] = useState(false);
   /**
    * Money borrowed, arriving in the account.
@@ -473,6 +485,11 @@ export default function BankScreen() {
     setRepayingPartyId(null);
     setBorrowTarget(null);
     setShowRepayPicker(false);
+    // Cleared between postings: the next line in a sitting is rarely charged
+    // the same fee, and a charge carried over would be invented money out.
+    setChargeAmount('');
+    setChargeCategory('');
+    setShowChargeCategoryPicker(false);
     setTransferDirection('to_savings');
     setBankTransferDestinationId(accounts.find((candidate) => candidate.id !== selectedAccountId)?.id ?? null);
     setModalVisible(true);
@@ -511,6 +528,11 @@ export default function BankScreen() {
     setRepayingPartyId(null);
     setBorrowTarget(null);
     setShowRepayPicker(false);
+    // Cleared between postings: the next line in a sitting is rarely charged
+    // the same fee, and a charge carried over would be invented money out.
+    setChargeAmount('');
+    setChargeCategory('');
+    setShowChargeCategoryPicker(false);
     setDepositorAmounts({});
   };
 
@@ -1360,6 +1382,18 @@ export default function BankScreen() {
       return;
     }
 
+    // Checked before the first posting, so a bad charge cannot leave the
+    // withdrawal saved and the fee lost.
+    if (isWithdrawal && chargeAmount.trim() !== '') {
+      if (parsedCharge === null || parsedCharge < 0) {
+        Alert.alert('Check the charge', 'Enter zero or more, with up to two decimal places.');
+        return;
+      }
+      if (parsedCharge > 0 && !chargeCategory.trim()) {
+        Alert.alert('Where does the charge go?', 'Give the bank charge a category of its own.');
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       if (editingTransactionId !== null) {
@@ -1484,6 +1518,22 @@ export default function BankScreen() {
             accountId: selectedAccountId ?? undefined,
           },
         });
+        // The bank's fee, as its own posting. Second rather than first: if
+        // this one fails the withdrawal still stands, which is the truth the
+        // bank statement will show, and the fee can be added on its own.
+        if (chargeToPost > 0) {
+          await createDisbursement({
+            data: {
+              amount: chargeToPost,
+              description: `Bank charge — ${finalDescription}`,
+              date,
+              expenseCategory: chargeCategory.trim(),
+              madeById: !isSharedWorkspace ? user?.id : withdrawerId ?? null,
+              destinationKind: 'category',
+              accountId: selectedAccountId ?? undefined,
+            },
+          });
+        }
       }
       // Read before finishEntry, which clears it. Asking after an edit would
       // take the money off a second time.
@@ -1493,7 +1543,7 @@ export default function BankScreen() {
       const repaidBy = txType === 'deposit' && editingTransactionId === null ? repayingParty : null;
       const borrowedAgainst = txType === 'deposit' && editingTransactionId === null ? borrowTarget : null;
       const borrowedFrom = borrowedFromParty;
-      finishEntry(keepOpen, { amount: parsed, direction: txType === 'deposit' ? 'in' : 'out' });
+      finishEntry(keepOpen, { amount: parsed + (txType === 'disbursement' ? chargeToPost : 0), direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
       if (repaidBy) {
         offerRepaymentSettlement(repaidBy, parsed);
@@ -1602,6 +1652,9 @@ export default function BankScreen() {
   const isTransfer = txType === 'transfer';
   const isBankTransfer = txType === 'bank_transfer';
   const parsedOutgoingAmount = readAmount(amount);
+  // Blank means no charge. Anything unreadable is caught on submit.
+  const parsedCharge = chargeAmount.trim() === '' ? 0 : readAmount(chargeAmount);
+  const chargeToPost = isWithdrawal && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
@@ -1621,7 +1674,9 @@ export default function BankScreen() {
     parsedOutgoingAmount > 0
     ? getProjectedBalanceAfterPosting(
         data.balance,
-        parsedOutgoingAmount,
+        // The charge leaves the account too, so the figure somebody is working
+        // down to has to include it.
+        parsedOutgoingAmount + chargeToPost,
         isOutgoingTransaction ? 'out' : 'in',
         editingTransaction
           ? { amount: editingTransaction.amount, type: editingTransaction.type }
@@ -2659,6 +2714,79 @@ export default function BankScreen() {
                   )}
                 </>
               )}
+
+              {/* The bank's fee on this withdrawal, entered with it and
+                  posted separately. Two postings rather than one: folded into
+                  the amount, a repayment of 5,000 with a 50 charge would offer
+                  to take 5,050 off the loan when only 5,000 reached it. */}
+              {isWithdrawal ? (
+                <View testID="bank-charge-block" style={{ marginBottom: 14 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                    Bank charge <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
+                  </Text>
+                  <TextInput
+                    value={chargeAmount}
+                    onChangeText={setChargeAmount}
+                    placeholder="e.g. 50"
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="decimal-pad"
+                    style={[styles.input, { borderColor: colors.border, backgroundColor: colors.muted, color: colors.foreground }]}
+                    testID="bank-charge-amount"
+                  />
+                  {chargeToPost > 0 ? (
+                    <>
+                      <Text style={[styles.label, { color: colors.mutedForeground, marginTop: 8 }]}>
+                        Charge category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
+                        onPress={() => setShowChargeCategoryPicker((open) => !open)}
+                        testID="bank-charge-category"
+                      >
+                        <Text style={{ flex: 1, color: chargeCategory ? colors.foreground : colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                          {chargeCategory || 'Choose a category'}
+                        </Text>
+                        <Feather name={showChargeCategoryPicker ? 'chevron-up' : 'chevron-down'} size={16} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                      {showChargeCategoryPicker && (
+                        <View style={[styles.categoryDropdown, { borderColor: colors.dropdownBorder, backgroundColor: colors.dropdownBackground }]}>
+                          {categoryTree.map((group) => (
+                            <View key={`charge-group-${group.name}`}>
+                              {group.children.length > 0 ? (
+                                <>
+                                  <Text style={{ color: colors.dropdownMutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 11, paddingHorizontal: 14, paddingTop: 10 }}>
+                                    {group.name.toUpperCase()}
+                                  </Text>
+                                  {group.children.map((child) => (
+                                    <TouchableOpacity
+                                      key={`charge-child-${child}`}
+                                      style={styles.categoryOption}
+                                      onPress={() => { setChargeCategory(child); setShowChargeCategoryPicker(false); }}
+                                    >
+                                      <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{child}</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                                </>
+                              ) : (
+                                <TouchableOpacity
+                                  style={styles.categoryOption}
+                                  onPress={() => { setChargeCategory(group.name); setShowChargeCategoryPicker(false); }}
+                                >
+                                  <Text style={{ color: colors.dropdownForeground, fontFamily: 'Inter_400Regular' }}>{group.name}</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 6 }}>
+                        Saved as a second posting of KES {formatKES(chargeToPost)}, so what you owe moves by the payment
+                        alone and the fee still shows as spending.
+                      </Text>
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
 
               {/* Somebody paying back what they owe. Kept above who deposited
                   it, because the answer changes what the money means: a
