@@ -253,6 +253,13 @@
       "when": 1789924365399,
       "tag": "0035_deposit_applies_to_period",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789974309079,
+      "tag": "0036_bank_charges_become_spending",
+      "breakpoints": true
     }
   ]
 }

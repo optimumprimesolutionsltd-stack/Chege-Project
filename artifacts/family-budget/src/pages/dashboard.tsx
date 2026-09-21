@@ -3008,15 +3008,6 @@ export default function Dashboard() {
               <div className={`h-full rounded-full transition-all duration-1000 ${isOverBudget ? "bg-destructive" : "bg-secondary"}`} style={{ width: `${Math.min(percentSpent, 100)}%` }} />
             </div>
           </div>
-          {(summary.bankChargesTotal ?? 0) > 0 ? (
-            <p className="mt-4 text-sm text-primary-foreground/70" data-testid="dashboard-bank-charges">
-              The bank also took {formatKes(summary.bankChargesTotal ?? 0)} in charges
-              {(summary.bankChargesCount ?? 0) > 0
-                ? ` across ${summary.bankChargesCount} ${summary.bankChargesCount === 1 ? "fee" : "fees"}`
-                : ""}
-              . That is not counted as spending, because it belongs to no category.
-            </p>
-          ) : null}
         </CardContent>
       </Card>
 

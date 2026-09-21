@@ -20,13 +20,6 @@ describe('the account separates what was spent from what was moved', () => {
     expect(bank).toContain('Still yours, in another pot.');
   });
 
-  it('names bank charges apart from both', () => {
-    // A fee is genuinely gone, but the app reports it apart from household
-    // spending, so folding it into either would misstate one of them.
-    expect(bank).toContain('charges += tx.amount;');
-    expect(bank).toContain('testID="bank-stat-charges"');
-  });
-
   it('shows spending under its own label', () => {
     expect(bank).toContain('testID="bank-stat-spent"');
     expect(bank).toContain('<Text style={styles.statLabel}>Spent</Text>');
@@ -34,10 +27,16 @@ describe('the account separates what was spent from what was moved', () => {
   });
 
   it('stays quiet about what does not apply', () => {
-    // Most accounts have no transfers and no charges in a given period, and a
-    // pair of zero lines every month is noise.
+    // Most accounts have no transfers in a given period, and a zero line every
+    // month is noise.
     expect(bank).toContain('{outgoing.moved > 0 ? (');
-    expect(bank).toContain('{outgoing.charges > 0 ? (');
+  });
+
+  it('no longer sets a bank fee apart from ordinary spending', () => {
+    // Fees are recorded against a category now, so there is nothing to hold
+    // out of the spending figure.
+    expect(bank).not.toContain('charges += tx.amount;');
+    expect(bank).not.toContain('bank-stat-charges');
   });
 
   it('recomputes only when the transactions change', () => {

@@ -16,7 +16,6 @@ describe("monthly report PDF", () => {
       expenseCount: 0,
       categories: [],
       totalFunding: 0,
-      bankChargesTotal: 0,
       incomeStreams: [],
     });
     expect(pdf.length).toBeGreaterThan(0);
@@ -33,7 +32,6 @@ describe("monthly report PDF", () => {
       expenseCount: 0,
       categories: [],
       totalFunding: 0,
-      bankChargesTotal: 0,
       incomeStreams: [],
     });
     expect(BRAND_MARK).not.toBeNull();

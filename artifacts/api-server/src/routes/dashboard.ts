@@ -200,23 +200,6 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   });
 
   const totalSpent = Number(spentRow.total) + Number(categorisedDisbursementsRow.total);
-  // What the bank took in fees. Deliberately outside totalSpent: a charge is
-  // money genuinely gone, but it is not household spending and belongs to no
-  // category, so adding it would inflate every budget comparison by whatever
-  // the bank happened to levy. Reported so it stops being invisible outside
-  // the banking screen — until now the only way to see it was to go looking.
-  const [bankChargesRow] = await db
-    .select({
-      total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(jointAccountTxTable)
-    .where(sql`${jointAccountTxTable.groupId} = ${groupId}
-      AND ${jointAccountTxTable.type} = 'disbursement'
-      AND ${jointAccountTxTable.bankCharge} = true
-      AND EXTRACT(MONTH FROM ${jointAccountTxTable.date}) = ${month}
-      AND EXTRACT(YEAR FROM ${jointAccountTxTable.date}) = ${year}`);
-
   res.json({
     month, year,
     totalBudget,
@@ -224,8 +207,6 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     remaining: totalBudget - totalSpent,
     expenseCount: Number(countRow.count),
     memberContributions,
-    bankChargesTotal: Number(bankChargesRow?.total ?? 0),
-    bankChargesCount: Number(bankChargesRow?.count ?? 0),
   });
 });
 
@@ -1430,26 +1411,13 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
         ) AS bank_deposit_count,
         COALESCE(SUM(CASE
           WHEN bank_tx.type = 'disbursement'
-            AND bank_tx.bank_transfer_id IS NULL
-            AND bank_tx.bank_charge = false THEN bank_tx.amount
+            AND bank_tx.bank_transfer_id IS NULL THEN bank_tx.amount
           ELSE 0
         END), 0) AS bank_disbursement_total,
         COUNT(*) FILTER (
           WHERE bank_tx.type = 'disbursement'
             AND bank_tx.bank_transfer_id IS NULL
-            AND bank_tx.bank_charge = false
         ) AS bank_disbursement_count,
-        COALESCE(SUM(CASE
-          WHEN bank_tx.type = 'disbursement'
-            AND bank_tx.bank_transfer_id IS NULL
-            AND bank_tx.bank_charge = true THEN bank_tx.amount
-          ELSE 0
-        END), 0) AS bank_charges_total,
-        COUNT(*) FILTER (
-          WHERE bank_tx.type = 'disbursement'
-            AND bank_tx.bank_transfer_id IS NULL
-            AND bank_tx.bank_charge = true
-        ) AS bank_charges_count,
         COALESCE(SUM(CASE
           WHEN bank_tx.type = 'disbursement'
             AND bank_tx.bank_transfer_id IS NULL
@@ -1482,8 +1450,6 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
       bank_totals.bank_deposit_count AS "bankDepositCount",
       bank_totals.bank_disbursement_total AS "bankDisbursementTotal",
       bank_totals.bank_disbursement_count AS "bankDisbursementCount",
-      bank_totals.bank_charges_total AS "bankChargesTotal",
-      bank_totals.bank_charges_count AS "bankChargesCount",
       savings_totals.savings_total AS "savingsTotal",
       savings_totals.savings_count AS "savingsCount",
       expense_totals.expense_total + bank_totals.standalone_disbursement_total AS "spendingTotal",
@@ -1509,8 +1475,6 @@ router.get("/dashboard/period-totals", async (req, res): Promise<void> => {
     bankDisbursementTotal: numberValue("bankDisbursementTotal"),
     // Kept out of spendingTotal on purpose - a bank fee is not spending on the
     // group's purposes - but a real outflow the report still has to show.
-    bankChargesTotal: numberValue("bankChargesTotal"),
-    bankChargesCount: numberValue("bankChargesCount"),
     savingsTotal: numberValue("savingsTotal"),
     netMovement: contributionTotal - spendingTotal,
     expenseCount: numberValue("expenseCount"),
@@ -1582,7 +1546,7 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     .where(eq(groupsTable.id, groupId))
     .limit(1);
 
-  const [categories, spentByCategory, disbursementsByCategory, expenseTotal, incomeResult, bankChargesRow] = await Promise.all([
+  const [categories, spentByCategory, disbursementsByCategory, expenseTotal, incomeResult] = await Promise.all([
     db
       .select()
       .from(budgetCategoriesTable)
@@ -1662,15 +1626,6 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
         CASE WHEN source.id IS NULL THEN 'No income stream selected' ELSE COALESCE(owner.preferred_name, owner.first_name, 'Member') END
       ORDER BY total DESC, "sourceName" ASC
     `),
-    db
-      .select({ total: sql<number>`COALESCE(SUM(${jointAccountTxTable.amount}), 0)` })
-      .from(jointAccountTxTable)
-      .where(sql`${jointAccountTxTable.groupId} = ${groupId}
-        AND ${jointAccountTxTable.type} = 'disbursement'
-        AND ${jointAccountTxTable.bankTransferId} IS NULL
-        AND ${jointAccountTxTable.bankCharge} = true
-        AND ${jointAccountTxTable.date} >= ${rangeFrom}
-        AND ${jointAccountTxTable.date} <= ${rangeTo}`),
   ]);
 
   const spentMap = new Map(spentByCategory.map((item) => [item.category, item.total]));
@@ -1731,7 +1686,6 @@ router.get("/dashboard/monthly-report.pdf", async (req, res): Promise<void> => {
     expenseCount: Number(expenseTotal[0]?.count ?? 0),
     categories: categoryRows,
     totalFunding,
-    bankChargesTotal: Number(bankChargesRow[0]?.total ?? 0),
     incomeStreams: rawIncomeRows.map((row) => ({
       sourceName: row.sourceName,
       ownerName: row.ownerName,

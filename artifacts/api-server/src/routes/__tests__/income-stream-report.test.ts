@@ -302,8 +302,6 @@ describe("GET /dashboard/period-totals", () => {
       contributionTotal: 2200,
       bankDepositTotal: 1500,
       bankDisbursementTotal: 400,
-      bankChargesTotal: 0,
-      bankChargesCount: 0,
       savingsTotal: 300,
       netMovement: 1100,
       expenseCount: 3,
@@ -365,16 +363,20 @@ describe("GET /dashboard/monthly-report.pdf", () => {
 
 describe("GET /dashboard/summary — joint-bank expense attribution", () => {
   it("excludes a paid_from_bank expense with no payer from individual contribution totals", async () => {
-    const selectRows = [
-      [{ total: "1000" }], // budget
-      [{ total: "800" }], // spending
-      [{ count: "2" }], // expense count
-      [{ total: "0" }], // categorized bank disbursements
-      [{ userId: "member-a", firstName: "Amina", monthlyTarget: 1000 }], // members
-    ];
+    // Answered by what each query asks for rather than by the order the
+    // queries happen to run in. A positional queue silently re-aims every
+    // answer the moment a query is added or removed anywhere in the route,
+    // and then fails somewhere unrelated to the change.
+    const rowsFor = (columns: Record<string, unknown>): unknown[] => {
+      if ("firstName" in columns) return [{ userId: "member-a", firstName: "Amina", monthlyTarget: 1000 }];
+      if ("count" in columns) return [{ count: "2" }];
+      return [{ total: "800" }];
+    };
     let selectCall = 0;
-    mockedDb.select.mockImplementation(() => {
-      const rows = selectRows[selectCall++] ?? [];
+    mockedDb.select.mockImplementation((columns?: Record<string, unknown>) => {
+      // The budget total is the first thing the route asks for, and it is the
+      // one figure that shares its shape with the spending total.
+      const rows = selectCall++ === 0 ? [{ total: "1000" }] : rowsFor(columns ?? {});
       const result: any = {
         from: () => result,
         leftJoin: () => result,

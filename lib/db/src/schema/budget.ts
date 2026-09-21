@@ -312,7 +312,11 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   madeById: text("made_by_id"), // userId for deposits; null ok for disbursements
   incomeSourceId: integer("income_source_id"), // which income source funded this deposit
   expenseCategory: text("expense_category"), // optional: which expense category this disbursement covers
-  bankCharge: boolean("bank_charge").notNull().default(false), // true for a bank fee/charge, excluded from household spending reports
+  // Retired. Bank fees are ordinary spending now, recorded against a category
+  // like any other cost, and nothing reads this. It is kept rather than
+  // dropped because it is the only record of which postings were fees, and
+  // that is what makes the decision reversible.
+  bankCharge: boolean("bank_charge").notNull().default(false),
   /** The month this deposit was *for*, when that differs from the day it
    *  arrived — April's dues paid in September, or June's paid in April. Null
    *  means the month it arrived in, which is every deposit unless somebody

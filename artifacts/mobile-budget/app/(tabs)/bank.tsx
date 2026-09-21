@@ -33,7 +33,6 @@ import {
   useGetJointAccount,
   useCreateDeposit,
   useCreateDisbursement,
-  useCreateBankCharge,
   useUpdateJointAccountTransaction,
   useDeleteJointAccountTransaction,
   useDeleteExpense,
@@ -100,7 +99,6 @@ type Tx = {
   /** The month a deposit was for, when that is not the month it arrived. */
   appliesToMonth?: number | null;
   appliesToYear?: number | null;
-  bankCharge?: boolean;
   savingsGoalId?: number | null;
   savingsGoalName?: string | null;
   transferDirection?: string | null;
@@ -115,7 +113,7 @@ type Tx = {
   createdAt?: string | null;
 };
 
-type TxType = 'deposit' | 'disbursement' | 'transfer' | 'bank_transfer' | 'bank_charge';
+type TxType = 'deposit' | 'disbursement' | 'transfer' | 'bank_transfer';
 
 type MemberIncomeSource = {
   id: number;
@@ -230,12 +228,6 @@ export default function BankScreen() {
   // this screen exists to fix.
   const [reconcileDate, setReconcileDate] = useState(todayIso());
   const [showReconcileDatePicker, setShowReconcileDatePicker] = useState(false);
-  // A shortfall can be recorded either way. As a charge it stays out of
-  // household spending, which is right when the bank simply took a fee. As a
-  // category it counts as spending, which is right when the money went
-  // somewhere and the posting was missed. Only the person reconciling knows
-  // which, so the app asks instead of deciding.
-  const [reconcileAs, setReconcileAs] = useState<'charge' | 'category'>('charge');
   const [reconcileCategory, setReconcileCategory] = useState('');
   const [showReconcileCategoryPicker, setShowReconcileCategoryPicker] = useState(false);
   const [reconciling, setReconciling] = useState(false);
@@ -274,7 +266,6 @@ export default function BankScreen() {
 
   const { mutateAsync: createDeposit } = useCreateDeposit();
   const { mutateAsync: createDisbursement } = useCreateDisbursement();
-  const { mutateAsync: createBankCharge } = useCreateBankCharge();
   const { mutateAsync: updateTransaction } = useUpdateJointAccountTransaction();
   const { mutateAsync: deleteTransaction } = useDeleteJointAccountTransaction();
   const { mutateAsync: deleteExpense } = useDeleteExpense();
@@ -438,7 +429,6 @@ export default function BankScreen() {
   const openReconcile = () => {
     setStatementBalance('');
     setReconcileNarration('');
-    setReconcileAs('charge');
     setReconcileCategory('');
     setShowReconcileCategoryPicker(false);
     // Default to the day the account was last active rather than today: you
@@ -463,34 +453,23 @@ export default function BankScreen() {
       Alert.alert('Choose a bank account', 'Pick the account you are checking before recording the difference.');
       return;
     }
-    if (reconcileAs === 'category' && !reconcileCategory.trim()) {
+    if (!reconcileCategory.trim()) {
       Alert.alert('Choose a category', 'Pick the category this spending belongs to, or record it as a bank charge.');
       return;
     }
     setReconciling(true);
     try {
-      if (reconcileAs === 'category') {
-        await createDisbursement({
-          data: {
-            amount: difference,
-            description: reconcileNarration.trim() || reconcileCategory,
-            date: reconcileDate,
-            expenseCategory: reconcileCategory,
-            madeById: !isSharedWorkspace ? user?.id : null,
-            destinationKind: 'category',
-            accountId: selectedAccountId,
-          },
-        });
-      } else {
-        await createBankCharge({
-          data: {
-            amount: difference,
-            narration: reconcileNarration.trim() || 'Bank charges',
-            date: reconcileDate,
-            accountId: selectedAccountId,
-          },
-        });
-      }
+      await createDisbursement({
+        data: {
+          amount: difference,
+          description: reconcileNarration.trim() || reconcileCategory,
+          date: reconcileDate,
+          expenseCategory: reconcileCategory,
+          madeById: !isSharedWorkspace ? user?.id : null,
+          destinationKind: 'category',
+          accountId: selectedAccountId,
+        },
+      });
       setReconcileVisible(false);
       await invalidateBalance();
     } catch (err: unknown) {
@@ -645,7 +624,7 @@ export default function BankScreen() {
     }
     const type: TxType = tx.savingsGoalId
       ? 'transfer'
-      : tx.bankCharge ? 'bank_charge' : tx.type === 'deposit' ? 'deposit' : 'disbursement';
+      : tx.type === 'deposit' ? 'deposit' : 'disbursement';
     setTxType(type);
     setEditingTransactionId(tx.id);
     setAmount(String(tx.amount));
@@ -821,10 +800,6 @@ export default function BankScreen() {
       Alert.alert('Category required', 'Choose or add a category for this withdrawal.');
       return;
     }
-    if (txType === 'bank_charge' && !description.trim()) {
-      Alert.alert('Narration required', 'Add the bank statement narration for this charge.');
-      return;
-    }
     if (txType === 'disbursement' && withdrawDest === 'other' && !description.trim()) {
       Alert.alert('Narration required', 'Explain where the money is going when you choose Other.');
       return;
@@ -948,7 +923,6 @@ export default function BankScreen() {
             ...(txType === 'deposit' && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(txType === 'deposit' && appliesTo ? { appliesToMonth: appliesTo.month, appliesToYear: appliesTo.year } : {}),
             ...(txType === 'disbursement' ? { expenseCategory, destinationKind: withdrawDest === 'other' ? 'other' : 'category' } : {}),
-            ...(txType === 'bank_charge' ? { bankCharge: true } : {}),
             accountId: selectedAccountId ?? undefined,
           },
         });
@@ -1024,15 +998,6 @@ export default function BankScreen() {
             },
           });
         }
-      } else if (txType === 'bank_charge') {
-        await createBankCharge({
-          data: {
-            amount: parsed,
-            narration: description.trim(),
-            date,
-            accountId: selectedAccountId ?? undefined,
-          },
-        });
       } else {
         // Disbursement — include madeById: null for Joint bank or the selected member
         await createDisbursement({
@@ -1072,21 +1037,16 @@ export default function BankScreen() {
   const outgoing = useMemo(() => {
     let spent = 0;
     let moved = 0;
-    let charges = 0;
     for (const tx of transactions) {
       if (tx.type !== 'disbursement') continue;
-      if (tx.bankCharge) {
-        // A fee is genuinely gone, but the app reports it apart from household
-        // spending, so it is named rather than folded into either.
-        charges += tx.amount;
-      } else if (tx.bankTransferId != null || tx.savingsGoalId != null) {
+      if (tx.bankTransferId != null || tx.savingsGoalId != null) {
         // Still yours, in another pot.
         moved += tx.amount;
       } else {
         spent += tx.amount;
       }
     }
-    return { spent, moved, charges };
+    return { spent, moved };
   }, [transactions]);
 
   // Panel-level edit mode: one Edit on a heading turns the list editable, one
@@ -1132,13 +1092,12 @@ export default function BankScreen() {
   const isDeposit = txType === 'deposit';
   const isWithdrawal = txType === 'disbursement';
   const isTransfer = txType === 'transfer';
-  const isBankCharge = txType === 'bank_charge';
   const isBankTransfer = txType === 'bank_transfer';
   const parsedOutgoingAmount = readAmount(amount);
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
-  const isOutgoingTransaction = isWithdrawal || isBankCharge || isBankTransfer || (isTransfer && transferDirection === 'to_savings');
+  const isOutgoingTransaction = isWithdrawal || isBankTransfer || (isTransfer && transferDirection === 'to_savings');
   // The balance the account will hold once this posting is saved, shown while
   // the amount is still being typed. Incoming money is projected too: somebody
   // recording a day works down to the closing balance on their statement, and
@@ -1374,13 +1333,6 @@ export default function BankScreen() {
                   </>
                 ) : null}
               </View>
-              {/* Named only when there are any: most accounts have none, and a
-                  zero line every month is noise. */}
-              {outgoing.charges > 0 ? (
-                <Text style={styles.chargesNote} testID="bank-stat-charges">
-                  Bank charges: KES {formatKES(outgoing.charges)}
-                </Text>
-              ) : null}
               <View style={styles.openingBalanceRow}>
                 <View>
                   <Text style={styles.openingBalanceLabel}>Opening balance</Text>
@@ -1459,17 +1411,6 @@ export default function BankScreen() {
                   <Feather name="shuffle" size={16} color="#67e8f9" />
                   <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#67e8f9' }]}>Bank → Bank</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: '#78350f' }, (!canManageAccount || !hasBankAccounts) && styles.actionBtnDisabled]}
-                  onPress={() => openModal('bank_charge')}
-                  activeOpacity={0.8}
-                  disabled={!canManageAccount || !hasBankAccounts}
-                  accessibilityHint={!canManageAccount ? 'Only a Shared group owner or admin can record a bank charge.' : undefined}
-                  testID="bank-charge-action"
-                >
-                  <Feather name="file-minus" size={16} color="#fde68a" />
-                  <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={[styles.actionBtnText, { color: '#fde68a' }]}>Charge</Text>
-                </TouchableOpacity>
               </View>
             </>
           )}
@@ -1520,7 +1461,6 @@ export default function BankScreen() {
         renderItem={({ item }) => {
           const dep = item.type === 'deposit';
           const payerLabel = txPayerLabel(item);
-          const bankCharge = item.bankCharge === true;
           const editing = txEditor.editing;
           const removable = canRemoveTx(item);
           const staged = editing && txEditor.isRemoving(item.id);
@@ -1551,7 +1491,6 @@ export default function BankScreen() {
                     ? `${dep ? 'From' : 'To'} ${item.bankTransferAccountName ?? 'bank account'}`
                     : item.savingsGoalId
                     ? `${item.transferDirection === 'to_savings' ? 'Bank → Savings' : 'Savings → Bank'}: ${item.savingsGoalName ?? 'Savings goal'}`
-                    : bankCharge ? `Bank charge: ${item.description}`
                     : !dep && item.expenseCategory ? item.expenseCategory : item.description}
                 </Text>
                 <Text style={[styles.txMeta, { color: colors.mutedForeground }]}>
@@ -1559,8 +1498,6 @@ export default function BankScreen() {
                     ? `Internal bank transfer · ${item.description} · `
                     : item.savingsGoalId
                     ? `${item.description} · `
-                    : bankCharge
-                      ? 'Excluded from household spending and reports · '
                     : dep
                       ? `${payerLabel} · ${item.description} · `
                       : `${payerLabel}${item.expenseCategory && item.description !== item.expenseCategory ? ` · ${item.description}` : ''} · `}
@@ -1740,54 +1677,15 @@ export default function BankScreen() {
                 >
                   <Text style={[styles.toggleText, { color: txType === 'bank_transfer' ? '#fff' : colors.mutedForeground }]}>Bank</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toggleOption, txType === 'bank_charge' && styles.toggleActiveDisburse]}
-                  onPress={() => setTxType('bank_charge')}
-                  testID="bank-toggle-charge"
-                >
-                  <Text style={[styles.toggleText, { color: txType === 'bank_charge' ? '#fff' : colors.mutedForeground }]}>Charge</Text>
-                </TouchableOpacity>
               </View>
               ) : null}
 
               <Text style={[styles.sheetTitle, { color: colors.foreground }]}>
                 {editingTransactionId !== null
-                  ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Transfer' : isBankCharge ? 'Bank Charge' : 'Withdrawal'}`
-                  : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankTransfer ? 'Move Between Bank Accounts' : isBankCharge ? 'Record Bank Charge' : 'Take Money Out'}
+                  ? `Edit ${isDeposit ? 'Deposit' : isTransfer ? 'Transfer' : 'Withdrawal'}`
+                  : isDeposit ? 'Add Money to Account' : isTransfer ? 'Move Bank & Savings Funds' : isBankTransfer ? 'Move Between Bank Accounts' : 'Take Money Out'}
               </Text>
 
-              {isBankCharge && (
-                <>
-                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account</Text>
-                  <View style={styles.memberRow}>
-                    {accounts.map((candidate) => {
-                      const selected = candidate.id === selectedAccountId;
-                      return (
-                        <TouchableOpacity
-                          key={candidate.id}
-                          testID={`bank-charge-account-${candidate.id}`}
-                          style={[
-                            styles.memberPill,
-                            {
-                              backgroundColor: selected ? '#166534' : colors.muted,
-                              borderColor: selected ? '#22c55e' : colors.border,
-                            },
-                          ]}
-                          onPress={() => selectAccount(candidate.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[styles.memberPillText, { color: selected ? '#fff' : colors.foreground }]}>
-                            {candidate.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
-                    This charge reduces only the selected account.
-                  </Text>
-                </>
-              )}
               {(isDeposit || isWithdrawal) && (
                 <View style={{ marginBottom: 14 }}>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>Bank account *</Text>
@@ -2029,10 +1927,10 @@ export default function BankScreen() {
               )}
 
               {/* Deposits require a description. Withdrawal details come after the required category. */}
-              {(isDeposit || isBankCharge) && (
+              {isDeposit && (
                 <>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                    {isBankCharge ? 'Narration *' : 'Description'}
+                    Description
                   </Text>
                   <TextInput
                     style={[
@@ -2043,7 +1941,7 @@ export default function BankScreen() {
                         backgroundColor: colors.muted,
                       },
                     ]}
-                    placeholder={isBankCharge ? 'e.g. Monthly account maintenance fee' : 'e.g. Monthly contribution'}
+                    placeholder="e.g. Monthly contribution"
                     placeholderTextColor={colors.mutedForeground}
                     value={description}
                     onChangeText={setDescription}
@@ -2835,48 +2733,10 @@ export default function BankScreen() {
               ) : reconcileDifference > 0 ? (
                 <>
                   <Text style={[styles.reconcileMessage, { color: colors.foreground }]} testID="bank-reconcile-short">
-                    KES {formatKES(reconcileDifference)} left the account with nothing recorded against it. That is
-                    either a fee the bank took or a posting you have not entered yet, and the two are counted
-                    differently — so Jamvi will not decide which for you.
+                    KES {formatKES(reconcileDifference)} left the account with nothing recorded against it — a fee the
+                    bank took, or a posting you have not entered yet. Either way it is spending, so give it a category.
                   </Text>
-                  <Text style={[styles.label, { color: colors.mutedForeground }]}>What was it?</Text>
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
-                    {([
-                      { key: 'charge' as const, label: 'A bank charge' },
-                      { key: 'category' as const, label: 'Spending I missed' },
-                    ]).map((option) => {
-                      const picked = reconcileAs === option.key;
-                      return (
-                        <Pressable
-                          key={option.key}
-                          onPress={() => setReconcileAs(option.key)}
-                          accessibilityRole="radio"
-                          accessibilityState={{ selected: picked }}
-                          testID={`bank-reconcile-as-${option.key}`}
-                          style={[
-                            styles.memberPill,
-                            {
-                              backgroundColor: picked ? colors.primary : colors.muted,
-                              borderColor: picked ? colors.primary : colors.border,
-                            },
-                          ]}
-                        >
-                          <Text style={[styles.memberPillText, { color: picked ? '#fff' : colors.foreground }]}>
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  <Text style={[styles.reconcileHelp, { color: colors.mutedForeground, textAlign: 'left', marginTop: 0 }]}>
-                    {reconcileAs === 'charge'
-                      ? 'A fee is money gone, but it belongs to no category and no budget was set for it, so it is reported apart from spending.'
-                      : 'This counts as spending against the category you pick, the same as any withdrawal.'}
-                  </Text>
-
-                  {reconcileAs === 'category' ? (
-                    <>
-                      <Text style={[styles.label, { color: colors.mutedForeground }]}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
                         Category <Text style={{ fontWeight: '400', color: '#f87171' }}>* required</Text>
                       </Text>
                       <TouchableOpacity
@@ -2920,12 +2780,7 @@ export default function BankScreen() {
                           ))}
                         </View>
                       )}
-                    </>
-                  ) : null}
-
-                  <Text style={[styles.label, { color: colors.mutedForeground }]}>
-                    {reconcileAs === 'charge' ? 'Date of the charge' : 'Date of the spending'}
-                  </Text>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>Date of the spending</Text>
                   <Pressable
                     onPress={() => setShowReconcileDatePicker(true)}
                     style={[styles.input, styles.pickerButton, { borderColor: colors.border, backgroundColor: colors.muted }]}
@@ -2956,7 +2811,7 @@ export default function BankScreen() {
                   )}
                   <TextInput
                     style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.muted }]}
-                    placeholder="What the statement calls it (default: Bank charges)"
+                    placeholder="What the statement calls it"
                     placeholderTextColor={colors.mutedForeground}
                     value={reconcileNarration}
                     onChangeText={setReconcileNarration}
@@ -2975,16 +2830,12 @@ export default function BankScreen() {
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text style={[styles.submitText, { color: '#fff' }]}>
-                        {reconcileAs === 'charge'
-                          ? `Record KES ${formatKES(reconcileDifference)} as a bank charge`
-                          : `Record KES ${formatKES(reconcileDifference)} as spending`}
+                        Record KES {formatKES(reconcileDifference)} as spending
                       </Text>
                     )}
                   </TouchableOpacity>
                   <Text style={[styles.reconcileHelp, { color: colors.mutedForeground }]}>
-                    {reconcileAs === 'charge'
-                      ? 'A charge is kept out of household spending, so this will not touch any budget.'
-                      : `This will count against ${reconcileCategory || 'the category you pick'} like any other withdrawal.`}
+                    This will count against {reconcileCategory || 'the category you pick'} like any other withdrawal.
                   </Text>
                 </>
               ) : (
@@ -3181,7 +3032,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
-  chargesNote: { color: '#cbd5f5', fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 6, textAlign: 'center' as const },
   openingBalanceRow: {
     flexDirection: 'row',
     alignItems: 'center',

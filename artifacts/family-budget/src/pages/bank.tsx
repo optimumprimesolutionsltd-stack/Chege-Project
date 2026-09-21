@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useCreateBankCharge, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction, useDeleteExpense,
+  useGetJointAccount, useCreateDeposit, useCreateDisbursement, useUpdateJointAccountTransaction, useDeleteJointAccountTransaction, useDeleteExpense,
   useGetMembers, useGetBudgetCategories, getGetBudgetCategoriesQueryKey,
   useGetSavingsGoals, useTransferBankToSavings, useTransferSavingsToBank, useGetGroup,
   getGetJointAccountQueryKey, getGetDashboardActivityQueryKey, getGetDashboardIncomeStreamsQueryKey,
@@ -49,7 +49,6 @@ type EditableTransaction = {
   madeById?: string | null;
   incomeSourceId?: number | null;
   expenseCategory?: string | null;
-  bankCharge?: boolean;
   bankTransferId?: string | null;
   bankTransferAccountId?: number | null;
   bankTransferAccountName?: string | null;
@@ -99,7 +98,6 @@ export default function Bank() {
   const { data: categories } = useGetBudgetCategories();
   const createDeposit = useCreateDeposit();
   const createDisbursement = useCreateDisbursement();
-  const createBankCharge = useCreateBankCharge();
   const updateTx = useUpdateJointAccountTransaction();
   const deleteTx = useDeleteJointAccountTransaction();
   const deleteExpense = useDeleteExpense();
@@ -128,7 +126,7 @@ export default function Bank() {
       (tx.contributorSplits?.length ?? 0) === 0
     );
 
-  const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | "bank_transfer" | "bank_charge" | null>(null);
+  const [mode, setMode] = useState<"deposit" | "disbursement" | "transfer" | "bank_transfer" | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -176,11 +174,6 @@ export default function Bank() {
   const [reconciling, setReconciling] = useState(false);
   const [statementBalance, setStatementBalance] = useState("");
   const [reconcileNarration, setReconcileNarration] = useState("");
-  // A shortfall can be recorded either way. As a charge it stays out of
-  // household spending, which is right when the bank took a fee. As a category
-  // it counts as spending, which is right when the money went somewhere and
-  // the posting was missed. Only the person reconciling knows which.
-  const [reconcileAs, setReconcileAs] = useState<"charge" | "category">("charge");
   const [reconcileCategory, setReconcileCategory] = useState("");
 
   const selectedBankAccount = accounts.find((item) => item.id === selectedAccountId) ?? null;
@@ -265,7 +258,6 @@ export default function Bank() {
   const openReconcile = () => {
     setStatementBalance("");
     setReconcileNarration("");
-    setReconcileAs("charge");
     setReconcileCategory("");
     setShowReconcile(true);
   };
@@ -288,7 +280,7 @@ export default function Bank() {
       });
       return;
     }
-    if (reconcileAs === "category" && !reconcileCategory.trim()) {
+    if (!reconcileCategory.trim()) {
       toast({
         variant: "destructive",
         title: "Choose a category",
@@ -298,7 +290,7 @@ export default function Bank() {
     }
     setReconciling(true);
     try {
-      if (reconcileAs === "category") {
+      {
         await createDisbursement.mutateAsync({
           data: {
             amount: difference,
@@ -311,16 +303,6 @@ export default function Bank() {
           },
         });
         toast({ title: "Spending recorded", description: `It counts against ${reconcileCategory}.` });
-      } else {
-        await createBankCharge.mutateAsync({
-          data: {
-            amount: difference,
-            narration: reconcileNarration.trim() || "Bank charges",
-            date: new Date().toISOString().slice(0, 10),
-            accountId: selectedAccountId,
-          },
-        });
-        toast({ title: "Bank charge recorded", description: "It is kept out of household spending." });
       }
       setShowReconcile(false);
       invalidate();
@@ -524,7 +506,7 @@ export default function Bank() {
     }));
   };
 
-  const openMode = (m: "deposit" | "disbursement" | "transfer" | "bank_transfer" | "bank_charge") => {
+  const openMode = (m: "deposit" | "disbursement" | "transfer" | "bank_transfer") => {
     if (!canManageAccount && m !== "deposit") {
       toast({
         variant: "destructive",
@@ -572,7 +554,7 @@ export default function Bank() {
     }
     const transactionMode = tx.savingsGoalId
       ? "transfer"
-      : tx.bankCharge ? "bank_charge" : tx.type === "deposit" ? "deposit" : "disbursement";
+      : tx.type === "deposit" ? "deposit" : "disbursement";
     setEditingTransaction(tx);
     setMode(transactionMode);
     setAmount(String(tx.amount));
@@ -619,7 +601,7 @@ export default function Bank() {
 
   const handleSubmit = async (e?: React.FormEvent, { keepOpen = false }: { keepOpen?: boolean } = {}) => {
     e?.preventDefault();
-    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer" || mode === "bank_transfer" || mode === "bank_charge") && !description.trim())) {
+    if (!mode || !amount || !date || ((mode === "deposit" || mode === "transfer" || mode === "bank_transfer") && !description.trim())) {
       toast({
         variant: "destructive",
         title: "Complete transaction details",
@@ -785,7 +767,6 @@ export default function Bank() {
             ...(mode === "deposit" && contributorSplits.length === 0 ? { incomeSourceId } : {}),
             ...(mode === "deposit" && depositSourceKind ? { sourceKind: depositSourceKind } : {}),
             ...(mode === "disbursement" ? { expenseCategory, destinationKind: withdrawalDestinationKind } : {}),
-            ...(mode === "bank_charge" ? { bankCharge: true } : {}),
             accountId: editingTransaction.accountId ?? selectedAccountId ?? undefined,
           },
         });
@@ -822,16 +803,6 @@ export default function Bank() {
           });
         }
         toast({ title: "Deposit recorded" });
-      } else if (mode === "bank_charge") {
-        await createBankCharge.mutateAsync({
-          data: {
-            amount: total,
-            narration: description.trim(),
-            date,
-            accountId: selectedAccountId ?? undefined,
-          },
-        });
-        toast({ title: "Bank charge recorded" });
       } else {
         await createDisbursement.mutateAsync({
           data: {
@@ -883,10 +854,10 @@ export default function Bank() {
     }
   };
 
-  const isPending = createDeposit.isPending || createDisbursement.isPending || createBankCharge.isPending || updateTx.isPending ||
+  const isPending = createDeposit.isPending || createDisbursement.isPending || updateTx.isPending ||
     transferToSavings.isPending || transferFromSavings.isPending || transferBankToBank.isPending || addingCategory;
   const outgoingAmount = parseBankAmount(amount);
-  const isOutgoingTransaction = mode === "disbursement" || mode === "bank_charge" ||
+  const isOutgoingTransaction = mode === "disbursement" ||
     mode === "bank_transfer" || (mode === "transfer" && transferDirection === "to_savings");
   // The balance the account will hold once this posting is saved, shown while
   // the amount is still being typed. Incoming money is projected too: somebody
@@ -1109,33 +1080,10 @@ export default function Bank() {
             ) : reconcileDifference > 0 ? (
               <div className="space-y-3">
                 <p className="text-sm text-foreground" data-testid="bank-reconcile-short">
-                  {formatKes(reconcileDifference)} left the account with nothing recorded against it. That is either a
-                  fee the bank took or a posting you have not entered yet, and the two are counted differently — so
-                  Jamvi will not decide which for you.
+                  {formatKes(reconcileDifference)} left the account with nothing recorded against it — a fee the bank
+                  took, or a posting you have not entered yet. Either way it is spending, so give it a category.
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { key: "charge" as const, label: "A bank charge" },
-                    { key: "category" as const, label: "Spending I missed" },
-                  ]).map((option) => (
-                    <Button
-                      key={option.key}
-                      type="button"
-                      variant={reconcileAs === option.key ? "default" : "outline"}
-                      onClick={() => setReconcileAs(option.key)}
-                      data-testid={`button-reconcile-as-${option.key}`}
-                      className="h-10"
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {reconcileAs === "charge"
-                    ? "A fee is money gone, but it belongs to no category and no budget was set for it, so it is reported apart from spending."
-                    : "This counts as spending against the category you pick, the same as any withdrawal."}
-                </p>
-                {reconcileAs === "category" && (
+                {(
                   <select
                     data-testid="select-reconcile-category"
                     className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
@@ -1177,13 +1125,11 @@ export default function Bank() {
                     className="h-12 px-6"
                   >
                     {reconciling && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                    Record {formatKes(reconcileDifference)} as {reconcileAs === "charge" ? "a bank charge" : "spending"}
+                    Record {formatKes(reconcileDifference)} as spending
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {reconcileAs === "charge"
-                    ? "A charge is kept out of household spending, so this will not touch any budget."
-                    : `This will count against ${reconcileCategory || "the category you pick"} like any other withdrawal.`}
+                  This will count against {reconcileCategory || "the category you pick"} like any other withdrawal.
                 </p>
               </div>
             ) : (
@@ -1316,24 +1262,14 @@ export default function Bank() {
           >
             Bank → Bank
           </Button>
-          <Button
-            data-testid="button-bank-charge"
-            onClick={() => openMode("bank_charge")}
-            variant="outline"
-            className="h-12 px-4 rounded-xl"
-            disabled={!canManageAccount}
-            aria-describedby={!canManageAccount ? "bank-manager-guidance" : undefined}
-          >
-            Bank charge
-          </Button>
         </div>
       ) : (
         <Card ref={formCardRef} className="border-none shadow-md bg-accent/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-display">
               {editingTransaction
-                ? `Edit ${mode === "deposit" ? "Deposit" : mode === "transfer" ? "Transfer" : mode === "bank_charge" ? "Bank Charge" : "Withdrawal"}`
-                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : mode === "bank_transfer" ? "Move Money Between Bank Accounts" : mode === "bank_charge" ? "Record Bank Charge" : "Take Money Out"}
+                ? `Edit ${mode === "deposit" ? "Deposit" : mode === "transfer" ? "Transfer" : "Withdrawal"}`
+                : mode === "deposit" ? "Add Money to Account" : mode === "transfer" ? "Move Between Bank & Savings" : mode === "bank_transfer" ? "Move Money Between Bank Accounts" : "Take Money Out"}
             </CardTitle>
             <CardDescription>
               {mode === "deposit"
@@ -1342,8 +1278,6 @@ export default function Bank() {
                   ? `Move ${isSharedWorkspace ? "Shared group" : "Personal budget"} funds between this account and a savings goal.`
                   : mode === "bank_transfer"
                     ? "Record an internal move. It changes only these two bank balances and is not income or spending."
-                  : mode === "bank_charge"
-                    ? "Record a fee from the bank statement. It reduces this account but is not counted as household spending."
                   : `Money going out of ${account?.accountName ?? "this bank account"}.`}
             </CardDescription>
           </CardHeader>
@@ -1411,25 +1345,6 @@ export default function Bank() {
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {mode === "bank_charge" && (
-                  <div className="space-y-2 sm:col-span-2">
-                    <label className="text-sm font-semibold text-foreground">Bank account</label>
-                    <select
-                      data-testid="select-bank-charge-account"
-                      required
-                      value={selectedAccountId ?? ""}
-                      onChange={e => setSelectedAccountId(Number(e.target.value))}
-                      className="flex h-12 w-full rounded-md border border-input bg-card px-3 py-2 text-base"
-                    >
-                      {accounts.map(candidate => (
-                        <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-muted-foreground">
-                      This charge reduces only the selected account.
-                    </p>
-                  </div>
-                )}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-foreground">Amount (KES)</label>
                   <Input
@@ -1549,18 +1464,17 @@ export default function Bank() {
                   <label className="text-sm font-semibold text-foreground">
                     {mode === "deposit"
                       ? depositSourceKind === "other" ? "Other source narration" : "Description"
-                      : mode === "bank_charge" ? "Narration" : withdrawalDestinationKind === "other" ? "Other destination narration" : "Details"}
+                      : withdrawalDestinationKind === "other" ? "Other destination narration" : "Details"}
                     {mode === "disbursement" && withdrawalDestinationKind !== "other" && <span className="font-normal text-muted-foreground"> (optional)</span>}
-                    {mode === "bank_charge" && <span className="text-destructive"> *</span>}
                   </label>
                   <Input
                     data-testid="input-description"
                     placeholder={mode === "deposit"
                       ? depositSourceKind === "other" ? "e.g. Group gift from a friend" : "e.g. Salary deposit"
-                      : mode === "bank_charge" ? "e.g. Monthly account maintenance fee" : withdrawalDestinationKind === "other" ? "e.g. Emergency cash support" : "e.g. Paid school fees for term two"}
+                      : withdrawalDestinationKind === "other" ? "e.g. Emergency cash support" : "e.g. Paid school fees for term two"}
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    required={mode === "deposit" || mode === "bank_charge" || withdrawalDestinationKind === "other"}
+                    required={mode === "deposit" || withdrawalDestinationKind === "other"}
                     className="h-12 bg-card"
                   />
                 </div>}
@@ -1865,7 +1779,6 @@ export default function Bank() {
               const isDeposit = tx.type === "deposit";
               const isTransfer = !!tx.savingsGoalId;
               const isBankTransfer = !!tx.bankTransferId;
-              const isBankCharge = tx.bankCharge === true;
               const attribution = madeByLabel(tx.madeByName, tx.type);
               const removable = canManageAccount || canEditTransaction(tx);
               return (
@@ -1889,7 +1802,6 @@ export default function Bank() {
                           ? `${isDeposit ? "From" : "To"} ${tx.bankTransferAccountName ?? "bank account"}`
                           : isTransfer
                           ? `${tx.transferDirection === "to_savings" ? "Bank → Savings" : "Savings → Bank"}: ${tx.savingsGoalName ?? "Savings goal"}`
-                          : isBankCharge ? `Bank charge: ${tx.description}`
                           : !isDeposit && tx.expenseCategory ? tx.expenseCategory : tx.description}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5" data-testid={`tx-meta-${tx.id}`}>
@@ -1897,8 +1809,6 @@ export default function Bank() {
                           ? `Internal bank transfer · ${tx.description}`
                           : isTransfer
                           ? tx.description
-                          : isBankCharge
-                            ? "Excluded from household spending and reports"
                           : isDeposit
                             ? `Deposited by ${attribution} · ${tx.description}`
                             : `Withdrawn by ${attribution}${tx.expenseCategory && tx.description !== tx.expenseCategory ? ` · ${tx.description}` : ""}`}

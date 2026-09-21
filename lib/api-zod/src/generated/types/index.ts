@@ -17,7 +17,6 @@ export * from './authUserEnvelope';
 export * from './bankAccount';
 export * from './bankAccountInput';
 export * from './bankAccountUpdate';
-export * from './bankChargeInput';
 export * from './bankToBankTransferInput';
 export * from './bankToBankTransferResult';
 export * from './budgetCategory';
