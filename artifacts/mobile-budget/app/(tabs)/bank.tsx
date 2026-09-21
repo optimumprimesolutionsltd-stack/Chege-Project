@@ -1384,7 +1384,7 @@ export default function BankScreen() {
 
     // Checked before the first posting, so a bad charge cannot leave the
     // withdrawal saved and the fee lost.
-    if (isWithdrawal && chargeAmount.trim() !== '') {
+    if (chargeCanApply && chargeAmount.trim() !== '') {
       if (parsedCharge === null || parsedCharge < 0) {
         Alert.alert('Check the charge', 'Enter zero or more, with up to two decimal places.');
         return;
@@ -1518,22 +1518,27 @@ export default function BankScreen() {
             accountId: selectedAccountId ?? undefined,
           },
         });
-        // The bank's fee, as its own posting. Second rather than first: if
-        // this one fails the withdrawal still stands, which is the truth the
-        // bank statement will show, and the fee can be added on its own.
-        if (chargeToPost > 0) {
-          await createDisbursement({
-            data: {
-              amount: chargeToPost,
-              description: `Bank charge — ${finalDescription}`,
-              date,
-              expenseCategory: chargeCategory.trim(),
-              madeById: !isSharedWorkspace ? user?.id : withdrawerId ?? null,
-              destinationKind: 'category',
-              accountId: selectedAccountId ?? undefined,
-            },
-          });
-        }
+      }
+      // The bank's fee, as its own posting, for a deposit as much as a
+      // withdrawal — a fee on money paid in is still a fee. Last rather than
+      // first: if it fails the posting it belongs to still stands, which is
+      // the truth the statement will show, and the fee can be added alone.
+      //
+      // It carries the same date as the posting it came with, so a day's
+      // charges sit with the day's postings. Each is separate, and giving
+      // them one category is what totals them for the month.
+      if (chargeToPost > 0) {
+        await createDisbursement({
+          data: {
+            amount: chargeToPost,
+            description: `Bank charge — ${description.trim() || (txType === 'deposit' ? 'deposit' : 'withdrawal')}`,
+            date,
+            expenseCategory: chargeCategory.trim(),
+            madeById: !isSharedWorkspace ? user?.id : txType === 'deposit' ? null : withdrawerId ?? null,
+            destinationKind: 'category',
+            accountId: selectedAccountId ?? undefined,
+          },
+        });
       }
       // Read before finishEntry, which clears it. Asking after an edit would
       // take the money off a second time.
@@ -1654,7 +1659,8 @@ export default function BankScreen() {
   const parsedOutgoingAmount = readAmount(amount);
   // Blank means no charge. Anything unreadable is caught on submit.
   const parsedCharge = chargeAmount.trim() === '' ? 0 : readAmount(chargeAmount);
-  const chargeToPost = isWithdrawal && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
+  const chargeCanApply = isWithdrawal || isDeposit;
+  const chargeToPost = chargeCanApply && parsedCharge !== null && parsedCharge > 0 ? parsedCharge : 0;
   const editingTransaction = editingTransactionId === null
     ? null
     : transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
@@ -1674,9 +1680,9 @@ export default function BankScreen() {
     parsedOutgoingAmount > 0
     ? getProjectedBalanceAfterPosting(
         data.balance,
-        // The charge leaves the account too, so the figure somebody is working
-        // down to has to include it.
-        parsedOutgoingAmount + chargeToPost,
+        // The fee always leaves the account, whichever way the posting
+        // itself runs: it adds to a withdrawal and eats into a deposit.
+        parsedOutgoingAmount + (isOutgoingTransaction ? chargeToPost : -chargeToPost),
         isOutgoingTransaction ? 'out' : 'in',
         editingTransaction
           ? { amount: editingTransaction.amount, type: editingTransaction.type }
@@ -2719,7 +2725,7 @@ export default function BankScreen() {
                   posted separately. Two postings rather than one: folded into
                   the amount, a repayment of 5,000 with a 50 charge would offer
                   to take 5,050 off the loan when only 5,000 reached it. */}
-              {isWithdrawal ? (
+              {chargeCanApply ? (
                 <View testID="bank-charge-block" style={{ marginBottom: 14 }}>
                   <Text style={[styles.label, { color: colors.mutedForeground }]}>
                     Bank charge <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text>
@@ -2780,8 +2786,8 @@ export default function BankScreen() {
                         </View>
                       )}
                       <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 6 }}>
-                        Saved as a second posting of KES {formatKES(chargeToPost)}, so what you owe moves by the payment
-                        alone and the fee still shows as spending.
+                        Saved as a second posting of KES {formatKES(chargeToPost)} — spending, whichever way this one
+                        runs. Giving every fee the same category totals them for the month on its own.
                       </Text>
                     </>
                   ) : null}

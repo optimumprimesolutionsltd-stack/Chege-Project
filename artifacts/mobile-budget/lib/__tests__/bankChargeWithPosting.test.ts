@@ -12,8 +12,13 @@ describe('a withdrawal can carry its bank charge', () => {
     expect(bank).toContain('testID="bank-charge-amount"');
   });
 
-  it('is offered on withdrawals only', () => {
-    expect(bank).toContain('{isWithdrawal ? (');
+  it('is offered on deposits too — a fee on money in is still a fee', () => {
+    expect(bank).toContain('const chargeCanApply = isWithdrawal || isDeposit;');
+    expect(bank).toContain('{chargeCanApply ? (');
+  });
+
+  it('is not offered on transfers, which move money rather than spend it', () => {
+    expect(bank).not.toContain('isWithdrawal || isDeposit || isTransfer');
   });
 
   it('is optional, and blank means none', () => {
@@ -31,7 +36,7 @@ describe('it is a second posting, never part of the first', () => {
     // offer to take 5,050 off the loan when only 5,000 reached it, and the
     // balance would drift by the fee every time.
     expect(bank).toContain('if (chargeToPost > 0) {');
-    expect(bank).toContain('description: `Bank charge — ${finalDescription}`,');
+    expect(bank).toContain('description: `Bank charge — ${description.trim() ||');
   });
 
   it('carries a category of its own', () => {
@@ -45,17 +50,25 @@ describe('it is a second posting, never part of the first', () => {
     expect(bank).toContain("Alert.alert('Check the charge'");
   });
 
-  it('is posted after the withdrawal, not before', () => {
-    // If the fee fails the withdrawal still stands, which is what the
+  it('is posted after the posting it belongs to, not before', () => {
+    // If the fee fails, that posting still stands, which is what the
     // statement will show. The other way round invents a fee for nothing.
     const submit = bank.slice(bank.indexOf('const handleSubmit'));
     expect(submit.indexOf('destinationKind: withdrawDest')).toBeLessThan(submit.indexOf('if (chargeToPost > 0) {'));
+  });
+
+  it('carries the date of the posting it came with', () => {
+    // A day's charges belong with that day's postings, not with today's.
+    const block = bank.slice(bank.indexOf('if (chargeToPost > 0) {'));
+    expect(block.slice(0, 600)).toContain('date,');
   });
 });
 
 describe('the figures include it', () => {
   it('falls out of the projected balance as it is typed', () => {
-    expect(bank).toContain('parsedOutgoingAmount + chargeToPost,');
+    // It adds to a withdrawal and eats into a deposit: the fee always leaves
+    // the account, whichever way the posting itself runs.
+    expect(bank).toContain('parsedOutgoingAmount + (isOutgoingTransaction ? chargeToPost : -chargeToPost),');
   });
 
   it('counts in the sitting total', () => {
