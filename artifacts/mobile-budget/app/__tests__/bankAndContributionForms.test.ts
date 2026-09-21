@@ -46,12 +46,12 @@ describe('Record contributions reads as sections', () => {
   });
 
   it('puts the amount mode and its explanation in one panel', () => {
-    expect(record).toContain('HOW MUCH EACH PERSON PAID');
+    expect(record).toContain('HOW MUCH EACH MEMBER PAID');
     // The rule that matters stays inside that panel rather than floating loose.
-    const panel = record.slice(record.indexOf('HOW MUCH EACH PERSON PAID'), record.indexOf('{mode === \'simple\' && ('));
+    const panel = record.slice(record.indexOf('HOW MUCH EACH MEMBER PAID'), record.indexOf('{mode === \'simple\' && ('));
     expect(panel).toContain('Everyone is ticked to start.');
     expect(panel).toContain('Same amount');
-    expect(panel).toContain('Per person');
+    expect(panel).toContain('Per member');
   });
 
   it('gives a section a visible edge rather than bare stacked rows', () => {

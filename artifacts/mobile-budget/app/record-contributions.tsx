@@ -76,7 +76,7 @@ export default function RecordContributionsScreen() {
     });
   }, [accounts]);
   // A dropdown rather than the same pill-chip style used for the Same
-  // amount/Per person mode toggle just below it — the two looked like one
+  // amount/Per member mode toggle just below it — the two looked like one
   // continuous row of options when they were styled the same way, and were
   // reported as confusing to tell apart.
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
@@ -156,8 +156,8 @@ export default function RecordContributionsScreen() {
       return next;
     });
 
-  // Same amount / Per person are two views of one intent, not separate forms.
-  // Switching to Per person fills each ticked row from the flat figure (or the
+  // Same amount / Per member are two views of one intent, not separate forms.
+  // Switching to Per member fills each ticked row from the flat figure (or the
   // person's target); switching back collapses to that figure when every
   // ticked row already agrees. `amounts` is kept across switches, so a round
   // trip never loses per-person edits.
@@ -238,18 +238,18 @@ export default function RecordContributionsScreen() {
       return;
     }
     if (chosen.length === 0) {
-      Alert.alert('Nobody ticked', 'Tick at least one person who paid.');
+      Alert.alert('Nobody ticked', 'Tick at least one member who paid.');
       return;
     }
     if (mode === 'simple' && !(Number(each) > 0)) {
-      Alert.alert('Enter the amount', 'Type what each person paid in the Each (KES) box.');
+      Alert.alert('Enter the amount', 'Type what each member paid in the Each (KES) box.');
       return;
     }
     const splits = chosen
       .map((contributor) => ({ contributorId: contributor.id, amount: amountFor(contributor) }))
       .filter((split) => split.amount > 0);
     if (splits.length === 0) {
-      Alert.alert('No amounts entered', 'Enter what each ticked person paid, or untick anyone who paid nothing.');
+      Alert.alert('No amounts entered', 'Enter what each ticked member paid, or untick anyone who paid nothing.');
       return;
     }
 
@@ -259,7 +259,7 @@ export default function RecordContributionsScreen() {
     const accountName = accounts.find((account) => account.id === accountId)?.name;
     Alert.alert(
       `Record KES ${kes(amount)}?`,
-      `${splits.length} ${splits.length === 1 ? 'person' : 'people'}${accountName ? ` · into ${accountName}` : ''} for ${countsToward}. This adds one bank deposit.`,
+      `${splits.length} ${splits.length === 1 ? 'member' : 'members'}${accountName ? ` · into ${accountName}` : ''} for ${countsToward}. This adds one bank deposit.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Record', onPress: () => void submitRecord(splits, amount) },
@@ -427,7 +427,7 @@ export default function RecordContributionsScreen() {
             chips, and the rule that matters (everyone starts ticked) was easy
             to skim past. */}
         <View style={[styles.block, styles.sectionCard, { borderColor: colors.primary + '55', backgroundColor: colors.primary + '0A' }]}>
-        <Text style={[styles.sectionHeading, { color: colors.primary }]}>HOW MUCH EACH PERSON PAID</Text>
+        <Text style={[styles.sectionHeading, { color: colors.primary }]}>HOW MUCH EACH MEMBER PAID</Text>
         <View style={styles.chips}>
           {(['simple', 'advanced'] as const).map((option) => {
             const on = mode === option;
@@ -438,7 +438,7 @@ export default function RecordContributionsScreen() {
                 style={[styles.chip, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? `${colors.primary}18` : 'transparent' }]}
               >
                 <Text style={{ color: on ? colors.primary : colors.foreground, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_400Regular' }}>
-                  {option === 'simple' ? 'Same amount' : 'Per person'}
+                  {option === 'simple' ? 'Same amount' : 'Per member'}
                 </Text>
               </Pressable>
             );
@@ -452,8 +452,8 @@ export default function RecordContributionsScreen() {
         </Text>
         <Text style={[styles.modeHint, { color: colors.mutedForeground }]}>
           {mode === 'simple'
-            ? 'Same amount: everyone paid the same — type it once below. Switching to Per person fills every row with it.'
-            : 'Per person: each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing.'}
+            ? 'Same amount: everyone paid the same — type it once below. Switching to Per member fills every row with it.'
+            : 'Per member: each row starts from the same-amount figure. Change the ones that differ, or clear a row for someone who paid nothing.'}
         </Text>
         </View>
 
@@ -477,7 +477,7 @@ export default function RecordContributionsScreen() {
         ) : contributors.length < 2 ? (
           <Text style={[styles.notice, { borderColor: colors.border, color: colors.mutedForeground }]}>
             {contributors.length === 0
-              ? 'Nobody to record yet. Add the people who contribute below — they do not need the app.'
+              ? 'Nobody to record yet. Add the members who contribute below — they do not need the app.'
               : 'Add at least one more name below. A shared group records for a group.'}
           </Text>
         ) : (

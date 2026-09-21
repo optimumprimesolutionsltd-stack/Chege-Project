@@ -347,6 +347,19 @@ export const jointAccountTxTable = pgTable("joint_account_transactions", {
   // dropped because it is the only record of which postings were fees, and
   // that is what makes the decision reversible.
   bankCharge: boolean("bank_charge").notNull().default(false),
+  /**
+   * The party whose balance this movement settles, if it settles one.
+   *
+   * A repayment arriving from somebody who owed you is money you already had
+   * once — you lent it — so it is not income, and every figure that counts
+   * money in has to know to leave it out. Attribution alone cannot say that: a
+   * deposit with no member and no income source is still counted, as money
+   * held for the group.
+   *
+   * It stays a real transaction in the ledger and the activity feed, because
+   * it really did reach the account.
+   */
+  settlesContributorId: integer("settles_contributor_id").references(() => groupContributorsTable.id, { onDelete: "set null" }),
   /** The month this deposit was *for*, when that differs from the day it
    *  arrived — April's dues paid in September, or June's paid in April. Null
    *  means the month it arrived in, which is every deposit unless somebody

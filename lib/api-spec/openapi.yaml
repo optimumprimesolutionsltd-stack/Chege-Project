@@ -3490,6 +3490,13 @@ components:
     DepositInput:
       type: object
       properties:
+        settlesContributorId:
+          type: number
+          minimum: 1
+          description: >-
+            The party this repays, when it repays one. Money lent coming back
+            is not income, so every figure counting money in leaves these out.
+            The transaction stays in the ledger.
         amount:
           type: number
           minimum: 0

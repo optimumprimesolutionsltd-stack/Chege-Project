@@ -102,6 +102,7 @@ export async function loadContributionStatement(
       .where(sql`${jointAccountDepositSplitsTable.groupId} = ${groupId}
         AND ${jointAccountTxTable.type} = 'deposit'
         AND ${jointAccountTxTable.bankTransferId} IS NULL
+        AND ${jointAccountTxTable.settlesContributorId} IS NULL
         AND ${jointAccountTxTable.date} >= make_date(${earliest.year}, ${earliest.month}, 1)`),
   ]);
 
@@ -120,6 +121,7 @@ export async function loadContributionStatement(
     WHERE t.group_id = ${groupId}
       AND t.type = 'deposit'
       AND t.bank_transfer_id IS NULL
+      AND t.settles_contributor_id IS NULL
       AND t.date >= make_date(${earliest.year}, ${earliest.month}, 1)
     GROUP BY t.id, t.date, t.description, t.amount, b.name
     HAVING t.amount - COALESCE(SUM(s.amount), 0) > 0
@@ -563,6 +565,7 @@ export async function loadContributionGrid(groupId: number, monthsBack: number):
       .where(sql`${jointAccountDepositSplitsTable.groupId} = ${groupId}
         AND ${jointAccountTxTable.type} = 'deposit'
         AND ${jointAccountTxTable.bankTransferId} IS NULL
+        AND ${jointAccountTxTable.settlesContributorId} IS NULL
         AND make_date(
               COALESCE(${jointAccountTxTable.appliesToYear}, EXTRACT(YEAR FROM ${jointAccountTxTable.date}))::int,
               COALESCE(${jointAccountTxTable.appliesToMonth}, EXTRACT(MONTH FROM ${jointAccountTxTable.date}))::int,

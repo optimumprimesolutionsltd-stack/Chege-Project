@@ -1057,6 +1057,7 @@ export const UpdateJointAccountOpeningBalanceResponse = zod.object({
 /**
  * @summary Deposit money into a bank account
  */
+
 export const createDepositBodyAmountMin = 0;
 export const createDepositBodyAmountMultipleOf = 0.01;
 
@@ -1075,6 +1076,7 @@ export const createDepositBodyContributorSplitsItemAmountMultipleOf = 0.01;
 
 
 export const CreateDepositBody = zod.object({
+  "settlesContributorId": zod.number().min(1).optional().describe('The party this repays, when it repays one. Money lent coming back is not income, so every figure counting money in leaves these out. The transaction stays in the ledger.'),
   "amount": zod.number().min(createDepositBodyAmountMin).multipleOf(createDepositBodyAmountMultipleOf).describe('KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.'),
   "description": zod.string(),
   "date": zod.coerce.date(),

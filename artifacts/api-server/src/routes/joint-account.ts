@@ -79,6 +79,13 @@ async function validateIncomeSourceOwner(
 
 const DepositInput = z.object({
   amount: NonNegativeBankAmount,
+  /**
+   * The party this repays, when it repays one. Money you lent coming back is
+   * not income — you had it once already — so every figure that counts money
+   * in leaves these out. It stays in the ledger, because it really did reach
+   * the account.
+   */
+  settlesContributorId: z.number().int().positive().optional(),
   description: z.string().min(1),
   date: z.string().min(1),
   madeById: z.string().nullable().optional(),
@@ -489,7 +496,21 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
     if (error) { res.status(400).json({ error }); return; }
   }
 
-  const { amount, description, date, incomeSourceId, sourceKind, contributorSplits } = parsed.data;
+  const { amount, description, date, incomeSourceId, sourceKind, contributorSplits, settlesContributorId } = parsed.data;
+  // Scoped to this group: an id from another group must not be reachable by
+  // guessing, and a settlement pointing outside the group would exclude money
+  // from income on the word of a stranger.
+  if (settlesContributorId !== undefined) {
+    const [party] = await db
+      .select({ id: groupContributorsTable.id })
+      .from(groupContributorsTable)
+      .where(and(eq(groupContributorsTable.id, settlesContributorId), eq(groupContributorsTable.groupId, groupId)))
+      .limit(1);
+    if (!party) {
+      res.status(400).json({ error: "That person is not in this budget." });
+      return;
+    }
+  }
   if (sourceKind === "other" && !description.trim()) {
     res.status(400).json({ error: "Add a narration for an Other source." });
     return;
@@ -561,7 +582,10 @@ router.post("/joint-account/deposit", async (req, res): Promise<void> => {
         appliesToMonth,
         appliesToYear,
         madeById: contributorSplits ? null : madeById,
-        incomeSourceId: contributorSplits ? null : incomeSourceId ?? null,
+        // A repayment has no income source by definition: the money is not
+        // being earned, it is coming back.
+        incomeSourceId: settlesContributorId ? null : contributorSplits ? null : incomeSourceId ?? null,
+        settlesContributorId: settlesContributorId ?? null,
       })
       .returning();
     if (contributorSplits) {
