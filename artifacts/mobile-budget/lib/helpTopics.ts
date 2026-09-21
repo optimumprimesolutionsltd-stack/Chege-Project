@@ -68,7 +68,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         question: 'Put money into savings',
         steps: [
-          'Banking tab, then Transfer. Or Withdraw, with Savings as the destination.',
+          'Banking tab, then To savings. Or Withdraw, with Savings as the destination.',
           'Both credit the goal, and count as moved rather than spent.',
         ],
         route: '/(tabs)/bank',
@@ -77,8 +77,9 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         question: 'Move money between your own accounts',
         steps: [
-          'Banking tab, then Bank to Bank.',
+          'Banking tab, then Between accounts.',
           'It changes both balances and is neither income nor spending.',
+          'To savings is the other one: that moves between an account and a savings goal.',
         ],
         route: '/(tabs)/bank',
         keywords: ['transfer', 'between accounts', 'internal'],
