@@ -216,7 +216,7 @@ export interface ExpenseCategoryAllocation {
      * @minLength 1
      */
   category: string;
-  /** @minimum 1 */
+  /** @minimum 0 */
   amount: number;
 }
 
@@ -228,7 +228,7 @@ export interface ExpenseFundingSplit {
   userId?: string | null;
   /** Optional readable source label retained for history. */
   label?: string;
-  /** @minimum 1 */
+  /** @minimum 0 */
   amount: number;
   /**
      * Required for personal portions; omit for Joint-bank portions.
@@ -1206,7 +1206,7 @@ export interface DepositContributorSplit {
      * @minimum 1
      */
   contributorId?: number;
-  /** @minimum 0.01 */
+  /** @minimum 0 */
   amount: number;
   /** @minimum 1 */
   incomeSourceId?: number;
@@ -1332,8 +1332,8 @@ export const DepositInputSourceKind = {
 
 export interface DepositInput {
   /**
-     * Positive KES amount with up to two decimal places
-     * @minimum 0.01
+     * KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
+     * @minimum 0
      */
   amount: number;
   description: string;
@@ -1382,8 +1382,8 @@ export const DisbursementInputDestinationKind = {
 
 export interface DisbursementInput {
   /**
-     * Positive KES amount with up to two decimal places
-     * @minimum 0.01
+     * KES amount with up to two decimal places. Zero is allowed, so an existing posting can be cleared to nothing rather than deleted.
+     * @minimum 0
      */
   amount: number;
   description?: string;
@@ -1402,7 +1402,7 @@ export interface DisbursementInput {
 }
 
 export interface BankChargeInput {
-  /** @minimum 0.01 */
+  /** @minimum 0 */
   amount: number;
   /**
      * Required explanation from the bank statement, for example monthly account fee
@@ -1443,7 +1443,7 @@ export const UpdateJointAccountTransactionInputTransferDirection = {
 } as const;
 
 export interface UpdateJointAccountTransactionInput {
-  /** @minimum 0.01 */
+  /** @minimum 0 */
   amount: number;
   /** Optional supporting detail; withdrawals fall back to their category */
   description?: string;
@@ -1483,7 +1483,7 @@ export interface UpdateJointAccountTransactionInput {
 export interface SavingsTransferInput {
   /**
      * Savings goals currently use whole KES amounts
-     * @minimum 1
+     * @minimum 0
      */
   amount: number;
   /** @minimum 1 */
@@ -1505,7 +1505,7 @@ export interface BankToBankTransferInput {
   sourceAccountId: number;
   /** @minimum 1 */
   destinationAccountId: number;
-  /** @minimum 0.01 */
+  /** @minimum 0 */
   amount: number;
   /**
      * @minLength 1
@@ -1581,8 +1581,8 @@ export interface ContributorSplit {
      */
   userId: string | null;
   /**
-     * Amount attributed to this contributor (whole KES only; positive integer)
-     * @minimum 1
+     * Amount attributed to this contributor (whole KES only; zero or more)
+     * @minimum 0
      */
   amount: number;
 }

@@ -9,7 +9,7 @@
 export interface SavingsTransferInput {
   /**
      * Savings goals currently use whole KES amounts
-     * @minimum 1
+     * @minimum 0
      */
   amount: number;
   /** @minimum 1 */

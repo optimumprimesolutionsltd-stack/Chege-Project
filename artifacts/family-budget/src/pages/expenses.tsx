@@ -899,16 +899,16 @@ export default function Expenses() {
       toast({
         variant: "destructive",
         title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
+        description: "Enter an amount before saving. Zero is allowed; blank is not.",
       });
       return;
     }
     const amount = Number(addForm.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount < 0) {
       toast({
         variant: "destructive",
         title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
+        description: "Use zero or more before saving.",
       });
       return;
     }
@@ -933,7 +933,7 @@ export default function Expenses() {
       });
       return;
     }
-    if (hasCategoryAllocation && (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
+    if (hasCategoryAllocation && (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount < 0) ||
       new Set(categoryAllocations.map((allocation) => allocation.category.toLocaleLowerCase())).size !== categoryAllocations.length ||
       allocationTotal !== amount)) {
       toast({ variant: "destructive", title: "Category allocations don't add up", description: "Choose distinct categories with positive whole-KES amounts that total the expense." });
@@ -1161,12 +1161,14 @@ export default function Expenses() {
       }
       return;
     }
+    // An expense edited down to nothing is saved at zero rather than refused.
+    // Deleting the row is a different decision, with its own button.
     const amount = Number(editForm.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount < 0) {
       toast({
         variant: "destructive",
         title: "Enter a valid amount",
-        description: "Use an expense amount greater than zero before saving.",
+        description: "Use zero or more before saving.",
       });
       return;
     }
@@ -1188,7 +1190,7 @@ export default function Expenses() {
     }));
     const hasCategoryAllocation = categoryAllocations.some((allocation) => allocation.category);
     const allocationTotal = categoryAllocations.reduce((total, allocation) => total + allocation.amount, 0);
-    if (hasCategoryAllocation && (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount <= 0) ||
+    if (hasCategoryAllocation && (categoryAllocations.some((allocation) => !allocation.category || !Number.isInteger(allocation.amount) || allocation.amount < 0) ||
       new Set(categoryAllocations.map((allocation) => allocation.category.toLocaleLowerCase())).size !== categoryAllocations.length ||
       allocationTotal !== amount)) {
       toast({ variant: "destructive", title: "Category allocations don't add up", description: "Choose distinct categories with positive whole-KES amounts that total the expense." });

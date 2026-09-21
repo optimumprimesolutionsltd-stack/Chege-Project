@@ -16,8 +16,8 @@ export interface ContributorSplit {
      */
   userId: string | null;
   /**
-     * Amount attributed to this contributor (whole KES only; positive integer)
-     * @minimum 1
+     * Amount attributed to this contributor (whole KES only; zero or more)
+     * @minimum 0
      */
   amount: number;
 }

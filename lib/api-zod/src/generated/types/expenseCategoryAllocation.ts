@@ -12,6 +12,6 @@ export interface ExpenseCategoryAllocation {
      * @minLength 1
      */
   category: string;
-  /** @minimum 1 */
+  /** @minimum 0 */
   amount: number;
 }

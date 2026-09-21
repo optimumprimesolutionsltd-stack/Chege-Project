@@ -14,7 +14,7 @@ export interface ExpenseFundingSplit {
   userId?: string | null;
   /** Optional readable source label retained for history. */
   label?: string;
-  /** @minimum 1 */
+  /** @minimum 0 */
   amount: number;
   /**
      * Required for personal portions; omit for Joint-bank portions.

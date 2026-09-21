@@ -1118,10 +1118,11 @@ export default function AddExpenseSheet() {
       );
       return;
     }
-    if (isEditMode && !amount.trim()) {
-      handleRemove();
-      return;
-    }
+    // Clearing the amount on an existing expense used to delete it outright.
+    // That made "I got the figure wrong and want it at zero for now" and "this
+    // expense never happened" the same gesture, and only one of them is
+    // recoverable. An empty amount now saves as zero; Remove still deletes.
+    if (isEditMode && !amount.trim()) setAmount('0');
     // Everything wrong with the form, worked out in one pass. This used to be
     // two dozen sequential early returns, each raising its own alert, so a
     // half-filled form was a queue: fix one thing, tap Save, be told the next.
