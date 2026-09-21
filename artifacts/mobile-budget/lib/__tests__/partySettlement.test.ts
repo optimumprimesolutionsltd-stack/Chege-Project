@@ -12,9 +12,40 @@ describe('paying somebody you owe', () => {
     expect(bank).toContain('Someone I owe');
   });
 
-  it('stays out of the way of a household that owes nobody', () => {
-    // Nothing recorded, nothing offered.
-    expect(bank).toContain('{owedParties.length > 0 ? (() => {');
+  it('is offered before anybody has been recorded', () => {
+    // It used to appear only once a party had a balance — and the only place
+    // to give somebody a balance was behind that chip. So the destination was
+    // unreachable: nothing to list, and no way to make anything to list.
+    expect(bank).not.toContain('{owedParties.length > 0 ? (() => {');
+  });
+
+  it('lets somebody be added from inside the picker', () => {
+    expect(bank).toContain('testID="bank-add-party-form"');
+    expect(bank).toContain('testID="bank-new-party-name"');
+    expect(bank).toContain('testID="bank-add-party"');
+  });
+
+  it('can say it is a bank rather than a person', () => {
+    // KCB is a party you owe and never a contributor.
+    expect(bank).toContain('testID="bank-new-party-institution"');
+    expect(bank).toContain("kind: newPartyIsInstitution ? 'institution' : 'person',");
+  });
+
+  it('selects the new party for the payment in hand', () => {
+    expect(bank).toContain('setWithdrawPartyId(party.id);');
+  });
+
+  it('waits for the list before selecting from it', () => {
+    // The picker and the settlement prompt both read it, and somebody created
+    // moments ago has to be in it by the time they do.
+    const handler = bank.slice(bank.indexOf('const handleCreateParty'), bank.indexOf('setWithdrawPartyId(party.id);'));
+    expect(handler).toContain("await queryClient.invalidateQueries({ queryKey: ['parties'] });");
+  });
+
+  it('insists on a name, and takes zero owed', () => {
+    // Somebody you owe nothing yet is still worth recording before the loan.
+    expect(bank).toContain("Alert.alert('Who is it?'");
+    expect(bank).toContain("const owed = readAmount(newPartyOwed || '0');");
   });
 
   it('lists only parties there is something to settle with', () => {
