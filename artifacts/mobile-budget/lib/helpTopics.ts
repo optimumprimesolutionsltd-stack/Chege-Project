@@ -140,6 +140,17 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['opening balance', 'starting', 'initial'],
       },
       {
+        question: 'Get a statement for a period',
+        steps: [
+          'Banking tab, then Statement.',
+          'Choose the account and the dates.',
+          'It reads oldest first with a running balance, so it can be held beside the one your bank sends.',
+          'Share as PDF to send or keep it.',
+        ],
+        route: '/bank-statement',
+        keywords: ['statement', 'export', 'pdf', 'period', 'month', 'print', 'share', 'record'],
+      },
+      {
         question: 'Check the app against your bank statement',
         steps: [
           'Banking tab, then Check against statement.',

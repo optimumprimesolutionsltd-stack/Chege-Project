@@ -11,6 +11,7 @@ import {
   groupContributorsTable,
   incomeSourcesTable,
   bankAccountsTable,
+  groupsTable,
 } from "@workspace/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -26,6 +27,7 @@ import { canonicalExpenseCategoryName } from "../lib/categoryNames";
 import { headingAmong, postingToHeadingError } from "../lib/category-headings";
 import { memberLedgerName } from "../lib/contributor-name";
 import { GROUP_ATTRIBUTION } from "../lib/attribution";
+import { createBankStatementPdf } from "../lib/bank-statement-pdf";
 
 const router = Router();
 /**
@@ -443,6 +445,144 @@ router.delete("/joint-accounts/:id", async (req, res): Promise<void> => {
 
 // With accountId this returns that account. Without it, it preserves legacy
 // workspace-wide reporting by aggregating every account.
+/**
+ * An account statement for a period.
+ *
+ * Jamvi's own screens list newest first, which is right for entering a day and
+ * useless for checking one: a running balance only means anything read
+ * downwards from where it started. So this is oldest first, with an opening
+ * balance worked out from everything before the period and a closing balance
+ * to hold against the bank's own figure.
+ */
+const StatementQuery = z.object({
+  accountId: z.coerce.number().int().positive(),
+  from: z.string().date(),
+  to: z.string().date(),
+});
+
+async function loadBankStatement(groupId: number, accountId: number, from: string, to: string) {
+  const accounts = await listWorkspaceAccounts(groupId);
+  const account = accounts.find((candidate) => candidate.id === accountId);
+  if (!account) return null;
+
+  // Everything before the period, to know where the balance stood when it
+  // began. Cheaper than fetching the rows: only the two sums are needed.
+  const [before] = await db
+    .select({
+      deposits: sql<number>`COALESCE(SUM(CASE WHEN ${jointAccountTxTable.type} = 'deposit' THEN ${jointAccountTxTable.amount} ELSE 0 END), 0)`,
+      disbursements: sql<number>`COALESCE(SUM(CASE WHEN ${jointAccountTxTable.type} = 'disbursement' THEN ${jointAccountTxTable.amount} ELSE 0 END), 0)`,
+    })
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.accountId} = ${accountId} AND ${jointAccountTxTable.date} < ${from}`);
+
+  const rows = await db
+    .select()
+    .from(jointAccountTxTable)
+    .where(sql`${jointAccountTxTable.groupId} = ${groupId} AND ${jointAccountTxTable.accountId} = ${accountId} AND ${jointAccountTxTable.date} >= ${from} AND ${jointAccountTxTable.date} <= ${to}`)
+    // Oldest first, and by insertion within a day so two postings on one date
+    // keep the order they were entered in rather than swapping between loads.
+    .orderBy(sql`${jointAccountTxTable.date} ASC, ${jointAccountTxTable.id} ASC`);
+
+  const openingBalance =
+    Number(account.openingBalance ?? 0) + Number(before?.deposits ?? 0) - Number(before?.disbursements ?? 0);
+
+  let running = openingBalance;
+  let totalIn = 0;
+  let totalOut = 0;
+  let borrowed = 0;
+  let repaidToUs = 0;
+  let lent = 0;
+  const entries = rows.map((tx) => {
+    const isIn = tx.type === "deposit";
+    const amount = Number(tx.amount);
+    running = isIn ? running + amount : running - amount;
+    if (isIn) totalIn += amount;
+    else totalOut += amount;
+    if (isIn && tx.isBorrowing) borrowed += amount;
+    if (isIn && tx.settlesContributorId !== null) repaidToUs += amount;
+    if (!isIn && tx.isLending) lent += amount;
+    return {
+      id: tx.id,
+      date: tx.date,
+      description: tx.description ?? "",
+      detail: tx.expenseCategory ?? (tx.isLending ? "Lent out" : tx.isBorrowing ? "Borrowed" : null),
+      moneyIn: isIn ? amount : 0,
+      moneyOut: isIn ? 0 : amount,
+      balance: Math.round(running * 100) / 100,
+    };
+  });
+
+  const round = (value: number) => Math.round(value * 100) / 100;
+  return {
+    accountId,
+    accountName: account.name,
+    from,
+    to,
+    openingBalance: round(openingBalance),
+    closingBalance: round(running),
+    totalIn: round(totalIn),
+    totalOut: round(totalOut),
+    borrowed: round(borrowed),
+    repaidToUs: round(repaidToUs),
+    lent: round(lent),
+    entries,
+  };
+}
+
+function statementPeriodLabel(from: string, to: string): string {
+  const day = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    if (!y || !m || !d) return iso;
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
+  };
+  return `${day(from)} to ${day(to)}`;
+}
+
+router.get("/joint-account/statement", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const query = StatementQuery.safeParse(req.query);
+  if (!query.success) { res.status(400).json({ error: "Give an account and a from and to date." }); return; }
+  if (query.data.from > query.data.to) { res.status(400).json({ error: "The period ends before it starts." }); return; }
+  const statement = await loadBankStatement(groupId, query.data.accountId, query.data.from, query.data.to);
+  if (!statement) { res.status(404).json({ error: "Bank account not found." }); return; }
+  res.json(statement);
+});
+
+router.get("/joint-account/statement.pdf", async (req, res): Promise<void> => {
+  const groupId = getActiveGroupId(req, res);
+  if (groupId === null) return;
+  const query = StatementQuery.safeParse(req.query);
+  if (!query.success) { res.status(400).json({ error: "Give an account and a from and to date." }); return; }
+  if (query.data.from > query.data.to) { res.status(400).json({ error: "The period ends before it starts." }); return; }
+  const statement = await loadBankStatement(groupId, query.data.accountId, query.data.from, query.data.to);
+  if (!statement) { res.status(404).json({ error: "Bank account not found." }); return; }
+
+  const [group] = await db
+    .select({ name: groupsTable.name })
+    .from(groupsTable)
+    .where(eq(groupsTable.id, groupId))
+    .limit(1);
+
+  const pdf = await createBankStatementPdf({
+    groupName: group?.name ?? "Jamvi",
+    accountName: statement.accountName,
+    periodLabel: statementPeriodLabel(statement.from, statement.to),
+    openingBalance: statement.openingBalance,
+    closingBalance: statement.closingBalance,
+    totalIn: statement.totalIn,
+    totalOut: statement.totalOut,
+    borrowed: statement.borrowed,
+    repaidToUs: statement.repaidToUs,
+    lent: statement.lent,
+    rows: statement.entries,
+  });
+  const slug = statement.accountName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "account";
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="jamvi-statement-${slug}-${statement.from}-to-${statement.to}.pdf"`);
+  res.send(pdf);
+});
+
 router.get("/joint-account", async (req, res): Promise<void> => {
   const groupId = getActiveGroupId(req, res);
   if (groupId === null) return;
