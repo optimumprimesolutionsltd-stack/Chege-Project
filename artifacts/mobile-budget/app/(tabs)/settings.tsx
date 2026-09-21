@@ -1878,6 +1878,20 @@ export default function SettingsScreen() {
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
             </View>
           </Pressable>
+          <Pressable testID="open-parties" onPress={() => router.push('/parties')} style={styles.row}>
+            <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>
+                <Feather name="users" size={16} color={colors.primary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: colors.foreground }]} numberOfLines={1}>Creditors and debtors</Text>
+            </View>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 12 }}>
+              <Text style={[styles.rowValue, { color: colors.mutedForeground, flexShrink: 1 }]} numberOfLines={1}>
+                Who you owe, and who owes you
+              </Text>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </View>
+          </Pressable>
           <Pressable testID="open-subscription" onPress={() => router.push('/subscription')} style={styles.row}>
             <View style={[styles.rowLeft, { flexShrink: 0, flex: 0 }]}>
               <View style={[styles.rowIcon, { backgroundColor: colors.primary + '18' }]}>

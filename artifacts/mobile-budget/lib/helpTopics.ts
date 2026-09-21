@@ -307,6 +307,18 @@ export const HELP_SECTIONS: HelpSection[] = [
         keywords: ['debt', 'loan', 'creditor', 'owed', 'borrow', 'fuliza', 'sacco'],
       },
       {
+        question: 'See everybody you owe, and everybody who owes you',
+        steps: [
+          'Settings, then Creditors and debtors.',
+          'Both directions are listed, with what each comes to.',
+          'Tap anybody to fix a name or a balance — an opening balance typed wrong is corrected here.',
+          'One person can be both at once: you can owe them and be owed by them, and neither figure hides the other.',
+          'Blank is not zero. Blank means the balance is not tracked; zero means it is tracked and settled.',
+        ],
+        route: '/parties',
+        keywords: ['creditor', 'debtor', 'owed', 'opening balance', 'kcb', 'mwangi', 'list', 'correct'],
+      },
+      {
         question: 'Change what you owe',
         steps: [
           'Debt tab, then the pencil on that debt.',
