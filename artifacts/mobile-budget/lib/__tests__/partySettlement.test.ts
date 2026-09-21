@@ -48,8 +48,13 @@ describe('paying somebody you owe', () => {
     expect(bank).toContain("const owed = readAmount(newPartyOwed || '0');");
   });
 
-  it('lists only parties there is something to settle with', () => {
-    expect(bank).toContain("() => parties.filter((party) => typeof party.owedByUs === 'number'),");
+  it('lists everybody, because a debtor can also be a creditor', () => {
+    // These used to be filtered by which way the balance stood, so somebody
+    // recorded as owing you could not be paid. The schema has held both
+    // columns on one row from the start for exactly this reason.
+    expect(bank).toContain('const owedParties = parties;');
+    expect(bank).toContain('const owingParties = parties;');
+    expect(bank).not.toContain("parties.filter((party) => typeof party.owedByUs === 'number')");
   });
 
   it('shows what stands between you while choosing', () => {

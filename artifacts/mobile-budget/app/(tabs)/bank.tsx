@@ -446,16 +446,22 @@ export default function BankScreen() {
     queryFn: () => customFetch<Party[]>('/api/contributors'),
     staleTime: 30_000,
   });
-  const owedParties = useMemo(
-    () => parties.filter((party) => typeof party.owedByUs === 'number'),
-    [parties],
-  );
-  const selectedParty = owedParties.find((party) => party.id === withdrawPartyId) ?? null;
-  const owingParties = useMemo(
-    () => parties.filter((party) => typeof party.owedToUs === 'number'),
-    [parties],
-  );
-  const repayingParty = owingParties.find((party) => party.id === repayingPartyId) ?? null;
+  /**
+   * Everybody, on every side.
+   *
+   * These used to be filtered by which way the balance stood: only people you
+   * owed could be paid, only people who owed you could repay. But a debtor can
+   * borrow and a creditor can lend — the schema has held both columns on one
+   * row from the start for exactly that reason — so filtering hid real choices
+   * and made somebody recorded one way unusable the other.
+   *
+   * Kept as names so the balance shown beside each stays the one that matters
+   * for what is being recorded.
+   */
+  const owedParties = parties;
+  const selectedParty = parties.find((party) => party.id === withdrawPartyId) ?? null;
+  const owingParties = parties;
+  const repayingParty = parties.find((party) => party.id === repayingPartyId) ?? null;
   const lentToParty =
     withdrawDest === 'lend' && withdrawPartyId !== null
       ? parties.find((party) => party.id === withdrawPartyId) ?? null
@@ -1996,7 +2002,7 @@ export default function BankScreen() {
                   )}
                 </View>
                 {canManageAccount && (
-                  <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                  <View style={styles.balanceActionRow}>
                     <TouchableOpacity
                       style={styles.editOpeningBalanceBtn}
                       onPress={openOpeningBalanceEditor}
@@ -4436,16 +4442,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
+  // Four actions stacked to the right of the balance outgrew the card: the
+  // column sized itself to "Check against statement" and ran off the edge,
+  // clipping every label. They sit under the balance now and wrap, which is
+  // the same fix the Deposit/Withdraw row needed for the same reason.
   openingBalanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 16,
     borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  balanceActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   openingBalanceLabel: {
     fontSize: 11,

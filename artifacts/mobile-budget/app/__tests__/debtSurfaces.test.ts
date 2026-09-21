@@ -45,9 +45,17 @@ describe('debt has its own tab, but only once it exists', () => {
   });
 
   it('hides the tab for a budget that tracks no debt', () => {
-    expect(tabs).toContain("const showDebt = debtCategories.some((row) => row.debtBalance !== null && row.debtBalance !== undefined);");
     expect(tabs).toContain('{showDebt && (');
     expect(tabs).toContain('options={showDebt');
+  });
+
+  it('shows it for somebody you owe, not only a category', () => {
+    // Creditors could be recorded all day — a lender named while borrowing, a
+    // party given an opening balance — and the tab stayed away, because it
+    // only ever looked at categories.
+    expect(tabs).toContain('debtCategories.some((row) => row.debtBalance !== null && row.debtBalance !== undefined) ||');
+    expect(tabs).toContain("debtParties.some((party) => typeof party.owedByUs === 'number');");
+    expect(tabs).toContain("queryKey: ['parties'],");
   });
 
   it('remounts the navigator when the tab appears', () => {
