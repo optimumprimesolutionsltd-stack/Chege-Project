@@ -20,6 +20,7 @@ import Settings from '@/pages/settings';
 import Subscription from "@/pages/subscription";
 import SavingsGoals from '@/pages/savings-goals';
 import Bank from '@/pages/bank';
+import Parties from '@/pages/parties';
 import Parity from '@/pages/parity';
 import IncomeStreamsReport from '@/pages/income-streams-report';
 import SearchPage from '@/pages/search';
@@ -119,6 +120,7 @@ function AuthenticatedApp() {
         <Route path="/activity" component={Activity} />
         <Route path="/savings-goals" component={SavingsGoals} />
         <Route path="/bank" component={Bank} />
+        <Route path="/parties" component={Parties} />
         <Route path="/reports" component={IncomeStreamsReport} />
         <Route path="/search" component={SearchPage} />
         <Route path="/subscription" component={Subscription} />

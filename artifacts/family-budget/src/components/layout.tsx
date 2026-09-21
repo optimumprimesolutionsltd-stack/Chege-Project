@@ -174,6 +174,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(uses('activity') ? [{ href: '/activity', label: isSharedWorkspace ? 'Group Activity' : 'My Activity', icon: Activity }] : []),
     ...(uses('goals') ? [{ href: '/savings-goals', label: isSharedWorkspace ? 'Group Goals' : 'My Goals', icon: Target }] : []),
     ...(uses('bank') ? [{ href: '/bank', label: 'Bank accounts', icon: Landmark }] : []),
+    // Beside the bank, since paying a creditor and being paid by a debtor both
+    // happen there and the balances they move live here.
+    ...(uses('bank') ? [{ href: '/parties', label: 'Creditors & debtors', icon: HandCoins }] : []),
     ...(uses('reports') ? [{ href: '/reports', label: isSharedWorkspace ? 'Group Reports' : 'My Reports', icon: BarChart3 }] : []),
     // Search, Subscription and Settings are never hideable: Settings is how a
     // section gets switched back on, and Subscription is how the app keeps
