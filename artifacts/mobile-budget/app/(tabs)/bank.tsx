@@ -270,6 +270,14 @@ export default function BankScreen() {
   // category is still what kind of cost it was, because the money did leave.
   const [withdrawPartyId, setWithdrawPartyId] = useState<number | null>(null);
   const [showPartyPicker, setShowPartyPicker] = useState(false);
+  // Made here, because there is nowhere else. Adding somebody only happened
+  // through "Record this month", which a Personal budget never shows — so a
+  // party could not be created at all, and the destination that lists them had
+  // nothing to list.
+  const [newPartyName, setNewPartyName] = useState('');
+  const [newPartyOwed, setNewPartyOwed] = useState('');
+  const [newPartyIsInstitution, setNewPartyIsInstitution] = useState(false);
+  const [addingParty, setAddingParty] = useState(false);
   const [withdrawSourceName, setWithdrawSourceName] = useState<string | null>(null);
   const [withdrawGoalId, setWithdrawGoalId] = useState<number | null>(null);
   const [showGoalPicker, setShowGoalPicker] = useState(false);
@@ -880,6 +888,45 @@ export default function BankScreen() {
         },
       ],
     );
+  };
+
+  const handleCreateParty = async () => {
+    const name = newPartyName.trim();
+    if (!name) {
+      Alert.alert('Who is it?', 'Give the person or institution a name, such as Mwangi or KCB.');
+      return;
+    }
+    const owed = readAmount(newPartyOwed || '0');
+    if (owed === null || owed < 0) {
+      Alert.alert('What is owed?', 'Enter zero or more, with up to two decimal places.');
+      return;
+    }
+    setAddingParty(true);
+    try {
+      const party = await customFetch<{ id: number }>('/api/contributors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          kind: newPartyIsInstitution ? 'institution' : 'person',
+          owedByUs: Math.round(owed),
+        }),
+      });
+      // Awaited: the picker and the settlement prompt both read this list, and
+      // a party created moments ago has to be in it by the time they do.
+      await queryClient.invalidateQueries({ queryKey: ['parties'] });
+      setWithdrawPartyId(party.id);
+      setNewPartyName('');
+      setNewPartyOwed('');
+      setNewPartyIsInstitution(false);
+      setShowPartyPicker(false);
+    } catch (error: unknown) {
+      if (!handleLapsedError(error)) {
+        Alert.alert('Could not add them', error instanceof Error ? error.message : 'Please try again.');
+      }
+    } finally {
+      setAddingParty(false);
+    }
   };
 
   const selectJointBank = () => {
@@ -2747,7 +2794,7 @@ export default function BankScreen() {
                     {/* Somebody you owe: a person or an institution. Offered
                         only when there is one, so a household that has never
                         recorded a debt sees nothing extra. */}
-                    {owedParties.length > 0 ? (() => {
+                    {(() => {
                       const selected = withdrawDest === 'party';
                       return (
                         <TouchableOpacity
@@ -2772,7 +2819,7 @@ export default function BankScreen() {
                           </Text>
                         </TouchableOpacity>
                       );
-                    })() : null}
+                    })()}
 
                     {/* Other chip */}
                     {(() => {
@@ -2834,6 +2881,67 @@ export default function BankScreen() {
                               </Text>
                             </TouchableOpacity>
                           ))}
+                          {/* The only way to make one. Adding somebody lived
+                              on "Record this month", which a Personal budget
+                              never shows. */}
+                          <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, padding: 10, gap: 8 }} testID="bank-add-party-form">
+                            <Text style={{ color: colors.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 12 }}>
+                              {owedParties.length === 0 ? 'NOBODY YET — ADD WHO YOU OWE' : "CAN'T FIND THEM? ADD SOMEBODY"}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <TextInput
+                                value={newPartyName}
+                                onChangeText={setNewPartyName}
+                                editable={!addingParty}
+                                placeholder="e.g. Mwangi, or KCB"
+                                placeholderTextColor={colors.mutedForeground}
+                                style={{
+                                  flex: 1, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                                  borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                                  fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                                }}
+                                testID="bank-new-party-name"
+                              />
+                              <TextInput
+                                value={newPartyOwed}
+                                onChangeText={setNewPartyOwed}
+                                editable={!addingParty}
+                                placeholder="Owed"
+                                placeholderTextColor={colors.mutedForeground}
+                                keyboardType="decimal-pad"
+                                style={{
+                                  width: 92, height: 40, borderWidth: 1, borderColor: colors.dropdownBorder,
+                                  borderRadius: 8, color: colors.foreground, paddingHorizontal: 10,
+                                  fontFamily: 'Inter_400Regular', backgroundColor: colors.dropdownBackground,
+                                }}
+                                testID="bank-new-party-owed"
+                              />
+                              <TouchableOpacity
+                                disabled={addingParty}
+                                onPress={handleCreateParty}
+                                style={{ minWidth: 58, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, opacity: addingParty ? 0.55 : 1 }}
+                                testID="bank-add-party"
+                              >
+                                {addingParty ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ color: '#fff', fontFamily: 'Inter_600SemiBold' }}>Add</Text>}
+                              </TouchableOpacity>
+                            </View>
+                            <Pressable
+                              onPress={() => setNewPartyIsInstitution((on) => !on)}
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: newPartyIsInstitution }}
+                              testID="bank-new-party-institution"
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                            >
+                              <Feather
+                                name={newPartyIsInstitution ? 'check-square' : 'square'}
+                                size={15}
+                                color={newPartyIsInstitution ? colors.primary : colors.mutedForeground}
+                              />
+                              <Text style={{ color: colors.dropdownForeground, fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+                                A bank or business, not a person
+                              </Text>
+                            </Pressable>
+                          </View>
                         </View>
                       )}
                       <Text style={{ color: colors.mutedForeground, fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 }}>

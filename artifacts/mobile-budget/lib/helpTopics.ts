@@ -295,6 +295,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         steps: [
           'Banking tab, then Withdraw.',
           'Under where the money is going, choose Someone I owe, and pick them.',
+          'Nobody listed yet? Add them there — a name, what is owed, and whether it is a bank rather than a person.',
           'Give it a category as usual — the money did leave.',
           'Once it saves, Jamvi offers to take the payment off what you owe them.',
         ],
