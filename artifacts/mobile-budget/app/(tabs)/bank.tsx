@@ -755,6 +755,57 @@ export default function BankScreen() {
     }
   };
 
+  /**
+   * Offer to take a payment off what is owed.
+   *
+   * Asked rather than applied. A debt balance is a stored number and a posting
+   * is a record that can be edited or deleted afterwards; if paying reduced
+   * the balance by itself, every one of those paths would have to put it back,
+   * and the first one that did not would send the balance quietly wrong. A
+   * number you are asked about stays a number you own.
+   *
+   * Only on a new withdrawal. Offering it again when an existing one is edited
+   * would take the money off twice.
+   */
+  const offerDebtReduction = (categoryName: string, amount: number) => {
+    const name = categoryName.trim().toLocaleLowerCase();
+    // The generated category type does not declare the debt columns; the route
+    // returns the whole row and always has.
+    const debt = (categories as unknown as Array<{ id: number; name: string; debtBalance?: number | null }>)
+      .find((row) => row.name.trim().toLocaleLowerCase() === name && typeof row.debtBalance === 'number');
+    const owed = debt?.debtBalance;
+    if (!debt || typeof owed !== 'number' || owed <= 0 || amount <= 0) return;
+
+    // Whole shillings: the column is an integer, and a debt quoted to the
+    // cent is not how anybody is told what they owe.
+    const paid = Math.round(amount);
+    const remaining = Math.max(0, owed - paid);
+    Alert.alert(
+      `Take this off ${debt.name}?`,
+      paid >= owed
+        ? `You owe KES ${formatKES(owed)}. This clears it.`
+        : `You owe KES ${formatKES(owed)}. Taking KES ${formatKES(paid)} off leaves KES ${formatKES(remaining)}.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: remaining === 0 ? 'Clear it' : 'Reduce',
+          onPress: async () => {
+            try {
+              await customFetch(`/api/budget-categories/${debt.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ debtBalance: remaining }),
+              });
+              await queryClient.invalidateQueries({ queryKey: getGetBudgetCategoriesQueryKey() });
+            } catch (error: unknown) {
+              Alert.alert('Could not update the debt', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const selectJointBank = () => {
     if (!canManageShared) {
       Alert.alert('Admin access required', 'Ask a group owner or admin to use Joint bank for this shared transaction.');
@@ -1096,8 +1147,15 @@ export default function BankScreen() {
           },
         });
       }
+      // Read before finishEntry, which clears it. Asking after an edit would
+      // take the money off a second time.
+      const wasNewWithdrawal = txType === 'disbursement' && editingTransactionId === null;
+      const paidCategory = expenseCategory.trim();
       finishEntry(keepOpen, { amount: parsed, direction: txType === 'deposit' ? 'in' : 'out' });
       await invalidateBalance();
+      if (wasNewWithdrawal && paidCategory) {
+        offerDebtReduction(paidCategory, parsed);
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Nothing was recorded.';

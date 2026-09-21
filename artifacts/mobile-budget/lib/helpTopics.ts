@@ -258,16 +258,45 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    title: 'Things the phone cannot do yet',
+    title: 'Debt',
     topics: [
       {
-        question: 'Add or edit a debt',
+        question: 'Start tracking a debt',
         steps: [
-          'Use Jamvi on a laptop, at jamvi.co.ke, on the budget page.',
-          'The Debt tab here shows what is owed and the payoff plan, but cannot create or change a debt.',
-          'Paying a creditor does not reduce the balance by itself. Edit the balance after paying.',
+          'Debt tab, then Track a debt.',
+          'Name it, say what is owed, and give the yearly rate if you know it.',
+          'Using the name of a category you already have marks that category as the debt, rather than making a second one.',
         ],
-        keywords: ['debt', 'loan', 'creditor', 'owed', 'borrow'],
+        route: '/(tabs)/debt',
+        keywords: ['debt', 'loan', 'creditor', 'owed', 'borrow', 'fuliza', 'sacco'],
+      },
+      {
+        question: 'Change what you owe',
+        steps: [
+          'Debt tab, then the pencil on that debt.',
+          'The balance and the rate are both editable.',
+        ],
+        route: '/(tabs)/debt',
+        keywords: ['balance', 'edit debt', 'interest', 'rate'],
+      },
+      {
+        question: 'Pay a debt from a bank account',
+        steps: [
+          'Banking tab, then Withdraw, with the debt as the category.',
+          'After it saves, Jamvi asks whether to take that much off what you owe.',
+          'It asks rather than doing it, so a payment you later edit or delete cannot leave the balance quietly wrong.',
+        ],
+        route: '/(tabs)/bank',
+        keywords: ['pay', 'repay', 'loan', 'creditor', 'reduce'],
+      },
+      {
+        question: 'Stop tracking a debt',
+        steps: [
+          'Debt tab, then Stop tracking on that debt.',
+          'The category stays, along with everything recorded against it. Only the balance owed is forgotten.',
+        ],
+        route: '/(tabs)/debt',
+        keywords: ['remove debt', 'cleared', 'finished', 'stop'],
       },
     ],
   },
