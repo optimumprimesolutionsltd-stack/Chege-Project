@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { customFetch } from '@workspace/api-client-react';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { formatMonthKey, summariseDebts, type DebtWithPayment } from '@/lib/debtSummary';
 
 type CategoryRow = DebtWithPayment & { budgetAmount?: number | null };
+
+/**
+ * Asked once. A prompt that cannot be sent away becomes furniture, and
+ * furniture is what somebody who owes nothing would be given for ever.
+ */
+const PROMPT_DISMISSED_KEY = 'home_debt_prompt_dismissed';
 
 function kes(value: number): string {
   return value.toLocaleString('en-KE', { maximumFractionDigits: 0 });
@@ -21,16 +28,32 @@ function kes(value: number): string {
  * clearing a loan. The question that keeps that person going is not "what do I
  * owe" — they know — it is "when does this end", so that is the headline.
  *
- * Renders nothing at all when no debt is tracked: an empty debt card on every
- * household's home screen would be the opposite of making debt significant.
+ * With nothing tracked it offers to start, once, because the Debt tab only
+ * appears after a first debt exists and so is no use for making one. Exactly
+ * one of the two can render, which is why the invitation lives here rather
+ * than beside the card: the home screen cannot end up carrying both.
  */
-export function DebtSummaryCard() {
+export function DebtSummaryCard({ canTrackDebt = false }: { canTrackDebt?: boolean }) {
   const colors = useColors();
   const { data: categories = [], isLoading } = useQuery<CategoryRow[]>({
     queryKey: ['budget-categories-full'],
     queryFn: () => customFetch<CategoryRow[]>('/api/budget-categories'),
     staleTime: 30_000,
   });
+
+  // null until read: showing the invitation and snatching it back a frame
+  // later is worse than showing it slightly late.
+  const [promptDismissed, setPromptDismissed] = useState<boolean | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem(PROMPT_DISMISSED_KEY)
+      .then((value) => setPromptDismissed(value === 'true'))
+      .catch(() => setPromptDismissed(false));
+  }, []);
+
+  const dismissPrompt = useCallback(() => {
+    setPromptDismissed(true);
+    AsyncStorage.setItem(PROMPT_DISMISSED_KEY, 'true').catch(() => {});
+  }, []);
 
   const debts: DebtWithPayment[] = categories
     .filter((row) => row.debtBalance !== null && row.debtBalance !== undefined)
@@ -43,7 +66,56 @@ export function DebtSummaryCard() {
       monthlyPayment: row.budgetAmount ?? null,
     }));
 
-  if (isLoading || debts.length === 0) return null;
+  if (isLoading) return null;
+
+  if (debts.length === 0) {
+    // Not on an empty budget. Somebody who has added nothing at all is already
+    // being told to make a budget, and two next steps at once is neither.
+    const worthAsking = canTrackDebt && categories.length > 0 && promptDismissed === false;
+    if (!worthAsking) return null;
+
+    return (
+      <View
+        testID="home-track-debt-cta"
+        style={[styles.card, { backgroundColor: colors.card, borderColor: `${colors.primary}55` }]}
+      >
+        <View style={styles.headRow}>
+          <View style={styles.headLeft}>
+            <Feather name="trending-down" size={16} color={colors.primary} />
+            <Text style={[styles.heading, { color: colors.foreground }]}>Paying off a loan?</Text>
+          </View>
+        </View>
+        <Text style={[styles.promptBody, { color: colors.mutedForeground }]}>
+          Track what you owe — a bank loan, a SACCO, Fuliza, or money owed to somebody — and Jamvi
+          works out when you will be clear of it, and counts it down as you pay.
+        </Text>
+        <View style={styles.promptActions}>
+          <Pressable
+            testID="home-track-debt"
+            accessibilityRole="button"
+            accessibilityLabel="Track a debt"
+            onPress={() => router.push('/(tabs)/debt')}
+            style={({ pressed }) => [
+              styles.promptButton,
+              { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 },
+            ]}
+          >
+            <Text style={[styles.promptButtonText, { color: colors.primaryForeground }]}>Track a debt</Text>
+            <Feather name="arrow-right" size={16} color={colors.primaryForeground} />
+          </Pressable>
+          <Pressable
+            testID="home-track-debt-dismiss"
+            accessibilityRole="button"
+            accessibilityLabel="I have no debt to track"
+            onPress={dismissPrompt}
+            style={({ pressed }) => [styles.promptDismiss, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[styles.promptDismissText, { color: colors.mutedForeground }]}>No debt</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   const view = summariseDebts(debts, 'snowball');
   const clearedEverything = view.totalOwed === 0;
@@ -113,4 +185,10 @@ const styles = StyleSheet.create({
   sub: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
   focus: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 4 },
   cleared: { fontSize: 11, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
+  promptBody: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18, marginTop: 6 },
+  promptActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  promptButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12 },
+  promptButtonText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  promptDismiss: { paddingVertical: 10, paddingHorizontal: 8 },
+  promptDismissText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
 });

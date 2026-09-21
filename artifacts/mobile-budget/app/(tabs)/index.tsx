@@ -450,10 +450,11 @@ export default function DashboardScreen() {
             </View>
           )}
 
-          {/* Debt sits on Home with the same weight savings has. It renders
-              nothing when no debt is tracked, so a household that owes
-              nothing never sees it. */}
-          <DebtSummaryCard />
+          {/* Debt sits on Home with the same weight savings has. With nothing
+              tracked it offers to start — once, dismissably — because the Debt
+              tab only appears after a first debt exists. A viewer is never
+              asked: they could not act on it. */}
+          <DebtSummaryCard canTrackDebt={canManageBudget} />
 
           {isSharedWorkspace && (
             <View style={styles.ringWrap}>
