@@ -2025,6 +2025,19 @@ export default function BankScreen() {
                         <Text style={styles.editOpeningBalanceText}>Check against statement</Text>
                       </TouchableOpacity>
                     )}
+                    {/* The account as a document: oldest first, running
+                        balance, to hold beside the bank's own. */}
+                    {hasBankAccounts && (
+                      <TouchableOpacity
+                        style={styles.editOpeningBalanceBtn}
+                        onPress={() => router.push('/bank-statement')}
+                        activeOpacity={0.8}
+                        testID="bank-statement-action"
+                      >
+                        <Feather name="file-text" size={14} color="#d1fae5" />
+                        <Text style={styles.editOpeningBalanceText}>Statement</Text>
+                      </TouchableOpacity>
+                    )}
                     {/* Money that only passed through: somebody who owes
                         you settling with somebody you owe. */}
                     {hasBankAccounts && canManageAccount && (
